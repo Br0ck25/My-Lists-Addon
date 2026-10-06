@@ -3282,7 +3282,7 @@ function sanitizeSharedChannel(raw) {
 // the full channel is one code lookup away.
 function sharedChannelSummary(code, record) {
   const channel = record.channel || {};
-  const showKeys = new Set((channel.items || []).map(channelItemShowKey));
+  const showKeys = new Set((channel.items || []).filter((it) => !it || it.kind !== "movie").map(channelItemShowKey));
   const sampleItems = (channel.items || []).slice(0, 9);
   return {
     code: code,

@@ -924,7 +924,7 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
 
 function renderCustomizeButtonHtml(name, url, type) {
   return '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(name || '') + '" data-url="' + escapeAttr(url || '') + '" data-type="' + escapeAttr(type || 'movie') + '" title="Customize in List Builder" aria-label="Customize in List Builder">' +
-    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none; flex-shrink:0;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="u-fsh-0" style="pointer-events:none;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
     '<span class="customize-btn-text">Customize</span>' +
   '</button>';
 }
@@ -1071,7 +1071,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     let addBtnHtml = '';
     if ((item.source === 'My Lists Addon' || item.source === 'Profile') && usernameSlug) {
       likeBtnHtml = '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
-      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn list-add-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + (item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
@@ -1080,7 +1080,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       likeBtnHtml = '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
         (alreadyLikedExt ? '&#9829;' : '&#9825;') +
         '</button>';
-      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn list-add-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
@@ -1095,7 +1095,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     const cardHtml = '<div class="list-card" data-list-type="' + escapeAttr(item.type || 'mixed') + '" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(slotType) + '" data-creator="' + escapeAttr(item.user || '') + '" data-items="' + escapeAttr(item.items || '') + '" data-likes="' + escapeAttr(item.likes || 0) + '" data-source="' + escapeAttr(item.source) + '">' +
       '<div class="list-card-header">' +
       '<div class="list-card-body">' +
-      '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + sourceBadgeHtml + escapeHtml(item.name) + '</div>' +
+      '<div class="list-card-title searchViewListBtn u-cur-pointer">' + sourceBadgeHtml + escapeHtml(item.name) + '</div>' +
       '<div class="list-card-meta">' +
       (creatorLabel ? '<span>' + creatorLabel + '</span>' : '') +
       (creatorLabel ? '<span class="list-card-meta-sep">&middot;</span>' : '') +
@@ -1120,10 +1120,10 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   let html = topCards.map(c => c.html).join('');
 
   if (topCards.length === 0) {
-    html = '<p style="color:var(--muted); font-size:0.9rem; padding:8px 0;"><small>No lists match that search.</small></p>';
+    html = '<p class="u-c-v_muted u-fs-v_font_size_base u-p-8px_0"><small>No lists match that search.</small></p>';
   }
   if (traktError) {
-    html += '<p class="testresult err" style="margin-top:8px;">&#10007; Trakt search: ' + escapeHtml(traktError) + '</p>';
+    html += '<p class="testresult err u-mt-8px">&#10007; Trakt search: ' + escapeHtml(traktError) + '</p>';
   }
   box.innerHTML = html;
 
@@ -1357,10 +1357,10 @@ async function loadPosterSlot(slot) {
 
             let overlays = '';
             if (isMobileEnd) {
-              overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+              overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' + totalCount + ' &rsaquo;</div>';
             }
             if (isDesktopEnd) {
-              overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+              overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' + totalCount + ' &rsaquo;</div>';
             }
 
             let removeBtn = '';
@@ -1387,7 +1387,7 @@ async function loadPosterSlot(slot) {
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';
@@ -1858,7 +1858,7 @@ async function loadPopularListsFeed(forceRefresh) {
     traktPopularCache = null;
     if (window._listPreviewCache) window._listPreviewCache.clear();
   }
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading popular public lists…</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading popular public lists…</p>';
   try {
     const [mdbLists, traktLists] = await Promise.all([
       ensureMdblistPopularLoaded(),
@@ -1867,7 +1867,7 @@ async function loadPopularListsFeed(forceRefresh) {
     const combined = [...(mdbLists || []), ...(traktLists || [])];
     combined.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     if (!combined.length) {
-      container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">No popular public lists found.</p>';
+      container.innerHTML = '<p class="app-shell-muted">No popular public lists found.</p>';
       return;
     }
     render5PosterListsFeed(container, combined);
@@ -1887,10 +1887,10 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
     const isDesktopEnd = (i === previewPosters.length - 1 && previewPosters.length >= 4);
     let overlays = '';
     if (isMobileEnd) {
-      overlays += '<div class="list-card-count-overlay mobile-only curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay mobile-only curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + totalCount + ' &rsaquo;</div>';
     }
     if (isDesktopEnd) {
-      overlays += '<div class="list-card-count-overlay desktop-only curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay desktop-only curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + totalCount + ' &rsaquo;</div>';
     }
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
     const tilePoster = resolveClientPoster(s, s.poster || '');
@@ -1901,7 +1901,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
         overlays +
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(s.name) + '</div>' +
-      ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
 
@@ -1910,7 +1910,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
 
   const isAdded = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(null, type, customUrl) || isListAddedToConfig(customUrl, type));
   const addBtnHtml = renderCustomizeButtonHtml(title, customUrl, type) +
-    '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
+    '<button type="button" class="lc-btn list-add-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -1919,7 +1919,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
   return '<div class="list-card" data-name="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     '<div class="list-card-header">' +
       '<div class="list-card-body">' +
-        '<div class="list-card-title curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + escapeHtml(title) + '</div>' +
+        '<div class="list-card-title curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + escapeHtml(title) + '</div>' +
         '<div class="list-card-meta">' +
           '<span>' + escapeHtml(subtitle) + '</span>' +
           '<span class="list-card-meta-sep">&middot;</span>' +
@@ -1964,7 +1964,7 @@ async function loadCuratedListsFeed(forceRefresh) {
   if (curatedListsFeedLoaded && !forceRefresh && !historyChanged && container.children.length > 0) {
     return;
   }
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading your personalized curated lists…</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading your personalized curated lists…</p>';
 
   try {
     let customListsMap = {};
@@ -2185,7 +2185,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       const recommendedLists = scored.slice(0, 10).map(function(s) { return s.list; });
 
       if (recommendedLists.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:0.95rem; margin:0 0 2px;">Recommended Community Lists</h3><p style="margin:0; font-size:0.8rem; color:var(--muted);">Top community and curated lists you might like</p></div>';
+        sectionsHtml += '<div class="u-mt-24px u-mb-8px"><h3 class="u-fs-v_font_size_base u-m-0_0_2px">Recommended Community Lists</h3><p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Top community and curated lists you might like</p></div>';
         sectionsHtml += recommendedLists.map(l => {
           const type = l.type || 'movie';
           const added = alreadyAdded.has(l.url + '|' + type);
@@ -2194,7 +2194,7 @@ async function loadCuratedListsFeed(forceRefresh) {
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
               '<div class="list-card-body">' +
-                '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+                '<div class="list-card-title searchViewListBtn u-cur-pointer">' + escapeHtml(l.name) + '</div>' +
                 '<div class="list-card-meta">' +
                   '<span>by ' + escapeHtml(author) + '</span>' +
                   '<span class="list-card-meta-sep">&middot;</span>' +
@@ -2207,7 +2207,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                 '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLiked ? ' liked' : '') + '" data-url="' + escapeAttr(l.url) + '">' +
                   (alreadyLiked ? '&#9829;' : '&#9825;') +
                 '</button>' +
-                '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+                '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
                   (added ? 'style="color:var(--danger);"' : '') +
                   ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
                   (added ? 'Remove' : '+ Add') +
@@ -2229,7 +2229,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       }).slice(0, 5);
 
       if (similarToCustom.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:0.95rem; margin:0 0 2px;">Lists Similar to Your Custom Lists</h3><p style="margin:0; font-size:0.8rem; color:var(--muted);">Public lists matching the themes of custom lists you created</p></div>';
+        sectionsHtml += '<div class="u-mt-24px u-mb-8px"><h3 class="u-fs-v_font_size_base u-m-0_0_2px">Lists Similar to Your Custom Lists</h3><p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Public lists matching the themes of custom lists you created</p></div>';
         const alreadyAdded = new Set();
         document.querySelectorAll('#lists .entry').forEach(function(entry) {
           const t = entry.querySelector('.type') ? entry.querySelector('.type').value : '';
@@ -2245,7 +2245,7 @@ async function loadCuratedListsFeed(forceRefresh) {
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
               '<div class="list-card-body">' +
-                '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+                '<div class="list-card-title searchViewListBtn u-cur-pointer">' + escapeHtml(l.name) + '</div>' +
                 '<div class="list-card-meta">' +
                   '<span>by ' + escapeHtml(author) + '</span>' +
                   '<span class="list-card-meta-sep">&middot;</span>' +
@@ -2258,7 +2258,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                 '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLiked ? ' liked' : '') + '" data-url="' + escapeAttr(l.url) + '">' +
                   (alreadyLiked ? '&#9829;' : '&#9825;') +
                 '</button>' +
-                '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+                '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
                   (added ? 'style="color:var(--danger);"' : '') +
                   ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
                   (added ? 'Remove' : '+ Add') +
@@ -2274,8 +2274,8 @@ async function loadCuratedListsFeed(forceRefresh) {
 
     if (!sectionsHtml) {
       container.innerHTML =
-        '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
-          '<p style="margin:0; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+        '<div class="u-ta-center u-p-24px_16px u-bd-1px_solid_v_border u-br-v_radius">' +
+          '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '</div>';
       return;
     }
@@ -2290,8 +2290,8 @@ async function loadCuratedListsFeed(forceRefresh) {
   } catch (err) {
     console.error('Curated lists error:', err);
     container.innerHTML =
-      '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
-        '<p style="margin:0 0 10px; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+      '<div class="u-ta-center u-p-24px_16px u-bd-1px_solid_v_border u-br-v_radius">' +
+        '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '<button type="button" class="lc-btn primary" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;]">Explore Discover</button>' +
       '</div>';
   }
@@ -2302,7 +2302,7 @@ async function renderLikedListsFeed(forceRefresh) {
   if (!container) return;
   const likedUrls = [...getLikedListsSet()];
   if (!likedUrls.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p>';
+    container.innerHTML = '<p class="app-shell-muted">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p>';
     container.dataset.likedCount = '0';
     return;
   }
@@ -2310,7 +2310,7 @@ async function renderLikedListsFeed(forceRefresh) {
     return;
   }
   container.dataset.likedCount = String(likedUrls.length);
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading your ' + likedUrls.length + ' liked list(s)...</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading your ' + likedUrls.length + ' liked list(s)…</p>';
   try {
     const toplists = await ensureMdblistPopularLoaded();
     const topMap = new Map();
@@ -2525,7 +2525,7 @@ function render5PosterListsFeed(container, lists) {
     return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+          '<div class="list-card-title searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             sourceBadgeHtml +
             escapeHtml(displayName) +
           '</div>' +
@@ -2540,7 +2540,7 @@ function render5PosterListsFeed(container, lists) {
         '<div class="list-card-actions">' +
           likeBtnHtml +
           renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
-          '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+          '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
             ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
@@ -2760,7 +2760,7 @@ function seasonWatchedButtonState(d, seasonMeta) {
 // call site).
 function watchedSeasonButtonState(watched) {
   return watched
-    ? { upcoming: false, label: '<span style="margin-right:4px;">&#x2713;</span> Mark Season Unwatched', className: 'secondary', title: '' }
+    ? { upcoming: false, label: '<span class="u-mr-4px">&#x2713;</span> Mark Season Unwatched', className: 'secondary', title: '' }
     : { upcoming: false, label: 'Mark Season Watched', className: 'primary', title: '' };
 }
 
@@ -2791,7 +2791,7 @@ function episodeWatchButtonHtml(ep, isWatched) {
   const hasAired = typeof isEpisodeAired !== 'function' || isEpisodeAired(ep);
   if (hasAired || isWatched) {
     return '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isWatched ? 'secondary' : 'primary') + '" data-act="toggleEpisodeWatchStatusFromModal">' +
-      (isWatched ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+      (isWatched ? '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
       '</button>';
   }
   const airDate = (ep && (ep.air_date || ep.airDate)) || '';
@@ -2995,10 +2995,10 @@ function openEpisodeDetails(epNum) {
   const airTimeLabel = typeof episodeAirTimeLabel === 'function' ? episodeAirTimeLabel(d, ep) : '';
 
   let infoHtml = '';
-  if (date) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(date) + '</div>';
-  if (airTimeLabel) infoHtml += '<div style="margin-bottom:6px; color:var(--brand);">' + escapeHtml(airTimeLabel) + '</div>';
-  if (runtime) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(runtime) + '</div>';
-  if (ep.vote_average) infoHtml += '<div style="margin-bottom:6px;">\u2605 ' + escapeHtml(Number(ep.vote_average).toFixed(1)) + ' TMDB</div>';
+  if (date) infoHtml += '<div class="u-mb-6px">' + escapeHtml(date) + '</div>';
+  if (airTimeLabel) infoHtml += '<div class="u-mb-6px u-c-v_brand">' + escapeHtml(airTimeLabel) + '</div>';
+  if (runtime) infoHtml += '<div class="u-mb-6px">' + escapeHtml(runtime) + '</div>';
+  if (ep.vote_average) infoHtml += '<div class="u-mb-6px">\u2605 ' + escapeHtml(Number(ep.vote_average).toFixed(1)) + ' TMDB</div>';
   
   window._currentEpisodeDetails = ep;
   
@@ -3029,15 +3029,15 @@ function openEpisodeDetails(epNum) {
 
   const innerHtml = 
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-    '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap; margin-top:20px;">' +
-      '<div style="flex: 0 0 300px; max-width: 100%;">' +
-        (still ? '<img src="' + still + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+    '<div class="u-fd-row u-gap-32px u-fw2-wrap u-mt-20px" style="display:flex;">' +
+      '<div class="u-flex-0_0_300px u-maxw-100">' +
+        (still ? '<img src="' + still + '" class="u-br-v_radius_sm u-bsh-0_4px_12px_rgba_0_0_0_0_5" style="width:100%;">' : '') +
       '</div>' +
-      '<div style="flex: 1; min-width: 300px;">' +
-        '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
-          '<div style="margin-bottom:20px;">' + watchBtnHtml + '</div>' +
-        '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
-        '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
+      '<div class="u-flex-1 u-minw-300px">' +
+        '<h1 class="u-m-0_0_16px u-fs-2_5rem u-ff-serif">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
+          '<div class="u-mb-20px">' + watchBtnHtml + '</div>' +
+        '<div class="u-mb-16px u-c-v_text u-fs-v_font_size_md">' + infoHtml + '</div>' +
+        '<p class="u-fs-v_font_size_md u-lh-1_6 u-c-v_text u-mb-24px">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
       '</div>' +
     '</div>';
     
@@ -3180,7 +3180,7 @@ window.updateSeasonEpisodeCounts = updateSeasonEpisodeCounts;
 // spelling out its own label and classes is how they came to disagree.
 function showWatchedButtonState(watched) {
   return watched
-    ? { label: '<span style="margin-right:4px;">&#x2713;</span> Mark Show Unwatched', className: 'secondary' }
+    ? { label: '<span class="u-mr-4px">&#x2713;</span> Mark Show Unwatched', className: 'secondary' }
     : { label: 'Mark Show Watched', className: 'primary' };
 }
 
@@ -3483,8 +3483,8 @@ function renderItemStorylinesWatchOrder(d, type) {
           (isWatched && !isCurrent ? '<span class="item-storyline-watched-badge" title="Watched">&#x2713;</span>' : '') +
         '</div>' +
         '<div class="item-storyline-title">' + escapeHtml(displayTitle) + '</div>' +
-        '<div class="item-storyline-meta" style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
-          '<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(formatSubtitle) + '</span>' +
+        '<div class="item-storyline-meta u-ai-center u-jc-space_between u-gap-6px" style="display:flex;">' +
+          '<span class="u-ov-hidden u-to-ellipsis u-ws-nowrap">' + escapeHtml(formatSubtitle) + '</span>' +
           ratingSlot +
         '</div>' +
       '</div>';
@@ -3512,7 +3512,7 @@ function renderItemStorylinesWatchOrder(d, type) {
   }).join('');
 
   const pillsHtml = (matchingEvents.length > 1) ?
-    '<div class="subnav-pills-bar" style="margin-bottom:16px; flex-wrap:wrap;">' +
+    '<div class="subnav-pills-bar u-mb-16px u-fw2-wrap">' +
       matchingEvents.map((ev, idx) =>
         '<button type="button" class="subnav-pill' + (idx === 0 ? ' active' : '') + '" data-act="switchItemStorylineTab" data-act-args="' + appActArgs([ev.id, "@self"]) + '">' +
           (idx === 0 ? '<span class="check-icon">&#x2713;</span> ' : '') + escapeHtml(ev.name) +
@@ -3532,8 +3532,8 @@ function renderItemStorylinesWatchOrder(d, type) {
   }
 
   return '<div class="item-storylines-section">' +
-    '<div class="shelf-header" style="margin-bottom:12px;">' +
-      '<h3 style="margin: 0; font-family:serif; font-size:1.5rem;">Storylines, Sagas &amp; Universes</h3>' +
+    '<div class="shelf-header u-mb-12px">' +
+      '<h3 class="u-m-0 u-ff-serif u-fs-v_font_size_2xl">Storylines, Sagas &amp; Universes</h3>' +
     '</div>' +
     pillsHtml +
     '<div class="item-storylines-panels">' +
@@ -3596,7 +3596,7 @@ async function openItemDetailsModal(id, type, opts) {
   }
   
   const body = document.getElementById('itemDetailsBody');
-  body.innerHTML = '<p style="color:var(--muted); text-align:center; padding: 40px;">Fetching information from TMDB...</p>';
+  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB...</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -3670,15 +3670,15 @@ async function openItemDetailsModal(id, type, opts) {
     const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
-      '<h3 style="margin: 0 0 16px; font-family:serif; font-size:1.5rem;">Trailer</h3>' +
-      '<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:8px;">' +
-      '<iframe style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
+      '<h3 class="u-m-0_0_16px u-ff-serif u-fs-v_font_size_2xl">Trailer</h3>' +
+      '<div class="u-pb-56_25 u-ov-hidden u-br-v_radius_sm" style="position:relative; height:0;">' +
+      '<iframe class="u-bd-0" style="position:absolute; top:0; left:0; width:100%; height:100%;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
       '</div>' : '';
 
     let seasonsHtml = '';
     if (d.seasonsData && d.seasonsData.length > 0) {
-      seasonsHtml += '<h3 style="margin: 32px 0 16px; font-family:serif; font-size:1.5rem;">Seasons</h3>';
-      seasonsHtml += '<div style="display:flex; flex-direction:column; gap:16px;">';
+      seasonsHtml += '<h3 class="u-m-32px_0_16px u-ff-serif u-fs-v_font_size_2xl">Seasons</h3>';
+      seasonsHtml += '<div class="u-fd-column u-gap-16px" style="display:flex;">';
       // Specials (season 0) are real seasons too -- just listed last, below
       // every numbered season, since TMDB itself orders them first.
       const regularSeasons = d.seasonsData.filter(season => season.season_number !== 0);
@@ -3709,8 +3709,8 @@ async function openItemDetailsModal(id, type, opts) {
                 '</button>' +
               '</div>' +
             '</div>' +
-            '<div class="season-episodes-container" style="display:none; padding:16px; border-top:1px solid var(--border); background:rgba(0,0,0,0.2);">' +
-              '<div class="episodes-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:16px;"></div>' +
+            '<div class="season-episodes-container u-p-16px u-bdt-1px_solid_v_border u-bg-rgba_0_0_0_0_2" style="display:none;">' +
+              '<div class="episodes-grid u-gtc-repeat_auto_fill_minmax_140px_1fr u-gap-16px" style="display:grid;"></div>' +
             '</div>' +
           '</div>';
       });
@@ -3753,7 +3753,7 @@ async function openItemDetailsModal(id, type, opts) {
           '</button>'
           :
           '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
-            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
           '</button>') +
       '</div>' +
       genresHtml +
@@ -3761,13 +3761,13 @@ async function openItemDetailsModal(id, type, opts) {
         '<p class="item-synopsis" id="itemSynopsisText">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
         '<button type="button" class="item-synopsis-toggle" id="itemSynopsisToggle" aria-controls="itemSynopsisText" aria-expanded="false" hidden data-act="toggleItemSynopsis" data-act-args="[&quot;@self&quot;]">Read More</button>' +
       '</div>' +
-      (trailerHtml ? '<div style="margin-top:32px;">' + trailerHtml + '</div>' : '') +
-      (seasonsHtml ? '<div style="margin-top:32px;">' + seasonsHtml + '</div>' : '') +
-      (storylinesHtml ? '<div style="margin-top:32px;">' + storylinesHtml + '</div>' : '');
+      (trailerHtml ? '<div class="u-mt-32px">' + trailerHtml + '</div>' : '') +
+      (seasonsHtml ? '<div class="u-mt-32px">' + seasonsHtml + '</div>' : '') +
+      (storylinesHtml ? '<div class="u-mt-32px">' + storylinesHtml + '</div>' : '');
     syncItemSynopsisToggle();
       
   } catch (err) {
-    body.innerHTML = '<p class="testresult err" style="margin-top:48px;">\u2717 ' + escapeHtml(err.message) + '</p>';
+    body.innerHTML = '<p class="testresult err u-mt-48px">\u2717 ' + escapeHtml(err.message) + '</p>';
   }
 }
 
@@ -3844,7 +3844,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   container.style.display = 'block';
   if (grid.innerHTML.trim() !== '') return; // already loaded
   
-  grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding: 20px; color:var(--muted);">Loading episodes...</div>';
+  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes...</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -3872,18 +3872,18 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
       window._episodeDataCache[ep.episode_number] = ep;
       const still = ep.still_path ? escapeAttr(ep.still_path) : (fallbackStill ? escapeAttr(fallbackStill) : '');
       epsHtml +=
-        '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
-          '<div style="width:100%; aspect-ratio:16/9; background:#222; border-radius:6px; overflow:hidden; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-            (still ? '<img src="' + still + '" style="width:100%; height:100%; object-fit:cover;">' : '') +
-            '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:#ffffff; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8rem; box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
+        '<div class="clickable-episode u-fd-column u-gap-4px u-cur-pointer" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
+          '<div class="u-aspectratio-16_9 u-bg-222 u-br-v_radius_sm u-ov-hidden u-bsh-0_2px_6px_rgba_0_0_0_0_4" style="width:100%; position:relative;">' +
+            (still ? '<img src="' + still + '" class="u-objectfit-cover" style="width:100%; height:100%;">' : '') +
+            '<div class="episode-num-badge u-bg-v_accent u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
           '</div>' +
-          '<div style="font-size:0.9rem; color:var(--text); line-height:1.2; padding-top:4px;">' + escapeHtml(ep.name) + '</div>' +
+          '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
     });
-    grid.innerHTML = epsHtml || '<div style="grid-column: 1 / -1; color:var(--muted);">No episodes found.</div>';
+    grid.innerHTML = epsHtml || '<div class="u-gridcolumn-1_1 u-c-v_muted">No episodes found.</div>';
     if (typeof updateSeasonWatchedButton === 'function') updateSeasonWatchedButton(seasonNum);
   } catch (err) {
-    grid.innerHTML = '<div style="grid-column: 1 / -1; color:red;">Error loading episodes.</div>';
+    grid.innerHTML = '<div class="u-gridcolumn-1_1 u-c-red">Error loading episodes.</div>';
   }
 }
 
@@ -4187,7 +4187,7 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Custom Lists
   if (customLists.length > 0) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:4px 0 6px;">Custom Lists</div>';
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-4px_0_6px">Custom Lists</div>';
     customLists.forEach((list, idx) => {
       let isChecked = false;
       try {
@@ -4202,33 +4202,33 @@ function openSelectListModal(id, type, title, poster) {
       }
       
       html += 
-        '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+          '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
             '<input type="checkbox" class="list-select-cb" data-type="custom" data-idx="' + idx + '" data-initially-checked="' + (isChecked ? 'true' : 'false') + '" ' + (isChecked ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
-            '<span style="font-weight:500;">' + escapeHtml(displayName) + '</span>' +
-            (isChecked ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+            '<span class="u-fw-500">' + escapeHtml(displayName) + '</span>' +
+            (isChecked ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
-          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isChecked ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: Trakt
   if (hasTrakt) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#ed1c24; font-weight:bold;">\u25CF</span> Trakt ' + (traktUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-ed1c24 u-fw-bold">\u25CF</span> Trakt ' + (traktUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
     '</div>';
 
     const traktWl = Array.isArray(window._myTraktLists) ? window._myTraktLists.find(l => l.slug === 'watchlist' || l.url === 'trakt:watchlist') : null;
     const inTraktWatchlist = isItemInExternalList('trakt', 'watchlist', 'watchlist', id, traktWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-name="Trakt Watchlist" data-initially-checked="' + (inTraktWatchlist ? 'true' : 'false') + '" ' + (inTraktWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>Trakt Watchlist</span>' +
-          (inTraktWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTraktWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTraktLists)) {
@@ -4236,13 +4236,13 @@ function openSelectListModal(id, type, title, poster) {
         if (!tl || tl.slug === 'watchlist' || tl.url === 'trakt:watchlist') return;
         const inList = isItemInExternalList('trakt', 'custom', tl.id || tl.slug || '', id, tl);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="custom" data-list-id="' + escapeAttr(tl.id || tl.slug || '') + '" data-name="' + escapeAttr(tl.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tl.name || 'Trakt List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -4250,8 +4250,8 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Simkl
   if (hasSimkl) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#00e699; font-weight:bold;">\u25CF</span> Simkl ' + (simklUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-00e699 u-fw-bold">\u25CF</span> Simkl ' + (simklUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
     '</div>';
 
     const simklStatuses = [
@@ -4266,45 +4266,45 @@ function openSelectListModal(id, type, title, poster) {
       const foundList = Array.isArray(window._mySimklLists) ? window._mySimklLists.find(l => l.url && l.url.includes(st.key) && (type === 'series' ? l.type === 'series' : l.type === 'movie')) : null;
       const isPresent = isItemInExternalList('simkl', 'status', st.key, id, foundList);
       html += 
-        '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+          '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
             '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="simkl" data-target="status" data-status="' + st.key + '" data-list-id="' + st.key + '" data-name="Simkl ' + escapeAttr(st.label) + '" data-initially-checked="' + (isPresent ? 'true' : 'false') + '" ' + (isPresent ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
             '<span>' + escapeHtml(st.label) + '</span>' +
-            (isPresent ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+            (isPresent ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
-          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isPresent ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: TMDB
   if (hasTmdb) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#01b4e4; font-weight:bold;">\u25CF</span> TMDB ' + (tmdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-01b4e4 u-fw-bold">\u25CF</span> TMDB ' + (tmdbUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
     '</div>';
 
     const tmdbWl = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('watchlist')) : null;
     const inTmdbWatchlist = isItemInExternalList('tmdb', 'watchlist', 'watchlist', id, tmdbWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="watchlist" data-list-id="watchlist" data-name="TMDB Watchlist" data-initially-checked="' + (inTmdbWatchlist ? 'true' : 'false') + '" ' + (inTmdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Watchlist</span>' +
-          (inTmdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTmdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     const tmdbFav = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('favorites')) : null;
     const inTmdbFav = isItemInExternalList('tmdb', 'favorite', 'favorite', id, tmdbFav);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="favorite" data-list-id="favorite" data-name="TMDB Favorites" data-initially-checked="' + (inTmdbFav ? 'true' : 'false') + '" ' + (inTmdbFav ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Favorites</span>' +
-          (inTmdbFav ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTmdbFav ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbFav ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTmdbLists)) {
@@ -4312,13 +4312,13 @@ function openSelectListModal(id, type, title, poster) {
         if (!tml || (tml.url && (tml.url.includes('watchlist') || tml.url.includes('favorites')))) return;
         const inList = isItemInExternalList('tmdb', 'custom', tml.id || '', id, tml);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="custom" data-list-id="' + escapeAttr(tml.id || '') + '" data-name="' + escapeAttr(tml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tml.name || 'TMDB List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -4326,20 +4326,20 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: MDBList
   if (hasMdblist) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#f5c518; font-weight:bold;">\u25CF</span> MDBList ' + (mdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-f5c518 u-fw-bold">\u25CF</span> MDBList ' + (mdbUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
     '</div>';
 
     const mdbWl = Array.isArray(window._myMdblistLists) ? window._myMdblistLists.find(l => l.slug === 'watchlist' || l.url === 'mdblist:watchlist') : null;
     const inMdbWatchlist = isItemInExternalList('mdblist', 'watchlist', 'watchlist', id, mdbWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-name="MDBList Watchlist" data-initially-checked="' + (inMdbWatchlist ? 'true' : 'false') + '" ' + (inMdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>MDBList Watchlist</span>' +
-          (inMdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inMdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myMdblistLists)) {
@@ -4347,27 +4347,27 @@ function openSelectListModal(id, type, title, poster) {
         if (!ml || ml.slug === 'watchlist' || ml.slug === 'history' || ml.url === 'mdblist:watchlist' || ml.url === 'mdblist:history') return;
         const inList = isItemInExternalList('mdblist', 'custom', ml.id || ml.slug || '', id, ml);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="custom" data-list-id="' + escapeAttr(ml.id || ml.slug || '') + '" data-name="' + escapeAttr(ml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(ml.name || 'MDBList List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
   }
 
   if (html) {
-    html += '<div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); text-align: center;">' +
-      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:0.9rem;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
+    html += '<div class="u-mt-16px u-pt-12px u-bdt-1px_dashed_v_border u-ta-center">' +
+      '<button type="button" class="lc-btn secondary u-fs-v_font_size_base" style="width:100%;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
     '</div>';
   }
 
   if (html === '') {
-    html = '<p style="text-align:center; padding:20px; color:var(--muted); font-size:0.95rem;">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
-      '<a href="#" id="emptyCreateListLink" style="color:var(--accent); font-weight:600;">Create a Custom List</a> or connect Trakt/Simkl/TMDB/MDBList in <strong>Settings</strong>.</p>';
+    html = '<p class="u-ta-center u-p-20px u-c-v_muted u-fs-v_font_size_base">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
+      '<a href="#" id="emptyCreateListLink" class="u-c-v_accent u-fw-600">Create a Custom List</a> or connect Trakt/Simkl/TMDB/MDBList in <strong>Settings</strong>.</p>';
     document.getElementById('addSelectedListsBtn').style.display = 'none';
     setTimeout(() => {
       const lnk = document.getElementById('emptyCreateListLink');
@@ -4417,9 +4417,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -4447,9 +4447,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -4481,9 +4481,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -4518,9 +4518,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -5187,7 +5187,7 @@ function applySearchFilters() {
 
 function renderTitlePosterCards(items, totalCount, resEl) {
   if (!items || !items.length) {
-    resEl.innerHTML = '<p style="margin:16px 0; color:var(--muted); font-size:0.9rem;"><small>No titles match the selected filters.</small></p>';
+    resEl.innerHTML = '<p class="u-m-16px_0 u-c-v_muted u-fs-v_font_size_base"><small>No titles match the selected filters.</small></p>';
     return;
   }
 
@@ -5198,10 +5198,10 @@ function renderTitlePosterCards(items, totalCount, resEl) {
   let countBadge = '';
   if (q) {
     countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-      ? '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
-      : '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+      ? '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
   } else {
-    countBadge = '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+    countBadge = '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Top Trending ' + typeLabel + ' Right Now</div>';
   }
 
   const postersHtml = items.map(m => {
@@ -5209,7 +5209,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     const type = currentCatalogSearchType === 'tv' ? 'series' : 'movie';
     const id = 'tmdb:' + m.tmdbId;
     const ratingHtml = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(m) : '';
-    const subtitleHtml = '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;">' +
+    const subtitleHtml = '<div class="u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;">' +
       '<span>' + escapeHtml(m.year || '') + '</span>' +
       ratingHtml +
     '</div>';
@@ -5229,7 +5229,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
 
     const posterEl = resolvedCardPoster
       ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     
     return '<div class="live-preview-poster-card clickable-poster" ' +
       'data-id="' + escapeAttr(id || '') + '" ' +

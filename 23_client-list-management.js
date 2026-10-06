@@ -83,7 +83,6 @@ function initTouchDrag(handle) {
 // single most recent destructive action (not a full history) -- good enough
 // for "oops, changed my mind" without the complexity of a real undo stack.
 let undoSnapshot = null;
-let undoTimer = null;
 
 function captureUndoSnapshot() {
   undoSnapshot = { entries: collectEntries() };
@@ -92,26 +91,16 @@ function captureUndoSnapshot() {
 let activeUndoToast = null;
 
 function showUndoToast(message) {
-  if (typeof showToast === 'function') {
-    if (activeUndoToast && typeof activeUndoToast.dismiss === 'function') {
-      activeUndoToast.dismiss();
+  if (activeUndoToast && typeof activeUndoToast.dismiss === 'function') {
+    activeUndoToast.dismiss();
+  }
+  activeUndoToast = showToast(message, 'undo', {
+    duration: 8000,
+    actionText: 'Undo',
+    onAction: function() {
+      performUndo();
     }
-    activeUndoToast = showToast(message, 'undo', {
-      duration: 8000,
-      actionText: 'Undo',
-      onAction: function() {
-        performUndo();
-      }
-    });
-    return;
-  }
-  const toast = document.getElementById('undoToast');
-  if (toast) {
-    document.getElementById('undoToastMsg').textContent = message;
-    toast.style.display = 'flex';
-    clearTimeout(undoTimer);
-    undoTimer = setTimeout(hideUndoToast, 8000);
-  }
+  });
 }
 
 function hideUndoToast() {
@@ -119,9 +108,6 @@ function hideUndoToast() {
     activeUndoToast.dismiss();
     activeUndoToast = null;
   }
-  const toast = document.getElementById('undoToast');
-  if (toast) toast.style.display = 'none';
-  clearTimeout(undoTimer);
 }
 
 function performUndo() {
@@ -1463,7 +1449,7 @@ function showPosterPlaceholderFor(img) {
   if (!ph) {
     ph = document.createElement('div');
     ph.className = 'live-preview-poster live-preview-poster-placeholder';
-    ph.innerHTML = '<small style="color:var(--muted); font-size:0.7rem;">No poster</small>';
+    ph.innerHTML = '<small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small>';
     parent.appendChild(ph);
   }
   ph.style.display = 'flex';
@@ -1911,8 +1897,8 @@ function livePreviewPosterHtml(m) {
   const landscape = m.posterShape === 'landscape';
   const posterClass = 'live-preview-poster' + (landscape ? ' landscape' : '');
   const posterEl = resolvedPoster
-    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>'
-    : '<div class="' + posterClass + ' live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>'
+    : '<div class="' + posterClass + ' live-preview-poster-placeholder"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
   
   const parentUrl = (m.listUrl || (window._currentListDetailsParams ? window._currentListDetailsParams.listUrl : '') || '').toLowerCase();
   const parentName = (m.listName || (window._currentListDetailsParams ? window._currentListDetailsParams.name : '') || '').toLowerCase();
@@ -2046,11 +2032,11 @@ function livePreviewPosterHtml(m) {
   let subtitleHtml = '';
   const subText = m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : ''));
   if (subText && ratingSpan) {
-    subtitleHtml = '<div class="live-preview-poster-subtitle" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
+    subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
   } else if (subText) {
     subtitleHtml = '<div class="live-preview-poster-subtitle">' + escapeHtml(subText) + '</div>';
   } else if (ratingSpan) {
-    subtitleHtml = '<div class="live-preview-poster-subtitle" style="display:flex; align-items:center; justify-content:flex-end; gap:4px; width:100%;">' + ratingSpan + '</div>';
+    subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-flex_end u-gap-4px" style="display:flex; width:100%;">' + ratingSpan + '</div>';
   }
   const extraCardClass = isTraktCwContext ? ' detail-page-trakt-continue-watching' : (isMdblistUpNextContext ? ' detail-page-mdblist-up-next' : '');
   // resolvedPoster, not m.poster: this attribute is what the poster modal

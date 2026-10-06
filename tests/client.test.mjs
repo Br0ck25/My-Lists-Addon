@@ -3152,11 +3152,11 @@ describe("client: Storylines, Sagas & Universes rating badges", () => {
     const client = loadClient({ routes: batchRoute({ [KONOSUBA_SHOW_ID]: 7.6 }) });
     client.call("renderStorylinesUniverseList", "all");
     const html = client.get("document").getElementById("storylinesUniverseList").innerHTML;
-    const yearLineWithSlot = /list-card-mini-poster-year"[^>]*><span>[^<]*<\/span><span class="storyline-rating-slot" data-rating-id="tt5312384">/;
+    const yearLineWithSlot = /list-card-mini-poster-year[ "][^>]*><span>[^<]*<\/span><span class="storyline-rating-slot" data-rating-id="tt5312384">/;
     assert.match(html, yearLineWithSlot,
       "the rating slot sits inside the year line, beside the year, not overlaid on the poster image");
 
-    const imgWrapBlocks = [...html.matchAll(/list-card-mini-poster-img-wrap"[\s\S]*?(?=<div class="list-card-mini-poster-name")/g)];
+    const imgWrapBlocks = [...html.matchAll(/list-card-mini-poster-img-wrap[ "][\s\S]*?(?=<div class="list-card-mini-poster-name")/g)];
     assert.ok(imgWrapBlocks.length > 0, "sanity check: the grid rendered at least one poster tile");
     imgWrapBlocks.forEach((m) => {
       assert.equal(m[0].includes("storyline-rating-slot"), false,
@@ -5143,7 +5143,7 @@ describe("client: air times", () => {
     let html = "";
     client.set("showModal", (inner) => { html = inner; });
     client.call("openEpisodeDetails", epNum);
-    return [...html.matchAll(/color:var\(--brand\);">([^<]*)</g)].map((m) => m[1]);
+    return [...html.matchAll(/class="[^"]*\bu-c-v_brand\b[^"]*">([^<]*)</g)].map((m) => m[1]);
   }
 
   it("puts the hour under the date, for tonight's episode and every later one", async () => {
@@ -6835,6 +6835,25 @@ describe("client: what a channel adds up to", () => {
     const client = loadClient({ routes: {} });
     assert.equal(client.call("channelSummaryLine", client.call("channelDraftSummary", [], {})), "");
   });
+
+  it("does not call movies shows or episodes", () => {
+    const client = loadClient({ routes: {} });
+    const movie = (id, title) => ({ kind: "movie", imdbId: id, title, runtime: 120, airDate: "1999-05-19" });
+    const only = client.call("channelDraftSummary", [movie("tt1", "A"), movie("tt2", "B"), movie("tt3", "C")], {});
+    assert.equal(only.shows, 0);
+    assert.equal(only.episodes, 0);
+    assert.equal(only.movies, 3);
+    const line = client.call("channelSummaryLine", only);
+    assert.match(line, /3 movies/);
+    assert.doesNotMatch(line, /show|episode/);
+    // A mix still counts each kind under its own name.
+    const mixed = client.call("channelSummaryLine", client.call("channelDraftSummary", [
+      epOf("tt9", 1, "Rugrats", 30, "1991-08-11"), movie("tt1", "A"),
+    ], {}));
+    assert.match(mixed, /1 show\b/);
+    assert.match(mixed, /1 episode\b/);
+    assert.match(mixed, /1 movie\b/);
+  });
 });
 
 describe("client: adding something already in the channel", () => {
@@ -7367,7 +7386,7 @@ describe("client: one card shape for a channel listing", () => {
     }, "<button>Publish</button>", "");
     assert.match(html, /Saturday Morning 90s/);
     assert.match(html, /Cartoons, all morning\./);
-    assert.match(html, /300 episodes/);
+    assert.match(html, /300 items/);
     assert.match(html, /12 shows/);
     assert.match(html, /daily lineup/);
     assert.match(html, /img\/bd\.jpg/);
@@ -7757,7 +7776,7 @@ describe("client: My Catalogs sub-heading and poster rating badges", () => {
 
     client.call("toggleTmdbRatingSetting", true);
     const tmdbSpan = client.call("formatRatingSpanHtml", item);
-    assert.match(tmdbSpan, /class="poster-rating"/);
+    assert.match(tmdbSpan, /class="poster-rating[ "]/);
     assert.match(tmdbSpan, /data-rating-type="tmdb"/);
     assert.match(tmdbSpan, /7\.7/);
 
@@ -7778,19 +7797,19 @@ describe("client: My Catalogs sub-heading and poster rating badges", () => {
       items: [{ id: "tt1234567", title: "Test Film", year: "2024", vote_average: 8.2 }]
     };
     const listCardHtml = client.call("buildLocalListCardHtml", listObj);
-    assert.match(listCardHtml, /class="poster-rating"/);
+    assert.match(listCardHtml, /class="poster-rating[ "]/);
     assert.match(listCardHtml, /8\.2/);
 
     // 2. Details page card (livePreviewPosterHtml)
     const detailsItem = { id: "tt1234567", name: "Test Film", year: "2024", vote_average: 8.2, isLivePreviewShelf: false };
     const detailsHtml = client.call("livePreviewPosterHtml", detailsItem);
-    assert.match(detailsHtml, /class="poster-rating"/);
+    assert.match(detailsHtml, /class="poster-rating[ "]/);
     assert.match(detailsHtml, /8\.2/);
 
     // 3. Live Preview shelf card (isLivePreviewShelf: true - suppressed)
     const shelfItem = { id: "tt1234567", name: "Test Film", year: "2024", vote_average: 8.2, isLivePreviewShelf: true };
     const shelfHtml = client.call("livePreviewPosterHtml", shelfItem);
-    assert.doesNotMatch(shelfHtml, /class="poster-rating"/);
+    assert.doesNotMatch(shelfHtml, /class="poster-rating[ "]/);
   });
 
   it("Continue Watching badges are not removed when a show is removed from Airing Next", () => {

@@ -1733,6 +1733,651 @@ const STARTER_PACK_ENTRIES = [
   { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "movie", enabled: true, group: "Combined Charts" },
   { name: "Streaming (All Services)", url: "tmdb:chart:appletv\ntmdb:chart:disney\ntmdb:chart:discovery\ntmdb:chart:hbomax\ntmdb:chart:hulu\ntmdb:chart:netflix\ntmdb:chart:netflixkids\ntmdb:chart:paramount\ntmdb:chart:primevideo\ntmdb:chart:peacock", type: "series", enabled: true, group: "Combined Charts" }
 ];
+
+// The design tokens (colours, radii, shadows, spacing, type, z-index layers,
+// motion) for light and dark, shared by every page that renders its own
+// <style>: the app shell (09_), the admin dashboard (03_) and the backup
+// guide (24_). One definition, so a colour is changed once. See DESIGN_SYSTEM.md.
+const DESIGN_TOKENS_CSS = `
+  :root {
+    /* Modern iOS/macOS human-interface design system tokens */
+    color-scheme: light;
+
+    /* Semantic Surfaces & Backgrounds */
+    --color-bg-canvas:      #F2F2F7;
+    --color-bg-surface:     #FFFFFF;
+    --color-bg-elevated:    #FFFFFF;
+    --color-bg-sunken:      #E5E5EA;
+    --color-bg-overlay:     rgba(0, 0, 0, 0.45);
+
+    /* Semantic Borders */
+    --color-border-subtle:  rgba(0, 0, 0, 0.08);
+    --color-border-strong:  rgba(0, 0, 0, 0.14);
+    --color-border-focus:   #0066D6;
+
+    /* Semantic Typography / Foreground */
+    --color-text-primary:   #1C1C1E;
+    --color-text-secondary: #3A3A3C;
+    --color-text-muted:     #636366;
+    --color-text-inverse:   #FFFFFF;
+
+    /* Brand & Accent */
+    --color-brand:          #0066D6;
+    --color-brand-hover:    #0055B8;
+    --color-brand-active:   #00459A;
+    --color-brand-subtle:   rgba(0, 102, 214, 0.12);
+    --color-brand-wash:     rgba(0, 102, 214, 0.08);
+    --color-brand-tint:     rgba(0, 102, 214, 0.16);
+    --color-brand-line:     rgba(0, 102, 214, 0.35);
+    --color-brand-2:        #34AADC;
+    /* Fill the brand colour behind white text (>= 4.5:1 in both themes);
+       --color-brand itself is for text, borders and focus. */
+    --color-brand-fill:         #0066D6;
+    --color-brand-fill-hover:   #0055B8;
+    --color-brand-fill-active:  #00459A;
+    --color-on-brand:           #FFFFFF;
+
+    /* Status & Feedback */
+    --color-danger:         #FF3B30;
+    --color-danger-hover:   #D70015;
+    --color-danger-subtle:  rgba(255, 59, 48, 0.12);
+    --color-danger-wash:    rgba(255, 59, 48, 0.08);
+    --color-danger-tint:    rgba(255, 59, 48, 0.16);
+    --color-danger-line:    rgba(255, 59, 48, 0.35);
+    --color-success:        #34C759;
+    --color-success-hover:  #248A3D;
+    --color-success-subtle: rgba(52, 199, 89, 0.12);
+    /* Coloured text on a tinted or white surface (>= 4.5:1) */
+    --color-success-text:   #1F7A35;
+    --color-warn-text:      #B25000;
+    --color-danger-text:    #D70015;
+    --color-badge-tmdb:     #00769E;
+    --color-badge-mylists:  #7B2FA8;
+    --color-badge-imdb:     #7A5C00;
+    --color-warn:           #FF9500;
+    --color-warn-hover:     #C97000;
+    --color-warn-subtle:    rgba(255, 149, 0, 0.12);
+
+    /* Rating Colors */
+    --color-rating-high:    #1F7A35;
+    --color-rating-mid:     #B25000;
+    --color-rating-low:     #C41E14;
+    --color-rating-none:    #48484A;
+    --color-badge-finale-text: #FFD166;
+
+    /* Third-party brand colours (fixed by the brands, the same in both themes) */
+    --brand-netflix: #E50914; --brand-prime: #00A8E1; --brand-apple: #000000;
+    --brand-disney: #113CCF; --brand-max: #5B00C5; --brand-hulu: #1CE783; --brand-hulu-text: #000000;
+    --brand-paramount: #0064FF; --brand-peacock: #000000; --brand-discovery: #002244; --brand-kids: #FF9900;
+    --brand-stremio-from: #9B8FFF; --brand-stremio-to: #6D48FF;
+    --brand-nuvio-from: #FF5E3A; --brand-nuvio-to: #FF2A68;
+    --brand-wako-from: #007AFF; --brand-wako-to: #34AADC;
+
+    /* Elevation & Shadows */
+    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow:               0 2px 10px rgba(0, 0, 0, 0.08);
+    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.10);
+    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.16);
+    --shadow-focus:         0 0 0 3px rgba(0, 102, 214, 0.35);
+
+    /* Spacing Scale (8pt grid system with half-steps) */
+    --space-0-5:            2px;
+    --space-1:              4px;
+    --space-1-5:            6px;
+    --space-2:              8px;
+    --space-2-5:            10px;
+    --space-3:              12px;
+    --space-3-5:            14px;
+    --space-4:              16px;
+    --space-5:              20px;
+    --space-6:              24px;
+    --space-8:              32px;
+
+    /* Border Radius Scale */
+    --radius-xs:            4px;
+    --radius-sm:            8px;
+    --radius-md:            12px;
+    --radius-lg:            16px;
+    --radius-xl:            20px;
+    --radius-pill:          999px;
+
+    /* Stacking layers */
+    --z-sticky:             10;
+    --z-modal:              1000;
+    --z-nav:                900;
+    --z-toast:              99999;
+
+    /* Motion */
+    --duration-fast:        0.12s;
+    --duration-base:        0.15s;
+    --duration-slow:        0.25s;
+    --ease:                 ease;
+
+    /* Interactive Component Controls & Touch Targets */
+    --control-height-sm:    32px;
+    --control-height-md:    40px;
+    --control-height-lg:    48px;
+    --control-touch-min:    44px;
+
+    /* Typography Scale */
+    --font-display:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-body:            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-mono:            ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-size-2xs:        0.68rem;
+    --font-size-xs:         0.75rem;
+    --font-size-sm:         0.85rem;
+    --font-size-base:       0.925rem;
+    --font-size-md:         1rem;
+    --font-size-lg:         1.15rem;
+    --font-size-xl:         1.35rem;
+    --font-size-2xl:        1.6rem;
+
+    /* Scrollbars */
+    --sb-track:             transparent;
+    --sb-thumb:             rgba(0, 0, 0, 0.15);
+    --sb-thumb-hover:       rgba(0, 0, 0, 0.25);
+
+    /* Complete Backward-Compatibility Aliases */
+    --bg:                   var(--color-bg-canvas);
+    --surface:              var(--color-bg-surface);
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
+    --panel:                var(--color-bg-surface);
+    --panel-strong:         var(--color-bg-sunken);
+    --border:               var(--color-border-subtle);
+    --border-strong:        var(--color-border-strong);
+    --text:                 var(--color-text-primary);
+    --text-2:               var(--color-text-secondary);
+    --muted:                var(--color-text-muted);
+    --accent:               var(--color-brand);
+    --brand:                var(--color-brand);
+    --accent-hover:         var(--color-brand-hover);
+    --accent-2:             var(--color-brand-2);
+    --danger:               var(--color-danger);
+    --success:              var(--color-success);
+    --warn:                 var(--color-warn);
+    --rating-high:          var(--color-rating-high);
+    --rating-mid:           var(--color-rating-mid);
+    --rating-low:           var(--color-rating-low);
+    --radius:               14px;
+  }
+  :root.dark-theme {
+    color-scheme: dark;
+
+    /* Semantic Surfaces & Backgrounds (Dark Mode) */
+    --color-bg-canvas:      #000000;
+    --color-bg-surface:     #1C1C1E;
+    --color-bg-elevated:    #2C2C2E;
+    --color-bg-sunken:      #161618;
+    --color-bg-overlay:     rgba(0, 0, 0, 0.65);
+
+    /* Semantic Borders (Dark Mode) */
+    --color-border-subtle:  rgba(255, 255, 255, 0.14);
+    --color-border-strong:  rgba(255, 255, 255, 0.24);
+    --color-border-focus:   #0A84FF;
+
+    /* Semantic Typography / Foreground (Dark Mode) */
+    --color-text-primary:   #FFFFFF;
+    --color-text-secondary: #EBEBF5;
+    --color-text-muted:     #AEAEB2;
+    --color-text-inverse:   #000000;
+
+    /* Brand & Accent (Dark Mode) */
+    --color-brand:          #0A84FF;
+    --color-brand-hover:    #0071E3;
+    --color-brand-active:   #0056B3;
+    --color-brand-subtle:   rgba(10, 132, 255, 0.18);
+    --color-brand-wash:     rgba(10, 132, 255, 0.14);
+    --color-brand-tint:     rgba(10, 132, 255, 0.24);
+    --color-brand-line:     rgba(10, 132, 255, 0.40);
+    --color-brand-2:        #5AC8FA;
+    --color-brand-fill:         #0A64D8;
+    --color-brand-fill-hover:   #0B5FCC;
+    --color-brand-fill-active:  #0A54B3;
+
+    /* Status & Feedback (Dark Mode) */
+    --color-danger:         #FF453A;
+    --color-danger-hover:   #FF6961;
+    --color-danger-subtle:  rgba(255, 69, 58, 0.18);
+    --color-danger-wash:    rgba(255, 69, 58, 0.15);
+    --color-danger-tint:    rgba(255, 69, 58, 0.24);
+    --color-danger-line:    rgba(255, 69, 58, 0.40);
+    --color-success:        #30D158;
+    --color-success-hover:  #34C759;
+    --color-success-subtle: rgba(48, 209, 88, 0.18);
+    --color-success-text:   #30D158;
+    --color-warn-text:      #FF9F0A;
+    --color-danger-text:    #FF453A;
+    --color-badge-tmdb:     #5AC8FA;
+    --color-badge-mylists:  #BF5AF2;
+    --color-badge-imdb:     #F5C518;
+    --color-warn:           #FF9F0A;
+    --color-warn-hover:     #FFB340;
+    --color-warn-subtle:    rgba(255, 159, 10, 0.18);
+
+    /* Rating Colors (Dark Mode) */
+    --color-rating-high:    #1F7A35;
+    --color-rating-mid:     #B25000;
+    --color-rating-low:     #C41E14;
+    --color-rating-none:    #48484A;
+
+    /* Shadows & Elevation (Dark Mode) */
+    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow:               0 2px 10px rgba(0, 0, 0, 0.45);
+    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.55);
+    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.70);
+    --shadow-focus:         0 0 0 3px rgba(10, 132, 255, 0.45);
+
+    /* Scrollbars (Dark Mode) */
+    --sb-thumb:             rgba(255, 255, 255, 0.15);
+    --sb-thumb-hover:       rgba(255, 255, 255, 0.25);
+
+    /* Backward-Compatibility Aliases (Dark Mode) */
+    --surface-2:            var(--color-bg-sunken);
+    --surface-3:            var(--color-border-strong);
+  }
+`;
+
+// Generated single-declaration helpers (u-<property>-<value>) that replaced
+// repeated inline style="" attributes in the page markup. Each class is one
+// declaration, and !important on purpose: it wins over component rules exactly
+// as the inline style it replaced did (e.g. input[readonly], .modal-card input).
+// Prefer a real component class (DESIGN_SYSTEM.md) for anything
+// new, and use these only where a one-off spacing/colour tweak is needed.
+const UTILITY_CSS = `
+.u-acc-v_accent{accent-color:var(--accent) !important}
+.u-acc-v_brand{accent-color:var(--brand) !important}
+.u-ai-center{align-items:center !important}
+.u-ai-flex_end{align-items:flex-end !important}
+.u-ai-flex_start{align-items:flex-start !important}
+.u-ai-stretch{align-items:stretch !important}
+.u-as-flex_start{align-self:flex-start !important}
+.u-aspectratio-16_9{aspect-ratio:16/9 !important}
+.u-bd-0{border:0 !important}
+.u-bd-1_5px_dashed_v_border{border:1.5px dashed var(--border) !important}
+.u-bd-1_5px_solid_v_border_strong{border:1.5px solid var(--border-strong) !important}
+.u-bd-1px_solid_rgba_0_0_0_0_15{border:1px solid rgba(0,0,0,0.15) !important}
+.u-bd-1px_solid_rgba_0_122_255_0_2{border:1px solid rgba(0,122,255,0.2) !important}
+.u-bd-1px_solid_rgba_0_122_255_0_25{border:1px solid rgba(0,122,255,0.25) !important}
+.u-bd-1px_solid_rgba_0_122_255_0_3{border:1px solid rgba(0,122,255,0.3) !important}
+.u-bd-1px_solid_rgba_255_149_0_0_3{border:1px solid rgba(255,149,0,0.3) !important}
+.u-bd-1px_solid_rgba_255_149_0_0_35{border:1px solid rgba(255,149,0,0.35) !important}
+.u-bd-1px_solid_rgba_255_255_255_0_12{border:1px solid rgba(255,255,255,0.12) !important}
+.u-bd-1px_solid_rgba_255_255_255_0_3{border:1px solid rgba(255,255,255,0.3) !important}
+.u-bd-1px_solid_rgba_255_59_48_0_25{border:1px solid rgba(255,59,48,0.25) !important}
+.u-bd-1px_solid_rgba_255_59_48_0_3{border:1px solid rgba(255,59,48,0.3) !important}
+.u-bd-1px_solid_v_border{border:1px solid var(--border) !important}
+.u-bd-1px_solid_v_border_strong{border:1px solid var(--border-strong) !important}
+.u-bd-1px_solid_v_color_border_strong{border:1px solid var(--color-border-strong) !important}
+.u-bd-1px_solid_v_color_danger{border:1px solid var(--color-danger) !important}
+.u-bd-2px_dashed_v_accent{border:2px dashed var(--accent) !important}
+.u-bd-2px_solid_v_accent{border:2px solid var(--accent) !important}
+.u-bd-2px_solid_v_border{border:2px solid var(--border) !important}
+.u-bd-none{border:none !important}
+.u-bdb-1px_solid_v_border{border-bottom:1px solid var(--border) !important}
+.u-bdb-none{border-bottom:none !important}
+.u-bdc-rgba_255_149_0_0_4{border-color:rgba(255,149,0,0.4) !important}
+.u-bdc-rgba_255_59_48_0_25{border-color:rgba(255,59,48,0.25) !important}
+.u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3) !important}
+.u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35) !important}
+.u-bdc-rgba_255_59_48_0_4{border-color:rgba(255,59,48,0.4) !important}
+.u-bdc-v_color_danger{border-color:var(--color-danger) !important}
+.u-bdc-v_danger{border-color:var(--danger) !important}
+.u-bdt-1px_dashed_v_border{border-top:1px dashed var(--border) !important}
+.u-bdt-1px_solid_v_border{border-top:1px solid var(--border) !important}
+.u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08{border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08)) !important}
+.u-bg-222{background:#222 !important}
+.u-bg-F2F2F7{background:#F2F2F7 !important}
+.u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100{background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%) !important}
+.u-bg-none{background:none !important}
+.u-bg-rgba_0_0_0_0_2{background:rgba(0,0,0,0.2) !important}
+.u-bg-rgba_0_0_0_0_3{background:rgba(0,0,0,0.3) !important}
+.u-bg-rgba_0_0_0_0_5{background:rgba(0,0,0,0.5) !important}
+.u-bg-rgba_0_0_0_0_75{background:rgba(0,0,0,0.75) !important}
+.u-bg-rgba_0_122_255_0_08{background:rgba(0,122,255,0.08) !important}
+.u-bg-rgba_255_149_0_0_05{background:rgba(255,149,0,0.05) !important}
+.u-bg-rgba_255_149_0_0_12{background:rgba(255,149,0,0.12) !important}
+.u-bg-rgba_255_255_255_0_03{background:rgba(255,255,255,0.03) !important}
+.u-bg-rgba_255_59_48_0_05{background:rgba(255,59,48,0.05) !important}
+.u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08) !important}
+.u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12) !important}
+.u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15) !important}
+.u-bg-v_accent{background:var(--accent) !important}
+.u-bg-v_bg{background:var(--bg) !important}
+.u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03)) !important}
+.u-bg-v_border{background:var(--border) !important}
+.u-bg-v_card_bg{background:var(--card-bg) !important}
+.u-bg-v_color_bg_elevated{background:var(--color-bg-elevated) !important}
+.u-bg-v_color_bg_overlay{background:var(--color-bg-overlay) !important}
+.u-bg-v_color_bg_sunken{background:var(--color-bg-sunken) !important}
+.u-bg-v_color_danger{background:var(--color-danger) !important}
+.u-bg-v_color_on_brand{background:var(--color-on-brand) !important}
+.u-bg-v_color_success_subtle{background:var(--color-success-subtle) !important}
+.u-bg-v_color_warn{background:var(--color-warn) !important}
+.u-bg-v_panel_strong{background:var(--panel-strong) !important}
+.u-bg-v_surface{background:var(--surface) !important}
+.u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04)) !important}
+.u-bordercollapse-collapse{border-collapse:collapse !important}
+.u-bordertopcolor-transparent{border-top-color:transparent !important}
+.u-bordertopcolor-v_accent{border-top-color:var(--accent) !important}
+.u-br-50{border-radius:50% !important}
+.u-br-v_radius{border-radius:var(--radius) !important}
+.u-br-v_radius_lg{border-radius:var(--radius-lg) !important}
+.u-br-v_radius_md{border-radius:var(--radius-md) !important}
+.u-br-v_radius_pill{border-radius:var(--radius-pill) !important}
+.u-br-v_radius_sm{border-radius:var(--radius-sm) !important}
+.u-br-v_radius_xl{border-radius:var(--radius-xl) !important}
+.u-br-v_radius_xs{border-radius:var(--radius-xs) !important}
+.u-bs-border_box{box-sizing:border-box !important}
+.u-bsh-0_1px_4px_rgba_0_0_0_0_4{box-shadow:0 1px 4px rgba(0,0,0,0.4) !important}
+.u-bsh-0_2px_6px_rgba_0_0_0_0_4{box-shadow:0 2px 6px rgba(0,0,0,0.4) !important}
+.u-bsh-0_4px_12px_rgba_0_0_0_0_5{box-shadow:0 4px 12px rgba(0,0,0,0.5) !important}
+.u-bsh-v_shadow_lg{box-shadow:var(--shadow-lg) !important}
+.u-bsh-v_shadow_sm{box-shadow:var(--shadow-sm) !important}
+.u-c-00e699{color:#00e699 !important}
+.u-c-01b4e4{color:#01b4e4 !important}
+.u-c-1C1C1E{color:#1C1C1E !important}
+.u-c-ed1c24{color:#ed1c24 !important}
+.u-c-f5c518{color:#f5c518 !important}
+.u-c-red{color:red !important}
+.u-c-v_accent{color:var(--accent) !important}
+.u-c-v_accent_2{color:var(--accent-2) !important}
+.u-c-v_brand{color:var(--brand) !important}
+.u-c-v_color_danger_text{color:var(--color-danger-text) !important}
+.u-c-v_color_on_brand{color:var(--color-on-brand) !important}
+.u-c-v_color_success_text{color:var(--color-success-text) !important}
+.u-c-v_color_warn_text{color:var(--color-warn-text) !important}
+.u-c-v_danger{color:var(--danger) !important}
+.u-c-v_danger_v_color_danger{color:var(--danger, var(--color-danger)) !important}
+.u-c-v_muted{color:var(--muted) !important}
+.u-c-v_text{color:var(--text) !important}
+.u-c-v_text_2{color:var(--text-2) !important}
+.u-c-v_warning_v_color_warn{color:var(--warning, var(--color-warn)) !important}
+.u-cur-default{cursor:default !important}
+.u-cur-grab{cursor:grab !important}
+.u-cur-not_allowed{cursor:not-allowed !important}
+.u-cur-pointer{cursor:pointer !important}
+.u-fd-column{flex-direction:column !important}
+.u-fd-row{flex-direction:row !important}
+.u-ff-inherit{font-family:inherit !important}
+.u-ff-monospace{font-family:monospace !important}
+.u-ff-sans_serif{font-family:sans-serif !important}
+.u-ff-serif{font-family:serif !important}
+.u-ff-v_font_mono_monospace{font-family:var(--font-mono, monospace) !important}
+.u-flex-0_0_300px{flex:0 0 300px !important}
+.u-flex-0_0_auto{flex:0 0 auto !important}
+.u-flex-1{flex:1 !important}
+.u-flex-1_1_220px{flex:1 1 220px !important}
+.u-flex-1_1_320px{flex:1 1 320px !important}
+.u-flex-none{flex:none !important}
+.u-fs-13px{font-size:13px !important}
+.u-fs-2_5rem{font-size:2.5rem !important}
+.u-fs-2rem{font-size:2rem !important}
+.u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}
+.u-fs-v_font_size_2xs{font-size:var(--font-size-2xs) !important}
+.u-fs-v_font_size_base{font-size:var(--font-size-base) !important}
+.u-fs-v_font_size_lg{font-size:var(--font-size-lg) !important}
+.u-fs-v_font_size_md{font-size:var(--font-size-md) !important}
+.u-fs-v_font_size_sm{font-size:var(--font-size-sm) !important}
+.u-fs-v_font_size_xl{font-size:var(--font-size-xl) !important}
+.u-fs-v_font_size_xs{font-size:var(--font-size-xs) !important}
+.u-fsh-0{flex-shrink:0 !important}
+.u-fw-400{font-weight:400 !important}
+.u-fw-500{font-weight:500 !important}
+.u-fw-600{font-weight:600 !important}
+.u-fw-700{font-weight:700 !important}
+.u-fw-800{font-weight:800 !important}
+.u-fw-bold{font-weight:bold !important}
+.u-fw-normal{font-weight:normal !important}
+.u-fw2-wrap{flex-wrap:wrap !important}
+.u-gap-0{gap:0 !important}
+.u-gap-10px{gap:10px !important}
+.u-gap-12px{gap:12px !important}
+.u-gap-16px{gap:16px !important}
+.u-gap-20px{gap:20px !important}
+.u-gap-24px{gap:24px !important}
+.u-gap-32px{gap:32px !important}
+.u-gap-4px{gap:4px !important}
+.u-gap-5px{gap:5px !important}
+.u-gap-6px{gap:6px !important}
+.u-gap-8px{gap:8px !important}
+.u-gridcolumn-1_1{grid-column:1 / -1 !important}
+.u-gtc-repeat_auto_fill_minmax_140px_1fr{grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)) !important}
+.u-gtc-repeat_auto_fill_minmax_90px_1fr{grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)) !important}
+.u-gtc-repeat_auto_fit_minmax_260px_1fr{grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)) !important}
+.u-gtc-repeat_auto_fit_minmax_min_100_200px_1fr{grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)) !important}
+.u-jc-center{justify-content:center !important}
+.u-jc-flex_end{justify-content:flex-end !important}
+.u-jc-flex_start{justify-content:flex-start !important}
+.u-jc-space_between{justify-content:space-between !important}
+.u-lh-1{line-height:1 !important}
+.u-lh-1_2{line-height:1.2 !important}
+.u-lh-1_35{line-height:1.35 !important}
+.u-lh-1_4{line-height:1.4 !important}
+.u-lh-1_45{line-height:1.45 !important}
+.u-lh-1_5{line-height:1.5 !important}
+.u-lh-1_6{line-height:1.6 !important}
+.u-ls-0_02em{letter-spacing:0.02em !important}
+.u-ls-0_05em{letter-spacing:0.05em !important}
+.u-ls-0_5px{letter-spacing:0.5px !important}
+.u-ls-4px{letter-spacing:4px !important}
+.u-m-0{margin:0 !important}
+.u-m-0_0_10px{margin:0 0 10px !important}
+.u-m-0_0_12px{margin:0 0 12px !important}
+.u-m-0_0_12px_18px{margin:0 0 12px 18px !important}
+.u-m-0_0_14px{margin:0 0 14px !important}
+.u-m-0_0_16px{margin:0 0 16px !important}
+.u-m-0_0_18px{margin:0 0 18px !important}
+.u-m-0_0_2px{margin:0 0 2px !important}
+.u-m-0_0_4px{margin:0 0 4px !important}
+.u-m-0_0_6px{margin:0 0 6px !important}
+.u-m-0_0_8px{margin:0 0 8px !important}
+.u-m-0_6px_6px_0{margin:0 6px 6px 0 !important}
+.u-m-0_auto{margin:0 auto !important}
+.u-m-10px_0{margin:10px 0 !important}
+.u-m-10px_0_0{margin:10px 0 0 !important}
+.u-m-10px_0_4px{margin:10px 0 4px !important}
+.u-m-12px_0{margin:12px 0 !important}
+.u-m-12px_0_0{margin:12px 0 0 !important}
+.u-m-12px_0_20px{margin:12px 0 20px !important}
+.u-m-12px_0_8px{margin:12px 0 8px !important}
+.u-m-14px_0_4px{margin:14px 0 4px !important}
+.u-m-16px_0{margin:16px 0 !important}
+.u-m-16px_0_20px{margin:16px 0 20px !important}
+.u-m-16px_0_6px{margin:16px 0 6px !important}
+.u-m-20px_0_4px{margin:20px 0 4px !important}
+.u-m-2px_0_0{margin:2px 0 0 !important}
+.u-m-2px_0_0_24px{margin:2px 0 0 24px !important}
+.u-m-2px_4px_2px_0{margin:2px 4px 2px 0 !important}
+.u-m-32px_0_16px{margin:32px 0 16px !important}
+.u-m-3px_0_0{margin:3px 0 0 !important}
+.u-m-4px_0_0{margin:4px 0 0 !important}
+.u-m-4px_0_1px{margin:4px 0 1px !important}
+.u-m-4px_0_6px{margin:4px 0 6px !important}
+.u-m-6px_0_0{margin:6px 0 0 !important}
+.u-m-6px_0_0_24px{margin:6px 0 0 24px !important}
+.u-m-6px_0_4px{margin:6px 0 4px !important}
+.u-m-8px_0{margin:8px 0 !important}
+.u-m-8px_0_0{margin:8px 0 0 !important}
+.u-m-8px_0_0_24px{margin:8px 0 0 24px !important}
+.u-m-8px_0_12px{margin:8px 0 12px !important}
+.u-m-8px_0_14px{margin:8px 0 14px !important}
+.u-m-8px_0_16px{margin:8px 0 16px !important}
+.u-maxh-340px{max-height:340px !important}
+.u-maxh-55vh{max-height:55vh !important}
+.u-maxh-85vh{max-height:85vh !important}
+.u-maxw-100{max-width:100% !important}
+.u-maxw-220px{max-width:220px !important}
+.u-maxw-320px{max-width:320px !important}
+.u-maxw-340px{max-width:340px !important}
+.u-maxw-380px{max-width:380px !important}
+.u-maxw-400px{max-width:400px !important}
+.u-maxw-420px{max-width:420px !important}
+.u-maxw-440px{max-width:440px !important}
+.u-maxw-480px{max-width:480px !important}
+.u-maxw-500px{max-width:500px !important}
+.u-maxw-520px{max-width:520px !important}
+.u-maxw-540px{max-width:540px !important}
+.u-maxw-680px{max-width:680px !important}
+.u-mb-0{margin-bottom:0 !important}
+.u-mb-10px{margin-bottom:10px !important}
+.u-mb-12px{margin-bottom:12px !important}
+.u-mb-14px{margin-bottom:14px !important}
+.u-mb-16px{margin-bottom:16px !important}
+.u-mb-18px{margin-bottom:18px !important}
+.u-mb-20px{margin-bottom:20px !important}
+.u-mb-24px{margin-bottom:24px !important}
+.u-mb-2px{margin-bottom:2px !important}
+.u-mb-4px{margin-bottom:4px !important}
+.u-mb-6px{margin-bottom:6px !important}
+.u-mb-8px{margin-bottom:8px !important}
+.u-minh-120px{min-height:120px !important}
+.u-minh-30px{min-height:30px !important}
+.u-minh-38px{min-height:38px !important}
+.u-minh-44px{min-height:44px !important}
+.u-minh-70px{min-height:70px !important}
+.u-minh-unset{min-height:unset !important}
+.u-minw-0{min-width:0 !important}
+.u-minw-140px{min-width:140px !important}
+.u-minw-160px{min-width:160px !important}
+.u-minw-180px{min-width:180px !important}
+.u-minw-200px{min-width:200px !important}
+.u-minw-210px{min-width:210px !important}
+.u-minw-220px{min-width:220px !important}
+.u-minw-240px{min-width:240px !important}
+.u-minw-280px{min-width:280px !important}
+.u-minw-300px{min-width:300px !important}
+.u-minw-320px{min-width:320px !important}
+.u-minw-80px{min-width:80px !important}
+.u-minw-90px{min-width:90px !important}
+.u-minw-auto{min-width:auto !important}
+.u-ml-26px{margin-left:26px !important}
+.u-ml-4px{margin-left:4px !important}
+.u-ml-6px{margin-left:6px !important}
+.u-ml-8px{margin-left:8px !important}
+.u-ml-auto{margin-left:auto !important}
+.u-mr-0{margin-right:0 !important}
+.u-mr-4px{margin-right:4px !important}
+.u-mr-6px{margin-right:6px !important}
+.u-mr-8px{margin-right:8px !important}
+.u-mt-0{margin-top:0 !important}
+.u-mt-10px{margin-top:10px !important}
+.u-mt-12px{margin-top:12px !important}
+.u-mt-14px{margin-top:14px !important}
+.u-mt-16px{margin-top:16px !important}
+.u-mt-18px{margin-top:18px !important}
+.u-mt-20px{margin-top:20px !important}
+.u-mt-24px{margin-top:24px !important}
+.u-mt-28px{margin-top:28px !important}
+.u-mt-2px{margin-top:2px !important}
+.u-mt-32px{margin-top:32px !important}
+.u-mt-3px{margin-top:3px !important}
+.u-mt-48px{margin-top:48px !important}
+.u-mt-4px{margin-top:4px !important}
+.u-mt-6px{margin-top:6px !important}
+.u-mt-8px{margin-top:8px !important}
+.u-objectfit-cover{object-fit:cover !important}
+.u-ol-none{outline:none !important}
+.u-ov-auto{overflow:auto !important}
+.u-ov-hidden{overflow:hidden !important}
+.u-overflowwrap-anywhere{overflow-wrap:anywhere !important}
+.u-ovx-auto{overflow-x:auto !important}
+.u-ovy-auto{overflow-y:auto !important}
+.u-p-0{padding:0 !important}
+.u-p-0_0_10px{padding:0 0 10px !important}
+.u-p-0_0_12px{padding:0 0 12px !important}
+.u-p-0_0_4px{padding:0 0 4px !important}
+.u-p-0_14px_14px{padding:0 14px 14px !important}
+.u-p-0_16px{padding:0 16px !important}
+.u-p-0_18px{padding:0 18px !important}
+.u-p-0_20px{padding:0 20px !important}
+.u-p-10px{padding:10px !important}
+.u-p-10px_0{padding:10px 0 !important}
+.u-p-10px_0_12px{padding:10px 0 12px !important}
+.u-p-10px_12px{padding:10px 12px !important}
+.u-p-10px_14px{padding:10px 14px !important}
+.u-p-10px_16px{padding:10px 16px !important}
+.u-p-10px_24px{padding:10px 24px !important}
+.u-p-12px{padding:12px !important}
+.u-p-12px_0{padding:12px 0 !important}
+.u-p-12px_14px{padding:12px 14px !important}
+.u-p-12px_16px{padding:12px 16px !important}
+.u-p-12px_28px{padding:12px 28px !important}
+.u-p-14px_0{padding:14px 0 !important}
+.u-p-14px_16px{padding:14px 16px !important}
+.u-p-14px_18px{padding:14px 18px !important}
+.u-p-16px{padding:16px !important}
+.u-p-16px_18px{padding:16px 18px !important}
+.u-p-18px{padding:18px !important}
+.u-p-20px{padding:20px !important}
+.u-p-22px{padding:22px !important}
+.u-p-24px{padding:24px !important}
+.u-p-24px_16px{padding:24px 16px !important}
+.u-p-28px_16px{padding:28px 16px !important}
+.u-p-2px{padding:2px !important}
+.u-p-2px_10px{padding:2px 10px !important}
+.u-p-2px_6px{padding:2px 6px !important}
+.u-p-2px_8px{padding:2px 8px !important}
+.u-p-3px_0{padding:3px 0 !important}
+.u-p-3px_8px{padding:3px 8px !important}
+.u-p-40px{padding:40px !important}
+.u-p-4px{padding:4px !important}
+.u-p-4px_0{padding:4px 0 !important}
+.u-p-4px_10px{padding:4px 10px !important}
+.u-p-4px_10px_4px_0{padding:4px 10px 4px 0 !important}
+.u-p-4px_6px{padding:4px 6px !important}
+.u-p-4px_8px_4px_0{padding:4px 8px 4px 0 !important}
+.u-p-5px_8px{padding:5px 8px !important}
+.u-p-6px{padding:6px !important}
+.u-p-6px_10px{padding:6px 10px !important}
+.u-p-6px_12px{padding:6px 12px !important}
+.u-p-6px_14px{padding:6px 14px !important}
+.u-p-6px_16px{padding:6px 16px !important}
+.u-p-7px_12px{padding:7px 12px !important}
+.u-p-8px{padding:8px !important}
+.u-p-8px_0{padding:8px 0 !important}
+.u-p-8px_10px{padding:8px 10px !important}
+.u-p-8px_12px{padding:8px 12px !important}
+.u-p-8px_14px{padding:8px 14px !important}
+.u-p-8px_16px{padding:8px 16px !important}
+.u-p-8px_18px{padding:8px 18px !important}
+.u-p-8px_20px{padding:8px 20px !important}
+.u-p-8px_24px{padding:8px 24px !important}
+.u-p-9px_12px{padding:9px 12px !important}
+.u-p-9px_14px{padding:9px 14px !important}
+.u-pb-12px{padding-bottom:12px !important}
+.u-pb-14px{padding-bottom:14px !important}
+.u-pb-56_25{padding-bottom:56.25% !important}
+.u-pl-18px{padding-left:18px !important}
+.u-pl-38px{padding-left:38px !important}
+.u-pr-10px{padding-right:10px !important}
+.u-pr-12px{padding-right:12px !important}
+.u-pr-38px{padding-right:38px !important}
+.u-pr-4px{padding-right:4px !important}
+.u-pr-8px{padding-right:8px !important}
+.u-pt-10px{padding-top:10px !important}
+.u-pt-12px{padding-top:12px !important}
+.u-pt-14px{padding-top:14px !important}
+.u-pt-4px{padding-top:4px !important}
+.u-rs-vertical{resize:vertical !important}
+.u-ta-center{text-align:center !important}
+.u-ta-left{text-align:left !important}
+.u-ta-right{text-align:right !important}
+.u-td-none{text-decoration:none !important}
+.u-to-ellipsis{text-overflow:ellipsis !important}
+.u-touchaction-manipulation{touch-action:manipulation !important}
+.u-tt-none{text-transform:none !important}
+.u-tt-uppercase{text-transform:uppercase !important}
+.u-us-all{user-select:all !important}
+.u-us-none{user-select:none !important}
+.u-va-middle{vertical-align:middle !important}
+.u-va-top{vertical-align:top !important}
+.u-wb-break_all{word-break:break-all !important}
+.u-wb-break_word{word-break:break-word !important}
+.u-ws-normal{white-space:normal !important}
+.u-ws-nowrap{white-space:nowrap !important}
+.u-ws-pre_wrap{white-space:pre-wrap !important}
+`;
 // --- icon (placeholder, replace via /mnt/project source if needed) --------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
@@ -12361,29 +13006,8 @@ function renderAdminLoginPage(errorMsg, accessOn) {
   }
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
-  :root {
-    --bg: #F2F2F7;
-    --surface: #FFFFFF;
-    --panel-strong: #E5E5EA;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.15);
-    --text: #000000;
-    --text-2: #3A3A3C;
-    --muted: #8E8E93;
-    --accent: #007AFF;
-    --danger: #FF3B30;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-    --shadow: 0 2px 10px rgba(0,0,0,0.08);
-    --radius: 14px;
-    --radius-sm: 10px;
-    --radius-pill: 999px;
-    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
-  }
-  html.dark-theme {
-    --bg: #000000; --surface: #1C1C1E; --panel-strong: #2C2C2E;
-    --border: rgba(255,255,255,0.15); --border-strong: rgba(255,255,255,0.25);
-    --text: #FFFFFF; --text-2: #EBEBF5;
-  }
+${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; }
   body {
     font-family: var(--font-body);
@@ -12456,7 +13080,7 @@ function renderAdminLoginPage(errorMsg, accessOn) {
     <div class="panel">
       <h2 class="panel-title">Admin sign in</h2>
       ${accessOn
-        ? `<p style="color:var(--text-2); margin:0 0 14px; font-size:0.85rem; line-height:1.45;">Cloudflare Access is <strong>on</strong> for this dashboard. If you reached this page through Access, you are already signed in &mdash; <a href="/admin" style="color:var(--accent);">open the dashboard</a>.<br>If you are seeing this instead, Access did not let the request through (check the Access application&rsquo;s policy for <code>/admin</code>), or this hostname is not covered by it. The key below is the break-glass way in.</p>`
+        ? `<p class="u-c-v_text_2 u-m-0_0_14px u-fs-v_font_size_sm u-lh-1_45">Cloudflare Access is <strong>on</strong> for this dashboard. If you reached this page through Access, you are already signed in &mdash; <a href="/admin" class="u-c-v_accent">open the dashboard</a>.<br>If you are seeing this instead, Access did not let the request through (check the Access application&rsquo;s policy for <code>/admin</code>), or this hostname is not covered by it. The key below is the break-glass way in.</p>`
         : ""}
       <form method="POST" action="/admin/login">
         <div class="row">
@@ -12604,7 +13228,7 @@ function applySupportGoalUpdate(stored, body, now = new Date()) {
 
 async function renderAdminDashboard(env) {
   if (!env || !env.CONFIGS) {
-    return `<!DOCTYPE html><html><body style="background:#F2F2F7;color:#1C1C1E;font-family:sans-serif;padding:40px;">This Worker has no CONFIGS KV namespace bound, so there's no stats to show.</body></html>`;
+    return `<!DOCTYPE html><html><body class="u-bg-F2F2F7 u-c-1C1C1E u-ff-sans_serif u-p-40px">This Worker has no CONFIGS KV namespace bound, so there's no stats to show.</body></html>`;
   }
   // Surfaced in the Maintenance tab below so a dashboard-only self-hoster
   // (no wrangler.toml in front of them) can see at a glance whether this
@@ -12737,7 +13361,7 @@ async function renderAdminDashboard(env) {
         // attribute escaping here the same way it already does for the two
         // <td> values above; resetCreatorKey reads the values back off the
         // element at click time instead of receiving them as literals.
-        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:0.8rem;" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
+        `<td><button type="button" class="lc-btn secondary u-p-4px_10px u-fs-v_font_size_sm" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
     )
     .join("");
   const creatorTruncatedNote = shownCreatorCount < totalCreatorCount
@@ -12781,30 +13405,8 @@ async function renderAdminDashboard(env) {
   }
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
-  :root {
-    --bg: #F2F2F7;
-    --surface: #FFFFFF;
-    --panel-strong: #E5E5EA;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.15);
-    --text: #000000;
-    --text-2: #3A3A3C;
-    --muted: #8E8E93;
-    --accent: #007AFF;
-    --danger: #FF3B30;
-    --success: #34C759;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-    --shadow: 0 2px 10px rgba(0,0,0,0.08);
-    --shadow-md: 0 8px 30px rgba(0,0,0,0.18);
-    --radius: 14px;
-    --radius-sm: 10px;
-    --radius-pill: 999px;
-  }
-  html.dark-theme {
-    --bg: #000000; --surface: #1C1C1E; --panel-strong: #2C2C2E;
-    --border: rgba(255,255,255,0.15); --border-strong: rgba(255,255,255,0.25);
-    --text: #FFFFFF; --text-2: #EBEBF5;
-  }
+${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; }
   body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,system-ui,sans-serif; max-width:900px; margin:0 auto; padding:20px 14px; }
   h1 { margin-bottom:4px; font-size:1.6rem; color:var(--text); }
@@ -12912,8 +13514,8 @@ async function renderAdminDashboard(env) {
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p style="color:#8E8E93; margin-top:0;">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
-  ${isD1Bound ? '' : '<div style="background:rgba(255,59,48,0.12); border:1px solid #FF3B30; border-radius:8px; padding:12px 16px; margin:0 0 18px; color:#FF3B30; font-size:0.88rem; line-height:1.4;"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
+  <p class="u-c-v_muted u-mt-0">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
+  ${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
        which row of sub-tabs is shown, and it is the sub-tab that selects
@@ -12979,7 +13581,7 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="sources">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Counted from each row's group at the moment an install link is generated -- one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Counted from each row's group at the moment an install link is generated -- one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five.</p>
     <div class="table-wrap">
       <table>
         <tr><th>Source</th><th>Count</th><th>Share</th></tr>
@@ -12989,8 +13591,8 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="trending">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
-    <div style="margin:12px 0;">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
+    <div class="u-m-12px_0">
       <select class="admin-select" id="trendingTypeSelect" data-act="loadTrendingData">
         <option value="watched">Most Watched</option>
         <option value="list-add">Most Added to Lists</option>
@@ -13007,14 +13609,14 @@ async function renderAdminDashboard(env) {
         <option value="movie">Movies Only</option>
         <option value="series">Shows Only</option>
       </select>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
-      <span id="backfillTrendingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <button type="button" class="admin-select u-cur-pointer" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
+      <span id="backfillTrendingStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
-    <p style="color:#8E8E93; margin:0 0 12px; font-size:0.8rem;">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
-    <div style="margin:0 0 12px;">
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
-      <span id="migrateDayCountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <p style="color:#8E8E93; margin:6px 0 0; font-size:0.8rem;">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
+    <p class="u-c-v_muted u-m-0_0_12px u-fs-v_font_size_sm">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
+    <div class="u-m-0_0_12px">
+      <button type="button" class="admin-select u-cur-pointer" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
+      <span id="migrateDayCountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <p class="u-c-v_muted u-m-6px_0_0 u-fs-v_font_size_sm">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
     </div>
     <div class="table-wrap">
       <table>
@@ -13025,8 +13627,8 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="search">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
-    <div style="margin:12px 0;">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
+    <div class="u-m-12px_0">
       <select class="admin-select" id="searchWindowSelect" data-act="loadSearchData">
         <option value="today">Today</option>
         <option value="7" selected>Last 7 Days</option>
@@ -13044,8 +13646,8 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="catalogs_lists">
-    <h2 style="margin-top:0;">Most Installed Curated &amp; Provider Catalogs</h2>
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Which built-in charts and provider catalogs users add to their Stremio configuration.</p>
+    <h2 class="u-mt-0">Most Installed Curated &amp; Provider Catalogs</h2>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Which built-in charts and provider catalogs users add to their Stremio configuration.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Catalog / Chart Name</th><th>Times Installed</th></tr></thead>
@@ -13053,8 +13655,8 @@ async function renderAdminDashboard(env) {
       </table>
     </div>
 
-    <h2 style="margin-top:28px;">Top Community &amp; Creator Lists</h2>
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Ranked by community engagement (likes and list copies/imports).</p>
+    <h2 class="u-mt-28px">Top Community &amp; Creator Lists</h2>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Ranked by community engagement (likes and list copies/imports).</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>List Name</th><th>Creator</th><th>Type</th><th>Items</th><th>Likes</th><th>Copies</th></tr></thead>
@@ -13064,7 +13666,7 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="audience">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Audience viewing breakdown derived from Stremio stream playback pings.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Audience viewing breakdown derived from Stremio stream playback pings.</p>
     
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value" id="audienceTotalPlays">0</div><div class="stat-label">Total streams tracked</div></div>
@@ -13073,7 +13675,7 @@ async function renderAdminDashboard(env) {
       <div class="stat-card"><div class="stat-value" id="audienceEpisodePlays">0</div><div class="stat-label">Episode plays</div></div>
     </div>
 
-    <h2 style="margin-top:20px;">Top Watched Genres</h2>
+    <h2 class="u-mt-20px">Top Watched Genres</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Genre</th><th>Stream Count</th></tr></thead>
@@ -13081,7 +13683,7 @@ async function renderAdminDashboard(env) {
       </table>
     </div>
 
-    <h2 style="margin-top:28px;">Release Era / Decades</h2>
+    <h2 class="u-mt-28px">Release Era / Decades</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Release Era</th><th>Stream Count</th></tr></thead>
@@ -13091,19 +13693,19 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="feedback">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Bug reports, improvement requests, and ideas submitted from Settings &gt; Feedback, newest first.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Bug reports, improvement requests, and ideas submitted from Settings &gt; Feedback, newest first.</p>
     <div class="feedback-card">
-      <div style="font-weight:600; margin-bottom:8px;">Log something yourself</div>
-      <select class="admin-select" id="newFeedbackCategory" style="margin-bottom:8px;">
+      <div class="u-fw-600 u-mb-8px">Log something yourself</div>
+      <select class="admin-select u-mb-8px" id="newFeedbackCategory">
         <option value="bug" selected>Bug</option>
         <option value="improvement">Improvement</option>
         <option value="idea">Idea</option>
         <option value="other">Other</option>
       </select>
-      <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:0.9rem; resize:vertical;"></textarea>
-      <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
-        <span id="newFeedbackStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+      <textarea id="newFeedbackMessage" placeholder="What did you find?" class="u-minh-70px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1px_solid_rgba_0_0_0_0_15 u-ff-inherit u-fs-v_font_size_base u-rs-vertical" style="width:100%;"></textarea>
+      <div class="u-mt-8px u-ai-center u-gap-10px" style="display:flex;">
+        <button type="button" class="admin-select u-cur-pointer" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
+        <span id="newFeedbackStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
     <div id="feedbackList">Loading\u2026</div>
@@ -13111,22 +13713,22 @@ async function renderAdminDashboard(env) {
 
   <!-- Edit Feedback Modal -->
   <div id="editFeedbackModal" class="modal-overlay" style="display:none;">
-    <div class="modal-card" style="max-width:500px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:var(--text);">Edit Feedback</h3>
+    <div class="modal-card u-maxw-500px">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
+        <h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-c-v_text">Edit Feedback</h3>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeEditFeedbackModal">&#x2715;</button>
       </div>
       <input type="hidden" id="editFeedbackId">
-      <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Category</label>
-      <select class="admin-select" id="editFeedbackCategory" style="margin-bottom:14px; width:100%; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text);">
+      <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px" style="display:block;">Category</label>
+      <select class="admin-select u-mb-14px u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text" id="editFeedbackCategory" style="width:100%;">
         <option value="bug">bug</option>
         <option value="improvement">improvement</option>
         <option value="idea">idea</option>
         <option value="other">other</option>
       </select>
-      <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Message</label>
-      <textarea id="editFeedbackMessage" style="width:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-family:inherit; font-size:0.92rem; resize:vertical; margin-bottom:16px; outline:none;"></textarea>
-      <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px" style="display:block;">Message</label>
+      <textarea id="editFeedbackMessage" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-16px u-ol-none" style="width:100%;"></textarea>
+      <div class="u-jc-flex_end u-gap-10px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
       </div>
@@ -13134,7 +13736,7 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="apiusage">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">Requests made using this Worker's own shared API keys (the fallback used whenever a visitor hasn't supplied their own) -- not counting anyone's personal keys, which only they can rate-limit. Watch these against each provider's limit if catalogs start coming back empty or slow.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Requests made using this Worker's own shared API keys (the fallback used whenever a visitor hasn't supplied their own) -- not counting anyone's personal keys, which only they can rate-limit. Watch these against each provider's limit if catalogs start coming back empty or slow.</p>
     <div class="table-wrap">
       <table>
         <tr><th>Key</th><th>Last 24h</th><th>Last 7 days</th><th>Last 30 days</th><th>Provider limit</th></tr>
@@ -13145,86 +13747,86 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="netflixpreview">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Find a provider's id</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <input type="text" id="providerLookupQueryInput" class="admin-select" style="margin-right:0; flex:1; max-width:220px;" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Find a provider's id</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
+      <div class="u-gap-8px u-ai-center" style="display:flex;">
+        <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
         <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
-        <span id="providerLookupStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="providerLookupStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
-      <div id="providerLookupResults" style="margin-top:10px;"></div>
+      <div id="providerLookupResults" class="u-mt-10px"></div>
     </div>
 
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
-      <label style="font-size:0.85rem; color:#8E8E93;">Provider id
-        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select" style="margin-right:0; width:60px;" value="8" placeholder="8">
+    <div class="u-gap-8px u-ai-center u-mb-16px u-fw2-wrap" style="display:flex;">
+      <label class="u-fs-v_font_size_sm u-c-v_muted">Provider id
+        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select u-mr-0" style="width:60px;" value="8" placeholder="8">
       </label>
-      <label style="font-size:0.85rem; color:#8E8E93;">Region
-        <input type="text" id="netflixPreviewRegionInput" class="admin-select" style="margin-right:0; width:70px; text-transform:uppercase;" value="US" maxlength="2" placeholder="US">
+      <label class="u-fs-v_font_size_sm u-c-v_muted">Region
+        <input type="text" id="netflixPreviewRegionInput" class="admin-select u-mr-0 u-tt-uppercase" style="width:70px;" value="US" maxlength="2" placeholder="US">
       </label>
       <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
-      <span id="netflixPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+      <span id="netflixPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
     </div>
     <div id="netflixPreviewMovies"></div>
-    <div id="netflixPreviewShows" style="margin-top:28px;"></div>
+    <div id="netflixPreviewShows" class="u-mt-28px"></div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
-      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; margin-bottom:14px;">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
+      <label class="u-ai-center u-gap-8px u-fw-600 u-fs-v_font_size_base u-mb-14px" style="display:flex;">
         <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
       </label>
-      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:12px;">Monthly goal (US dollars)
-        <input type="number" id="supportGoalAmount" class="admin-select" min="0" max="100000" step="1" style="display:block; margin:4px 0 0; width:160px;" placeholder="60">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-12px" style="display:block;">Monthly goal (US dollars)
+        <input type="number" id="supportGoalAmount" class="admin-select u-m-4px_0_0" min="0" max="100000" step="1" style="display:block; width:160px;" placeholder="60">
       </label>
-      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:6px;">Given so far this month (US dollars)
-        <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Given so far this month (US dollars)
+        <input type="number" id="supportGoalRaised" class="admin-select u-m-4px_0_0" min="0" step="0.01" style="display:block; width:160px;" placeholder="0">
       </label>
-      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
-        <span id="supportGoalStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="supportGoalStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Automatic totals from Ko-fi</div>
-      <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; color:#8E8E93; line-height:1.5;">
+    <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Automatic totals from Ko-fi</div>
+      <ol class="u-m-0_0_12px_18px u-p-0 u-fs-v_font_size_sm u-c-v_muted u-lh-1_5">
         <li>In Ko-fi, go to <strong>Settings &rarr; API &rarr; Webhooks</strong> and paste this as the Webhook URL, then press Update:
-          <div><code id="supportGoalWebhookUrl" style="user-select:all;"></code></div></li>
+          <div><code id="supportGoalWebhookUrl" class="u-us-all"></code></div></li>
         <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
         <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
       </ol>
-      <div style="font-size:0.85rem;">Token: <span id="supportGoalTokenState" style="color:#8E8E93;">checking&hellip;</span></div>
-      <div style="font-size:0.85rem; margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:#8E8E93;">none yet</span></div>
-      <div style="font-size:0.78rem; color:#8E8E93; margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
+      <div class="u-fs-v_font_size_sm">Token: <span id="supportGoalTokenState" style="color:var(--muted);">checking&hellip;</span></div>
+      <div class="u-fs-v_font_size_sm u-mt-4px">Last payment counted: <span id="supportGoalLastPayment" class="u-c-v_muted">none yet</span></div>
+      <div class="u-fs-v_font_size_xs u-c-v_muted u-mt-10px">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
     </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
-    <p style="color:#8E8E93; margin:0 0 16px; font-size:0.82rem;">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
+    <p class="u-c-v_muted u-m-0_0_16px u-fs-v_font_size_sm">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Sweep status</div>
-      <div id="nosStatus" style="font-size:0.85rem; color:#8E8E93;">Loading&hellip;</div>
-      <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Sweep status</div>
+      <div id="nosStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);">Loading&hellip;</div>
+      <div class="u-mt-12px u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
-        <label style="font-size:0.85rem; color:#8E8E93;">Pages
-          <input type="number" id="nosSweepUnits" class="admin-select" style="margin-right:0; width:70px;" value="30" min="1" max="100">
+        <label class="u-fs-v_font_size_sm u-c-v_muted">Pages
+          <input type="number" id="nosSweepUnits" class="admin-select u-mr-0" style="width:70px;" value="30" min="1" max="100">
         </label>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF9500; border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
-        <span id="nosSweepStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <button type="button" class="admin-select u-cur-pointer" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
+        <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_warn_text u-bdc-rgba_255_149_0_0_4" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
+        <span id="nosSweepStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
-      <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
+      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Rows in 30-day window</div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Rows in 30-day window</div>
       <div class="table-wrap">
         <table>
           <tr><th>Service</th><th>Type</th><th>Titles</th><th>Removed</th><th>Newest Arrival</th></tr>
@@ -13233,10 +13835,10 @@ async function renderAdminDashboard(env) {
       </div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Add / Sync Title to Catalog</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Add / Sync Title to Catalog</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
+      <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <input type="text" id="nosAddTitleInput" class="admin-select" placeholder="Title, IMDb ID (tt...) or TMDB ID" style="width:240px;">
         <select class="admin-select" id="nosAddServiceSelect">
           <option value="netflix">Netflix</option>
@@ -13253,15 +13855,15 @@ async function renderAdminDashboard(env) {
           <option value="movie">Movie</option>
         </select>
         <input type="date" id="nosAddDateInput" class="admin-select" style="width:130px;" title="Optional arrival date (defaults to episode air date or today)">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
-        <span id="nosAddStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <button type="button" class="admin-select u-cur-pointer" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
+        <span id="nosAddStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Preview the catalog</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Preview the catalog</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
+      <div class="u-gap-8px u-ai-center u-mb-12px u-fw2-wrap" style="display:flex;">
         <select class="admin-select" id="nosPreviewType" data-act="nosResetAndPreview">
           <option value="all" selected>All (Movies &amp; Shows)</option>
           <option value="movie">Movies</option>
@@ -13273,28 +13875,28 @@ async function renderAdminDashboard(env) {
         <input type="text" id="nosPreviewSearch" class="admin-select" placeholder="Filter by title or ID…" style="width:180px;" data-act="onNosPreviewSearchInput" data-act-on="input">
         <button type="button" class="secondary lc-btn" data-act="nosResetAndPreview">Load preview</button>
         <button type="button" class="secondary lc-btn" id="nosPrevBtn" data-act="nosChangePage" data-act-args="${adminActArgs([-1])}" disabled>&larr; Prev</button>
-        <span id="nosPageLabel" style="font-size:0.85rem; color:#8E8E93; font-weight:600;">Page 1</span>
+        <span id="nosPageLabel" class="u-fs-v_font_size_sm u-c-v_muted u-fw-600">Page 1</span>
         <button type="button" class="secondary lc-btn" id="nosNextBtn" data-act="nosChangePage" data-act-args="${adminActArgs([1])}" disabled>Next &rarr;</button>
-        <span id="nosPreviewStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <span id="nosPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
-      <div style="margin-bottom:12px; font-size:0.82rem; color:#8E8E93;">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
+      <div class="u-mb-12px u-fs-v_font_size_sm u-c-v_muted">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
       <div id="nosPreviewResults"></div>
     </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="channelpresets">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
-        <span id="cpStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+        <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_4" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
+        <span id="cpStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
       </div>
-      <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
+      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
+    <div class="panel u-m-0 u-p-14px_16px">
       <div class="table-wrap">
         <table>
           <tr><th>Network</th><th>Cached</th><th>Episodes</th><th>Built</th><th></th></tr>
@@ -13305,185 +13907,185 @@ async function renderAdminDashboard(env) {
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="maintenance">
-    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">D1 database: ${isD1Bound
-        ? '<span style="color:#30d158;">bound</span>'
-        : '<span style="color:#FF3B30;">not bound (required)</span>'}</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">${isD1Bound
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">D1 database: ${isD1Bound
+        ? '<span class="u-c-v_color_success_text">bound</span>'
+        : '<span class="u-c-v_color_danger_text">not bound (required)</span>'}</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">${isD1Bound
         ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
         : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
-      <span id="migrateD1Status" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <p style="color:#8E8E93; margin:10px 0 0; font-size:0.8rem;">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
+      <span id="migrateD1Status" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Unified accounts table (v2 identity)</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
-      <span id="migrateAccountsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Unified accounts table (v2 identity)</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
+      <span id="migrateAccountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
-      <span id="installsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
-      <span id="installsRestoreStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Install links: keys moving to encrypted storage</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
+      <span id="installsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
+      <span id="installsRestoreStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Lists v2: copy existing lists</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
-      <span id="listsBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="listsBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Lists v2: copy existing lists</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
+      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
+      <span id="listsBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="listsBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Activity: copy watch history</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
-      <span id="activityBackfillStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
-      <div id="activityBackfillResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Activity: copy watch history</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
+      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
+      <span id="activityBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
+      <div id="activityBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Background jobs queue: ${isJobsBound
-        ? '<span style="color:#30d158;">bound</span>'
-        : '<span style="color:#8E8E93;">not bound yet</span>'}</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
-      <span id="jobsPingStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
-      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
-      <span id="jobsStatusStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="jobsStatusResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
-      <p style="color:#8E8E93; margin:12px 0 8px; font-size:0.8rem;"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
-      <span id="shelfCompareStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="shelfCompareResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93; white-space:pre-wrap; word-break:break-word;"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Background jobs queue: ${isJobsBound
+        ? '<span class="u-c-v_color_success_text">bound</span>'
+        : '<span class="u-c-v_muted">not bound yet</span>'}</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
+      <span id="jobsPingStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
+      <span id="jobsStatusStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="jobsStatusResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
+      <span id="shelfCompareStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="shelfCompareResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Database schema</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
-      <span id="schemaCheckStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="schemaCheckResult" style="margin-top:10px;"></div>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Database schema</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
+      <span id="schemaCheckStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="schemaCheckResult" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Counts missing since 2 October</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
-      <span id="statsRecoveryStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="statsRecoveryResult" style="margin-top:10px; font-size:0.8rem; color:#8E8E93;"></div>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Counts missing since 2 October</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
+      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
+      <span id="statsRecoveryStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="statsRecoveryResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Export old data to R2 (a copy)</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
-      <input type="text" id="kvExportPrefix" class="admin-select" placeholder="creator:" style="min-width:180px;">
-      <button type="button" class="admin-select" style="cursor:pointer;" id="kvExportBtn" data-act="runKvExport">Export</button>
-      <span id="kvExportStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Export old data to R2 (a copy)</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
+      <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
+      <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
+      <span id="kvExportStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Public list directory &amp; search index</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
-      <span id="rebuildIndexStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Public list directory &amp; search index</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
+      <span id="rebuildIndexStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Delete a creator&rsquo;s lists</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Removes specific lists belonging to one Creator Profile: the list itself, its likes, its place in that creator&rsquo;s order, and its directory entry. Use it for content a creator cannot or will not remove themselves. A slug whose list is already gone is still cleared from the directory, which is how you get rid of an entry that shows an item count but opens empty.</p>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Browse first: this reads the creator&rsquo;s actual stored records, including any the creator&rsquo;s own dashboard cannot see because they are missing from their display order &mdash; which is how an account ends up with dozens of copies of one list under slugs nobody could guess. Filter by name, select them all, then delete. Deleting also records the deletion on the account, so the creator&rsquo;s other signed-in browsers drop their copies instead of uploading them straight back.</p>
-      <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="deleteListUserInput" class="admin-select" placeholder="Creator username" style="margin-right:6px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="creatorListsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Delete a creator&rsquo;s lists</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Removes specific lists belonging to one Creator Profile: the list itself, its likes, its place in that creator&rsquo;s order, and its directory entry. Use it for content a creator cannot or will not remove themselves. A slug whose list is already gone is still cleared from the directory, which is how you get rid of an entry that shows an item count but opens empty.</p>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Browse first: this reads the creator&rsquo;s actual stored records, including any the creator&rsquo;s own dashboard cannot see because they are missing from their display order &mdash; which is how an account ends up with dozens of copies of one list under slugs nobody could guess. Filter by name, select them all, then delete. Deleting also records the deletion on the account, so the creator&rsquo;s other signed-in browsers drop their copies instead of uploading them straight back.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
+      <div class="row u-mb-8px">
+        <input type="text" id="deleteListUserInput" class="admin-select u-mr-6px" placeholder="Creator username">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
+        <button type="button" class="admin-select u-cur-pointer" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
+        <span id="creatorListsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="creatorListsFilterInput" class="admin-select" placeholder="Filter by name or slug (e.g. coming of age)" style="min-width:280px; margin-right:6px;" data-act="renderCreatorListsTable" data-act-on="input">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="selectShownListsBtn" data-act="selectShownCreatorLists">Select all shown</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="clearSelectedListsBtn" data-act="clearSelectedCreatorLists">Clear selection</button>
+      <div class="row u-mb-8px">
+        <input type="text" id="creatorListsFilterInput" class="admin-select u-minw-280px u-mr-6px" placeholder="Filter by name or slug (e.g. coming of age)" data-act="renderCreatorListsTable" data-act-on="input">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="selectShownListsBtn" data-act="selectShownCreatorLists">Select all shown</button>
+        <button type="button" class="admin-select u-cur-pointer" id="clearSelectedListsBtn" data-act="clearSelectedCreatorLists">Clear selection</button>
       </div>
-      <div id="creatorListsResults" style="margin-bottom:8px; max-height:340px; overflow:auto;"></div>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="deleteListSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
+      <div id="creatorListsResults" class="u-mb-8px u-maxh-340px u-ov-auto"></div>
+      <div class="row u-mb-8px">
+        <input type="text" id="deleteListSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
-      <span id="deleteListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
+      <span id="deleteListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Anonymously published lists</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
-      <p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
-      <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="anonListStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Anonymously published lists</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
+      <div class="row u-mb-8px">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
+        <button type="button" class="admin-select u-cur-pointer" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
+        <span id="anonListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
-      <div id="anonListResults" style="margin-bottom:8px;"></div>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="deleteAnonSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
+      <div id="anonListResults" class="u-mb-8px"></div>
+      <div class="row u-mb-8px">
+        <input type="text" id="deleteAnonSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
-      <span id="deleteAnonStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
+      <span id="deleteAnonStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
-    <div class="admin-card" style="margin-top:12px;">
-      <h3 style="margin:0 0 6px; font-size:0.95rem;">Published channels</h3>
-      <p style="margin:0 0 10px; color:#8E8E93; font-size:0.82rem;">
+    <div class="admin-card u-mt-12px">
+      <h3 class="u-m-0_0_6px u-fs-v_font_size_base">Published channels</h3>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">
         The Explore Channels directory. Publishing a channel is owner-only, so without this panel
         a channel could only be withdrawn by whoever put it there.
         <strong>Unlist</strong> removes it from the directory and leaves existing share links working &mdash;
         the same thing its owner&rsquo;s own Unpublish does. <strong>Delete</strong> removes the stored channel,
         so every link to it stops working.
       </p>
-      <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
-        <span id="publishedChannelStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
+      <div class="row u-mb-8px">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
+        <button type="button" class="admin-select u-cur-pointer" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
+        <span id="publishedChannelStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       </div>
       <div id="publishedChannelResults"></div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Signed-in admin browsers</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
-      <button type="button" class="admin-select" style="cursor:pointer; margin-left:6px; color:#FF3B30; border-color:rgba(255,59,48,0.35);" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
-      <span id="adminSessionsStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="adminSessionsResult" style="margin-top:10px;"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Signed-in admin browsers</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
+      <button type="button" class="admin-select u-cur-pointer u-ml-6px u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
+      <span id="adminSessionsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="adminSessionsResult" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Audit log</div>
-      <p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
-      <span id="adminAuditStatus" style="color:#8E8E93; font-size:0.85rem; margin-left:6px;"></span>
-      <div id="adminAuditResult" style="margin-top:10px;"></div>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Audit log</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
+      <span id="adminAuditStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="adminAuditResult" class="u-mt-10px"></div>
     </div>
   </div>
 
   <!-- A form, not a link: logging out is a state change, and /admin/logout
        answers POST only now. See that route for why. -->
-  <form method="POST" action="/admin/logout" style="margin-top:24px;">
+  <form method="POST" action="/admin/logout" class="u-mt-24px">
     <button type="submit" class="linklike">Log out</button>
   </form>
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
@@ -13670,13 +14272,13 @@ async function renderAdminDashboard(env) {
       overlay.id = 'resetKeyOverlay';
       overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999;';
       overlay.innerHTML =
-        '<div style="background:#fff; border-radius:12px; padding:24px; max-width:380px; width:90%;">' +
-          '<h3 style="margin-top:0;">New key for ' + escapeHtmlAdmin(displayName) + '</h3>' +
-          '<p style="color:#8E8E93; font-size:0.9rem;">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
-          '<div id="resetKeyDisplay" style="font-family:monospace; font-size:1.1rem; background:#F2F2F7; border-radius:8px; padding:10px; text-align:center; margin:12px 0; user-select:all;">' + escapeHtmlAdmin(creatorKey) + '</div>' +
-          '<div style="display:flex; gap:8px;">' +
-            '<button type="button" class="lc-btn secondary" style="flex:1;" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
-            '<button type="button" class="lc-btn" style="flex:1;" data-act="closeResetKeyOverlay">Done</button>' +
+        '<div class="u-bg-v_color_on_brand u-br-v_radius_md u-p-24px u-maxw-380px" style="width:90%;">' +
+          '<h3 class="u-mt-0">New key for ' + escapeHtmlAdmin(displayName) + '</h3>' +
+          '<p class="u-c-v_muted u-fs-v_font_size_base">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
+          '<div id="resetKeyDisplay" class="u-ff-monospace u-fs-v_font_size_lg u-bg-F2F2F7 u-br-v_radius_sm u-p-10px u-ta-center u-m-12px_0 u-us-all">' + escapeHtmlAdmin(creatorKey) + '</div>' +
+          '<div class="u-gap-8px" style="display:flex;">' +
+            '<button type="button" class="lc-btn secondary u-flex-1" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
+            '<button type="button" class="lc-btn u-flex-1" data-act="closeResetKeyOverlay">Done</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -13731,24 +14333,24 @@ async function renderAdminDashboard(env) {
           return;
         }
         if (data.unavailable) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No session list yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, this dashboard signs in with the older cookie, which cannot be listed or revoked on its own.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">No session list yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, this dashboard signs in with the older cookie, which cannot be listed or revoked on its own.</p>';
           return;
         }
         if (!data.sessions.length) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No signed-in browsers.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">No signed-in browsers.</p>';
           return;
         }
         const rows = data.sessions.map((s) => {
-          const current = s.id === data.current ? ' <span style="color:#30d158;">(this browser)</span>' : '';
-          const state = s.revokedAt ? '<span style="color:#FF3B30;">signed out</span>' : (s.expired ? '<span style="color:#FF9500;">expired</span>' : '<span style="color:#30d158;">live</span>');
+          const current = s.id === data.current ? ' <span class="u-c-v_color_success_text">(this browser)</span>' : '';
+          const state = s.revokedAt ? '<span class="u-c-v_color_danger_text">signed out</span>' : (s.expired ? '<span class="u-c-v_color_warn_text">expired</span>' : '<span class="u-c-v_color_success_text">live</span>');
           return '<tr>' +
             '<td>' + escapeHtmlAdmin(s.actor) + current + '</td>' +
             '<td>' + state + '</td>' +
             '<td>' + escapeHtmlAdmin(adminWhen(s.lastSeenAt)) + '</td>' +
             '<td>' + escapeHtmlAdmin(adminWhen(s.expiresAt)) + '</td>' +
             '<td>' + escapeHtmlAdmin(s.ip || '\u2014') + '</td>' +
-            '<td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtmlAdmin(s.userAgent || '\u2014') + '</td>' +
-            '<td>' + (s.revokedAt || s.expired ? '' : '<button type="button" class="admin-select" style="cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.35);" data-act="revokeAdminSession" data-act-args="' + adminActAttr([s.id]) + '">Sign out</button>') + '</td>' +
+            '<td class="u-maxw-220px u-ov-hidden u-to-ellipsis u-ws-nowrap">' + escapeHtmlAdmin(s.userAgent || '\u2014') + '</td>' +
+            '<td>' + (s.revokedAt || s.expired ? '' : '<button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" data-act="revokeAdminSession" data-act-args="' + adminActAttr([s.id]) + '">Sign out</button>') + '</td>' +
             '</tr>';
         }).join('');
         box.innerHTML = '<table><tr><th>Signed in as</th><th>State</th><th>Last seen</th><th>Expires</th><th>IP</th><th>Browser</th><th></th></tr>' + rows + '</table>';
@@ -13816,11 +14418,11 @@ async function renderAdminDashboard(env) {
           return;
         }
         if (data.unavailable) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">No log yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, admin actions are not recorded.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">No log yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, admin actions are not recorded.</p>';
           return;
         }
         if (!data.entries.length) {
-          box.innerHTML = '<p style="color:#8E8E93; font-size:0.82rem; margin:0;">Nothing recorded yet. Signing out and back in writes the first two rows.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">Nothing recorded yet. Signing out and back in writes the first two rows.</p>';
           return;
         }
         const rows = data.entries.map((e) =>
@@ -13829,7 +14431,7 @@ async function renderAdminDashboard(env) {
           '<td>' + escapeHtmlAdmin(e.actor) + '</td>' +
           '<td><strong>' + escapeHtmlAdmin(e.action) + '</strong></td>' +
           '<td>' + escapeHtmlAdmin(e.target || '\u2014') + '</td>' +
-          '<td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtmlAdmin(e.detail || '') + '">' + escapeHtmlAdmin(e.detail || '\u2014') + '</td>' +
+          '<td class="u-maxw-320px u-ov-hidden u-to-ellipsis u-ws-nowrap" title="' + escapeHtmlAdmin(e.detail || '') + '">' + escapeHtmlAdmin(e.detail || '\u2014') + '</td>' +
           '<td>' + escapeHtmlAdmin(e.ip || '\u2014') + '</td>' +
           '</tr>'
         ).join('');
@@ -14599,7 +15201,7 @@ async function renderAdminDashboard(env) {
       }
       const shown = shownCreatorLists();
       if (!shown.length) {
-        results.innerHTML = '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">No list matches that filter.</p>';
+        results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">No list matches that filter.</p>';
       } else {
         const rows = shown.map(function (L) {
           const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
@@ -14607,22 +15209,22 @@ async function renderAdminDashboard(env) {
           // order entry was lost. These are the ones that get re-uploaded and
           // re-duplicated, so they are worth calling out rather than hiding.
           const orphan = L.inOrder ? '' :
-            '<span title="not in this creator\\'s display order" style="color:#FF9500;"> orphan</span>';
+            '<span title="not in this creator\\'s display order" class="u-c-v_color_warn_text"> orphan</span>';
           return '<tr>' +
-            '<td style="padding:4px 8px 4px 0;"><button type="button" class="admin-select" data-creator-slug="' +
-              escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem;">Select</button></td>' +
-            '<td style="padding:4px 8px 4px 0;"><code>' + escapeHtmlAdmin(L.slug) + '</code>' + orphan + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(L.name) + '</td>' +
-            '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.itemCount) || 0) + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + vis + '</td>' +
-            '<td style="padding:4px 0;"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
+            '<td class="u-p-4px_8px_4px_0"><button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs" data-creator-slug="' +
+              escapeHtmlAdmin(L.slug) + '">Select</button></td>' +
+            '<td class="u-p-4px_8px_4px_0"><code>' + escapeHtmlAdmin(L.slug) + '</code>' + orphan + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(L.name) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.itemCount) || 0) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + vis + '</td>' +
+            '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-          '<thead><tr style="color:#8E8E93; text-align:left;">' +
-          '<th></th><th style="padding-right:8px;">Slug</th><th style="padding-right:8px;">Name</th>' +
-          '<th style="padding-right:8px; text-align:right;">Items</th>' +
-          '<th style="padding-right:8px;">Visibility</th><th></th>' +
+        results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
+          '<thead><tr class="u-c-v_muted u-ta-left">' +
+          '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
+          '<th class="u-pr-8px u-ta-right">Items</th>' +
+          '<th class="u-pr-8px">Visibility</th><th></th>' +
           '</tr></thead><tbody>' + rows + '</tbody></table>';
       }
       const q = creatorListsFilterText();
@@ -14672,7 +15274,7 @@ async function renderAdminDashboard(env) {
         renderCreatorListsTable();
         if (!creatorListsLoaded.length) {
           document.getElementById('creatorListsResults').innerHTML =
-            '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">This creator has no stored lists.</p>';
+            '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">This creator has no stored lists.</p>';
         }
       } catch (e) {
         status.textContent = 'Failed: network error.';
@@ -14829,28 +15431,28 @@ async function renderAdminDashboard(env) {
         const lists = data.lists || [];
         anonListCount += lists.length;
         if (!anonListCount) {
-          results.innerHTML = '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">No anonymously published lists.</p>';
+          results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">No anonymously published lists.</p>';
         } else {
           const rows = lists.map(function (L) {
             const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
             return '<tr>' +
-              '<td style="padding:4px 8px 4px 0;"><button type="button" class="admin-select" data-anon-slug="' +
-                escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem;">Select</button></td>' +
-              '<td style="padding:4px 8px 4px 0;"><code>' + escapeHtmlAdmin(L.slug) + '</code></td>' +
-              '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(L.name) + '</td>' +
-              '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.itemCount) || 0) + '</td>' +
-              '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.likes) || 0) + '</td>' +
-              '<td style="padding:4px 8px 4px 0;">' + vis + '</td>' +
-              '<td style="padding:4px 0;"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
+              '<td class="u-p-4px_8px_4px_0"><button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs" data-anon-slug="' +
+                escapeHtmlAdmin(L.slug) + '">Select</button></td>' +
+              '<td class="u-p-4px_8px_4px_0"><code>' + escapeHtmlAdmin(L.slug) + '</code></td>' +
+              '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(L.name) + '</td>' +
+              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.itemCount) || 0) + '</td>' +
+              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.likes) || 0) + '</td>' +
+              '<td class="u-p-4px_8px_4px_0">' + vis + '</td>' +
+              '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
               '</tr>';
           }).join('');
           if (reset || !results.querySelector('tbody')) {
-            results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-              '<thead><tr style="color:#8E8E93; text-align:left;">' +
-              '<th></th><th style="padding-right:8px;">Slug</th><th style="padding-right:8px;">Name</th>' +
-              '<th style="padding-right:8px; text-align:right;">Items</th>' +
-              '<th style="padding-right:8px; text-align:right;">Likes</th>' +
-              '<th style="padding-right:8px;">Visibility</th><th></th>' +
+            results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
+              '<thead><tr class="u-c-v_muted u-ta-left">' +
+              '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
+              '<th class="u-pr-8px u-ta-right">Items</th>' +
+              '<th class="u-pr-8px u-ta-right">Likes</th>' +
+              '<th class="u-pr-8px">Visibility</th><th></th>' +
               '</tr></thead><tbody>' + rows + '</tbody></table>';
           } else {
             results.querySelector('tbody').insertAdjacentHTML('beforeend', rows);
@@ -14890,7 +15492,7 @@ async function renderAdminDashboard(env) {
         }
         const channels = data.channels || [];
         if (!channels.length) {
-          results.innerHTML = '<p style="color:#8E8E93; margin:0; font-size:0.82rem;">Nothing to show.</p>';
+          results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">Nothing to show.</p>';
           status.textContent = '';
           if (btn) btn.disabled = false;
           return;
@@ -14898,26 +15500,26 @@ async function renderAdminDashboard(env) {
         const rows = channels.map(function (C) {
           const code = escapeHtmlAdmin(C.code);
           return '<tr data-channel-row="' + code + '">' +
-            '<td style="padding:4px 8px 4px 0;"><code>' + code + '</code></td>' +
-            '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(C.name || '') + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(C.owner || '\u2014') + '</td>' +
-            '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(C.itemCount) || 0) + '</td>' +
-            '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(C.likes) || 0) + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + (C.listed ? 'listed' : 'unlisted') + '</td>' +
-            '<td style="padding:4px 8px 4px 0;"><a href="' + escapeHtmlAdmin(C.url || '') + '" target="_blank" rel="noopener">open</a></td>' +
-            '<td style="padding:4px 0; white-space:nowrap;">' +
-              '<button type="button" class="admin-select" data-channel-action="unlist" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem; margin-right:4px;">Unlist</button>' +
-              '<button type="button" class="admin-select" data-channel-action="delete" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:0.78rem; color:#FF3B30; border-color:rgba(255,59,48,0.35);">Delete</button>' +
+            '<td class="u-p-4px_8px_4px_0"><code>' + code + '</code></td>' +
+            '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(C.name || '') + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(C.owner || '\u2014') + '</td>' +
+            '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(C.itemCount) || 0) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(C.likes) || 0) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + (C.listed ? 'listed' : 'unlisted') + '</td>' +
+            '<td class="u-p-4px_8px_4px_0"><a href="' + escapeHtmlAdmin(C.url || '') + '" target="_blank" rel="noopener">open</a></td>' +
+            '<td class="u-p-4px_0 u-ws-nowrap">' +
+              '<button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs u-mr-4px" data-channel-action="unlist" data-code="' + code + '">Unlist</button>' +
+              '<button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" data-channel-action="delete" data-code="' + code + '">Delete</button>' +
             '</td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-          '<thead><tr style="color:#8E8E93; text-align:left;">' +
-          '<th style="padding-right:8px;">Code</th><th style="padding-right:8px;">Name</th>' +
-          '<th style="padding-right:8px;">Owner</th>' +
-          '<th style="padding-right:8px; text-align:right;">Items</th>' +
-          '<th style="padding-right:8px; text-align:right;">Likes</th>' +
-          '<th style="padding-right:8px;">State</th><th></th><th></th>' +
+        results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
+          '<thead><tr class="u-c-v_muted u-ta-left">' +
+          '<th class="u-pr-8px">Code</th><th class="u-pr-8px">Name</th>' +
+          '<th class="u-pr-8px">Owner</th>' +
+          '<th class="u-pr-8px u-ta-right">Items</th>' +
+          '<th class="u-pr-8px u-ta-right">Likes</th>' +
+          '<th class="u-pr-8px">State</th><th></th><th></th>' +
           '</tr></thead><tbody>' + rows + '</tbody></table>';
         status.textContent = channels.length + ' channel' + (channels.length === 1 ? '' : 's') + ' shown' +
           (data.done ? '. That is all of them.' : ', more available.');
@@ -15162,22 +15764,22 @@ async function renderAdminDashboard(env) {
         if (idx) {
           var pct = idx.max ? Math.round((idx.entries / idx.max) * 100) : 0;
           indexNote = idx.truncated
-            ? '<p style="color:#FF9500; margin:10px 0 0; font-size:0.82rem;"><strong>The public list directory is full.</strong> ' +
+            ? '<p class="u-c-v_color_warn_text u-m-10px_0_0 u-fs-v_font_size_sm"><strong>The public list directory is full.</strong> ' +
               'It holds ' + idx.entries.toLocaleString() + ' of a maximum ' + idx.max.toLocaleString() +
               ' entries, so the least-liked lists past that point are no longer being advertised. ' +
               'They are still reachable by their own URL.</p>'
-            : '<p style="color:#8E8E93; margin:10px 0 0; font-size:0.82rem;">Public list directory: ' +
+            : '<p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Public list directory: ' +
               idx.entries.toLocaleString() + ' of ' + idx.max.toLocaleString() + ' entries (' + pct + '%).</p>';
         }
         if (!data.bound) {
           status.textContent = '';
-          out.innerHTML = '<p style="color:#FF3B30; margin:0; font-size:0.82rem;"><strong>Warning: No D1 database is bound.</strong> D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> in Cloudflare Settings &rarr; Bindings.</p>' + indexNote;
+          out.innerHTML = '<p class="u-c-v_color_danger_text u-m-0 u-fs-v_font_size_sm"><strong>Warning: No D1 database is bound.</strong> D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> in Cloudflare Settings &rarr; Bindings.</p>' + indexNote;
           btn.disabled = false;
           return;
         }
         if (!data.checked) {
           status.textContent = '';
-          out.innerHTML = '<p style="color:#FF9500; margin:0; font-size:0.82rem;">Could not read the database to check' +
+          out.innerHTML = '<p class="u-c-v_color_warn_text u-m-0 u-fs-v_font_size_sm">Could not read the database to check' +
             (data.error ? (': ' + escapeHtmlAdmin(data.error)) : '.') +
             ' This is not the same as a missing migration \u2014 try again.</p>' + indexNote;
           btn.disabled = false;
@@ -15188,15 +15790,15 @@ async function renderAdminDashboard(env) {
         var ledger = data.ledger;
         var ledgerNote = '';
         if (ledger && ledger.behind) {
-          ledgerNote = '<p style="color:#FF3B30; margin:0 0 10px; font-size:0.82rem;"><strong>Writes are paused.</strong> ' +
+          ledgerNote = '<p class="u-c-v_color_danger_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>Writes are paused.</strong> ' +
             'The database is at migration ' + escapeHtmlAdmin(ledger.version) + ' and this Worker needs ' +
             escapeHtmlAdmin(ledger.required) + '. Visitors see &ldquo;My Lists is being updated&rdquo; on every save until the missing migrations are applied.</p>';
         } else if (ledger && ledger.readable && !ledger.version) {
-          ledgerNote = '<p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;">The migration ledger is empty.</p>';
+          ledgerNote = '<p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm">The migration ledger is empty.</p>';
         } else if (ledger && !ledger.readable) {
-          ledgerNote = '<p style="color:#FF9500; margin:0 0 10px; font-size:0.82rem;">No migration ledger yet. Apply <code>migrations/0014_add_schema_migrations.sql</code> so the Worker can tell which migrations have run.</p>';
+          ledgerNote = '<p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm">No migration ledger yet. Apply <code>migrations/0014_add_schema_migrations.sql</code> so the Worker can tell which migrations have run.</p>';
         } else if (ledger) {
-          ledgerNote = '<p style="color:#8E8E93; margin:0 0 10px; font-size:0.82rem;">Database at migration ' +
+          ledgerNote = '<p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Database at migration ' +
             escapeHtmlAdmin(ledger.version) + ' (this Worker needs ' + escapeHtmlAdmin(ledger.required) + ').</p>';
         }
         var dbStats = data.databaseStats;
@@ -15206,32 +15808,32 @@ async function renderAdminDashboard(env) {
           var rowsStr = dbStats.rowCounts
             ? Object.entries(dbStats.rowCounts).map(function (e) { return e[0] + ': ' + e[1].toLocaleString(); }).join(', ')
             : '';
-          dbStatsNote = '<p style="color:#8E8E93; margin:8px 0 0; font-size:0.82rem;">Database size: ~' +
+          dbStatsNote = '<p class="u-c-v_muted u-m-8px_0_0 u-fs-v_font_size_sm">Database size: ~' +
             mb + ' MB (' + (dbStats.pageCount || 0).toLocaleString() + ' pages &times; ' +
             (dbStats.pageSize || 0).toLocaleString() + ' B).' +
-            (rowsStr ? ('<br><span style="font-size:0.78rem;">Rows: ' + escapeHtmlAdmin(rowsStr) + '</span>') : '') +
+            (rowsStr ? ('<br><span class="u-fs-v_font_size_xs">Rows: ' + escapeHtmlAdmin(rowsStr) + '</span>') : '') +
             '</p>';
         }
         if (data.upToDate) {
           status.textContent = '';
-          out.innerHTML = ledgerNote + '<p style="color:#34C759; margin:0; font-size:0.82rem;">Up to date \u2014 every migration has been applied.</p>' + dbStatsNote + indexNote;
+          out.innerHTML = ledgerNote + '<p class="u-c-v_color_success_text u-m-0 u-fs-v_font_size_sm">Up to date \u2014 every migration has been applied.</p>' + dbStatsNote + indexNote;
           btn.disabled = false;
           return;
         }
         const rows = (data.missing || []).map(function (m) {
           return '<tr>' +
-            '<td style="padding:4px 10px 4px 0; vertical-align:top; white-space:nowrap;"><code>' + escapeHtmlAdmin(m.migration) + '</code></td>' +
-            '<td style="padding:4px 10px 4px 0; vertical-align:top; white-space:nowrap;"><code>' + escapeHtmlAdmin(m.name) + '</code></td>' +
-            '<td style="padding:4px 0; vertical-align:top;">' + escapeHtmlAdmin(m.consequence) + '</td>' +
+            '<td class="u-p-4px_10px_4px_0 u-va-top u-ws-nowrap"><code>' + escapeHtmlAdmin(m.migration) + '</code></td>' +
+            '<td class="u-p-4px_10px_4px_0 u-va-top u-ws-nowrap"><code>' + escapeHtmlAdmin(m.name) + '</code></td>' +
+            '<td class="u-p-4px_0 u-va-top">' + escapeHtmlAdmin(m.consequence) + '</td>' +
             '</tr>';
         }).join('');
         status.textContent = '';
-        out.innerHTML = ledgerNote + '<p style="color:#FF9500; margin:0 0 8px; font-size:0.82rem;"><strong>This Worker is running ahead of its database.</strong> ' +
+        out.innerHTML = ledgerNote + '<p class="u-c-v_color_warn_text u-m-0_0_8px u-fs-v_font_size_sm"><strong>This Worker is running ahead of its database.</strong> ' +
           'Unapplied migration' + ((data.pendingMigrations || []).length === 1 ? '' : 's') + ': ' +
           escapeHtmlAdmin((data.pendingMigrations || []).join(', ')) +
           '. Apply the matching file(s) under <code>migrations/</code> in the D1 Console, in filename order.</p>' +
-          '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.82rem;">' +
-          '<thead><tr style="color:#8E8E93; text-align:left;"><th style="padding-right:10px;">Migration</th><th style="padding-right:10px;">Missing</th><th>What does not work without it</th></tr></thead>' +
+          '<div class="u-ovx-auto"><table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
+          '<thead><tr class="u-c-v_muted u-ta-left"><th class="u-pr-10px">Migration</th><th class="u-pr-10px">Missing</th><th>What does not work without it</th></tr></thead>' +
           '<tbody>' + rows + '</tbody></table></div>' + dbStatsNote + indexNote;
       } catch (e) {
         status.textContent = 'Failed: network error.';
@@ -15286,11 +15888,11 @@ async function renderAdminDashboard(env) {
         }
         body.innerHTML = data.keys.map((k) =>
           '<tr>' +
-            '<td>' + escapeHtmlAdmin(k.label) + (k.configured ? '' : ' <span style="color:#FF9500;">(not set)</span>') + '</td>' +
+            '<td>' + escapeHtmlAdmin(k.label) + (k.configured ? '' : ' <span class="u-c-v_color_warn_text">(not set)</span>') + '</td>' +
             '<td>' + k.last24h + '</td>' +
             '<td>' + k.last7d + '</td>' +
             '<td>' + k.last30d + '</td>' +
-            '<td style="color:#8E8E93;">' + escapeHtmlAdmin(k.limit) + '</td>' +
+            '<td class="u-c-v_muted">' + escapeHtmlAdmin(k.limit) + '</td>' +
           '</tr>'
         ).join('');
       } catch (e) {
@@ -15309,7 +15911,7 @@ async function renderAdminDashboard(env) {
           (it.date ? '<div class="netflix-preview-year">' + escapeHtmlAdmin(it.date) + '</div>' : '') +
         '</div>'
       ).join('');
-      return '<h3 style="margin:0 0 4px; font-size:1.05rem;">' + label + ' <span style="color:#8E8E93; font-weight:400; font-size:0.85rem;">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
+      return '<h3 class="u-m-0_0_4px u-fs-v_font_size_md">' + label + ' <span class="u-c-v_muted u-fw-400 u-fs-v_font_size_sm">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
         '<div class="netflix-preview-grid">' + posters + '</div>';
     }
 
@@ -15365,12 +15967,12 @@ async function renderAdminDashboard(env) {
         }
         statusEl.textContent = '';
         if (!data.results.length) {
-          resultsEl.innerHTML = '<p style="color:#8E8E93; font-size:0.85rem;">No matches.</p>';
+          resultsEl.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">No matches.</p>';
           return;
         }
         resultsEl.innerHTML = data.results.map((p) =>
-          '<button type="button" class="admin-select" style="cursor:pointer; margin:0 6px 6px 0;" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
-            escapeHtmlAdmin(p.name) + ' <span style="color:#8E8E93;">(' + p.id + ')</span>' +
+          '<button type="button" class="admin-select u-cur-pointer u-m-0_6px_6px_0" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
+            escapeHtmlAdmin(p.name) + ' <span class="u-c-v_muted">(' + p.id + ')</span>' +
           '</button>'
         ).join('');
       } catch (e) {
@@ -15421,20 +16023,20 @@ async function renderAdminDashboard(env) {
         const bits = [];
         bits.push('<div>D1: ' + (st.d1Bound
           ? (st.tableReady
-            ? '<span style="color:#30d158;">bound, streaming_events ready</span>'
-            : '<span style="color:#FF3B30;">bound, but the table is missing</span>')
-          : '<span style="color:#FF3B30;">not bound -- this catalog is D1-only</span>') + '</div>');
+            ? '<span class="u-c-v_color_success_text">bound, streaming_events ready</span>'
+            : '<span class="u-c-v_color_danger_text">bound, but the table is missing</span>')
+          : '<span class="u-c-v_color_danger_text">not bound -- this catalog is D1-only</span>') + '</div>');
         if (st.error) {
-          bits.push('<div style="color:#FF3B30;">' + escapeHtmlAdmin(st.error) + '</div>');
+          bits.push('<div class="u-c-v_color_danger_text">' + escapeHtmlAdmin(st.error) + '</div>');
         }
         if (st.engine === 'justwatch') {
-          bits.push('<div>Engine: <span style="color:#30d158; font-weight:600;">JustWatch &ldquo;new&rdquo; feed</span> &mdash; the same source mdblist.com/new-on-streaming uses. Last 3 days re-read every 2 hours; ' + (st.jwDaysDone || 0) + ' older days of the 30-day window fully read. (Set the Worker var NEW_ON_STREAMING_ENGINE=rapidapi to switch back.)</div>');
+          bits.push('<div>Engine: <span class="u-c-v_color_success_text u-fw-600">JustWatch &ldquo;new&rdquo; feed</span> &mdash; the same source mdblist.com/new-on-streaming uses. Last 3 days re-read every 2 hours; ' + (st.jwDaysDone || 0) + ' older days of the 30-day window fully read. (Set the Worker var NEW_ON_STREAMING_ENGINE=rapidapi to switch back.)</div>');
         }
         if (st.engine === 'rapidapi') {
-          bits.push('<div>Engine: <span style="color:#30d158; font-weight:600;">RapidAPI Streaming Availability</span> &mdash; pulling direct streaming arrivals &amp; episode updates (previous 30 days)</div>');
+          bits.push('<div>Engine: <span class="u-c-v_color_success_text u-fw-600">RapidAPI Streaming Availability</span> &mdash; pulling direct streaming arrivals &amp; episode updates (previous 30 days)</div>');
         }
         if (st.engine === 'rapidapi' && !st.rapidKeyConfigured) {
-          bits.push('<div style="color:#FF3B30;"><strong>RAPIDAPI_KEY is not set.</strong> Run <code>npx wrangler secret put RAPIDAPI_KEY</code> to enable sweeps.</div>');
+          bits.push('<div class="u-c-v_color_danger_text"><strong>RAPIDAPI_KEY is not set.</strong> Run <code>npx wrangler secret put RAPIDAPI_KEY</code> to enable sweeps.</div>');
         }
         const usage = st.monthlyUsage || { count: 0, limit: 1000, remaining: 1000, safetyCap: 950 };
         const quotaColor = usage.count >= usage.safetyCap ? '#FF3B30' : (usage.count >= 750 ? '#FF9500' : '#30d158');
@@ -15446,17 +16048,17 @@ async function renderAdminDashboard(env) {
             const label = s.changeType === 'removed' ? 'removals' : (s.itemType === 'show' ? 'new titles' : 'new ' + s.itemType + 's');
             const upTo = s.readUpTo ? nosEpochToDay(s.readUpTo) + ' ' + new Date(s.readUpTo * 1000).toISOString().slice(11, 16) + ' UTC' : 'not started';
             return '<strong>' + escapeHtmlAdmin(label) + '</strong> read to ' + escapeHtmlAdmin(upTo) +
-              (s.catchingUp ? ' <span style="color:#FF9500;">(catching up)</span>' : '');
+              (s.catchingUp ? ' <span class="u-c-v_color_warn_text">(catching up)</span>' : '');
           }).join(' &middot; ') + '</div>');
         }
         bits.push('<div>Region: <strong>' + escapeHtmlAdmin(st.region || '') + '</strong> &mdash; 30-day rolling window</div>');
-        bits.push('<div>Visible to users: <span style="color:#30d158;">yes -- My Lists Addon Charts in Quick Add, and Discover</span></div>');
+        bits.push('<div>Visible to users: <span class="u-c-v_color_success_text">yes -- My Lists Addon Charts in Quick Add, and Discover</span></div>');
         const totals = st.totals || {};
         bits.push('<div>Active titles in 30d window: <strong>' + (totals.movie || 0) + '</strong> movies, <strong>' + (totals.series || 0) + '</strong> shows (' + (totals.removed || 0) + ' marked removed)</div>');
         if (st.lastSweep) {
           bits.push('<div>Last sweep: ' + nosEpochToDay(st.lastSweep.at) + ' &mdash; ' + (st.lastSweep.units || 0) + ' API calls, ' + (st.lastSweep.seen || 0) + ' changes seen, ' + (st.lastSweep.added || 0) + ' new arrivals, ' + (st.lastSweep.bumped || 0) + ' episodes bumped' + (st.lastSweep.pruned ? ', ' + st.lastSweep.pruned + ' pruned (>30d)' : '') + (st.lastSweep.errors ? ', ' + st.lastSweep.errors + ' errors' + (st.lastSweep.lastError ? ': ' + escapeHtmlAdmin(st.lastSweep.lastError) : '') : '') + (st.lastSweep.reason ? ' (' + escapeHtmlAdmin(st.lastSweep.reason) + ')' : '') + '</div>');
         } else {
-          bits.push('<div style="color:#FF9500;">No sweep has completed yet.</div>');
+          bits.push('<div class="u-c-v_color_warn_text">No sweep has completed yet.</div>');
         }
         statusEl.innerHTML = bits.join('');
 
@@ -15582,7 +16184,7 @@ async function renderAdminDashboard(env) {
           statusEl.textContent = data.error || 'Failed to add title.';
         } else {
           const r = data.result || {};
-          statusEl.innerHTML = '<span style="color:#30d158; font-weight:600;">Added: ' + escapeHtmlAdmin(r.name) + ' (' + escapeHtmlAdmin(nosProviderLabel(r.service)) + ', ' + (r.eventKind === 'episode' ? 'Episode ' + r.season + 'x' + r.episode + ', ' : '') + nosEpochToDay(r.eventAt) + ')</span>';
+          statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">Added: ' + escapeHtmlAdmin(r.name) + ' (' + escapeHtmlAdmin(nosProviderLabel(r.service)) + ', ' + (r.eventKind === 'episode' ? 'Episode ' + r.season + 'x' + r.episode + ', ' : '') + nosEpochToDay(r.eventAt) + ')</span>';
           inputEl.value = '';
           await loadNewOnStreaming();
           nosResetAndPreview();
@@ -15629,7 +16231,7 @@ async function renderAdminDashboard(env) {
         if (nextBtn) nextBtn.disabled = (nosCurrentPage + 1) * nosPageLimit >= total;
 
         if (!data.items || !data.items.length) {
-          resultsEl.innerHTML = '<p style="color:#8E8E93; font-size:0.85rem;">Empty -- no matching titles found.</p>';
+          resultsEl.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Empty -- no matching titles found.</p>';
           return;
         }
         // Grouped by day like mdblist.com/new-on-streaming, so the two can be
@@ -15647,22 +16249,22 @@ async function renderAdminDashboard(env) {
               ? svcs.map(function (s) {
                   return '<span class="admin-badge service">' + escapeHtmlAdmin(nosProviderLabel(s)) + '</span>';
                 }).join('')
-              : '<span style="color:var(--muted);">--</span>';
+              : '<span class="u-c-v_muted">--</span>';
             const dateStr = it.addedAt ? nosEpochToDay(it.addedAt) : '--';
             let dayHeader = '';
             if (dateStr !== lastDay) {
               lastDay = dateStr;
-              dayHeader = '<tr><td colspan="8" style="font-weight:600; padding-top:14px;">' + escapeHtmlAdmin(dateStr) + '</td></tr>';
+              dayHeader = '<tr><td colspan="8" class="u-fw-600 u-pt-14px">' + escapeHtmlAdmin(dateStr) + '</td></tr>';
             }
 
             return dayHeader + '<tr><td>' + (skip + i + 1) + '</td>' +
-              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" style="width:38px; height:56px; object-fit:cover; border-radius:4px; display:block;">' : '') + '</td>' +
+              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" class="u-objectfit-cover u-br-v_radius_xs" style="width:38px; height:56px; display:block;">' : '') + '</td>' +
               '<td><strong>' + escapeHtmlAdmin(it.name || '') + '</strong></td>' +
               '<td>' + typeBadge + '</td>' +
               '<td>' + svcBadges + '</td>' +
-              '<td style="white-space:nowrap;">' + escapeHtmlAdmin(dateStr) + '</td>' +
+              '<td class="u-ws-nowrap">' + escapeHtmlAdmin(dateStr) + '</td>' +
               '<td>' + escapeHtmlAdmin(it.releaseInfo || '') + '</td>' +
-              '<td style="color:var(--muted); font-family:monospace; font-size:0.8rem;">' + escapeHtmlAdmin(it.id || '') + '</td></tr>';
+              '<td class="u-c-v_muted u-ff-monospace u-fs-v_font_size_sm">' + escapeHtmlAdmin(it.id || '') + '</td></tr>';
           }).join('') +
           '</table></div>';
       } catch (e) {
@@ -15701,16 +16303,16 @@ async function renderAdminDashboard(env) {
         statusEl.textContent = data.networks.length + ' networks';
         body.innerHTML = data.networks.map((net) => {
           const cachedBadge = net.cached
-            ? '<span class="admin-badge" style="background:rgba(52,199,89,0.15); color:#34C759;">cached</span>'
-            : '<span style="color:var(--muted);">not cached</span>';
+            ? '<span class="admin-badge u-bg-rgba_52_199_89_0_15 u-c-v_color_success_text">cached</span>'
+            : '<span class="u-c-v_muted">not cached</span>';
           return '<tr>' +
-            '<td><strong>' + escapeHtmlAdmin(net.name) + '</strong> <span style="color:var(--muted); font-family:monospace; font-size:0.78rem;">(' + escapeHtmlAdmin(net.id) + ')</span></td>' +
+            '<td><strong>' + escapeHtmlAdmin(net.name) + '</strong> <span class="u-c-v_muted u-ff-monospace u-fs-v_font_size_xs">(' + escapeHtmlAdmin(net.id) + ')</span></td>' +
             '<td>' + cachedBadge + '</td>' +
             '<td>' + (net.cached ? net.itemCount : '--') + '</td>' +
-            '<td style="white-space:nowrap;">' + cpAgoText(net.builtAt) + '</td>' +
-            '<td style="white-space:nowrap;">' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem;" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:0.8rem; color:#FF3B30;" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
+            '<td class="u-ws-nowrap">' + cpAgoText(net.builtAt) + '</td>' +
+            '<td class="u-ws-nowrap">' +
+              '<button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
+              '<button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm u-c-v_color_danger_text" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -15794,14 +16396,14 @@ async function renderAdminDashboard(env) {
         const res = await fetch('/admin/api/feedback');
         const data = await res.json();
         if (!data.ok) {
-          box.innerHTML = '<p style="color:#FF3B30;">Could not load feedback -- try again.</p>';
+          box.innerHTML = '<p class="u-c-v_color_danger_text">Could not load feedback -- try again.</p>';
           return;
         }
         feedbackEntries = data.entries || [];
         feedbackTruncated = !!data.truncated;
         renderFeedbackList();
       } catch (e) {
-        box.innerHTML = '<p style="color:#FF3B30;">Could not load feedback -- try again.</p>';
+        box.innerHTML = '<p class="u-c-v_color_danger_text">Could not load feedback -- try again.</p>';
       }
     }
 
@@ -15814,14 +16416,14 @@ async function renderAdminDashboard(env) {
       const box = document.getElementById('feedbackList');
       if (!box) return;
       if (!feedbackEntries.length) {
-        box.innerHTML = '<p style="color:#8E8E93;">No feedback yet.</p>';
+        box.innerHTML = '<p class="u-c-v_muted">No feedback yet.</p>';
         return;
       }
       const open = feedbackEntries.filter((f) => !f.completed);
       const done = feedbackEntries.filter((f) => f.completed);
       box.innerHTML = open.map(feedbackCardHtml).join('') +
-        (done.length ? '<h3 style="margin:20px 0 4px; font-size:0.95rem; color:#8E8E93;">Completed</h3>' + done.map(feedbackCardHtml).join('') : '') +
-        (feedbackTruncated ? '<p style="color:#8E8E93; font-size:0.85rem;">Showing the most recent 300.</p>' : '');
+        (done.length ? '<h3 class="u-m-20px_0_4px u-fs-v_font_size_base u-c-v_muted">Completed</h3>' + done.map(feedbackCardHtml).join('') : '') +
+        (feedbackTruncated ? '<p class="u-c-v_muted u-fs-v_font_size_sm">Showing the most recent 300.</p>' : '');
       initFeedbackListEvents();
     }
 
@@ -15837,8 +16439,8 @@ async function renderAdminDashboard(env) {
       const contact = f.contact ? ' \u2014 ' + escapeHtmlAdmin(f.contact) : '';
       const completed = !!f.completed;
       const statusLabel = (!isSelfLogged && f.status === 'replied')
-        ? '<span class="admin-badge improvement" style="margin-left:6px;">Replied</span>'
-        : (completed ? '<span class="admin-badge other" style="margin-left:6px;">Resolved</span>' : '<span class="admin-badge bug" style="margin-left:6px;">Open</span>');
+        ? '<span class="admin-badge improvement u-ml-6px">Replied</span>'
+        : (completed ? '<span class="admin-badge other u-ml-6px">Resolved</span>' : '<span class="admin-badge bug u-ml-6px">Open</span>');
 
       const messages = Array.isArray(f.messages) && f.messages.length
         ? f.messages
@@ -15856,12 +16458,12 @@ async function renderAdminDashboard(env) {
         const mTime = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         const bg = isAdmin ? 'rgba(0,122,255,0.08)' : 'rgba(255,255,255,0.04)';
         const border = isAdmin ? 'rgba(0,122,255,0.25)' : 'var(--border)';
-        return '<div style="margin-top:6px; padding:8px 12px; border-radius:8px; background:' + bg + '; border:1px solid ' + border + ';">' +
-          '<div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700; color:' + (isAdmin ? 'var(--accent)' : 'var(--text)') + ';">' +
+        return '<div style="margin-top:6px; padding:8px 12px; border-radius:var(--radius-sm); background:' + bg + '; border:1px solid ' + border + ';">' +
+          '<div style="display:flex; justify-content:space-between; font-size:var(--font-size-xs); font-weight:700; color:' + (isAdmin ? 'var(--accent)' : 'var(--text)') + ';">' +
             '<span>' + escapeHtmlAdmin(sender) + '</span>' +
-            '<span style="color:var(--muted); font-weight:normal;">' + escapeHtmlAdmin(mTime) + '</span>' +
+            '<span class="u-c-v_muted u-fw-normal">' + escapeHtmlAdmin(mTime) + '</span>' +
           '</div>' +
-          '<div style="margin-top:4px; font-size:0.88rem; white-space:pre-wrap; word-break:break-word; color:var(--text);">' + escapeHtmlAdmin(m.text || '') + '</div>' +
+          '<div class="u-mt-4px u-fs-v_font_size_sm u-ws-pre_wrap u-wb-break_word u-c-v_text">' + escapeHtmlAdmin(m.text || '') + '</div>' +
         '</div>';
       }).join('');
 
@@ -15872,20 +16474,20 @@ async function renderAdminDashboard(env) {
             statusLabel +
           '</div>' +
           '<div class="feedback-actions">' +
-            '<button type="button" class="admin-select fb-copy-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer;">&#x2398; Copy</button>' +
-            '<button type="button" class="admin-select fb-edit-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer;">&#x270E; Edit</button>' +
-            '<button type="button" class="admin-select fb-status-btn" data-id="' + escapeHtmlAdmin(f.id) + '" data-completed="' + (!completed) + '" style="margin:0; cursor:pointer;">' +
+            '<button type="button" class="admin-select fb-copy-btn u-m-0 u-cur-pointer" data-id="' + escapeHtmlAdmin(f.id) + '">&#x2398; Copy</button>' +
+            '<button type="button" class="admin-select fb-edit-btn u-m-0 u-cur-pointer" data-id="' + escapeHtmlAdmin(f.id) + '">&#x270E; Edit</button>' +
+            '<button type="button" class="admin-select fb-status-btn u-m-0 u-cur-pointer" data-id="' + escapeHtmlAdmin(f.id) + '" data-completed="' + (!completed) + '">' +
               (completed ? '\u21a9 Reopen' : '\u2713 Mark done') +
             '</button>' +
-            '<button type="button" class="admin-select fb-delete-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer; color:#FF3B30; border-color:rgba(255,59,48,0.3);">&#x2715; Delete</button>' +
+            '<button type="button" class="admin-select fb-delete-btn u-m-0 u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_3" data-id="' + escapeHtmlAdmin(f.id) + '">&#x2715; Delete</button>' +
           '</div>' +
         '</div>' +
-        '<div style="margin-top:10px;">' + messagesHtml + '</div>' +
-        '<div class="feedback-meta" style="margin-top:8px;">' + when + ' \u2014 ' + who + contact + '</div>' +
+        '<div class="u-mt-10px">' + messagesHtml + '</div>' +
+        '<div class="feedback-meta u-mt-8px">' + when + ' \u2014 ' + who + contact + '</div>' +
         (!isSelfLogged ?
-          '<div style="margin-top:10px; display:flex; gap:8px; align-items:center;">' +
-            '<input type="text" id="adminReplyInput_' + escapeHtmlAdmin(f.id) + '" class="admin-select fb-reply-input" data-id="' + escapeHtmlAdmin(f.id) + '" style="flex:1; margin-right:0; padding:8px 10px;" placeholder="Type reply to ' + who + '...">' +
-            '<button type="button" class="secondary lc-btn fb-reply-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="padding:6px 14px; font-size:0.82rem;">Reply</button>' +
+          '<div class="u-mt-10px u-gap-8px u-ai-center" style="display:flex;">' +
+            '<input type="text" id="adminReplyInput_' + escapeHtmlAdmin(f.id) + '" class="admin-select fb-reply-input u-flex-1 u-mr-0 u-p-8px_10px" data-id="' + escapeHtmlAdmin(f.id) + '" placeholder="Type reply to ' + who + '...">' +
+            '<button type="button" class="secondary lc-btn fb-reply-btn u-p-6px_14px u-fs-v_font_size_sm" data-id="' + escapeHtmlAdmin(f.id) + '">Reply</button>' +
           '</div>' : ''
         ) +
       '</div>';
@@ -16064,16 +16666,16 @@ async function renderAdminDashboard(env) {
       const icon = isSuccess ? '\u2713' : '\u2715';
       const iconColor = isSuccess ? 'var(--success, #34C759)' : 'var(--danger, #FF3B30)';
       const html =
-        '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:1.15rem; font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
-            '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+        '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+          '<h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-ai-center u-gap-8px u-c-v_text" style="display:flex;">' +
+            '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
-        '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
-        '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-          '<button type="button" class="lc-btn primary" data-act="closeAdminModal" style="min-width:80px;">OK</button>' +
+        '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
+        '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+          '<button type="button" class="lc-btn primary u-minw-80px" data-act="closeAdminModal">OK</button>' +
         '</div>';
       showAdminModal(html);
     }
@@ -16083,15 +16685,15 @@ async function renderAdminDashboard(env) {
       const iconColor = isDanger ? 'var(--danger, #FF3B30)' : 'var(--accent, #007AFF)';
       const btnClass = isDanger ? 'lc-btn danger' : 'lc-btn primary';
       const html =
-        '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:1.15rem; font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
-            '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+        '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+          '<h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-ai-center u-gap-8px u-c-v_text" style="display:flex;">' +
+            '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
-        '<p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
-        '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
+        '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
+        '<div class="u-jc-flex_end u-gap-10px" style="display:flex;">' +
           '<button type="button" class="lc-btn secondary" data-act="closeAdminModal">Cancel</button>' +
           '<button type="button" class="' + btnClass + '" id="adminConfirmOkBtn">' + escapeHtmlAdmin(confirmBtnText || 'Confirm') + '</button>' +
         '</div>';
@@ -20464,7 +21066,7 @@ function sanitizeSharedChannel(raw) {
 // the full channel is one code lookup away.
 function sharedChannelSummary(code, record) {
   const channel = record.channel || {};
-  const showKeys = new Set((channel.items || []).map(channelItemShowKey));
+  const showKeys = new Set((channel.items || []).filter((it) => !it || it.kind !== "movie").map(channelItemShowKey));
   const sampleItems = (channel.items || []).slice(0, 9);
   return {
     code: code,
@@ -29143,7 +29745,7 @@ function buildAppShellNavHtml(style) {
     return `<a ${attrs}>\n      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">\n        ${APP_SHELL_TAB_ICONS[t.id] || ""}\n      </svg>\n      ${t.label}\n    </a>`;
   }).join("\n    ");
   if (isDesktop) {
-    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" style="display:flex; gap:8px; overflow-x:auto; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
+    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" class="u-gap-8px u-ovx-auto" style="display:flex; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
   }
   return `<nav class="bottom-nav" id="appShellMobileNav" aria-label="Main navigation">\n    ${items}\n  </nav>`;
 }
@@ -29385,185 +29987,8 @@ ${seoHeadHtml}
   it comes back byte-identical every time and carries no injected value.
 -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_CSS_START*/
-  :root {
-    /* Modern iOS/macOS human-interface design system tokens */
-    color-scheme: light;
-
-    /* Semantic Surfaces & Backgrounds */
-    --color-bg-canvas:      #F2F2F7;
-    --color-bg-surface:     #FFFFFF;
-    --color-bg-elevated:    #FFFFFF;
-    --color-bg-sunken:      #E5E5EA;
-    --color-bg-overlay:     rgba(0, 0, 0, 0.45);
-
-    /* Semantic Borders */
-    --color-border-subtle:  rgba(0, 0, 0, 0.08);
-    --color-border-strong:  rgba(0, 0, 0, 0.14);
-    --color-border-focus:   #007AFF;
-
-    /* Semantic Typography / Foreground */
-    --color-text-primary:   #1C1C1E;
-    --color-text-secondary: #3A3A3C;
-    --color-text-muted:     #636366;
-    --color-text-inverse:   #FFFFFF;
-
-    /* Brand & Accent */
-    --color-brand:          #007AFF;
-    --color-brand-hover:    #0062CC;
-    --color-brand-active:   #004FB3;
-    --color-brand-subtle:   rgba(0, 122, 255, 0.12);
-    --color-brand-2:        #34AADC;
-
-    /* Status & Feedback */
-    --color-danger:         #FF3B30;
-    --color-danger-hover:   #D70015;
-    --color-danger-subtle:  rgba(255, 59, 48, 0.12);
-    --color-success:        #34C759;
-    --color-success-hover:  #248A3D;
-    --color-success-subtle: rgba(52, 199, 89, 0.12);
-    --color-warn:           #FF9500;
-    --color-warn-hover:     #C97000;
-    --color-warn-subtle:    rgba(255, 149, 0, 0.12);
-
-    /* Rating Colors */
-    --color-rating-high:    #34C759;
-    --color-rating-mid:     #FF9500;
-    --color-rating-low:     #FF3B30;
-
-    /* Elevation & Shadows */
-    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.06);
-    --shadow:               0 2px 10px rgba(0, 0, 0, 0.08);
-    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.10);
-    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.16);
-    --shadow-focus:         0 0 0 3px rgba(0, 122, 255, 0.35);
-
-    /* Spacing Scale (8pt grid system with half-steps) */
-    --space-0-5:            2px;
-    --space-1:              4px;
-    --space-1-5:            6px;
-    --space-2:              8px;
-    --space-2-5:            10px;
-    --space-3:              12px;
-    --space-3-5:            14px;
-    --space-4:              16px;
-    --space-5:              20px;
-    --space-6:              24px;
-    --space-8:              32px;
-
-    /* Border Radius Scale */
-    --radius-xs:            4px;
-    --radius-sm:            8px;
-    --radius-md:            12px;
-    --radius-lg:            16px;
-    --radius-xl:            20px;
-    --radius-pill:          999px;
-
-    /* Interactive Component Controls & Touch Targets */
-    --control-height-sm:    32px;
-    --control-height-md:    40px;
-    --control-height-lg:    48px;
-    --control-touch-min:    44px;
-
-    /* Typography Scale */
-    --font-display:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
-    --font-body:            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
-    --font-mono:            ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-    --font-size-xs:         0.75rem;
-    --font-size-sm:         0.85rem;
-    --font-size-base:       0.925rem;
-    --font-size-md:         1rem;
-    --font-size-lg:         1.15rem;
-    --font-size-xl:         1.35rem;
-    --font-size-2xl:        1.6rem;
-
-    /* Scrollbars */
-    --sb-track:             transparent;
-    --sb-thumb:             rgba(0, 0, 0, 0.15);
-    --sb-thumb-hover:       rgba(0, 0, 0, 0.25);
-
-    /* Complete Backward-Compatibility Aliases */
-    --bg:                   var(--color-bg-canvas);
-    --surface:              var(--color-bg-surface);
-    --surface-2:            var(--color-bg-sunken);
-    --surface-3:            var(--color-border-strong);
-    --panel:                var(--color-bg-surface);
-    --panel-strong:         var(--color-bg-sunken);
-    --border:               var(--color-border-subtle);
-    --border-strong:        var(--color-border-strong);
-    --text:                 var(--color-text-primary);
-    --text-2:               var(--color-text-secondary);
-    --muted:                var(--color-text-muted);
-    --accent:               var(--color-brand);
-    --brand:                var(--color-brand);
-    --accent-hover:         var(--color-brand-hover);
-    --accent-2:             var(--color-brand-2);
-    --danger:               var(--color-danger);
-    --success:              var(--color-success);
-    --warn:                 var(--color-warn);
-    --rating-high:          var(--color-rating-high);
-    --rating-mid:           var(--color-rating-mid);
-    --rating-low:           var(--color-rating-low);
-    --radius:               14px;
-  }
-  :root.dark-theme {
-    color-scheme: dark;
-
-    /* Semantic Surfaces & Backgrounds (Dark Mode) */
-    --color-bg-canvas:      #000000;
-    --color-bg-surface:     #1C1C1E;
-    --color-bg-elevated:    #2C2C2E;
-    --color-bg-sunken:      #161618;
-    --color-bg-overlay:     rgba(0, 0, 0, 0.65);
-
-    /* Semantic Borders (Dark Mode) */
-    --color-border-subtle:  rgba(255, 255, 255, 0.14);
-    --color-border-strong:  rgba(255, 255, 255, 0.24);
-    --color-border-focus:   #0A84FF;
-
-    /* Semantic Typography / Foreground (Dark Mode) */
-    --color-text-primary:   #FFFFFF;
-    --color-text-secondary: #EBEBF5;
-    --color-text-muted:     #AEAEB2;
-    --color-text-inverse:   #000000;
-
-    /* Brand & Accent (Dark Mode) */
-    --color-brand:          #0A84FF;
-    --color-brand-hover:    #0071E3;
-    --color-brand-active:   #0056B3;
-    --color-brand-subtle:   rgba(10, 132, 255, 0.18);
-    --color-brand-2:        #5AC8FA;
-
-    /* Status & Feedback (Dark Mode) */
-    --color-danger:         #FF453A;
-    --color-danger-hover:   #FF6961;
-    --color-danger-subtle:  rgba(255, 69, 58, 0.18);
-    --color-success:        #30D158;
-    --color-success-hover:  #34C759;
-    --color-success-subtle: rgba(48, 209, 88, 0.18);
-    --color-warn:           #FF9F0A;
-    --color-warn-hover:     #FFB340;
-    --color-warn-subtle:    rgba(255, 159, 10, 0.18);
-
-    /* Rating Colors (Dark Mode) */
-    --color-rating-high:    #30D158;
-    --color-rating-mid:     #FF9F0A;
-    --color-rating-low:     #FF453A;
-
-    /* Shadows & Elevation (Dark Mode) */
-    --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.35);
-    --shadow:               0 2px 10px rgba(0, 0, 0, 0.45);
-    --shadow-md:            0 4px 20px rgba(0, 0, 0, 0.55);
-    --shadow-lg:            0 8px 30px rgba(0, 0, 0, 0.70);
-    --shadow-focus:         0 0 0 3px rgba(10, 132, 255, 0.45);
-
-    /* Scrollbars (Dark Mode) */
-    --sb-thumb:             rgba(255, 255, 255, 0.15);
-    --sb-thumb-hover:       rgba(255, 255, 255, 0.25);
-
-    /* Backward-Compatibility Aliases (Dark Mode) */
-    --surface-2:            var(--color-bg-sunken);
-    --surface-3:            var(--color-border-strong);
-  }
+${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   /* A visible keyboard focus indicator, restored.
@@ -29581,12 +30006,12 @@ ${seoHeadHtml}
   :where(input[type="checkbox"], input[type="radio"]):focus-visible {
     outline: 2px solid var(--accent) !important;
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
   }
   :where(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
     outline: none !important;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.25)) !important;
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, var(--color-brand-line)) !important;
   }
 
   /* The page has four @keyframes animations and 33 transitions and said
@@ -29604,7 +30029,7 @@ ${seoHeadHtml}
   /* scrollbar-gutter, because the page is a max-width block centred with
      'margin: 0 auto' and every tab is one panel swapped in for another. A
      panel whose content is shorter than the viewport takes the classic
-     scrollbar away, the content box gets ~15px wider, and the centred page
+     scrollbar away, the content box gets ~var(--space-4) wider, and the centred page
      slides right by half of that -- which is exactly what selecting
      Discover > Hidden Gems, Catalogs > Bulk Add, Lists > Liked or Import,
      or Channels > Quick Add or Import did on desktop. Reserving the gutter
@@ -29639,7 +30064,7 @@ ${seoHeadHtml}
     width: 100%;
     margin: 0 auto;
     display: grid;
-    gap: 12px;
+    gap: var(--space-3);
     overflow-x: hidden;
   }
 
@@ -29649,14 +30074,14 @@ ${seoHeadHtml}
     align-items: center;
     justify-content: space-between;
     flex-wrap: nowrap;
-    gap: 10px;
-    padding: 6px 4px 8px;
+    gap: var(--space-2-5);
+    padding: var(--space-1-5) var(--space-1) var(--space-2);
     min-width: 0;
   }
   .app-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2-5);
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -29664,7 +30089,7 @@ ${seoHeadHtml}
   .app-header-avatar {
     width: 40px;
     height: 40px;
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
     object-fit: cover;
   }
@@ -29675,7 +30100,7 @@ ${seoHeadHtml}
     overflow: hidden;
   }
   .app-header-title {
-    font-size: 1.35rem;
+    font-size: var(--font-size-xl);
     font-weight: 800;
     letter-spacing: -0.025em;
     color: var(--text);
@@ -29686,10 +30111,10 @@ ${seoHeadHtml}
     text-overflow: ellipsis;
   }
   .app-header-sub {
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     color: var(--muted);
     font-weight: 500;
-    margin-top: 1px;
+    margin-top: var(--space-0-5);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -29697,7 +30122,7 @@ ${seoHeadHtml}
   .app-header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     flex: 0 0 auto;
     margin-left: auto;
   }
@@ -29723,7 +30148,7 @@ ${seoHeadHtml}
     box-shadow: var(--shadow-sm);
     padding: 0;
     font-family: inherit;
-    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+    transition: background var(--duration-base) ease, border-color var(--duration-base) ease, transform var(--duration-base) ease, box-shadow var(--duration-base) ease, color var(--duration-base) ease;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
@@ -29747,17 +30172,17 @@ ${seoHeadHtml}
     color: var(--accent);
   }
   .header-avatar-btn.signed-in {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #ffffff;
+    background: var(--color-brand-fill);
+    border-color: var(--color-brand-fill);
+    color: var(--color-on-brand);
   }
   .header-avatar-btn.signed-in:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
-    color: #ffffff;
+    background: var(--color-brand-fill-hover);
+    border-color: var(--color-brand-fill-hover);
+    color: var(--color-on-brand);
   }
   .header-avatar-initial {
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     font-weight: 700;
     line-height: 1;
     text-transform: uppercase;
@@ -29785,7 +30210,7 @@ ${seoHeadHtml}
     padding: 0;
     position: relative;
     overflow: hidden;
-    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+    transition: background var(--duration-base) ease, border-color var(--duration-base) ease, transform var(--duration-base) ease, box-shadow var(--duration-base) ease, color var(--duration-base) ease;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
@@ -29805,7 +30230,7 @@ ${seoHeadHtml}
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) scale(1) rotate(0deg);
-    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+    transition: transform var(--duration-slow) cubic-bezier(0.4, 0, 0.2, 1), opacity var(--duration-slow) ease;
     pointer-events: none;
   }
   /* Light Mode default state: show moon, hide sun */
@@ -29822,23 +30247,19 @@ ${seoHeadHtml}
   /* No color override here -- matches the Guide page's theme toggle
      (renderGuidePage, 24_client-backup-restore-presets.js), which never
      colors its sun icon and just inherits the button's own text color. */
-  :root.dark-theme .theme-toggle-btn .theme-icon-sun,
-  html.dark-theme .theme-toggle-btn .theme-icon-sun,
-  body.dark-theme .theme-toggle-btn .theme-icon-sun {
+  :root.dark-theme .theme-toggle-btn .theme-icon-sun {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1) rotate(0deg);
   }
-  :root.dark-theme .theme-toggle-btn .theme-icon-moon,
-  html.dark-theme .theme-toggle-btn .theme-icon-moon,
-  body.dark-theme .theme-toggle-btn .theme-icon-moon {
+  :root.dark-theme .theme-toggle-btn .theme-icon-moon {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.4) rotate(-90deg);
   }
 
   /* --- Top Tab Bar (Desktop View) ---------------------------------------------- */
   .tab-bar {
-    display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px;
-    margin-bottom: 4px; -webkit-overflow-scrolling: touch;
+    display: flex; gap: var(--space-2); overflow-x: auto; padding: var(--space-0-5) 0 var(--space-1-5);
+    margin-bottom: var(--space-1); -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
   .tab-bar::-webkit-scrollbar { display: none; }
@@ -29848,23 +30269,23 @@ ${seoHeadHtml}
     color: var(--text-2);
     border: 1.5px solid var(--border-strong);
     border-radius: var(--radius-pill);
-    padding: 8px 16px;
-    font-size: 0.875rem;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
     min-height: unset;
-    transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base), box-shadow var(--duration-base);
     box-shadow: var(--shadow-sm);
   }
   .tab-btn.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-    box-shadow: 0 2px 10px rgba(0,122,255,0.30);
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    border-color: var(--color-brand-fill);
+    box-shadow: 0 2px 10px var(--color-brand-line);
   }
   .tab-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
-  .tab-panel { display: grid; gap: 14px; width: 100%; max-width: 100%; min-width: 0; }
+  .tab-panel { display: grid; gap: var(--space-3-5); width: 100%; max-width: 100%; min-width: 0; }
   .tab-panel[hidden] { display: none; }
   /* Prevent FOUC: Show initial active tab and hide inactive ones before script execution */
   html[data-initial-tab] .tab-panel {
@@ -29894,10 +30315,10 @@ ${seoHeadHtml}
   html[data-initial-tab="channels"] .tab-btn[data-tab="channels"],
   html[data-initial-tab="search"] .tab-btn[data-tab="search"],
   html[data-initial-tab="settings"] .tab-btn[data-tab="settings"] {
-    background: var(--accent) !important;
-    color: #fff !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 2px 10px rgba(0,122,255,0.30) !important;
+    background: var(--color-brand-fill) !important;
+    color: var(--color-on-brand) !important;
+    border-color: var(--color-brand-fill) !important;
+    box-shadow: 0 2px 10px var(--color-brand-line) !important;
   }
   html[data-initial-tab="catalogs"] .bottom-nav-item[data-tab="catalogs"],
   html[data-initial-tab="lists"] .bottom-nav-item[data-tab="lists"],
@@ -29937,9 +30358,9 @@ ${seoHeadHtml}
   html[data-initial-catalogs-sub="shelves"] #catalogsFilterBar .subnav-pill[data-sub="all"],
   html[data-initial-catalogs-sub="quickadd"] #catalogsFilterBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-catalogs-sub="bulk"] #catalogsFilterBar .subnav-pill[data-sub="bulk"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
@@ -29976,9 +30397,9 @@ ${seoHeadHtml}
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
@@ -30015,9 +30436,9 @@ ${seoHeadHtml}
   html[data-initial-channels-sub="storylines"] #channelsSubnavBar .subnav-pill[data-sub="storylines"],
   html[data-initial-channels-sub="quickadd"] #channelsSubnavBar .subnav-pill[data-sub="quickadd"],
   html[data-initial-channels-sub="import"] #channelsSubnavBar .subnav-pill[data-sub="import"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
@@ -30065,15 +30486,15 @@ ${seoHeadHtml}
   html[data-initial-settings-sub="external"] #settingsSubnavBar .subnav-pill[data-sub="external"],
   html[data-initial-settings-sub="backup"] #settingsSubnavBar .subnav-pill[data-sub="backup"],
   html[data-initial-settings-sub="feedback"] #settingsSubnavBar .subnav-pill[data-sub="feedback"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
 
   /* Discover */
   #discoverShelvesContainer {
-    display: none !important;
+    display: none;
   }
   html[data-initial-discover-sub="popular"] #discoverShelvesContainer,
   html[data-initial-discover-sub="popular"] #discoverListsFeedHeader,
@@ -30118,9 +30539,9 @@ ${seoHeadHtml}
   html[data-initial-discover-sub="kids"] #discoverSubnavBar .subnav-pill[data-sub="kids"],
   html[data-initial-discover-sub="holidays"] #discoverSubnavBar .subnav-pill[data-sub="holidays"],
   html[data-initial-discover-sub="genres"] #discoverSubnavBar .subnav-pill[data-sub="genres"] {
-    background: rgba(0, 122, 255, 0.12) !important;
+    background: var(--color-brand-subtle) !important;
     color: var(--accent) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    border-color: var(--color-brand-line) !important;
     box-shadow: none !important;
   }
   /* Each direct child of .tab-panel (the subnav pill bar, each
@@ -30147,16 +30568,16 @@ ${seoHeadHtml}
   #content-item-details { position: relative; }
   .item-back-btn {
     position: absolute; top: 12px; left: 12px; z-index: 3;
-    padding: 6px 14px; min-height: unset;
-    font-size: 0.9rem; font-weight: 600; font-family: inherit;
-    color: #fff; background: rgba(0,0,0,0.45);
+    padding: var(--space-1-5) var(--space-3-5); min-height: unset;
+    font-size: var(--font-size-base); font-weight: 600; font-family: inherit;
+    color: var(--color-on-brand); background: rgba(0,0,0,0.45);
     border: 1px solid rgba(255,255,255,0.25);
     border-radius: var(--radius-pill);
     -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
     cursor: pointer; box-shadow: none;
   }
   .item-back-btn:hover { background: rgba(0,0,0,0.6); }
-  .item-back-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .item-back-btn:focus-visible { outline: 2px solid var(--color-on-brand); outline-offset: 2px; }
   .item-hero {
     position: relative; overflow: hidden; width: 100%;
     height: clamp(220px, 62vw, 360px);
@@ -30173,56 +30594,56 @@ ${seoHeadHtml}
     background: linear-gradient(to bottom, transparent 35%, var(--bg) 100%);
   }
   .item-head {
-    display: flex; gap: 16px; align-items: flex-end;
+    display: flex; gap: var(--space-4); align-items: flex-end;
     margin-top: calc(-1 * clamp(80px, 22vw, 130px));
-    padding: 0 16px; position: relative; z-index: 1; min-width: 0;
+    padding: 0 var(--space-4); position: relative; z-index: 1; min-width: 0;
   }
   .item-head-poster {
     flex: 0 0 auto; width: clamp(88px, 24vw, 140px);
     border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
     border: 2px solid var(--bg); display: block;
   }
-  .item-head-main { flex: 1 1 0; min-width: 0; padding-bottom: 4px; }
+  .item-head-main { flex: 1 1 0; min-width: 0; padding-bottom: var(--space-1); }
   .item-title {
-    margin: 0 0 10px; font-size: clamp(1.4rem, 5vw, 2.2rem);
+    margin: 0 0 var(--space-2-5); font-size: clamp(1.4rem, 5vw, 2.2rem);
     font-family: serif; line-height: 1.15; overflow-wrap: anywhere;
   }
-  .item-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .item-pills { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1-5); }
   .item-pill {
-    display: inline-flex; align-items: center; padding: 3px 10px;
-    font-size: 0.82rem; font-weight: 600; white-space: nowrap;
+    display: inline-flex; align-items: center; padding: var(--space-1) var(--space-2-5);
+    font-size: var(--font-size-sm); font-weight: 600; white-space: nowrap;
     color: var(--text-2); background: var(--panel-strong);
     border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
   }
-  .item-pill-sep { color: var(--muted); font-size: 0.8rem; }
-  .item-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .item-pill-sep { color: var(--muted); font-size: var(--font-size-sm); }
+  .item-actions { display: flex; flex-wrap: wrap; gap: var(--space-2-5); }
   .item-actions .lc-btn {
     flex: 1 1 160px; justify-content: center;
-    padding: 10px 16px; font-size: 0.95rem;
+    padding: var(--space-2-5) var(--space-4); font-size: var(--font-size-base);
   }
   /* On a wide screen the two buttons stay the size they are on a phone (about
      180px each, side by side at the left) instead of stretching across. */
-  @media (min-width: 720px) {
+  @media (min-width: 641px) {
     .item-actions .lc-btn { flex: 0 0 180px; }
   }
-  .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
+  .item-genres { display: flex; flex-wrap: wrap; gap: var(--space-2); }
   .item-genre-chip {
-    padding: 5px 14px; min-height: unset; font-size: 0.85rem; font-weight: 600; font-family: inherit;
+    padding: var(--space-1-5) var(--space-3-5); min-height: unset; font-size: var(--font-size-sm); font-weight: 600; font-family: inherit;
     color: var(--text-2); background: var(--surface);
     border: 1.5px solid var(--border-strong); border-radius: var(--radius-pill);
-    cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s;
+    cursor: pointer; transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   }
   .item-genre-chip:hover { color: var(--accent); border-color: var(--accent); }
   .item-genre-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .item-synopsis {
-    margin: 0; font-size: 1.05rem; line-height: 1.6; color: var(--text);
+    margin: 0; font-size: var(--font-size-md); line-height: 1.6; color: var(--text);
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
     line-clamp: 3; overflow: hidden;
   }
   .item-synopsis.is-expanded { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
   .item-synopsis-toggle {
-    margin-top: 6px; padding: 0; min-height: unset; background: none; border: 0;
-    color: var(--accent); font-size: 0.95rem; font-weight: 600;
+    margin-top: var(--space-1-5); padding: 0; min-height: unset; background: none; border: 0;
+    color: var(--accent); font-size: var(--font-size-base); font-weight: 600;
     font-family: inherit; cursor: pointer;
   }
   .item-synopsis-toggle:hover { text-decoration: underline; }
@@ -30240,7 +30661,7 @@ ${seoHeadHtml}
       bottom: 0 !important;
       left: 0 !important;
       right: 0 !important;
-      z-index: 9999 !important;
+      z-index: var(--z-nav);
       background: rgba(255,255,255,0.94);
       -webkit-backdrop-filter: saturate(180%) blur(20px);
       backdrop-filter: saturate(180%) blur(20px);
@@ -30248,7 +30669,7 @@ ${seoHeadHtml}
       padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
       box-shadow: 0 -1px 0 rgba(0,0,0,0.08), 0 -4px 16px rgba(0,0,0,0.05);
     }
-    :root.dark-theme .bottom-nav, html.dark-theme .bottom-nav, body.dark-theme .bottom-nav {
+    :root.dark-theme .bottom-nav {
       background: rgba(0,0,0,0.94) !important;
       border-top: 1px solid var(--border) !important;
       box-shadow: 0 -1px 0 rgba(255,255,255,0.08), 0 -4px 16px rgba(0,0,0,0.6) !important;
@@ -30259,19 +30680,19 @@ ${seoHeadHtml}
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 3px;
-      padding: 4px 1px;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-0-5);
       min-height: 62px;
       background: transparent !important;
       border: none !important;
       border-radius: 0 !important;
       box-shadow: none !important;
       color: var(--muted);
-      font-size: 0.78rem;
+      font-size: var(--font-size-xs);
       font-weight: 600;
       letter-spacing: 0.01em;
       cursor: pointer;
-      transition: color 0.12s ease;
+      transition: color var(--duration-fast) ease;
       white-space: nowrap;
       /* flex items default to min-width:auto, so with nowrap these six
          cannot shrink below their own text and the last one overflows the
@@ -30283,7 +30704,7 @@ ${seoHeadHtml}
     }
     .bottom-nav-item svg {
       width: 28.5px; height: 28.5px; flex: none;
-      transition: transform 0.12s ease;
+      transition: transform var(--duration-fast) ease;
       stroke-width: 1.8;
     }
     .bottom-nav-item.active { color: var(--accent); }
@@ -30297,9 +30718,9 @@ ${seoHeadHtml}
      being cut in half. */
   @media (max-width: 360px) {
     .bottom-nav-item {
-      font-size: 0.68rem;
+      font-size: var(--font-size-2xs);
       letter-spacing: 0;
-      padding: 4px 0;
+      padding: var(--space-1) 0;
     }
     .bottom-nav-item svg { width: 25px; height: 25px; }
   }
@@ -30308,14 +30729,14 @@ ${seoHeadHtml}
     opacity: 0.55 !important;
     transform: scale(1.05) !important;
     box-shadow: 0 10px 25px rgba(0,0,0,0.4) !important;
-    z-index: 100 !important;
+    z-index: var(--z-sticky) !important;
     pointer-events: none !important;
   }
 
   /* --- Segmented Top Submenus (Matching Screenshot 3) --------------------- */
   .subnav-pills-bar {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -30324,7 +30745,7 @@ ${seoHeadHtml}
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x;
-    padding: 4px 16px 8px 4px;
+    padding: var(--space-1) var(--space-4) var(--space-2) var(--space-1);
     align-items: center;
     box-sizing: border-box;
   }
@@ -30332,42 +30753,37 @@ ${seoHeadHtml}
   .subnav-pill {
     flex: none;
     flex-shrink: 0;
-    padding: 5px 14px;
+    padding: var(--space-1-5) var(--space-3-5);
     min-height: 31px;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--color-border-strong);
     background: var(--color-bg-surface);
     color: var(--color-text-secondary);
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    gap: var(--space-1-5);
+    transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
     box-shadow: none;
     font-family: inherit;
   }
   .subnav-pill.active {
-    background: rgba(0, 122, 255, 0.12);
+    background: var(--color-brand-subtle);
     color: var(--accent);
-    border-color: rgba(0, 122, 255, 0.40);
+    border-color: var(--color-brand-line);
     box-shadow: none;
     font-weight: 700;
   }
-  :root.dark-theme .subnav-pill.active {
-    background: rgba(10, 132, 255, 0.22);
-    color: var(--accent);
-    border-color: rgba(10, 132, 255, 0.50);
-  }
   .subnav-pill:hover:not(.active) {
-    border-color: rgba(0, 122, 255, 0.40);
+    border-color: var(--color-brand-line);
     color: var(--accent);
   }
   .subnav-pill .check-icon {
     font-weight: 800;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     color: var(--accent);
   }
 
@@ -30377,15 +30793,15 @@ ${seoHeadHtml}
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    margin-top: 10px;
+    gap: var(--space-2-5);
+    margin-top: var(--space-2-5);
   }
   .search-filter-select {
     flex: none;
     width: auto;
     min-width: 105px;
-    font-size: 0.82rem;
-    padding: 5px 24px 5px 10px;
+    font-size: var(--font-size-sm);
+    padding: var(--space-1-5) var(--space-6) var(--space-1-5) var(--space-2-5);
     background: var(--surface);
     color: var(--text);
     border: 1.5px solid var(--border-strong);
@@ -30413,12 +30829,12 @@ ${seoHeadHtml}
   .search-input-box input {
     width: 100%;
     box-sizing: border-box;
-    padding: 10px 38px;
+    padding: var(--space-2-5) 38px;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--border-strong);
     background: var(--surface);
     color: var(--text);
-    font-size: 0.9rem;
+    font-size: var(--font-size-base);
   }
   .search-input-icon {
     position: absolute;
@@ -30447,7 +30863,7 @@ ${seoHeadHtml}
     justify-content: center;
     cursor: pointer;
     z-index: 2;
-    transition: opacity 0.15s ease, color 0.15s ease, transform 0.12s ease;
+    transition: opacity var(--duration-base) ease, color var(--duration-base) ease, transform var(--duration-fast) ease;
   }
   .search-clear-btn:hover {
     opacity: 1;
@@ -30468,29 +30884,29 @@ ${seoHeadHtml}
   /* --- Streaming Providers Chips Bar (Discover Tab) ----------------------- */
   .provider-bar {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    padding: 4px 0 8px;
+    padding: var(--space-1) 0 var(--space-2);
   }
   .provider-bar::-webkit-scrollbar { display: none; }
   .provider-chip {
     flex: none;
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 6px 13px;
+    gap: var(--space-2);
+    padding: var(--space-1-5) var(--space-3);
     border-radius: var(--radius-pill);
     background: var(--surface);
     border: 1.5px solid var(--border);
     color: var(--text);
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     font-weight: 700;
     cursor: pointer;
     box-shadow: var(--shadow-sm);
     white-space: nowrap;
-    transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+    transition: transform var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
   }
   .provider-chip:hover {
     transform: translateY(-1px);
@@ -30500,30 +30916,30 @@ ${seoHeadHtml}
   .provider-chip-icon {
     width: 20px;
     height: 20px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 900;
-    font-size: 0.72rem;
-    color: #fff;
+    font-size: var(--font-size-xs);
+    color: var(--color-on-brand);
     flex: none;
   }
-  .provider-chip-icon.netflix { background: #E50914; }
-  .provider-chip-icon.prime   { background: #00A8E1; }
-  .provider-chip-icon.apple   { background: #000000; color: #FFFFFF; }
-  .provider-chip-icon.disney  { background: #113CCF; }
-  .provider-chip-icon.max     { background: #5B00C5; }
-  .provider-chip-icon.hulu    { background: #1CE783; color: #000; }
-  .provider-chip-icon.paramount { background: #0064FF; }
-  .provider-chip-icon.peacock { background: #000000; color: #FFFFFF; }
-  .provider-chip-icon.discovery { background: #002244; }
-  .provider-chip-icon.kids { background: #FF9900; }
+  .provider-chip-icon.netflix { background: var(--brand-netflix); }
+  .provider-chip-icon.prime   { background: var(--brand-prime); }
+  .provider-chip-icon.apple   { background: var(--brand-apple); color: var(--color-on-brand); }
+  .provider-chip-icon.disney  { background: var(--brand-disney); }
+  .provider-chip-icon.max     { background: var(--brand-max); }
+  .provider-chip-icon.hulu    { background: var(--brand-hulu); color: var(--brand-hulu-text); }
+  .provider-chip-icon.paramount { background: var(--brand-paramount); }
+  .provider-chip-icon.peacock { background: var(--brand-peacock); color: var(--color-on-brand); }
+  .provider-chip-icon.discovery { background: var(--brand-discovery); }
+  .provider-chip-icon.kids { background: var(--brand-kids); }
   /* --- Discover Chart Cards & Quick Grids -------------------------------- */
   .quick-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: var(--space-2-5);
     width: 100%;
   }
   @media (min-width: 641px) {
@@ -30535,13 +30951,13 @@ ${seoHeadHtml}
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 12px;
+    padding: var(--space-3);
     box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 10px;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    gap: var(--space-2-5);
+    transition: transform var(--duration-base) ease, box-shadow var(--duration-base) ease, border-color var(--duration-base) ease;
   }
   .discover-chart-card:hover {
     box-shadow: var(--shadow);
@@ -30552,7 +30968,7 @@ ${seoHeadHtml}
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
     min-height: 38px;
   }
   .discover-chart-info {
@@ -30561,7 +30977,7 @@ ${seoHeadHtml}
   }
   .discover-chart-title {
     font-weight: 700;
-    font-size: 0.90rem;
+    font-size: var(--font-size-base);
     color: var(--text);
     line-height: 1.25;
     display: -webkit-box;
@@ -30573,13 +30989,13 @@ ${seoHeadHtml}
   }
   .discover-chart-seeall {
     flex-shrink: 0;
-    font-size: 0.78rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--accent);
     text-decoration: none;
     white-space: nowrap;
-    padding: 2px 0;
-    margin-top: 1px;
+    padding: var(--space-0-5) 0;
+    margin-top: var(--space-0-5);
     align-self: flex-start;
   }
   .discover-chart-seeall:hover {
@@ -30587,17 +31003,17 @@ ${seoHeadHtml}
   }
   .discover-chart-btns {
     display: flex;
-    gap: 6px;
+    gap: var(--space-1-5);
     align-items: center;
   }
   .discover-chart-btns .lc-btn {
     flex: 1;
     justify-content: center;
-    font-size: 0.78rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
-    padding: 6px 8px;
+    padding: var(--space-1-5) var(--space-2);
     border-radius: var(--radius-sm);
-    transition: all 0.15s ease;
+    transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease;
   }
   .discover-chart-btns .lc-btn:hover:not(:disabled) {
     border-color: var(--accent);
@@ -30609,8 +31025,8 @@ ${seoHeadHtml}
   .shelf-section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
   }
 
   /* Catalogs -> Quick Add sits each section in its own card, the way
@@ -30629,12 +31045,12 @@ ${seoHeadHtml}
     position: relative;
     display: flex;
     align-items: center;
-    gap: 4px;
-    margin: 0 0 10px;
-    padding: 0 2px 0 12px;
+    gap: var(--space-1);
+    margin: 0 0 var(--space-2-5);
+    padding: 0 var(--space-0-5) 0 var(--space-3);
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     overflow: hidden;
   }
   .support-strip[hidden] { display: none; }
@@ -30648,8 +31064,8 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 9px;
-    padding: 10px 0;
+    gap: var(--space-2);
+    padding: var(--space-2-5) 0;
     background: transparent;
     border: 0;
     border-radius: 0;
@@ -30659,20 +31075,20 @@ ${seoHeadHtml}
     text-align: left;
     white-space: normal;
     font: inherit;
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     font-weight: 500;
     cursor: pointer;
   }
   .support-strip .support-strip-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .support-strip-cup { font-size: 16px; line-height: 1; }
   .support-strip-body { flex: 1; min-width: 0; display: block; }
-  .support-strip-row { display: flex; justify-content: space-between; gap: 8px; line-height: 1.25; }
+  .support-strip-row { display: flex; justify-content: space-between; gap: var(--space-2); line-height: 1.25; }
   .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
   .support-strip-bar {
     display: block;
-    margin-top: 6px;
+    margin-top: var(--space-1-5);
     height: 6px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     background: var(--border-strong);
     overflow: hidden;
   }
@@ -30680,11 +31096,11 @@ ${seoHeadHtml}
     display: block;
     height: 100%;
     width: 0;
-    border-radius: 3px;
-    background: #ff8a00;
+    border-radius: var(--radius-xs);
+    background: var(--color-warn);
   }
-  .support-strip.is-covered { border-color: #bfe8c9; }
-  .support-strip.is-covered .support-strip-bar i { background: #34c759; }
+  .support-strip.is-covered { border-color: var(--color-success-subtle); }
+  .support-strip.is-covered .support-strip-bar i { background: var(--color-success) }
   .support-strip .support-strip-x,
   .support-strip .support-strip-x:hover,
   .support-strip .support-strip-x:focus,
@@ -30696,33 +31112,33 @@ ${seoHeadHtml}
     padding: 0;
     background: transparent;
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     box-shadow: none;
     transform: none;
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     font-weight: 400;
     cursor: pointer;
   }
   .support-strip .support-strip-x:hover { color: var(--text); }
   .support-strip .support-strip-x:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .qa-shelf-card {
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
     gap: 0;
   }
   .qa-shelf-card .shelf-header {
     align-items: center;
   }
   .qa-add-all-btn {
-    font-size: 0.80rem !important;
+    font-size: var(--font-size-sm) !important;
     font-weight: 600 !important;
-    padding: 4px 12px !important;
+    padding: var(--space-1) var(--space-3) !important;
     border-radius: var(--radius-pill) !important;
     color: var(--accent) !important;
     border: 1.5px solid var(--border-strong) !important;
     background: var(--surface) !important;
     box-shadow: var(--shadow-sm) !important;
-    transition: all 0.15s ease;
+    transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
   }
   .qa-add-all-btn:hover:not(:disabled) {
     background: var(--color-brand-subtle) !important;
@@ -30733,10 +31149,10 @@ ${seoHeadHtml}
      Add, which is where the pattern comes from -- one class so a change to
      one is a change to both. */
   .qa-shelf-sub {
-    margin: 0 0 12px;
-    padding: 0 2px;
+    margin: 0 0 var(--space-3);
+    padding: 0 var(--space-0-5);
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: var(--font-size-sm);
     line-height: 1.45;
   }
   /* Catalogs -> Bulk Import Subpanel */
@@ -30747,23 +31163,23 @@ ${seoHeadHtml}
   .bulk-provider-badges {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1-5);
     flex-wrap: wrap;
-    margin: 0 0 14px;
-    padding: 0 2px;
+    margin: 0 0 var(--space-3-5);
+    padding: 0 var(--space-0-5);
   }
   .bulk-provider-label {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--muted);
-    margin-right: 2px;
+    margin-right: var(--space-0-5);
   }
   #bulkPasteBox {
     min-height: 140px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    font-size: 0.88rem;
+    font-size: var(--font-size-sm);
     line-height: 1.6;
     resize: vertical;
     box-sizing: border-box;
@@ -30773,16 +31189,16 @@ ${seoHeadHtml}
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 14px;
+    gap: var(--space-3);
+    margin-top: var(--space-3-5);
   }
   .bulk-actions-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
   #bulkDetectedCount {
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     color: var(--muted);
     font-weight: 500;
   }
@@ -30795,12 +31211,12 @@ ${seoHeadHtml}
        without wrapping, that row forces the whole card (and everything
        else sharing its grid track) wider than the viewport. */
     flex-wrap: wrap;
-    row-gap: 8px;
-    padding: 0 2px;
+    row-gap: var(--space-2);
+    padding: 0 var(--space-0-5);
   }
   .shelf-title {
     min-width: 0;
-    font-size: 1.08rem;
+    font-size: var(--font-size-md);
     font-weight: 700;
     color: var(--text);
     margin: 0;
@@ -30824,9 +31240,9 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
-    padding: 0 2px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding: 0 var(--space-0-5);
     min-height: 32px;
   }
   #discoverListsFeedDesc,
@@ -30835,7 +31251,7 @@ ${seoHeadHtml}
   #discoverSubCurated .shelf-header p {
     margin: 0;
     color: var(--muted);
-    font-size: 0.84rem;
+    font-size: var(--font-size-sm);
     line-height: 1.4;
     flex: 1;
     min-width: 0;
@@ -30843,9 +31259,9 @@ ${seoHeadHtml}
   .refresh-btn {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 11px;
-    font-size: 0.8rem;
+    gap: var(--space-1-5);
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     min-height: 28px;
     border-radius: var(--radius-pill);
@@ -30853,26 +31269,26 @@ ${seoHeadHtml}
     cursor: pointer;
   }
   .see-all-link {
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--accent);
     background: none;
     border: none;
     cursor: pointer;
-    padding: 2px 0;
+    padding: var(--space-0-5) 0;
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: var(--space-1);
   }
   .see-all-link:hover { opacity: 0.75; }
   .shelf-scroll-wrap {
     display: flex;
-    gap: 10px;
+    gap: var(--space-2-5);
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    padding: 4px 2px 8px;
+    padding: var(--space-1) var(--space-0-5) var(--space-2);
     width: 100%;
     max-width: 100%;
   }
@@ -30882,7 +31298,7 @@ ${seoHeadHtml}
   .poster-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-1-5);
     width: 105px;
     flex: none;
     cursor: pointer;
@@ -30900,7 +31316,7 @@ ${seoHeadHtml}
     width: 100%;
     aspect-ratio: 2 / 3;
     position: relative;
-    border-radius: 9px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--panel-strong);
     box-shadow: var(--shadow-sm);
@@ -30916,15 +31332,15 @@ ${seoHeadHtml}
     position: absolute;
     top: 6px;
     left: 6px;
-    padding: 2px 5px;
-    border-radius: 5px;
-    font-size: 0.68rem;
+    padding: var(--space-0-5) var(--space-1-5);
+    border-radius: var(--radius-xs);
+    font-size: var(--font-size-2xs);
     font-weight: 800;
-    color: #fff;
+    color: var(--color-on-brand);
     line-height: 1.15;
     box-shadow: 0 1px 4px rgba(0,0,0,0.4);
     letter-spacing: -0.01em;
-    background: #48484A;
+    background: var(--color-rating-none);
   }
   .rating-badge.rating-high { background: var(--rating-high); }
   .rating-badge.rating-mid  { background: var(--rating-mid); }
@@ -30936,16 +31352,16 @@ ${seoHeadHtml}
     right: 6px;
     width: 16px;
     height: 16px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.6rem;
+    font-size: var(--font-size-2xs);
     font-weight: 900;
-    color: #fff;
+    color: var(--color-on-brand);
   }
   .poster-title {
-    font-size: 0.78rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--text);
     line-height: 1.25;
@@ -30956,12 +31372,12 @@ ${seoHeadHtml}
     margin: 0;
   }
   .poster-meta {
-    font-size: 0.7rem;
+    font-size: var(--font-size-xs);
     color: var(--muted);
     font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
     line-height: 1;
   }
 
@@ -30969,7 +31385,7 @@ ${seoHeadHtml}
   .poster-grid-3, .live-preview-modal-grid, #detailGrid, #listPreviewGrid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px 8px;
+    gap: var(--space-2-5) var(--space-2);
     width: 100%;
     /* #detailGrid (the "See All" list-details view -- see the /#/list?
        route) is a direct grid-item child of .tab-panel, same as
@@ -30986,7 +31402,7 @@ ${seoHeadHtml}
   @media (min-width: 641px) {
     .poster-grid-3, .live-preview-modal-grid, #detailGrid, #listPreviewGrid {
       grid-template-columns: repeat(9, 1fr);
-      gap: 12px 8px;
+      gap: var(--space-3) var(--space-2);
     }
   }
 
@@ -30995,22 +31411,22 @@ ${seoHeadHtml}
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 14px 16px;
-    margin-bottom: 14px;
+    padding: var(--space-3-5) var(--space-4);
+    margin-bottom: var(--space-3-5);
     box-shadow: var(--shadow-sm);
   }
   .channel-accordion {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    margin-bottom: 14px;
+    margin-bottom: var(--space-3-5);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
   }
   .channel-accordion summary {
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: var(--font-size-base);
     cursor: pointer;
     user-select: none;
     display: flex;
@@ -31025,9 +31441,9 @@ ${seoHeadHtml}
   }
   .channel-accordion summary::after {
     content: '\u25be';
-    font-size: 1rem;
+    font-size: var(--font-size-md);
     color: var(--muted);
-    transition: transform 0.2s ease;
+    transition: transform var(--duration-base) ease;
   }
   .channel-accordion[open] summary::after {
     transform: rotate(180deg);
@@ -31036,38 +31452,38 @@ ${seoHeadHtml}
     border-bottom: 1px solid var(--border);
   }
   .channel-accordion-body {
-    padding: 14px 16px;
+    padding: var(--space-3-5) var(--space-4);
   }
   .channel-quick-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 8px;
+    gap: var(--space-2);
   }
   .channel-season-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    margin-top: 8px;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
   }
   /* --- Channel broadcast schedule, Story Lock & the Quick Channel wizard -- */
   .channel-rule-row {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    font-size: 0.85rem;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
     cursor: pointer;
     user-select: none;
     line-height: 1.35;
   }
   .channel-rule-row input[type="checkbox"] {
-    margin: 2px 0 0;
+    margin: var(--space-0-5) 0 0;
     flex: 0 0 auto;
   }
   .channel-dial {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.8rem;
+    gap: var(--space-1-5);
+    font-size: var(--font-size-sm);
     color: var(--muted);
     white-space: nowrap;
   }
@@ -31075,12 +31491,12 @@ ${seoHeadHtml}
   .channel-dial select {
     width: auto;
     min-width: 76px;
-    font-size: 0.82rem;
-    padding: 5px 8px;
+    font-size: var(--font-size-sm);
+    padding: var(--space-1-5) var(--space-2);
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
   /* Rearranging My Channels. The handle itself is .drag-handle-list, the
      same one a list card uses; this is only what marks the card in flight. */
@@ -31092,7 +31508,7 @@ ${seoHeadHtml}
   .channel-pick-selected {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
   .channel-pick-selected img {
     opacity: 0.72;
@@ -31100,29 +31516,29 @@ ${seoHeadHtml}
   .channel-storylock-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 6px 12px;
-    margin-top: 6px;
+    gap: var(--space-1-5) var(--space-3);
+    margin-top: var(--space-1-5);
   }
   .channel-wizard-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: var(--space-2-5);
+    margin-bottom: var(--space-2-5);
   }
   .channel-wizard-grid label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    font-size: 0.8rem;
+    gap: var(--space-1);
+    font-size: var(--font-size-sm);
     font-weight: 600;
   }
   .channel-wizard-grid select {
-    font-size: 0.85rem;
-    padding: 6px 10px;
+    font-size: var(--font-size-sm);
+    padding: var(--space-1-5) var(--space-2-5);
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
   @media (min-width: 641px) {
     .channel-season-grid {
@@ -31136,12 +31552,12 @@ ${seoHeadHtml}
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    padding: 13px 13px 11px;
+    padding: var(--space-3) var(--space-3) var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    transition: box-shadow: 0.15s;
-    margin-bottom: 10px;
+    gap: var(--space-2-5);
+    transition: box-shadow var(--duration-base) var(--ease);
+    margin-bottom: var(--space-2-5);
     width: 100%;
     max-width: 100%;
     overflow: hidden;
@@ -31152,13 +31568,13 @@ ${seoHeadHtml}
   .list-card-header {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--space-2-5);
     min-width: 0;
   }
-  .list-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .list-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); }
   .list-card-title {
-    font-weight: 700; font-size: 0.96rem; color: var(--text);
-    margin: 0 0 2px; line-height: 1.3;
+    font-weight: 700; font-size: var(--font-size-base); color: var(--text);
+    margin: 0 0 var(--space-0-5); line-height: 1.3;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     cursor: pointer;
   }
@@ -31166,52 +31582,51 @@ ${seoHeadHtml}
     color: var(--accent);
   }
   .list-card-meta {
-    font-size: 0.76rem; color: var(--muted);
-    display: flex; flex-wrap: wrap; gap: 0 5px; align-items: center;
+    font-size: var(--font-size-xs); color: var(--muted);
+    display: flex; flex-wrap: wrap; gap: 0 var(--space-1-5); align-items: center;
     line-height: 1.4;
   }
   .list-card-meta-sep { color: var(--border-strong); }
   .list-source-badge {
     display: inline-flex;
     align-items: center;
-    padding: 2px 6px;
-    font-size: 0.68rem;
+    padding: var(--space-0-5) var(--space-1-5);
+    font-size: var(--font-size-2xs);
     font-weight: 700;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     letter-spacing: 0.3px;
     line-height: 1.2;
-    margin-right: 4px;
+    margin-right: var(--space-1);
     vertical-align: middle;
     background: var(--surface-2, rgba(255,255,255,0.06));
     border: 1px solid var(--border);
     color: var(--text-2);
   }
-  .list-source-badge.badge-mdblist { background: rgba(52,199,89,0.12); color: #34c759; border-color: rgba(52,199,89,0.3); }
-  .list-source-badge.badge-trakt { background: rgba(255,59,48,0.12); color: #ff3b30; border-color: rgba(255,59,48,0.3); }
-  .list-source-badge.badge-tmdb { background: rgba(90,200,250,0.12); color: #5ac8fa; border-color: rgba(90,200,250,0.3); }
-  .list-source-badge.badge-simkl { background: rgba(0,122,255,0.12); color: #007aff; border-color: rgba(0,122,255,0.3); }
-  .list-source-badge.badge-mylists, .list-source-badge.badge-profile { background: rgba(175,82,222,0.12); color: #af52de; border-color: rgba(175,82,222,0.3); }
-  .list-source-badge.badge-streaming { background: rgba(255,149,0,0.12); color: #ff9500; border-color: rgba(255,149,0,0.3); }
-  .list-source-badge.badge-imdb { background: rgba(245,197,24,0.12); color: #b8860b; border-color: rgba(245,197,24,0.3); }
-  :root.dark-theme .list-source-badge.badge-imdb { color: #f5c518; }
+  .list-source-badge.badge-mdblist { background: var(--color-success-subtle); color: var(--color-success-text); border-color: var(--color-success-text); }
+  .list-source-badge.badge-trakt { background: var(--color-danger-subtle); color: var(--color-danger-text); border-color: var(--color-danger-line); }
+  .list-source-badge.badge-tmdb { background: rgba(0, 118, 158, 0.12); color: var(--color-badge-tmdb); border-color: var(--color-badge-tmdb); }
+  .list-source-badge.badge-simkl { background: var(--color-brand-subtle); color: var(--color-brand); border-color: var(--color-brand-line); }
+  .list-source-badge.badge-mylists, .list-source-badge.badge-profile { background: rgba(123, 47, 168, 0.12); color: var(--color-badge-mylists); border-color: var(--color-badge-mylists); }
+  .list-source-badge.badge-streaming { background: var(--color-warn-subtle); color: var(--color-warn-text); border-color: var(--color-warn-text); }
+  .list-source-badge.badge-imdb { background: rgba(245, 197, 24, 0.12); color: var(--color-badge-imdb); border-color: var(--color-badge-imdb); }
   .list-source-badge.badge-autotrack {
     background: var(--surface-2, rgba(255,255,255,0.06));
     color: var(--muted);
     border-color: var(--border);
   }
   .list-card-actions {
-    display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap;
+    display: flex; gap: var(--space-1-5); align-items: center; flex-shrink: 0; flex-wrap: wrap;
   }
-  .list-card-actions :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .channelAddBtn, .curatedAddBtn, .searchAddBtn, .list-search-add-btn, .myListAddBtn):not(:first-child) {
-    margin-left: 6px;
+  .list-card-actions .list-add-btn:not(:first-child) {
+    margin-left: var(--space-1-5);
   }
   .lc-btn,
   button.lc-btn,
   .actions button.lc-btn {
-    padding: 6px 12px !important;
-    min-height: unset !important;
-    height: auto !important;
-    font-size: var(--font-size-xs, 0.8rem) !important;
+    padding: var(--space-1-5) var(--space-3);
+    min-height: unset;
+    height: auto;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--color-border-strong);
@@ -31220,26 +31635,23 @@ ${seoHeadHtml}
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
     font-family: inherit;
     white-space: nowrap;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, transform var(--duration-fast) ease;
   }
   .lc-btn:active:not(:disabled) { transform: scale(0.98); }
   .lc-btn.primary,
   button.lc-btn.primary,
   .actions button.lc-btn.primary {
-    background: var(--color-brand);
-    color: var(--color-text-inverse, #fff);
-    border-color: var(--color-brand);
+    background: var(--color-brand-fill);
+    color: var(--color-text-inverse, var(--color-on-brand));
+    border-color: var(--color-brand-fill);
     box-shadow: 0 2px 6px var(--color-brand-subtle);
-    padding: 6px 12px !important;
-    min-height: unset !important;
-    height: auto !important;
   }
   .lc-btn.primary:hover:not(:disabled) {
-    background: var(--color-brand-hover);
-    border-color: var(--color-brand-hover);
+    background: var(--color-brand-fill-hover);
+    border-color: var(--color-brand-fill-hover);
   }
   .lc-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   .lc-btn.secondary {
@@ -31247,7 +31659,7 @@ ${seoHeadHtml}
     color: var(--color-text-secondary);
     border: 1.5px solid var(--color-border-strong);
     box-shadow: var(--shadow-sm);
-    padding: 6px 12px;
+    padding: var(--space-1-5) var(--space-3);
     min-height: unset;
   }
   .lc-btn.secondary:hover:not(:disabled) {
@@ -31256,89 +31668,61 @@ ${seoHeadHtml}
   }
   .lc-btn.liked {
     color: var(--color-danger);
-    border-color: rgba(255,59,48,0.4);
+    border-color: var(--color-danger-line);
     background: var(--color-danger-subtle);
   }
   /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):not(:disabled) {
-    background: rgba(0, 122, 255, 0.08) !important;
-    border-color: rgba(0, 122, 255, 0.35) !important;
-    color: var(--accent) !important;
-    box-shadow: 0 1px 3px rgba(0, 122, 255, 0.08);
+  .list-add-btn:not(.is-added):not(:disabled) {
+    background: var(--color-brand-wash) !important;
+    border-color: var(--color-brand-line) !important;
+    color: var(--color-brand) !important;
+    box-shadow: var(--shadow-sm);
   }
-  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):not(:disabled) {
-    background: rgba(10, 132, 255, 0.14) !important;
-    border-color: rgba(10, 132, 255, 0.4) !important;
-    color: var(--accent) !important;
+  .list-add-btn:not(.is-added):hover:not(:disabled) {
+    background: var(--color-brand-tint) !important;
+    border-color: var(--color-brand) !important;
+    color: var(--color-brand) !important;
   }
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
-    background: rgba(0, 122, 255, 0.16) !important;
-    border-color: var(--accent) !important;
-    color: var(--accent) !important;
-  }
-  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):hover:not(:disabled) {
-    background: rgba(10, 132, 255, 0.24) !important;
-    border-color: var(--accent) !important;
-    color: var(--accent) !important;
-  }
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, .customListAddBtn, #detailAddBtn):not(.is-added):active:not(:disabled) {
+  .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
-    background: rgba(0, 122, 255, 0.22) !important;
+    background: var(--color-brand-tint) !important;
   }
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added {
-    color: var(--color-danger, #d70015) !important;
-    background: rgba(255, 59, 48, 0.08) !important;
-    border-color: rgba(255, 59, 48, 0.35) !important;
-    box-shadow: 0 1px 3px rgba(255, 59, 48, 0.08);
+  .list-add-btn.is-added {
+    color: var(--color-danger-text) !important;
+    background: var(--color-danger-wash) !important;
+    border-color: var(--color-danger-line) !important;
+    box-shadow: var(--shadow-sm);
   }
-  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added {
-    color: var(--color-danger, #ff453a) !important;
-    background: rgba(255, 69, 58, 0.15) !important;
-    border-color: rgba(255, 69, 58, 0.4) !important;
+  .list-add-btn.is-added:hover:not(:disabled) {
+    background: var(--color-danger-tint) !important;
+    border-color: var(--color-danger) !important;
+    color: var(--color-danger-text) !important;
   }
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:hover:not(:disabled) {
-    background: rgba(255, 59, 48, 0.16) !important;
-    border-color: var(--danger) !important;
-    color: var(--danger) !important;
-  }
-  :root.dark-theme :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:hover:not(:disabled) {
-    background: rgba(255, 69, 58, 0.24) !important;
-    border-color: var(--danger) !important;
-    color: var(--danger) !important;
-  }
-  :is(.localListAddToConfigBtn, .creatorListAddToConfigBtn, .myListAddBtn, .searchAddBtn, .curatedAddBtn, .curated-add-btn, .list-search-add-btn, .channelAddBtn, #detailAddBtn).is-added:active:not(:disabled) {
+  .list-add-btn.is-added:active:not(:disabled) {
     transform: scale(0.97);
-    background: rgba(255, 59, 48, 0.22) !important;
+    background: var(--color-danger-tint) !important;
   }
   .channelQuickAddBtn.is-added {
     border-color: var(--color-brand) !important;
     color: var(--color-brand) !important;
-    background: var(--brand-glow, rgba(0, 113, 227, 0.08)) !important;
+    background: var(--color-brand-subtle) !important;
     font-weight: 600;
   }
-  :root.dark-theme .channelQuickAddBtn.is-added {
-    border-color: var(--color-brand) !important;
-    color: var(--color-brand) !important;
-    background: rgba(41, 151, 255, 0.15) !important;
-  }
   .channelQuickAddBtn.is-added:hover:not(:disabled) {
-    background: rgba(0, 113, 227, 0.16) !important;
-  }
-  :root.dark-theme .channelQuickAddBtn.is-added:hover:not(:disabled) {
-    background: rgba(41, 151, 255, 0.24) !important;
+    background: var(--color-brand-tint) !important;
   }
   .lc-btn.view-btn {
     color: var(--color-brand);
     border-color: transparent;
     background: transparent;
     padding: 0;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     min-height: unset;
   }
   .lc-btn.searchLikeExternalBtn,
   .lc-btn.searchLikeBtn,
   #detailLikeBtn {
-    padding: 6px 10px;
+    padding: var(--space-1-5) var(--space-2-5);
     min-width: 32px;
     min-height: unset;
     justify-content: center;
@@ -31346,7 +31730,7 @@ ${seoHeadHtml}
     color: var(--color-text-secondary);
     border: 1.5px solid var(--color-border-strong);
     box-shadow: none;
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     line-height: 1;
   }
   .lc-btn.searchLikeExternalBtn:hover:not(:disabled),
@@ -31359,7 +31743,7 @@ ${seoHeadHtml}
   .lc-btn.searchLikeBtn.liked,
   #detailLikeBtn.liked {
     color: var(--color-danger);
-    border-color: rgba(255,59,48,0.4);
+    border-color: var(--color-danger-line);
     background: var(--color-danger-subtle);
   }
 
@@ -31368,29 +31752,29 @@ ${seoHeadHtml}
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    margin-bottom: 8px;
+    padding: var(--space-3) var(--space-3-5);
+    margin-bottom: var(--space-2);
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--space-2-5);
     box-shadow: var(--shadow-sm);
     position: relative;
   }
   .preset-card:has(.preset-overflow-menu[open]) {
-    z-index: 50;
+    z-index: var(--z-sticky);
   }
   .preset-card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     min-width: 0;
     flex: 1 1 auto;
   }
   .preset-card-title {
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: var(--font-size-base);
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -31399,7 +31783,7 @@ ${seoHeadHtml}
   .preset-actions-cluster {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1-5);
     flex-shrink: 0;
     position: relative;
   }
@@ -31420,9 +31804,9 @@ ${seoHeadHtml}
     cursor: pointer;
     user-select: none;
     list-style: none;
-    font-size: 1.15rem;
+    font-size: var(--font-size-lg);
     line-height: 1;
-    transition: background-color 0.12s ease, border-color 0.12s ease;
+    transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease;
   }
   .preset-overflow-btn::-webkit-details-marker {
     display: none;
@@ -31439,33 +31823,33 @@ ${seoHeadHtml}
     position: absolute;
     right: 0;
     top: calc(100% + 4px);
-    z-index: 100;
+    z-index: var(--z-sticky);
     min-width: 175px;
-    background: var(--color-bg-elevated, var(--surface-1, #1e1e24));
+    background: var(--color-bg-elevated);
     border: 1px solid var(--color-border-strong, var(--border));
-    border-radius: var(--radius-sm, 8px);
+    border-radius: var(--radius-sm);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-    padding: 4px;
+    padding: var(--space-1);
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-0-5);
   }
   .preset-menu-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     width: 100%;
-    padding: 8px 12px;
-    font-size: 0.82rem;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--text);
     background: none;
     border: none;
-    border-radius: var(--radius-xs, 4px);
+    border-radius: var(--radius-xs);
     text-align: left;
     cursor: pointer;
     box-sizing: border-box;
-    transition: background-color 0.12s ease;
+    transition: background-color var(--duration-fast) ease;
     white-space: nowrap;
   }
   .preset-menu-item:hover {
@@ -31474,26 +31858,26 @@ ${seoHeadHtml}
   .preset-menu-divider {
     height: 1px;
     background: var(--border);
-    margin: 3px 0;
+    margin: var(--space-1) 0;
   }
   .preset-actions-grid, .backup-actions-grid, .export-actions-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
+    gap: var(--space-1-5);
     width: 100%;
   }
   .backup-quick-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
   }
   .backup-advanced-disclosure {
     border: 1px solid var(--border);
-    border-radius: var(--radius-md, 10px);
-    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    border-radius: var(--radius-md);
+    background: var(--color-bg-sunken);
     overflow: hidden;
-    transition: border-color 0.15s ease;
+    transition: border-color var(--duration-base) ease;
   }
   .backup-advanced-disclosure[open] {
     border-color: var(--color-border-strong, var(--border));
@@ -31502,10 +31886,10 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
+    padding: var(--space-2-5) var(--space-3-5);
     cursor: pointer;
     user-select: none;
-    font-size: 0.85rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--muted);
     list-style: none;
@@ -31521,28 +31905,28 @@ ${seoHeadHtml}
     transform: rotate(180deg);
   }
   .backup-advanced-arrow {
-    transition: transform 0.15s ease;
-    font-size: 0.8rem;
+    transition: transform var(--duration-base) ease;
+    font-size: var(--font-size-sm);
     display: inline-block;
   }
   @media (min-width: 641px) {
     .preset-actions-grid {
       display: flex;
-      gap: 6px;
+      gap: var(--space-1-5);
       width: auto;
     }
     .backup-actions-grid, .export-actions-grid {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: var(--space-1-5);
       width: auto;
     }
   }
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     .preset-card {
       flex-direction: column;
       align-items: stretch;
-      gap: 8px;
+      gap: var(--space-2);
     }
     .preset-actions-cluster {
       justify-content: flex-end;
@@ -31553,8 +31937,8 @@ ${seoHeadHtml}
   #settingsSubBackup .backup-actions-grid button,
   #settingsSubBackup .export-actions-grid button,
   #settingsSubBackup .row button {
-    padding: 6px 14px;
-    font-size: 0.82rem;
+    padding: var(--space-1-5) var(--space-3-5);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     min-height: 34px;
     border-radius: var(--radius-pill);
@@ -31576,13 +31960,13 @@ ${seoHeadHtml}
   }
   .creator-key-display {
     font-family: var(--font-mono, monospace);
-    font-size: 0.88rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--text);
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 10px 12px;
+    padding: var(--space-2-5) var(--space-3);
     word-break: break-all;
     overflow-wrap: anywhere;
     white-space: normal;
@@ -31591,13 +31975,13 @@ ${seoHeadHtml}
     max-width: 100%;
     box-sizing: border-box;
     letter-spacing: 0.5px;
-    margin: 4px 0 10px;
+    margin: var(--space-1) 0 var(--space-2-5);
   }
   .account-key-group {
     display: flex;
     align-items: stretch;
-    gap: 8px;
-    margin: 4px 0 6px;
+    gap: var(--space-2);
+    margin: var(--space-1) 0 var(--space-1-5);
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -31608,25 +31992,25 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     min-height: 40px;
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
   }
   .account-key-actions {
     display: flex;
-    gap: 6px;
+    gap: var(--space-1-5);
     align-items: stretch;
     flex-shrink: 0;
   }
   .account-key-actions .lc-btn {
-    padding: 0 14px;
+    padding: 0 var(--space-3-5);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.84rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     white-space: nowrap;
     min-height: 40px;
   }
-  @media (max-width: 520px) {
+  @media (max-width: 640px) {
     .account-key-group {
       flex-direction: column;
     }
@@ -31639,24 +32023,24 @@ ${seoHeadHtml}
   }
 
   .danger-zone-disclosure {
-    margin-top: 16px;
+    margin-top: var(--space-4);
     border: 1px solid var(--border);
-    border-radius: var(--radius-md, 10px);
-    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    border-radius: var(--radius-md);
+    background: var(--color-bg-sunken);
     overflow: hidden;
-    transition: border-color 0.15s ease;
+    transition: border-color var(--duration-base) ease;
   }
   .danger-zone-disclosure[open] {
-    border-color: rgba(255, 59, 48, 0.3);
+    border-color: var(--color-danger-line);
   }
   .danger-zone-summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
+    padding: var(--space-2-5) var(--space-3-5);
     cursor: pointer;
     user-select: none;
-    font-size: 0.85rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--muted);
     list-style: none;
@@ -31672,21 +32056,21 @@ ${seoHeadHtml}
     transform: rotate(180deg);
   }
   .danger-zone-arrow {
-    transition: transform 0.15s ease;
-    font-size: 0.8rem;
+    transition: transform var(--duration-base) ease;
+    font-size: var(--font-size-sm);
     display: inline-block;
   }
   .danger-zone-content {
-    padding: 0 14px 14px;
+    padding: 0 var(--space-3-5) var(--space-3-5);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2-5);
   }
   .webhook-input-group {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: stretch;
-    margin-bottom: 10px;
+    margin-bottom: var(--space-2-5);
     flex-wrap: wrap;
     width: 100%;
     max-width: 100%;
@@ -31708,8 +32092,8 @@ ${seoHeadHtml}
     }
     .webhook-input-group input,
     .webhook-input-group button {
-      width: 100% !important;
-      flex: 1 1 100% !important;
+      width: 100%;
+      flex: 1 1 100%;
     }
   }
 
@@ -31717,8 +32101,8 @@ ${seoHeadHtml}
   .list-card-posters, .list-card-5posters {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    margin-top: 4px;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1);
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
@@ -31733,7 +32117,7 @@ ${seoHeadHtml}
     .shelf-header {
       flex-direction: column !important;
       align-items: stretch !important;
-      gap: 8px !important;
+      gap: var(--space-2) !important;
     }
     .shelf-header > div {
       width: 100%;
@@ -31754,10 +32138,10 @@ ${seoHeadHtml}
       white-space: nowrap;
     }
     .list-card-header {
-      display: flex !important;
-      flex-direction: column !important;
-      align-items: stretch !important;
-      gap: 8px !important;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-2);
     }
     .list-card-body {
       width: 100%;
@@ -31769,14 +32153,14 @@ ${seoHeadHtml}
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 6px;
+      gap: var(--space-1-5);
       flex-wrap: wrap;
     }
     .list-card-actions .lc-btn {
-      padding: 5px 9px !important;
-      font-size: 0.78rem !important;
+      padding: var(--space-1-5) var(--space-2);
+      font-size: var(--font-size-xs);
       line-height: 1.2;
-      min-height: 28px !important;
+      min-height: 28px;
       box-sizing: border-box;
       white-space: nowrap;
     }
@@ -31790,22 +32174,22 @@ ${seoHeadHtml}
       line-height: 1.25;
     }
     .customizeListBtn {
-      padding: 5px 8px !important;
-      min-width: 28px !important;
+      padding: var(--space-1-5) var(--space-2);
+      min-width: 28px;
       justify-content: center;
     }
     .customizeListBtn .customize-btn-text {
-      display: none !important;
+      display: none;
     }
     .drag-handle-list {
-      margin-right: 8px;
-      padding: 2px 4px;
+      margin-right: var(--space-2);
+      padding: var(--space-0-5) var(--space-1);
     }
   }
   @media (min-width: 641px) {
     .list-card-posters, .list-card-5posters {
       grid-template-columns: repeat(9, 1fr);
-      gap: 6px;
+      gap: var(--space-1-5);
     }
   }
   /* loadPosterSlot's failure state (19_client-search-and-likes.js) -- a
@@ -31823,13 +32207,13 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-2);
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: var(--font-size-sm);
   }
   .list-card-mini-poster {
     aspect-ratio: 2 / 3;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--panel-strong);
     border: 1px solid var(--border);
@@ -31841,7 +32225,7 @@ ${seoHeadHtml}
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.2s;
+    transition: transform var(--duration-base);
   }
   /* Same 9/3-across grid cell as .list-card-mini-poster above, but with a
      name (and optional second-line subtitle, e.g. an episode's "S07E10")
@@ -31855,13 +32239,13 @@ ${seoHeadHtml}
   .list-card-mini-poster-tile {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-1);
     width: 100%;
     min-width: 0;
   }
   .list-card-mini-poster-img-wrap {
     aspect-ratio: 2 / 3;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--panel-strong);
     border: 1px solid var(--border);
@@ -31871,7 +32255,7 @@ ${seoHeadHtml}
   .storyline-posters-scroll {
     display: flex !important;
     flex-direction: row !important;
-    gap: 12px !important;
+    gap: var(--space-3) !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch !important;
@@ -31880,7 +32264,7 @@ ${seoHeadHtml}
     max-width: 100% !important;
     min-width: 0 !important;
     box-sizing: border-box !important;
-    padding: 8px 2px 10px !important;
+    padding: var(--space-2) var(--space-0-5) var(--space-2-5) !important;
     scrollbar-width: thin !important;
   }
   .storyline-poster-item {
@@ -31895,22 +32279,22 @@ ${seoHeadHtml}
   }
   .item-storylines-section {
     border-top: 1px solid var(--border);
-    padding-top: 24px;
-    margin-top: 32px;
+    padding-top: var(--space-6);
+    margin-top: var(--space-8);
   }
   .item-storyline-block {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 16px;
-    margin-bottom: 16px;
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
   }
   .item-storyline-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 16px;
-    margin-bottom: 12px;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
     flex-wrap: wrap;
   }
   .item-storyline-header-info {
@@ -31918,42 +32302,42 @@ ${seoHeadHtml}
     min-width: 240px;
   }
   .item-storyline-saga-title {
-    font-size: 1.15rem;
+    font-size: var(--font-size-lg);
     font-weight: 700;
     color: var(--text);
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
   }
   .item-storyline-saga-meta {
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     color: var(--muted);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1-5);
     flex-wrap: wrap;
-    margin-bottom: 6px;
+    margin-bottom: var(--space-1-5);
   }
   .item-storyline-saga-desc {
-    font-size: 0.85rem;
+    font-size: var(--font-size-sm);
     color: var(--text-2);
     line-height: 1.45;
-    margin: 4px 0 0;
+    margin: var(--space-1) 0 0;
   }
   .item-storyline-header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     flex-shrink: 0;
   }
   .item-storyline-scroll {
     display: flex !important;
     flex-direction: row !important;
-    gap: 14px !important;
+    gap: var(--space-3-5) !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch !important;
     touch-action: pan-x !important;
-    padding: 10px 4px 14px !important;
-    margin-top: 8px;
+    padding: var(--space-2-5) var(--space-1) var(--space-3-5) !important;
+    margin-top: var(--space-2);
   }
   .item-storyline-card {
     display: flex;
@@ -31964,7 +32348,7 @@ ${seoHeadHtml}
     min-width: 120px;
     cursor: pointer;
     text-align: left;
-    transition: transform 0.15s ease;
+    transition: transform var(--duration-base) ease;
   }
   .item-storyline-card:hover {
     transform: translateY(-2px);
@@ -31980,15 +32364,15 @@ ${seoHeadHtml}
     overflow: hidden;
     background: var(--panel-strong);
     border: 1px solid var(--border);
-    margin-bottom: 8px;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    margin-bottom: var(--space-2);
+    transition: border-color var(--duration-base), box-shadow var(--duration-base);
   }
   .item-storyline-card:hover .item-storyline-poster-wrap {
     border-color: var(--border-strong);
   }
   .item-storyline-card.is-current .item-storyline-poster-wrap {
     border: 2px solid var(--accent);
-    box-shadow: 0 0 10px rgba(0, 122, 255, 0.4);
+    box-shadow: 0 0 10px var(--color-brand-line);
   }
   .item-storyline-poster-wrap img {
     width: 100%;
@@ -32001,10 +32385,10 @@ ${seoHeadHtml}
     top: 6px;
     left: 6px;
     background: rgba(0, 0, 0, 0.75);
-    color: #FFFFFF;
-    font-size: 0.68rem;
+    color: var(--color-on-brand);
+    font-size: var(--font-size-2xs);
     font-weight: 700;
-    padding: 2px 6px;
+    padding: var(--space-0-5) var(--space-1-5);
     border-radius: var(--radius-pill);
     letter-spacing: 0.02em;
     backdrop-filter: blur(4px);
@@ -32016,13 +32400,13 @@ ${seoHeadHtml}
     bottom: 6px;
     left: 6px;
     right: 6px;
-    background: var(--accent);
-    color: #FFFFFF;
-    font-size: 0.7rem;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    font-size: var(--font-size-xs);
     font-weight: 700;
     text-align: center;
-    padding: 3px 0;
-    border-radius: 4px;
+    padding: var(--space-1) 0;
+    border-radius: var(--radius-xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     z-index: 2;
@@ -32032,9 +32416,9 @@ ${seoHeadHtml}
     position: absolute;
     top: 6px;
     right: 6px;
-    background: var(--accent);
-    color: #FFFFFF;
-    font-size: 0.75rem;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    font-size: var(--font-size-xs);
     font-weight: 800;
     width: 20px;
     height: 20px;
@@ -32046,7 +32430,7 @@ ${seoHeadHtml}
     z-index: 2;
   }
   .item-storyline-title {
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--text);
     line-height: 1.25;
@@ -32054,13 +32438,13 @@ ${seoHeadHtml}
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    margin-bottom: 2px;
+    margin-bottom: var(--space-0-5);
   }
   .item-storyline-card.is-current .item-storyline-title {
     color: var(--accent);
   }
   .item-storyline-meta {
-    font-size: 0.72rem;
+    font-size: var(--font-size-xs);
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -32080,7 +32464,7 @@ ${seoHeadHtml}
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     border: 1px solid rgba(255, 255, 255, 0.22);
-    color: #fff;
+    color: var(--color-on-brand);
     outline: none;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -32095,13 +32479,13 @@ ${seoHeadHtml}
     padding: 0;
     cursor: pointer;
     z-index: 10;
-    transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    transition: opacity var(--duration-base) ease, background-color var(--duration-base) ease, border-color var(--duration-base) ease, transform var(--duration-base) ease;
   }
   .cw-remove-btn:hover,
   .cw-remove-btn:active {
     background: var(--danger);
     border-color: var(--danger);
-    color: #fff;
+    color: var(--color-on-brand);
   }
   .cw-remove-btn::after {
     content: '';
@@ -32134,17 +32518,17 @@ ${seoHeadHtml}
   #lists .cw-remove-btn,
   .live-preview-shelf-row .cw-remove-btn,
   .live-preview-posters .cw-remove-btn {
-    display: none !important;
+    display: none;
   }
   .cw-date-badge {
     position: absolute;
     top: 4px;
     left: 4px;
-    background: var(--accent);
-    color: #ffffff;
-    font-size: 0.62rem;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    font-size: var(--font-size-2xs);
     font-weight: 800;
-    padding: 2px 5px;
+    padding: var(--space-0-5) var(--space-1-5);
     border-radius: var(--radius-sm);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
     line-height: 1.15;
@@ -32167,7 +32551,7 @@ ${seoHeadHtml}
     opacity: 0.92;
   }
   .cw-date-badge-premiere {
-    background: #2fa84f;
+    background: var(--color-rating-high);
     top: auto;
     bottom: 4px;
     left: 50%;
@@ -32177,7 +32561,7 @@ ${seoHeadHtml}
     overflow: hidden;
   }
   .cw-date-badge-finale {
-    background: var(--warn, #FF9500);
+    background: var(--color-rating-mid);
     top: auto;
     bottom: 4px;
     left: 50%;
@@ -32188,7 +32572,7 @@ ${seoHeadHtml}
   }
   .cw-date-badge-finale-date {
     background: rgba(20, 20, 24, 0.92);
-    color: #ffd166;
+    color: var(--color-badge-finale-text);
     border: 1px solid rgba(255, 149, 0, 0.35);
     top: auto;
     bottom: 4px;
@@ -32197,12 +32581,12 @@ ${seoHeadHtml}
     max-width: calc(100% - 8px);
     text-overflow: ellipsis;
     overflow: hidden;
-    font-size: 0.58rem;
+    font-size: var(--font-size-2xs);
     font-weight: 700;
   }
   .cw-date-badge-companion {
-    background: var(--accent, #6366f1);
-    color: #ffffff;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     top: auto;
     bottom: 4px;
     left: 50%;
@@ -32215,12 +32599,12 @@ ${seoHeadHtml}
     position: absolute;
     bottom: 4px;
     left: 4px;
-    background: var(--accent);
-    color: #ffffff;
-    padding: 2px 6px;
-    border-radius: 4px;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    padding: var(--space-0-5) var(--space-1-5);
+    border-radius: var(--radius-xs);
     font-weight: bold;
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
     z-index: 2;
   }
@@ -32232,7 +32616,7 @@ ${seoHeadHtml}
   body.hide-badge-imdb-rating .rating-badge[data-rating-type="imdb"], body.hide-badge-imdb-rating .poster-rating[data-rating-type="imdb"] { display: none !important; }
   body.hide-badge-tmdb-rating .rating-badge[data-rating-type="tmdb"], body.hide-badge-tmdb-rating .poster-rating[data-rating-type="tmdb"] { display: none !important; }
   .live-preview-posters .rating-badge, .live-preview-shelf-row .rating-badge,
-  .live-preview-posters .poster-rating, .live-preview-shelf-row .poster-rating { display: none !important; }
+  .live-preview-posters .poster-rating, .live-preview-shelf-row .poster-rating { display: none; }
   body.hide-badge-watched .watched-badge, body.hide-badge-watched .cw-watched-indicator { display: none !important; }
   body.hide-catalogs-badges .live-preview-posters:not(.is-continue-watching-shelf):not(.is-airing-next-shelf):not(.is-watchlist-shelf) .cw-date-badge,
   body.hide-catalogs-badges .live-preview-shelf-row:not([data-list-slug="continue-watching"]):not([data-list-slug="airing-next"]):not([data-list-slug="watchlist"]) .cw-date-badge,
@@ -32260,7 +32644,7 @@ ${seoHeadHtml}
   body.hide-mdblist-up-next-badges .detail-page-mdblist-up-next .cw-date-badge { display: none !important; }
   .airing-next-filter-pills {
     display: flex;
-    gap: 6px;
+    gap: var(--space-1-5);
     flex-wrap: wrap;
   }
   .airingNextFilterPill {
@@ -32268,29 +32652,29 @@ ${seoHeadHtml}
     color: var(--muted);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    font-size: 0.7rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
-    padding: 3px 9px;
+    padding: var(--space-1) var(--space-2);
     cursor: pointer;
     white-space: nowrap;
   }
   .airingNextFilterPill.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    border-color: var(--color-brand-fill);
   }
   .list-card-mini-poster-img-wrap img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.2s;
+    transition: transform var(--duration-base);
   }
   .list-card-mini-poster-img-wrap img.clickable-poster:hover {
     transform: scale(1.05);
   }
   .list-card-mini-poster-name {
-    font-size: 0.68rem;
+    font-size: var(--font-size-2xs);
     color: var(--text);
     font-weight: 600;
     line-height: 1.25;
@@ -32302,7 +32686,7 @@ ${seoHeadHtml}
     min-height: 2.5em;
   }
   .list-card-mini-poster-subtitle {
-    font-size: 0.64rem;
+    font-size: var(--font-size-2xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -32310,7 +32694,7 @@ ${seoHeadHtml}
     text-overflow: ellipsis;
   }
   .list-card-mini-poster-year {
-    font-size: 0.64rem;
+    font-size: var(--font-size-2xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -32328,7 +32712,7 @@ ${seoHeadHtml}
     bottom: 4px;
     right: 4px;
     background: rgba(0, 0, 0, 0.7);
-    color: #fff;
+    color: var(--color-on-brand);
     width: 24px;
     height: 24px;
     border-radius: 50%;
@@ -32338,7 +32722,7 @@ ${seoHeadHtml}
     font-size: 18px;
     font-weight: bold;
     opacity: 0.85;
-    transition: opacity 0.2s, background 0.2s;
+    transition: opacity var(--duration-base), background var(--duration-base);
     z-index: 5;
     cursor: pointer;
   }
@@ -32347,13 +32731,13 @@ ${seoHeadHtml}
     opacity: 1;
   }
   .poster-add-overlay:hover {
-    background: var(--brand);
-    color: #fff;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
   }
   #lists .poster-add-overlay,
   #listsLivePreview .poster-add-overlay,
   .entry .poster-add-overlay {
-    display: none !important;
+    display: none;
   }
   .drag-handle-list {
     cursor: grab;
@@ -32362,12 +32746,12 @@ ${seoHeadHtml}
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
+    font-size: var(--font-size-lg);
     color: var(--muted);
-    margin-right: 12px;
-    padding: 2px 6px;
+    margin-right: var(--space-3);
+    padding: var(--space-0-5) var(--space-1-5);
     border-radius: var(--radius-sm);
-    transition: color 0.15s, background-color 0.15s;
+    transition: color var(--duration-base), background-color var(--duration-base);
     vertical-align: middle;
   }
   .drag-handle-list svg,
@@ -32388,9 +32772,9 @@ ${seoHeadHtml}
     position: absolute;
     inset: 0;
     background: rgba(0,0,0,0.65);
-    color: #fff;
+    color: var(--color-on-brand);
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -32416,16 +32800,16 @@ ${seoHeadHtml}
     background: transparent !important;
     border: none !important;
     color: var(--muted) !important;
-    font-size: 0.95rem !important;
+    font-size: var(--font-size-base) !important;
     font-weight: 700 !important;
     line-height: 1 !important;
     cursor: pointer !important;
-    padding: 0 0 0 4px !important;
+    padding: 0 0 0 var(--space-1) !important;
     margin: 0 !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    transition: color 0.15s !important;
+    transition: color var(--duration-base) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     width: auto !important;
@@ -32435,8 +32819,8 @@ ${seoHeadHtml}
     color: var(--danger) !important;
   }
   .merge-add-channel-select {
-    padding: 3px 8px;
-    font-size: 0.78rem;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--font-size-xs);
     font-weight: 600;
     border-radius: var(--radius-sm);
     border: 1px dashed var(--border);
@@ -32445,8 +32829,8 @@ ${seoHeadHtml}
     cursor: pointer;
     max-width: 220px;
     outline: none;
-    transition: border-color 0.15s, color 0.15s;
-    margin: 2px 0 2px 4px;
+    transition: border-color var(--duration-base), color var(--duration-base);
+    margin: var(--space-0-5) 0 var(--space-0-5) var(--space-1);
   }
   .merge-add-channel-select:hover {
     border-color: var(--accent);
@@ -32454,16 +32838,16 @@ ${seoHeadHtml}
   .detail-filter-bar {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--space-3);
     align-items: center;
     justify-content: space-between;
-    padding: 0 0 16px 0;
-    margin-bottom: 12px;
+    padding: 0 0 var(--space-4) 0;
+    margin-bottom: var(--space-3);
     border-bottom: 1px solid var(--border);
   }
   .detail-sort-select {
-    padding: 6px 28px 6px 12px;
-    font-size: 0.82rem;
+    padding: var(--space-1-5) 28px var(--space-1-5) var(--space-3);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
@@ -32471,7 +32855,7 @@ ${seoHeadHtml}
     color: var(--text);
     cursor: pointer;
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color var(--duration-base), box-shadow var(--duration-base);
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -32490,15 +32874,15 @@ ${seoHeadHtml}
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    padding: 16px;
+    padding: var(--space-4);
     width: 100%;
     max-width: 100%;
     overflow: visible;
   }
   .panel-title {
-    font-size: 1.1rem;
+    font-size: var(--font-size-lg);
     font-weight: 700;
-    margin: 0 0 10px;
+    margin: 0 0 var(--space-2-5);
     letter-spacing: -0.01em;
     color: var(--text);
   }
@@ -32517,7 +32901,7 @@ ${seoHeadHtml}
     border-radius: var(--radius-pill);
     background: var(--surface);
     border: 1.5px solid var(--border-strong);
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     box-shadow: var(--shadow-sm);
   }
   .search-bar-clear {
@@ -32525,7 +32909,7 @@ ${seoHeadHtml}
     width: 22px; height: 22px; min-height: unset;
     border-radius: 50%; background: rgba(0,0,0,0.12);
     color: var(--text-2); border: none; padding: 0;
-    font-size: 0.75rem; line-height: 1;
+    font-size: var(--font-size-xs); line-height: 1;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
   }
@@ -32533,7 +32917,7 @@ ${seoHeadHtml}
   /* --- Form controls & Helpers -------------------------------------------- */
   input, select, textarea {
     width: 100%;
-    padding: 11px 14px;
+    padding: var(--space-3) var(--space-3-5);
     border-radius: var(--radius-sm);
     border: 1.5px solid var(--border-strong);
     background: var(--surface);
@@ -32543,7 +32927,7 @@ ${seoHeadHtml}
     font-family: inherit;
     min-height: 44px;
     box-shadow: var(--shadow-sm);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    transition: border-color var(--duration-base) ease, box-shadow var(--duration-base) ease, background-color var(--duration-base) ease;
   }
   input:disabled, select:disabled, textarea:disabled,
   input[readonly], textarea[readonly] {
@@ -32573,11 +32957,11 @@ ${seoHeadHtml}
     color: var(--text);
     border: 1.5px solid var(--border-strong);
     border-radius: var(--radius-sm);
-    padding: 8px 14px;
-    margin-right: 12px;
+    padding: var(--space-2) var(--space-3-5);
+    margin-right: var(--space-3);
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background var(--duration-base), border-color var(--duration-base);
   }
   input[type="file"]::file-selector-button:hover {
     background: var(--surface-3);
@@ -32595,11 +32979,11 @@ ${seoHeadHtml}
   .ui-toggle input { opacity: 0; width: 0; height: 0; position: absolute; pointer-events: none; }
   .ui-toggle-slider {
     position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--color-border-strong, var(--border)); transition: background-color .25s ease; border-radius: 24px;
+    background-color: var(--color-border-strong, var(--border)); transition: background-color var(--duration-slow) ease; border-radius: var(--radius-xl);
   }
   .ui-toggle-slider:before {
     position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
-    background-color: white; transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 50%; box-shadow: var(--shadow-sm);
+    background-color: white; transition: transform var(--duration-slow) cubic-bezier(0.4, 0, 0.2, 1); border-radius: 50%; box-shadow: var(--shadow-sm);
   }
   .ui-toggle input:checked + .ui-toggle-slider { background-color: var(--color-brand, var(--accent)); }
   .ui-toggle input:checked + .ui-toggle-slider:before { transform: translateX(20px); }
@@ -32610,8 +32994,8 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    padding: 10px 0;
+    gap: var(--space-3-5);
+    padding: var(--space-2-5) 0;
     border-bottom: 1px solid var(--color-border-subtle, rgba(255,255,255,0.06));
   }
   .settings-toggle-row:last-child {
@@ -32620,14 +33004,14 @@ ${seoHeadHtml}
   .settings-check-group {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-0-5);
   }
   .settings-check-group.two-col-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px 16px;
+    gap: var(--space-1-5) var(--space-4);
   }
-  @media (max-width: 720px) {
+  @media (max-width: 640px) {
     .settings-check-group.two-col-grid {
       grid-template-columns: 1fr;
     }
@@ -32635,12 +33019,12 @@ ${seoHeadHtml}
   .settings-check-item {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 8px 10px;
-    border-radius: var(--radius-sm, 8px);
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-2-5);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     user-select: none;
-    transition: background-color 0.12s ease;
+    transition: background-color var(--duration-fast) ease;
     margin: 0;
   }
   .settings-check-item:hover {
@@ -32649,21 +33033,21 @@ ${seoHeadHtml}
   .settings-check-item input[type="checkbox"] {
     width: 17px;
     height: 17px;
-    margin-top: 2px;
+    margin-top: var(--space-0-5);
     cursor: pointer;
     flex: none;
     accent-color: var(--color-brand, var(--accent));
   }
   input:focus, select:focus, textarea:focus {
     border-color: var(--color-brand, var(--accent));
-    box-shadow: 0 0 0 3px var(--color-brand-subtle, rgba(0, 122, 255, 0.18));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle, var(--color-brand-tint));
   }
   input[readonly]:focus, textarea[readonly]:focus {
     border-color: var(--border-strong);
     box-shadow: none;
   }
   .custom-list-pick-poster {
-    width: 36px; height: 54px; object-fit: cover; border-radius: 4px; flex: none; cursor: pointer;
+    width: 36px; height: 54px; object-fit: cover; border-radius: var(--radius-xs); flex: none; cursor: pointer;
   }
   .custom-list-pick-poster.empty-poster { background: transparent; }
   .channel-poster-choice {
@@ -32671,26 +33055,26 @@ ${seoHeadHtml}
     display: flex;
     flex-direction: column;
     align-items: center;
-    border-radius: 8px;
-    padding: 6px;
+    border-radius: var(--radius-sm);
+    padding: var(--space-1-5);
     cursor: pointer;
     background: var(--surface);
     border: 2px solid transparent;
-    transition: border-color 0.15s ease, transform 0.15s ease;
+    transition: border-color var(--duration-base) ease, transform var(--duration-base) ease;
     user-select: none;
   }
   .channel-poster-choice:hover {
-    border-color: rgba(0, 122, 255, 0.4);
+    border-color: var(--color-brand-line);
   }
   .channel-poster-choice.selected {
     border-color: var(--accent);
-    background: rgba(0, 122, 255, 0.08);
+    background: var(--color-brand-wash);
   }
   .channel-poster-choice .channel-poster-thumb-wrap {
     position: relative;
     width: 100%;
     aspect-ratio: 2 / 3;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: rgba(0, 0, 0, 0.3);
     display: flex;
@@ -32710,9 +33094,9 @@ ${seoHeadHtml}
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: var(--accent);
-    color: #fff;
-    font-size: 0.75rem;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    font-size: var(--font-size-xs);
     font-weight: 700;
     display: none;
     align-items: center;
@@ -32725,57 +33109,57 @@ ${seoHeadHtml}
   }
   .channel-poster-choice .channel-poster-title {
     width: 100%;
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-top: 5px;
+    margin-top: var(--space-1-5);
   }
   .channel-poster-choice .channel-poster-meta {
-    font-size: 0.7rem;
+    font-size: var(--font-size-xs);
     color: var(--muted);
     text-align: center;
   }
   .channel-crossover-banner {
     position: relative;
-    background: linear-gradient(135deg, rgba(0, 122, 255, 0.12) 0%, rgba(88, 86, 214, 0.12) 100%);
-    border: 1px solid rgba(0, 122, 255, 0.35);
+    background: linear-gradient(135deg, var(--color-brand-subtle) 0%, rgba(88, 86, 214, 0.12) 100%);
+    border: 1px solid var(--color-brand-line);
     border-radius: var(--radius-md);
-    padding: 12px 14px;
-    margin-bottom: 12px;
+    padding: var(--space-3) var(--space-3-5);
+    margin-bottom: var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .channel-crossover-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
   }
   .channel-crossover-title {
-    font-size: 0.88rem;
+    font-size: var(--font-size-sm);
     font-weight: 700;
     color: var(--text);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1-5);
   }
   .channel-crossover-badge {
-    background: var(--accent);
-    color: #fff;
-    font-size: 0.68rem;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    font-size: var(--font-size-2xs);
     font-weight: 700;
-    padding: 2px 7px;
+    padding: var(--space-0-5) var(--space-2);
     border-radius: var(--radius-pill);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
   .channel-crossover-desc {
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     color: var(--muted);
     line-height: 1.35;
     margin: 0;
@@ -32783,34 +33167,34 @@ ${seoHeadHtml}
   .channel-crossover-parts {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin: 4px 0 2px;
+    gap: var(--space-1-5);
+    margin: var(--space-1) 0 var(--space-0-5);
   }
   .channel-crossover-chip {
-    font-size: 0.72rem;
-    padding: 3px 8px;
-    border-radius: 4px;
+    font-size: var(--font-size-xs);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-xs);
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
   }
   .channel-crossover-chip.present {
     background: rgba(52, 199, 89, 0.15);
     border-color: rgba(52, 199, 89, 0.4);
-    color: #34C759;
+    color: var(--color-success-text);
   }
   .channel-crossover-chip.missing {
     background: rgba(255, 149, 0, 0.15);
     border-color: rgba(255, 149, 0, 0.4);
-    color: #FF9500;
+    color: var(--color-warn-text);
   }
   .channel-crossover-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 2px;
+    gap: var(--space-2);
+    margin-top: var(--space-0-5);
     flex-wrap: wrap;
   }
   /* .lc-btn's base white-space:nowrap (further up this stylesheet) is
@@ -32829,59 +33213,59 @@ ${seoHeadHtml}
   .support-chat-container {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-top: 10px;
+    gap: var(--space-3);
+    margin-top: var(--space-2-5);
   }
   .support-threads-bar {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     overflow-x: auto;
-    padding-bottom: 4px;
+    padding-bottom: var(--space-1);
   }
   .support-thread-pill {
-    padding: 6px 12px;
+    padding: var(--space-1-5) var(--space-3);
     border-radius: var(--radius-pill);
     background: var(--surface);
     border: 1px solid var(--border);
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1-5);
     color: var(--text);
   }
   .support-thread-pill.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
+    border-color: var(--color-brand-fill);
   }
   .support-messages-stream {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2-5);
     max-height: 380px;
     min-height: 180px;
     overflow-y: auto;
-    padding: 12px;
+    padding: var(--space-3);
     background: rgba(0, 0, 0, 0.2);
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
   }
   .support-bubble {
     max-width: 85%;
-    padding: 10px 14px;
-    border-radius: 14px;
-    font-size: 0.88rem;
+    padding: var(--space-2-5) var(--space-3-5);
+    border-radius: var(--radius);
+    font-size: var(--font-size-sm);
     line-height: 1.4;
     word-break: break-word;
     white-space: pre-wrap;
   }
   .support-bubble.user {
     align-self: flex-end;
-    background: var(--accent);
-    color: #fff;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     border-bottom-right-radius: 4px;
   }
   .support-bubble.admin {
@@ -32892,40 +33276,40 @@ ${seoHeadHtml}
     border-bottom-left-radius: 4px;
   }
   .support-bubble-sender {
-    font-size: 0.72rem;
+    font-size: var(--font-size-xs);
     font-weight: 700;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1-5);
     opacity: 0.85;
   }
   .support-bubble-time {
-    font-size: 0.68rem;
+    font-size: var(--font-size-2xs);
     opacity: 0.65;
-    margin-top: 4px;
+    margin-top: var(--space-1);
     text-align: right;
   }
   .support-reply-composer {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: flex-end;
   }
   .support-reply-composer textarea {
     flex: 1;
     min-height: 44px;
     max-height: 120px;
-    padding: 10px 12px;
-    border-radius: 12px;
+    padding: var(--space-2-5) var(--space-3);
+    border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
     font-family: inherit;
-    font-size: 0.88rem;
+    font-size: var(--font-size-sm);
     resize: vertical;
   }
-  .row { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 10px; width: 100%; }
-  .field-row { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; }
+  .row { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2-5); margin-bottom: var(--space-2-5); width: 100%; }
+  .field-row { display: grid; grid-template-columns: 1fr; gap: var(--space-2-5); width: 100%; }
   /* ==========================================================================
      Design System: Standard Button Architecture (Phase 2)
      ========================================================================== */
@@ -32940,7 +33324,7 @@ ${seoHeadHtml}
     justify-content: center;
     gap: var(--space-1-5, 6px);
     font-family: inherit;
-    font-size: var(--font-size-base, 0.925rem);
+    font-size: var(--font-size-base);
     font-weight: 600;
     line-height: 1.2;
     text-align: center;
@@ -32952,35 +33336,35 @@ ${seoHeadHtml}
     user-select: none;
     -webkit-user-select: none;
     vertical-align: middle;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
-                box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+    transition: background-color var(--duration-base) ease, border-color var(--duration-base) ease, color var(--duration-base) ease,
+                box-shadow var(--duration-base) ease, transform var(--duration-fast) ease, opacity var(--duration-base) ease;
   }
 
   /* Default button behavior (Primary brand style) */
   :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)),
   .btn-primary,
   .primary:not(.lc-btn) {
-    background: var(--color-brand);
-    color: var(--color-text-inverse, #fff);
-    border-color: var(--color-brand);
+    background: var(--color-brand-fill);
+    color: var(--color-text-inverse, var(--color-on-brand));
+    border-color: var(--color-brand-fill);
     box-shadow: 0 2px 8px var(--color-brand-subtle);
     min-height: var(--control-height-md, 40px);
-    padding: 10px 18px;
+    padding: var(--space-2-5) var(--space-4);
   }
 
   :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):hover:not(:disabled),
   .btn-primary:hover:not(:disabled),
   .primary:not(.lc-btn):hover:not(:disabled) {
-    background: var(--color-brand-hover);
-    border-color: var(--color-brand-hover);
-    color: var(--color-text-inverse, #fff);
+    background: var(--color-brand-fill-hover);
+    border-color: var(--color-brand-fill-hover);
+    color: var(--color-text-inverse, var(--color-on-brand));
   }
 
   :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):active:not(:disabled),
   .btn-primary:active:not(:disabled),
   .primary:not(.lc-btn):active:not(:disabled) {
-    background: var(--color-brand-active);
-    border-color: var(--color-brand-active);
+    background: var(--color-brand-fill-active);
+    border-color: var(--color-brand-fill-active);
     transform: scale(0.98);
   }
 
@@ -32988,14 +33372,9 @@ ${seoHeadHtml}
   #catalogSearchBtn,
   button[data-act="runCatalogSearch"] {
     flex: none;
-    flex-shrink: 0;
-    padding: 7px 16px !important;
-    min-height: 36px !important;
-    height: 36px !important;
-    box-sizing: border-box !important;
-    border-radius: var(--radius-pill) !important;
-    font-size: 0.86rem !important;
-    font-weight: 600 !important;
+    padding: var(--space-1-5) var(--space-4);
+    min-height: var(--control-height-sm);
+    font-size: var(--font-size-sm);
     align-self: center;
   }
 
@@ -33011,7 +33390,7 @@ ${seoHeadHtml}
     border: 1.5px solid var(--color-border-strong);
     box-shadow: var(--shadow-sm);
     min-height: var(--control-height-md, 40px);
-    padding: 9px 16px;
+    padding: var(--space-2) var(--space-4);
   }
 
   .btn-secondary:hover:not(:disabled),
@@ -33039,7 +33418,7 @@ ${seoHeadHtml}
     border: 1.5px solid transparent;
     box-shadow: none;
     min-height: var(--control-height-md, 40px);
-    padding: 8px 14px;
+    padding: var(--space-2) var(--space-3-5);
   }
 
   .btn-ghost:hover:not(:disabled),
@@ -33061,10 +33440,10 @@ ${seoHeadHtml}
   .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
     color: var(--color-danger);
-    border: 1.5px solid rgba(255, 59, 48, 0.3);
+    border: 1.5px solid var(--color-danger-line);
     box-shadow: var(--shadow-sm);
     min-height: var(--control-height-md, 40px);
-    padding: 9px 16px;
+    padding: var(--space-2) var(--space-4);
   }
 
   .btn-danger:hover:not(:disabled),
@@ -33073,7 +33452,7 @@ ${seoHeadHtml}
   .actions button[data-act="removeAllLists"]:hover:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
     background: var(--color-danger);
-    color: #fff;
+    color: var(--color-on-brand);
     border-color: var(--color-danger);
   }
 
@@ -33089,21 +33468,21 @@ ${seoHeadHtml}
   /* Size Variants */
   .btn-sm {
     min-height: var(--control-height-sm, 32px);
-    padding: 5px 12px;
-    font-size: var(--font-size-xs, 0.8rem);
+    padding: var(--space-1-5) var(--space-3);
+    font-size: var(--font-size-xs);
     border-radius: var(--radius-pill);
   }
 
   .btn-md {
     min-height: var(--control-height-md, 40px);
-    padding: 9px 16px;
-    font-size: var(--font-size-sm, 0.88rem);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
   }
 
   .btn-lg {
     min-height: var(--control-height-lg, 48px);
-    padding: 12px 22px;
-    font-size: var(--font-size-base, 0.95rem);
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--font-size-base);
   }
 
   /* Disabled state across all buttons */
@@ -33120,22 +33499,23 @@ ${seoHeadHtml}
   }
 
   button.modal-close-x {
+    float: right; cursor: pointer;
     width: 32px; height: 32px; min-height: unset;
     padding: 0; border-radius: 50%;
     background: var(--color-bg-sunken); color: var(--color-text-muted);
     border: 1px solid var(--color-border-strong);
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 1rem; line-height: 1; flex: none;
+    font-size: var(--font-size-md); line-height: 1; flex: none;
   }
   button.modal-close-x:hover {
     color: var(--color-text-primary);
     background: var(--color-border-strong);
   }
 
-  .btn-stremio { background: linear-gradient(135deg, #9B8FFF, #6D48FF); color: #fff; border: none; }
-  .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: #fff; border: none; }
-  .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: #fff; border: none; }
-  .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+  .btn-stremio { background: linear-gradient(135deg, var(--brand-stremio-from), var(--brand-stremio-to)); color: var(--color-on-brand); border: none; }
+  .btn-nuvio   { background: linear-gradient(135deg, var(--brand-nuvio-from), var(--brand-nuvio-to)); color: var(--color-on-brand); border: none; }
+  .btn-wako    { background: linear-gradient(135deg, var(--brand-wako-from), var(--brand-wako-to)); color: var(--color-on-brand); border: none; }
+  .actions { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); }
 
   /* Catalog actions bar: side-by-side on mobile, spread on desktop */
   .catalog-actions-bar {
@@ -33143,9 +33523,9 @@ ${seoHeadHtml}
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-3);
     width: 100%;
-    margin-top: 16px;
+    margin-top: var(--space-4);
   }
   .catalog-actions-bar button[data-act="removeAllLists"] {
     flex: 0 0 auto;
@@ -33158,35 +33538,35 @@ ${seoHeadHtml}
   }
   @media (max-width: 640px) {
     .catalog-actions-bar {
-      gap: 8px;
+      gap: var(--space-2);
     }
     .catalog-actions-bar button[data-act="removeAllLists"] {
       flex: 0 0 auto;
-      padding: 9px 12px;
-      font-size: 0.85rem;
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--font-size-sm);
     }
     .catalog-actions-bar button[data-act="generate"] {
       flex: 1 1 auto;
       margin-left: 0;
       text-align: center;
-      padding: 9px 14px;
-      font-size: 0.88rem;
+      padding: var(--space-2) var(--space-3-5);
+      font-size: var(--font-size-sm);
     }
   }
 
   /* --- Install Result Card & Manifest Link Display ------------------------ */
   #result {
-    margin-top: 16px;
+    margin-top: var(--space-4);
   }
   .install-result-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 18px 20px;
+    padding: var(--space-4) var(--space-5);
     box-shadow: var(--shadow);
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--space-3-5);
     animation: resultSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
   @keyframes resultSlideIn {
@@ -33197,26 +33577,26 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
   }
   .install-result-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
+    gap: var(--space-1-5);
+    padding: var(--space-1) var(--space-2-5);
     border-radius: var(--radius-pill);
-    background: rgba(52, 199, 89, 0.12);
-    color: #34C759;
+    background: var(--color-success-subtle);
+    color: var(--color-success-text);
     font-weight: 700;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     letter-spacing: 0.01em;
   }
   .install-result-badge svg {
     stroke: currentColor;
   }
   .install-result-sub {
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     color: var(--muted);
     font-weight: 500;
   }
@@ -33225,24 +33605,24 @@ ${seoHeadHtml}
     flex-direction: column;
     background: var(--bg);
     border: 1.5px solid var(--border-strong);
-    border-radius: 12px;
-    padding: 12px 14px;
-    gap: 10px;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-3-5);
+    gap: var(--space-2-5);
+    transition: border-color var(--duration-base), box-shadow var(--duration-base);
     min-width: 0;
   }
   .install-url-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .install-url-label {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1-5);
     font-weight: 700;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     color: var(--text-2);
   }
   .install-url-label svg {
@@ -33251,16 +33631,16 @@ ${seoHeadHtml}
   .install-url-copy-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
+    gap: var(--space-1-5);
+    padding: var(--space-1-5) var(--space-3-5);
     border-radius: var(--radius-pill);
     background: var(--surface);
     border: 1.5px solid var(--border-strong);
     color: var(--text);
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
     box-shadow: var(--shadow-sm);
     min-height: unset;
     font-family: inherit;
@@ -33271,22 +33651,22 @@ ${seoHeadHtml}
     color: var(--accent);
   }
   .install-url-copy-btn.primary {
-    background: var(--color-brand) !important;
-    color: var(--color-text-inverse, #fff) !important;
-    border-color: var(--color-brand) !important;
+    background: var(--color-brand-fill) !important;
+    color: var(--color-text-inverse, var(--color-on-brand)) !important;
+    border-color: var(--color-brand-fill) !important;
     box-shadow: 0 2px 6px var(--color-brand-subtle) !important;
   }
   .install-url-copy-btn.primary:hover {
-    background: var(--color-brand-hover) !important;
-    border-color: var(--color-brand-hover) !important;
-    color: var(--color-text-inverse, #fff) !important;
+    background: var(--color-brand-fill-hover) !important;
+    border-color: var(--color-brand-fill-hover) !important;
+    color: var(--color-text-inverse, var(--color-on-brand)) !important;
   }
   .install-url-copy-btn.primary svg {
-    stroke: #ffffff;
+    stroke: var(--color-on-brand);
   }
   .install-url-box {
     font-family: var(--font-mono, monospace);
-    font-size: 0.84rem;
+    font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text);
     word-break: break-all;
@@ -33297,87 +33677,87 @@ ${seoHeadHtml}
     line-height: 1.5;
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    padding: var(--space-2-5) var(--space-3);
     cursor: pointer;
   }
   .install-hint-box {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    background: rgba(0, 122, 255, 0.05);
-    border: 1px solid rgba(0, 122, 255, 0.13);
+    gap: var(--space-2-5);
+    padding: var(--space-3) var(--space-3-5);
+    border-radius: var(--radius-md);
+    background: var(--color-brand-wash);
+    border: 1px solid var(--color-brand-subtle);
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     line-height: 1.45;
   }
   .install-hint-steps {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-top: 6px;
+    gap: var(--space-1);
+    margin-top: var(--space-1-5);
     color: var(--text);
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
   }
 
   .trakt-connect-actions {
     display: flex;
     flex-direction: row;
     width: auto;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2-5);
     flex-wrap: wrap;
   }
   @media (max-width: 640px) {
     .trakt-connect-actions {
-      display: flex !important;
-      flex-direction: row !important;
-      width: 100% !important;
-      gap: 8px !important;
-      flex-wrap: wrap !important;
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      gap: var(--space-2);
+      flex-wrap: wrap;
     }
     .trakt-connect-actions #traktConnectBtn,
     .trakt-connect-actions #traktDeviceBtn {
-      flex: 1 1 calc(50% - 4px) !important;
-      min-width: 0 !important;
-      padding: 8px 4px !important;
-      font-size: 0.8rem !important;
-      white-space: nowrap !important;
-      text-overflow: ellipsis !important;
-      overflow: hidden !important;
+      flex: 1 1 calc(50% - 4px);
+      min-width: 0;
+      padding: var(--space-2) var(--space-1);
+      font-size: var(--font-size-sm);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
     }
     .trakt-connect-actions #traktDisconnectBtn {
-      flex: 1 1 100% !important;
-      width: 100% !important;
-      padding: 8px 4px !important;
-      font-size: 0.8rem !important;
+      flex: 1 1 100%;
+      width: 100%;
+      padding: var(--space-2) var(--space-1);
+      font-size: var(--font-size-sm);
     }
   }
   @media (min-width: 641px) {
     .trakt-connect-actions {
-      display: flex !important;
-      flex-direction: row !important;
-      width: auto !important;
-      gap: 8px !important;
-      flex-wrap: wrap !important;
+      display: flex;
+      flex-direction: row;
+      width: auto;
+      gap: var(--space-2);
+      flex-wrap: wrap;
     }
     .trakt-connect-actions button {
-      flex: none !important;
-      width: auto !important;
+      flex: none;
+      width: auto;
     }
   }
 
   /* --- Provider Integration Cards (External Accounts & API Keys) --- */
   .provider-card {
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     background: var(--surface);
     box-shadow: var(--shadow-sm);
-    padding: 18px 20px;
-    margin-bottom: 16px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-4);
+    transition: border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
   }
   .provider-card:hover {
     border-color: var(--color-border-strong, var(--border));
@@ -33387,48 +33767,48 @@ ${seoHeadHtml}
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
     flex-wrap: wrap;
   }
   .provider-card-brand {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--space-2-5);
     flex: 1;
     min-width: 200px;
   }
   .provider-card-icon {
     width: 38px;
     height: 38px;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
+    font-size: var(--font-size-xl);
     background: var(--surface-2, rgba(255, 255, 255, 0.06));
     border: 1px solid var(--border);
     flex-shrink: 0;
   }
   .provider-card-title {
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     font-weight: 700;
     color: var(--text);
   }
   .provider-card-desc {
-    margin: 3px 0 0;
+    margin: var(--space-1) 0 0;
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     line-height: 1.35;
   }
   .provider-status-badge {
     display: inline-flex;
     align-items: center;
-    padding: 3px 10px;
-    border-radius: 9999px;
+    padding: var(--space-1) var(--space-2-5);
+    border-radius: var(--radius-pill);
     background: var(--surface);
     border: 1.5px solid var(--color-border-strong, var(--border));
-    font-size: 0.78rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     line-height: 1.2;
     flex-shrink: 0;
@@ -33436,36 +33816,36 @@ ${seoHeadHtml}
   .provider-status-badge > span {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
   }
   .provider-card-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
-    margin-bottom: 10px;
+    margin-bottom: var(--space-2-5);
   }
   .provider-advanced-disclosure {
     border-top: 1px solid var(--border);
-    padding-top: 10px;
-    margin-top: 12px;
+    padding-top: var(--space-2-5);
+    margin-top: var(--space-3);
   }
   .provider-advanced-summary {
     cursor: pointer;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     color: var(--muted);
     display: flex;
     align-items: center;
     justify-content: space-between;
     user-select: none;
-    padding: 2px 0;
+    padding: var(--space-0-5) 0;
   }
   .provider-advanced-summary:hover {
     color: var(--text);
   }
   .provider-advanced-arrow {
-    font-size: 0.75rem;
-    transition: transform 0.2s ease;
+    font-size: var(--font-size-xs);
+    transition: transform var(--duration-base) ease;
   }
   .provider-advanced-disclosure[open] .provider-advanced-arrow {
     transform: rotate(180deg);
@@ -33474,8 +33854,8 @@ ${seoHeadHtml}
   /* --- Import List Dropzone --- */
   .import-dropzone {
     border: 2px dashed var(--color-border-strong, var(--border));
-    border-radius: 12px;
-    padding: 28px 16px;
+    border-radius: var(--radius-md);
+    padding: 28px var(--space-4);
     background: var(--surface);
     text-align: center;
     cursor: pointer;
@@ -33483,14 +33863,14 @@ ${seoHeadHtml}
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+    gap: var(--space-2);
+    transition: border-color var(--duration-base) ease, background-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
   }
   .import-dropzone:hover,
   .import-dropzone.dragover {
-    border-color: var(--color-brand, #007aff);
-    background: var(--color-brand-subtle, rgba(0, 122, 255, 0.04));
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    border-color: var(--color-brand);
+    background: var(--color-brand-subtle, var(--color-brand-wash));
+    box-shadow: 0 0 0 3px var(--color-brand-subtle);
   }
   .import-dropzone-icon {
     font-size: 2rem;
@@ -33505,21 +33885,21 @@ ${seoHeadHtml}
   .resource-cards-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 14px;
-    margin-top: 10px;
+    gap: var(--space-3-5);
+    margin-top: var(--space-2-5);
   }
   .resource-card {
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 18px 20px;
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
     background: var(--surface);
     box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 14px;
+    gap: var(--space-3-5);
     text-decoration: none;
-    transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    transition: border-color var(--duration-base) ease, transform var(--duration-base) ease, box-shadow var(--duration-base) ease;
   }
   .resource-card:hover {
     border-color: var(--color-border-strong, var(--border));
@@ -33529,39 +33909,39 @@ ${seoHeadHtml}
   .resource-card-top {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--space-3);
   }
   .resource-card-icon {
     width: 36px;
     height: 36px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
+    font-size: var(--font-size-lg);
     background: var(--surface-2, rgba(255, 255, 255, 0.06));
     border: 1px solid var(--border);
     flex-shrink: 0;
   }
   .resource-card-title {
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: var(--font-size-base);
     color: var(--text);
   }
   .resource-card-desc {
-    margin: 3px 0 0;
+    margin: var(--space-1) 0 0;
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     line-height: 1.35;
   }
 
-  #lists { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; max-width: 100%; margin-bottom: 20px; }
+  #lists { display: grid; gap: var(--space-3); grid-template-columns: 1fr; width: 100%; max-width: 100%; margin-bottom: var(--space-5); }
   .entry {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    margin-bottom: 12px;
-    padding: 14px;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-3);
+    padding: var(--space-3-5);
     position: relative;
     box-shadow: var(--shadow-sm);
     /* A grid item's default min-width is auto (shrink no further than its
@@ -33577,51 +33957,51 @@ ${seoHeadHtml}
     border-color: var(--accent);
   }
   .entry-card-top {
-    display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; width: 100%;
+    display: flex; align-items: flex-start; gap: var(--space-2-5); margin-bottom: var(--space-2-5); width: 100%;
   }
   .entry-avatar {
-    width: 42px; height: 42px; border-radius: 11px; flex: none;
+    width: 42px; height: 42px; border-radius: var(--radius-md); flex: none;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 1.05rem; color: #fff;
+    font-weight: 800; font-size: var(--font-size-md); color: var(--color-on-brand);
     text-transform: uppercase;
   }
-  .entry-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-  .entry-name-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+  .entry-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1-5); }
+  .entry-name-row { display: flex; align-items: center; gap: var(--space-1-5); width: 100%; }
   .entry-name-row .name {
-    flex: 1; min-width: 0; padding: 6px 10px;
-    min-height: unset; font-size: 0.92rem; font-weight: 600;
-    border-radius: 8px;
+    flex: 1; min-width: 0; padding: var(--space-1-5) var(--space-2-5);
+    min-height: unset; font-size: var(--font-size-base); font-weight: 600;
+    border-radius: var(--radius-sm);
   }
-  .entry-type-row { display: flex; align-items: center; gap: 6px; }
+  .entry-type-row { display: flex; align-items: center; gap: var(--space-1-5); }
   .entry-type-row .type {
-    padding: 5px 10px; min-height: unset; font-size: 0.82rem;
-    border-radius: 8px; width: auto;
+    padding: var(--space-1-5) var(--space-2-5); min-height: unset; font-size: var(--font-size-sm);
+    border-radius: var(--radius-sm); width: auto;
   }
   .entry-pos-wrap .pos {
     width: 48px;
     height: 30px;
-    min-height: 30px !important;
+    min-height: 30px;
     max-height: 30px;
     box-sizing: border-box;
-    padding: 0 6px;
-    font-size: 0.82rem;
-    border-radius: 7px;
+    padding: 0 var(--space-1-5);
+    font-size: var(--font-size-sm);
+    border-radius: var(--radius-sm);
     text-align: center;
     background: var(--bg);
     border: 1.5px solid var(--border-strong);
     line-height: 27px;
   }
   .entry-ctrl-row {
-    display: flex; gap: 4px; align-items: center; flex-shrink: 0;
+    display: flex; gap: var(--space-1); align-items: center; flex-shrink: 0;
   }
   .ec-btn {
     width: 30px;
     height: 30px;
-    min-height: 30px !important;
+    min-height: 30px;
     max-height: 30px;
     box-sizing: border-box;
     padding: 0;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     background: var(--bg);
     border: 1.5px solid var(--border-strong);
     color: var(--muted);
@@ -33629,38 +34009,38 @@ ${seoHeadHtml}
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     line-height: 1;
   }
   .ec-btn:not(.movebtn):not(.drag-handle):not(.removebtn) {
     width: auto;
-    padding: 0 10px;
+    padding: 0 var(--space-2-5);
   }
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
   .ec-btn.danger {
-    color: var(--color-danger, #d70015);
-    border-color: rgba(255, 59, 48, 0.35);
-    background: rgba(255, 59, 48, 0.08);
+    color: var(--color-danger);
+    border-color: var(--color-danger-line);
+    background: var(--color-danger-wash);
   }
   :root.dark-theme .ec-btn.danger {
-    color: var(--color-danger, #ff453a);
-    border-color: rgba(255, 69, 58, 0.45);
-    background: rgba(255, 69, 58, 0.15);
+    color: var(--color-danger);
+    border-color: var(--color-danger-line);
+    background: var(--color-danger-tint);
   }
   .ec-btn.danger:hover:not(:disabled) {
-    color: #ffffff;
-    background: var(--color-danger, #ff3b30);
-    border-color: var(--color-danger, #ff3b30);
+    color: var(--color-on-brand);
+    background: var(--color-danger);
+    border-color: var(--color-danger);
   }
   .ec-btn.danger svg {
     display: block;
     stroke: currentColor;
     flex-shrink: 0;
   }
-  .sources { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+  .sources { display: flex; flex-direction: column; gap: var(--space-2-5); width: 100%; }
   .source-row { width: 100%; }
-  .source-row + .source-row { padding-top: 10px; border-top: 1px dashed var(--border-strong); }
-  .testrow { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; width: 100%; }
+  .source-row + .source-row { padding-top: var(--space-2-5); border-top: 1px dashed var(--border-strong); }
+  .testrow { display: flex; align-items: center; gap: var(--space-2-5); margin-top: var(--space-1); flex-wrap: wrap; width: 100%; }
   .testresult { width: 100%; }
   .testresult.ok { color: var(--success); }
   .testresult.err { color: var(--danger); }
@@ -33670,14 +34050,14 @@ ${seoHeadHtml}
   #lists.compact .sources,
   #lists.compact .add-source-btn,
   #lists.compact .watchlist-note {
-    display: none !important;
+    display: none;
   }
   .premade-shelf .sources,
   .premade-shelf .add-source-btn {
-    display: none !important;
+    display: none;
   }
   #lists.compact .entry {
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
   }
   #lists.compact .entry-card-top {
     margin-bottom: 0;
@@ -33687,8 +34067,8 @@ ${seoHeadHtml}
   .preview-thumbs {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    margin-top: 6px;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1-5);
     max-width: 240px;
     width: 100%;
   }
@@ -33701,14 +34081,14 @@ ${seoHeadHtml}
     .preview-thumbs {
       grid-template-columns: repeat(5, 1fr);
       max-width: 440px;
-      gap: 8px;
+      gap: var(--space-2);
     }
   }
   .preview-thumb {
     width: 100%;
     aspect-ratio: 2 / 3;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--panel-strong);
     display: block;
@@ -33719,18 +34099,18 @@ ${seoHeadHtml}
     background: transparent;
     border: none;
     border-radius: var(--radius);
-    padding: 0 0 14px 0;
+    padding: 0 0 var(--space-3-5) 0;
     box-shadow: none;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
     width: 100%;
   }
   .live-preview-shelf-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     color: var(--text);
   }
   .live-preview-shelf-title .shelf-title-text {
@@ -33742,15 +34122,15 @@ ${seoHeadHtml}
   }
   .live-preview-shelf-title .text-action-btn {
     margin-left: auto;
-    color: var(--accent) !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    min-height: unset !important;
-    height: auto !important;
-    padding: 2px 4px !important;
-    font-size: 0.82rem;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    min-height: unset;
+    height: auto;
+    padding: var(--space-0-5) var(--space-1);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
     flex: none;
@@ -33780,9 +34160,9 @@ ${seoHeadHtml}
   .live-preview-posters {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: var(--space-2);
     width: 100%;
-    padding-bottom: 6px;
+    padding-bottom: var(--space-1-5);
   }
   @media (max-width: 640px) {
     .live-preview-posters .live-preview-poster-card:nth-child(n+4) {
@@ -33792,13 +34172,13 @@ ${seoHeadHtml}
   @media (min-width: 641px) {
     .live-preview-posters {
       grid-template-columns: repeat(9, 1fr);
-      gap: 8px;
+      gap: var(--space-2);
     }
   }
   .live-preview-poster-card {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-1);
     min-width: 0;
     width: 100%;
   }
@@ -33806,7 +34186,7 @@ ${seoHeadHtml}
     width: 100%;
     aspect-ratio: 2 / 3;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--panel-strong);
     border: 1px solid var(--border);
     display: block;
@@ -33817,7 +34197,7 @@ ${seoHeadHtml}
   .live-preview-poster-placeholder {
     width: 100%;
     aspect-ratio: 2 / 3;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--panel-strong);
     border: 1px solid var(--border);
     display: flex;
@@ -33826,11 +34206,11 @@ ${seoHeadHtml}
     text-align: center;
   }
   .live-preview-poster-name {
-    font-size: 0.70rem;
+    font-size: var(--font-size-xs);
     color: var(--text);
     font-weight: 600;
     line-height: 1.25;
-    padding: 2px 4px 4px 4px;
+    padding: var(--space-0-5) var(--space-1) var(--space-1) var(--space-1);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -33845,16 +34225,16 @@ ${seoHeadHtml}
      anything without one (movies, shows, every other shelf on the site),
      so this never adds empty space to a normal poster card. */
   .live-preview-poster-subtitle {
-    font-size: 0.66rem;
+    font-size: var(--font-size-2xs);
     color: var(--muted);
     line-height: 1.25;
-    padding: 0 4px 2px 4px;
+    padding: 0 var(--space-1) var(--space-0-5) var(--space-1);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .live-preview-poster-year {
-    font-size: 0.65rem;
+    font-size: var(--font-size-2xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
@@ -33865,45 +34245,45 @@ ${seoHeadHtml}
   /* --- List Details page ("See All" full list view) ----------------------- */
   .list-details-page { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
   .detail-header-info h1 {
-    font-size: 1.3rem; font-weight: 800; margin: 0;
+    font-size: var(--font-size-xl); font-weight: 800; margin: 0;
   }
   .detail-header-info p {
-    margin: 0; font-size: 0.85rem; color: var(--muted);
+    margin: 0; font-size: var(--font-size-sm); color: var(--muted);
   }
 
   /* --- Season Cards & Headers --------------------------------------------- */
   .season-card {
-    background: var(--surface-light);
+    background: var(--color-bg-surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
   }
   .season-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 16px;
-    padding: 16px;
+    gap: var(--space-4);
+    padding: var(--space-4);
     cursor: pointer;
   }
   .season-header-main {
     display: flex;
-    gap: 16px;
+    gap: var(--space-4);
     align-items: center;
     min-width: 0;
     flex: 1;
   }
   .season-header-poster {
     width: 80px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     flex-shrink: 0;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
   .season-header-poster-placeholder {
     width: 80px;
     height: 120px;
-    background: #333;
-    border-radius: 4px;
+    background: var(--color-bg-sunken);
+    border-radius: var(--radius-xs);
     flex-shrink: 0;
   }
   .season-header-info {
@@ -33913,35 +34293,35 @@ ${seoHeadHtml}
     min-width: 0;
   }
   .season-header-title {
-    margin: 0 0 4px;
-    font-size: 1.2rem;
+    margin: 0 0 var(--space-1);
+    font-size: var(--font-size-lg);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .season-header-episodes {
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: var(--font-size-base);
   }
   .season-header-episodes.is-complete {
     color: var(--brand);
   }
   .season-header-actions {
     flex-shrink: 0;
-    margin-left: 12px;
+    margin-left: var(--space-3);
   }
   .season-header-actions .btn-mark-season-watched {
-    padding: 6px 14px;
-    font-size: 0.82rem;
+    padding: var(--space-1-5) var(--space-3-5);
+    font-size: var(--font-size-sm);
     white-space: nowrap;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .season-header {
       flex-direction: column;
       align-items: stretch;
-      gap: 12px;
-      padding: 12px;
+      gap: var(--space-3);
+      padding: var(--space-3);
     }
     .season-header-poster {
       width: 60px;
@@ -33958,8 +34338,8 @@ ${seoHeadHtml}
       width: 100%;
       text-align: center;
       justify-content: center;
-      padding: 8px 12px;
-      font-size: 0.85rem;
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--font-size-sm);
     }
   }
 
@@ -33967,11 +34347,11 @@ ${seoHeadHtml}
   .modal-overlay {
     position: fixed; inset: 0; background: var(--color-bg-overlay);
     display: flex; align-items: center; justify-content: center;
-    padding: 16px; z-index: 1000;
+    padding: var(--space-4); z-index: var(--z-modal);
   }
   .modal-card {
     background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-xl); padding: 22px; max-width: 440px; width: 100%;
+    border-radius: var(--radius-xl); padding: var(--space-6); max-width: 440px; width: 100%;
     max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg);
   }
   .modal-card.modal-card-wide {
@@ -33998,75 +34378,16 @@ ${seoHeadHtml}
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
-  .modal-close-x {
-    float: right; background: var(--bg); border: 1px solid var(--border-strong);
-    color: var(--muted); font-size: 1rem; cursor: pointer;
-    width: 32px; height: 32px; padding: 0; border-radius: 50%;
-    display: inline-flex; align-items: center; justify-content: center; line-height: 1;
-  }
-  .undo-toast {
-    position: fixed; left: 50%;
-    bottom: calc(66px + env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.96);
-    color: var(--text);
-    border: 1px solid var(--border-strong);
-    border-radius: 14px; padding: 12px 18px;
-    display: flex; align-items: center; gap: 14px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12); z-index: 1000;
-  }
-  :root.dark-theme .undo-toast,
-  html.dark-theme .undo-toast {
-    background: #000000;
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-  }
-  .action-toast {
-    position: fixed;
-    left: 50%;
-    bottom: calc(72px + env(safe-area-inset-bottom));
-    transform: translateX(-50%) translateY(20px);
-    background: rgba(255, 255, 255, 0.96);
-    color: var(--text);
-    border: 1px solid var(--border-strong);
-    padding: 10px 18px;
-    border-radius: var(--radius-pill);
-    font-size: 0.86rem;
-    font-weight: 600;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    z-index: 99999;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    white-space: nowrap;
-    max-width: 90vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-  .action-toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-  :root.dark-theme .action-toast,
-  html.dark-theme .action-toast {
-    background: #000000;
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
-  }
   .app-toast-container {
     position: fixed;
     left: 50%;
     bottom: calc(72px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
-    z-index: 99999;
+    z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     pointer-events: none;
     max-width: 90vw;
     width: max-content;
@@ -34074,19 +34395,19 @@ ${seoHeadHtml}
   .app-toast {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    gap: var(--space-3);
+    padding: var(--space-2-5) var(--space-4);
     border-radius: var(--radius-pill);
-    background: rgba(255, 255, 255, 0.96);
-    color: var(--text);
-    font-size: 0.88rem;
+    background: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
     font-weight: 500;
     box-shadow: 0 4px 20px rgba(0,0,0,0.12);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     opacity: 0;
     transform: translateY(12px);
-    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity var(--duration-base) cubic-bezier(0.16, 1, 0.3, 1), transform var(--duration-base) cubic-bezier(0.16, 1, 0.3, 1);
     pointer-events: auto;
     border: 1px solid var(--border-strong);
   }
@@ -34094,13 +34415,12 @@ ${seoHeadHtml}
     opacity: 1;
     transform: translateY(0);
   }
-  :root.dark-theme .app-toast,
-  html.dark-theme .app-toast {
-    background: #000000;
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-  }
+  .app-toast::before { flex: none; font-weight: 800; line-height: 1; }
+  .app-toast--success { border-color: var(--color-success-text); }
+  .app-toast--success::before { content: "\\2713"; color: var(--color-success-text); }
+  .app-toast--error { border-color: var(--color-danger-text); }
+  .app-toast--error::before { content: "!"; color: var(--color-danger-text); }
+  .app-toast--info::before { content: "i"; color: var(--color-brand); }
   .app-toast-msg {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -34108,19 +34428,19 @@ ${seoHeadHtml}
     max-width: 60vw;
   }
   .app-toast-action {
-    background: var(--accent);
-    color: #ffffff;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     border: none;
     border-radius: var(--radius-pill);
-    padding: 4px 12px;
-    font-size: 0.82rem;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
     line-height: 1.2;
-    transition: background 0.15s ease, transform 0.1s ease;
+    transition: background var(--duration-base) ease, transform var(--duration-fast) ease;
   }
   .app-toast-action:hover {
-    background: var(--accent-hover);
+    background: var(--color-brand-fill-hover);
   }
   .app-toast-action:active {
     transform: scale(0.96);
@@ -34129,9 +34449,9 @@ ${seoHeadHtml}
     background: transparent;
     border: none;
     color: var(--muted);
-    font-size: 1.1rem;
+    font-size: var(--font-size-lg);
     cursor: pointer;
-    padding: 0 4px;
+    padding: 0 var(--space-1);
     line-height: 1;
     display: inline-flex;
     align-items: center;
@@ -34139,14 +34459,6 @@ ${seoHeadHtml}
   }
   .app-toast-close:hover {
     color: var(--text);
-  }
-  :root.dark-theme .app-toast-close,
-  html.dark-theme .app-toast-close {
-    color: rgba(255, 255, 255, 0.6);
-  }
-  :root.dark-theme .app-toast-close:hover,
-  html.dark-theme .app-toast-close:hover {
-    color: #ffffff;
   }
   .sortable-item {
     user-select: none;
@@ -34159,7 +34471,7 @@ ${seoHeadHtml}
   .creator-list-row.dragging {
     opacity: 0.45 !important;
     transform: scale(0.98);
-    transition: transform 0.15s ease, opacity 0.15s ease;
+    transition: transform var(--duration-base) ease, opacity var(--duration-base) ease;
   }
   /* What marks the item being moved, on every drag-to-reorder
      (createSortableList, 16_): catalog rows, Your Custom Lists, My Channels,
@@ -34181,10 +34493,10 @@ ${seoHeadHtml}
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 5px 14px;
+    gap: var(--space-1-5);
+    padding: var(--space-1-5) var(--space-3-5);
     min-height: 31px;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     border-radius: var(--radius-pill);
     border: 1.5px solid var(--color-border-strong);
@@ -34192,32 +34504,32 @@ ${seoHeadHtml}
     color: var(--color-text-secondary);
     cursor: pointer;
     user-select: none;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
     box-shadow: none;
     font-family: inherit;
   }
   .custom-list-type-pill:hover:not(.active):not(:has(input:checked)) {
-    border-color: rgba(0, 122, 255, 0.40);
+    border-color: var(--color-brand-line);
     color: var(--accent);
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
-    background: rgba(0, 122, 255, 0.12) !important;
-    border-color: rgba(0, 122, 255, 0.40) !important;
+    background: var(--color-brand-subtle) !important;
+    border-color: var(--color-brand-line) !important;
     color: var(--accent) !important;
     font-weight: 700 !important;
     box-shadow: none !important;
   }
   :root.dark-theme .custom-list-type-pill:has(input:checked),
   :root.dark-theme .custom-list-type-pill.active {
-    background: rgba(10, 132, 255, 0.22) !important;
-    border-color: rgba(10, 132, 255, 0.50) !important;
+    background: var(--color-brand-line) !important;
+    border-color: var(--color-brand-line) !important;
     color: var(--accent) !important;
   }
   .custom-list-type-pill .check-icon {
     display: none;
     font-weight: 800;
-    font-size: 0.82rem;
+    font-size: var(--font-size-sm);
     color: var(--accent);
   }
   .custom-list-type-pill:has(input:checked) .check-icon,
@@ -34242,7 +34554,7 @@ ${seoHeadHtml}
     min-width: 0;
     cursor: pointer;
     user-select: none;
-    transition: transform 0.15s ease;
+    transition: transform var(--duration-base) ease;
   }
   .custom-list-search-card:hover:not(:has(.customListAddBtn:disabled)) {
     transform: translateY(-2px);
@@ -34254,18 +34566,18 @@ ${seoHeadHtml}
     width: 100%;
     aspect-ratio: 2/3;
     object-fit: cover;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.15s ease;
+    transition: box-shadow var(--duration-base) ease;
     background: var(--surface-2, rgba(255,255,255,0.06));
   }
   .custom-list-search-title {
     width: 100%;
-    font-size: 0.74rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     text-align: center;
     color: var(--text);
-    margin: 4px 0 2px;
+    margin: var(--space-1) 0 var(--space-0-5);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -34274,10 +34586,10 @@ ${seoHeadHtml}
     min-height: 2.5em;
   }
   .custom-list-search-meta {
-    font-size: 0.68rem;
+    font-size: var(--font-size-2xs);
     color: var(--muted);
     text-align: center;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -34285,13 +34597,13 @@ ${seoHeadHtml}
   }
 
   @media (max-width: 640px) {
-    .customListMoveBtn { display: none !important; }
-    .customListPosInput { display: none !important; }
+    .customListMoveBtn { display: none; }
+    .customListPosInput { display: none; }
   }
 
   @media (min-width: 641px) {
-    body { padding: 24px 20px 52px; }
-    .page { gap: 16px; }
+    body { padding: var(--space-6) var(--space-5) 52px; }
+    .page { gap: var(--space-4); }
     .actions { flex-direction: row; flex-wrap: wrap; }
     .actions button, .actions a { width: auto; }
     .custom-list-pick-poster { width: 72px; height: 108px; }
@@ -34315,29 +34627,29 @@ ${seoHeadHtml}
     #lists:not(.live-preview-edit-mode) .sources,
     #lists:not(.live-preview-edit-mode) .add-source-btn,
     #lists:not(.live-preview-edit-mode) .watchlist-note {
-      display: none !important;
+      display: none;
     }
     
     #lists:not(.live-preview-edit-mode) .entry {
-      border: none !important;
-      background: transparent !important;
-      box-shadow: none !important;
-      padding: 0 !important;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
     }
 
     #lists:not(.live-preview-edit-mode) {
-      grid-template-columns: 1fr !important;
+      grid-template-columns: 1fr;
     }
 
     /* In Edit Mode, hide the posters because they get in the way of drag-and-drop */
     #lists.live-preview-edit-mode .live-preview-posters {
-      display: none !important;
+      display: none;
     }
     
     #lists.live-preview-edit-mode .entry {
-      border: 1px solid var(--border) !important;
-      background: var(--bg) !important;
-      padding: 12px !important;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      padding: var(--space-3);
     }
 
   
@@ -34348,7 +34660,7 @@ ${seoHeadHtml}
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #007aff;
+    background: var(--color-brand-fill);
     color: white;
     display: flex;
     align-items: center;
@@ -34361,7 +34673,7 @@ ${seoHeadHtml}
   }
 
   .is-watch-history-shelf .watch-indicator-overlay {
-    display: none !important;
+    display: none;
   }
 
   /* --- Live Preview Skeleton Shimmer Loader ----------------------------- */
@@ -34372,14 +34684,14 @@ ${seoHeadHtml}
   .live-preview-skeleton-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-1-5);
     width: 100%;
     min-width: 0;
   }
   .live-preview-skeleton-poster {
     width: 100%;
     aspect-ratio: 2 / 3;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: linear-gradient(90deg, var(--panel-strong) 25%, var(--border-strong) 50%, var(--panel-strong) 75%);
     background-size: 200% 100%;
@@ -34387,7 +34699,7 @@ ${seoHeadHtml}
   }
   .live-preview-skeleton-line {
     height: 10px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     width: 80%;
     background: linear-gradient(90deg, var(--panel-strong) 25%, var(--border-strong) 50%, var(--panel-strong) 75%);
     background-size: 200% 100%;
@@ -34395,7 +34707,7 @@ ${seoHeadHtml}
   }
   .live-preview-skeleton-line-sub {
     height: 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     width: 50%;
     background: linear-gradient(90deg, var(--panel-strong) 25%, var(--border-strong) 50%, var(--panel-strong) 75%);
     background-size: 200% 100%;
@@ -34410,12 +34722,12 @@ ${seoHeadHtml}
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
+    font-size: var(--font-size-lg);
     color: var(--muted);
-    margin-right: 8px;
-    padding: 2px 6px;
+    margin-right: var(--space-2);
+    padding: var(--space-0-5) var(--space-1-5);
     border-radius: var(--radius-sm);
-    transition: color 0.15s ease, background-color 0.15s ease;
+    transition: color var(--duration-base) ease, background-color var(--duration-base) ease;
     vertical-align: middle;
     flex: none;
     line-height: 1;
@@ -34444,11 +34756,11 @@ ${seoHeadHtml}
     display: inline-flex;
     align-items: center;
     flex: none;
-    gap: 4px;
-    font-size: 0.74rem;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
     font-weight: 500;
     color: var(--muted);
-    margin-left: 6px;
+    margin-left: var(--space-1-5);
     letter-spacing: 0.01em;
   }
   .live-preview-shelf-status .status-spin {
@@ -34467,40 +34779,40 @@ ${seoHeadHtml}
   html[data-app-shell="1"] a.bottom-nav-item { text-decoration: none; }
   /* Search -> Lists: the source and sort chips, smaller than the Movies /
      Shows / Lists pills above them (setCatalogListSearchChip, 19_). */
-  html[data-app-shell="1"] .catalog-list-chips { display: grid; gap: 6px; margin-top: 8px; }
-  html[data-app-shell="1"] .catalog-list-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  html[data-app-shell="1"] .catalog-list-chips { display: grid; gap: var(--space-1-5); margin-top: var(--space-2); }
+  html[data-app-shell="1"] .catalog-list-chip-row { display: flex; flex-wrap: wrap; gap: var(--space-1-5); }
   html[data-app-shell="1"] .catalog-list-chip {
     flex: none; min-height: unset; cursor: pointer;
-    padding: 3px 10px; font-size: 0.75rem; font-weight: 600; line-height: 1.5;
+    padding: var(--space-1) var(--space-2-5); font-size: var(--font-size-xs); font-weight: 600; line-height: 1.5;
     border-radius: var(--radius-pill); border: 1px solid var(--border-strong);
     background: var(--surface); color: var(--text-2);
   }
   html[data-app-shell="1"] .catalog-list-chip:hover { border-color: var(--accent); color: var(--accent); }
-  html[data-app-shell="1"] .catalog-list-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  html[data-app-shell="1"] .catalog-list-chip.active { background: var(--color-brand-fill); border-color: var(--color-brand-fill); color: var(--color-on-brand); }
 
   /* The shell's Settings cards (P6-2). The card itself is the ordinary
      .panel; these are the rows, the small action row and the status chip
      inside it, so the new panels look like the rest of the page without a
      second stylesheet. */
-  html[data-app-shell="1"] .app-shell-muted { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
-  html[data-app-shell="1"] .app-shell-kv { margin: 0 0 8px; font-size: 0.92rem; }
-  html[data-app-shell="1"] .app-shell-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  html[data-app-shell="1"] .app-shell-muted { color: var(--muted); font-size: var(--font-size-sm); margin: 0 0 var(--space-2-5); }
+  html[data-app-shell="1"] .app-shell-kv { margin: 0 0 var(--space-2); font-size: var(--font-size-base); }
+  html[data-app-shell="1"] .app-shell-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-1); }
   html[data-app-shell="1"] .app-shell-row {
     display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 12px; flex-wrap: wrap; padding: 12px 0;
+    gap: var(--space-3); flex-wrap: wrap; padding: var(--space-3) 0;
     border-top: 1px solid var(--border);
   }
-  html[data-app-shell="1"] .app-shell-row-main { flex: 1 1 240px; min-width: 0; font-size: 0.9rem; }
-  html[data-app-shell="1"] .app-shell-row-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  html[data-app-shell="1"] .app-shell-row-main { flex: 1 1 240px; min-width: 0; font-size: var(--font-size-base); }
+  html[data-app-shell="1"] .app-shell-row-controls { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
   html[data-app-shell="1"] .app-shell-chip {
-    display: inline-block; padding: 2px 10px; border-radius: var(--radius-pill);
-    font-size: 0.75rem; font-weight: 600;
+    display: inline-block; padding: var(--space-0-5) var(--space-2-5); border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs); font-weight: 600;
     border: 1px solid var(--border); color: var(--muted);
   }
   html[data-app-shell="1"] .app-shell-chip-ok { color: var(--success); border-color: rgba(52, 199, 89, 0.45); }
   html[data-app-shell="1"] .app-shell-chip-warn { color: var(--warn); border-color: rgba(255, 149, 0, 0.45); }
-  html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: rgba(255, 59, 48, 0.35); }
-  html[data-app-shell="1"] .app-shell-details { margin-top: 10px; font-size: 0.88rem; }
+  html[data-app-shell="1"] .app-shell-danger { color: var(--danger); border-color: var(--color-danger-line); }
+  html[data-app-shell="1"] .app-shell-details { margin-top: var(--space-2-5); font-size: var(--font-size-sm); }
   html[data-app-shell="1"] .app-shell-details summary { cursor: pointer; color: var(--text); }
 
   /* The duplicate toggle (P6-3), right below the rows it applies to and above
@@ -34509,25 +34821,25 @@ ${seoHeadHtml}
      #legacyDedupePanel). The review styles below are shared with the Lists,
      Imports and Channels views. */
   html[data-app-shell="1"] #legacyDedupePanel { display: none; }
-  html[data-app-shell="1"] .app-shell-review { margin-top: 12px; }
+  html[data-app-shell="1"] .app-shell-review { margin-top: var(--space-3); }
   html[data-app-shell="1"] .app-shell-review-row {
     display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.88rem;
+    gap: var(--space-2-5); padding: var(--space-2) 0; border-top: 1px solid var(--border); font-size: var(--font-size-sm);
   }
   html[data-app-shell="1"] .app-shell-review-url {
-    color: var(--muted); font-size: 0.78rem;
+    color: var(--muted); font-size: var(--font-size-xs);
     word-break: break-all; overflow-wrap: anywhere;
   }
   html[data-app-shell="1"] .app-shell-review-bad { color: var(--danger); }
   html[data-app-shell="1"] .app-shell-dedupe {
-    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
-    font-size: 0.92rem; user-select: none; margin: 16px 0 0;
-    padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px;
+    display: flex; align-items: flex-start; gap: var(--space-2-5); cursor: pointer;
+    font-size: var(--font-size-base); user-select: none; margin: var(--space-4) 0 0;
+    padding: var(--space-3-5) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md);
     background: var(--surface);
   }
   /* Sits right above the Daily Randomizer box and matches it. */
-  html[data-app-shell="1"] .app-shell-dedupe .app-shell-muted { margin: 4px 0 0; }
-  html[data-app-shell="1"] .app-shell-dedupe input { margin-top: 2px; cursor: pointer; width: 16px; height: 16px; }
+  html[data-app-shell="1"] .app-shell-dedupe .app-shell-muted { margin: var(--space-1) 0 0; }
+  html[data-app-shell="1"] .app-shell-dedupe input { margin-top: var(--space-0-5); cursor: pointer; width: 16px; height: 16px; }
 
   /* A chip you can press (the Imports and Channels screens). The chosen one
      is highlighted; a disabled one is dimmed. */
@@ -34541,20 +34853,33 @@ ${seoHeadHtml}
 
   /* Import progress (P6-6): how far the server has got, and a heading for the
      blocks under it. */
-  html[data-app-shell="1"] .app-shell-h3 { margin: 14px 0 6px; font-size: 1rem; }
+  html[data-app-shell="1"] .app-shell-h3 { margin: var(--space-3-5) 0 var(--space-1-5); font-size: var(--font-size-md); }
   html[data-app-shell="1"] .app-shell-bar {
-    height: 8px; border-radius: 999px; overflow: hidden;
-    background: var(--panel-strong); border: 1px solid var(--border); margin: 2px 0 8px;
+    height: 8px; border-radius: var(--radius-pill); overflow: hidden;
+    background: var(--panel-strong); border: 1px solid var(--border); margin: var(--space-0-5) 0 var(--space-2);
   }
   html[data-app-shell="1"] .app-shell-bar > span {
-    display: block; height: 100%; background: var(--accent); transition: width 0.3s ease;
+    display: block; height: 100%; background: var(--accent); transition: width var(--duration-slow) ease;
   }
   html[data-app-shell="1"] #appShellImportName, html[data-app-shell="1"] #appShellAddTitlesInput {
-    width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 0.95rem;
+    width: 100%; padding: var(--space-2-5) var(--space-3); border-radius: var(--radius-md);
+    border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: var(--font-size-base);
   }
 
 
+
+  /* Touch targets: on phones the compact controls keep their look but get a
+     44px hit area (WCAG 2.5.5 / HIG) from an invisible extension. */
+  @media (max-width: 640px) {
+    :where(.lc-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, button.modal-close-x, .search-clear-btn, #catalogSearchBtn) { position: relative; }
+    .lc-btn::after, .subnav-pill::after, #catalogSearchBtn::after {
+      content: ""; position: absolute; inset: -7px 0;
+    }
+    .header-icon-btn::after, .header-avatar-btn::after, button.modal-close-x::after, .search-clear-btn::after {
+      content: ""; position: absolute; inset: -4px;
+    }
+    .subnav-pills-bar { padding-top: var(--space-3); padding-bottom: var(--space-4); }
+  }
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
      It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
@@ -34659,9 +34984,6 @@ ${appShellMobileNavHtml}
     })();
   </script>
 
-  <!-- Action Notification Toast -->
-  <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
-
   <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
        (16_client-row-core.js) only when the admin has turned it on. -->
   <div class="support-strip" id="supportStrip" hidden>
@@ -34677,11 +34999,11 @@ ${appShellMobileNavHtml}
 
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
-    <div style="margin-bottom: 20px;">
-      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: 0.9rem;">&larr; Back</button>
+    <div class="u-mb-20px">
+      <button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_base" data-act="navigateBackFromDetail">&larr; Back</button>
     </div>
-    <div class="detail-header-info" style="margin-bottom:14px;">
-      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div class="detail-header-info u-mb-14px">
+      <div class="u-ai-center u-gap-10px u-fw2-wrap" style="display:flex;">
         <!-- A list opened before its own "nice" name is available (e.g. a
              row whose configured name is itself a pasted URL) shows that
              raw URL here. As a flex item, an <h1> defaults to
@@ -34690,33 +35012,33 @@ ${appShellMobileNavHtml}
              can exceed the viewport on mobile, forcing this whole row
              (and the like/+Add buttons with it, via their margin-left:
              auto) past the screen edge instead of wrapping in place. -->
-        <h1 id="detailTitle" style="min-width:0; overflow-wrap:anywhere;">List Title</h1>
-        <div style="display:flex; gap:10px; align-items:center; margin-left:auto;">
+        <h1 id="detailTitle" class="u-minw-0 u-overflowwrap-anywhere">List Title</h1>
+        <div class="u-gap-10px u-ai-center u-ml-auto" style="display:flex;">
           <button type="button" class="lc-btn searchLikeExternalBtn" id="detailLikeBtn" aria-label="Like this list">&#9825;</button>
-          <button type="button" class="lc-btn primary" id="detailAddBtn">+ Add</button>
+          <button type="button" class="lc-btn list-add-btn primary" id="detailAddBtn">+ Add</button>
         </div>
       </div>
-      <p id="detailSubtitle" style="margin-top:4px;">Loading&hellip;</p>
+      <p id="detailSubtitle" class="u-mt-4px">Loading&hellip;</p>
     </div>
     <div id="detailFilterBar" class="detail-filter-bar" style="display:none;">
-      <div id="whFilterControls" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
+      <div id="whFilterControls" class="u-gap-6px u-fw2-wrap u-ai-center" style="display:flex; width:100%;">
         <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
-        <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:0.84rem; color:var(--text); user-select:none;">
-          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
+        <label class="wh-group-shows-toggle u-ai-center u-gap-6px u-ml-8px u-cur-pointer u-fs-v_font_size_sm u-c-v_text u-us-none" style="display:inline-flex;">
+          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" class="u-acc-v_accent u-cur-pointer">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="btn-danger btn-sm" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="margin-left:auto;">Clear History</button>
+        <button type="button" class="btn-danger btn-sm u-ml-auto" id="whClearHistoryBtn" data-act="clearWatchHistoryAll">Clear History</button>
       </div>
-      <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
+      <div id="genericTypeFilterControls" class="u-gap-6px u-fw2-wrap u-ai-center" style="display:none; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
-        <button type="button" class="btn-danger btn-sm" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; margin-left:auto;">Clear All</button>
+        <button type="button" class="btn-danger btn-sm u-ml-auto" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none;">Clear All</button>
       </div>
-      <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
-        <label for="whSortSelect" style="font-size:0.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
+      <div id="whSortControls" class="u-ai-center u-gap-8px" style="display:flex;">
+        <label for="whSortSelect" class="u-fs-v_font_size_xs u-c-v_muted u-fw-700 u-tt-uppercase u-ls-0_02em">Sort</label>
         <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
           <option value="oldest">Oldest Watched</option>
@@ -34726,26 +35048,26 @@ ${appShellMobileNavHtml}
       </div>
     </div>
     <div class="poster-grid-3" id="detailGrid"></div>
-    <p id="detailStatus" style="text-align:center; color:var(--muted); margin-top:14px;"><small>Loading&hellip;</small></p>
+    <p id="detailStatus" class="u-ta-center u-mt-14px" style="color:var(--muted);"><small>Loading&hellip;</small></p>
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
     <button type="button" class="item-back-btn" data-act="navigateBackFromDetail" aria-label="Back">&larr; Back</button>
-    <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
+    <div id="itemDetailsBody" class="u-fd-column u-gap-24px" style="display:flex;">
       <!-- Filled dynamically -->
     </div>
   </div>
 
-  <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
+  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createListModalTitle">Create List</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
-      <div style="margin-bottom: 12px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Save To</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="onChangeCreateListDestination">
+      <div class="u-mb-12px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Save To</label>
+        <select id="createListModalDestination" aria-label="Destination" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act="onChangeCreateListDestination">
           <option value="custom">My Lists (Local / Profile)</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
@@ -34754,202 +35076,202 @@ ${appShellMobileNavHtml}
         </select>
       </div>
       
-      <div style="margin-bottom: 12px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
+      <div class="u-mb-12px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">List Name *</label>
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
-      <div style="margin-bottom: 12px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.9rem; resize:vertical; font-family:inherit;"></textarea>
+      <div class="u-mb-12px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
       
-      <div style="margin-bottom: 14px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
-        <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;">
+      <div class="u-mb-14px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Content Type</label>
+        <select id="createListModalType" aria-label="Content type" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
           <option value="mixed">Mixed (Movies &amp; Shows)</option>
         </select>
       </div>
       
-      <div id="createListModalPublicWrap" style="margin-bottom: 18px;">
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
-          <input type="checkbox" id="createListModalPublic" style="margin-top:3px; flex-shrink:0;">
+      <div id="createListModalPublicWrap" class="u-mb-18px">
+        <label class="u-ai-flex_start u-gap-10px u-cur-pointer" style="display:flex;">
+          <input type="checkbox" id="createListModalPublic" class="u-mt-3px u-fsh-0">
           <div>
-            <span style="font-size:0.92rem; font-weight:600; color:var(--text); display:block;">Make list public</span>
-            <span style="font-size:0.78rem; color:var(--muted); display:block; margin-top:2px; line-height:1.35;">When enabled, this list is visible on your public creator profile and community directory.</span>
+            <span class="u-fs-v_font_size_base u-fw-600 u-c-v_text" style="display:block;">Make list public</span>
+            <span class="u-fs-v_font_size_xs u-c-v_muted u-mt-2px u-lh-1_35" style="display:block;">When enabled, this list is visible on your public creator profile and community directory.</span>
           </div>
         </label>
       </div>
       
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitCreateListModal">Create</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="createListModalBtn" style="opacity:0.5;" disabled data-act="submitCreateListModal">Create</button>
       </div>
     </div>
   </div>
 
   <!-- Add Catalog Modal -->
-  <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">New Catalog</h2>
+  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">New Catalog</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
       </div>
       
-      <div style="margin-bottom: 12px;">
-        <label for="addShelfModalName" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog Name</label>
-        <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="validateAddShelfModal">
+      <div class="u-mb-12px">
+        <label for="addShelfModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Catalog Name</label>
+        <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="validateAddShelfModal">
       </div>
       
-      <div style="margin-bottom: 12px;">
-        <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog URL</label>
+      <div class="u-mb-12px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Catalog URL</label>
         <div id="addShelfModalLinksContainer">
-          <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
+          <div class="add-shelf-link-row u-ai-center u-gap-8px u-mb-8px" style="display:flex;">
+            <input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
-        <button type="button" class="lc-btn secondary" style="width: 100%; font-size: 0.84rem; padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
-        <small style="display:block; color:var(--muted); font-size:0.78rem; margin-top:4px;">Combine multiple list URLs into a single catalog row on your home screen.</small>
+        <button type="button" class="lc-btn secondary u-fs-v_font_size_sm u-p-6px_12px u-mt-4px" style="width:100%;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
+        <small class="u-c-v_muted u-fs-v_font_size_xs u-mt-4px" style="display:block;">Combine multiple list URLs into a single catalog row on your home screen.</small>
       </div>
       
-      <div style="margin-bottom: 16px;">
-        <label for="addShelfModalType" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act="validateAddShelfModal">
+      <div class="u-mb-16px">
+        <label for="addShelfModalType" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Content Type</label>
+        <select id="addShelfModalType" aria-label="Catalog type" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
       </div>
       
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="appActHideAddShelfModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="addShelfModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitAddShelfModal">Add Catalog</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="addShelfModalBtn" style="opacity:0.5;" disabled data-act="submitAddShelfModal">Add Catalog</button>
       </div>
     </div>
   </div>
 
   <!-- Import List Modal -->
-  <div id="importListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import List from Link</h2>
+  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import List from Link</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportListModal">&#x2715;</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
-      <div style="margin-bottom: 12px;">
-        <label for="modalCustomListImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List URL</label>
-        <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <div class="u-mb-12px">
+        <label for="modalCustomListImportUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">List URL</label>
+        <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
       </div>
-      <div style="margin-bottom: 14px;">
-        <label for="modalCustomListImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name (Optional)</label>
-        <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+      <div class="u-mb-14px">
+        <label for="modalCustomListImportNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">List Name (Optional)</label>
+        <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
       </div>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:18px;">
+      <label class="u-ai-center u-gap-8px u-cur-pointer u-mb-18px" style="display:flex;">
         <input type="checkbox" id="modalCustomListImportSyncCheck" checked>
-        <span style="font-size:0.85rem; color:var(--text);">Keep custom list synced with external link</span>
+        <span class="u-fs-v_font_size_sm u-c-v_text">Keep custom list synced with external link</span>
       </label>
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeImportListModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="modalCustomListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import List</button>
+        <button type="button" class="lc-btn primary u-minw-90px" id="modalCustomListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import List</button>
       </div>
     </div>
   </div>
 
   <!-- Import Channel Modal -->
-  <div id="importChannelModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 440px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Import Channel</h2>
+  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-440px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Channel</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportChannelModal">&#x2715;</button>
       </div>
 
       <!-- Segmented Mode Selector: From Link vs From Share Code -->
-      <div class="subnav-pills-bar" id="importChannelModePills" style="margin-bottom: 14px; gap: 6px; padding: 0;">
+      <div class="subnav-pills-bar u-mb-14px u-gap-6px u-p-0" id="importChannelModePills">
         <button type="button" class="subnav-pill active" id="importChannelModeLinkBtn" data-act="switchImportChannelMode" data-act-args="[&quot;link&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> From List Link</button>
         <button type="button" class="subnav-pill" id="importChannelModeCodeBtn" data-act="switchImportChannelMode" data-act-args="[&quot;code&quot;,&quot;@self&quot;]">From Share Code</button>
       </div>
 
       <!-- Mode 1: From List Link -->
       <div id="importChannelPanelLink">
-        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
-        <div style="margin-bottom: 12px;">
-          <label for="modalChannelImportUrlInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Show List URL</label>
-          <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
+        <div class="u-mb-12px">
+          <label for="modalChannelImportUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Show List URL</label>
+          <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
-        <div style="margin-bottom: 12px;">
-          <label for="modalChannelImportNameInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Name</label>
-          <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        <div class="u-mb-12px">
+          <label for="modalChannelImportNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Channel Name</label>
+          <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
-        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:18px;">
-          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked style="margin-top:2px;">
-          <span style="font-size:0.82rem; color:var(--text); line-height:1.35;">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
+        <label class="u-ai-flex_start u-gap-8px u-cur-pointer u-mb-18px" style="display:flex;">
+          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked class="u-mt-2px">
+          <span class="u-fs-v_font_size_sm u-c-v_text u-lh-1_35">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
         </label>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
-          <button type="button" class="lc-btn primary" id="modalChannelImportBtn" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import Channel</button>
+          <button type="button" class="lc-btn primary u-minw-90px" id="modalChannelImportBtn" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import Channel</button>
         </div>
       </div>
 
       <!-- Mode 2: From Share Code -->
       <div id="importChannelPanelCode" style="display:none;">
-        <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem; line-height:1.4;">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
-        <div style="margin-bottom: 14px;">
-          <label for="modalChannelShareCodeInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Share Link or Code</label>
-          <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem; box-sizing:border-box;">
+        <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
+        <div class="u-mb-14px">
+          <label for="modalChannelShareCodeInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Channel Share Link or Code</label>
+          <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
-        <div id="modalChannelShareImportStatus" style="margin-bottom:14px; font-size:0.85rem;"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <div id="modalChannelShareImportStatus" class="u-mb-14px u-fs-v_font_size_sm"></div>
+        <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
-          <button type="button" class="lc-btn primary" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Add Channel</button>
+          <button type="button" class="lc-btn primary u-minw-90px" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add Channel</button>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="selectListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index: 10001; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
-    <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-maxh-85vh" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <div>
-          <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Add / Remove from Lists</h2>
-          <p style="margin:4px 0 0; font-size:0.85rem; color:var(--muted);">Check to add, uncheck to remove.</p>
+          <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Add / Remove from Lists</h2>
+          <p class="u-m-4px_0_0 u-fs-v_font_size_sm u-c-v_muted">Check to add, uncheck to remove.</p>
         </div>
         <button type="button" class="modal-close-x" aria-label="Close" id="selectListModalCloseBtn">&#x2715;</button>
       </div>
-      <div id="selectListModalBody" style="display: flex; flex-direction: column; gap: 0; max-height: 55vh; overflow-y: auto; margin-bottom: 18px; padding-right: 4px;">
+      <div id="selectListModalBody" class="u-fd-column u-gap-0 u-maxh-55vh u-ovy-auto u-mb-18px u-pr-4px" style="display:flex;">
         <!-- Filled dynamically -->
       </div>
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" data-act="closeSelectListModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="addSelectedListsBtn" style="min-width: 90px;">Done</button>
+        <button type="button" class="lc-btn primary u-minw-90px" id="addSelectedListsBtn">Done</button>
       </div>
     </div>
   </div>
 
   <!-- Trakt Device Activation Modal -->
-  <div id="traktDeviceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index: 10002; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; text-align: center;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text);">Connect Trakt</h2>
+  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index:10002; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-24px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-ta-center" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Connect Trakt</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
-      <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
-      <div id="traktDeviceCodeBox" style="background: var(--panel-strong); border: 2px dashed var(--accent); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-        <div id="traktDeviceUserCode" style="font-size: 2rem; font-weight: 800; letter-spacing: 4px; color: var(--accent); font-family: monospace;">LOADING...</div>
+      <div id="traktDeviceCodeBox" class="u-bg-v_panel_strong u-bd-2px_dashed_v_accent u-br-v_radius_md u-p-16px u-mb-16px">
+        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
-        <a id="traktDeviceActivateLink" href="https://trakt.tv/activate" target="_blank" rel="noopener noreferrer" class="lc-btn primary" style="padding: 12px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <div class="u-fd-column u-gap-10px u-mb-16px" style="display:flex;">
+        <a id="traktDeviceActivateLink" href="https://trakt.tv/activate" target="_blank" rel="noopener noreferrer" class="lc-btn primary u-p-12px u-fw-700 u-td-none u-ai-center u-jc-center u-gap-8px" style="display:flex;">
           Open trakt.tv/activate &#x2197;
         </a>
       </div>
 
-      <div id="traktDevicePollingStatus" style="font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <div id="traktDevicePollingStatus" class="u-fs-v_font_size_sm u-ai-center u-jc-center u-gap-8px" style="display:flex; color:var(--muted);">
         Waiting for authorization on Trakt...
       </div>
 
-      <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-mt-18px u-bdt-1px_solid_v_border u-pt-14px">
         <button type="button" class="lc-btn secondary" style="width: 100%;" data-act="closeTraktDeviceModal">Cancel</button>
       </div>
     </div>
@@ -34987,21 +35309,21 @@ if ('serviceWorker' in navigator) {
   <div class="lists-subpanel" id="catalogsSubShelves">
   <!-- Catalogs Management Card -->
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+    <div class="shelf-header u-mb-12px u-ai-center u-jc-space_between u-gap-12px">
       <div>
         <h2 class="shelf-title sr-only">Live Preview &amp; Editor</h2>
-        <p style="margin:0; color:var(--muted); font-size:0.85rem;">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
+        <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
       </div>
-      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0;">
+      <div class="actions u-fd-row u-fw2-wrap u-ai-center u-gap-6px u-fsh-0">
         <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
         <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
         ${refreshButtonHtml('renderLivePreview', 'Refresh catalogs preview')}
       </div>
     </div>
 
-    <div class="row" style="margin-bottom:12px; gap:8px;">
+    <div class="row u-mb-12px u-gap-8px">
       <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
-      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" style="flex:none; width:auto;">
+      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" class="u-flex-none" style="width:auto;">
         <option value="">All groups</option>
       </select>
     </div>
@@ -35014,15 +35336,15 @@ if ('serviceWorker' in navigator) {
     <div id="appShellHomeEditor"></div>
 
     <!-- 24-Hour Randomizer Controls -->
-    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">
-      <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+    <div class="u-mt-16px u-p-12px_16px u-bg-v_surface u-br-v_radius_md u-bd-1px_solid_v_border">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-4px u-ai-center u-gap-6px" style="display:flex;">
         <span>Daily Randomizer</span>
       </div>
       <div>
         <div class="settings-toggle-row">
-          <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle Catalogs daily (every 24h)</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Rotates the order of your catalog rows once every 24 hours.</p>
+          <div class="u-flex-1 u-minw-0 u-pr-12px">
+            <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Shuffle Catalogs daily (every 24h)</span>
+            <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Rotates the order of your catalog rows once every 24 hours.</p>
           </div>
           <label class="ui-toggle" aria-label="Shuffle Catalogs daily (every 24h)">
             <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState">
@@ -35031,9 +35353,9 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div class="settings-toggle-row">
-          <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Shuffle items in Catalogs daily (every 24h)</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Randomizes the order of titles inside each catalog row every 24 hours.</p>
+          <div class="u-flex-1 u-minw-0 u-pr-12px">
+            <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Shuffle items in Catalogs daily (every 24h)</span>
+            <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Randomizes the order of titles inside each catalog row every 24 hours.</p>
           </div>
           <label class="ui-toggle" aria-label="Shuffle items in Catalogs daily (every 24h)">
             <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState">
@@ -35049,12 +35371,6 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 
-  <!-- Undo Toast -->
-  <div id="undoToast" class="undo-toast" style="display:none;">
-    <span id="undoToastMsg"></span>
-    <button type="button" class="secondary" data-act="performUndo">Undo</button>
-  </div>
-
   <!-- Generated Install Link Result Box -->
   <div id="result"></div>
 
@@ -35063,7 +35379,7 @@ if ('serviceWorker' in navigator) {
   <div class="lists-subpanel" id="catalogsSubBulk" style="display:none;">
   <div class="panel bulk-panel">
     <h2 class="panel-title">Bulk Import Lists</h2>
-    <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem; line-height:1.45;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
+    <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm u-lh-1_45">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
     <div class="bulk-provider-badges">
       <span class="bulk-provider-label">Supported:</span>
       <span class="list-source-badge badge-mdblist">MDBList</span>
@@ -35088,7 +35404,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- My Lists Addon Charts Shelf -- this add-on's own charts (MY_LISTS_ADDON_CHARTS, 08). -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">My Lists Addon Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mylists-charts">+ Add all</button>
       </div>
@@ -35098,7 +35414,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Combined Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Combined Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="combined-charts">+ Add all</button>
       </div>
@@ -35108,7 +35424,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- TMDB Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">TMDB Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="tmdb-charts">+ Add all</button>
       </div>
@@ -35118,7 +35434,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Trakt Official Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Trakt Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="trakt-charts">+ Add all</button>
       </div>
@@ -35128,7 +35444,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- MDBList Official Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">MDBList Official</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mdblist-charts">+ Add all</button>
       </div>
@@ -35138,7 +35454,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Simkl Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Simkl Anime &amp; Trending</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="simkl-charts">+ Add all</button>
       </div>
@@ -35148,7 +35464,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Streaming Top 10 Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Streaming Top 10</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-top10">+ Add all</button>
       </div>
@@ -35158,7 +35474,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Streaming Catalogs Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Streaming Catalogs</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-catalogs">+ Add all</button>
       </div>
@@ -35168,7 +35484,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Kids Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Kids</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="kids">+ Add all</button>
       </div>
@@ -35178,7 +35494,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Holidays Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Holidays</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="holidays">+ Add all</button>
       </div>
@@ -35188,7 +35504,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Genres Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Genres</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="genres">+ Add all</button>
       </div>
@@ -35299,12 +35615,12 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+      <div class="shelf-header u-mb-12px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">Your Custom Lists</h2>
-          <p style="margin:0; color:var(--muted); font-size:0.85rem;">Custom lists you've created locally or on your profile.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Custom lists you've created locally or on your profile.</p>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
+        <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
           <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
           ${refreshButtonHtml('appActRefreshCreatorDashboard', 'Refresh lists')}
@@ -35313,48 +35629,48 @@ if ('serviceWorker' in navigator) {
       <div id="creatorDashboard"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-mdblist">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your MDBList Lists</h2>
-        <div style="display:flex; gap:8px;">
+    <div class="panel u-mt-12px" id="myListsSectionPanel-mdblist">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your MDBList Lists</h2>
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" data-act="toggleListsMdblistConnection">Connect MDBList</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected MDBList account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Watch History from your connected MDBList account.</p>
       <div id="myMdblistListsResult"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-trakt">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your Trakt Lists</h2>
-        <div style="display:flex; gap:8px;">
+    <div class="panel u-mt-12px" id="myListsSectionPanel-trakt">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your Trakt Lists</h2>
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" data-act="toggleListsTraktConnection">Connect Trakt</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Trakt account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Watch History from your connected Trakt account.</p>
       <div id="myTraktListsResult"></div>
-      <div id="myPrivateTraktListsResult" style="margin-top:10px;"></div>
+      <div id="myPrivateTraktListsResult" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-tmdb">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your TMDB Lists</h2>
-        <div style="display:flex; gap:8px;">
+    <div class="panel u-mt-12px" id="myListsSectionPanel-tmdb">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your TMDB Lists</h2>
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" data-act="toggleListsTmdbConnection">Connect TMDB</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Favorites from your connected TMDB account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Favorites from your connected TMDB account.</p>
       <div id="myTmdbListsResult"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-simkl">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your Simkl Lists</h2>
-        <div style="display:flex; gap:8px;">
+    <div class="panel u-mt-12px" id="myListsSectionPanel-simkl">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your Simkl Lists</h2>
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" data-act="toggleListsSimklConnection">Connect Simkl</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
       <div id="mySimklListsResult"></div>
     </div>
   </div>
@@ -35371,27 +35687,27 @@ if ('serviceWorker' in navigator) {
            overwrites it on every switch to this tab and is authoritative for
            the empty case -- nothing may read this element's children to decide
            whether the feed has loaded. See switchListsSubmenu. -->
-      <div id="likedListsFeed"><p style="color:var(--muted); font-size:0.88rem;">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p></div>
+      <div id="likedListsFeed"><p class="u-c-v_muted u-fs-v_font_size_sm">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p></div>
     </div>
   </div>
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
+      <div class="shelf-header u-mb-10px">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
       </div>
-      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage titles for this custom list.</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm">Curate, reorder, and manage titles for this custom list.</p>
 
       <!-- 1. List Name & Content Type Header Group -->
-      <div style="display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
-        <div style="flex:1 1 320px; max-width:480px; min-width:0;">
-          <label for="customListNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
-          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.92rem; box-sizing:border-box;">
+      <div class="u-gap-20px u-ai-flex_end u-fw2-wrap u-mb-16px" style="display:flex;">
+        <div class="u-flex-1_1_320px u-maxw-480px u-minw-0">
+          <label for="customListNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">List Name</label>
+          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" class="u-p-9px_14px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
-        <div style="flex:0 0 auto;">
-          <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
-          <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
+        <div class="u-flex-0_0_auto">
+          <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">Content Type</label>
+          <div id="customListTypeToggles" class="u-gap-8px u-ai-center" style="display:flex;">
             <label class="custom-list-type-pill active">
               <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
               <span class="check-icon">&#x2713;</span><span>Movies</span>
@@ -35409,10 +35725,10 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- 2. Public List Toggle -->
-      <div id="customListVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+      <div id="customListVisibilityRow" class="u-p-10px_14px u-bg-v_surface u-bd-1px_solid_v_border u-br-v_radius_md u-jc-space_between u-ai-center u-gap-12px u-mb-16px" style="display:flex;">
         <div>
-          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public List</span>
-          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this list visible on your public creator profile and discoverable in the community directory</p>
+          <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public List</span>
+          <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this list visible on your public creator profile and discoverable in the community directory</p>
         </div>
         <label class="ui-toggle" aria-label="Make list public">
           <input type="checkbox" id="customListPublicToggle" checked>
@@ -35421,43 +35737,43 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- 3. Inline Search & Quick Add Bar -->
-      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
-        <label for="customListSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
-        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
+      <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
+        <label for="customListSearchInput" class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px" style="display:block;">Add Titles to List</label>
+        <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
         <div class="search-input-box">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
-          <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
+          <button type="button" id="customListSearchClearBtn" class="search-clear-btn u-bg-none u-bd-none u-c-v_muted u-cur-pointer u-p-4px" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
         </div>
-        <div id="customListSearchResult" style="margin-top:10px;"></div>
+        <div id="customListSearchResult" class="u-mt-10px"></div>
       </div>
 
       <!-- 4. Picks in This List -->
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; margin-bottom:8px;">
-        <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
-          Picks in this list <span id="customListDraftCount" style="font-weight:normal; font-size:0.8rem; color:var(--muted);">(0 items)</span>
+      <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px u-mt-8px u-mb-8px" style="display:flex;">
+        <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
+          Picks in this list <span id="customListDraftCount" class="u-fw-normal u-fs-v_font_size_sm u-c-v_muted">(0 items)</span>
         </div>
-        <div class="actions" id="customListDraftActions" style="margin:0; gap:8px; display:none;">
-          <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft" style="font-size:0.8rem;">Shuffle Picks Now</button>
-          <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25); font-size:0.8rem;" data-act="removeAllCustomListDraftPicks">Remove All</button>
+        <div class="actions u-m-0 u-gap-8px" id="customListDraftActions" style="display:none;">
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_sm" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
+          <button type="button" class="secondary lc-btn u-c-v_danger u-bdc-rgba_255_59_48_0_25 u-fs-v_font_size_sm" data-act="removeAllCustomListDraftPicks">Remove All</button>
         </div>
       </div>
       <div id="customListDraftList">
-        <p style="color:var(--muted); font-size:0.85rem;"><small>No items in this list yet &mdash; search above or tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>
+        <p class="u-c-v_muted u-fs-v_font_size_sm"><small>No items in this list yet &mdash; search above or tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>
       </div>
 
       <!-- 5. Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:16px; border:1px solid var(--border); border-radius:10px; padding:12px 16px; background:var(--surface); box-shadow:var(--shadow-sm);">
-        <summary style="font-weight:600; font-size:0.88rem; cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
+      <details class="channel-advanced-details u-mt-16px u-bd-1px_solid_v_border u-br-v_radius_md u-p-12px_16px u-bg-v_surface u-bsh-v_shadow_sm">
+        <summary class="u-fw-600 u-fs-v_font_size_sm u-cur-pointer u-us-none u-c-v_text u-ai-center u-jc-space_between" style="display:flex;">
           <span>Advanced Settings</span>
-          <span style="font-size:0.75rem; color:var(--muted); font-weight:normal;">Play order &amp; watch history rules</span>
+          <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order &amp; watch history rules</span>
         </summary>
-        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="customListPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap; color:var(--text);">Play order:</label>
-            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="max-width:320px; font-size:0.86rem; padding:7px 12px; background:var(--surface); color:var(--text); border:1.5px solid var(--border-strong); border-radius:var(--radius-pill);">
+        <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
+          <div class="u-ai-center u-gap-10px u-mb-6px u-fw2-wrap" style="display:flex;">
+            <label for="customListPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap u-c-v_text">Play order:</label>
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-maxw-320px u-fs-v_font_size_sm u-p-7px_12px u-bg-v_surface u-c-v_text u-bd-1_5px_solid_v_border_strong u-br-v_radius_pill">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -35465,12 +35781,12 @@ if ('serviceWorker' in navigator) {
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="customListPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:0.78rem;">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="customListPlayOrderHint" class="u-m-0_0_14px u-fs-v_font_size_xs" style="color:var(--muted);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+          <div class="u-jc-space_between u-ai-center u-gap-12px u-mt-12px u-pt-10px u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08" style="display:flex;">
             <div>
-              <span style="font-size:0.86rem; font-weight:600; color:var(--text);">Hide watched</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Skip items already in your watch history (requires Auto-track playback signed in)</p>
+              <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Hide watched</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Skip items already in your watch history (requires Auto-track playback signed in)</p>
             </div>
             <label class="ui-toggle" aria-label="Hide watched items">
               <input type="checkbox" id="customListHideWatchedCheck">
@@ -35481,9 +35797,9 @@ if ('serviceWorker' in navigator) {
       </details>
 
       <!-- 6. Bottom Action Bar -->
-      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+      <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
-        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Create List</button>
+        <button type="button" class="primary lc-btn u-p-8px_24px u-fw-600" id="customListSaveBtn" data-act="saveCustomList">Create List</button>
       </div>
     </div>
   </div>
@@ -35491,20 +35807,20 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 7: Import list from a Link -->
   <div class="lists-subpanel" id="listsSubImport" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
+      <div class="shelf-header u-mb-10px">
         <h2 class="shelf-title">Import list from a link</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
       <div class="row">
         <input type="text" id="customListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL">
       </div>
-      <div class="row" style="margin-top:8px;">
+      <div class="row u-mt-8px">
         <input type="text" id="customListImportNameInput" placeholder="Name (e.g. My Favorites)">
         <button type="button" class="secondary" id="customListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import list</button>
       </div>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
+      <label class="u-ai-center u-gap-8px u-cur-pointer u-mt-10px" style="display:flex;">
         <input type="checkbox" id="customListImportSyncCheck" checked>
-        <span style="font-size:0.85rem;">Keep custom list synced with external link</span>
+        <span class="u-fs-v_font_size_sm">Keep custom list synced with external link</span>
       </label>
     </div>
 
@@ -35530,15 +35846,15 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
   <div class="channels-subpanel" id="channelsSubStorylines" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Storylines, Sagas &amp; Universes</h2>
-        <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem; line-height:1.4;">
+        <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">
           Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
         </p>
       </div>
 
       <!-- Category Filter Tabs -->
-      <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px;">
+      <div class="subnav-pills-bar u-mb-16px" id="storylineCategoryFilterBar">
         <button type="button" class="subnav-pill active" data-act="filterStorylinesCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All Sagas</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;moviesagas&quot;,&quot;@self&quot;]">Movie Sagas (3+ Films)</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;tvuniverses&quot;,&quot;@self&quot;]">TV Universes &amp; Bridges</button>
@@ -35547,32 +35863,32 @@ if ('serviceWorker' in navigator) {
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;animation&quot;,&quot;@self&quot;]">Animation &amp; Anime</button>
       </div>
 
-      <div id="storylinesUniverseList" style="display:flex; flex-direction:column; gap:16px;"></div>
+      <div id="storylinesUniverseList" class="u-fd-column u-gap-16px" style="display:flex;"></div>
     </div>
   </div>
 
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
+      <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">My Channels</h2>
-          <p style="margin:0; color:var(--muted); font-size:0.85rem;">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <div class="u-gap-8px u-fw2-wrap u-ai-center" style="display:flex;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
           <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ Create Channel</button>
           <button type="button" class="secondary lc-btn" data-act="openImportChannelModal" title="Import channel from link or share code">Import</button>
           ${refreshButtonHtml('refreshMyChannelsAction', 'Refresh channels')}
         </div>
       </div>
-      <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
-      <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <div id="channelNextUpStatus" class="u-mb-8px"></div>
+      <div class="row u-mb-10px u-gap-8px" id="myChannelsToolbar">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
         </div>
-        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -35580,35 +35896,35 @@ if ('serviceWorker' in navigator) {
           <option value="manual">My order (drag to arrange)</option>
         </select>
       </div>
-      <div id="myChannelsUndoBar" style="display:none; margin-bottom:10px;"></div>
-      <div id="myCreatedChannelsList"><p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
+      <div id="myChannelsUndoBar" class="u-mb-10px" style="display:none;"></div>
+      <div id="myCreatedChannelsList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
-      <div class="shelf-header" style="margin-bottom:8px;">
+    <div class="panel u-mt-12px">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Merge Saved Channels into One Catalog</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
       
-      <div id="savedMergedChannelsSection" style="margin-bottom:16px;">
+      <div id="savedMergedChannelsSection" class="u-mb-16px">
         <div id="savedMergedChannelsList"></div>
       </div>
 
-      <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
-        <div class="shelf-header" style="margin-bottom:8px;">
-          <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog or Channel</h3>
+      <div class="u-bdt-1px_solid_v_border u-pt-12px u-mt-12px">
+        <div class="shelf-header u-mb-8px">
+          <h3 class="u-fs-v_font_size_base u-fw-700 u-m-0">Create Merged Catalog or Channel</h3>
         </div>
-        <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
-          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
+        <div id="channelMergeSelectAllWrap" class="actions u-mb-8px u-jc-flex_end" style="display:none;">
+          <label class="u-ai-center u-gap-6px u-cur-pointer u-fs-v_font_size_sm u-us-none" style="display:flex;">
             <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
-        <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
-        <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
-          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
-          <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
-          <button type="button" class="secondary lc-btn" data-act="combineChannelsIntoChannel" data-act-args="[&quot;@self&quot;]" title="Make a new channel with every episode of the checked channels, duplicates left out" style="border-radius:var(--radius-pill);">Combine into one channel</button>
+        <div id="channelMergeList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No saved channels yet.</small></p></div>
+        <div class="row u-mt-10px u-gap-8px" id="channelMergeControls" style="display:none;">
+          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" class="u-maxw-380px u-br-v_radius_pill" style="width:100%;">
+          <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="mergeChannelsIntoRow">Merge into catalog</button>
+          <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="combineChannelsIntoChannel" data-act-args="[&quot;@self&quot;]" title="Make a new channel with every episode of the checked channels, duplicates left out">Combine into one channel</button>
         </div>
       </div>
     </div>
@@ -35617,13 +35933,13 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 2: Quick Add Popular Networks -->
   <div class="channels-subpanel" id="channelsSubQuickAdd" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
-      <div class="channel-quick-sections" style="display:flex; flex-direction:column; gap:16px; margin-top:14px;">
+      <div class="channel-quick-sections u-fd-column u-gap-16px u-mt-14px" style="display:flex;">
         <div>
-          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Major Broadcast</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Major Broadcast</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="ABC" data-networkid="2">ABC</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="CBS" data-networkid="16">CBS</button>
@@ -35635,7 +35951,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Cable &amp; Premium Drama</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Cable &amp; Premium Drama</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="AMC" data-networkid="174">AMC</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Comedy Central" data-networkid="47">Comedy Central</button>
@@ -35649,7 +35965,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Animation &amp; Kids</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Animation &amp; Kids</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Adult Swim" data-networkid="80">Adult Swim</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Cartoon Network" data-networkid="56">Cartoon Network</button>
@@ -35659,7 +35975,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Documentary &amp; Lifestyle</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Documentary &amp; Lifestyle</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Discovery" data-networkid="64">Discovery</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Food Network" data-networkid="143">Food Network</button>
@@ -35670,7 +35986,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Classics &amp; Variety</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Classics &amp; Variety</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="A&amp;E" data-networkid="129">A&amp;E</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Hallmark Channel" data-networkid="384">Hallmark Channel</button>
@@ -35680,25 +35996,25 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
       </div>
-      <div id="channelQuickAddStatus" style="margin-top:8px;"></div>
+      <div id="channelQuickAddStatus" class="u-mt-8px"></div>
     </div>
   </div>
 
   <!-- Submenu: Explore Channels (the community directory) -->
   <div class="channels-subpanel" id="channelsSubExplore" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Explore Channels</h2>
-        <p style="margin:0; color:var(--muted); font-size:0.85rem;">
+        <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">
           24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
         </p>
       </div>
-      <div class="row" style="margin-bottom:10px; gap:8px; align-items:center;">
-        <div class="search-input-box" style="flex:1;">
+      <div class="row u-mb-10px u-gap-8px u-ai-center">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="renderChannelDirectory">
+          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
         </div>
-        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
+        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="newest">Newest</option>
           <option value="added">Most added</option>
           <option value="liked">Most liked</option>
@@ -35706,63 +36022,63 @@ if ('serviceWorker' in navigator) {
         </select>
         ${refreshButtonHtml('loadChannelDirectory', 'Refresh published channels', [true])}
       </div>
-      <div id="channelDirectoryFeed"><p style="color:var(--muted); font-size:0.85rem;"><small>Loading published channels&hellip;</small></p></div>
+      <div id="channelDirectoryFeed"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>Loading published channels&hellip;</small></p></div>
     </div>
   </div>
 
   <!-- Submenu 3: Import & Merge Tools -->
   <div class="channels-subpanel" id="channelsSubImport" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Import channel from a link</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a TV channel catalog.</p>
-      <div class="row" style="margin-bottom:8px;">
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a TV channel catalog.</p>
+      <div class="row u-mb-8px">
         <input type="text" id="channelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL">
       </div>
       <div class="row">
         <input type="text" id="channelImportNameInput" placeholder="Channel name (e.g. Sitcom Central)">
         <button type="button" class="secondary" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import channel</button>
       </div>
-      <label class="channel-rule-row" style="margin-top:10px;">
+      <label class="channel-rule-row u-mt-10px">
         <input type="checkbox" id="channelImportLiveSyncCheck" checked>
         <span>Live Cloud Sync &mdash; keep this channel following the list instead of taking a one-time snapshot</span>
       </label>
-      <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">The channel remembers the list URL and rebuilds its pool in the background, so titles the list gains turn up here on their own.</p>
+      <p class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">The channel remembers the list URL and rebuilds its pool in the background, so titles the list gains turn up here on their own.</p>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
-      <div class="shelf-header" style="margin-bottom:8px;">
+    <div class="panel u-mt-12px">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Add a shared channel</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
       <div class="row">
         <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]">
         <button type="button" class="secondary" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add channel</button>
       </div>
-      <div id="channelShareImportStatus" style="margin-top:8px;"></div>
+      <div id="channelShareImportStatus" class="u-mt-8px"></div>
     </div>
   </div>
 
   <!-- Custom Channel Builder / Editor -->
   <div class="channels-subpanel" id="channelsSubBuild" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
+      <div class="shelf-header u-mb-10px">
         <h2 class="shelf-title" id="channelEditorTitle">Create a Custom Channel</h2>
       </div>
-      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage picks for this custom channel.</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm">Curate, reorder, and manage picks for this custom channel.</p>
 
       <!-- 1. Channel Name -->
-      <div style="margin-bottom:16px; max-width:480px;">
-        <label for="channelNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Channel Name</label>
+      <div class="u-mb-16px u-maxw-480px">
+        <label for="channelNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">Channel Name</label>
         <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)">
       </div>
 
       <!-- 2. Public Channel Toggle -->
-      <div id="channelVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+      <div id="channelVisibilityRow" class="u-p-10px_14px u-bg-v_surface u-bd-1px_solid_v_border u-br-v_radius_md u-jc-space_between u-ai-center u-gap-12px u-mb-16px" style="display:flex;">
         <div>
-          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public Channel</span>
-          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this channel visible on your public creator profile and discoverable in the community directory</p>
+          <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public Channel</span>
+          <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this channel visible on your public creator profile and discoverable in the community directory</p>
         </div>
         <label class="ui-toggle" aria-label="Make channel public">
           <input type="checkbox" id="channelPublicToggle" checked>
@@ -35771,16 +36087,16 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- 3. Search & Add Titles -->
-      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
-        <label for="channelSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to Channel</label>
-        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search any TV show or movie to add to your channel.</p>
-      <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
+      <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
+        <label for="channelSearchInput" class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px" style="display:block;">Add Titles to Channel</label>
+        <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search any TV show or movie to add to your channel.</p>
+      <div class="subnav-pills-bar u-mb-10px" id="channelSearchTypeChips">
         <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
         <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
-      <div class="row" style="gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <div class="row u-gap-8px">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
         </div>
@@ -35789,47 +36105,47 @@ if ('serviceWorker' in navigator) {
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
 
-      <div id="channelCrossoverSuggestions" style="display:none; margin-top:14px;"></div>
+      <div id="channelCrossoverSuggestions" class="u-mt-14px" style="display:none;"></div>
       </div>
 
-      <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
-      <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;"></div>
-      <div class="row" style="margin-bottom:8px; gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <p class="u-mt-14px u-mb-6px u-fw-600 u-fs-v_font_size_sm">Picks in this channel: <span id="channelDraftCountBadge" class="u-c-v_muted u-fw-500"></span></p>
+      <div id="channelDraftStats" class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_xs"></div>
+      <div class="row u-mb-8px u-gap-8px">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
         </div>
-        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
+        <button type="button" class="secondary lc-btn u-flex-none u-ws-nowrap" id="channelDraftSelectModeBtn" style="width:auto;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
-      <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
-        <span id="channelDraftSelectionCount" style="font-size:0.8rem; font-weight:600;">0 selected</span>
+      <div id="channelDraftBulkBar" class="u-fw2-wrap u-gap-6px u-ai-center u-mb-8px u-p-8px u-bd-1px_solid_v_border u-br-v_radius_sm u-bg-v_surface" style="display:none;">
+        <span id="channelDraftSelectionCount" class="u-fs-v_font_size_sm u-fw-600">0 selected</span>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[true]">Select shown</button>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[false]">Clear</button>
-        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" class="u-fs-v_font_size_sm u-p-5px_8px u-bg-v_bg u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">
           <option value="">Select a whole show or season&hellip;</option>
         </select>
-        <span style="flex:1;"></span>
+        <span class="u-flex-1"></span>
         <button type="button" class="secondary lc-btn" data-act="pairChannelDraftSelection" title="Play these picks back to back, in this order">Pair</button>
         <button type="button" class="secondary lc-btn" data-act="unpairChannelDraftSelection" title="Drop any hand-made pairing on these picks">Unpair</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;top&quot;]">To top</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;bottom&quot;]">To bottom</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeChannelDraftSelection">Remove selected</button>
+        <button type="button" class="secondary lc-btn u-c-v_danger u-bdc-rgba_255_59_48_0_25" data-act="removeChannelDraftSelection">Remove selected</button>
       </div>
-      <div id="channelDraftList"><p style="color:var(--muted); font-size:0.85rem;"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
-      <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
+      <div id="channelDraftList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
+      <div class="actions u-mt-8px u-jc-flex_start u-gap-8px">
         <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
+        <button type="button" class="secondary lc-btn u-c-v_danger u-bdc-rgba_255_59_48_0_25" data-act="removeAllChannelDraftPicks">Remove All</button>
       </div>
       <!-- Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:14px; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface);">
-        <summary style="font-weight:600; font-size:0.88rem; cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
+      <details class="channel-advanced-details u-mt-14px u-bd-1px_solid_v_border u-br-v_radius_sm u-p-10px_14px u-bg-v_surface">
+        <summary class="u-fw-600 u-fs-v_font_size_sm u-cur-pointer u-us-none u-c-v_text u-ai-center u-jc-space_between" style="display:flex;">
           <span>Advanced Settings</span>
-          <span style="font-size:0.75rem; color:var(--muted); font-weight:normal;">Play order, rotation &amp; broadcast schedule</span>
+          <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order, rotation &amp; broadcast schedule</span>
         </summary>
-        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="channelPlayOrderSelect" style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:0.85rem; padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
+          <div class="u-ai-center u-gap-8px u-mb-6px u-fw2-wrap" style="display:flex;">
+            <label for="channelPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap">Play order:</label>
+            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-flex-1 u-minw-210px u-fs-v_font_size_sm u-p-6px_10px u-bg-v_surface u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -35839,16 +36155,16 @@ if ('serviceWorker' in navigator) {
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="channelPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:0.78rem;">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="channelPlayOrderHint" class="u-m-0_0_14px u-fs-v_font_size_xs" style="color:var(--muted);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <!-- Broadcast schedule & smart rules -->
-          <div style="border-top:1px solid var(--border); padding-top:12px;">
-            <p style="margin:0 0 8px; font-weight:600; font-size:0.85rem;">Broadcast schedule</p>
+          <div class="u-bdt-1px_solid_v_border u-pt-12px">
+            <p class="u-m-0_0_8px u-fw-600 u-fs-v_font_size_sm">Broadcast schedule</p>
             <label class="channel-rule-row">
               <input type="checkbox" id="channelDailyRotateCheck" data-act="updateChannelBroadcastControls">
               <span>Daily Broadcast Schedule &mdash; run a fresh lineup out of these picks every day</span>
             </label>
-            <div id="channelDailyRotateDials" style="display:none; margin:8px 0 0 24px; flex-wrap:wrap; gap:10px;">
+            <div id="channelDailyRotateDials" class="u-m-8px_0_0_24px u-fw2-wrap u-gap-10px" style="display:none;">
               <label class="channel-dial">Shows per day
                 <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" data-act="updateChannelBroadcastControls">
               </label>
@@ -35865,67 +36181,67 @@ if ('serviceWorker' in navigator) {
                 </select>
               </label>
             </div>
-            <p id="channelDailyRotateHint" style="margin:6px 0 0 24px; color:var(--muted); font-size:0.78rem;">Off &mdash; every pick in this channel plays, in the order above.</p>
+            <p id="channelDailyRotateHint" class="u-m-6px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Off &mdash; every pick in this channel plays, in the order above.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelHideWatchedCheck">
               <span>Hide watched &mdash; skip episodes already in my watch history</span>
             </label>
-            <p style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
+            <p class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
-            <p id="channelPairPartsHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
+            <p id="channelPairPartsHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
               <span>Automatically add new episodes</span>
             </label>
-            <div id="channelNewEpisodesRow" style="display:none; margin:6px 0 0 24px;">
+            <div id="channelNewEpisodesRow" class="u-m-6px_0_0_24px" style="display:none;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelNewEpisodesTopCheck">
                 <span>Put new episodes at the top</span>
               </label>
             </div>
-            <p id="channelAutoNewEpisodesHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;">Off &mdash; this channel plays the picks below and nothing else.</p>
+            <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);">Off &mdash; this channel plays the picks below and nothing else.</p>
 
-            <div id="channelLiveSyncRow" style="display:none; margin-top:10px;">
+            <div id="channelLiveSyncRow" class="u-mt-10px" style="display:none;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelLiveSyncCheck">
                 <span>Live Cloud Sync &mdash; refresh this channel from its source list</span>
               </label>
-              <p id="channelLiveSyncHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:0.78rem;"></p>
+              <p id="channelLiveSyncHint" class="u-m-2px_0_0_24px u-fs-v_font_size_xs" style="color:var(--muted);"></p>
             </div>
 
-            <div id="channelStoryLockSection" style="margin-top:12px;"></div>
+            <div id="channelStoryLockSection" class="u-mt-12px"></div>
           </div>
         </div>
       </details>
 
       <!-- Channel Poster Selection Section -->
-      <div id="channelPosterPickerSection" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px; display:none;">
-        <p style="margin:0 0 4px; font-weight:600; font-size:0.85rem;">Channel Poster:</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:0.8rem;">Choose a show poster (ranked by most episodes) or choose our custom channel poster.</p>
-        <div id="channelPosterChoicesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:10px;"></div>
-        <div style="margin-top:12px;">
-          <p style="margin:0 0 6px; font-size:0.8rem; font-weight:600; color:var(--muted);">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
-          <div class="row" style="gap:8px;">
-            <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" style="flex:1; font-size:0.82rem;">
-            <button type="button" class="secondary" style="white-space:nowrap; font-size:0.82rem;" data-act="applyChannelPosterUrl">Use This</button>
+      <div id="channelPosterPickerSection" class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px" style="display:none;">
+        <p class="u-m-0_0_4px u-fw-600 u-fs-v_font_size_sm">Channel Poster:</p>
+        <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Choose a show poster (ranked by most episodes) or choose our custom channel poster.</p>
+        <div id="channelPosterChoicesGrid" class="u-gtc-repeat_auto_fill_minmax_90px_1fr u-gap-10px" style="display:grid;"></div>
+        <div class="u-mt-12px">
+          <p class="u-m-0_0_6px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
+          <div class="row u-gap-8px">
+            <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" class="u-flex-1 u-fs-v_font_size_sm">
+            <button type="button" class="secondary u-ws-nowrap u-fs-v_font_size_sm" data-act="applyChannelPosterUrl">Use This</button>
           </div>
-          <div id="channelPosterUrlPreview" style="margin-top:8px; align-items:center; gap:10px; display:none;">
-            <img id="channelPosterUrlImg" src="" alt="Poster preview" style="width:54px; height:80px; object-fit:cover; border-radius:4px; border:2px solid var(--accent);" loading="lazy">
-            <span id="channelPosterUrlStatus" style="font-size:0.78rem; color:var(--muted);"></span>
+          <div id="channelPosterUrlPreview" class="u-mt-8px u-ai-center u-gap-10px" style="display:none;">
+            <img id="channelPosterUrlImg" src="" alt="Poster preview" class="u-objectfit-cover u-br-v_radius_xs u-bd-2px_solid_v_accent" style="width:54px; height:80px;" loading="lazy">
+            <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
           </div>
         </div>
       </div>
 
       <!-- Bottom Action Bar -->
-      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+      <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="channelCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditChannel">Cancel</button>
-        <button type="button" class="primary lc-btn" id="channelSaveBtn" data-act="saveChannel" style="padding:8px 24px; font-weight:600;">Create Channel</button>
+        <button type="button" class="primary lc-btn u-p-8px_24px u-fw-600" id="channelSaveBtn" data-act="saveChannel">Create Channel</button>
       </div>
     </div>
   </div>
@@ -35933,14 +36249,14 @@ if ('serviceWorker' in navigator) {
 
 <div class="tab-panel" data-tab-panel="search" id="content-search" role="tabpanel" aria-labelledby="tab-desktop-search" hidden>
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px;">
+    <div class="shelf-header u-mb-12px">
       <h2 class="shelf-title">Search Movies, TV Shows &amp; Lists</h2>
     </div>
     
     <div class="search-input-wrapper">
       <div class="search-input-box">
         <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." style="width:100%; padding-left:38px; padding-right:38px;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." class="u-pl-38px u-pr-38px" style="width:100%;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
         <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">
           <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" /></svg>
         </button>
@@ -35948,14 +36264,14 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div class="search-filters-toolbar">
-      <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin:0; width:auto; padding:0; flex-shrink:0;">
+      <div class="subnav-pills-bar u-m-0 u-p-0 u-fsh-0" id="catalogSearchTypeChips" style="width:auto;">
         <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
         <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
         <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
       </div>
 
       <!-- Quick Filter Dropdowns for Movies & Shows -->
-      <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin:0; align-items:center;">
+      <div id="catalogSearchFiltersRow" class="u-fw2-wrap u-gap-8px u-m-0 u-ai-center" style="display:flex;">
         <select id="catalogSearchGenreSelect" class="search-filter-select" aria-label="Filter by genre" data-act="applySearchFilters">
           <option value="">All Genres</option>
           <option value="28,10759">Action &amp; Adventure</option>
@@ -35997,7 +36313,7 @@ if ('serviceWorker' in navigator) {
           <option value="5.0">5.0+ ⭐</option>
         </select>
 
-        <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:0.8rem; padding:4px 10px; min-height:30px; height:30px; border-radius:var(--radius-pill); display:none;">Reset</button>
+        <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn u-fs-v_font_size_sm u-p-4px_10px u-minh-30px u-br-v_radius_pill" data-act="resetSearchFilters" style="height:30px; display:none;">Reset</button>
       </div>
     </div>
     <!-- Where the lists come from, and in what order: the chips
@@ -36018,7 +36334,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
 
-    <div id="catalogSearchResult" style="margin-top:14px;"></div>
+    <div id="catalogSearchResult" class="u-mt-14px"></div>
   </div>
 </div>
 <div class="tab-panel" data-tab-panel="settings" id="content-settings" role="tabpanel" aria-labelledby="tab-desktop-settings" hidden>
@@ -36035,45 +36351,45 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 2: Presets & Backup -->
   <div class="settings-subpanel" id="settingsSubBackup" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-        <h2 class="shelf-title" style="margin:0;">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+      <div class="shelf-header u-mb-10px u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px" style="display:flex;">
+        <h2 class="shelf-title u-m-0">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
         <div>
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:6px 14px; font-size:0.82rem;">Upload preset file</button>
+          <button type="button" class="secondary lc-btn u-ws-nowrap u-p-6px_14px u-fs-v_font_size_sm" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]">Upload preset file</button>
           <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
         </div>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Save your current setup as a named preset to reuse or download as a file.</p>
-      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; max-width:540px;">
-        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1; min-width:0; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem;">
-        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 18px;">Save preset</button>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Save your current setup as a named preset to reuse or download as a file.</p>
+      <div class="preset-create-group u-gap-8px u-ai-stretch u-mb-10px u-maxw-540px" style="display:flex;">
+        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" class="u-flex-1 u-minw-0 u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base">
+        <button type="button" class="primary lc-btn u-ws-nowrap u-p-0_18px" data-act="saveCurrentAsPreset">Save preset</button>
       </div>
-      <div id="presetsList" style="margin-top:10px;"></div>
+      <div id="presetsList" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Backup &amp; Restore</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       
       <div class="backup-quick-grid">
-        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+        <div class="u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px_18px u-bg-v_surface u-bsh-v_shadow_sm u-fd-column u-jc-space_between u-gap-12px" style="display:flex;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Download Backup
             </div>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
           </div>
-          <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
+          <button type="button" class="secondary lc-btn u-as-flex_start u-p-8px_18px u-fw-600" data-act="downloadConfigJson">Download Backup File</button>
         </div>
 
-        <div style="border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+        <div class="u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px_18px u-bg-v_surface u-bsh-v_shadow_sm u-fd-column u-jc-space_between u-gap-12px" style="display:flex;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Restore from File
             </div>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Restore your previous setup from an exported backup .json file.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Restore your previous setup from an exported backup .json file.</p>
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]" style="padding:8px 18px; font-weight:600;">Upload &amp; Restore File</button>
+          <div class="u-ai-center u-gap-8px" style="display:flex;">
+            <button type="button" class="secondary lc-btn u-p-8px_18px u-fw-600" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]">Upload &amp; Restore File</button>
             <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
@@ -36084,9 +36400,9 @@ if ('serviceWorker' in navigator) {
           <span>Advanced: Direct JSON Configuration Payload</span>
           <span class="backup-advanced-arrow">&#x25BE;</span>
         </summary>
-        <div style="padding:0 14px 14px; display:flex; flex-direction:column; gap:10px;">
-          <textarea id="configJsonBox" rows="5" style="width:100%; font-family:var(--font-mono, monospace); font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); padding:8px 10px; box-sizing:border-box;" placeholder="Paste config JSON here to restore..."></textarea>
-          <div class="backup-actions-grid" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="u-p-0_14px_14px u-fd-column u-gap-10px" style="display:flex;">
+          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-13px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore..."></textarea>
+          <div class="backup-actions-grid u-gap-8px u-fw2-wrap" style="display:flex;">
             <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current to box</button>
             <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON from box</button>
           </div>
@@ -36100,15 +36416,15 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Export Lists &amp; History</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
       
-      <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
+      <div class="u-fd-column u-gap-12px" style="display:flex;">
+        <div class="u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px u-p-14px_18px u-bg-v_surface u-bd-1px_solid_v_border u-bsh-v_shadow_sm u-br-v_radius_md" style="display:flex;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">Watch History</div>
-            <div style="font-size:0.8rem; color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Watch History</div>
+            <div class="u-fs-v_font_size_sm u-c-v_muted">All watched movies, shows, and episodes with timestamps</div>
           </div>
           <div class="export-actions-grid">
             <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;trakt&quot;]">CSV (Trakt / Simkl)</button>
@@ -36117,10 +36433,10 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:12px;">
+        <div class="u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px u-p-14px_18px u-bg-v_surface u-bd-1px_solid_v_border u-bsh-v_shadow_sm u-br-v_radius_md" style="display:flex;">
           <div>
-            <div style="font-weight:700; font-size:0.92rem; color:var(--text);">All Custom Lists &amp; Watchlist</div>
-            <div style="font-size:0.8rem; color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">All Custom Lists &amp; Watchlist</div>
+            <div class="u-fs-v_font_size_sm u-c-v_muted">Export all created lists, watchlist, and continue watching items</div>
           </div>
           <div class="export-actions-grid">
             <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;all-custom-lists&quot;,&quot;standard&quot;]">Export All (CSV)</button>
@@ -36142,21 +36458,21 @@ if ('serviceWorker' in navigator) {
   <div class="settings-subpanel" id="settingsSubDisplay" style="display:none;">
     <!-- Consolidated Catalog & Content Rules (P1 & P2) -->
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Catalog &amp; Content Rules</h2>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Configure streaming availability, digital release filters, cross-list deduplication, and adult content safety.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Configure streaming availability, digital release filters, cross-list deduplication, and adult content safety.</p>
 
       <div class="settings-row-group">
         <!-- Region -->
-        <div class="settings-row-item" style="padding-bottom:14px; border-bottom:1px solid var(--border);">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:240px;">
-              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Content Region</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
+        <div class="settings-row-item u-pb-14px u-bdb-1px_solid_v_border">
+          <div class="u-jc-space_between u-ai-flex_start u-gap-16px u-fw2-wrap" style="display:flex;">
+            <div class="u-flex-1 u-minw-240px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Content Region</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
             </div>
-            <div style="flex:none; width:100%; max-width:320px;">
-              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+            <div class="u-flex-none u-maxw-320px" style="width:100%;">
+              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
                 ${buildRegionOptionsHtml(initialRegion)}
               </select>
             </div>
@@ -36164,14 +36480,14 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <!-- Digital Release Filter -->
-        <div class="settings-row-item" style="padding:14px 0; border-bottom:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0; border:none;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Hide items with no digital release</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
-              <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
-                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
-                <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
+        <div class="settings-row-item u-p-14px_0 u-bdb-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0 u-bd-none">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Hide items with no digital release</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
+              <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+                <summary class="u-cur-pointer u-c-v_accent u-fw-600">More details</summary>
+                <p class="u-m-4px_0_0">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
               </details>
             </div>
             <label class="ui-toggle" aria-label="Hide items with no digital release">
@@ -36182,14 +36498,14 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <!-- Deduplication -->
-        <div class="settings-row-item" id="legacyDedupePanel" style="padding:14px 0; border-bottom:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0; border:none;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Remove duplicate items across lists</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
-              <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
-                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
-                <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
+        <div class="settings-row-item u-p-14px_0 u-bdb-1px_solid_v_border" id="legacyDedupePanel">
+          <div class="settings-toggle-row u-p-0 u-bd-none">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Remove duplicate items across lists</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
+              <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+                <summary class="u-cur-pointer u-c-v_accent u-fw-600">How row deduplication works</summary>
+                <p class="u-m-4px_0_0">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
               </details>
             </div>
             <label class="ui-toggle" aria-label="Remove duplicate items across lists">
@@ -36200,11 +36516,11 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <!-- Adult Content -->
-        <div class="settings-row-item" style="padding-top:14px;">
-          <div class="settings-toggle-row" style="padding:0; border:none;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Adult Content Filter</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
+        <div class="settings-row-item u-pt-14px">
+          <div class="settings-toggle-row u-p-0 u-bd-none">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Adult Content Filter</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
             </div>
             <label class="ui-toggle" aria-label="Adult Content Filter">
               <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]">
@@ -36216,16 +36532,16 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Better Posters Panel (P2 & P3) -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Better Posters</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
-      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Better Posters artwork</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
-          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
-            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
+      <div class="settings-toggle-row u-p-0_0_12px u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use Better Posters artwork</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
+          <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+            <summary class="u-cur-pointer u-c-v_accent u-fw-600">Artwork compatibility details</summary>
+            <p class="u-m-4px_0_0">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
           </details>
         </div>
         <label class="ui-toggle" aria-label="Use Better Posters artwork">
@@ -36234,74 +36550,74 @@ if ('serviceWorker' in navigator) {
         </label>
       </div>
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
-        <div style="font-size:0.85rem; font-weight:700; color:var(--text);">What to draw on the poster</div>
+        <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text">What to draw on the poster</div>
         <div class="settings-check-group two-col-grid">
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Genre</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Genre label along the bottom of the poster.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Genre</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Genre label along the bottom of the poster.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Rating</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Star rating along the bottom of the poster.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Rating</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Star rating along the bottom of the poster.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Trend tags</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">A corner tag on titles that are currently trending or newly released.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Trend tags</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">A corner tag on titles that are currently trending or newly released.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Quality tags</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Quality tags</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Age rating</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Certification chip (PG-13, TV-MA, and so on).</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Age rating</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Certification chip (PG-13, TV-MA, and so on).</p>
             </div>
           </label>
         </div>
-        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
-          <div style="flex:1; min-width:220px; max-width:320px;">
-            <label for="betterPostersRatingSourceSelect" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Rating source</label>
-            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+        <div class="u-gap-16px u-fw2-wrap u-mt-6px" style="display:flex;">
+          <div class="u-flex-1 u-minw-220px u-maxw-320px">
+            <label for="betterPostersRatingSourceSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Rating source</label>
+            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
               ${betterPostersRatingSourceOptionsHtml}
             </select>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Which score the rating is taken from.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Which score the rating is taken from.</p>
           </div>
-          <div style="flex:1; min-width:220px; max-width:320px;">
-            <label for="betterPostersLangSelect" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Poster language</label>
-            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+          <div class="u-flex-1 u-minw-220px u-maxw-320px">
+            <label for="betterPostersLangSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster language</label>
+            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
               ${betterPostersLangOptionsHtml}
             </select>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Language BetterPosters draws text in.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Language BetterPosters draws text in.</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- RatingPosterDB Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">RatingPosterDB</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">RatingPosterDB</a> posters with ratings drawn on, styled the way you set them up at <a href="https://manager.ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">manager.ratingposterdb.com</a>. Needs your own paid RPDB API key.</p>
-      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use RatingPosterDB artwork</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio. Turns Better Posters and Pictorium off, because only one can draw a poster.</p>
-          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How your request limit is protected</summary>
-            <p style="margin:4px 0 0;">Every poster RatingPosterDB sends counts against your key's monthly limit, so posters are not loaded from it directly. This add-on fetches each poster once, keeps it for three days, and shows it to every device from that copy. It asks RatingPosterDB for at most 20 new posters a minute, so a page of new titles fills in over a few minutes (the ordinary poster shows meanwhile), and it stops asking once 95% of your monthly limit is used. Only titles with an IMDb ID are affected. Airing Next and date badges are not drawn over these posters. The website keeps its normal posters.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Swap plain poster artwork for <a href="https://ratingposterdb.com/" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">RatingPosterDB</a> posters with ratings drawn on, styled the way you set them up at <a href="https://manager.ratingposterdb.com/" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">manager.ratingposterdb.com</a>. Needs your own paid RPDB API key.</p>
+      <div class="settings-toggle-row u-p-0_0_12px u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use RatingPosterDB artwork</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Replaces poster artwork in Stremio and Nuvio. Turns Better Posters and Pictorium off, because only one can draw a poster.</p>
+          <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+            <summary class="u-cur-pointer u-c-v_accent u-fw-600">How your request limit is protected</summary>
+            <p class="u-m-4px_0_0">Every poster RatingPosterDB sends counts against your key's monthly limit, so posters are not loaded from it directly. This add-on fetches each poster once, keeps it for three days, and shows it to every device from that copy. It asks RatingPosterDB for at most 20 new posters a minute, so a page of new titles fills in over a few minutes (the ordinary poster shows meanwhile), and it stops asking once 95% of your monthly limit is used. Only titles with an IMDb ID are affected. Airing Next and date badges are not drawn over these posters. The website keeps its normal posters.</p>
           </details>
         </div>
         <label class="ui-toggle" aria-label="Use RatingPosterDB artwork">
@@ -36311,27 +36627,27 @@ if ('serviceWorker' in navigator) {
       </div>
       <div id="rpdbOptions" style="display:${initialRpdb ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div>
-          <label for="rpdbKeyInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">API key</label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" style="flex:1; min-width:200px; max-width:380px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
-            <button type="button" class="secondary lc-btn" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]" style="border-radius:var(--radius-pill);">Test key</button>
+          <label for="rpdbKeyInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">API key</label>
+          <div class="u-gap-8px u-fw2-wrap u-ai-center" style="display:flex;">
+            <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" class="u-flex-1 u-minw-200px u-maxw-380px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box">
+            <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]">Test key</button>
           </div>
-          <p id="rpdbKeyStatus" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
+          <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-fs-v_font_size_xs" style="color:var(--muted);">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
         </div>
       </div>
     </div>
 
     <!-- Pictorium Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Pictorium</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for posters drawn by your own <a href="https://github.com/Eful97/Pictorium" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">Pictorium</a> space &mdash; ratings, streaming quality, Netflix Top 10 ribbons, awards and more, styled the way you set them up there. Needs a Pictorium space with your own TMDB key.</p>
-      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Pictorium artwork</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters and RatingPosterDB off, because only one can draw a poster.</p>
-          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
-            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Swap plain poster artwork for posters drawn by your own <a href="https://github.com/Eful97/Pictorium" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">Pictorium</a> space &mdash; ratings, streaming quality, Netflix Top 10 ribbons, awards and more, styled the way you set them up there. Needs a Pictorium space with your own TMDB key.</p>
+      <div class="settings-toggle-row u-p-0_0_12px u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use Pictorium artwork</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters and RatingPosterDB off, because only one can draw a poster.</p>
+          <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+            <summary class="u-cur-pointer u-c-v_accent u-fw-600">Artwork compatibility details</summary>
+            <p class="u-m-4px_0_0">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
           </details>
         </div>
         <label class="ui-toggle" aria-label="Use Pictorium artwork">
@@ -36341,20 +36657,20 @@ if ('serviceWorker' in navigator) {
       </div>
       <div id="pictoriumOptions" style="display:${initialPictorium ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div>
-          <label for="pictoriumUrlInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Poster link</label>
-          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
-          <p id="pictoriumUrlHint" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
+          <label for="pictoriumUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster link</label>
+          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
+          <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-fs-v_font_size_xs" style="color:var(--muted);">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
         </div>
       </div>
     </div>
 
     <!-- Metadata Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Metadata</h2>
-      <div class="settings-toggle-row" style="padding:0; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use My Lists Addon metadata</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
+      <div class="settings-toggle-row u-p-0 u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use My Lists Addon metadata</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
         </div>
         <label class="ui-toggle" aria-label="Use My Lists Addon metadata">
           <input type="checkbox" id="provideMetadataCheckbox" ${initialProvideMetadata ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;provideMetadata&quot;,&quot;@checked&quot;]">
@@ -36364,135 +36680,135 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Poster Badges & Labels Panel (P3) -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Poster Badges &amp; Labels</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
-      <div style="display:flex; flex-direction:column; gap:16px;">
-        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
-          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Website &amp; Dashboard</div>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
+      <div class="u-fd-column u-gap-16px" style="display:flex;">
+        <div class="u-bdb-1px_solid_v_border u-pb-14px u-fd-column u-gap-6px" style="display:flex;">
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Website &amp; Dashboard</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next (Dashboard)</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Airing Next shelf and provider lists on your dashboard</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Airing Next (Dashboard)</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Airing Next shelf and provider lists on your dashboard</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In-progress series on your website dashboard</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Continue Watching</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">In-progress series on your website dashboard</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Shows in your Watchlist with upcoming episodes</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Watchlist</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Shows in your Watchlist with upcoming episodes</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Trakt Continue Watching</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Connected Trakt Continue Watching series</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Trakt Continue Watching</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Connected Trakt Continue Watching series</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">MDBList Up Next</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Connected MDBList Up Next series</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">MDBList Up Next</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Connected MDBList Up Next series</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Catalogs &amp; Live Preview</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Catalog rows, Catalogs Live Preview &amp; Editor, and See All views</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Catalogs &amp; Live Preview</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Catalog rows, Catalogs Live Preview &amp; Editor, and See All views</p>
               </div>
             </label>
           </div>
         </div>
 
-        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
-          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Stremio &amp; Nuvio (Artwork Overlays)</div>
+        <div class="u-bdb-1px_solid_v_border u-pb-14px u-fd-column u-gap-6px" style="display:flex;">
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Stremio &amp; Nuvio (Artwork Overlays)</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Airing Next Catalogs in Stremio &amp; Nuvio</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Airing Next Catalogs in Stremio &amp; Nuvio</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watchlist Catalogs in Stremio &amp; Nuvio</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Watchlist Catalogs in Stremio &amp; Nuvio</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Other Custom &amp; Provider Catalogs</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Overlay badges on MDBList, Trakt, Simkl, and Custom list rows</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Other Custom &amp; Provider Catalogs</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay badges on MDBList, Trakt, Simkl, and Custom list rows</p>
               </div>
             </label>
           </div>
         </div>
 
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <div style="font-size:0.85rem; font-weight:700; color:var(--text); margin-bottom:4px;">Badge Types</div>
+        <div class="u-fd-column u-gap-6px" style="display:flex;">
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Badge Types</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Upcoming Air Date</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>)</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Upcoming Air Date</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>)</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Premiere</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Green <code>Season Premiere</code> badge on un-aired Episode 1s</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Season Premiere</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Green <code>Season Premiere</code> badge on un-aired Episode 1s</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Orange <code>Season Finale</code> badge on season finales</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Season Finale</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Orange <code>Season Finale</code> badge on season finales</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Season Finale Date</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Date when the season finale will air on mid-season episodes</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Season Finale Date</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Date when the season finale will air on mid-season episodes</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">TMDb Ratings</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Star rating (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">TMDb Ratings</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Star rating (e.g. <span class="u-c-f5c518 u-fw-700">★ 7.9</span>) beside the year/subtitle</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Watched Status Badges</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Checkmark badge on movies and shows you've already watched</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Watched Status Badges</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Checkmark badge on movies and shows you've already watched</p>
               </div>
             </label>
           </div>
@@ -36501,9 +36817,9 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Hidden Lists Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Hidden Lists</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
       <div id="hiddenListsSettingsSection"></div>
     </div>
   </div>
@@ -36512,17 +36828,17 @@ if ('serviceWorker' in navigator) {
   <div class="settings-subpanel" id="settingsSubScrobble" style="display:none;">
     <div class="panel">
       <h2 class="panel-title">Watchlist Preferences</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Customize how watched movies and TV shows are managed in your personal Watchlist.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Customize how watched movies and TV shows are managed in your personal Watchlist.</p>
       <div id="watchlistPreferencesSection"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Watch History &amp; Continue Watching</h2>
-      <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
-        <div class="settings-toggle-row" style="padding-top:4px;">
-          <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Storyline &amp; Companion Recommendations</span>
-            <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
+      <div class="u-bdb-1px_solid_v_border u-pb-12px u-mb-12px">
+        <div class="settings-toggle-row u-pt-4px">
+          <div class="u-flex-1 u-minw-0 u-pr-12px">
+            <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Storyline &amp; Companion Recommendations</span>
+            <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
           </div>
           <label class="ui-toggle" aria-label="Toggle Storyline and Companion Recommendations">
             <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]">
@@ -36530,16 +36846,16 @@ if ('serviceWorker' in navigator) {
           </label>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
-      <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
+      <div id="watchHistorySettingsSection" class="u-gap-10px u-fw2-wrap" style="display:flex;">
         <button type="button" class="btn-danger btn-sm" data-act="clearWatchHistoryAll">Clear Watch History</button>
         <button type="button" class="btn-danger btn-sm" data-act="clearContinueWatchingAll">Clear Continue Watching</button>
       </div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Auto-Track &amp; Media Server Scrobbling</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Automatically scrobble and track watched movies and TV episodes across your streaming apps (Stremio, Nuvio, Wako, etc.) and home media servers (Plex, Jellyfin, Emby) into your personal Watch History and Continue Watching.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble and track watched movies and TV episodes across your streaming apps (Stremio, Nuvio, Wako, etc.) and home media servers (Plex, Jellyfin, Emby) into your personal Watch History and Continue Watching.</p>
       <div id="trackPlaybackSection"></div>
     </div>
   </div>
@@ -36548,21 +36864,21 @@ if ('serviceWorker' in navigator) {
   <div class="settings-subpanel" id="settingsSubExternal" style="display:none;">
     <div class="panel">
       <h2 class="panel-title">External Accounts &amp; API Keys</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Connect your external service accounts and API keys. When signed in to your Profile, your connected accounts stay synchronized across devices and logouts.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Connect your external service accounts and API keys. When signed in to your Profile, your connected accounts stay synchronized across devices and logouts.</p>
 
       <!-- TMDB Section -->
       <div class="provider-card" id="tmdbSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">The Movie Database (TMDB)</span>
-              <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="tmdbConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="tmdbConnectBtn" data-act="startTmdbConnect" style="font-weight:600;">Connect TMDB Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36570,9 +36886,9 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom TMDB API Key / Token</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px;">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</p>
+          <div class="u-mt-10px">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+            <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="u-c-v_accent_2">themoviedb.org/settings/api</a>.</p>
           </div>
         </details>
       </div>
@@ -36581,31 +36897,31 @@ if ('serviceWorker' in navigator) {
       <div class="provider-card" id="traktSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">Trakt</span>
-              <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="traktConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
           </div>
         </div>
         <div class="provider-card-actions trakt-connect-actions">
-          <button type="button" class="secondary lc-btn" id="traktConnectBtn" data-act="startTraktConnect" style="font-weight:600;">Connect Trakt Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
           <button type="button" class="secondary lc-btn" id="traktDeviceBtn" data-act="startTraktDeviceLogin" title="Connect from a TV or secondary device via trakt.tv/activate">Connect with PIN / Code</button>
           <button type="button" class="secondary lc-btn btn-danger" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
-        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0 0 10px;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Trakt</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Trakt account history.</p>
+        <div id="traktSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sync Watch History to Trakt</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Automatically sync items marked as watched or played to your Trakt account history.</p>
             </div>
             <label class="ui-toggle" aria-label="Sync Watch History to Trakt">
               <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]">
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
-          <div style="margin-top:8px;">
-            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+          <div class="u-mt-8px">
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36613,10 +36929,10 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom Trakt Client ID &amp; Username</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
-            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</p>
+          <div class="u-mt-10px u-fd-column u-gap-8px" style="display:flex;">
+            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+            <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" class="u-c-v_accent_2">trakt.tv/oauth/applications</a>.</p>
           </div>
         </details>
       </div>
@@ -36625,30 +36941,30 @@ if ('serviceWorker' in navigator) {
       <div class="provider-card" id="mdblistSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">MDBList</span>
-              <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="mdblistConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect" style="font-weight:600;">Connect MDBList Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
-        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0 0 10px;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to MDBList</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your MDBList account history.</p>
+        <div id="mdblistSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sync Watch History to MDBList</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Automatically sync items marked as watched or played to your MDBList account history.</p>
             </div>
             <label class="ui-toggle" aria-label="Sync Watch History to MDBList">
               <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]">
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
-          <div style="margin-top:8px;">
-            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+          <div class="u-mt-8px">
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36656,9 +36972,9 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom MDBList API Key</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px;">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</p>
+          <div class="u-mt-10px">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+            <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" class="u-c-v_accent_2">mdblist.com/preferences</a>.</p>
           </div>
         </details>
       </div>
@@ -36667,30 +36983,30 @@ if ('serviceWorker' in navigator) {
       <div class="provider-card" id="simklSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">Simkl</span>
-              <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="simklConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="simklConnectBtn" data-act="startSimklConnect" style="font-weight:600;">Connect Simkl Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
-        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0 0 10px;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Sync Watch History to Simkl</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Automatically sync items marked as watched or played to your Simkl account history.</p>
+        <div id="simklSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sync Watch History to Simkl</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Automatically sync items marked as watched or played to your Simkl account history.</p>
             </div>
             <label class="ui-toggle" aria-label="Sync Watch History to Simkl">
               <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]">
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
-          <div style="margin-top:8px;">
-            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:0.8rem;">Sync Current Watch History Now</button>
+          <div class="u-mt-8px">
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36698,23 +37014,23 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom Simkl Client ID</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px;">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:6px 0 0; font-size:0.78rem; color:var(--muted);">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</p>
+          <div class="u-mt-10px">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+            <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" class="u-c-v_accent_2">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
       </div>
     </div>
 
     <!-- Unified Import List Panel -->
-    <div class="panel" style="margin-top:14px;">
+    <div class="panel u-mt-14px">
       <h2 class="panel-title">Import List</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
 
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:12px;">
+      <div class="u-gtc-repeat_auto_fit_minmax_260px_1fr u-gap-12px u-mb-12px" style="display:grid;">
         <div>
-          <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Source (optional)</label>
-          <select id="importListSourceSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.88rem; box-sizing:border-box;">
+          <label for="importListSourceSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Source (optional)</label>
+          <select id="importListSourceSelect" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
             <option value="auto">Auto-detect</option>
             <option value="imdb">IMDb</option>
             <option value="letterboxd">Letterboxd</option>
@@ -36726,113 +37042,113 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">Import to which list?</label>
-          <select id="importTargetListSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.88rem; box-sizing:border-box;" data-act="onImportTargetListChange">
+          <label for="importTargetListSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Import to which list?</label>
+          <select id="importTargetListSelect" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;" data-act="onImportTargetListChange">
             <!-- Populated dynamically -->
           </select>
         </div>
       </div>
 
-      <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
-        <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:0.85rem; margin-bottom:6px; color:var(--text);">New List Name</label>
-        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; max-width:400px; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
+      <div id="importNewListInputWrap" class="u-mb-12px" style="display:none;">
+        <label for="importNewListNameInput" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">New List Name</label>
+        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" class="u-maxw-400px u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
       </div>
 
-      <div style="margin-bottom:14px;">
+      <div class="u-mb-14px">
         <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); opacity:0.8; margin-bottom:2px;" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="u-c-v_muted u-mb-2px" style="opacity:0.8;" aria-hidden="true">
             <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
             <path d="M12 12v9"></path>
             <path d="m16 16-4-4-4 4"></path>
           </svg>
-          <div style="text-align:center;">
-            <div style="font-weight:600; font-size:0.92rem; color:var(--text);">Choose files or drag &amp; drop here</div>
-            <div style="margin-top:3px; color:var(--muted); font-size:0.78rem;">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
+          <div class="u-ta-center">
+            <div class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Choose files or drag &amp; drop here</div>
+            <div class="u-mt-3px u-c-v_muted u-fs-v_font_size_xs">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
           </div>
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 16px; font-size:0.82rem; margin-top:2px;">Select files&hellip;</button>
+          <button type="button" class="secondary lc-btn u-p-6px_16px u-fs-v_font_size_sm u-mt-2px" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">Select files&hellip;</button>
           <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
         </div>
-        <div id="unifiedImportSelectedCount" style="margin-top:6px; font-size:0.82rem; color:var(--muted);">No files selected</div>
+        <div id="unifiedImportSelectedCount" class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">No files selected</div>
       </div>
 
-      <div style="margin-bottom:14px;">
-        <label class="settings-check-item" style="padding:10px 12px; margin:0;">
+      <div class="u-mb-14px">
+        <label class="settings-check-item u-p-10px_12px u-m-0">
           <input type="checkbox" id="importAlsoMarkWatchedCheck">
           <div class="settings-check-label">
-            <strong style="font-size:0.88rem; color:var(--text);">Also add watched items to Watch History</strong>
+            <strong class="u-fs-v_font_size_sm u-c-v_text">Also add watched items to Watch History</strong>
             <span class="settings-check-desc">Automatically marks imported watched items in your Watch History</span>
           </div>
         </label>
       </div>
 
-      <div class="actions" style="margin-top:8px;">
-        <button type="button" class="primary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:0.92rem; font-weight:600;" data-act="runUnifiedListImport">Start Import</button>
+      <div class="actions u-mt-8px">
+        <button type="button" class="primary lc-btn u-p-10px_24px u-fs-v_font_size_base u-fw-600" id="btnUnifiedImport" data-act="runUnifiedListImport">Start Import</button>
       </div>
 
-      <div id="unifiedImportResult" style="margin-top:12px;"></div>
+      <div id="unifiedImportResult" class="u-mt-12px"></div>
     </div>
   </div>
 
   <!-- Submenu 3: Feedback & Support -->
   <div class="settings-subpanel" id="settingsSubFeedback" style="display:none;">
     <div class="panel">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+      <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px u-mb-12px" style="display:flex;">
         <div>
-          <h2 class="panel-title" style="margin:0;">Support &amp; Developer Chat</h2>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:0.85rem;">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
+          <h2 class="panel-title u-m-0">Support &amp; Developer Chat</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
         </div>
-        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]" style="padding:6px 14px; font-size:0.85rem;">+ New Message</button>
+        <button type="button" class="secondary lc-btn u-p-6px_14px u-fs-v_font_size_sm" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]">+ New Message</button>
       </div>
 
       <!-- Active Threads Selector -->
-      <div id="supportThreadsBar" class="support-threads-bar" style="display:none; margin-bottom:12px;"></div>
+      <div id="supportThreadsBar" class="support-threads-bar u-mb-12px" style="display:none;"></div>
 
       <div class="feedback-container">
         <!-- Chat View -->
         <div id="supportChatView" style="display:none;">
           <div id="supportMessagesStream" class="support-messages-stream"></div>
-          <div class="support-reply-composer" style="margin-top:10px;">
+          <div class="support-reply-composer u-mt-10px">
             <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
-            <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
+            <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-            <span id="supportChatStatus" style="font-size:0.8rem; color:var(--muted);"></span>
-            <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:0.75rem; border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+          <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
+            <span id="supportChatStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
+            <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
           </div>
         </div>
 
         <!-- New Message / Initial Form -->
         <div id="newFeedbackFormWrap">
           <div class="row">
-            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Category</label>
-            <select id="feedbackCategorySelect" aria-label="Feedback category" style="max-width:320px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:7px 12px; font-size:0.88rem;">
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Category</label>
+            <select id="feedbackCategorySelect" aria-label="Feedback category" class="u-maxw-320px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-7px_12px u-fs-v_font_size_sm">
               <option value="bug">Bug Report</option>
               <option value="improvement">Improvement / Feature Request</option>
               <option value="idea">Idea / Suggestion</option>
               <option value="other">General Question / Other</option>
             </select>
           </div>
-          <div class="row" style="margin-top:10px;">
-            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Message</label>
-            <textarea id="feedbackMessageInput" rows="4" style="width:100%; max-width:680px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:10px 12px; font-size:0.88rem; box-sizing:border-box;" placeholder="What would you like help with or what did you find?"></textarea>
+          <div class="row u-mt-10px">
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Message</label>
+            <textarea id="feedbackMessageInput" rows="4" class="u-maxw-680px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-10px_12px u-fs-v_font_size_sm u-bs-border_box" style="width:100%;" placeholder="What would you like help with or what did you find?"></textarea>
           </div>
-          <div class="row" style="margin-top:10px;">
-            <label style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Contact Info (optional)</label>
-            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" style="width:100%; max-width:440px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:8px 12px; font-size:0.88rem; box-sizing:border-box;">
+          <div class="row u-mt-10px">
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Contact Info (optional)</label>
+            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" class="u-maxw-440px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-8px_12px u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
           </div>
-          <div class="actions" style="margin-top:12px; gap:8px; justify-content:flex-start;">
-            <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback" style="padding:8px 20px; font-size:0.88rem; font-weight:600;">Send Message</button>
+          <div class="actions u-mt-12px u-gap-8px u-jc-flex_start">
+            <button type="button" class="primary lc-btn u-p-8px_20px u-fs-v_font_size_sm u-fw-600" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
             <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
           </div>
-          <p id="feedbackStatus" style="margin-top:8px; font-size:0.85rem;"></p>
+          <p id="feedbackStatus" class="u-mt-8px u-fs-v_font_size_sm"></p>
         </div>
       </div>
     </div>
 
     <!-- Resources & Documentation Section -->
-    <div class="panel" style="margin-top:14px;">
+    <div class="panel u-mt-14px">
       <h2 class="panel-title">Resources &amp; Support</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:0.85rem;">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
       
       <div class="resource-cards-grid">
         <a href="/guide" class="resource-card">
@@ -36840,7 +37156,7 @@ if ('serviceWorker' in navigator) {
             <div class="resource-card-title">User Guide &amp; Docs</div>
             <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
         <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener" class="resource-card">
@@ -36848,7 +37164,7 @@ if ('serviceWorker' in navigator) {
             <div class="resource-card-title">Support on Ko-fi</div>
             <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Support Project &rarr;</span>
         </a>
 
         <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="resource-card">
@@ -36856,7 +37172,7 @@ if ('serviceWorker' in navigator) {
             <div class="resource-card-title">TorBox Debrid</div>
             <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Try TorBox (Referral) &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Try TorBox (Referral) &rarr;</span>
         </a>
       </div>
     </div>
@@ -38520,7 +38836,7 @@ function formatRatingSpanHtml(item, options = {}) {
   }
 
   if (ratingNum == null || ratingNum <= 0) return '';
-  return '<span class="poster-rating" data-rating-type="tmdb" style="color:#f5c518; font-weight:700; font-size:0.75rem; margin-left:auto; flex-shrink:0;">&#9733; ' + ratingNum.toFixed(1) + '</span>';
+  return '<span class="poster-rating u-c-f5c518 u-fw-700 u-fs-v_font_size_xs u-ml-auto u-fsh-0" data-rating-type="tmdb">&#9733; ' + ratingNum.toFixed(1) + '</span>';
 }
 window.formatRatingSpanHtml = formatRatingSpanHtml;
 
@@ -38550,7 +38866,7 @@ function renderMediaCard(item, options = {}) {
 
   const posterImg = poster
     ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-    : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+    : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
 
   const topLeft = options.topLeftHtml !== undefined ? options.topLeftHtml : '';
   const topRight = options.topRightHtml || '';
@@ -38560,9 +38876,9 @@ function renderMediaCard(item, options = {}) {
   if (subtitle === undefined) {
     const ratingSpan = (typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(item, options) : '';
     if (ratingSpan && year) {
-      subtitle = '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(String(year)) + '</span>' + ratingSpan + '</div>';
+      subtitle = '<div class="u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(String(year)) + '</span>' + ratingSpan + '</div>';
     } else if (ratingSpan) {
-      subtitle = '<div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; width:100%;">' + ratingSpan + '</div>';
+      subtitle = '<div class="u-ai-center u-jc-flex_end u-gap-4px" style="display:flex; width:100%;">' + ratingSpan + '</div>';
     } else {
       subtitle = year ? escapeHtml(String(year)) : '';
     }
@@ -39228,23 +39544,23 @@ function openSupportGoal() {
   const left = Math.max(0, g.goal - g.raised);
   const pct = Math.max(0, Math.min(100, (g.raised / g.goal) * 100));
   const row = function(label, value, strong) {
-    return '<div style="display:flex; justify-content:space-between;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
+    return '<div class="u-jc-space_between" style="display:flex;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
   };
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
-      '<h3 style="margin:0; font-size:1.1rem;">Keeping My Lists Addon running</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-6px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">Keeping My Lists Addon running</h3>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 12px; color:var(--muted); font-size:0.88rem; line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
-    '<div style="font-size:1.8rem; font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:0.85rem; font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
-    '<div style="height:10px; border-radius:10px; background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:10px; background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
-    '<div style="display:grid; gap:6px; font-size:0.88rem; color:var(--text); margin-bottom:14px;">' +
+    '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">It is free, with no ads. Donations only cover the hosting bill.</p>' +
+    '<div class="u-fs-v_font_size_2xl u-fw-800">' + supportMoney(g.raised) + ' <small class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted">of ' + supportMoney(g.goal) + ' this month</small></div>' +
+    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div class="u-gap-6px u-fs-v_font_size_sm u-c-v_text u-mb-14px" style="display:grid;">' +
       row('Hosting this month', supportMoney(g.goal), false) +
       row('Given so far', supportMoney(g.raised), false) +
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
-    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:var(--accent); color:#fff; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
-    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
+    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 1st of each month.</p>';
   showModal(html);
 }
 
@@ -39257,16 +39573,16 @@ function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
   const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
-        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="primary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">OK</button>' +
+    '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+      '<button type="button" class="primary u-minw-80px u-p-8px_16px" data-act="closeModal">OK</button>' +
     '</div>';
   showModal(html);
 }
@@ -39304,11 +39620,11 @@ if (typeof window !== 'undefined') {
 // and the caller's own result dialog still arrives.
 function showAppBusy(title, message) {
   const html =
-    '<h3 style="margin:0 0 12px; font-size:1.1rem; display:flex; align-items:center; gap:10px;">' +
+    '<h3 class="u-m-0_0_12px u-fs-v_font_size_lg u-ai-center u-gap-10px" style="display:flex;">' +
       '<span class="app-spinner" aria-hidden="true"></span> ' +
       escapeHtml(title) +
     '</h3>' +
-    '<p role="status" aria-live="polite" style="margin:0; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message || '') + '</p>';
+    '<p role="status" aria-live="polite" class="u-m-0 u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message || '') + '</p>';
   showModal(html);
 }
 
@@ -39317,16 +39633,16 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
   const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
   const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
-        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+    '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+      '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
       '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
@@ -39490,15 +39806,15 @@ function confirmDialog(message, title = 'Confirm Action', confirmBtnText = 'Conf
 
 function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem;">' + escapeHtml(title) + '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">' + escapeHtml(title) + '</h3>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:0.9rem;">' + escapeHtml(message) + '</p>' : '') +
-    '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
-      '<button type="button" class="primary" id="appPromptBtn" style="min-width:80px; padding:8px 16px;">OK</button>' +
+    (message ? '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_base">' + escapeHtml(message) + '</p>' : '') +
+    '<input type="text" id="appPromptInput" class="input u-mb-16px" style="width:100%;" value="' + escapeAttr(defaultValue || '') + '" />' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+      '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
+      '<button type="button" class="primary u-minw-80px u-p-8px_16px" id="appPromptBtn">OK</button>' +
     '</div>';
   showModal(html);
   const input = document.getElementById('appPromptInput');
@@ -40120,7 +40436,7 @@ function renderDiscoverChartsList(type, forceRefresh) {
     return;
   }
   window._currentDiscoverRenderedFilter = type;
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading charts\u2026</p>';
+  container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Loading charts\u2026</p>';
 
   // Build list objects from all chart tables, filtered to the right type.
   const lists = [];
@@ -40239,7 +40555,7 @@ function renderDiscoverChartsList(type, forceRefresh) {
       }
     }, 400);
   } else {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Could not load chart lists.</p>';
+    container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Could not load chart lists.</p>';
   }
 }
 
@@ -40283,10 +40599,8 @@ function switchCatalogsSubmenu(filter, btn) {
     }
   }
 
-  const undoToast = document.getElementById('undoToast');
   const resultDiv = document.getElementById('result');
   if (filter !== 'all') {
-    if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
     if (filter === 'bulk' && typeof updateBulkAddUi === 'function') updateBulkAddUi();
   } else {
@@ -40402,8 +40716,8 @@ function channelSourceRowHtml(u) {
     }
   }
   return '<div class="source-row">' +
-    '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
-    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editChannel" data-act-args="[&quot;@self&quot;]">Edit</button></p>' +
+    '<p class="u-m-0"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
+    '<button type="button" class="secondary channelEditBtn u-p-4px_10px u-minh-unset" data-act="editChannel" data-act-args="[&quot;@self&quot;]">Edit</button></p>' +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
 }
@@ -40619,13 +40933,13 @@ function customListSourceRowHtml(u) {
     summary = items.length + ' ' + label + (items.length === 1 ? '' : 's');
     if (payload.shuffle) summary += ' \u2014 shuffled daily';
     if (payload.publishedUrl) {
-      publishedLinkHtml = '<p style="margin:6px 0 0;"><small>Shared at: <a href="' + escapeAttr(payload.publishedUrl) + '" target="_blank" style="color:var(--accent-2); word-break:break-all;">' + escapeHtml(payload.publishedUrl) + '</a></small></p>';
+      publishedLinkHtml = '<p class="u-m-6px_0_0"><small>Shared at: <a href="' + escapeAttr(payload.publishedUrl) + '" target="_blank" class="u-c-v_accent_2 u-wb-break_all">' + escapeHtml(payload.publishedUrl) + '</a></small></p>';
     }
   }
   return '<div class="source-row">' +
-    '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
-    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editCustomList" data-act-args="[&quot;@self&quot;]">Edit</button> ' +
-    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" data-act="startSaveListFlow" data-act-args="[&quot;@self&quot;]">Save List</button></p>' +
+    '<p class="u-m-0"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
+    '<button type="button" class="secondary customListEditBtn u-p-4px_10px u-minh-unset" data-act="editCustomList" data-act-args="[&quot;@self&quot;]">Edit</button> ' +
+    '<button type="button" class="secondary customListShareBtn u-p-4px_10px u-minh-unset" data-act="startSaveListFlow" data-act-args="[&quot;@self&quot;]">Save List</button></p>' +
     publishedLinkHtml +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
@@ -40745,8 +41059,8 @@ function entryAvatarColor(s) {
 function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
-    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<div class="add-shelf-link-row u-ai-center u-gap-8px u-mb-8px" style="display:flex;">' +
+      '<input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -40763,8 +41077,8 @@ function addShelfModalAddLink() {
   div.style.gap = '8px';
   div.style.marginBottom = '8px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 6px 12px; height: 38px; min-height: 38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
+    '<input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="Additional URL" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="lc-btn secondary u-p-6px_12px u-minh-38px" aria-label="Remove this URL" style="height:38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -40886,15 +41200,15 @@ function addRow(name, url, type, enabled, group, channelId) {
   const avatarBg = entryAvatarColor(group || name || '');
 
   div.innerHTML =
-    '<div class="entry-card-top" style="flex-direction: column;">' +
-      '<div class="entry-ctrl-row" style="width: 100%; justify-content: flex-start; margin-bottom: 2px;">' +
-        '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
+    '<div class="entry-card-top u-fd-column">' +
+      '<div class="entry-ctrl-row u-jc-flex_start u-mb-2px" style="width:100%;">' +
+        '<div class="entry-pos-wrap u-ai-center" style="display:flex;">' +
           '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
-        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab;"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
+        '<span class="drag-handle ec-btn u-cur-grab" title="Drag to reorder"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
-        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
+        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary u-ml-auto u-mr-6px u-fw-600 u-p-2px_10px" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
         '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
           '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none; display:block;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
@@ -40904,9 +41218,9 @@ function addRow(name, url, type, enabled, group, channelId) {
           '</svg>' +
         '</button>' +
       '</div>' +
-      '<div style="display: flex; gap: 8px; width: 100%; align-items: center;">' +
-        '<div class="entry-card-body" style="flex-direction: row; gap: 10px; align-items: center; width: 100%;">' +
-          '<div class="entry-name-row" style="flex: 1;">' +
+      '<div class="u-gap-8px u-ai-center" style="display:flex; width:100%;">' +
+        '<div class="entry-card-body u-fd-row u-gap-10px u-ai-center" style="width:100%;">' +
+          '<div class="entry-name-row u-flex-1">' +
             '<input type="text" placeholder="Name (e.g. Trending Movies)" class="name" value="' + escapeAttr(name || '') + '">' +
           '</div>' +
           '<div class="entry-type-row" style="width: auto;">' +
@@ -40924,7 +41238,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p class="u-c-v_muted u-fs-v_font_size_sm u-ta-center u-p-20px"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,
@@ -41151,10 +41465,10 @@ async function runMyMdblistLists() {
   const token = isDisc ? '' : (mdblistAccessToken || readProviderSecret('myListAddon:mdblistAccessToken') || '');
   const key = isDisc ? '' : (manualKey || token || readProviderSecret('myListAddon:mdblistKey') || '');
   if (!key) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your MDBList account in Settings or click <strong>Connect MDBList</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your MDBList account in Settings or click <strong>Connect MDBList</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
     return;
   }
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your MDBList lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your MDBList lists\u2026</small></p>';
   try {
     // POST: an MDBList key or token is never put in a URL (the server refuses it).
     const res = await fetch(ORIGIN + '/api/mdblist-my-lists', {
@@ -41340,7 +41654,7 @@ function renderMyMdblistLists(lists) {
   window._myMdblistLists = lists || [];
   const box = document.getElementById('myMdblistListsResult');
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No lists found on your MDBList account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No lists found on your MDBList account.</small></p>';
     return;
   }
 
@@ -41432,14 +41746,14 @@ function renderMyMdblistLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
+    const addBtns = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
     const isCustomUserList = !isHistory && !isWatchlist && !isAiringNext && !isUpNext && !l.dynamic;
-    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn" style="color:var(--danger); border-color:var(--danger);" data-provider="mdblist" data-list-id="' + escapeAttr(l.id || l.slug) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
+    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn u-c-v_danger u-bdc-v_danger" data-provider="mdblist" data-list-id="' + escapeAttr(l.id || l.slug) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
 
     let postersHtml = '';
     if (isUpNext) {
@@ -41450,8 +41764,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showMdbUpNextBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesMdblistUpNext') : true;
             const showAirDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -41497,7 +41811,7 @@ function renderMyMdblistLists(lists) {
             const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbUpNextRemoveBtn +
                 overlays +
@@ -41508,7 +41822,7 @@ function renderMyMdblistLists(lists) {
           }).join('') +
         '</div>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>No shows in progress.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>No shows in progress.</small></p>';
       }
     } else if (isAiringNext) {
       const previewItems = filteredItems.slice(0, 9);
@@ -41518,8 +41832,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -41559,7 +41873,7 @@ function renderMyMdblistLists(lists) {
             const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbAiringNextRemoveBtn +
                 overlays +
@@ -41570,9 +41884,9 @@ function renderMyMdblistLists(lists) {
           }).join('') +
         '</div>';
       } else if (_mdblistAiringNextEnriching) {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted); font-size:0.85rem;"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span class="u-bd-2px_solid_v_accent u-bordertopcolor-transparent u-br-50 u-va-middle u-mr-6px" style="display:inline-block; width:12px; height:12px; animation:spin 0.8s linear infinite;"></span>Checking upcoming air dates&hellip;</p>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
       }
     } else {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
@@ -41583,7 +41897,7 @@ function renderMyMdblistLists(lists) {
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="MDBList" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" ' + titleClick + ' style="cursor:pointer;">' + escapeHtml(l.name) + (l.dynamic ? ' <span class="badge">Dynamic</span>' : '') + '</div>' +
+          '<div class="list-card-title u-cur-pointer" ' + titleClick + '>' + escapeHtml(l.name) + (l.dynamic ? ' <span class="badge">Dynamic</span>' : '') + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + typeLabel + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' items</span>' +
@@ -41600,7 +41914,7 @@ function renderMyMdblistLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
   if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
 }
@@ -41658,7 +41972,7 @@ async function runMyTraktLists() {
   const box = document.getElementById('myTraktListsResult');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
   const token = isDisc ? '' : (traktAccessToken || readProviderSecret('myListAddon:traktAccessToken') || '');
-  const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+  const neutralMsg = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
   if (!token) {
     if (box) box.innerHTML = neutralMsg;
@@ -41748,9 +42062,9 @@ function renderMdblistConnectStatus() {
 
   if (statusEl) {
     if (token && user) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">\u2713 Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected as @' + escapeHtml(user) + '</span>';
     } else if (token) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">\u2713 Connected to MDBList</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected to MDBList</span>';
       if (!window._mdblistResolvingUser) {
         window._mdblistResolvingUser = true;
         setTimeout(() => {
@@ -41759,9 +42073,9 @@ function renderMdblistConnectStatus() {
         }, 100);
       }
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:var(--text-2); font-weight:600;">Custom MDBList API Key configured</span>';
+      statusEl.innerHTML = '<span class="u-c-v_text_2 u-fw-600">Custom MDBList API Key configured</span>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected.</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected.</span>';
     }
   }
   if (connectBtn) connectBtn.textContent = token ? 'Re-connect MDBList' : (key ? 'Update Key' : 'Connect MDBList Account');
@@ -41873,7 +42187,7 @@ function disconnectTrakt() {
   const box = document.getElementById('myPrivateTraktListsResult');
   if (box) box.innerHTML = '';
   const pubBox = document.getElementById('myTraktListsResult');
-  if (pubBox) pubBox.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+  if (pubBox) pubBox.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 }
 
 function toggleListsTraktConnection() {
@@ -41907,13 +42221,13 @@ function renderTraktConnectStatus() {
   
   if (statusEl) {
     if (token && user) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">✓ Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected as @' + escapeHtml(user) + '</span>';
     } else if (token) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">✓ Connected to Trakt</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected to Trakt</span>';
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">✓ Custom Trakt Client ID configured' + (user ? ' (@' + escapeHtml(user) + ')' : '') + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Custom Trakt Client ID configured' + (user ? ' (@' + escapeHtml(user) + ')' : '') + '</span>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected.</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected.</span>';
     }
   }
   if (connectBtn) connectBtn.textContent = token ? 'Re-connect Trakt' : (key ? 'Update Client ID' : 'Connect Trakt Account');
@@ -41928,7 +42242,7 @@ function renderTraktConnectStatus() {
   const pubBox = document.getElementById('myTraktListsResult');
   if (!isAccountConnected) {
     if (box) box.innerHTML = '';
-    if (pubBox) pubBox.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+    if (pubBox) pubBox.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
   }
 }
 
@@ -42048,7 +42362,7 @@ async function startTraktDeviceLogin(retried) {
     if (!data.ok || !data.user_code) {
       if (codeEl) codeEl.innerText = 'ERROR';
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
+        statusEl.innerHTML = '<span class="u-c-v_danger">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary u-ml-8px u-p-3px_8px u-fs-v_font_size_xs" data-act="startTraktDeviceLogin">Try Again</button>';
       }
       return;
     }
@@ -42058,7 +42372,7 @@ async function startTraktDeviceLogin(retried) {
       linkEl.href = data.verification_url || 'https://trakt.tv/activate';
     }
     if (statusEl) {
-      statusEl.innerHTML = '<span style="color:var(--accent); font-weight:600;">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval...';
+      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval...';
     }
 
     const deviceCode = data.device_code;
@@ -42071,7 +42385,7 @@ async function startTraktDeviceLogin(retried) {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
-        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Get New Code</button>';
+        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary u-ml-8px u-p-3px_8px u-fs-v_font_size_xs" data-act="startTraktDeviceLogin">Get New Code</button>';
         return;
       }
 
@@ -42119,7 +42433,7 @@ async function startTraktDeviceLogin(retried) {
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
-    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:0.75rem;" data-act="startTraktDeviceLogin">Try Again</button>';
+    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary u-ml-8px u-p-3px_8px u-fs-v_font_size_xs" data-act="startTraktDeviceLogin">Try Again</button>';
   }
 }
 
@@ -42131,7 +42445,7 @@ async function runMyPrivateTraktLists() {
     box.innerHTML = '';
     return;
   }
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your Trakt lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your Trakt lists\u2026</small></p>';
   try {
     const res = await fetch(ORIGIN + '/api/trakt-my-private-lists', {
       method: 'POST',
@@ -42309,7 +42623,7 @@ function renderMyPrivateTraktLists(lists) {
   window._myPrivateTraktLists = lists || [];
   const box = document.getElementById('myPrivateTraktListsResult');
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No lists found on your Trakt account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No lists found on your Trakt account.</small></p>';
     return;
   }
 
@@ -42401,7 +42715,7 @@ function renderMyPrivateTraktLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn myPrivateListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
+    const addBtns = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn myPrivateListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -42409,7 +42723,7 @@ function renderMyPrivateTraktLists(lists) {
 
     const isCustomUserList = !isHistory && !isWatchlist && !isAiringNext && !isContinueWatching;
     const traktListId = (l.ids && l.ids.trakt) || l.id || l.slug || '';
-    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn" style="color:var(--danger); border-color:var(--danger);" data-provider="trakt" data-list-id="' + escapeAttr(traktListId) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
+    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn u-c-v_danger u-bdc-v_danger" data-provider="trakt" data-list-id="' + escapeAttr(traktListId) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
 
     let postersHtml = '';
     if (isContinueWatching) {
@@ -42420,8 +42734,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showTraktCwBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesTraktContinueWatching') : true;
             const showAirDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -42464,14 +42778,14 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             const progPercent = Math.min(100, Math.max(0, it.progress || 0));
             const progressOverlay = progPercent > 0
-              ? '<div class="playback-progress-bar" style="position:absolute; bottom:0; left:0; right:0; height:4px; background:rgba(0,0,0,0.5); z-index:2;"><div style="width:' + progPercent + '%; height:100%; background:var(--accent);"></div></div>'
+              ? '<div class="playback-progress-bar u-bg-rgba_0_0_0_0_5" style="position:absolute; bottom:0; left:0; right:0; height:4px; z-index:2;"><div style="width:' + progPercent + '%; height:100%; background:var(--accent);"></div></div>'
               : '';
 
             const epSubtitle = it.episodeTitle || (it.seasonNum != null && it.episodeNum != null ? ('S' + it.seasonNum + 'E' + it.episodeNum) : '');
 
             return '<div class="list-card-mini-poster-tile trakt-continue-watching-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(it.type || 'mixed') + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 progressOverlay +
                 (dateBadge + bottomBadge) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
@@ -42483,7 +42797,7 @@ function renderMyPrivateTraktLists(lists) {
           }).join('') +
         '</div>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing in progress.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing in progress.</small></p>';
       }
     } else if (isAiringNext) {
       const previewItems = filteredItems.slice(0, 9);
@@ -42493,8 +42807,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -42533,7 +42847,7 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
@@ -42544,9 +42858,9 @@ function renderMyPrivateTraktLists(lists) {
           }).join('') +
         '</div>';
       } else if (_traktAiringNextEnriching) {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted); font-size:0.85rem;"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span class="u-bd-2px_solid_v_accent u-bordertopcolor-transparent u-br-50 u-va-middle u-mr-6px" style="display:inline-block; width:12px; height:12px; animation:spin 0.8s linear infinite;"></span>Checking upcoming air dates&hellip;</p>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
       }
     } else {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
@@ -42557,7 +42871,7 @@ function renderMyPrivateTraktLists(lists) {
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="Trakt" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" ' + titleClick + ' style="cursor:pointer;">' + escapeHtml(l.name) + (l.private && !isWatchlist && !isHistory && !isAiringNext && !isContinueWatching ? ' <span class="badge">Private</span>' : '') + '</div>' +
+          '<div class="list-card-title u-cur-pointer" ' + titleClick + '>' + escapeHtml(l.name) + (l.private && !isWatchlist && !isHistory && !isAiringNext && !isContinueWatching ? ' <span class="badge">Private</span>' : '') + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + typeLabel + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' items</span>' +
@@ -42574,7 +42888,7 @@ function renderMyPrivateTraktLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
   if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
 }
@@ -42721,13 +43035,13 @@ function renderTmdbConnectStatus() {
 
   if (statusEl) {
     if (sess && user) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">\u2713 Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected as @' + escapeHtml(user) + '</span>';
     } else if (sess) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">\u2713 TMDB Account Connected</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 TMDB Account Connected</span>';
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6;">\u2713 Custom TMDB Key configured</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text">\u2713 Custom TMDB Key configured</span>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected</span>';
     }
   }
 
@@ -42756,11 +43070,11 @@ async function runMyTmdbLists() {
   const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   if (!sess && !acc) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your TMDB account in Settings or click <strong>Connect TMDB</strong> above to see your personal lists, watchlist, and favorites here.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your TMDB account in Settings or click <strong>Connect TMDB</strong> above to see your personal lists, watchlist, and favorites here.</small></p>';
     return;
   }
 
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your TMDB lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your TMDB lists\u2026</small></p>';
   try {
     // POST: the TMDB session id is a credential and is never put in a URL.
     const res = await fetch(ORIGIN + '/api/tmdb-my-lists', {
@@ -42802,7 +43116,7 @@ function renderMyTmdbLists(lists) {
   const box = document.getElementById('myTmdbListsResult');
   if (!box) return;
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No lists found on your TMDB account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No lists found on your TMDB account.</small></p>';
     return;
   }
 
@@ -42831,7 +43145,7 @@ function renderMyTmdbLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
+    const addBtns = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -42847,10 +43161,10 @@ function renderMyTmdbLists(lists) {
           const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
           let overlays = '';
           if (isMobileEnd) {
-            overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:default;">' + totalCount + ' &rsaquo;</div>';
+            overlays += '<div class="list-card-count-overlay mobile-only u-cur-default">' + totalCount + ' &rsaquo;</div>';
           }
           if (isDesktopEnd) {
-            overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:default;">' + totalCount + ' &rsaquo;</div>';
+            overlays += '<div class="list-card-count-overlay desktop-only u-cur-default">' + totalCount + ' &rsaquo;</div>';
           }
           const posterType = it.type || (l.contentType === 'series' ? 'series' : 'movie');
           const tmdbTarget = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : 'custom');
@@ -42865,14 +43179,14 @@ function renderMyTmdbLists(lists) {
               overlays +
             '</div>' +
             '<div class="list-card-mini-poster-name">' + escapeHtml(it.title || '') + '</div>' +
-            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
           '</div>';
         }).join('') +
       '</div>';
     }
 
     const isCustomUserList = !isWatchlist && !isFavorites;
-    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn" style="color:var(--danger); border-color:var(--danger);" data-provider="tmdb" data-list-id="' + escapeAttr(listIdStr) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
+    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn u-c-v_danger u-bdc-v_danger" data-provider="tmdb" data-list-id="' + escapeAttr(listIdStr) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '">' +
       '<div class="list-card-header">' +
@@ -42893,7 +43207,7 @@ function renderMyTmdbLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
 }
 
@@ -43145,13 +43459,13 @@ function renderSimklConnectStatus() {
 
   if (statusEl) {
     if (token && user) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">\u2713 Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected as @' + escapeHtml(user) + '</span>';
     } else if (token) {
-      statusEl.innerHTML = '<span style="color:#7ce7b6; font-weight:600;">\u2713 Connected to Simkl</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected to Simkl</span>';
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:var(--text-2); font-weight:600;">Custom Simkl Client ID configured</span> <small style="color:var(--muted);">(Account not connected)</small>';
+      statusEl.innerHTML = '<span class="u-c-v_text_2 u-fw-600">Custom Simkl Client ID configured</span> <small class="u-c-v_muted">(Account not connected)</small>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected.</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected.</span>';
     }
   }
 
@@ -43182,14 +43496,14 @@ async function runMySimklLists() {
   const input = document.getElementById('simklKeyInput');
   const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
-  const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Simkl account in Settings or click <strong>Connect Simkl</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+  const neutralMsg = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Simkl account in Settings or click <strong>Connect Simkl</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
   if (!token) {
     box.innerHTML = neutralMsg;
     return;
   }
 
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your Simkl lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your Simkl lists\u2026</small></p>';
   try {
     const res = await fetch(ORIGIN + '/api/simkl/my-lists', {
       method: 'POST',
@@ -43325,7 +43639,7 @@ function renderMySimklLists(lists) {
   const box = document.getElementById('mySimklListsResult');
   if (!box) return;
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No items found on your Simkl account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No items found on your Simkl account.</small></p>';
     return;
   }
 
@@ -43412,7 +43726,7 @@ function renderMySimklLists(lists) {
     const markWatchedBtn = isCompleted
       ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" data-act="markSimklListAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : '';
-    const addBtn = '<button type="button" class="lc-btn secondary myListAddBtn' + (added ? ' is-added' : '') + '" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
+    const addBtn = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn' + (added ? ' is-added' : '') + '" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
 
     const previewItems = filteredItems.slice(0, 9);
     let posterThumbs = '';
@@ -43423,11 +43737,11 @@ function renderMySimklLists(lists) {
           const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
           let overlays = '';
           if (isAiringNext) {
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn u-cur-pointer" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn u-cur-pointer" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
           } else {
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' + totalCount + ' &rsaquo;</div>';
           }
           const simklStatus = isAiringNext ? (it.status || 'watching') : (l.statusKey || (l.url ? l.url.split(':')[3] : 'plantowatch'));
           const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
@@ -43470,7 +43784,7 @@ function renderMySimklLists(lists) {
           const smkPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster) : it.poster;
           return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
             '<div class="list-card-mini-poster-img-wrap">' +
-              (smkPoster ? '<img src="' + escapeAttr(smkPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(smkPoster || '') + '" alt="" loading="lazy">' : '<div style="width:100%;height:100%;background:var(--bg-card);"></div>') +
+              (smkPoster ? '<img src="' + escapeAttr(smkPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(smkPoster || '') + '" alt="" loading="lazy">' : '<div class="u-bg-v_color_bg_sunken" style="width:100%; height:100%;"></div>') +
               (isAiringNext ? (dateBadge + bottomBadge) : '') +
               removeBtn +
               overlays +
@@ -43481,7 +43795,7 @@ function renderMySimklLists(lists) {
         }).join('') +
       '</div>';
     } else if (isAiringNext) {
-      posterThumbs = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
+      posterThumbs = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
     }
 
     const titleClick = isAiringNext ? 'data-act="openSimklAiringNextDetailsPage"' : '';
@@ -43489,7 +43803,7 @@ function renderMySimklLists(lists) {
     return '<div class="list-card" data-list-type="' + type + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" ' + titleClick + ' style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+          '<div class="list-card-title u-cur-pointer" ' + titleClick + '>' + escapeHtml(l.name) + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + typeLabel + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' items</span>' +
@@ -43505,7 +43819,7 @@ function renderMySimklLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
 }
 
@@ -44883,26 +45197,26 @@ function renderDiscoveredCategories() {
   if (globalTargetWrap) globalTargetWrap.style.display = discoveredImportCategories.length > 1 ? 'none' : '';
   if (globalNewWrap && discoveredImportCategories.length > 1) globalNewWrap.style.display = 'none';
 
-  let html = '<div style="margin-top:10px; border-top:1px solid var(--border); padding-top:12px;">' +
-    '<p style="font-weight:600; font-size:0.9rem; margin-bottom:8px; color:var(--text);">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
-    '<div style="display:flex; flex-direction:column; gap:10px;">';
+  let html = '<div class="u-mt-10px u-bdt-1px_solid_v_border u-pt-12px">' +
+    '<p class="u-fw-600 u-fs-v_font_size_base u-mb-8px u-c-v_text">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
+    '<div class="u-fd-column u-gap-10px" style="display:flex;">';
 
   discoveredImportCategories.forEach((cat, idx) => {
     const isWatchedOrDiary = cat.isWatchCategory || cat.id.includes('watch') || cat.id.includes('diary') || cat.id.includes('history');
     const watchToggle = isWatchedOrDiary
-      ? '<div style="margin-left:26px; margin-top:4px;"><label style="font-size:0.8rem; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
+      ? '<div class="u-ml-26px u-mt-4px"><label class="u-fs-v_font_size_sm u-c-v_muted u-cur-pointer u-ai-center u-gap-5px" style="display:inline-flex;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
       : '';
 
-    html += '<div class="row" style="flex-direction:column; align-items:flex-start; padding:10px 12px; background:var(--bg-2, rgba(255,255,255,0.03)); border:1px solid var(--border); border-radius:8px;">' +
-      '<div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:8px;">' +
-        '<label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; cursor:pointer; color:var(--text);">' +
+    html += '<div class="row u-fd-column u-ai-flex_start u-p-10px_12px u-bg-v_bg_2_rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm">' +
+      '<div class="u-ai-center u-jc-space_between u-fw2-wrap u-gap-8px" style="display:flex; width:100%;">' +
+        '<label class="u-ai-center u-gap-8px u-fw-600 u-fs-v_font_size_base u-cur-pointer u-c-v_text" style="display:inline-flex;">' +
           '<input type="checkbox" class="importCatCheck" data-cat-index="' + idx + '" checked> ' +
           escapeHtml(cat.label) +
-          ' <span style="font-weight:normal; color:var(--muted); font-size:0.82rem;">(' + cat.items.length + ' entries)</span>' +
+          ' <span class="u-fw-normal u-c-v_muted u-fs-v_font_size_sm">(' + cat.items.length + ' entries)</span>' +
         '</label>' +
-        '<div style="display:inline-flex; align-items:center; gap:6px;">' +
-          '<span style="font-size:0.8rem; color:var(--muted);">Destination:</span>' +
-          '<select class="importCatTargetSelect" data-cat-index="' + idx + '" style="padding:6px 10px; font-size:0.85rem; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
+        '<div class="u-ai-center u-gap-6px" style="display:inline-flex;">' +
+          '<span class="u-fs-v_font_size_sm u-c-v_muted">Destination:</span>' +
+          '<select class="importCatTargetSelect u-p-6px_10px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text" data-cat-index="' + idx + '">' +
             buildCategoryTargetOptionsHtml(cat.defaultTarget, cat.defaultNewName) +
           '</select>' +
         '</div>' +
@@ -44937,7 +45251,7 @@ async function onUnifiedImportFilesSelected(input) {
   }
 
   if (box) {
-    box.innerHTML = '<p style="margin-top:10px; font-size:0.85rem; color:var(--muted);"><small>Scanning file(s)&hellip;</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"><small>Scanning file(s)&hellip;</small></p>';
   }
 
   const discovered = [];
@@ -45344,7 +45658,7 @@ async function runUnifiedListImport() {
     const rawItems = cat.items;
 
     if (resultBox) {
-      resultBox.innerHTML = '<p style="font-size:0.88rem; color:var(--muted);"><small>Processing ' + escapeHtml(cat.label) + ' (' + rawItems.length + ' items)&hellip;</small></p>';
+      resultBox.innerHTML = '<p class="u-fs-v_font_size_sm u-c-v_muted"><small>Processing ' + escapeHtml(cat.label) + ' (' + rawItems.length + ' items)&hellip;</small></p>';
     }
 
     // Resolve missing IMDb / Poster metadata via TMDB bulk-resolve
@@ -45463,18 +45777,18 @@ async function runUnifiedListImport() {
   if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
   if (typeof populateImportTargetLists === 'function') populateImportTargetLists();
 
-  let summaryHtml = '<div style="margin-top:12px;">';
+  let summaryHtml = '<div class="u-mt-12px">';
   if (createdSummary.length) {
     summaryHtml += '<p class="testresult ok">\u2713 Successfully imported:<br>' + createdSummary.map(escapeHtml).join('<br>') + '</p>';
   }
   if (totalWatchedAdded) {
-    summaryHtml += '<p style="margin-top:6px; font-size:0.85rem; color:#7ce7b6;">\u2713 Marked ' + totalWatchedAdded + ' item(s) as watched in Watch History.</p>';
+    summaryHtml += '<p class="u-mt-6px u-fs-v_font_size_sm u-c-v_color_success_text">\u2713 Marked ' + totalWatchedAdded + ' item(s) as watched in Watch History.</p>';
   }
   if (errors.length) {
-    summaryHtml += '<p class="testresult err" style="margin-top:8px;">' + errors.map(escapeHtml).join('<br>') + '</p>';
+    summaryHtml += '<p class="testresult err u-mt-8px">' + errors.map(escapeHtml).join('<br>') + '</p>';
   }
   if (!createdSummary.length && !errors.length) {
-    summaryHtml += '<p style="color:var(--muted); font-size:0.85rem;">No new items were added (items may already exist in the target lists).</p>';
+    summaryHtml += '<p class="u-c-v_muted u-fs-v_font_size_sm">No new items were added (items may already exist in the target lists).</p>';
   }
   summaryHtml += '</div>';
 
@@ -46435,7 +46749,7 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
 
 function renderCustomizeButtonHtml(name, url, type) {
   return '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(name || '') + '" data-url="' + escapeAttr(url || '') + '" data-type="' + escapeAttr(type || 'movie') + '" title="Customize in List Builder" aria-label="Customize in List Builder">' +
-    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none; flex-shrink:0;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="u-fsh-0" style="pointer-events:none;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
     '<span class="customize-btn-text">Customize</span>' +
   '</button>';
 }
@@ -46582,7 +46896,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     let addBtnHtml = '';
     if ((item.source === 'My Lists Addon' || item.source === 'Profile') && usernameSlug) {
       likeBtnHtml = '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
-      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn list-add-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + (item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
@@ -46591,7 +46905,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       likeBtnHtml = '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
         (alreadyLikedExt ? '&#9829;' : '&#9825;') +
         '</button>';
-      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn list-add-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
@@ -46606,7 +46920,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     const cardHtml = '<div class="list-card" data-list-type="' + escapeAttr(item.type || 'mixed') + '" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(slotType) + '" data-creator="' + escapeAttr(item.user || '') + '" data-items="' + escapeAttr(item.items || '') + '" data-likes="' + escapeAttr(item.likes || 0) + '" data-source="' + escapeAttr(item.source) + '">' +
       '<div class="list-card-header">' +
       '<div class="list-card-body">' +
-      '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + sourceBadgeHtml + escapeHtml(item.name) + '</div>' +
+      '<div class="list-card-title searchViewListBtn u-cur-pointer">' + sourceBadgeHtml + escapeHtml(item.name) + '</div>' +
       '<div class="list-card-meta">' +
       (creatorLabel ? '<span>' + creatorLabel + '</span>' : '') +
       (creatorLabel ? '<span class="list-card-meta-sep">&middot;</span>' : '') +
@@ -46631,10 +46945,10 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   let html = topCards.map(c => c.html).join('');
 
   if (topCards.length === 0) {
-    html = '<p style="color:var(--muted); font-size:0.9rem; padding:8px 0;"><small>No lists match that search.</small></p>';
+    html = '<p class="u-c-v_muted u-fs-v_font_size_base u-p-8px_0"><small>No lists match that search.</small></p>';
   }
   if (traktError) {
-    html += '<p class="testresult err" style="margin-top:8px;">&#10007; Trakt search: ' + escapeHtml(traktError) + '</p>';
+    html += '<p class="testresult err u-mt-8px">&#10007; Trakt search: ' + escapeHtml(traktError) + '</p>';
   }
   box.innerHTML = html;
 
@@ -46868,10 +47182,10 @@ async function loadPosterSlot(slot) {
 
             let overlays = '';
             if (isMobileEnd) {
-              overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+              overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' + totalCount + ' &rsaquo;</div>';
             }
             if (isDesktopEnd) {
-              overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+              overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' + totalCount + ' &rsaquo;</div>';
             }
 
             let removeBtn = '';
@@ -46898,7 +47212,7 @@ async function loadPosterSlot(slot) {
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';
@@ -47369,7 +47683,7 @@ async function loadPopularListsFeed(forceRefresh) {
     traktPopularCache = null;
     if (window._listPreviewCache) window._listPreviewCache.clear();
   }
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading popular public lists…</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading popular public lists…</p>';
   try {
     const [mdbLists, traktLists] = await Promise.all([
       ensureMdblistPopularLoaded(),
@@ -47378,7 +47692,7 @@ async function loadPopularListsFeed(forceRefresh) {
     const combined = [...(mdbLists || []), ...(traktLists || [])];
     combined.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     if (!combined.length) {
-      container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">No popular public lists found.</p>';
+      container.innerHTML = '<p class="app-shell-muted">No popular public lists found.</p>';
       return;
     }
     render5PosterListsFeed(container, combined);
@@ -47398,10 +47712,10 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
     const isDesktopEnd = (i === previewPosters.length - 1 && previewPosters.length >= 4);
     let overlays = '';
     if (isMobileEnd) {
-      overlays += '<div class="list-card-count-overlay mobile-only curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay mobile-only curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + totalCount + ' &rsaquo;</div>';
     }
     if (isDesktopEnd) {
-      overlays += '<div class="list-card-count-overlay desktop-only curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay desktop-only curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + totalCount + ' &rsaquo;</div>';
     }
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
     const tilePoster = resolveClientPoster(s, s.poster || '');
@@ -47412,7 +47726,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
         overlays +
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(s.name) + '</div>' +
-      ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
 
@@ -47421,7 +47735,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
 
   const isAdded = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(null, type, customUrl) || isListAddedToConfig(customUrl, type));
   const addBtnHtml = renderCustomizeButtonHtml(title, customUrl, type) +
-    '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
+    '<button type="button" class="lc-btn list-add-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -47430,7 +47744,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
   return '<div class="list-card" data-name="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     '<div class="list-card-header">' +
       '<div class="list-card-body">' +
-        '<div class="list-card-title curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + escapeHtml(title) + '</div>' +
+        '<div class="list-card-title curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + escapeHtml(title) + '</div>' +
         '<div class="list-card-meta">' +
           '<span>' + escapeHtml(subtitle) + '</span>' +
           '<span class="list-card-meta-sep">&middot;</span>' +
@@ -47475,7 +47789,7 @@ async function loadCuratedListsFeed(forceRefresh) {
   if (curatedListsFeedLoaded && !forceRefresh && !historyChanged && container.children.length > 0) {
     return;
   }
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading your personalized curated lists…</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading your personalized curated lists…</p>';
 
   try {
     let customListsMap = {};
@@ -47696,7 +48010,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       const recommendedLists = scored.slice(0, 10).map(function(s) { return s.list; });
 
       if (recommendedLists.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:0.95rem; margin:0 0 2px;">Recommended Community Lists</h3><p style="margin:0; font-size:0.8rem; color:var(--muted);">Top community and curated lists you might like</p></div>';
+        sectionsHtml += '<div class="u-mt-24px u-mb-8px"><h3 class="u-fs-v_font_size_base u-m-0_0_2px">Recommended Community Lists</h3><p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Top community and curated lists you might like</p></div>';
         sectionsHtml += recommendedLists.map(l => {
           const type = l.type || 'movie';
           const added = alreadyAdded.has(l.url + '|' + type);
@@ -47705,7 +48019,7 @@ async function loadCuratedListsFeed(forceRefresh) {
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
               '<div class="list-card-body">' +
-                '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+                '<div class="list-card-title searchViewListBtn u-cur-pointer">' + escapeHtml(l.name) + '</div>' +
                 '<div class="list-card-meta">' +
                   '<span>by ' + escapeHtml(author) + '</span>' +
                   '<span class="list-card-meta-sep">&middot;</span>' +
@@ -47718,7 +48032,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                 '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLiked ? ' liked' : '') + '" data-url="' + escapeAttr(l.url) + '">' +
                   (alreadyLiked ? '&#9829;' : '&#9825;') +
                 '</button>' +
-                '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+                '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
                   (added ? 'style="color:var(--danger);"' : '') +
                   ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
                   (added ? 'Remove' : '+ Add') +
@@ -47740,7 +48054,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       }).slice(0, 5);
 
       if (similarToCustom.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:0.95rem; margin:0 0 2px;">Lists Similar to Your Custom Lists</h3><p style="margin:0; font-size:0.8rem; color:var(--muted);">Public lists matching the themes of custom lists you created</p></div>';
+        sectionsHtml += '<div class="u-mt-24px u-mb-8px"><h3 class="u-fs-v_font_size_base u-m-0_0_2px">Lists Similar to Your Custom Lists</h3><p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Public lists matching the themes of custom lists you created</p></div>';
         const alreadyAdded = new Set();
         document.querySelectorAll('#lists .entry').forEach(function(entry) {
           const t = entry.querySelector('.type') ? entry.querySelector('.type').value : '';
@@ -47756,7 +48070,7 @@ async function loadCuratedListsFeed(forceRefresh) {
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
               '<div class="list-card-body">' +
-                '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+                '<div class="list-card-title searchViewListBtn u-cur-pointer">' + escapeHtml(l.name) + '</div>' +
                 '<div class="list-card-meta">' +
                   '<span>by ' + escapeHtml(author) + '</span>' +
                   '<span class="list-card-meta-sep">&middot;</span>' +
@@ -47769,7 +48083,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                 '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLiked ? ' liked' : '') + '" data-url="' + escapeAttr(l.url) + '">' +
                   (alreadyLiked ? '&#9829;' : '&#9825;') +
                 '</button>' +
-                '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+                '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
                   (added ? 'style="color:var(--danger);"' : '') +
                   ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
                   (added ? 'Remove' : '+ Add') +
@@ -47785,8 +48099,8 @@ async function loadCuratedListsFeed(forceRefresh) {
 
     if (!sectionsHtml) {
       container.innerHTML =
-        '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
-          '<p style="margin:0; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+        '<div class="u-ta-center u-p-24px_16px u-bd-1px_solid_v_border u-br-v_radius">' +
+          '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '</div>';
       return;
     }
@@ -47801,8 +48115,8 @@ async function loadCuratedListsFeed(forceRefresh) {
   } catch (err) {
     console.error('Curated lists error:', err);
     container.innerHTML =
-      '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px;">' +
-        '<p style="margin:0 0 10px; font-size:0.88rem; color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+      '<div class="u-ta-center u-p-24px_16px u-bd-1px_solid_v_border u-br-v_radius">' +
+        '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '<button type="button" class="lc-btn primary" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;]">Explore Discover</button>' +
       '</div>';
   }
@@ -47813,7 +48127,7 @@ async function renderLikedListsFeed(forceRefresh) {
   if (!container) return;
   const likedUrls = [...getLikedListsSet()];
   if (!likedUrls.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p>';
+    container.innerHTML = '<p class="app-shell-muted">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p>';
     container.dataset.likedCount = '0';
     return;
   }
@@ -47821,7 +48135,7 @@ async function renderLikedListsFeed(forceRefresh) {
     return;
   }
   container.dataset.likedCount = String(likedUrls.length);
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading your ' + likedUrls.length + ' liked list(s)...</p>';
+  container.innerHTML = '<p class="app-shell-muted">Loading your ' + likedUrls.length + ' liked list(s)…</p>';
   try {
     const toplists = await ensureMdblistPopularLoaded();
     const topMap = new Map();
@@ -48036,7 +48350,7 @@ function render5PosterListsFeed(container, lists) {
     return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+          '<div class="list-card-title searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             sourceBadgeHtml +
             escapeHtml(displayName) +
           '</div>' +
@@ -48051,7 +48365,7 @@ function render5PosterListsFeed(container, lists) {
         '<div class="list-card-actions">' +
           likeBtnHtml +
           renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
-          '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+          '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
             ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
@@ -48271,7 +48585,7 @@ function seasonWatchedButtonState(d, seasonMeta) {
 // call site).
 function watchedSeasonButtonState(watched) {
   return watched
-    ? { upcoming: false, label: '<span style="margin-right:4px;">&#x2713;</span> Mark Season Unwatched', className: 'secondary', title: '' }
+    ? { upcoming: false, label: '<span class="u-mr-4px">&#x2713;</span> Mark Season Unwatched', className: 'secondary', title: '' }
     : { upcoming: false, label: 'Mark Season Watched', className: 'primary', title: '' };
 }
 
@@ -48302,7 +48616,7 @@ function episodeWatchButtonHtml(ep, isWatched) {
   const hasAired = typeof isEpisodeAired !== 'function' || isEpisodeAired(ep);
   if (hasAired || isWatched) {
     return '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isWatched ? 'secondary' : 'primary') + '" data-act="toggleEpisodeWatchStatusFromModal">' +
-      (isWatched ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+      (isWatched ? '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
       '</button>';
   }
   const airDate = (ep && (ep.air_date || ep.airDate)) || '';
@@ -48506,10 +48820,10 @@ function openEpisodeDetails(epNum) {
   const airTimeLabel = typeof episodeAirTimeLabel === 'function' ? episodeAirTimeLabel(d, ep) : '';
 
   let infoHtml = '';
-  if (date) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(date) + '</div>';
-  if (airTimeLabel) infoHtml += '<div style="margin-bottom:6px; color:var(--brand);">' + escapeHtml(airTimeLabel) + '</div>';
-  if (runtime) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(runtime) + '</div>';
-  if (ep.vote_average) infoHtml += '<div style="margin-bottom:6px;">\u2605 ' + escapeHtml(Number(ep.vote_average).toFixed(1)) + ' TMDB</div>';
+  if (date) infoHtml += '<div class="u-mb-6px">' + escapeHtml(date) + '</div>';
+  if (airTimeLabel) infoHtml += '<div class="u-mb-6px u-c-v_brand">' + escapeHtml(airTimeLabel) + '</div>';
+  if (runtime) infoHtml += '<div class="u-mb-6px">' + escapeHtml(runtime) + '</div>';
+  if (ep.vote_average) infoHtml += '<div class="u-mb-6px">\u2605 ' + escapeHtml(Number(ep.vote_average).toFixed(1)) + ' TMDB</div>';
   
   window._currentEpisodeDetails = ep;
   
@@ -48540,15 +48854,15 @@ function openEpisodeDetails(epNum) {
 
   const innerHtml = 
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-    '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap; margin-top:20px;">' +
-      '<div style="flex: 0 0 300px; max-width: 100%;">' +
-        (still ? '<img src="' + still + '" style="width:100%; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+    '<div class="u-fd-row u-gap-32px u-fw2-wrap u-mt-20px" style="display:flex;">' +
+      '<div class="u-flex-0_0_300px u-maxw-100">' +
+        (still ? '<img src="' + still + '" class="u-br-v_radius_sm u-bsh-0_4px_12px_rgba_0_0_0_0_5" style="width:100%;">' : '') +
       '</div>' +
-      '<div style="flex: 1; min-width: 300px;">' +
-        '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
-          '<div style="margin-bottom:20px;">' + watchBtnHtml + '</div>' +
-        '<div style="margin-bottom:16px; color:var(--text); font-size:1.05rem;">' + infoHtml + '</div>' +
-        '<p style="font-size:1.05rem; line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
+      '<div class="u-flex-1 u-minw-300px">' +
+        '<h1 class="u-m-0_0_16px u-fs-2_5rem u-ff-serif">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
+          '<div class="u-mb-20px">' + watchBtnHtml + '</div>' +
+        '<div class="u-mb-16px u-c-v_text u-fs-v_font_size_md">' + infoHtml + '</div>' +
+        '<p class="u-fs-v_font_size_md u-lh-1_6 u-c-v_text u-mb-24px">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
       '</div>' +
     '</div>';
     
@@ -48691,7 +49005,7 @@ window.updateSeasonEpisodeCounts = updateSeasonEpisodeCounts;
 // spelling out its own label and classes is how they came to disagree.
 function showWatchedButtonState(watched) {
   return watched
-    ? { label: '<span style="margin-right:4px;">&#x2713;</span> Mark Show Unwatched', className: 'secondary' }
+    ? { label: '<span class="u-mr-4px">&#x2713;</span> Mark Show Unwatched', className: 'secondary' }
     : { label: 'Mark Show Watched', className: 'primary' };
 }
 
@@ -48994,8 +49308,8 @@ function renderItemStorylinesWatchOrder(d, type) {
           (isWatched && !isCurrent ? '<span class="item-storyline-watched-badge" title="Watched">&#x2713;</span>' : '') +
         '</div>' +
         '<div class="item-storyline-title">' + escapeHtml(displayTitle) + '</div>' +
-        '<div class="item-storyline-meta" style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
-          '<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(formatSubtitle) + '</span>' +
+        '<div class="item-storyline-meta u-ai-center u-jc-space_between u-gap-6px" style="display:flex;">' +
+          '<span class="u-ov-hidden u-to-ellipsis u-ws-nowrap">' + escapeHtml(formatSubtitle) + '</span>' +
           ratingSlot +
         '</div>' +
       '</div>';
@@ -49023,7 +49337,7 @@ function renderItemStorylinesWatchOrder(d, type) {
   }).join('');
 
   const pillsHtml = (matchingEvents.length > 1) ?
-    '<div class="subnav-pills-bar" style="margin-bottom:16px; flex-wrap:wrap;">' +
+    '<div class="subnav-pills-bar u-mb-16px u-fw2-wrap">' +
       matchingEvents.map((ev, idx) =>
         '<button type="button" class="subnav-pill' + (idx === 0 ? ' active' : '') + '" data-act="switchItemStorylineTab" data-act-args="' + appActArgs([ev.id, "@self"]) + '">' +
           (idx === 0 ? '<span class="check-icon">&#x2713;</span> ' : '') + escapeHtml(ev.name) +
@@ -49043,8 +49357,8 @@ function renderItemStorylinesWatchOrder(d, type) {
   }
 
   return '<div class="item-storylines-section">' +
-    '<div class="shelf-header" style="margin-bottom:12px;">' +
-      '<h3 style="margin: 0; font-family:serif; font-size:1.5rem;">Storylines, Sagas &amp; Universes</h3>' +
+    '<div class="shelf-header u-mb-12px">' +
+      '<h3 class="u-m-0 u-ff-serif u-fs-v_font_size_2xl">Storylines, Sagas &amp; Universes</h3>' +
     '</div>' +
     pillsHtml +
     '<div class="item-storylines-panels">' +
@@ -49107,7 +49421,7 @@ async function openItemDetailsModal(id, type, opts) {
   }
   
   const body = document.getElementById('itemDetailsBody');
-  body.innerHTML = '<p style="color:var(--muted); text-align:center; padding: 40px;">Fetching information from TMDB...</p>';
+  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB...</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -49181,15 +49495,15 @@ async function openItemDetailsModal(id, type, opts) {
     const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
-      '<h3 style="margin: 0 0 16px; font-family:serif; font-size:1.5rem;">Trailer</h3>' +
-      '<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:8px;">' +
-      '<iframe style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
+      '<h3 class="u-m-0_0_16px u-ff-serif u-fs-v_font_size_2xl">Trailer</h3>' +
+      '<div class="u-pb-56_25 u-ov-hidden u-br-v_radius_sm" style="position:relative; height:0;">' +
+      '<iframe class="u-bd-0" style="position:absolute; top:0; left:0; width:100%; height:100%;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
       '</div>' : '';
 
     let seasonsHtml = '';
     if (d.seasonsData && d.seasonsData.length > 0) {
-      seasonsHtml += '<h3 style="margin: 32px 0 16px; font-family:serif; font-size:1.5rem;">Seasons</h3>';
-      seasonsHtml += '<div style="display:flex; flex-direction:column; gap:16px;">';
+      seasonsHtml += '<h3 class="u-m-32px_0_16px u-ff-serif u-fs-v_font_size_2xl">Seasons</h3>';
+      seasonsHtml += '<div class="u-fd-column u-gap-16px" style="display:flex;">';
       // Specials (season 0) are real seasons too -- just listed last, below
       // every numbered season, since TMDB itself orders them first.
       const regularSeasons = d.seasonsData.filter(season => season.season_number !== 0);
@@ -49220,8 +49534,8 @@ async function openItemDetailsModal(id, type, opts) {
                 '</button>' +
               '</div>' +
             '</div>' +
-            '<div class="season-episodes-container" style="display:none; padding:16px; border-top:1px solid var(--border); background:rgba(0,0,0,0.2);">' +
-              '<div class="episodes-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:16px;"></div>' +
+            '<div class="season-episodes-container u-p-16px u-bdt-1px_solid_v_border u-bg-rgba_0_0_0_0_2" style="display:none;">' +
+              '<div class="episodes-grid u-gtc-repeat_auto_fill_minmax_140px_1fr u-gap-16px" style="display:grid;"></div>' +
             '</div>' +
           '</div>';
       });
@@ -49264,7 +49578,7 @@ async function openItemDetailsModal(id, type, opts) {
           '</button>'
           :
           '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
-            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
           '</button>') +
       '</div>' +
       genresHtml +
@@ -49272,13 +49586,13 @@ async function openItemDetailsModal(id, type, opts) {
         '<p class="item-synopsis" id="itemSynopsisText">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
         '<button type="button" class="item-synopsis-toggle" id="itemSynopsisToggle" aria-controls="itemSynopsisText" aria-expanded="false" hidden data-act="toggleItemSynopsis" data-act-args="[&quot;@self&quot;]">Read More</button>' +
       '</div>' +
-      (trailerHtml ? '<div style="margin-top:32px;">' + trailerHtml + '</div>' : '') +
-      (seasonsHtml ? '<div style="margin-top:32px;">' + seasonsHtml + '</div>' : '') +
-      (storylinesHtml ? '<div style="margin-top:32px;">' + storylinesHtml + '</div>' : '');
+      (trailerHtml ? '<div class="u-mt-32px">' + trailerHtml + '</div>' : '') +
+      (seasonsHtml ? '<div class="u-mt-32px">' + seasonsHtml + '</div>' : '') +
+      (storylinesHtml ? '<div class="u-mt-32px">' + storylinesHtml + '</div>' : '');
     syncItemSynopsisToggle();
       
   } catch (err) {
-    body.innerHTML = '<p class="testresult err" style="margin-top:48px;">\u2717 ' + escapeHtml(err.message) + '</p>';
+    body.innerHTML = '<p class="testresult err u-mt-48px">\u2717 ' + escapeHtml(err.message) + '</p>';
   }
 }
 
@@ -49355,7 +49669,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   container.style.display = 'block';
   if (grid.innerHTML.trim() !== '') return; // already loaded
   
-  grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding: 20px; color:var(--muted);">Loading episodes...</div>';
+  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes...</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -49383,18 +49697,18 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
       window._episodeDataCache[ep.episode_number] = ep;
       const still = ep.still_path ? escapeAttr(ep.still_path) : (fallbackStill ? escapeAttr(fallbackStill) : '');
       epsHtml +=
-        '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
-          '<div style="width:100%; aspect-ratio:16/9; background:#222; border-radius:6px; overflow:hidden; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-            (still ? '<img src="' + still + '" style="width:100%; height:100%; object-fit:cover;">' : '') +
-            '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:#ffffff; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8rem; box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
+        '<div class="clickable-episode u-fd-column u-gap-4px u-cur-pointer" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
+          '<div class="u-aspectratio-16_9 u-bg-222 u-br-v_radius_sm u-ov-hidden u-bsh-0_2px_6px_rgba_0_0_0_0_4" style="width:100%; position:relative;">' +
+            (still ? '<img src="' + still + '" class="u-objectfit-cover" style="width:100%; height:100%;">' : '') +
+            '<div class="episode-num-badge u-bg-v_accent u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
           '</div>' +
-          '<div style="font-size:0.9rem; color:var(--text); line-height:1.2; padding-top:4px;">' + escapeHtml(ep.name) + '</div>' +
+          '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
     });
-    grid.innerHTML = epsHtml || '<div style="grid-column: 1 / -1; color:var(--muted);">No episodes found.</div>';
+    grid.innerHTML = epsHtml || '<div class="u-gridcolumn-1_1 u-c-v_muted">No episodes found.</div>';
     if (typeof updateSeasonWatchedButton === 'function') updateSeasonWatchedButton(seasonNum);
   } catch (err) {
-    grid.innerHTML = '<div style="grid-column: 1 / -1; color:red;">Error loading episodes.</div>';
+    grid.innerHTML = '<div class="u-gridcolumn-1_1 u-c-red">Error loading episodes.</div>';
   }
 }
 
@@ -49698,7 +50012,7 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Custom Lists
   if (customLists.length > 0) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:4px 0 6px;">Custom Lists</div>';
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-4px_0_6px">Custom Lists</div>';
     customLists.forEach((list, idx) => {
       let isChecked = false;
       try {
@@ -49713,33 +50027,33 @@ function openSelectListModal(id, type, title, poster) {
       }
       
       html += 
-        '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+          '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
             '<input type="checkbox" class="list-select-cb" data-type="custom" data-idx="' + idx + '" data-initially-checked="' + (isChecked ? 'true' : 'false') + '" ' + (isChecked ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
-            '<span style="font-weight:500;">' + escapeHtml(displayName) + '</span>' +
-            (isChecked ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+            '<span class="u-fw-500">' + escapeHtml(displayName) + '</span>' +
+            (isChecked ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
-          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isChecked ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: Trakt
   if (hasTrakt) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#ed1c24; font-weight:bold;">\u25CF</span> Trakt ' + (traktUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-ed1c24 u-fw-bold">\u25CF</span> Trakt ' + (traktUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
     '</div>';
 
     const traktWl = Array.isArray(window._myTraktLists) ? window._myTraktLists.find(l => l.slug === 'watchlist' || l.url === 'trakt:watchlist') : null;
     const inTraktWatchlist = isItemInExternalList('trakt', 'watchlist', 'watchlist', id, traktWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-name="Trakt Watchlist" data-initially-checked="' + (inTraktWatchlist ? 'true' : 'false') + '" ' + (inTraktWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>Trakt Watchlist</span>' +
-          (inTraktWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTraktWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTraktLists)) {
@@ -49747,13 +50061,13 @@ function openSelectListModal(id, type, title, poster) {
         if (!tl || tl.slug === 'watchlist' || tl.url === 'trakt:watchlist') return;
         const inList = isItemInExternalList('trakt', 'custom', tl.id || tl.slug || '', id, tl);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="custom" data-list-id="' + escapeAttr(tl.id || tl.slug || '') + '" data-name="' + escapeAttr(tl.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tl.name || 'Trakt List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -49761,8 +50075,8 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Simkl
   if (hasSimkl) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#00e699; font-weight:bold;">\u25CF</span> Simkl ' + (simklUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-00e699 u-fw-bold">\u25CF</span> Simkl ' + (simklUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
     '</div>';
 
     const simklStatuses = [
@@ -49777,45 +50091,45 @@ function openSelectListModal(id, type, title, poster) {
       const foundList = Array.isArray(window._mySimklLists) ? window._mySimklLists.find(l => l.url && l.url.includes(st.key) && (type === 'series' ? l.type === 'series' : l.type === 'movie')) : null;
       const isPresent = isItemInExternalList('simkl', 'status', st.key, id, foundList);
       html += 
-        '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+        '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+          '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
             '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="simkl" data-target="status" data-status="' + st.key + '" data-list-id="' + st.key + '" data-name="Simkl ' + escapeAttr(st.label) + '" data-initially-checked="' + (isPresent ? 'true' : 'false') + '" ' + (isPresent ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
             '<span>' + escapeHtml(st.label) + '</span>' +
-            (isPresent ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+            (isPresent ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
-          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isPresent ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: TMDB
   if (hasTmdb) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#01b4e4; font-weight:bold;">\u25CF</span> TMDB ' + (tmdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-01b4e4 u-fw-bold">\u25CF</span> TMDB ' + (tmdbUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
     '</div>';
 
     const tmdbWl = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('watchlist')) : null;
     const inTmdbWatchlist = isItemInExternalList('tmdb', 'watchlist', 'watchlist', id, tmdbWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="watchlist" data-list-id="watchlist" data-name="TMDB Watchlist" data-initially-checked="' + (inTmdbWatchlist ? 'true' : 'false') + '" ' + (inTmdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Watchlist</span>' +
-          (inTmdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTmdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     const tmdbFav = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('favorites')) : null;
     const inTmdbFav = isItemInExternalList('tmdb', 'favorite', 'favorite', id, tmdbFav);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="favorite" data-list-id="favorite" data-name="TMDB Favorites" data-initially-checked="' + (inTmdbFav ? 'true' : 'false') + '" ' + (inTmdbFav ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Favorites</span>' +
-          (inTmdbFav ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inTmdbFav ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbFav ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTmdbLists)) {
@@ -49823,13 +50137,13 @@ function openSelectListModal(id, type, title, poster) {
         if (!tml || (tml.url && (tml.url.includes('watchlist') || tml.url.includes('favorites')))) return;
         const inList = isItemInExternalList('tmdb', 'custom', tml.id || '', id, tml);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="custom" data-list-id="' + escapeAttr(tml.id || '') + '" data-name="' + escapeAttr(tml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tml.name || 'TMDB List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -49837,20 +50151,20 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: MDBList
   if (hasMdblist) {
-    html += '<div style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#f5c518; font-weight:bold;">\u25CF</span> MDBList ' + (mdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-f5c518 u-fw-bold">\u25CF</span> MDBList ' + (mdbUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
     '</div>';
 
     const mdbWl = Array.isArray(window._myMdblistLists) ? window._myMdblistLists.find(l => l.slug === 'watchlist' || l.url === 'mdblist:watchlist') : null;
     const inMdbWatchlist = isItemInExternalList('mdblist', 'watchlist', 'watchlist', id, mdbWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-name="MDBList Watchlist" data-initially-checked="' + (inMdbWatchlist ? 'true' : 'false') + '" ' + (inMdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>MDBList Watchlist</span>' +
-          (inMdbWatchlist ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+          (inMdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myMdblistLists)) {
@@ -49858,27 +50172,27 @@ function openSelectListModal(id, type, title, poster) {
         if (!ml || ml.slug === 'watchlist' || ml.slug === 'history' || ml.url === 'mdblist:watchlist' || ml.url === 'mdblist:history') return;
         const inList = isItemInExternalList('mdblist', 'custom', ml.id || ml.slug || '', id, ml);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:0.95rem;">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="custom" data-list-id="' + escapeAttr(ml.id || ml.slug || '') + '" data-name="' + escapeAttr(ml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(ml.name || 'MDBList List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
   }
 
   if (html) {
-    html += '<div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); text-align: center;">' +
-      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:0.9rem;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
+    html += '<div class="u-mt-16px u-pt-12px u-bdt-1px_dashed_v_border u-ta-center">' +
+      '<button type="button" class="lc-btn secondary u-fs-v_font_size_base" style="width:100%;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
     '</div>';
   }
 
   if (html === '') {
-    html = '<p style="text-align:center; padding:20px; color:var(--muted); font-size:0.95rem;">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
-      '<a href="#" id="emptyCreateListLink" style="color:var(--accent); font-weight:600;">Create a Custom List</a> or connect Trakt/Simkl/TMDB/MDBList in <strong>Settings</strong>.</p>';
+    html = '<p class="u-ta-center u-p-20px u-c-v_muted u-fs-v_font_size_base">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
+      '<a href="#" id="emptyCreateListLink" class="u-c-v_accent u-fw-600">Create a Custom List</a> or connect Trakt/Simkl/TMDB/MDBList in <strong>Settings</strong>.</p>';
     document.getElementById('addSelectedListsBtn').style.display = 'none';
     setTimeout(() => {
       const lnk = document.getElementById('emptyCreateListLink');
@@ -49928,9 +50242,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -49958,9 +50272,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -49992,9 +50306,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -50029,9 +50343,9 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:0.75rem; background:rgba(0,230,153,0.15); color:#00b377; padding:2px 6px; border-radius:4px; font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:0.75rem; color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -50698,7 +51012,7 @@ function applySearchFilters() {
 
 function renderTitlePosterCards(items, totalCount, resEl) {
   if (!items || !items.length) {
-    resEl.innerHTML = '<p style="margin:16px 0; color:var(--muted); font-size:0.9rem;"><small>No titles match the selected filters.</small></p>';
+    resEl.innerHTML = '<p class="u-m-16px_0 u-c-v_muted u-fs-v_font_size_base"><small>No titles match the selected filters.</small></p>';
     return;
   }
 
@@ -50709,10 +51023,10 @@ function renderTitlePosterCards(items, totalCount, resEl) {
   let countBadge = '';
   if (q) {
     countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-      ? '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
-      : '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+      ? '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
   } else {
-    countBadge = '<div style="margin-bottom:12px; font-size:0.86rem; font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+    countBadge = '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Top Trending ' + typeLabel + ' Right Now</div>';
   }
 
   const postersHtml = items.map(m => {
@@ -50720,7 +51034,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     const type = currentCatalogSearchType === 'tv' ? 'series' : 'movie';
     const id = 'tmdb:' + m.tmdbId;
     const ratingHtml = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(m) : '';
-    const subtitleHtml = '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;">' +
+    const subtitleHtml = '<div class="u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;">' +
       '<span>' + escapeHtml(m.year || '') + '</span>' +
       ratingHtml +
     '</div>';
@@ -50740,7 +51054,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
 
     const posterEl = resolvedCardPoster
       ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     
     return '<div class="live-preview-poster-card clickable-poster" ' +
       'data-id="' + escapeAttr(id || '') + '" ' +
@@ -50999,30 +51313,30 @@ async function runChannelTitleSearch() {
 function renderChannelTitleResults(results, searchType = 'tv') {
   const box = document.getElementById('channelSearchResult');
   if (!results.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No matches found.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No matches found.</small></p>';
     return;
   }
   const isMovie = searchType === 'movie';
   const cardsHtml = results.map((r) => {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : (r.poster);
     const posterImg = rPoster
-      ? '<img class="preview-thumb" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" style="cursor:pointer;">'
-      : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.7rem;text-align:center;padding:4px;cursor:pointer;">No poster</div>';
+      ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy">'
+      : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px u-cur-pointer" style="display:flex;">No poster</div>';
     const btnLabel = isMovie ? '+ Add Movie' : '+ Browse';
     const cardClass = isMovie ? 'channelMovieCard' : 'channelTitleCard';
     const btnClass = isMovie ? 'channelAddMovieBtn' : 'channelTitleBtn';
-    return '<div class="custom-list-search-item ' + cardClass + '" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' +
+    return '<div class="custom-list-search-item ' + cardClass + ' u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' +
       ' data-tmdbid="' + r.tmdbId + '" data-title="' + escapeAttr(r.title) + '" data-year="' + escapeAttr(r.year || '') + '" data-poster="' + escapeAttr(r.poster || '') + '" data-backdrop="' + escapeAttr(r.backdrop || '') + '">' +
       posterImg +
-      '<div style="width:100%; font-size:0.75rem; font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(r.title) + '">' +
+      '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(r.title) + '">' +
         escapeHtml(r.title) +
       '</div>' +
-      (r.year ? '<div style="font-size:0.7rem; color:var(--muted); text-align:center; margin-bottom:4px;">' + escapeHtml(r.year) + '</div>' : '<div style="height:14px; margin-bottom:4px;"></div>') +
-      '<button type="button" class="lc-btn secondary ' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.75rem;"' +
+      (r.year ? '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px">' + escapeHtml(r.year) + '</div>' : '<div class="u-mb-4px" style="height:14px;"></div>') +
+      '<button type="button" class="lc-btn secondary ' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' +
       ' data-tmdbid="' + r.tmdbId + '" data-title="' + escapeAttr(r.title) + '" data-year="' + escapeAttr(r.year || '') + '" data-poster="' + escapeAttr(r.poster || '') + '" data-backdrop="' + escapeAttr(r.backdrop || '') + '">' + btnLabel + '</button>' +
       '</div>';
   }).join('');
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:10px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cardsHtml + '</div>';
 }
 
 document.getElementById('channelSearchResult').addEventListener('click', (e) => {
@@ -51145,7 +51459,7 @@ async function browseChannelShow(tmdbId, showName, showPoster, showBackdrop) {
       escapeHtml(s.name || ('Season ' + s.season)) + ' (' + s.episodeCount + ')</button>'
     ).join(' ');
     box.innerHTML = '<p><small>Pick a season of <strong>' + escapeHtml(showName) + '</strong>, or:</small></p>' +
-      '<div class="actions" style="flex-wrap:wrap; margin-bottom:10px;">' +
+      '<div class="actions u-fw2-wrap u-mb-10px">' +
       '<button type="button" class="secondary channelAddAllSeasonsBtn"' +
       ' data-tmdbid="' + tmdbId + '" data-imdbid="' + escapeAttr(data.imdbId) + '"' +
       ' data-showname="' + escapeAttr(showName) + '" data-poster="' + escapeAttr(poster) + '"' +
@@ -51306,13 +51620,13 @@ async function loadChannelSeasonEpisodes(tmdbId, imdbId, showName, showPoster, s
       const epJson = escapeAttr(JSON.stringify({
         season: parseInt(season, 10), episode: ep.episode, title: ep.name, released: ep.released, thumbnail: ep.thumbnail, runtime: ep.runtime || 0,
       }));
-      return '<label class="row quick-row" style="cursor:pointer;">' +
+      return '<label class="row quick-row u-cur-pointer">' +
         '<span><input type="checkbox" class="channelEpisodeCheck" data-ep="' + epJson + '"> ' +
         'S' + season + 'E' + ep.episode + ' \u2014 ' + escapeHtml(ep.name || '') + '</span>' +
         '</label>';
     }).join('');
     listBox.innerHTML = rows +
-      '<div class="actions" style="margin-top:8px;">' +
+      '<div class="actions u-mt-8px">' +
       '<button type="button" class="secondary channelAddEpisodesBtn"' +
       ' data-imdbid="' + escapeAttr(imdbId) + '" data-tmdbid="' + escapeAttr(tmdbId) + '"' +
       ' data-showname="' + escapeAttr(showName) + '"' +
@@ -51792,8 +52106,8 @@ function renderChannelUndoBar() {
   }
   const name = _pendingChannelUndo.channel.name || 'Channel';
   bar.style.display = 'block';
-  bar.innerHTML = '<div class="row" style="gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">' +
-    '<span style="flex:1; font-size:0.85rem;">Deleted &ldquo;' + escapeHtml(name) + '&rdquo;.</span>' +
+  bar.innerHTML = '<div class="row u-gap-8px u-ai-center u-p-8px_10px u-bd-1px_solid_v_border u-br-v_radius_sm u-bg-v_surface">' +
+    '<span class="u-flex-1 u-fs-v_font_size_sm">Deleted &ldquo;' + escapeHtml(name) + '&rdquo;.</span>' +
     '<button type="button" class="secondary lc-btn" data-act="undoChannelDelete">Undo</button>' +
     '</div>';
 }
@@ -52035,7 +52349,7 @@ function renderChannelDraftList() {
   const badge = document.getElementById('channelDraftCountBadge');
   if (badge) badge.textContent = channelDraftItems.length ? '(' + channelDraftItems.length + ')' : '';
   if (!channelDraftItems.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>Nothing added yet &mdash; search above to get started.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing added yet &mdash; search above to get started.</small></p>';
     renderChannelPosterPicker();
     renderChannelCrossoverSuggestions();
     updateChannelBroadcastControls();
@@ -52088,7 +52402,7 @@ function renderChannelDraftList() {
     const posterSrc = it.thumbnail || it.poster || it.showPoster || it.backdrop || '';
     const posterEl = posterSrc
       ? '<img class="live-preview-poster" src="' + escapeAttr(posterSrc) + '" alt="" loading="lazy">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
 
     // Dragging is off while selecting: a drag and a tap-to-select on the
     // same card are the same gesture on a touch screen, and one of the two
@@ -52096,11 +52410,11 @@ function renderChannelDraftList() {
     const selecting = channelDraftSelectMode;
     const selectBox = selecting
       ? '<div style="position:absolute; top:4px; left:4px; z-index:5;">' +
-          '<input type="checkbox" class="channelPickCheck" data-idx="' + i + '"' + (isChannelDraftSelected(i) ? ' checked' : '') +
-          ' aria-label="Select this pick" style="width:20px; height:20px; accent-color:var(--accent); cursor:pointer;">' +
+          '<input type="checkbox" class="channelPickCheck u-acc-v_accent u-cur-pointer" data-idx="' + i + '"' + (isChannelDraftSelected(i) ? ' checked' : '') +
+          ' aria-label="Select this pick" style="width:20px; height:20px;">' +
         '</div>'
       : '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-          '<input type="number" class="pos channelPosInput" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:0.75rem; text-align:center; border-radius:6px; background:rgba(0,0,0,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
+          '<input type="number" class="pos channelPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
         '</div>';
     const removeBtn = selecting ? '' : '<button type="button" class="cw-remove-btn channelRemovePickBtn" title="Remove pick" aria-label="Remove pick" style="z-index:4;">\u2715</button>';
 
@@ -52127,8 +52441,8 @@ function renderChannelDraftList() {
   }).join('');
   
   box.innerHTML = visible.length
-    ? '<div class="poster-grid-3" style="margin-top:10px;">' + cardsHtml + '</div>'
-    : '<p style="color:var(--muted); font-size:0.85rem;"><small>No pick in this channel matches that filter.</small></p>';
+    ? '<div class="poster-grid-3 u-mt-10px">' + cardsHtml + '</div>'
+    : '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No pick in this channel matches that filter.</small></p>';
   const bulkBar = document.getElementById('channelDraftBulkBar');
   if (bulkBar) bulkBar.style.display = channelDraftSelectMode ? 'flex' : 'none';
   const modeBtn = document.getElementById('channelDraftSelectModeBtn');
@@ -52217,12 +52531,12 @@ function renderChannelPosterPicker() {
 
   // 1. Custom Channel Poster Option
   let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
-    '<div class="channel-poster-thumb-wrap custom-preview" style="background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; border:1px solid rgba(0,122,255,0.3);">' +
+    '<div class="channel-poster-thumb-wrap custom-preview u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100 u-fd-column u-ai-center u-jc-center u-gap-4px u-p-6px u-bd-1px_solid_rgba_0_122_255_0_3" style="display:flex;">' +
       '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
       '</svg>' +
-      '<span style="font-size:0.62rem; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:0.5px; text-align:center;">Custom</span>' +
+      '<span class="u-fs-v_font_size_2xs u-fw-700 u-c-v_color_on_brand u-tt-uppercase u-ls-0_5px u-ta-center">Custom</span>' +
     '</div>' +
     '<div class="channel-poster-check">\u2713</div>' +
     '<div class="channel-poster-title" title="Custom Channel Poster">Custom Poster</div>' +
@@ -58749,7 +59063,7 @@ function renderChannelCrossoverSuggestions() {
       '<p class="channel-crossover-desc">' + escapeHtml(event.description) + '</p>' +
       '<div class="channel-crossover-parts">' + chipsHtml + '</div>' +
       '<div class="channel-crossover-actions">' +
-        '<button type="button" class="primary lc-btn" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '" style="padding:6px 14px; font-size:0.82rem;">' + escapeHtml(btnLabel) + '</button>' +
+        '<button type="button" class="primary lc-btn u-p-6px_14px u-fs-v_font_size_sm" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '">' + escapeHtml(btnLabel) + '</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -59333,22 +59647,22 @@ function renderChannelStoryLock() {
     return '<label class="channel-rule-row" for="' + escapeAttr(id) + '">' +
       '<input type="checkbox" id="' + escapeAttr(id) + '"' + (isChannelShowStoryLocked(g.key) ? ' checked' : '') +
         ' data-act="toggleChannelStoryLock" data-act-args="' + appActArgs([g.key, "@checked"]) + '">' +
-      '<span>' + escapeHtml(g.name) + ' <small style="color:var(--muted);">(' + g.count + ')</small></span>' +
+      '<span>' + escapeHtml(g.name) + ' <small class="u-c-v_muted">(' + g.count + ')</small></span>' +
     '</label>';
   }).join('');
   box.innerHTML =
-    '<p style="margin:0 0 4px; font-weight:600; font-size:0.85rem;">Story Lock</p>' +
-    '<p style="margin:0 0 4px; color:var(--muted); font-size:0.78rem;">' +
+    '<p class="u-m-0_0_4px u-fw-600 u-fs-v_font_size_sm">Story Lock</p>' +
+    '<p class="u-m-0_0_4px u-c-v_muted u-fs-v_font_size_xs">' +
       'Shuffling suits a procedural &mdash; Seinfeld, The Office, Law &amp; Order. It ruins a serialized one. ' +
       'Tick a show here and it always advances to its next episode in order, while everything else keeps shuffling around it.' +
     '</p>' +
     (rotating
-      ? '<p style="margin:0 0 4px; color:var(--muted); font-size:0.78rem;">' +
+      ? '<p class="u-m-0_0_4px u-c-v_muted u-fs-v_font_size_xs">' +
           'On a daily schedule a locked show airs every day, starting from its first episode on the day you tick it and picking up where the day before stopped. ' +
           'With Hide watched on, it picks up from the first episode you have not seen instead. Untick and tick again to start it over.' +
         '</p>'
       : '') +
-    (active ? '' : '<p style="margin:0 0 4px; color:var(--muted); font-size:0.78rem;"><em>This channel plays in the order listed above, so nothing is being shuffled for a lock to protect against yet.</em></p>') +
+    (active ? '' : '<p class="u-m-0_0_4px u-c-v_muted u-fs-v_font_size_xs"><em>This channel plays in the order listed above, so nothing is being shuffled for a lock to protect against yet.</em></p>') +
     '<div class="channel-storylock-grid">' + rows + '</div>';
 }
 
@@ -59956,7 +60270,8 @@ function channelDraftSummary(items, settings) {
   list.forEach((it) => {
     if (!it) return;
     const key = channelDraftShowKey(it);
-    if (key) shows.add(key);
+    // A movie is not a show: counting it as one printed "11 shows · 11 movies".
+    if (key && it.kind !== 'movie') shows.add(key);
     if (it.kind === 'movie') movies++;
     else episodes++;
     const runtime = Number(it.runtime);
@@ -60406,7 +60721,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
   });
 
   if (!filtered.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No sagas found in this category.</small></p>';
+    container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No sagas found in this category.</small></p>';
     return;
   }
 
@@ -60457,10 +60772,10 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
       const isDesktopEnd = (i === previewPosters.length - 1 && totalCount >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' + totalCount + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' + totalCount + ' &rsaquo;</div>';
       }
 
       // The registry hands each entry a poster but never a rating -- these are
@@ -60477,19 +60792,19 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
         : '';
 
       return '<div class="list-card-mini-poster-tile">' +
-        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
+        '<div class="list-card-mini-poster-img-wrap u-cur-pointer" style="position:relative;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
           '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' +
           overlays +
         '</div>' +
         '<div class="list-card-mini-poster-name" title="' + escapeAttr(itemTitle) + '">' + escapeHtml(itemTitle) + '</div>' +
-        '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(yearOrSeason) + '</span>' + ratingSlot + '</div>' +
+        '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(yearOrSeason) + '</span>' + ratingSlot + '</div>' +
       '</div>';
     }).join('');
 
     return '<div class="list-card" data-universe-id="' + escapeAttr(event.id) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
+          '<div class="list-card-title u-cur-pointer" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' + escapeHtml(event.name) + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + escapeHtml(event.franchise) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
@@ -60500,7 +60815,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
         '</div>' +
         '<div class="list-card-actions">' +
           '<button type="button" class="lc-btn secondary" data-act="loadStorylineToDraft" data-act-args="' + appActArgs([event.id, "@self"]) + '" title="Customize in Channel Builder">Customize</button>' +
-          '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
+          '<button type="button" class="lc-btn list-add-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" data-act="createInstantStorylineChannel" data-act-args="' + appActArgs([event.id, "@self"]) + '" ' + (isAdded ? 'style="color:var(--danger);"' : '') + '>' + (isAdded ? 'Remove' : '+ Add') + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="list-card-posters">' +
@@ -61451,7 +61766,7 @@ function renderMyCreatedChannelsList() {
   const map = ensureAllChannelsSyncedFromRows(loadLocalChannels());
   const channels = Object.values(map);
   if (!channels.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
     return;
   }
   
@@ -61460,7 +61775,7 @@ function renderMyCreatedChannelsList() {
   if (sortSel && sortSel.value !== myChannelsSort) sortSel.value = myChannelsSort;
   const shown = sortMyChannels(filterMyChannels(channels));
   if (!shown.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No channel matches that search.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channel matches that search.</small></p>';
     return;
   }
 
@@ -61475,7 +61790,9 @@ function renderMyCreatedChannelsList() {
     const orderLabel = channelPlayOrderLabel(ch);
     const metaBits = [];
     if (ch.dynamic === 'next-up') metaBits.push('fills itself in from Continue Watching');
-    else metaBits.push(totalEpisodes + ' episode' + (totalEpisodes === 1 ? '' : 's'));
+    // The counts (shows, episodes, movies) are the second line's job; repeating
+    // them here, as "episodes", was wrong for a movie-only channel.
+    else if (!totalEpisodes) metaBits.push('No items yet');
     if (ch.dailyRotate) {
       metaBits.push((ch.rotateShows || CHANNEL_DEFAULT_ROTATE_SHOWS) + ' shows \u00d7 ' +
         (ch.rotateEpisodes || CHANNEL_DEFAULT_ROTATE_EPISODES) + ' daily');
@@ -61500,10 +61817,10 @@ function renderMyCreatedChannelsList() {
       const isDesktopEnd = (i === allPosters.length - 1 && allItems.length >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
 
       const p = it.thumbnail || it.poster || it.showPoster || it.backdrop || ch.poster || ch.backdrop || '';
@@ -61558,7 +61875,7 @@ function renderMyCreatedChannelsList() {
       
       const imgHtml = p
         ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-        : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:0.65rem;text-align:center;padding:4px;">No poster</div>';
+        : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
       
       // Each tile opens that item's own details -- was previously
       // unclickable itself (only the shared container-level onclick below
@@ -61585,29 +61902,27 @@ function renderMyCreatedChannelsList() {
       '</div>';
     }).join('');
     
-    const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
+    const addBtnHtml = '<button type="button" class="lc-btn list-add-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:var(--font-size-sm);' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleChannelInCatalog" data-act-args="' + appActArgs([ch.channelId]) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
-    return '<div class="list-card" style="margin-bottom:12px;" data-channel-id="' + escapeAttr(ch.channelId) + '">' +
+    return '<div class="list-card u-mb-12px" data-channel-id="' + escapeAttr(ch.channelId) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
+          '<div class="list-card-title u-cur-pointer" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
             '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
             escapeHtml(ch.name) +
           '</div>' +
-          (ch.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
-          '<div class="list-card-meta">' +
-            '<span>' + metaText + '</span>' +
-          '</div>' +
+          (ch.description ? '<div class="u-fs-v_font_size_sm u-c-v_text u-mt-2px">' + escapeHtml(ch.description) + '</div>' : '') +
+          (metaText ? '<div class="list-card-meta"><span>' + metaText + '</span></div>' : '') +
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
-            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
+            ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
+          '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           addBtnHtml +
         '</div>' +
       '</div>' +
@@ -61755,7 +62070,7 @@ function updateQuickAddButtonsState() {
 
     if (isAdded) {
       btn.classList.add('is-added');
-      btn.innerHTML = '<span class="check-icon" style="margin-right:4px;">&#x2713;</span> ' + escapeHtml(netName);
+      btn.innerHTML = '<span class="check-icon u-mr-4px">&#x2713;</span> ' + escapeHtml(netName);
       btn.title = netName + ' (Already added to your channels)';
     } else {
       btn.classList.remove('is-added');
@@ -62027,7 +62342,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
             showAddedToast('Channel "' + name + '" added to your Catalogs.');
           }
           if (statusBox) {
-            statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + (payload.items ? payload.items.length : 0) + ' episodes with daily rotation)!</p>';
+            statusBox.innerHTML = '<p class="testresult ok u-m-4px_0_0">\u2713 Channel "' + escapeHtml(name) + '" added (' + (payload.items ? payload.items.length : 0) + ' episodes with daily rotation)!</p>';
             setTimeout(() => {
               if (statusBox) statusBox.innerHTML = '';
             }, 4000);
@@ -62116,7 +62431,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       showAddedToast('Channel "' + name + '" added to your Catalogs.');
     }
     if (statusBox) {
-      statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + items.length + ' episodes with daily rotation)!</p>';
+      statusBox.innerHTML = '<p class="testresult ok u-m-4px_0_0">\u2713 Channel "' + escapeHtml(name) + '" added (' + items.length + ' episodes with daily rotation)!</p>';
       setTimeout(function() {
         if (statusBox) statusBox.innerHTML = '';
       }, 4000);
@@ -62352,13 +62667,13 @@ function createNextUpChannel(btn) {
   const say = (html) => { if (status) status.innerHTML = html; };
   const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator);
   if (!signedIn) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ A Next Up channel reads your watch history, so it needs a Creator Profile with Auto-track playback switched on.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ A Next Up channel reads your watch history, so it needs a Creator Profile with Auto-track playback switched on.</p>');
     return;
   }
   const map = loadLocalChannels();
   const already = Object.values(map).find((ch) => ch && ch.dynamic === 'next-up');
   if (already) {
-    say('<p class="testresult ok" style="margin:4px 0 0;">You already have one — "' + escapeHtml(already.name) + '".</p>');
+    say('<p class="testresult ok u-m-4px_0_0">You already have one — "' + escapeHtml(already.name) + '".</p>');
     openChannelDetailsPage(already.channelId);
     return;
   }
@@ -62394,7 +62709,7 @@ function createNextUpChannel(btn) {
     renderChannelMergeList();
     showAddedToast('"' + NEXT_UP_CHANNEL_NAME + '" added to your Catalogs.');
     const seeded = payload.items.length;
-    say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + NEXT_UP_CHANNEL_NAME + '" added with ' + seeded +
+    say('<p class="testresult ok u-m-4px_0_0">✓ "' + NEXT_UP_CHANNEL_NAME + '" added with ' + seeded +
       ' show' + (seeded === 1 ? '' : 's') + ' up next, and it refreshes itself from Continue Watching as you watch.' +
       (seeded ? '' : ' Nothing is in progress yet — it fills in once you have started something.') + '</p>');
     setTimeout(() => { if (status) status.innerHTML = ''; }, 8000);
@@ -62433,7 +62748,7 @@ async function runChannelWizard(btn) {
   const genres = (document.getElementById('channelWizardGenre') || {}).value || '';
   const limit = parseInt((document.getElementById('channelWizardSize') || {}).value, 10) || 8;
   if (!networkId && !era && !genres) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Choose at least one of network, era or genre first.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Choose at least one of network, era or genre first.</p>');
     return;
   }
   const name = channelWizardName();
@@ -62451,7 +62766,7 @@ async function runChannelWizard(btn) {
     const res = await fetch(ORIGIN + '/api/wizard-channel-shows?' + params, { cache: 'no-store' });
     const data = await res.json();
     if (!data.ok || !Array.isArray(data.shows) || !data.shows.length) {
-      say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(data.error || 'Nothing matched that combination.') + '</p>');
+      say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(data.error || 'Nothing matched that combination.') + '</p>');
       return;
     }
     const built = await buildChannelItemsFromShows(data.shows, {
@@ -62462,7 +62777,7 @@ async function runChannelWizard(btn) {
       },
     });
     if (!built.items.length) {
-      say('<p class="testresult err" style="margin:4px 0 0;">✗ Found those shows but could not read any episodes for them.</p>');
+      say('<p class="testresult err u-m-4px_0_0">✗ Found those shows but could not read any episodes for them.</p>');
       return;
     }
     const channelId = generateChannelId();
@@ -62484,12 +62799,12 @@ async function runChannelWizard(btn) {
     renderMyCreatedChannelsList();
     renderChannelMergeList();
     showAddedToast('Channel "' + name + '" added to your Catalogs.');
-    say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(name) + '" built from ' + data.shows.length +
+    say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(name) + '" built from ' + data.shows.length +
       ' shows (' + built.items.length + ' episodes), rotating a fresh lineup daily.</p>');
     const nameInput = document.getElementById('channelWizardNameInput');
     if (nameInput) nameInput.value = '';
   } catch (e) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while building that channel.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Network error while building that channel.</p>');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -62589,7 +62904,7 @@ async function runCatalogListWizard(targetType, btn) {
   const limit = parseInt((document.getElementById('catalogWizardSize') || {}).value, 10) || 20;
 
   if (!networkId && !era && !genres) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Choose at least one of network/studio, era or genre first.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Choose at least one of network/studio, era or genre first.</p>');
     return;
   }
 
@@ -62623,7 +62938,7 @@ async function runCatalogListWizard(targetType, btn) {
       }
 
       if (!movieItems.length && !showItems.length) {
-        say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(movieErr || showErr || 'Nothing matched that combination.') + '</p>');
+        say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(movieErr || showErr || 'Nothing matched that combination.') + '</p>');
         return;
       }
 
@@ -62639,7 +62954,7 @@ async function runCatalogListWizard(targetType, btn) {
 
       if (typeof renderLivePreview === 'function') renderLivePreview();
       showAddedToast('Added separate lists: ' + addedDesc.join(' and ') + ' to Catalogs.');
-      say('<p class="testresult ok" style="margin:4px 0 0;">✓ Built ' + addedDesc.join(' and ') + ' as separate catalog rows (not combined).</p>');
+      say('<p class="testresult ok u-m-4px_0_0">✓ Built ' + addedDesc.join(' and ') + ' as separate catalog rows (not combined).</p>');
     } else {
       const isMovie = targetType === 'movie';
       const suffix = isMovie ? '(Movies)' : '(Shows)';
@@ -62650,12 +62965,12 @@ async function runCatalogListWizard(targetType, btn) {
       addCatalogWizardList(listName, items, targetType);
       if (typeof renderLivePreview === 'function') renderLivePreview();
       showAddedToast('List "' + listName + '" added to your Catalogs.');
-      say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(listName) + '" built from ' + items.length + ' ' + (isMovie ? 'movies' : 'shows') + ' and added to your Catalogs.</p>');
+      say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(listName) + '" built from ' + items.length + ' ' + (isMovie ? 'movies' : 'shows') + ' and added to your Catalogs.</p>');
     }
     const nameInput = document.getElementById('catalogWizardNameInput');
     if (nameInput) nameInput.value = '';
   } catch (e) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(e.message || 'Network error while building lists.') + '</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(e.message || 'Network error while building lists.') + '</p>');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -62696,25 +63011,25 @@ async function runChannelPersonSearch(q) {
 function renderChannelPersonResults(results) {
   const box = document.getElementById('channelSearchResult');
   if (!results.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No one by that name.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No one by that name.</small></p>';
     return;
   }
   const cards = results.map((p) => {
     const pPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(p, p.poster || '') : (p.poster);
     const img = pPoster
-      ? '<img class="preview-thumb" src="' + escapeAttr(pPoster) + '" alt="" loading="lazy" style="cursor:pointer;">'
-      : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.7rem;text-align:center;padding:4px;cursor:pointer;">No photo</div>';
+      ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(pPoster) + '" alt="" loading="lazy">'
+      : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px u-cur-pointer" style="display:flex;">No photo</div>';
     const data = ' data-personid="' + escapeAttr(String(p.personId)) + '" data-personname="' + escapeAttr(p.name) + '"';
-    return '<div class="custom-list-search-item channelPersonCard" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' + data + '>' +
+    return '<div class="custom-list-search-item channelPersonCard u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' + data + '>' +
       img +
-      '<div style="width:100%; font-size:0.75rem; font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</div>' +
-      '<div style="font-size:0.7rem; color:var(--muted); text-align:center; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;" title="' + escapeAttr(p.knownFor || p.department || '') + '">' +
+      '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</div>' +
+      '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px u-ov-hidden u-to-ellipsis u-ws-nowrap" style="width:100%;" title="' + escapeAttr(p.knownFor || p.department || '') + '">' +
         escapeHtml(p.knownFor || p.department || '') +
       '</div>' +
-      '<button type="button" class="lc-btn secondary channelPersonBtn" style="width:100%; padding:4px 6px; font-size:0.75rem;"' + data + '>+ Browse</button>' +
+      '<button type="button" class="lc-btn secondary channelPersonBtn u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' + data + '>+ Browse</button>' +
       '</div>';
   }).join('');
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:10px;">' + cards + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cards + '</div>';
 }
 
 // --- browsing one person's filmography ----------------------------------
@@ -62769,7 +63084,7 @@ function channelPersonCreditCardHtml(credit, isShow) {
   const poster = typeof resolveClientPoster === 'function' ? resolveClientPoster(credit, credit.poster || '') : (credit.poster || '');
   const img = poster
     ? '<img class="preview-thumb" src="' + escapeAttr(poster) + '" alt="" loading="lazy">'
-    : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.7rem;text-align:center;padding:4px;">No poster</div>';
+    : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px" style="display:flex;">No poster</div>';
   const data =
     ' data-tmdbid="' + escapeAttr(String(credit.tmdbId)) + '"' +
     ' data-title="' + escapeAttr(credit.title) + '"' +
@@ -62780,13 +63095,13 @@ function channelPersonCreditCardHtml(credit, isShow) {
   const btnClass = isShow ? 'channelPersonShowBtn' : 'channelPersonMovieBtn';
   const btnLabel = isShow ? '+ Their episodes' : '+ Add';
   const sub = [credit.year, credit.role].filter(Boolean).join(' \u00b7 ');
-  return '<div class="custom-list-search-item ' + cardClass + '" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' + data + '>' +
+  return '<div class="custom-list-search-item ' + cardClass + ' u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' + data + '>' +
     img +
-    '<div style="width:100%; font-size:0.75rem; font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(credit.title) + '">' +
+    '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(credit.title) + '">' +
       escapeHtml(credit.title) +
     '</div>' +
-    '<div style="font-size:0.7rem; color:var(--muted); text-align:center; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;" title="' + escapeAttr(sub) + '">' + escapeHtml(sub) + '</div>' +
-    '<button type="button" class="lc-btn secondary ' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.75rem;"' + data + '>' + btnLabel + '</button>' +
+    '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px u-ov-hidden u-to-ellipsis u-ws-nowrap" style="width:100%;" title="' + escapeAttr(sub) + '">' + escapeHtml(sub) + '</div>' +
+    '<button type="button" class="lc-btn secondary ' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' + data + '>' + btnLabel + '</button>' +
     '</div>';
 }
 
@@ -62799,27 +63114,27 @@ function renderChannelPersonCredits() {
     return;
   }
   const header =
-    '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
-      '<p style="margin:0; font-weight:600; font-size:0.9rem; flex:1; min-width:160px;">' +
+    '<div class="u-ai-center u-gap-10px u-fw2-wrap u-mb-10px" style="display:flex;">' +
+      '<p class="u-m-0 u-fw-600 u-fs-v_font_size_base u-flex-1 u-minw-160px">' +
         escapeHtml(c.name) + ' \u2014 ' + c.movies.length + ' film' + (c.movies.length === 1 ? '' : 's') +
         (c.shows.length ? ' and ' + c.shows.length + ' show' + (c.shows.length === 1 ? '' : 's') : '') +
       '</p>' +
-      '<label for="channelSpotlightSortSelect" style="font-size:0.8rem; font-weight:600;">Order:</label>' +
-      '<select id="channelSpotlightSortSelect" data-act="setChannelSpotlightSortAndReload" data-act-args="[&quot;@value&quot;]" style="font-size:0.82rem; padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px;">' +
+      '<label for="channelSpotlightSortSelect" class="u-fs-v_font_size_sm u-fw-600">Order:</label>' +
+      '<select id="channelSpotlightSortSelect" data-act="setChannelSpotlightSortAndReload" data-act-args="[&quot;@value&quot;]" class="u-fs-v_font_size_sm u-p-5px_8px u-bg-v_surface u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">' +
         '<option value="chronological"' + (channelSpotlightSort === 'chronological' ? ' selected' : '') + '>Career order</option>' +
         '<option value="rating"' + (channelSpotlightSort === 'rating' ? ' selected' : '') + '>Best first</option>' +
       '</select>' +
     '</div>' +
-    '<div class="actions" style="flex-wrap:wrap; margin-bottom:10px;">' +
+    '<div class="actions u-fw2-wrap u-mb-10px">' +
       '<button type="button" class="secondary channelPersonAddAllBtn">Add everything as a Spotlight channel</button>' +
     '</div>';
   const movies = c.movies.length
-    ? '<p style="margin:10px 0 4px; font-weight:600; font-size:0.85rem;">Films</p>' +
+    ? '<p class="u-m-10px_0_4px u-fw-600 u-fs-v_font_size_sm">Films</p>' +
       '<div class="poster-grid-3">' + c.movies.map((m) => channelPersonCreditCardHtml(m, false)).join('') + '</div>'
     : '';
   const shows = c.shows.length
-    ? '<p style="margin:14px 0 4px; font-weight:600; font-size:0.85rem;">Television</p>' +
-      '<p style="margin:0 0 6px; color:var(--muted); font-size:0.78rem;">The button adds only the episodes they are actually in. Tap the poster instead to pick seasons and episodes yourself, the same way you would from the Shows tab.</p>' +
+    ? '<p class="u-m-14px_0_4px u-fw-600 u-fs-v_font_size_sm">Television</p>' +
+      '<p class="u-m-0_0_6px u-c-v_muted u-fs-v_font_size_xs">The button adds only the episodes they are actually in. Tap the poster instead to pick seasons and episodes yourself, the same way you would from the Shows tab.</p>' +
       '<div class="poster-grid-3">' + c.shows.map((sh) => channelPersonCreditCardHtml(sh, true)).join('') + '</div>' +
       '<div id="channelEpisodeList"></div>'
     : '<div id="channelEpisodeList"></div>';
@@ -63078,7 +63393,7 @@ async function addWholeSpotlightToDraft(btn) {
     setChannelPlayOrder('as-listed');
     renderChannelDraftList();
     updateChannelSaveButtonLabel();
-    say('<p class="testresult ok" style="margin:4px 0 0;">\u2713 Added ' + movieItems.length + ' film' + (movieItems.length === 1 ? '' : 's') +
+    say('<p class="testresult ok u-m-4px_0_0">\u2713 Added ' + movieItems.length + ' film' + (movieItems.length === 1 ? '' : 's') +
       (episodeItems.length ? ' and ' + episodeItems.length + ' episode' + (episodeItems.length === 1 ? '' : 's') : '') +
       ', ' + (channelSpotlightSort === 'rating' ? 'best first' : 'in career order') + '.' +
       (guestShows ? ' Guest appearances are only the episodes ' + escapeHtml(c.name) + ' is in.' : '') +
@@ -63241,24 +63556,24 @@ function showSavedChannelModal(channelName, visibility, url) {
   showModal(
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-      '<h2 class="panel-title" style="margin-top:0;">\u2713 Channel Saved</h2>' +
-      '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
+      '<h2 class="panel-title u-mt-0">\u2713 Channel Saved</h2>' +
+      '<p class="u-m-8px_0_16px u-fs-v_font_size_base u-c-v_text">' +
         '<strong>' + escapeHtml(channelName || 'Channel') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> channel.' +
       '</p>' +
       (isPrivate
-        ? '<div style="padding:12px 14px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.2); border-radius:10px; margin-bottom:16px;">' +
-            '<p style="margin:0; font-size:0.84rem; color:var(--text);">Only you can see this channel from your profile when logged in.</p>' +
+        ? '<div class="u-p-12px_14px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_2 u-br-v_radius_md u-mb-16px">' +
+            '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Only you can see this channel from your profile when logged in.</p>' +
           '</div>'
-        : '<div style="margin-bottom:16px;">' +
-            '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
-            '<div style="display:flex; gap:8px; align-items:center;">' +
-              '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+        : '<div class="u-mb-16px">' +
+            '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
+            '<div class="u-gap-8px u-ai-center" style="display:flex;">' +
+              '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
+              '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_14px" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
+        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
@@ -63380,7 +63695,7 @@ async function importSharedChannel(btn) {
   };
   const code = parseChannelShareCode(input ? input.value : '');
   if (!code) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ That does not look like a channel share link or code.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ That does not look like a channel share link or code.</p>');
     return;
   }
   const originalLabel = btn ? btn.textContent : '';
@@ -63392,11 +63707,11 @@ async function importSharedChannel(btn) {
     say('<p><small>Fetching that channel…</small></p>');
     const data = await fetchSharedChannel(code);
     if (!data.ok || !data.channel) {
-      say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(data.error || 'That channel link could not be read.') + '</p>');
+      say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(data.error || 'That channel link could not be read.') + '</p>');
       return;
     }
     acceptSharedChannel(data.channel, code);
-    say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
+    say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
       (data.channel.items || []).length + ' picks).</p>');
     if (input) input.value = '';
     if (modalInput) modalInput.value = '';
@@ -63408,7 +63723,7 @@ async function importSharedChannel(btn) {
       }, 900);
     }
   } catch (e) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while fetching that channel.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Network error while fetching that channel.</p>');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -63468,7 +63783,7 @@ async function loadChannelDirectory(force) {
     return;
   }
   _channelDirectoryLoading = true;
-  if (feed) feed.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>Loading published channels…</small></p>';
+  if (feed) feed.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Loading published channels…</small></p>';
   try {
     const res = await fetch(ORIGIN + '/api/channel/directory?limit=60&sort=' + encodeURIComponent(_channelDirectorySort),
       { cache: force ? 'no-store' : 'default' });
@@ -63487,7 +63802,8 @@ async function loadChannelDirectory(force) {
 function channelDirectoryMetaLine(entry) {
   const bits = [];
   if (entry.dynamic === 'next-up') bits.push('follows its owner’s watch history');
-  else bits.push(entry.itemCount + ' episode' + (entry.itemCount === 1 ? '' : 's'));
+  else if (entry.showCount === 0 && entry.itemCount > 0) bits.push(entry.itemCount + (entry.itemCount === 1 ? ' movie' : ' movies'));
+  else bits.push(entry.itemCount + (entry.itemCount === 1 ? ' item' : ' items'));
   if (entry.showCount > 1) bits.push(entry.showCount + ' shows');
   if (entry.dailyRotate) bits.push('daily lineup');
   else if (entry.shuffle) bits.push('shuffled daily');
@@ -63502,7 +63818,7 @@ function renderChannelDirectory() {
   if (!feed) return;
   const entries = _channelDirectoryEntries || [];
   if (!entries.length) {
-    feed.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>Nothing published yet. Build a channel and be the first — publish it from the panel below.</small></p>';
+    feed.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing published yet. Build a channel and be the first — publish it from the panel below.</small></p>';
     return;
   }
   const filterInput = document.getElementById('channelDirectorySearchInput');
@@ -63515,7 +63831,7 @@ function renderChannelDirectory() {
       ))
     : entries;
   if (!shown.length) {
-    feed.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No published channel matches that.</small></p>';
+    feed.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No published channel matches that.</small></p>';
     return;
   }
   const localChannelsMap = (typeof loadLocalChannels === 'function') ? loadLocalChannels() : {};
@@ -63551,8 +63867,8 @@ function renderChannelDirectory() {
   feed.innerHTML = shown.map((e) => {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
-      : '<button type="button" class="lc-btn channelAddBtn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
+      ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger u-bdc-v_danger" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
+      : '<button type="button" class="lc-btn list-add-btn channelAddBtn primary u-p-6px_12px u-fs-v_font_size_sm" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
@@ -63560,7 +63876,7 @@ function renderChannelDirectory() {
         ' data-act="toggleChannelDirectoryLike" data-act-args="' + appActArgs([e.code, "@self"]) + '">' +
         (_channelDirectoryLiked[e.code] ? '\u2665' : '\u2661') + (e.likes ? ' ' + e.likes : '') +
       '</button>' +
-      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
+      '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
       actionBtn,
       ''
     );
@@ -63819,13 +64135,13 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const isDesktopEnd = (i === sampleItems.length - 1 && sampleItems.length >= 4);
         let overlays = '';
         if (entry.code) {
-          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
-          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
+          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
+          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
         }
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
           ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-          : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:0.65rem;text-align:center;padding:4px;">No poster</div>';
+          : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId
@@ -63850,17 +64166,17 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
     art = ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(entry.name || 'Channel') + '&format=landscape&v=6';
   }
   const thumb = (!postersHtml && art)
-    ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" style="width:88px; height:56px; object-fit:cover; border-radius:6px; border:1px solid var(--border); flex:0 0 auto;">'
+    ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" class="u-objectfit-cover u-br-v_radius_sm u-bd-1px_solid_v_border u-flex-0_0_auto" style="width:88px; height:56px;">'
     : '';
   const openAttr = entry.code
     ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '" title="See everything in this channel"'
     : '';
-  return '<div class="list-card" style="margin-bottom:10px;">' +
-    '<div class="list-card-header" style="gap:10px; align-items:center;">' +
+  return '<div class="list-card u-mb-10px">' +
+    '<div class="list-card-header u-gap-10px u-ai-center">' +
       (thumb ? '<div' + openAttr + '>' + thumb + '</div>' : '') +
       '<div class="list-card-body">' +
         '<div class="list-card-title"' + openAttr + '>' + escapeHtml(entry.name || 'Channel') + '</div>' +
-        (entry.description ? '<div style="font-size:0.8rem; color:var(--text); margin-top:2px;">' + escapeHtml(entry.description) + '</div>' : '') +
+        (entry.description ? '<div class="u-fs-v_font_size_sm u-c-v_text u-mt-2px">' + escapeHtml(entry.description) + '</div>' : '') +
         '<div class="list-card-meta"><span>' + escapeHtml(channelDirectoryMetaLine(entry)) + '</span></div>' +
       '</div>' +
       '<div class="list-card-actions">' + actionsHtml + '</div>' +
@@ -63875,7 +64191,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
 function channelAsListingEntry(ch) {
   const items = ch.items || [];
   const showKeys = {};
-  items.forEach((it) => { const k = channelDraftShowKey(it); if (k) showKeys[k] = true; });
+  items.forEach((it) => { const k = channelDraftShowKey(it); if (k && it.kind !== 'movie') showKeys[k] = true; });
   let poster = ch.poster || null;
   let backdrop = ch.backdrop || null;
   if (!poster && !backdrop) {
@@ -63955,7 +64271,7 @@ function renderChannelPublishList() {
   if (!box) return;
   const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator);
   if (!signedIn) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>Sign in to a Creator Profile under <strong>Settings</strong> to publish a channel here. You can still share any channel privately with <strong>Share</strong> under My Channels.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Sign in to a Creator Profile under <strong>Settings</strong> to publish a channel here. You can still share any channel privately with <strong>Share</strong> under My Channels.</small></p>';
     return;
   }
   const channels = Object.values(ensureAllChannelsSyncedFromRows(loadLocalChannels()));
@@ -63963,16 +64279,16 @@ function renderChannelPublishList() {
 
   const mine = channels.map((ch) => {
     const action = ch.sharePublished
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:0.8rem;" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
+      ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
+      : '<button type="button" class="lc-btn primary u-p-6px_12px u-fs-v_font_size_sm" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
     const extra =
       // A published channel's link lives here, on screen, rather than only
       // in the modal that announced it -- that modal closes and takes the
       // link with it.
       (ch.shareCode
-        ? '<div class="row" style="margin-top:8px; gap:8px;">' +
-            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" style="font-size:0.8rem;">' +
-            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
+        ? '<div class="row u-mt-8px u-gap-8px">' +
+            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" class="u-fs-v_font_size_sm">' +
+            '<button type="button" class="secondary lc-btn u-flex-none u-ws-nowrap" style="width:auto;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
           '</div>'
         : '');
     return channelListingCardHtml(channelAsListingEntry(ch), action, extra);
@@ -63982,15 +64298,15 @@ function renderChannelPublishList() {
   // because there is nothing to edit, publish or copy -- only to withdraw.
   const orphans = _orphanedPublishedChannels.map((entry) => channelListingCardHtml(
     entry,
-    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
+    '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
     ''
   )).join('');
 
   box.innerHTML =
-    (channels.length ? mine : '<p style="color:var(--muted); font-size:0.85rem;"><small>No channels yet \u2014 build one first.</small></p>') +
+    (channels.length ? mine : '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels yet \u2014 build one first.</small></p>') +
     (orphans
-      ? '<p style="margin:16px 0 6px; font-weight:600; font-size:0.85rem;">Still listed, but no longer on this device</p>' +
-        '<p style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;">You published these and the channel has since been deleted here. They are still in Explore Channels until you take them down.</p>' +
+      ? '<p class="u-m-16px_0_6px u-fw-600 u-fs-v_font_size_sm">Still listed, but no longer on this device</p>' +
+        '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_xs">You published these and the channel has since been deleted here. They are still in Explore Channels until you take them down.</p>' +
         orphans
       : '');
 }
@@ -64496,7 +64812,7 @@ function renderChannelMergeList() {
   if (savedBox) {
     const mergedList = Object.values(mergedMap);
     if (!mergedList.length) {
-      savedBox.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>No merged catalogs created yet. Select channels below to combine them.</small></p>';
+      savedBox.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0"><small>No merged catalogs created yet. Select channels below to combine them.</small></p>';
     } else {
       mergedList.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
       savedBox.innerHTML = mergedList.map((merged) => {
@@ -64515,7 +64831,7 @@ function renderChannelMergeList() {
           const ch = channelsMap[chId];
           const chName = ch ? ch.name : 'Unknown Channel';
           if (ch && Array.isArray(ch.items)) totalEpisodes += ch.items.length;
-          return '<span class="badge" style="display:inline-flex; align-items:center; gap:5px; padding:3px 8px; font-size:0.8rem; background:var(--panel-strong); border:1px solid var(--border); border-radius:6px; margin:2px 4px 2px 0;">' +
+          return '<span class="badge u-ai-center u-gap-5px u-p-3px_8px u-fs-v_font_size_sm u-bg-v_panel_strong u-bd-1px_solid_v_border u-br-v_radius_sm u-m-2px_4px_2px_0" style="display:inline-flex;">' +
             escapeHtml(chName) +
             '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" data-act="removeChannelFromMerge" data-act-args="' + appActArgs([merged.mergedId, chId]) + '">\u2715</button>' +
           '</span>';
@@ -64531,31 +64847,31 @@ function renderChannelMergeList() {
             options +
           '</select>';
         } else {
-          addSelectHtml = '<select class="merge-add-channel-select" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65; cursor:not-allowed;">' +
+          addSelectHtml = '<select class="merge-add-channel-select u-cur-not_allowed" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65;">' +
             '<option value="">All saved channels added</option>' +
           '</select>' +
-          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:0.75rem; margin-left:4px;" data-act="appActGoToQuickAdd">+ Quick Add</button>';
+          ' <button type="button" class="lc-btn secondary u-p-2px_8px u-fs-v_font_size_xs u-ml-4px" data-act="appActGoToQuickAdd">+ Quick Add</button>';
         }
         
-        const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
+        const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + (totalEpisodes === 1 ? ' item' : ' items');
         
-        const addBtnHtml = '<button type="button" class="lc-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:0.8rem;' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
+        const addBtnHtml = '<button type="button" class="lc-btn list-add-btn channelAddBtn ' + (isAdded ? 'secondary is-added' : 'primary') + '" style="padding:6px 12px; font-size:var(--font-size-sm);' + (isAdded ? ' color:var(--danger);' : '') + '" data-act="toggleMergedChannelInCatalog" data-act-args="' + appActArgs([merged.mergedId]) + '">' +
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
-        return '<div class="list-card" style="margin-bottom:10px;" data-merged-id="' + escapeAttr(merged.mergedId) + '">' +
+        return '<div class="list-card u-mb-10px" data-merged-id="' + escapeAttr(merged.mergedId) + '">' +
           '<div class="list-card-header">' +
             '<div class="list-card-body">' +
               '<div class="list-card-title">' + escapeHtml(merged.name) + '</div>' +
               '<div class="list-card-meta"><span>' + countText + '</span></div>' +
-              '<div style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center;">' +
-                '<strong style="font-size:0.75rem; color:var(--muted); margin-right:6px;">Merged:</strong>' +
-                (channelChips || '<span style="color:var(--muted); font-size:0.8rem; margin-right:4px;">None</span>') +
+              '<div class="u-mt-6px u-fw2-wrap u-ai-center" style="display:flex;">' +
+                '<strong class="u-fs-v_font_size_xs u-c-v_muted u-mr-6px">Merged:</strong>' +
+                (channelChips || '<span class="u-c-v_muted u-fs-v_font_size_sm u-mr-4px">None</span>') +
                 addSelectHtml +
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:0.8rem; color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
+              '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
             '</div>' +
           '</div>' +
@@ -64577,9 +64893,9 @@ function renderChannelMergeList() {
     if (selectAllWrap) selectAllWrap.style.display = 'none';
     if (controlsRow) controlsRow.style.display = 'none';
     if (channels.length === 1) {
-      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
+      box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
     } else {
-      box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:0;"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
+      box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
     }
     return;
   }
@@ -64591,8 +64907,8 @@ function renderChannelMergeList() {
   
   box.innerHTML = channels.map((ch) => {
     const epCount = (ch.items || []).length;
-    const label = escapeHtml(ch.name) + ' <span style="color:var(--muted); font-size:0.8rem;">(' + epCount + ' ep)</span>';
-    return '<label class="row quick-row" style="cursor:pointer; margin-bottom:4px;">' +
+    const label = escapeHtml(ch.name) + ' <span class="u-c-v_muted u-fs-v_font_size_sm">(' + epCount + ' ep)</span>';
+    return '<label class="row quick-row u-cur-pointer u-mb-4px">' +
       '<span><input type="checkbox" class="channelMergeCheck" data-channelid="' + escapeAttr(ch.channelId) + '"> ' + label + '</span>' +
       '</label>';
   }).join('');
@@ -64836,7 +65152,7 @@ async function runCustomListTitleSearch(query) {
     return [];
   }
   const seq = ++customListSearchSeq;
-  box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>Searching\u2026</small></p>';
+  box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-p-8px_0"><small>Searching\u2026</small></p>';
 
   try {
     const isAdult = typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : false;
@@ -64877,7 +65193,7 @@ async function runCustomListTitleSearch(query) {
     return results;
   } catch (e) {
     if (seq !== customListSearchSeq) return [];
-    box.innerHTML = '<p class="testresult err" style="margin:8px 0; font-size:0.85rem;">\u2717 Network error while searching.</p>';
+    box.innerHTML = '<p class="testresult err u-m-8px_0 u-fs-v_font_size_sm">\u2717 Network error while searching.</p>';
     return [];
   }
 }
@@ -64886,7 +65202,7 @@ function renderCustomListSearchResults(results) {
   const box = document.getElementById('customListSearchResult');
   if (!box) return;
   if (!results.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>No titles found matching that search.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-p-8px_0"><small>No titles found matching that search.</small></p>';
     return;
   }
 
@@ -64904,11 +65220,11 @@ function renderCustomListSearchResults(results) {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
     const posterImg = rPoster
       ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.72rem;">No poster</small></div>';
+      : '<div class="custom-list-search-poster live-preview-poster-placeholder u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px" style="display:flex;" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
 
     const isAlreadyAdded = existingKeys.has(draftKey(itemKind, r.title, r.year));
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
-    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn customListAddBtn';
+    const btnClass = isAlreadyAdded ? 'lc-btn list-add-btn secondary customListAddBtn' : 'lc-btn list-add-btn customListAddBtn';
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
 
     return '<div class="custom-list-search-card"' +
@@ -64928,7 +65244,7 @@ function renderCustomListSearchResults(results) {
       '<div class="custom-list-search-meta">' +
         (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
       '</div>' +
-      '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.72rem; font-weight:600; border-radius:var(--radius-pill);"' +
+      '<button type="button" class="' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs u-fw-600 u-br-v_radius_pill" style="width:100%;"' +
         disabledAttr +
         ' data-searchtype="' + itemType + '"' +
         ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
@@ -64940,7 +65256,7 @@ function renderCustomListSearchResults(results) {
     '</div>';
   }).join('');
 
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:12px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-12px">' + cardsHtml + '</div>';
   if (typeof resolveMissingPostersInDom === 'function') {
     resolveMissingPostersInDom(box);
   }
@@ -65026,10 +65342,10 @@ function renderCustomListDraftList() {
   const box = document.getElementById('customListDraftList');
   if (!box) return;
   if (!customListDraftItems.length) {
-    box.innerHTML = '<div style="text-align:center; padding:28px 16px; border:1.5px dashed var(--border); border-radius:10px; background:var(--surface); margin-top:8px;">' +
-      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); margin-bottom:8px; opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
-      '<div style="font-weight:600; font-size:0.9rem; color:var(--text); margin-bottom:4px;">No titles in this list yet</div>' +
-      '<p style="color:var(--muted); font-size:0.82rem; margin:0 auto; max-width:340px;">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
+    box.innerHTML = '<div class="u-ta-center u-p-28px_16px u-bd-1_5px_dashed_v_border u-br-v_radius_md u-bg-v_surface u-mt-8px">' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="u-c-v_muted u-mb-8px" style="opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
+      '<div class="u-fw-600 u-fs-v_font_size_base u-c-v_text u-mb-4px">No titles in this list yet</div>' +
+      '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0_auto u-maxw-340px">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
     '</div>';
     return;
   }
@@ -65039,7 +65355,7 @@ function renderCustomListDraftList() {
     const typeLabel = itType === 'series' ? 'Show' : 'Movie';
     const yearSub = (it.year ? it.year + ' \u2022 ' : '') + typeLabel;
     const posBox = '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-      '<input type="number" class="pos customListPosInput" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:0.75rem; text-align:center; border-radius:6px; background:rgba(0,0,0,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
+      '<input type="number" class="pos customListPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
     '</div>';
     const removeBtn = '<button type="button" class="cw-remove-btn customListRemovePickBtn" title="Remove from list" aria-label="Remove from list" style="z-index:4;">\u2715</button>';
 
@@ -65057,9 +65373,9 @@ function renderCustomListDraftList() {
     const pickPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster || '') : it.poster;
     const posterEl = pickPoster
       ? '<img class="live-preview-poster" src="' + escapeAttr(pickPoster) + '" alt="" loading="lazy">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     
-    return '<div class="live-preview-poster-card custom-list-pick" data-idx="' + i + '" style="position:relative; cursor:grab; user-select:none; touch-action:manipulation;">' +
+    return '<div class="live-preview-poster-card custom-list-pick u-cur-grab u-us-none u-touchaction-manipulation" data-idx="' + i + '" style="position:relative;">' +
       '<div style="position:relative; width:100%;">' +
         posterEl +
         posBox +
@@ -65069,7 +65385,7 @@ function renderCustomListDraftList() {
       '<div class="live-preview-poster-year">' + escapeHtml(yearSub) + '</div>' +
     '</div>';
   }).join('');
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:10px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cardsHtml + '</div>';
   initCustomListHoldDrag();
 }
 
@@ -66654,7 +66970,7 @@ window.toggleWatchStatus = function(id, type, name, poster) {
   const btn = document.getElementById('btnMarkWatched');
   if (btn) {
     if (window._watchedItemIds.has(id)) {
-      btn.innerHTML = '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched';
+      btn.innerHTML = '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched';
       btn.classList.remove('primary');
       btn.classList.add('secondary');
     } else {
@@ -66937,7 +67253,7 @@ window.markShowWatched = async function(imdbId) {
     if (failedSeasons > 0) {
       btn.innerHTML = "Couldn't load episodes -- try again";
     } else {
-      btn.innerHTML = wasFullyWatched ? '<span style="margin-right:4px;">&#x2713;</span> Mark Show Unwatched' : 'Mark Show Watched';
+      btn.innerHTML = wasFullyWatched ? '<span class="u-mr-4px">&#x2713;</span> Mark Show Unwatched' : 'Mark Show Watched';
       // Every season is still to come, so there is genuinely nothing to
       // mark. Silence here read as a broken button.
       if (typeof showAddedToast === 'function') {
@@ -67046,7 +67362,7 @@ window.markShowWatched = async function(imdbId) {
   }
   btn.disabled = false;
   if (nowWatched) {
-    btn.innerHTML = '<span style="margin-right:4px;">&#x2713;</span> Mark Show Unwatched';
+    btn.innerHTML = '<span class="u-mr-4px">&#x2713;</span> Mark Show Unwatched';
     btn.classList.remove('primary');
     btn.classList.add('secondary');
   } else {
@@ -67072,7 +67388,7 @@ window.markShowWatched = async function(imdbId) {
       return;
     }
     if (nowWatched) {
-      seasonBtn.innerHTML = '<span style="margin-right:4px;">&#x2713;</span> Mark Season Unwatched';
+      seasonBtn.innerHTML = '<span class="u-mr-4px">&#x2713;</span> Mark Season Unwatched';
       seasonBtn.classList.remove('primary');
       seasonBtn.classList.add('secondary');
     } else {
@@ -68871,8 +69187,8 @@ function buildAiringNextCardHtml() {
     const isMobileEnd = (i === 2 && shown.length > 3);
     const isDesktopEnd = (i === shown.length - 1 && shown.length >= 4);
     let overlays = '';
-    if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only airingNextViewBtn" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
-    if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only airingNextViewBtn" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+    if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only airingNextViewBtn u-cur-pointer">' + totalCount + ' &rsaquo;</div>';
+    if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only airingNextViewBtn u-cur-pointer">' + totalCount + ' &rsaquo;</div>';
     const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
     const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
     let dateBadge = '';
@@ -68914,12 +69230,12 @@ function buildAiringNextCardHtml() {
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
       (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
 
   const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, 'series', 'airing-next') : false;
-  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn list-add-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="airing-next">' + (isAdded ? 'Remove' : '+ Add') + '</button>';
 
@@ -69692,8 +70008,8 @@ function renderAccountKeySection() {
   if (!box) return;
   if (!activeCreator) {
     box.innerHTML =
-      '<p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
-      '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:12px;">' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
+      '<div class="actions u-fd-row u-gap-8px u-fw2-wrap u-mt-12px" style="width:auto;">' +
       '<button type="button" class="primary" data-act="openCreateProfileModal">Create Free Account</button>' +
       '<button type="button" class="secondary" data-act="openRestoreModal">Login</button>' +
       '</div>';
@@ -69702,15 +70018,15 @@ function renderAccountKeySection() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   const hasRecovery = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
   box.innerHTML =
-    '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">' +
+    '<div class="u-ai-center u-jc-space_between u-mb-12px u-fw2-wrap u-gap-8px" style="display:flex;">' +
     '<div>' +
-    '<span style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Signed in as</span>' +
-    '<h3 style="margin:2px 0 0; font-size:1.1rem; font-weight:800; color:var(--text);">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
+    '<span class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700">Signed in as</span>' +
+    '<h3 class="u-m-2px_0_0 u-fs-v_font_size_lg u-fw-800 u-c-v_text">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
     '</div>' +
     '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
-    '<div style="margin-top:6px;">' +
-      '<div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">Account Key</div>' +
+    '<div class="u-mt-6px">' +
+      '<div class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700 u-mb-6px">Account Key</div>' +
       '<div class="account-key-group">' +
         '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
         '<div class="account-key-actions">' +
@@ -69718,16 +70034,16 @@ function renderAccountKeySection() {
           '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
         '</div>' +
       '</div>' +
-      '<p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
+      '<p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
-    '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:rgba(255,255,255,0.03);">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
-        '<div style="font-weight:700; font-size:0.9rem; color:var(--text);">Account Recovery</div>' +
-        '<span style="font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:6px;' + (hasRecovery ? ' background:rgba(52,199,89,0.15); color:#34c759;' : ' background:rgba(255,149,0,0.15); color:#ff9500;') + '">' +
+    '<div class="recovery-section u-mt-16px u-p-14px_16px u-bd-1px_solid_rgba_255_255_255_0_12 u-br-v_radius_md u-bg-rgba_255_255_255_0_03">' +
+      '<div class="u-jc-space_between u-ai-center u-mb-6px u-fw2-wrap u-gap-6px" style="display:flex;">' +
+        '<div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Account Recovery</div>' +
+        '<span style="font-size:var(--font-size-xs); font-weight:700; padding:2px 8px; border-radius:var(--radius-sm);' + (hasRecovery ? ' background:rgba(52,199,89,0.15); color:var(--color-success-text);' : ' background:rgba(255,149,0,0.15); color:var(--color-warn-text);') + '">' +
           (hasRecovery ? '\u2713 Configured' : '\u26A0 Not Set') +
         '</span>' +
       '</div>' +
-      '<p style="margin:0 0 10px; font-size:0.82rem; color:var(--muted);">' +
+      '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">' +
         (hasRecovery
           ? 'Your recovery answer is active. It can reset your key if lost, or find your username.'
           : 'You have not set a recovery answer. Add one so you can recover your username or reset your key if you ever lose them.') +
@@ -69738,22 +70054,22 @@ function renderAccountKeySection() {
     '</div>' +
     '<details class="danger-zone-disclosure">' +
       '<summary class="danger-zone-summary">' +
-        '<span style="display:flex; align-items:center; gap:8px;">' +
-          '<span style="font-size:0.95rem;">&#x26A0;</span>' +
+        '<span class="u-ai-center u-gap-8px" style="display:flex;">' +
+          '<span class="u-fs-v_font_size_base">&#x26A0;</span>' +
           '<span>Danger Zone (Reset or Delete Account)</span>' +
         '</span>' +
         '<span class="danger-zone-arrow">&#x25BE;</span>' +
       '</summary>' +
       '<div class="danger-zone-content">' +
-        '<div style="border:1px solid rgba(255,149,0,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,149,0,0.05);">' +
-          '<div style="font-weight:700; font-size:0.88rem; color:#ff9500; margin-bottom:4px;">Reset Account</div>' +
-          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-          '<button type="button" class="lc-btn" style="background:#ff9500; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
+        '<div class="u-bd-1px_solid_rgba_255_149_0_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_149_0_0_05">' +
+          '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_color_warn_text u-mb-4px">Reset Account</div>' +
+          '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
+          '<button type="button" class="lc-btn u-bg-v_color_warn u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
         '</div>' +
-        '<div style="border:1px solid rgba(255,59,48,0.3); border-radius:10px; padding:12px 14px; background:rgba(255,59,48,0.05);">' +
-          '<div style="font-weight:700; font-size:0.88rem; color:var(--danger, #ff3b30); margin-bottom:4px;">Delete Account</div>' +
-          '<p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted); line-height:1.4;">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-          '<button type="button" class="lc-btn" style="background:#ff3b30; color:#fff; border:none; padding:6px 14px; font-weight:700; font-size:0.84rem; border-radius:8px; cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+        '<div class="u-bd-1px_solid_rgba_255_59_48_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_59_48_0_05">' +
+          '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_danger_v_color_danger u-mb-4px">Delete Account</div>' +
+          '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
+          '<button type="button" class="lc-btn u-bg-v_color_danger u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
         '</div>' +
       '</div>' +
     '</details>';
@@ -69765,10 +70081,10 @@ function openSetRecoveryAnswerModal() {
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>' + (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') + '</h2>' +
     '<p class="modal-sub">Choose an answer you will remember (e.g. your childhood pet, first school, or a passphrase). Must be at least 8 characters.</p>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerInput" placeholder="Recovery Answer (8+ characters)" minlength="8"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerConfirmInput" placeholder="Confirm Recovery Answer" minlength="8"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="setRecoveryAnswerInput" placeholder="Recovery Answer (8+ characters)" minlength="8"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="setRecoveryAnswerConfirmInput" placeholder="Confirm Recovery Answer" minlength="8"></div>' +
     '<div id="setRecoveryAnswerError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="setRecoveryAnswerBtn" data-act="submitSetRecoveryAnswer">Save Recovery Answer</button>' +
     '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
     '</div>'
@@ -69916,20 +70232,20 @@ function openDeleteAccountModal() {
   if (!activeCreator) return;
   showModal(
     '<div class="modal-body">' +
-      '<h2 class="panel-title" style="color:var(--danger, #ff3b30);">&#x26A0; Delete Account &amp; All Data</h2>' +
-      '<p style="margin:8px 0 14px; font-size:0.9rem;">Are you sure you want to delete your account <strong>' + escapeHtml(activeCreator.displayName) + '</strong>?</p>' +
-      '<div style="background:rgba(255,59,48,0.08); border:1px solid rgba(255,59,48,0.25); border-radius:8px; padding:12px; margin-bottom:14px; font-size:0.85rem; color:var(--text);">' +
-        '<p style="margin:0 0 6px; font-weight:700; color:var(--danger, #ff3b30);">&#x2717; This action is permanent and cannot be undone.</p>' +
-        '<ul style="margin:0; padding-left:18px; color:var(--muted);">' +
+      '<h2 class="panel-title u-c-v_danger_v_color_danger">&#x26A0; Delete Account &amp; All Data</h2>' +
+      '<p class="u-m-8px_0_14px u-fs-v_font_size_base">Are you sure you want to delete your account <strong>' + escapeHtml(activeCreator.displayName) + '</strong>?</p>' +
+      '<div class="u-bg-rgba_255_59_48_0_08 u-bd-1px_solid_rgba_255_59_48_0_25 u-br-v_radius_sm u-p-12px u-mb-14px u-fs-v_font_size_sm u-c-v_text">' +
+        '<p class="u-m-0_0_6px u-fw-700 u-c-v_danger_v_color_danger">&#x2717; This action is permanent and cannot be undone.</p>' +
+        '<ul class="u-m-0 u-pl-18px u-c-v_muted">' +
           '<li>All your published lists will be deleted from the server.</li>' +
           '<li>All synced backups, likes, and channel configurations will be erased.</li>' +
           '<li>Your account key will become permanently invalid.</li>' +
         '</ul>' +
       '</div>' +
       '<div id="deleteAccountStatus"></div>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:#ff3b30; border-color:#ff3b30; color:#fff;" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger u-bdc-v_color_danger u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );
@@ -69940,7 +70256,7 @@ async function handleDeleteAccount() {
   const btn = document.getElementById('confirmDeleteAccountBtn');
   const status = document.getElementById('deleteAccountStatus');
   if (btn) btn.disabled = true;
-  if (status) status.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;">Deleting account and all data\u2026</p>';
+  if (status) status.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Deleting account and all data\u2026</p>';
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/delete-account', {
@@ -69972,14 +70288,14 @@ async function handleDeleteAccount() {
 function openShareListModal(listName, listUrl) {
   showModal(
     '<div class="modal-body">' +
-      '<h2 class="panel-title" style="margin-bottom:6px;">Share List</h2>' +
-      '<p style="margin:0 0 14px; font-size:0.88rem; color:var(--muted);">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
-      '<div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">' +
-        '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly style="flex:1; padding:10px 12px; font-size:0.9rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" data-act="copyShareListUrl" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
+      '<h2 class="panel-title u-mb-6px">Share List</h2>' +
+      '<p class="u-m-0_0_14px u-fs-v_font_size_sm u-c-v_muted">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
+      '<div class="u-gap-8px u-ai-center u-mb-14px" style="display:flex;">' +
+        '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_base u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
+        '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_16px" id="shareListCopyBtn" data-act="copyShareListUrl">Copy Link</button>' +
       '</div>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
+        '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' +
         '<button type="button" class="secondary lc-btn" data-act="closeModal">Close</button>' +
       '</div>' +
     '</div>'
@@ -70041,9 +70357,9 @@ function renderWatchlistPreferencesSection() {
   } catch (e) {}
   box.innerHTML =
     '<div class="settings-toggle-row">' +
-      '<div style="flex:1; min-width:0; padding-right:12px;">' +
-        '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Automatically remove watched items from Watchlist</span>' +
-        '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
+      '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+        '<span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Automatically remove watched items from Watchlist</span>' +
+        '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
       '</div>' +
       '<label class="ui-toggle" aria-label="Automatically remove watched items from Watchlist">' +
         '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]">' +
@@ -70157,7 +70473,7 @@ function renderHiddenListsSettingsSection() {
   });
 
   if (!rows.length && Object.keys(MY_LISTS_SECTION_PANEL_IDS || {}).length === 0) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;"><small>No lists found yet -- visit My Lists (and connect any providers you use) first, then come back here to manage what\u2019s shown.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No lists found yet -- visit My Lists (and connect any providers you use) first, then come back here to manage what\u2019s shown.</small></p>';
     return;
   }
 
@@ -70178,8 +70494,8 @@ function renderHiddenListsSettingsSection() {
     const checked = hiddenSections.has(section);
     return '<label class="settings-check-item">' +
       '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]">' +
-      '<div style="flex:1; min-width:0;">' +
-        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">' + escapeHtml(sectionLabels[section]) + '</span>' +
+      '<div class="u-flex-1 u-minw-0">' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(sectionLabels[section]) + '</span>' +
       '</div>' +
     '</label>';
   }).join('') + '</div>';
@@ -70188,20 +70504,20 @@ function renderHiddenListsSettingsSection() {
     const checked = hiddenIds.has(String(r.id));
     return '<label class="settings-check-item">' +
       '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
-      '<div style="flex:1; min-width:0;">' +
-        '<span style="font-weight:600; font-size:0.88rem; color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
-        '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
+      '<div class="u-flex-1 u-minw-0">' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text u-overflowwrap-anywhere">' + escapeHtml(r.name) + '</span>' +
+        '<div class="u-c-v_muted u-fs-v_font_size_xs u-mt-2px">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
-  }).join('') + '</div>') : '<p style="color:var(--muted); font-size:0.85rem; margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
+  }).join('') + '</div>') : '<p class="u-c-v_muted u-fs-v_font_size_sm u-mt-8px"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
 
   box.innerHTML =
-    '<div style="margin-bottom:14px;">' +
-      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Whole Sections</div>' +
+    '<div class="u-mb-14px">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-6px">Whole Sections</div>' +
       sectionsHtml +
     '</div>' +
-    '<div style="border-top:1px solid var(--border); padding-top:14px;">' +
-      '<div style="font-weight:700; font-size:0.85rem; color:var(--text); margin-bottom:6px;">Individual Lists</div>' +
+    '<div class="u-bdt-1px_solid_v_border u-pt-14px">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-6px">Individual Lists</div>' +
       rowsHtml +
     '</div>';
 }
@@ -70276,12 +70592,12 @@ function renderTrackPlaybackSection() {
   } catch (e) {}
 
   box.innerHTML =
-    '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
-      '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
+    '<div class="u-mb-14px u-pb-14px u-bdb-1px_solid_v_border">' +
+      '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
       '<div class="settings-toggle-row">' +
-        '<div style="flex:1; min-width:0; padding-right:12px;">' +
-          '<span style="font-weight:600; font-size:0.92rem; color:var(--text);">Enable In-App Playback Auto-Tracking</span>' +
-          '<p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+        '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+          '<span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Enable In-App Playback Auto-Tracking</span>' +
+          '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
         '</div>' +
         '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
           '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
@@ -70290,20 +70606,20 @@ function renderTrackPlaybackSection() {
       '</div>' +
     '</div>' +
 
-    '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
-      '<p style="margin:0 0 6px; font-weight:700; font-size:0.92rem;">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
-      '<p style="margin:0 0 8px; color:var(--muted); font-size:0.82rem;">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
+    '<div class="u-mb-14px u-pb-14px u-bdb-1px_solid_v_border">' +
+      '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
+      '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
-        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:0.82rem;">' +
-        '<button type="button" class="secondary lc-btn" data-act="copyScrobbleWebhookUrl" style="padding:8px 14px; font-size:0.84rem;">Copy Webhook URL</button>' +
-        '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:0.84rem;">Regenerate</button>' +
+        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
+        '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="copyScrobbleWebhookUrl">Copy Webhook URL</button>' +
+        '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been.">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<div class="settings-toggle-row" style="padding:0 0 4px; border-bottom:none;">' +
-          '<div style="flex:1; min-width:0; padding-right:12px;">' +
-            '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Enable Media Server User Filtering</span>' +
-            '<p style="margin:2px 0 0; color:var(--muted); font-size:0.8rem;">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+      '<div class="u-m-12px_0_0 u-p-12px_0 u-bdt-1px_solid_v_border u-bs-border_box u-maxw-100" style="width:100%;">' +
+        '<div class="settings-toggle-row u-p-0_0_4px u-bdb-none">' +
+          '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+            '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Enable Media Server User Filtering</span>' +
+            '<p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_sm">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
           '</div>' +
           '<label class="ui-toggle" aria-label="Enable Media Server User Filtering">' +
             '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]">' +
@@ -70311,33 +70627,33 @@ function renderTrackPlaybackSection() {
           '</label>' +
         '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
-          '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
-            '<p style="margin:0; font-size:0.8rem; font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
-            '<button type="button" class="secondary lc-btn" data-act="loadScrobbleSeenUsers" style="padding:3px 8px; font-size:0.75rem;">Refresh Users</button>' +
+          '<div class="u-ai-center u-jc-space_between u-mb-6px" style="display:flex;">' +
+            '<p class="u-m-0 u-fs-v_font_size_sm u-fw-600 u-c-v_text">Select Allowed Users:</p>' +
+            '<button type="button" class="secondary lc-btn u-p-3px_8px u-fs-v_font_size_xs" data-act="loadScrobbleSeenUsers">Refresh Users</button>' +
           '</div>' +
-          '<div id="scrobbleSeenUsersBox" style="font-size:0.82rem; color:var(--muted); margin-bottom:10px;"><small>Loading\u2026</small></div>' +
-          '<p style="margin:0 0 4px; font-size:0.8rem; color:var(--muted);">Additional / Manual Usernames (comma-separated):</p>' +
-          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:0.84rem;">' +
-          '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:0.84rem; user-select:none; margin:0;">' +
-            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<div id="scrobbleSeenUsersBox" class="u-fs-v_font_size_sm u-c-v_muted u-mb-10px"><small>Loading\u2026</small></div>' +
+          '<p class="u-m-0_0_4px u-fs-v_font_size_sm u-c-v_muted">Additional / Manual Usernames (comma-separated):</p>' +
+          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" class="u-bs-border_box u-mb-8px u-fs-v_font_size_sm" style="width:100%;">' +
+          '<label class="u-ai-flex_start u-gap-8px u-cur-pointer u-fs-v_font_size_sm u-us-none u-m-0" style="display:flex;">' +
+            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" class="u-mt-2px u-cur-pointer u-flex-none" style="width:16px; height:16px;">' +
             '<span>Block scrobbles with no username in the payload</span>' +
           '</label>' +
         '</div>' +
       '</div>' +
 
-      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<div class="settings-toggle-row" style="padding:0 0 10px;">' +
-          '<div style="flex:1; min-width:0; padding-right:12px;">' +
-            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Automatically sync media server scrobbles to your Watch History list</span>' +
+      '<div class="u-m-12px_0_0 u-p-12px_0 u-bdt-1px_solid_v_border u-bs-border_box u-maxw-100" style="width:100%;">' +
+        '<div class="settings-toggle-row u-p-0_0_10px">' +
+          '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+            '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Automatically sync media server scrobbles to your Watch History list</span>' +
           '</div>' +
           '<label class="ui-toggle" aria-label="Sync media server scrobbles to Watch History">' +
             '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]">' +
             '<span class="ui-toggle-slider"></span>' +
           '</label>' +
         '</div>' +
-        '<div class="settings-toggle-row" style="padding:10px 0 12px; border-bottom:none;">' +
-          '<div style="flex:1; min-width:0; padding-right:12px;">' +
-            '<span style="font-weight:600; font-size:0.86rem; color:var(--text);">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
+        '<div class="settings-toggle-row u-p-10px_0_12px u-bdb-none">' +
+          '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+            '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
           '</div>' +
           '<label class="ui-toggle" aria-label="Forward scrobbles to connected external accounts">' +
             '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]">' +
@@ -70345,27 +70661,27 @@ function renderTrackPlaybackSection() {
           '</label>' +
         '</div>' +
         '<div>' +
-          '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:0.82rem; white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
+          '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm u-ws-normal u-lh-1_35 u-ta-center u-maxw-100 u-bs-border_box" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="width:100%;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
       '</div>' +
 
-      '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap:8px; margin-top:10px; width:100%; max-width:100%; box-sizing:border-box;">' +
-        '<details style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:0.82rem;">' +
-          '<summary style="cursor:pointer; font-weight:600; color:var(--accent-2);">Plex Webhook Setup</summary>' +
-          '<p style="margin:6px 0 4px; color:var(--muted);">1. Open <strong>Plex Web &rarr; Settings &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Click <strong>Save Changes</strong>.</p>' +
+      '<div class="u-gtc-repeat_auto_fit_minmax_min_100_200px_1fr u-gap-8px u-mt-10px u-maxw-100 u-bs-border_box" style="display:grid; width:100%;">' +
+        '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
+          '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Plex Webhook Setup</summary>' +
+          '<p class="u-m-6px_0_4px u-c-v_muted">1. Open <strong>Plex Web &rarr; Settings &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Click <strong>Save Changes</strong>.</p>' +
         '</details>' +
-        '<details style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:0.82rem;">' +
-          '<summary style="cursor:pointer; font-weight:600; color:var(--accent-2);">Jellyfin Webhook Setup</summary>' +
-          '<p style="margin:6px 0 4px; color:var(--muted);">1. In Jellyfin <strong>Dashboard &rarr; Plugins</strong>, install the <strong>Webhook</strong> plugin.<br>2. Go to Webhook settings &rarr; <strong>Add Generic Destination</strong>.<br>3. Paste the URL and check <strong>Playback</strong> events.</p>' +
+        '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
+          '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Jellyfin Webhook Setup</summary>' +
+          '<p class="u-m-6px_0_4px u-c-v_muted">1. In Jellyfin <strong>Dashboard &rarr; Plugins</strong>, install the <strong>Webhook</strong> plugin.<br>2. Go to Webhook settings &rarr; <strong>Add Generic Destination</strong>.<br>3. Paste the URL and check <strong>Playback</strong> events.</p>' +
         '</details>' +
-        '<details style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:0.82rem;">' +
-          '<summary style="cursor:pointer; font-weight:600; color:var(--accent-2);">Emby Webhook Setup</summary>' +
-          '<p style="margin:6px 0 4px; color:var(--muted);">1. Open Emby Server <strong>Dashboard &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Check <strong>Playback</strong> / <strong>Scrobble</strong> events.</p>' +
+        '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
+          '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Emby Webhook Setup</summary>' +
+          '<p class="u-m-6px_0_4px u-c-v_muted">1. Open Emby Server <strong>Dashboard &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Check <strong>Playback</strong> / <strong>Scrobble</strong> events.</p>' +
         '</details>' +
       '</div>' +
     '</div>' +
 
-    '<div id="trackPlaybackStatus" style="margin-top:8px;"></div>';
+    '<div id="trackPlaybackStatus" class="u-mt-8px"></div>';
 
   refreshTrackPlaybackStatus();
   loadScrobbleSeenUsers();
@@ -70506,7 +70822,7 @@ async function loadScrobbleSeenUsers() {
   const box = document.getElementById('scrobbleSeenUsersBox');
   if (!box || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  box.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">Checking detected users\u2026</span>';
+  box.innerHTML = '<span class="u-c-v_muted u-fs-v_font_size_sm">Checking detected users\u2026</span>';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-seen-users', {
       method: 'POST',
@@ -70515,7 +70831,7 @@ async function loadScrobbleSeenUsers() {
     });
     const data = await res.json();
     if (!data.ok || !data.users || !Object.keys(data.users).length) {
-      box.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">No users detected yet. Once Plex, Jellyfin, or Emby sends a webhook event, detected user profiles will appear here as selectable checkboxes.</span>';
+      box.innerHTML = '<span class="u-c-v_muted u-fs-v_font_size_sm">No users detected yet. Once Plex, Jellyfin, or Emby sends a webhook event, detected user profiles will appear here as selectable checkboxes.</span>';
       return;
     }
     const allowed = (localStorage.getItem('myListAddon:scrobbleAllowedUsers') || '')
@@ -70523,7 +70839,7 @@ async function loadScrobbleSeenUsers() {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
-    let html = '<div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">';
+    let html = '<div class="u-fd-column u-gap-4px u-mt-4px" style="display:flex;">';
     for (const [username, info] of Object.entries(data.users)) {
       const isChecked = allowed.includes(username.toLowerCase());
       let timeStr = '';
@@ -70540,15 +70856,15 @@ async function loadScrobbleSeenUsers() {
       }
       const serverName = (info && info.server) || 'Media Server';
       html +=
-        '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84rem; padding:3px 0;">' +
-          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
-          '<span><strong>' + escapeHtml(username) + '</strong> <span style="color:var(--muted); font-size:0.78rem;">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
+        '<label class="u-ai-center u-gap-8px u-cur-pointer u-fs-v_font_size_sm u-p-3px_0" style="display:flex;">' +
+          '<input type="checkbox" class="scrobble-user-cb u-cur-pointer u-flex-none" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px;">' +
+          '<span><strong>' + escapeHtml(username) + '</strong> <span class="u-c-v_muted u-fs-v_font_size_xs">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
         '</label>';
     }
     html += '</div>';
     box.innerHTML = html;
   } catch (err) {
-    box.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">Could not load detected users right now.</span>';
+    box.innerHTML = '<span class="u-c-v_muted u-fs-v_font_size_sm">Could not load detected users right now.</span>';
   }
 }
 
@@ -70593,7 +70909,7 @@ async function refreshTrackPlaybackStatus() {
   const statusBox = document.getElementById('trackPlaybackStatus');
   if (!statusBox || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  statusBox.innerHTML = '<small style="color:var(--muted);">Checking scrobble status\u2026</small>';
+  statusBox.innerHTML = '<small class="u-c-v_muted">Checking scrobble status\u2026</small>';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/track-status', {
       method: 'POST',
@@ -70602,7 +70918,7 @@ async function refreshTrackPlaybackStatus() {
     });
     const data = await res.json();
     if (!data.ok || !data.lastPingAt) {
-      statusBox.innerHTML = '<div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(255,255,255,0.03); border-radius:6px; font-size:0.83rem; color:var(--muted);"><span style="color:var(--muted);">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
+      statusBox.innerHTML = '<div class="u-ai-center u-gap-8px u-p-8px_12px u-bg-rgba_255_255_255_0_03 u-br-v_radius_sm u-fs-v_font_size_sm u-c-v_muted" style="display:flex;"><span class="u-c-v_muted">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
       return;
     }
     const when = new Date(data.lastPingAt).toLocaleString();
@@ -70614,11 +70930,11 @@ async function refreshTrackPlaybackStatus() {
     if (data.legacyAuthForm) {
       const formName = data.legacyAuthForm === 'key' ? 'Account Key (?creator=&key=)' : 'Install Link (?config=)';
       legacyBanner =
-        '<div style="margin-top:10px; padding:10px 12px; background:rgba(255,149,0,0.12); border:1px solid rgba(255,149,0,0.35); border-radius:8px; font-size:0.83rem; color:var(--text);">' +
-          '<div style="display:flex; align-items:flex-start; gap:8px;">' +
-            '<span style="color:var(--warning, #ff9500); font-size:1.1rem; line-height:1.2;">&#x26A0;</span>' +
+        '<div class="u-mt-10px u-p-10px_12px u-bg-rgba_255_149_0_0_12 u-bd-1px_solid_rgba_255_149_0_0_35 u-br-v_radius_sm u-fs-v_font_size_sm u-c-v_text">' +
+          '<div class="u-ai-flex_start u-gap-8px" style="display:flex;">' +
+            '<span class="u-c-v_warning_v_color_warn u-fs-v_font_size_lg u-lh-1_2">&#x26A0;</span>' +
             '<div>' +
-              '<div style="font-weight:700; color:var(--warning, #ff9500); margin-bottom:2px;">Outdated Webhook URL Detected</div>' +
+              '<div class="u-fw-700 u-c-v_warning_v_color_warn u-mb-2px">Outdated Webhook URL Detected</div>' +
               'Your media server is using an older link format (' + escapeHtml(formName) + '). ' +
               'This format is deprecated and will be retired. Please copy your updated Webhook URL above (carrying your secure token) and paste it into Plex, Jellyfin, or Emby to keep syncing playback.' +
             '</div>' +
@@ -70626,18 +70942,18 @@ async function refreshTrackPlaybackStatus() {
         '</div>';
     }
     statusBox.innerHTML =
-      '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:8px; font-size:0.84rem;">' +
-        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
-          '<span style="color:var(--accent); font-weight:700;">\u2713 Last Scrobble Activity</span>' +
-          '<span style="color:var(--muted); font-size:0.78rem;">' + escapeHtml(when) + '</span>' +
+      '<div class="u-p-10px_12px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_25 u-br-v_radius_sm u-fs-v_font_size_sm">' +
+        '<div class="u-ai-center u-jc-space_between u-mb-4px" style="display:flex;">' +
+          '<span class="u-c-v_accent u-fw-700">\u2713 Last Scrobble Activity</span>' +
+          '<span class="u-c-v_muted u-fs-v_font_size_xs">' + escapeHtml(when) + '</span>' +
         '</div>' +
-        '<div style="color:var(--text);">' +
-          'Source: ' + serverLabel + userLabel + ' &bull; Matched: <code style="color:var(--accent-2);">' + escapeHtml(displayMatched) + '</code>' +
+        '<div class="u-c-v_text">' +
+          'Source: ' + serverLabel + userLabel + ' &bull; Matched: <code class="u-c-v_accent_2">' + escapeHtml(displayMatched) + '</code>' +
         '</div>' +
       '</div>' +
       legacyBanner;
   } catch (e) {
-    statusBox.innerHTML = '<small style="color:var(--muted);">Could not check status right now.</small>';
+    statusBox.innerHTML = '<small class="u-c-v_muted">Could not check status right now.</small>';
   }
 }
 
@@ -70859,13 +71175,13 @@ function openRestoreModal() {
     '<h2>Login</h2>' +
     '<p class="modal-sub">Enter your Username and Account Key to login and sync your lists.</p>' +
     '<div class="row"><input type="text" id="restoreNameInput" placeholder="Username"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="restoreKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="restoreKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div id="restoreModalError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="restoreSubmitBtn" data-act="submitRestoreProfile">Login</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openCreateProfileModal">Need an account? Create one</button>' +
     '</div>' +
-    '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:0.85rem;">' +
+    '<div class="u-jc-space_between u-ai-center u-mt-14px u-fs-v_font_size_sm" style="display:flex;">' +
     '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotKeyModal">Forgot key?</a>' +
     '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotUsernameModal">Forgot username?</a>' +
     '</div>'
@@ -70938,13 +71254,13 @@ function openForgotKeyModal() {
     '<h2>Reset Your Key</h2>' +
     '<p class="modal-sub">Enter your Username and the recovery answer you set when you created your account.</p>' +
     '<div class="row"><input type="text" id="forgotKeyNameInput" placeholder="Username"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="forgotKeyAnswerInput" placeholder="Recovery Answer"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="forgotKeyAnswerInput" placeholder="Recovery Answer"></div>' +
     '<div id="forgotKeyModalError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="forgotKeySubmitBtn" data-act="submitForgotKey">Reset Key</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>' +
-    '<p class="modal-sub" style="margin-top:14px;">Didn\\'t set a recovery answer, or don\\'t remember it? Reach out via Settings &gt; Feedback &amp; Support.</p>'
+    '<p class="modal-sub u-mt-14px">Didn\\'t set a recovery answer, or don\\'t remember it? Reach out via Settings &gt; Feedback &amp; Support.</p>'
   );
 }
 
@@ -71004,9 +71320,9 @@ function openForgotUsernameModal() {
     '<h2>Find Your Username</h2>' +
     '<p class="modal-sub">Enter your Account Key and Recovery Answer (if you set one) to retrieve your username.</p>' +
     '<div class="row"><input type="text" id="forgotUsernameKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="forgotUsernameAnswerInput" placeholder="Recovery Answer (if set)"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="forgotUsernameAnswerInput" placeholder="Recovery Answer (if set)"></div>' +
     '<div id="forgotUsernameModalError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="forgotUsernameSubmitBtn" data-act="submitForgotUsername">Find Username</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>'
@@ -71039,10 +71355,10 @@ async function submitForgotUsername() {
     showModal(
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2>Account Found</h2>' +
-      '<p class="modal-sub" style="margin-bottom:6px;">Your Username is:</p>' +
-      '<div class="creator-key-display" style="font-size:1.1rem; font-weight:700; user-select:all;">' + escapeHtml(username) + '</div>' +
-      (data.displayName && data.displayName !== username ? '<p class="modal-sub" style="margin-top:8px;">Display Name: <strong>' + escapeHtml(data.displayName) + '</strong></p>' : '') +
-      '<div class="actions" style="margin-top:18px;">' +
+      '<p class="modal-sub u-mb-6px">Your Username is:</p>' +
+      '<div class="creator-key-display u-fs-v_font_size_lg u-fw-700 u-us-all">' + escapeHtml(username) + '</div>' +
+      (data.displayName && data.displayName !== username ? '<p class="modal-sub u-mt-8px">Display Name: <strong>' + escapeHtml(data.displayName) + '</strong></p>' : '') +
+      '<div class="actions u-mt-18px">' +
       '<button type="button" class="primary" id="loginWithFoundUserBtn">Login with this Username</button>' +
       '<button type="button" class="secondary" data-act="closeModal">Done</button>' +
       '</div>'
@@ -72951,11 +73267,11 @@ function openCreateProfileModal() {
     '<h2>Create a Free Account</h2>' +
     '<p class="modal-sub">Save and sync your custom lists, presets, and channels from any device.<br>No email. No password. Just a username and key.</p>' +
     '<div class="row"><input type="text" id="createProfileNameInput" placeholder="Choose a Username" maxlength="25"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="createProfileDisplayInput" placeholder="Display name (optional)" maxlength="40"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="createProfileRecoveryInput" placeholder="Recovery Answer (optional, 8+ characters)" minlength="8"></div>' +
-    '<p class="modal-sub" style="font-size:0.78rem; margin-top:4px;">If you ever lose your key, this is the only way back in besides contacting us. It can reset your key on its own, so treat it like a password: at least 8 characters, something only you know -- not a public username or anything someone could look up.</p>' +
+    '<div class="row u-mt-8px"><input type="text" id="createProfileDisplayInput" placeholder="Display name (optional)" maxlength="40"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="createProfileRecoveryInput" placeholder="Recovery Answer (optional, 8+ characters)" minlength="8"></div>' +
+    '<p class="modal-sub u-fs-v_font_size_xs u-mt-4px">If you ever lose your key, this is the only way back in besides contacting us. It can reset your key on its own, so treat it like a password: at least 8 characters, something only you know -- not a public username or anything someone could look up.</p>' +
     '<div id="createProfileError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="createProfileSubmitBtn" data-act="submitCreateProfile">Create Account</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Already have one? Login</button>' +
     '</div>'
@@ -73091,9 +73407,9 @@ async function submitCreateProfile() {
 function showKeyRevealModal(displayName, creatorKey) {
   showModal(
     '<h2>Profile Created</h2>' +
-    '<p class="modal-sub" style="margin-bottom:4px;">Username</p>' +
-    '<p style="margin:0 0 14px; font-weight:600;">' + escapeHtml(displayName) + '</p>' +
-    '<p class="modal-sub" style="margin-bottom:4px;">Key</p>' +
+    '<p class="modal-sub u-mb-4px">Username</p>' +
+    '<p class="u-m-0_0_14px u-fw-600">' + escapeHtml(displayName) + '</p>' +
+    '<p class="modal-sub u-mb-4px">Key</p>' +
     '<div class="creator-key-display" id="revealedCreatorKey">' + escapeHtml(creatorKey) + '</div>' +
     '<p class="modal-sub">Save this key somewhere safe. You\\'ll need it to edit your lists from another browser. You can view it again later from Settings.</p>' +
     '<div class="actions">' +
@@ -73139,19 +73455,19 @@ function openVisibilityModal() {
   showModal(
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-      '<h2 class="panel-title" style="margin-top:0;">Save Custom List</h2>' +
-      '<p style="margin:0 0 16px; font-size:0.88rem; color:var(--muted);">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
-      '<div class="visibility-choice" style="display:flex; flex-direction:column; gap:12px; margin: 16px 0 20px;">' +
-        '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg);">' +
-          '<input type="radio" name="listVisibility" value="public" checked style="margin-top:3px; accent-color:var(--brand);">' +
-          '<span style="flex:1;"><strong style="color:var(--text); font-size:0.92rem;">Public</strong><br><small style="color:var(--muted);">Anyone with the link can view, like, and add this list to their catalogs.</small></span>' +
+      '<h2 class="panel-title u-mt-0">Save Custom List</h2>' +
+      '<p class="u-m-0_0_16px u-fs-v_font_size_sm u-c-v_muted">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
+      '<div class="visibility-choice u-fd-column u-gap-12px u-m-16px_0_20px" style="display:flex;">' +
+        '<label class="u-ai-flex_start u-gap-12px u-cur-pointer u-p-12px_14px u-bd-1px_solid_v_border u-br-v_radius_md u-bg-v_bg" style="display:flex;">' +
+          '<input type="radio" name="listVisibility" value="public" checked class="u-mt-3px u-acc-v_brand">' +
+          '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Public</strong><br><small class="u-c-v_muted">Anyone with the link can view, like, and add this list to their catalogs.</small></span>' +
         '</label>' +
-        '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg);">' +
-          '<input type="radio" name="listVisibility" value="private" style="margin-top:3px; accent-color:var(--brand);">' +
-          '<span style="flex:1;"><strong style="color:var(--text); font-size:0.92rem;">Private</strong><br><small style="color:var(--muted);">Only you can view and edit this list when logged into your account.</small></span>' +
+        '<label class="u-ai-flex_start u-gap-12px u-cur-pointer u-p-12px_14px u-bd-1px_solid_v_border u-br-v_radius_md u-bg-v_bg" style="display:flex;">' +
+          '<input type="radio" name="listVisibility" value="private" class="u-mt-3px u-acc-v_brand">' +
+          '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Private</strong><br><small class="u-c-v_muted">Only you can view and edit this list when logged into your account.</small></span>' +
         '</label>' +
       '</div>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<button type="button" class="secondary lc-btn" data-act="closeModal">Cancel</button>' +
         '<button type="button" class="primary lc-btn" data-act="confirmSaveAsCreator">Save List</button>' +
       '</div>' +
@@ -73164,24 +73480,24 @@ function showSavedCustomListModal(listName, visibility, url) {
   showModal(
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-      '<h2 class="panel-title" style="margin-top:0;">\u2713 List Saved</h2>' +
-      '<p style="margin:8px 0 16px; font-size:0.9rem; color:var(--text);">' +
+      '<h2 class="panel-title u-mt-0">\u2713 List Saved</h2>' +
+      '<p class="u-m-8px_0_16px u-fs-v_font_size_base u-c-v_text">' +
         '<strong>' + escapeHtml(listName || 'Custom List') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> list.' +
       '</p>' +
       (isPrivate
-        ? '<div style="padding:12px 14px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.2); border-radius:10px; margin-bottom:16px;">' +
-            '<p style="margin:0; font-size:0.84rem; color:var(--text);">Only you can see this list from your profile when logged in.</p>' +
+        ? '<div class="u-p-12px_14px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_2 u-br-v_radius_md u-mb-16px">' +
+            '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Only you can see this list from your profile when logged in.</p>' +
           '</div>'
-        : '<div style="margin-bottom:16px;">' +
-            '<p style="margin:0 0 8px; font-size:0.84rem; color:var(--muted);">Public share link:</p>' +
-            '<div style="display:flex; gap:8px; align-items:center;">' +
-              '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:0.88rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
-              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+        : '<div class="u-mb-16px">' +
+            '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
+            '<div class="u-gap-8px u-ai-center" style="display:flex;">' +
+              '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
+              '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_14px" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
-        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
+        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
@@ -73260,8 +73576,8 @@ function showAppNoticeModal(title, message, isError) {
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;' + (isError ? ' color:var(--danger);' : '') + '">' + escapeHtml(title || 'Notice') + '</h2>' +
-      '<p style="margin:12px 0 20px; font-size:0.9rem; color:var(--text); line-height:1.4;">' + escapeHtml(message || '') + '</p>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end;">' +
+      '<p class="u-m-12px_0_20px u-fs-v_font_size_base u-c-v_text u-lh-1_4">' + escapeHtml(message || '') + '</p>' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end">' +
         '<button type="button" class="primary lc-btn" data-act="closeModal">OK</button>' +
       '</div>' +
     '</div>'
@@ -73949,10 +74265,10 @@ async function renderCreatorDashboard(options) {
         const isDesktopEnd = (i === allPosters.length - 1 && allPosters.length >= 4);
         let overlays = '';
         if (isMobileEnd) {
-          overlays += '<div class="list-card-count-overlay mobile-only creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+          overlays += '<div class="list-card-count-overlay mobile-only creatorListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
         }
         if (isDesktopEnd) {
-          overlays += '<div class="list-card-count-overlay desktop-only creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+          overlays += '<div class="list-card-count-overlay desktop-only creatorListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
         }
         const removeBtn = isWatchlist
           ? '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
@@ -73962,7 +74278,7 @@ async function renderCreatorDashboard(options) {
         const label = formatWatchItemLabel(it);
         const posterEl = itemPoster
           ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-          : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+          : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || '') + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
             '<div class="list-card-mini-poster-img-wrap">' +
@@ -73972,7 +74288,7 @@ async function renderCreatorDashboard(options) {
             '</div>' +
             '<div class="list-card-mini-poster-name">' + escapeHtml(label.title || it.title || it.name || '') + '</div>' +
             (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
           '</div>';
       }).join('');
       const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, l.type, l.slug) : false;
@@ -73982,7 +74298,7 @@ async function renderCreatorDashboard(options) {
         : '';
       return '<div class="list-card creator-list-row" data-slug="' + escapeAttr(l.slug) + '">' +
         '<div class="list-card-header">' +
-          '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
+          '<div class="list-card-body creatorListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' +
             '<div class="list-card-title">' +
               '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
@@ -74002,14 +74318,14 @@ async function renderCreatorDashboard(options) {
             syncBtnHtml +
             shareBtn +
             deleteBtnHtml +
-            '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
+            '<button type="button" class="lc-btn list-add-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
             '</button>' +
           '</div>' +
         '</div>' +
-        (posterThumbs ? '<div class="list-card-posters poster-preview-static creatorListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
+        (posterThumbs ? '<div class="list-card-posters poster-preview-static creatorListViewTrigger u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + posterThumbs + '</div>' : '') +
       '</div>';
     }
 
@@ -74115,7 +74431,7 @@ async function renderCreatorDashboard(options) {
       : '<p><small>No lists yet \u2014 build one under Create List to get started.</small></p>';
 
     const prevScrollTop = box.scrollTop;
-    box.innerHTML = '<div id="creatorListRows" style="margin-bottom:14px;">' + rowsHtml + '</div>';
+    box.innerHTML = '<div id="creatorListRows" class="u-mb-14px">' + rowsHtml + '</div>';
     if (prevScrollTop) box.scrollTop = prevScrollTop;
     document.querySelectorAll('#creatorListRows .drag-handle-list').forEach((h) => initCreatorListTouchDrag(h));
     if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
@@ -74219,10 +74535,10 @@ function buildLocalListCardHtml(l) {
     const isDesktopEnd = (i === allPosters.length - 1 && allPosters.length >= 4);
     let overlays = '';
     if (isMobileEnd) {
-      overlays += '<div class="list-card-count-overlay mobile-only localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay mobile-only localListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
     }
     if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only localListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
     }
     const posterId = it.showId || it.imdbId || it.id || '';
     const posterType = it.kind || (it.type !== 'mixed' ? (it.type || '') : '') || (it.showId ? 'series' : (l.type === 'mixed' ? '' : (l.type || '')));
@@ -74325,7 +74641,7 @@ function buildLocalListCardHtml(l) {
 
     const posterEl = itemPoster
       ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
       '<div class="list-card-mini-poster-img-wrap">' +
@@ -74337,7 +74653,7 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
       (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
   const typeLabel = l.type === 'series' ? 'Shows' : l.type === 'movie' ? 'Movies' : 'Mixed';
@@ -74367,7 +74683,7 @@ function buildLocalListCardHtml(l) {
     }
   }
 
-  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn list-add-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="' + escapeAttr(l.slug) + '">' +
     (isAdded ? 'Remove' : '+ Add') +
@@ -74384,7 +74700,7 @@ function buildLocalListCardHtml(l) {
 
   return '<div class="' + cardClass + '" data-slug="' + escapeAttr(l.slug) + '" data-list-type="' + escapeAttr(l.type || 'movie') + '">' +
     '<div class="list-card-header">' +
-      '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
+      '<div class="list-card-body localListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '">' +
         '<div class="list-card-title">' +
           '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
@@ -74410,7 +74726,7 @@ function buildLocalListCardHtml(l) {
             addBtnHtml +
           '</div>') +
     '</div>' +
-    (posterThumbs ? '<div class="list-card-posters poster-preview-static localListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
+    (posterThumbs ? '<div class="list-card-posters poster-preview-static localListViewTrigger u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '">' + posterThumbs + '</div>' : '') +
   '</div>';
 }
 
@@ -74514,7 +74830,7 @@ function renderLocalCustomListsDashboard(box, silent) {
     ? visibleLists.map((l) => l.isAiringNext ? buildAiringNextCardHtml() : buildLocalListCardHtml(l)).join('')
     : '<p><small>No lists yet \u2014 build one under Create List to get started.</small></p>';
   const prevScrollTop = box ? box.scrollTop : 0;
-  box.innerHTML = '<div id="creatorListRows" style="margin-bottom:14px;">' + rowsHtml + '</div>';
+  box.innerHTML = '<div id="creatorListRows" class="u-mb-14px">' + rowsHtml + '</div>';
   if (prevScrollTop) box.scrollTop = prevScrollTop;
   document.querySelectorAll('#creatorListRows .drag-handle-list').forEach((h) => initCreatorListTouchDrag(h));
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
@@ -76134,7 +76450,6 @@ function initTouchDrag(handle) {
 // single most recent destructive action (not a full history) -- good enough
 // for "oops, changed my mind" without the complexity of a real undo stack.
 let undoSnapshot = null;
-let undoTimer = null;
 
 function captureUndoSnapshot() {
   undoSnapshot = { entries: collectEntries() };
@@ -76143,26 +76458,16 @@ function captureUndoSnapshot() {
 let activeUndoToast = null;
 
 function showUndoToast(message) {
-  if (typeof showToast === 'function') {
-    if (activeUndoToast && typeof activeUndoToast.dismiss === 'function') {
-      activeUndoToast.dismiss();
+  if (activeUndoToast && typeof activeUndoToast.dismiss === 'function') {
+    activeUndoToast.dismiss();
+  }
+  activeUndoToast = showToast(message, 'undo', {
+    duration: 8000,
+    actionText: 'Undo',
+    onAction: function() {
+      performUndo();
     }
-    activeUndoToast = showToast(message, 'undo', {
-      duration: 8000,
-      actionText: 'Undo',
-      onAction: function() {
-        performUndo();
-      }
-    });
-    return;
-  }
-  const toast = document.getElementById('undoToast');
-  if (toast) {
-    document.getElementById('undoToastMsg').textContent = message;
-    toast.style.display = 'flex';
-    clearTimeout(undoTimer);
-    undoTimer = setTimeout(hideUndoToast, 8000);
-  }
+  });
 }
 
 function hideUndoToast() {
@@ -76170,9 +76475,6 @@ function hideUndoToast() {
     activeUndoToast.dismiss();
     activeUndoToast = null;
   }
-  const toast = document.getElementById('undoToast');
-  if (toast) toast.style.display = 'none';
-  clearTimeout(undoTimer);
 }
 
 function performUndo() {
@@ -77514,7 +77816,7 @@ function showPosterPlaceholderFor(img) {
   if (!ph) {
     ph = document.createElement('div');
     ph.className = 'live-preview-poster live-preview-poster-placeholder';
-    ph.innerHTML = '<small style="color:var(--muted); font-size:0.7rem;">No poster</small>';
+    ph.innerHTML = '<small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small>';
     parent.appendChild(ph);
   }
   ph.style.display = 'flex';
@@ -77962,8 +78264,8 @@ function livePreviewPosterHtml(m) {
   const landscape = m.posterShape === 'landscape';
   const posterClass = 'live-preview-poster' + (landscape ? ' landscape' : '');
   const posterEl = resolvedPoster
-    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>'
-    : '<div class="' + posterClass + ' live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+    ? '<img class="' + posterClass + '" src="' + escapeAttr(resolvedPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]" data-imdb="' + escapeAttr(m.id || '') + '"><div class="' + posterClass + ' live-preview-poster-placeholder" style="display:none;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>'
+    : '<div class="' + posterClass + ' live-preview-poster-placeholder"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
   
   const parentUrl = (m.listUrl || (window._currentListDetailsParams ? window._currentListDetailsParams.listUrl : '') || '').toLowerCase();
   const parentName = (m.listName || (window._currentListDetailsParams ? window._currentListDetailsParams.name : '') || '').toLowerCase();
@@ -78097,11 +78399,11 @@ function livePreviewPosterHtml(m) {
   let subtitleHtml = '';
   const subText = m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : ''));
   if (subText && ratingSpan) {
-    subtitleHtml = '<div class="live-preview-poster-subtitle" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
+    subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
   } else if (subText) {
     subtitleHtml = '<div class="live-preview-poster-subtitle">' + escapeHtml(subText) + '</div>';
   } else if (ratingSpan) {
-    subtitleHtml = '<div class="live-preview-poster-subtitle" style="display:flex; align-items:center; justify-content:flex-end; gap:4px; width:100%;">' + ratingSpan + '</div>';
+    subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-flex_end u-gap-4px" style="display:flex; width:100%;">' + ratingSpan + '</div>';
   }
   const extraCardClass = isTraktCwContext ? ' detail-page-trakt-continue-watching' : (isMdblistUpNextContext ? ' detail-page-mdblist-up-next' : '');
   // resolvedPoster, not m.poster: this attribute is what the poster modal
@@ -81216,7 +81518,7 @@ function renderPresetsList() {
   const names = Object.keys(map).sort();
   if (badge) badge.textContent = names.length ? '(' + names.length + ' saved)' : '';
   if (!names.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:8px 0;"><small>No saved presets yet.</small></p>';
+    container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-8px_0"><small>No saved presets yet.</small></p>';
     return;
   }
   container.innerHTML = names.map((n) => {
@@ -81225,7 +81527,7 @@ function renderPresetsList() {
     const count = entries.length;
     return '<div class="preset-card" data-preset="' + escapeAttr(n) + '">' +
       '<div class="preset-card-header">' +
-        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted); flex-shrink:0;">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
+        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small class="u-c-v_muted u-fsh-0">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
       '</div>' +
       '<div class="preset-actions-cluster">' +
         '<button type="button" class="primary lc-btn preset-load-btn" title="Load this preset into your active catalogs">Load</button>' +
@@ -81236,7 +81538,7 @@ function renderPresetsList() {
             '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
             '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
             '<div class="preset-menu-divider"></div>' +
-            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">Delete Preset</button>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn u-c-v_danger_v_color_danger">Delete Preset</button>' +
           '</div>' +
         '</details>' +
       '</div>' +
@@ -81785,8 +82087,8 @@ function installSaveBody(entries, keys) {
 // The rows a signed-out install link cannot carry, named, with a way in.
 function signInToInstallHtml(message, entries) {
   const names = (entries || []).filter((e) => rowNeedsAccount(e.url)).map((e) => e.name || 'Untitled');
-  return '<div class="install-result-card" style="padding:18px;">'
-    + '<p class="testresult err" style="margin:0 0 12px;">' + escapeHtml(message)
+  return '<div class="install-result-card u-p-18px">'
+    + '<p class="testresult err u-m-0_0_12px">' + escapeHtml(message)
     + (names.length ? (' Sign in, or remove ' + (names.length === 1 ? 'this row' : 'these rows') + ' first: ' + escapeHtml(names.join(', ')) + '.') : '')
     + '</p>'
     + '<button type="button" class="btn btn-primary" data-act="openRestoreModal">Log in or sign up</button>'
@@ -81810,7 +82112,7 @@ async function generate() {
     }
   }
   box.style.display = 'block';
-  box.innerHTML = '<div class="install-result-card" style="align-items:center; justify-content:center; padding:24px; color:var(--muted);"><span class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle;"></span> Generating install link\u2026</div>';
+  box.innerHTML = '<div class="install-result-card u-ai-center u-jc-center u-p-24px u-c-v_muted"><span class="spinner u-bd-2px_solid_v_border u-bordertopcolor-v_accent u-br-50 u-mr-8px u-va-middle" style="display:inline-block; width:20px; height:20px; animation:spin 0.8s linear infinite;"></span> Generating install link\u2026</div>';
 
   // Prefer a short, KV-backed id (see /api/save) so the install URL stays a
   // fixed short length no matter how many lists are configured. If this
@@ -81847,8 +82149,8 @@ async function generate() {
     // hosted site always has it, so a failure here is transient: say so and
     // offer a retry.
     const errTxt = escapeHtml(saveErrorMessage || 'Unknown error');
-    box.innerHTML = '<div class="install-result-card" style="padding:18px;">'
-      + '<p class="testresult err" style="margin:0 0 12px;">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
+    box.innerHTML = '<div class="install-result-card u-p-18px">'
+      + '<p class="testresult err u-m-0_0_12px">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
       + '<button type="button" class="btn btn-primary" data-act="generate">Try again</button>'
       + '</div>';
     return;
@@ -81889,14 +82191,14 @@ async function generate() {
 
       \${sizeWarning}
 
-      <div class="install-actions-bar" style="display:flex; flex-wrap:wrap; gap:10px;">
-        <a href="\${stremioInstallUrl}" class="btn-stremio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:0.9rem;">
+      <div class="install-actions-bar u-fw2-wrap u-gap-10px" style="display:flex;">
+        <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:0.9rem;">
+        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Nuvio
         </a>
-        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary" style="display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; font-weight:600; border-radius:var(--radius-pill); text-align:center; font-size:0.85rem; text-decoration:none;">
+        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>
       </div>
@@ -81906,9 +82208,9 @@ async function generate() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
           <span>Manifest Link</span>
         </div>
-        <div class="install-url-input-group" style="display:flex; align-items:stretch; gap:8px; width:100%; flex-wrap:wrap;">
-          <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="flex:1 1 220px; min-width:0; margin:0; display:flex; align-items:center;">\${installUrl}</div>
-          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; border-radius:var(--radius-pill);">
+        <div class="install-url-input-group u-ai-stretch u-gap-8px u-fw2-wrap" style="display:flex; width:100%;">
+          <div class="install-url-box u-flex-1_1_220px u-minw-0 u-m-0 u-ai-center" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="display:flex;">\${installUrl}</div>
+          <button type="button" class="install-url-copy-btn primary lc-btn u-flex-none u-p-0_16px u-minh-38px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_sm u-br-v_radius_pill" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="height:auto; display:inline-flex;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
@@ -81916,9 +82218,9 @@ async function generate() {
       </div>
 
       <div class="install-hint-box">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="u-fsh-0 u-mt-2px"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
         <div>
-          <span style="font-weight:600; color:var(--text);">To install manually, copy the manifest link above and paste it into:</span>
+          <span class="u-fw-600 u-c-v_text">To install manually, copy the manifest link above and paste it into:</span>
           <div class="install-hint-steps">
             <span>&bull; <strong>Stremio</strong> &rarr; Addons &rarr; Community &rarr; Paste URL</span>
             <span>&bull; <strong>Nuvio</strong> &rarr; Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
@@ -82660,7 +82962,8 @@ function appShellApiMessage(status) {
 
 // --- one accessible dialog ---------------------------------------------------
 //
-// For new code: a title, a message and buttons that resolve. It rides on
+// For new code: a title, a message and buttons that resolve. Pass
+// destructive: true for removals/resets so the confirm button is red. It rides on
 // showModal/closeModal (16_client-row-core.js), which already move focus in,
 // trap Tab, close on Escape, restore focus and lock the page behind it.
 function appShellDialog(options) {
@@ -82668,11 +82971,11 @@ function appShellDialog(options) {
   const confirmLabel = o.confirmLabel || 'OK';
   const cancelLabel = o.cancelLabel;
   let html = '';
-  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:1.08rem;">' + escapeHtml(o.title) + '</h3>';
-  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
-  html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
-  if (cancelLabel) html += '<button type="button" class="secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
-  html += '<button type="button" class="primary" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
+  if (o.title) html += '<h3 class="u-m-0_0_10px u-fs-v_font_size_md">' + escapeHtml(o.title) + '</h3>';
+  if (o.message) html += '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm u-lh-1_45 u-ws-pre_wrap">' + escapeHtml(o.message) + '</p>';
+  html += '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">';
+  if (cancelLabel) html += '<button type="button" class="btn-secondary u-minw-80px u-p-8px_16px" id="appShellDialogCancel">' + escapeHtml(cancelLabel) + '</button>';
+  html += '<button type="button" class="' + (o.destructive ? 'btn-danger' : 'btn-primary') + ' u-minw-80px u-p-8px_16px" id="appShellDialogConfirm">' + escapeHtml(confirmLabel) + '</button>';
   html += '</div>';
 
   return new Promise(function (resolve) {
@@ -82766,11 +83069,11 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
-    '<div class="settings-toggle-row" style="padding:0;">' +
-      '<div style="flex:1; min-width:0; padding-right:12px;">' +
-        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
-        '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+  const html = '<div class="u-mt-16px u-p-12px_16px u-bg-v_surface u-br-v_radius_md u-bd-1px_solid_v_border">' +
+    '<div class="settings-toggle-row u-p-0">' +
+      '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Hide titles already shown in rows above</span>' +
+        '<p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">The top row keeps everything; lower rows drop titles already shown above.</p>' +
       '</div>' +
       '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
         '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
@@ -83347,7 +83650,7 @@ function appShellImportFinishedHtml() {
       '</div>' + appShellImportUnmatchedHtml();
     return html;
   }
-  html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+  html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
     '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(appShellImportListName()) + '">' +
     '<label class="app-shell-dedupe" for="appShellImportHomeToggle">' +
     '<input type="checkbox" id="appShellImportHomeToggle" checked>' +
@@ -83372,7 +83675,7 @@ function appShellRenderImports() {
   if (!host) return false;
   const typed = document.getElementById('appShellImportName');
   const typedValue = typed ? typed.value : '';
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
+  let html = '<div class="panel u-mb-12px">' +
     '<h2 class="panel-title">Import a file</h2>' +
     '<p class="app-shell-muted">A Letterboxd zip or CSV, an IMDb CSV, a Trakt export. Matching happens on the server, so you can close this page and come back.</p>';
 
@@ -83402,15 +83705,15 @@ function appShellRenderImports() {
     html += '<p class="app-shell-kv"><strong>' + appShellImportsEscape(appShellImportFile.name) + '</strong> &middot; ' +
       (counts.movie + counts.series) + ' titles' +
       (appShellImportFile.truncated ? ' (the first ' + APP_SHELL_IMPORT_ROWS_MAX + ')' : '') + '</p>' +
-      '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
+      '<div class="app-shell-actions u-mb-8px">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
       appShellImportKindChip('series', 'Shows', counts.series) + '</div>';
     if (counts.movie && counts.series) {
       html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
         (chosen === 'movie' ? 'movies' : 'shows') + ' -- pick the other chip afterwards for the rest.</p>';
     }
-    html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+    html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
       '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
-      '<div class="app-shell-actions" style="margin-top:10px;">' +
+      '<div class="app-shell-actions u-mt-10px">' +
       '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +
       '<button type="button" class="secondary lc-btn" data-app-shell-action="import-clear">Choose another file</button>' +
       '</div>';
@@ -83742,7 +84045,7 @@ function renderGuidePage(origin) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#F2F2F7">
 <title>${title}</title>
 <meta name="description" content="${description}">
 <link rel="canonical" href="${origin}/guide">
@@ -83802,57 +84105,15 @@ function renderGuidePage(origin) {
      Inter and JetBrains Mono from Google Fonts. It now has no third-party
      origin at all. See docs/DECISIONS.md D-20. -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
-  :root {
-    /* Same reason as the app shell's (09_page-shell.js): an installed PWA
-       paints the status bar and the home-indicator strip from the UA's own
-       surface color, and that surface stays white until the document says
-       it is dark. This page defaults to dark, so the default says dark. */
-    color-scheme: dark;
-    --bg: #000000;
-    --bg-surface: #1C1C1E;
-    --bg-card: #2C2C2E;
-    --bg-input: #3A3A3C;
-    --text: #FFFFFF;
-    --text-muted: #8E8E93;
-    --text-dim: #A1A1A6;
-    --border: rgba(255,255,255,0.12);
-    --border-strong: rgba(255,255,255,0.22);
-    --accent: #0A84FF;
-    --accent-hover: #0070E0;
-    --accent-bg: rgba(10, 132, 255, 0.15);
-    --success: #30D158;
-    --warning: #FFD60A;
-    --danger: #FF453A;
-    --radius-lg: 16px;
-    --radius-md: 12px;
-    --radius-sm: 8px;
-    --shadow: 0 4px 20px rgba(0,0,0,0.5);
-  }
-
-  :root.light-theme, .light-theme {
-    color-scheme: light;
-    --bg: #F2F2F7;
-    --bg-surface: #FFFFFF;
-    --bg-card: #E5E5EA;
-    --bg-input: #D1D1D6;
-    --text: #1C1C1E;
-    --text-muted: #6C6C70;
-    --text-dim: #48484A;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.16);
-    --accent: #007AFF;
-    --accent-hover: #0062CC;
-    --accent-bg: rgba(0, 122, 255, 0.10);
-    --shadow: 0 2px 12px rgba(0,0,0,0.06);
-  }
-
+${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; background: var(--bg); }
   body {
     background: var(--bg);
     color: var(--text);
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 16px;
     line-height: 1.65;
     -webkit-font-smoothing: antialiased;
@@ -83886,7 +84147,7 @@ function renderGuidePage(origin) {
     border-radius: 10px;
   }
   .brand-text {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-weight: 800;
     font-size: 1.25rem;
     letter-spacing: -0.02em;
@@ -83913,9 +84174,9 @@ function renderGuidePage(origin) {
     background: var(--accent);
     color: #FFF;
   }
-  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:hover { background: var(--color-brand-hover); }
   .btn-secondary {
-    background: var(--bg-surface);
+    background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border-strong);
   }
@@ -83926,7 +84187,7 @@ function renderGuidePage(origin) {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
     cursor: pointer;
     display: flex;
@@ -83942,10 +84203,10 @@ function renderGuidePage(origin) {
     height: 18px;
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
   }
-  .icon-sun { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); left: 50%; top: 50%; }
-  .icon-moon { opacity: 0; transform: translate(-50%, -50%) rotate(-90deg) scale(0.4); left: 50%; top: 50%; }
-  :root.light-theme .icon-sun, .light-theme .icon-sun { opacity: 0; transform: translate(-50%, -50%) rotate(90deg) scale(0.4); }
-  :root.light-theme .icon-moon, .light-theme .icon-moon { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  .icon-sun { opacity: 0; transform: translate(-50%, -50%) rotate(90deg) scale(0.4); left: 50%; top: 50%; }
+  .icon-moon { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); left: 50%; top: 50%; }
+  :root.dark-theme .icon-sun { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  :root.dark-theme .icon-moon { opacity: 0; transform: translate(-50%, -50%) rotate(-90deg) scale(0.4); }
 
   /* Hero */
   .hero-section {
@@ -83958,7 +84219,7 @@ function renderGuidePage(origin) {
     display: inline-block;
     padding: 4px 12px;
     border-radius: 999px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     font-size: 0.82rem;
     font-weight: 700;
@@ -83967,7 +84228,7 @@ function renderGuidePage(origin) {
     margin-bottom: 16px;
   }
   h1 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 2.5rem;
     font-weight: 800;
     line-height: 1.15;
@@ -83976,7 +84237,7 @@ function renderGuidePage(origin) {
   }
   .hero-sub {
     font-size: 1.15rem;
-    color: var(--text-dim);
+    color: var(--text-2);
     line-height: 1.6;
     margin-bottom: 28px;
   }
@@ -83992,9 +84253,9 @@ function renderGuidePage(origin) {
   .toc-pill {
     padding: 7px 14px;
     border-radius: 999px;
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
-    color: var(--text-dim);
+    color: var(--text-2);
     font-size: 0.85rem;
     font-weight: 600;
     text-decoration: none;
@@ -84003,12 +84264,12 @@ function renderGuidePage(origin) {
   .toc-pill:hover {
     color: var(--text);
     border-color: var(--accent);
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
   }
 
   /* Guide Content Blocks */
   .guide-block {
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 32px 28px;
@@ -84027,7 +84288,7 @@ function renderGuidePage(origin) {
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     display: flex;
     align-items: center;
@@ -84036,20 +84297,20 @@ function renderGuidePage(origin) {
     font-weight: 700;
   }
   h2 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
   h3 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 1.15rem;
     font-weight: 700;
     margin: 24px 0 10px;
     color: var(--text);
   }
-  p { color: var(--text-dim); margin-bottom: 14px; }
-  ul, ol { color: var(--text-dim); padding-left: 24px; margin-bottom: 16px; }
+  p { color: var(--text-2); margin-bottom: 14px; }
+  ul, ol { color: var(--text-2); padding-left: 24px; margin-bottom: 16px; }
   li { margin-bottom: 8px; }
   strong { color: var(--text); font-weight: 600; }
 
@@ -84061,7 +84322,7 @@ function renderGuidePage(origin) {
     margin: 20px 0;
   }
   .step-card {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 18px 20px;
@@ -84095,7 +84356,7 @@ function renderGuidePage(origin) {
 
   /* Callout Tips */
   .tip-box {
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     border-left: 4px solid var(--accent);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     padding: 14px 18px;
@@ -84107,7 +84368,7 @@ function renderGuidePage(origin) {
 
   /* Code / Snippets */
   code {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 2px 7px;
@@ -84116,7 +84377,7 @@ function renderGuidePage(origin) {
     color: var(--text);
   }
   .code-block {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 12px 16px;
@@ -84136,7 +84397,7 @@ function renderGuidePage(origin) {
     margin: 20px 0;
   }
   .provider-card {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 16px;
@@ -84155,7 +84416,7 @@ function renderGuidePage(origin) {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     font-size: 0.75rem;
     font-weight: 700;
@@ -84175,12 +84436,12 @@ function renderGuidePage(origin) {
   }
   .faq-a {
     font-size: 0.95rem;
-    color: var(--text-dim);
+    color: var(--text-2);
   }
 
   /* Footer CTA */
   .footer-cta {
-    background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-card) 100%);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--color-bg-sunken) 100%);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 36px 32px;
@@ -84202,7 +84463,7 @@ function renderGuidePage(origin) {
     padding-top: 20px;
     border-top: 1px solid var(--border);
     text-align: center;
-    color: var(--text-muted);
+    color: var(--muted);
     font-size: 0.85rem;
   }
   .footer-nav a { color: var(--accent); text-decoration: none; }
@@ -84215,25 +84476,14 @@ function renderGuidePage(origin) {
 </style>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
   function applyTheme(t) {
-    if (t === 'light') {
-      document.documentElement.classList.add('light-theme');
-      document.documentElement.classList.remove('dark-theme');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#F2F2F7');
-    } else {
-      document.documentElement.classList.add('dark-theme');
-      document.documentElement.classList.remove('light-theme');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#000000');
-    }
+    var dark = t === 'dark';
+    document.documentElement.classList.toggle('dark-theme', dark);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#000000' : '#F2F2F7');
   }
   const saved = localStorage.getItem('theme');
-  if (saved) {
-    applyTheme(saved);
-  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    applyTheme('light');
-  }
+  applyTheme(saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   function toggleTheme() {
-    const isLight = document.documentElement.classList.contains('light-theme');
-    const next = isLight ? 'dark' : 'light';
+    const next = document.documentElement.classList.contains('dark-theme') ? 'light' : 'dark';
     localStorage.setItem('theme', next);
     applyTheme(next);
   }
@@ -84296,7 +84546,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">1</div>
       <div>
         <h2>1. Quick Start</h2>
-        <p style="margin-bottom:0;">Get catalog rows running on Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol, with zero registration.</p>
+        <p class="u-mb-0">Get catalog rows running on Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol, with zero registration.</p>
       </div>
     </div>
 
@@ -84338,7 +84588,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">2</div>
       <div>
         <h2>2. Discover Tab</h2>
-        <p style="margin-bottom:0;">Browse everything available without typing a single URL.</p>
+        <p class="u-mb-0">Browse everything available without typing a single URL.</p>
       </div>
     </div>
 
@@ -84365,7 +84615,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">3</div>
       <div>
         <h2>3. Catalogs Tab</h2>
-        <p style="margin-bottom:0;">Where you add, arrange, and finalize what appears on your home screen.</p>
+        <p class="u-mb-0">Where you add, arrange, and finalize what appears on your home screen.</p>
       </div>
     </div>
 
@@ -84386,22 +84636,22 @@ function renderGuidePage(origin) {
       <div class="provider-card">
         <h4>MDBList</h4>
         <span class="provider-tag">No Key Required</span>
-        <p style="margin-top:8px;">Paste any public list URL like <code>mdblist.com/lists/username/list-name</code>. Connect an account or API key under Settings to unlock your personal Watchlist and private lists.</p>
+        <p class="u-mt-8px">Paste any public list URL like <code>mdblist.com/lists/username/list-name</code>. Connect an account or API key under Settings to unlock your personal Watchlist and private lists.</p>
       </div>
       <div class="provider-card">
         <h4>Trakt.tv</h4>
         <span class="provider-tag">OAuth &amp; Public</span>
-        <p style="margin-top:8px;">Add public lists (<code>trakt.tv/users/username/lists/list-slug</code>) or connect your account to sync your Watchlist and History.</p>
+        <p class="u-mt-8px">Add public lists (<code>trakt.tv/users/username/lists/list-slug</code>) or connect your account to sync your Watchlist and History.</p>
       </div>
       <div class="provider-card">
         <h4>TheMovieDB (TMDB)</h4>
         <span class="provider-tag">Lists &amp; Charts</span>
-        <p style="margin-top:8px;">Add public lists (<code>themoviedb.org/list/12345</code>), or browse automated genre, network, and streaming-provider charts.</p>
+        <p class="u-mt-8px">Add public lists (<code>themoviedb.org/list/12345</code>), or browse automated genre, network, and streaming-provider charts.</p>
       </div>
       <div class="provider-card">
         <h4>Simkl</h4>
         <span class="provider-tag">Anime &amp; Trending</span>
-        <p style="margin-top:8px;">One-tap trending charts for Movies, Shows, and Anime. Connect an account to import personal lists and watch history.</p>
+        <p class="u-mt-8px">One-tap trending charts for Movies, Shows, and Anime. Connect an account to import personal lists and watch history.</p>
       </div>
     </div>
 
@@ -84429,7 +84679,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">4</div>
       <div>
         <h2>4. Lists Tab</h2>
-        <p style="margin-bottom:0;">Your personal, account-connected, and hand-built lists, separate from the catalog rows themselves.</p>
+        <p class="u-mb-0">Your personal, account-connected, and hand-built lists, separate from the catalog rows themselves.</p>
       </div>
     </div>
 
@@ -84468,7 +84718,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">5</div>
       <div>
         <h2>5. Channels Tab</h2>
-        <p style="margin-bottom:0;">Turn any set of shows into a continuous 24/7-style catalog row, like flipping on a real network.</p>
+        <p class="u-mb-0">Turn any set of shows into a continuous 24/7-style catalog row, like flipping on a real network.</p>
       </div>
     </div>
 
@@ -84503,7 +84753,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">6</div>
       <div>
         <h2>6. Storylines, Sagas &amp; Universes</h2>
-        <p style="margin-bottom:0;">Found inside the Channels tab &mdash; complete franchise viewing orders, pre-built for you.</p>
+        <p class="u-mb-0">Found inside the Channels tab &mdash; complete franchise viewing orders, pre-built for you.</p>
       </div>
     </div>
 
@@ -84524,7 +84774,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">7</div>
       <div>
         <h2>7. Search Tab</h2>
-        <p style="margin-bottom:0;">A unified search across movies, shows, and lists.</p>
+        <p class="u-mb-0">A unified search across movies, shows, and lists.</p>
       </div>
     </div>
 
@@ -84543,7 +84793,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">8</div>
       <div>
         <h2>8. Importing Lists &amp; Data From Other Sites</h2>
-        <p style="margin-bottom:0;">Two kinds of import: a single list by URL, and bulk files from other trackers.</p>
+        <p class="u-mb-0">Two kinds of import: a single list by URL, and bulk files from other trackers.</p>
       </div>
     </div>
 
@@ -84577,7 +84827,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">9</div>
       <div>
         <h2>9. Settings Tab</h2>
-        <p style="margin-bottom:0;">Connected accounts, region, watch history, and support.</p>
+        <p class="u-mb-0">Connected accounts, region, watch history, and support.</p>
       </div>
     </div>
 
@@ -84623,7 +84873,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">10</div>
       <div>
         <h2>10. Backups, Presets &amp; Data Export</h2>
-        <p style="margin-bottom:0;">Found under Settings &rarr; Presets &amp; Backup.</p>
+        <p class="u-mb-0">Found under Settings &rarr; Presets &amp; Backup.</p>
       </div>
     </div>
 
@@ -84655,7 +84905,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">11</div>
       <div>
         <h2>11. Frequently Asked Questions</h2>
-        <p style="margin-bottom:0;">Quick answers to common questions and troubleshooting.</p>
+        <p class="u-mb-0">Quick answers to common questions and troubleshooting.</p>
       </div>
     </div>
 
@@ -84689,7 +84939,7 @@ function renderGuidePage(origin) {
   <div class="footer-cta">
     <h3>Ready to Customize Your Home Screen?</h3>
     <p>Build your dream Stremio, Wako, and Nuvio catalog setup in under a minute with zero account required.</p>
-    <a href="${origin}/" class="btn btn-primary" style="font-size:1.05rem; padding:12px 28px;">Go to mylistsaddon.com &rarr;</a>
+    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to mylistsaddon.com &rarr;</a>
   </div>
 
   <!-- Footer Navigation -->
@@ -106708,7 +106958,7 @@ async function writeChannelFromLegacy(env, code, record, index, budget, recon) {
   // A listing goes to the top of Newest whenever it is (re)published: the
   // legacy index moves it to the front on every share of a listed channel.
   const publishedAt = record.published ? updatedAt : (existing ? existing.published_at : null);
-  const showCount = new Set(items.map(channelItemShowKey)).size;
+  const showCount = new Set(items.filter((it) => !it || it.kind !== "movie").map(channelItemShowKey)).size;
   const legacyLikes = Math.max(Number(record.likes) || 0, Number(index && index.likes) || 0);
   const legacyAdds = Number(index && index.adds) || 0;
   const res = await env.DB.prepare(

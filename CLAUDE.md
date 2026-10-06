@@ -32,6 +32,16 @@ This repository (`My Lists Addon Website`) is a high-performance, single-deploy 
 - The HTML UI and admin pages are rendered inside JavaScript template strings.
 - Never use unescaped `</script>` inside inline scripts or strings (use `<\/script>` or external escaping) to prevent breaking script execution or introducing XSS.
 
+### 4. UI Changes Must Follow the Design System
+Every change to what the user sees (buttons, colours, spacing, text sizes, modals, toasts, lists, wording) must follow **`AI_UI_RULES.md`** (one page, read it first) and **`DESIGN_SYSTEM.md`** (full spec, with copy-paste recipes). Do not rely on memory of how the UI looks.
+- **Reuse before you build.** Use the existing button, card, pill, modal and toast classes/functions listed in `DESIGN_SYSTEM.md` §3. Never invent a new button style.
+- **Tokens only.** Colours, radii, shadows, spacing, font sizes, z-index and durations come from `DESIGN_TOKENS_CSS` (`00_constants.js`). No hex/rgba literals, no odd pixel values.
+- **Adding a button:** pick the variant (`.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, or `.lc-btn` inside a card), use `<button type="button" data-act="…">`, add an `aria-label` if it is icon-only, and cover hover, focus, disabled, loading and dark mode. Recipe in `DESIGN_SYSTEM.md` §10.
+- **Inline `style=""`:** only for properties a script toggles (`display`, `width`, `height`, ...). Anything else is a class. Never put a colour `u-*` helper on an element a script colours (`*Status`, `*Hint`, `*State`).
+- **Wording:** a movie is never a "show" or an "episode"; each count is stated once.
+- **Check:** `node --test tests/*.test.mjs` includes `tests/design-system.test.mjs`, which fails on token, breakpoint, z-index, contrast-pairing, hex-literal and add-button drift. If you add a token or variant, update `DESIGN_SYSTEM.md` in the same change.
+- **Humans and AIs follow the same rules.** If a rule gets in the way, change the rule in `DESIGN_SYSTEM.md` and the test, not just your own file.
+
 ---
 
 ## Senior Developer Efficiency Rules

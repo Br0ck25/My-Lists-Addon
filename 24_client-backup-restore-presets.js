@@ -1335,7 +1335,7 @@ function renderPresetsList() {
   const names = Object.keys(map).sort();
   if (badge) badge.textContent = names.length ? '(' + names.length + ' saved)' : '';
   if (!names.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; margin:8px 0;"><small>No saved presets yet.</small></p>';
+    container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-8px_0"><small>No saved presets yet.</small></p>';
     return;
   }
   container.innerHTML = names.map((n) => {
@@ -1344,7 +1344,7 @@ function renderPresetsList() {
     const count = entries.length;
     return '<div class="preset-card" data-preset="' + escapeAttr(n) + '">' +
       '<div class="preset-card-header">' +
-        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted); flex-shrink:0;">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
+        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small class="u-c-v_muted u-fsh-0">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
       '</div>' +
       '<div class="preset-actions-cluster">' +
         '<button type="button" class="primary lc-btn preset-load-btn" title="Load this preset into your active catalogs">Load</button>' +
@@ -1355,7 +1355,7 @@ function renderPresetsList() {
             '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
             '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
             '<div class="preset-menu-divider"></div>' +
-            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, #ff3b30);">Delete Preset</button>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn u-c-v_danger_v_color_danger">Delete Preset</button>' +
           '</div>' +
         '</details>' +
       '</div>' +
@@ -1904,8 +1904,8 @@ function installSaveBody(entries, keys) {
 // The rows a signed-out install link cannot carry, named, with a way in.
 function signInToInstallHtml(message, entries) {
   const names = (entries || []).filter((e) => rowNeedsAccount(e.url)).map((e) => e.name || 'Untitled');
-  return '<div class="install-result-card" style="padding:18px;">'
-    + '<p class="testresult err" style="margin:0 0 12px;">' + escapeHtml(message)
+  return '<div class="install-result-card u-p-18px">'
+    + '<p class="testresult err u-m-0_0_12px">' + escapeHtml(message)
     + (names.length ? (' Sign in, or remove ' + (names.length === 1 ? 'this row' : 'these rows') + ' first: ' + escapeHtml(names.join(', ')) + '.') : '')
     + '</p>'
     + '<button type="button" class="btn btn-primary" data-act="openRestoreModal">Log in or sign up</button>'
@@ -1929,7 +1929,7 @@ async function generate() {
     }
   }
   box.style.display = 'block';
-  box.innerHTML = '<div class="install-result-card" style="align-items:center; justify-content:center; padding:24px; color:var(--muted);"><span class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle;"></span> Generating install link\u2026</div>';
+  box.innerHTML = '<div class="install-result-card u-ai-center u-jc-center u-p-24px u-c-v_muted"><span class="spinner u-bd-2px_solid_v_border u-bordertopcolor-v_accent u-br-50 u-mr-8px u-va-middle" style="display:inline-block; width:20px; height:20px; animation:spin 0.8s linear infinite;"></span> Generating install link\u2026</div>';
 
   // Prefer a short, KV-backed id (see /api/save) so the install URL stays a
   // fixed short length no matter how many lists are configured. If this
@@ -1966,8 +1966,8 @@ async function generate() {
     // hosted site always has it, so a failure here is transient: say so and
     // offer a retry.
     const errTxt = escapeHtml(saveErrorMessage || 'Unknown error');
-    box.innerHTML = '<div class="install-result-card" style="padding:18px;">'
-      + '<p class="testresult err" style="margin:0 0 12px;">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
+    box.innerHTML = '<div class="install-result-card u-p-18px">'
+      + '<p class="testresult err u-m-0_0_12px">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
       + '<button type="button" class="btn btn-primary" data-act="generate">Try again</button>'
       + '</div>';
     return;
@@ -2008,14 +2008,14 @@ async function generate() {
 
       \${sizeWarning}
 
-      <div class="install-actions-bar" style="display:flex; flex-wrap:wrap; gap:10px;">
-        <a href="\${stremioInstallUrl}" class="btn-stremio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:0.9rem;">
+      <div class="install-actions-bar u-fw2-wrap u-gap-10px" style="display:flex;">
+        <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:0.9rem;">
+        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Nuvio
         </a>
-        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary" style="display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; font-weight:600; border-radius:var(--radius-pill); text-align:center; font-size:0.85rem; text-decoration:none;">
+        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>
       </div>
@@ -2025,9 +2025,9 @@ async function generate() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
           <span>Manifest Link</span>
         </div>
-        <div class="install-url-input-group" style="display:flex; align-items:stretch; gap:8px; width:100%; flex-wrap:wrap;">
-          <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="flex:1 1 220px; min-width:0; margin:0; display:flex; align-items:center;">\${installUrl}</div>
-          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; border-radius:var(--radius-pill);">
+        <div class="install-url-input-group u-ai-stretch u-gap-8px u-fw2-wrap" style="display:flex; width:100%;">
+          <div class="install-url-box u-flex-1_1_220px u-minw-0 u-m-0 u-ai-center" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="display:flex;">\${installUrl}</div>
+          <button type="button" class="install-url-copy-btn primary lc-btn u-flex-none u-p-0_16px u-minh-38px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_sm u-br-v_radius_pill" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="height:auto; display:inline-flex;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
@@ -2035,9 +2035,9 @@ async function generate() {
       </div>
 
       <div class="install-hint-box">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="u-fsh-0 u-mt-2px"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
         <div>
-          <span style="font-weight:600; color:var(--text);">To install manually, copy the manifest link above and paste it into:</span>
+          <span class="u-fw-600 u-c-v_text">To install manually, copy the manifest link above and paste it into:</span>
           <div class="install-hint-steps">
             <span>&bull; <strong>Stremio</strong> &rarr; Addons &rarr; Community &rarr; Paste URL</span>
             <span>&bull; <strong>Nuvio</strong> &rarr; Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
@@ -2779,7 +2779,8 @@ function appShellApiMessage(status) {
 
 // --- one accessible dialog ---------------------------------------------------
 //
-// For new code: a title, a message and buttons that resolve. It rides on
+// For new code: a title, a message and buttons that resolve. Pass
+// destructive: true for removals/resets so the confirm button is red. It rides on
 // showModal/closeModal (16_client-row-core.js), which already move focus in,
 // trap Tab, close on Escape, restore focus and lock the page behind it.
 function appShellDialog(options) {
@@ -2787,11 +2788,11 @@ function appShellDialog(options) {
   const confirmLabel = o.confirmLabel || 'OK';
   const cancelLabel = o.cancelLabel;
   let html = '';
-  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:1.08rem;">' + escapeHtml(o.title) + '</h3>';
-  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
-  html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
-  if (cancelLabel) html += '<button type="button" class="secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
-  html += '<button type="button" class="primary" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
+  if (o.title) html += '<h3 class="u-m-0_0_10px u-fs-v_font_size_md">' + escapeHtml(o.title) + '</h3>';
+  if (o.message) html += '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm u-lh-1_45 u-ws-pre_wrap">' + escapeHtml(o.message) + '</p>';
+  html += '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">';
+  if (cancelLabel) html += '<button type="button" class="btn-secondary u-minw-80px u-p-8px_16px" id="appShellDialogCancel">' + escapeHtml(cancelLabel) + '</button>';
+  html += '<button type="button" class="' + (o.destructive ? 'btn-danger' : 'btn-primary') + ' u-minw-80px u-p-8px_16px" id="appShellDialogConfirm">' + escapeHtml(confirmLabel) + '</button>';
   html += '</div>';
 
   return new Promise(function (resolve) {
@@ -2885,11 +2886,11 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">' +
-    '<div class="settings-toggle-row" style="padding:0;">' +
-      '<div style="flex:1; min-width:0; padding-right:12px;">' +
-        '<span style="font-weight:600; font-size:0.88rem; color:var(--text);">Hide titles already shown in rows above</span>' +
-        '<p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+  const html = '<div class="u-mt-16px u-p-12px_16px u-bg-v_surface u-br-v_radius_md u-bd-1px_solid_v_border">' +
+    '<div class="settings-toggle-row u-p-0">' +
+      '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Hide titles already shown in rows above</span>' +
+        '<p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">The top row keeps everything; lower rows drop titles already shown above.</p>' +
       '</div>' +
       '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
         '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
@@ -3466,7 +3467,7 @@ function appShellImportFinishedHtml() {
       '</div>' + appShellImportUnmatchedHtml();
     return html;
   }
-  html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+  html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
     '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(appShellImportListName()) + '">' +
     '<label class="app-shell-dedupe" for="appShellImportHomeToggle">' +
     '<input type="checkbox" id="appShellImportHomeToggle" checked>' +
@@ -3491,7 +3492,7 @@ function appShellRenderImports() {
   if (!host) return false;
   const typed = document.getElementById('appShellImportName');
   const typedValue = typed ? typed.value : '';
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
+  let html = '<div class="panel u-mb-12px">' +
     '<h2 class="panel-title">Import a file</h2>' +
     '<p class="app-shell-muted">A Letterboxd zip or CSV, an IMDb CSV, a Trakt export. Matching happens on the server, so you can close this page and come back.</p>';
 
@@ -3521,15 +3522,15 @@ function appShellRenderImports() {
     html += '<p class="app-shell-kv"><strong>' + appShellImportsEscape(appShellImportFile.name) + '</strong> &middot; ' +
       (counts.movie + counts.series) + ' titles' +
       (appShellImportFile.truncated ? ' (the first ' + APP_SHELL_IMPORT_ROWS_MAX + ')' : '') + '</p>' +
-      '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
+      '<div class="app-shell-actions u-mb-8px">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
       appShellImportKindChip('series', 'Shows', counts.series) + '</div>';
     if (counts.movie && counts.series) {
       html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
         (chosen === 'movie' ? 'movies' : 'shows') + ' -- pick the other chip afterwards for the rest.</p>';
     }
-    html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+    html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
       '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
-      '<div class="app-shell-actions" style="margin-top:10px;">' +
+      '<div class="app-shell-actions u-mt-10px">' +
       '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +
       '<button type="button" class="secondary lc-btn" data-app-shell-action="import-clear">Choose another file</button>' +
       '</div>';
@@ -3861,7 +3862,7 @@ function renderGuidePage(origin) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#F2F2F7">
 <title>${title}</title>
 <meta name="description" content="${description}">
 <link rel="canonical" href="${origin}/guide">
@@ -3921,57 +3922,15 @@ function renderGuidePage(origin) {
      Inter and JetBrains Mono from Google Fonts. It now has no third-party
      origin at all. See docs/DECISIONS.md D-20. -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
-  :root {
-    /* Same reason as the app shell's (09_page-shell.js): an installed PWA
-       paints the status bar and the home-indicator strip from the UA's own
-       surface color, and that surface stays white until the document says
-       it is dark. This page defaults to dark, so the default says dark. */
-    color-scheme: dark;
-    --bg: #000000;
-    --bg-surface: #1C1C1E;
-    --bg-card: #2C2C2E;
-    --bg-input: #3A3A3C;
-    --text: #FFFFFF;
-    --text-muted: #8E8E93;
-    --text-dim: #A1A1A6;
-    --border: rgba(255,255,255,0.12);
-    --border-strong: rgba(255,255,255,0.22);
-    --accent: #0A84FF;
-    --accent-hover: #0070E0;
-    --accent-bg: rgba(10, 132, 255, 0.15);
-    --success: #30D158;
-    --warning: #FFD60A;
-    --danger: #FF453A;
-    --radius-lg: 16px;
-    --radius-md: 12px;
-    --radius-sm: 8px;
-    --shadow: 0 4px 20px rgba(0,0,0,0.5);
-  }
-
-  :root.light-theme, .light-theme {
-    color-scheme: light;
-    --bg: #F2F2F7;
-    --bg-surface: #FFFFFF;
-    --bg-card: #E5E5EA;
-    --bg-input: #D1D1D6;
-    --text: #1C1C1E;
-    --text-muted: #6C6C70;
-    --text-dim: #48484A;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.16);
-    --accent: #007AFF;
-    --accent-hover: #0062CC;
-    --accent-bg: rgba(0, 122, 255, 0.10);
-    --shadow: 0 2px 12px rgba(0,0,0,0.06);
-  }
-
+${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; background: var(--bg); }
   body {
     background: var(--bg);
     color: var(--text);
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 16px;
     line-height: 1.65;
     -webkit-font-smoothing: antialiased;
@@ -4005,7 +3964,7 @@ function renderGuidePage(origin) {
     border-radius: 10px;
   }
   .brand-text {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-weight: 800;
     font-size: 1.25rem;
     letter-spacing: -0.02em;
@@ -4032,9 +3991,9 @@ function renderGuidePage(origin) {
     background: var(--accent);
     color: #FFF;
   }
-  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:hover { background: var(--color-brand-hover); }
   .btn-secondary {
-    background: var(--bg-surface);
+    background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border-strong);
   }
@@ -4045,7 +4004,7 @@ function renderGuidePage(origin) {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
     cursor: pointer;
     display: flex;
@@ -4061,10 +4020,10 @@ function renderGuidePage(origin) {
     height: 18px;
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
   }
-  .icon-sun { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); left: 50%; top: 50%; }
-  .icon-moon { opacity: 0; transform: translate(-50%, -50%) rotate(-90deg) scale(0.4); left: 50%; top: 50%; }
-  :root.light-theme .icon-sun, .light-theme .icon-sun { opacity: 0; transform: translate(-50%, -50%) rotate(90deg) scale(0.4); }
-  :root.light-theme .icon-moon, .light-theme .icon-moon { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  .icon-sun { opacity: 0; transform: translate(-50%, -50%) rotate(90deg) scale(0.4); left: 50%; top: 50%; }
+  .icon-moon { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); left: 50%; top: 50%; }
+  :root.dark-theme .icon-sun { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  :root.dark-theme .icon-moon { opacity: 0; transform: translate(-50%, -50%) rotate(-90deg) scale(0.4); }
 
   /* Hero */
   .hero-section {
@@ -4077,7 +4036,7 @@ function renderGuidePage(origin) {
     display: inline-block;
     padding: 4px 12px;
     border-radius: 999px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     font-size: 0.82rem;
     font-weight: 700;
@@ -4086,7 +4045,7 @@ function renderGuidePage(origin) {
     margin-bottom: 16px;
   }
   h1 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 2.5rem;
     font-weight: 800;
     line-height: 1.15;
@@ -4095,7 +4054,7 @@ function renderGuidePage(origin) {
   }
   .hero-sub {
     font-size: 1.15rem;
-    color: var(--text-dim);
+    color: var(--text-2);
     line-height: 1.6;
     margin-bottom: 28px;
   }
@@ -4111,9 +4070,9 @@ function renderGuidePage(origin) {
   .toc-pill {
     padding: 7px 14px;
     border-radius: 999px;
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
-    color: var(--text-dim);
+    color: var(--text-2);
     font-size: 0.85rem;
     font-weight: 600;
     text-decoration: none;
@@ -4122,12 +4081,12 @@ function renderGuidePage(origin) {
   .toc-pill:hover {
     color: var(--text);
     border-color: var(--accent);
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
   }
 
   /* Guide Content Blocks */
   .guide-block {
-    background: var(--bg-surface);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 32px 28px;
@@ -4146,7 +4105,7 @@ function renderGuidePage(origin) {
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     display: flex;
     align-items: center;
@@ -4155,20 +4114,20 @@ function renderGuidePage(origin) {
     font-weight: 700;
   }
   h2 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
   h3 {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 1.15rem;
     font-weight: 700;
     margin: 24px 0 10px;
     color: var(--text);
   }
-  p { color: var(--text-dim); margin-bottom: 14px; }
-  ul, ol { color: var(--text-dim); padding-left: 24px; margin-bottom: 16px; }
+  p { color: var(--text-2); margin-bottom: 14px; }
+  ul, ol { color: var(--text-2); padding-left: 24px; margin-bottom: 16px; }
   li { margin-bottom: 8px; }
   strong { color: var(--text); font-weight: 600; }
 
@@ -4180,7 +4139,7 @@ function renderGuidePage(origin) {
     margin: 20px 0;
   }
   .step-card {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 18px 20px;
@@ -4214,7 +4173,7 @@ function renderGuidePage(origin) {
 
   /* Callout Tips */
   .tip-box {
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     border-left: 4px solid var(--accent);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     padding: 14px 18px;
@@ -4226,7 +4185,7 @@ function renderGuidePage(origin) {
 
   /* Code / Snippets */
   code {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 2px 7px;
@@ -4235,7 +4194,7 @@ function renderGuidePage(origin) {
     color: var(--text);
   }
   .code-block {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 12px 16px;
@@ -4255,7 +4214,7 @@ function renderGuidePage(origin) {
     margin: 20px 0;
   }
   .provider-card {
-    background: var(--bg-card);
+    background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 16px;
@@ -4274,7 +4233,7 @@ function renderGuidePage(origin) {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    background: var(--accent-bg);
+    background: var(--color-brand-subtle);
     color: var(--accent);
     font-size: 0.75rem;
     font-weight: 700;
@@ -4294,12 +4253,12 @@ function renderGuidePage(origin) {
   }
   .faq-a {
     font-size: 0.95rem;
-    color: var(--text-dim);
+    color: var(--text-2);
   }
 
   /* Footer CTA */
   .footer-cta {
-    background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-card) 100%);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--color-bg-sunken) 100%);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 36px 32px;
@@ -4321,7 +4280,7 @@ function renderGuidePage(origin) {
     padding-top: 20px;
     border-top: 1px solid var(--border);
     text-align: center;
-    color: var(--text-muted);
+    color: var(--muted);
     font-size: 0.85rem;
   }
   .footer-nav a { color: var(--accent); text-decoration: none; }
@@ -4334,25 +4293,14 @@ function renderGuidePage(origin) {
 </style>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
   function applyTheme(t) {
-    if (t === 'light') {
-      document.documentElement.classList.add('light-theme');
-      document.documentElement.classList.remove('dark-theme');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#F2F2F7');
-    } else {
-      document.documentElement.classList.add('dark-theme');
-      document.documentElement.classList.remove('light-theme');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#000000');
-    }
+    var dark = t === 'dark';
+    document.documentElement.classList.toggle('dark-theme', dark);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#000000' : '#F2F2F7');
   }
   const saved = localStorage.getItem('theme');
-  if (saved) {
-    applyTheme(saved);
-  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    applyTheme('light');
-  }
+  applyTheme(saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   function toggleTheme() {
-    const isLight = document.documentElement.classList.contains('light-theme');
-    const next = isLight ? 'dark' : 'light';
+    const next = document.documentElement.classList.contains('dark-theme') ? 'light' : 'dark';
     localStorage.setItem('theme', next);
     applyTheme(next);
   }
@@ -4415,7 +4363,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">1</div>
       <div>
         <h2>1. Quick Start</h2>
-        <p style="margin-bottom:0;">Get catalog rows running on Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol, with zero registration.</p>
+        <p class="u-mb-0">Get catalog rows running on Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol, with zero registration.</p>
       </div>
     </div>
 
@@ -4457,7 +4405,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">2</div>
       <div>
         <h2>2. Discover Tab</h2>
-        <p style="margin-bottom:0;">Browse everything available without typing a single URL.</p>
+        <p class="u-mb-0">Browse everything available without typing a single URL.</p>
       </div>
     </div>
 
@@ -4484,7 +4432,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">3</div>
       <div>
         <h2>3. Catalogs Tab</h2>
-        <p style="margin-bottom:0;">Where you add, arrange, and finalize what appears on your home screen.</p>
+        <p class="u-mb-0">Where you add, arrange, and finalize what appears on your home screen.</p>
       </div>
     </div>
 
@@ -4505,22 +4453,22 @@ function renderGuidePage(origin) {
       <div class="provider-card">
         <h4>MDBList</h4>
         <span class="provider-tag">No Key Required</span>
-        <p style="margin-top:8px;">Paste any public list URL like <code>mdblist.com/lists/username/list-name</code>. Connect an account or API key under Settings to unlock your personal Watchlist and private lists.</p>
+        <p class="u-mt-8px">Paste any public list URL like <code>mdblist.com/lists/username/list-name</code>. Connect an account or API key under Settings to unlock your personal Watchlist and private lists.</p>
       </div>
       <div class="provider-card">
         <h4>Trakt.tv</h4>
         <span class="provider-tag">OAuth &amp; Public</span>
-        <p style="margin-top:8px;">Add public lists (<code>trakt.tv/users/username/lists/list-slug</code>) or connect your account to sync your Watchlist and History.</p>
+        <p class="u-mt-8px">Add public lists (<code>trakt.tv/users/username/lists/list-slug</code>) or connect your account to sync your Watchlist and History.</p>
       </div>
       <div class="provider-card">
         <h4>TheMovieDB (TMDB)</h4>
         <span class="provider-tag">Lists &amp; Charts</span>
-        <p style="margin-top:8px;">Add public lists (<code>themoviedb.org/list/12345</code>), or browse automated genre, network, and streaming-provider charts.</p>
+        <p class="u-mt-8px">Add public lists (<code>themoviedb.org/list/12345</code>), or browse automated genre, network, and streaming-provider charts.</p>
       </div>
       <div class="provider-card">
         <h4>Simkl</h4>
         <span class="provider-tag">Anime &amp; Trending</span>
-        <p style="margin-top:8px;">One-tap trending charts for Movies, Shows, and Anime. Connect an account to import personal lists and watch history.</p>
+        <p class="u-mt-8px">One-tap trending charts for Movies, Shows, and Anime. Connect an account to import personal lists and watch history.</p>
       </div>
     </div>
 
@@ -4548,7 +4496,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">4</div>
       <div>
         <h2>4. Lists Tab</h2>
-        <p style="margin-bottom:0;">Your personal, account-connected, and hand-built lists, separate from the catalog rows themselves.</p>
+        <p class="u-mb-0">Your personal, account-connected, and hand-built lists, separate from the catalog rows themselves.</p>
       </div>
     </div>
 
@@ -4587,7 +4535,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">5</div>
       <div>
         <h2>5. Channels Tab</h2>
-        <p style="margin-bottom:0;">Turn any set of shows into a continuous 24/7-style catalog row, like flipping on a real network.</p>
+        <p class="u-mb-0">Turn any set of shows into a continuous 24/7-style catalog row, like flipping on a real network.</p>
       </div>
     </div>
 
@@ -4622,7 +4570,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">6</div>
       <div>
         <h2>6. Storylines, Sagas &amp; Universes</h2>
-        <p style="margin-bottom:0;">Found inside the Channels tab &mdash; complete franchise viewing orders, pre-built for you.</p>
+        <p class="u-mb-0">Found inside the Channels tab &mdash; complete franchise viewing orders, pre-built for you.</p>
       </div>
     </div>
 
@@ -4643,7 +4591,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">7</div>
       <div>
         <h2>7. Search Tab</h2>
-        <p style="margin-bottom:0;">A unified search across movies, shows, and lists.</p>
+        <p class="u-mb-0">A unified search across movies, shows, and lists.</p>
       </div>
     </div>
 
@@ -4662,7 +4610,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">8</div>
       <div>
         <h2>8. Importing Lists &amp; Data From Other Sites</h2>
-        <p style="margin-bottom:0;">Two kinds of import: a single list by URL, and bulk files from other trackers.</p>
+        <p class="u-mb-0">Two kinds of import: a single list by URL, and bulk files from other trackers.</p>
       </div>
     </div>
 
@@ -4696,7 +4644,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">9</div>
       <div>
         <h2>9. Settings Tab</h2>
-        <p style="margin-bottom:0;">Connected accounts, region, watch history, and support.</p>
+        <p class="u-mb-0">Connected accounts, region, watch history, and support.</p>
       </div>
     </div>
 
@@ -4742,7 +4690,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">10</div>
       <div>
         <h2>10. Backups, Presets &amp; Data Export</h2>
-        <p style="margin-bottom:0;">Found under Settings &rarr; Presets &amp; Backup.</p>
+        <p class="u-mb-0">Found under Settings &rarr; Presets &amp; Backup.</p>
       </div>
     </div>
 
@@ -4774,7 +4722,7 @@ function renderGuidePage(origin) {
       <div class="block-icon">11</div>
       <div>
         <h2>11. Frequently Asked Questions</h2>
-        <p style="margin-bottom:0;">Quick answers to common questions and troubleshooting.</p>
+        <p class="u-mb-0">Quick answers to common questions and troubleshooting.</p>
       </div>
     </div>
 
@@ -4808,7 +4756,7 @@ function renderGuidePage(origin) {
   <div class="footer-cta">
     <h3>Ready to Customize Your Home Screen?</h3>
     <p>Build your dream Stremio, Wako, and Nuvio catalog setup in under a minute with zero account required.</p>
-    <a href="${origin}/" class="btn btn-primary" style="font-size:1.05rem; padding:12px 28px;">Go to mylistsaddon.com &rarr;</a>
+    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to mylistsaddon.com &rarr;</a>
   </div>
 
   <!-- Footer Navigation -->

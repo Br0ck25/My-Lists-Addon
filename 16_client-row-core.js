@@ -1653,7 +1653,7 @@ function formatRatingSpanHtml(item, options = {}) {
   }
 
   if (ratingNum == null || ratingNum <= 0) return '';
-  return '<span class="poster-rating" data-rating-type="tmdb" style="color:#f5c518; font-weight:700; font-size:0.75rem; margin-left:auto; flex-shrink:0;">&#9733; ' + ratingNum.toFixed(1) + '</span>';
+  return '<span class="poster-rating u-c-f5c518 u-fw-700 u-fs-v_font_size_xs u-ml-auto u-fsh-0" data-rating-type="tmdb">&#9733; ' + ratingNum.toFixed(1) + '</span>';
 }
 window.formatRatingSpanHtml = formatRatingSpanHtml;
 
@@ -1683,7 +1683,7 @@ function renderMediaCard(item, options = {}) {
 
   const posterImg = poster
     ? '<img class="live-preview-poster" src="' + escapeAttr(poster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-    : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+    : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
 
   const topLeft = options.topLeftHtml !== undefined ? options.topLeftHtml : '';
   const topRight = options.topRightHtml || '';
@@ -1693,9 +1693,9 @@ function renderMediaCard(item, options = {}) {
   if (subtitle === undefined) {
     const ratingSpan = (typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(item, options) : '';
     if (ratingSpan && year) {
-      subtitle = '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(String(year)) + '</span>' + ratingSpan + '</div>';
+      subtitle = '<div class="u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(String(year)) + '</span>' + ratingSpan + '</div>';
     } else if (ratingSpan) {
-      subtitle = '<div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; width:100%;">' + ratingSpan + '</div>';
+      subtitle = '<div class="u-ai-center u-jc-flex_end u-gap-4px" style="display:flex; width:100%;">' + ratingSpan + '</div>';
     } else {
       subtitle = year ? escapeHtml(String(year)) : '';
     }
@@ -2361,23 +2361,23 @@ function openSupportGoal() {
   const left = Math.max(0, g.goal - g.raised);
   const pct = Math.max(0, Math.min(100, (g.raised / g.goal) * 100));
   const row = function(label, value, strong) {
-    return '<div style="display:flex; justify-content:space-between;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
+    return '<div class="u-jc-space_between" style="display:flex;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
   };
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
-      '<h3 style="margin:0; font-size:1.1rem;">Keeping My Lists Addon running</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-6px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">Keeping My Lists Addon running</h3>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 12px; color:var(--muted); font-size:0.88rem; line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
-    '<div style="font-size:1.8rem; font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:0.85rem; font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
-    '<div style="height:10px; border-radius:10px; background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:10px; background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
-    '<div style="display:grid; gap:6px; font-size:0.88rem; color:var(--text); margin-bottom:14px;">' +
+    '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">It is free, with no ads. Donations only cover the hosting bill.</p>' +
+    '<div class="u-fs-v_font_size_2xl u-fw-800">' + supportMoney(g.raised) + ' <small class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted">of ' + supportMoney(g.goal) + ' this month</small></div>' +
+    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div class="u-gap-6px u-fs-v_font_size_sm u-c-v_text u-mb-14px" style="display:grid;">' +
       row('Hosting this month', supportMoney(g.goal), false) +
       row('Given so far', supportMoney(g.raised), false) +
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
-    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:var(--accent); color:#fff; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
-    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
+    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 1st of each month.</p>';
   showModal(html);
 }
 
@@ -2390,16 +2390,16 @@ function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
   const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
-        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="primary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">OK</button>' +
+    '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+      '<button type="button" class="primary u-minw-80px u-p-8px_16px" data-act="closeModal">OK</button>' +
     '</div>';
   showModal(html);
 }
@@ -2437,11 +2437,11 @@ if (typeof window !== 'undefined') {
 // and the caller's own result dialog still arrives.
 function showAppBusy(title, message) {
   const html =
-    '<h3 style="margin:0 0 12px; font-size:1.1rem; display:flex; align-items:center; gap:10px;">' +
+    '<h3 class="u-m-0_0_12px u-fs-v_font_size_lg u-ai-center u-gap-10px" style="display:flex;">' +
       '<span class="app-spinner" aria-hidden="true"></span> ' +
       escapeHtml(title) +
     '</h3>' +
-    '<p role="status" aria-live="polite" style="margin:0; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message || '') + '</p>';
+    '<p role="status" aria-live="polite" class="u-m-0 u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message || '') + '</p>';
   showModal(html);
 }
 
@@ -2450,16 +2450,16 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
   const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
   const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">' +
-        '<span style="color:' + iconColor + '; font-weight:bold; font-size:1.2rem;">' + icon + '</span> ' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
+        '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:0.9rem; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
+    '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+      '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
       '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
@@ -2623,15 +2623,15 @@ function confirmDialog(message, title = 'Confirm Action', confirmBtnText = 'Conf
 
 function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:1.1rem;">' + escapeHtml(title) + '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">' + escapeHtml(title) + '</h3>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    (message ? '<p style="margin:0 0 12px; color:var(--muted); font-size:0.9rem;">' + escapeHtml(message) + '</p>' : '') +
-    '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-      '<button type="button" class="secondary" data-act="closeModal" style="min-width:80px; padding:8px 16px;">Cancel</button>' +
-      '<button type="button" class="primary" id="appPromptBtn" style="min-width:80px; padding:8px 16px;">OK</button>' +
+    (message ? '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_base">' + escapeHtml(message) + '</p>' : '') +
+    '<input type="text" id="appPromptInput" class="input u-mb-16px" style="width:100%;" value="' + escapeAttr(defaultValue || '') + '" />' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+      '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
+      '<button type="button" class="primary u-minw-80px u-p-8px_16px" id="appPromptBtn">OK</button>' +
     '</div>';
   showModal(html);
   const input = document.getElementById('appPromptInput');
@@ -3253,7 +3253,7 @@ function renderDiscoverChartsList(type, forceRefresh) {
     return;
   }
   window._currentDiscoverRenderedFilter = type;
-  container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Loading charts\u2026</p>';
+  container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Loading charts\u2026</p>';
 
   // Build list objects from all chart tables, filtered to the right type.
   const lists = [];
@@ -3372,7 +3372,7 @@ function renderDiscoverChartsList(type, forceRefresh) {
       }
     }, 400);
   } else {
-    container.innerHTML = '<p style="color:var(--muted); font-size:0.88rem;">Could not load chart lists.</p>';
+    container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Could not load chart lists.</p>';
   }
 }
 
@@ -3416,10 +3416,8 @@ function switchCatalogsSubmenu(filter, btn) {
     }
   }
 
-  const undoToast = document.getElementById('undoToast');
   const resultDiv = document.getElementById('result');
   if (filter !== 'all') {
-    if (undoToast) undoToast.style.display = 'none';
     if (resultDiv) resultDiv.style.display = 'none';
     if (filter === 'bulk' && typeof updateBulkAddUi === 'function') updateBulkAddUi();
   } else {
@@ -3535,8 +3533,8 @@ function channelSourceRowHtml(u) {
     }
   }
   return '<div class="source-row">' +
-    '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
-    '<button type="button" class="secondary channelEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editChannel" data-act-args="[&quot;@self&quot;]">Edit</button></p>' +
+    '<p class="u-m-0"><small>' + escapeHtml(summary) + ' \u2014 built with the Channels panel above.</small> ' +
+    '<button type="button" class="secondary channelEditBtn u-p-4px_10px u-minh-unset" data-act="editChannel" data-act-args="[&quot;@self&quot;]">Edit</button></p>' +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
 }
@@ -3752,13 +3750,13 @@ function customListSourceRowHtml(u) {
     summary = items.length + ' ' + label + (items.length === 1 ? '' : 's');
     if (payload.shuffle) summary += ' \u2014 shuffled daily';
     if (payload.publishedUrl) {
-      publishedLinkHtml = '<p style="margin:6px 0 0;"><small>Shared at: <a href="' + escapeAttr(payload.publishedUrl) + '" target="_blank" style="color:var(--accent-2); word-break:break-all;">' + escapeHtml(payload.publishedUrl) + '</a></small></p>';
+      publishedLinkHtml = '<p class="u-m-6px_0_0"><small>Shared at: <a href="' + escapeAttr(payload.publishedUrl) + '" target="_blank" class="u-c-v_accent_2 u-wb-break_all">' + escapeHtml(payload.publishedUrl) + '</a></small></p>';
     }
   }
   return '<div class="source-row">' +
-    '<p style="margin:0;"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
-    '<button type="button" class="secondary customListEditBtn" style="padding:4px 10px; min-height:unset;" data-act="editCustomList" data-act-args="[&quot;@self&quot;]">Edit</button> ' +
-    '<button type="button" class="secondary customListShareBtn" style="padding:4px 10px; min-height:unset;" data-act="startSaveListFlow" data-act-args="[&quot;@self&quot;]">Save List</button></p>' +
+    '<p class="u-m-0"><small>' + escapeHtml(summary) + ' \u2014 built with the Custom List panel above.</small> ' +
+    '<button type="button" class="secondary customListEditBtn u-p-4px_10px u-minh-unset" data-act="editCustomList" data-act-args="[&quot;@self&quot;]">Edit</button> ' +
+    '<button type="button" class="secondary customListShareBtn u-p-4px_10px u-minh-unset" data-act="startSaveListFlow" data-act-args="[&quot;@self&quot;]">Save List</button></p>' +
     publishedLinkHtml +
     '<input type="hidden" class="url" value="' + escapeAttr(u) + '">' +
     '</div>';
@@ -3878,8 +3876,8 @@ function entryAvatarColor(s) {
 function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
-    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
-      '<input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<div class="add-shelf-link-row u-ai-center u-gap-8px u-mb-8px" style="display:flex;">' +
+      '<input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
   validateAddShelfModal();
@@ -3896,8 +3894,8 @@ function addShelfModalAddLink() {
   div.style.gap = '8px';
   div.style.marginBottom = '8px';
   div.innerHTML = 
-    '<input type="url" class="addShelfModalLinkInput" placeholder="Additional URL" style="flex:1; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:0.95rem;" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 6px 12px; height: 38px; min-height: 38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
+    '<input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="Additional URL" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
+    '<button type="button" class="lc-btn secondary u-p-6px_12px u-minh-38px" aria-label="Remove this URL" style="height:38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -4019,15 +4017,15 @@ function addRow(name, url, type, enabled, group, channelId) {
   const avatarBg = entryAvatarColor(group || name || '');
 
   div.innerHTML =
-    '<div class="entry-card-top" style="flex-direction: column;">' +
-      '<div class="entry-ctrl-row" style="width: 100%; justify-content: flex-start; margin-bottom: 2px;">' +
-        '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
+    '<div class="entry-card-top u-fd-column">' +
+      '<div class="entry-ctrl-row u-jc-flex_start u-mb-2px" style="width:100%;">' +
+        '<div class="entry-pos-wrap u-ai-center" style="display:flex;">' +
           '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
-        '<span class="drag-handle ec-btn" title="Drag to reorder" style="cursor:grab;"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
+        '<span class="drag-handle ec-btn u-cur-grab" title="Drag to reorder"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,-1]" title="Move up">&#8593;</button>' +
         '<button type="button" class="ec-btn movebtn secondary" data-act="moveRow" data-act-args="[&quot;@self&quot;,1]" title="Move down">&#8595;</button>' +
-        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary" style="margin-left: auto; margin-right: 6px; font-weight:600; padding: 2px 10px;" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
+        ((isCustomList || isChannel) ? ('<button type="button" class="ec-btn secondary u-ml-auto u-mr-6px u-fw-600 u-p-2px_10px" data-act="' + (isCustomList ? 'editEntryCustomList' : 'editEntryChannel') + '" data-act-args="[&quot;@self&quot;]">Edit</button>') : '') +
         '<button type="button" class="ec-btn movebtn removebtn danger" data-act="removeEntryWithUndo" data-act-args="[&quot;@self&quot;]" title="Remove this list" aria-label="Remove this list" style="' + (!(isCustomList || isChannel) ? 'margin-left: auto;' : '') + '">' +
           '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none; display:block;">' +
             '<polyline points="3 6 5 6 21 6"></polyline>' +
@@ -4037,9 +4035,9 @@ function addRow(name, url, type, enabled, group, channelId) {
           '</svg>' +
         '</button>' +
       '</div>' +
-      '<div style="display: flex; gap: 8px; width: 100%; align-items: center;">' +
-        '<div class="entry-card-body" style="flex-direction: row; gap: 10px; align-items: center; width: 100%;">' +
-          '<div class="entry-name-row" style="flex: 1;">' +
+      '<div class="u-gap-8px u-ai-center" style="display:flex; width:100%;">' +
+        '<div class="entry-card-body u-fd-row u-gap-10px u-ai-center" style="width:100%;">' +
+          '<div class="entry-name-row u-flex-1">' +
             '<input type="text" placeholder="Name (e.g. Trending Movies)" class="name" value="' + escapeAttr(name || '') + '">' +
           '</div>' +
           '<div class="entry-type-row" style="width: auto;">' +
@@ -4057,7 +4055,7 @@ function addRow(name, url, type, enabled, group, channelId) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p style="color:var(--muted); font-size:0.88rem; text-align:center; padding: 20px;"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p class="u-c-v_muted u-fs-v_font_size_sm u-ta-center u-p-20px"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,

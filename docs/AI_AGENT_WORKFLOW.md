@@ -29,6 +29,14 @@ When you switch to Arena.ai Agent Mode, copy and paste this:
 
 ---
 
+## When You Ask For a Visual or Wording Change
+
+Add this line to any request that touches buttons, colours, spacing or text, so every AI follows the same rules:
+
+> Follow `AI_UI_RULES.md` and `DESIGN_SYSTEM.md` for this change, reuse existing buttons and classes, and run the tests before you finish.
+
+---
+
 ## The Emergency Undo Button (If an AI Breaks Something)
 
 Because Git is now active on your computer, you have a 100% reliable safety net. If any AI ever breaks something and you don't know how to fix it, just ask the current AI:

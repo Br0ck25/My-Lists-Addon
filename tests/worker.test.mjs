@@ -4,7 +4,7 @@ import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { D1_MAX_BOUND_PARAMS, accountProof, call, createUser, freshIsolate, hasPublicIndex, isPublicIndexKey, lapseCreatorTombstone, makeD1, makeEnv, makeKv, nextIp, publicIndexEntries, publicIndexSnapshot, runScheduledTick, seedAnonPublishedList, worker } from "./harness.mjs";
+import { D1_MAX_BOUND_PARAMS, accountProof, awaitFreshRateWindow, call, createUser, freshIsolate, hasPublicIndex, isPublicIndexKey, lapseCreatorTombstone, makeD1, makeEnv, makeKv, nextIp, publicIndexEntries, publicIndexSnapshot, runScheduledTick, seedAnonPublishedList, worker } from "./harness.mjs";
 
 // Likes, channel adds and shares need an account (docs/DECISIONS.md D-6).
 // Most of the tests below were written when a signed-out visitor voted as a
@@ -4071,6 +4071,11 @@ function stubTmdbSearch() {
 }
 
 describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
+  // These tests count 429s over a per-minute rate window. Start each one early
+  // in a window (10 s of margin; the slowest takes ~3 s) so a run that crosses
+  // a minute boundary cannot reset the count mid-test.
+  beforeEach(async () => { await awaitFreshRateWindow(60000, 10000); });
+
   it("rejects a bulk-resolve request larger than the server's fan-out cap", async () => {
     const env = makeEnv();
     const items = Array.from({ length: 500 }, (_, i) => ({ title: "Film " + i, year: 2000 }));
@@ -8146,6 +8151,9 @@ describe("N11: verifying a Creator Key is bounded, not free", () => {
 describe("test-suite blind spots the audit's mutation testing found", () => {
   // M15 -- nothing covered the per-IP account creation limit at all.
   it("M15: creating profiles is rate limited per IP", async () => {
+    // Both creates must land in one rate window; a run that straddles a
+    // minute boundary would be let through by design.
+    await awaitFreshRateWindow();
     const env = makeEnv({ CONFIGS: makeKv() });
     const ip = "203.0.113.150";
     const first = await call(env, "/api/creator/create", { method: "POST", ip, json: { creatorName: "ratefirst" } });

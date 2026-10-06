@@ -231,7 +231,7 @@ async function runCustomListTitleSearch(query) {
     return [];
   }
   const seq = ++customListSearchSeq;
-  box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>Searching\u2026</small></p>';
+  box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-p-8px_0"><small>Searching\u2026</small></p>';
 
   try {
     const isAdult = typeof isAdultContentFilterEnabled === 'function' ? isAdultContentFilterEnabled() : false;
@@ -272,7 +272,7 @@ async function runCustomListTitleSearch(query) {
     return results;
   } catch (e) {
     if (seq !== customListSearchSeq) return [];
-    box.innerHTML = '<p class="testresult err" style="margin:8px 0; font-size:0.85rem;">\u2717 Network error while searching.</p>';
+    box.innerHTML = '<p class="testresult err u-m-8px_0 u-fs-v_font_size_sm">\u2717 Network error while searching.</p>';
     return [];
   }
 }
@@ -281,7 +281,7 @@ function renderCustomListSearchResults(results) {
   const box = document.getElementById('customListSearchResult');
   if (!box) return;
   if (!results.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:0.85rem; padding:8px 0;"><small>No titles found matching that search.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-p-8px_0"><small>No titles found matching that search.</small></p>';
     return;
   }
 
@@ -299,11 +299,11 @@ function renderCustomListSearchResults(results) {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
     const posterImg = rPoster
       ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.72rem; text-align:center; padding:4px;" data-needs-fallback="1"><small style="color:var(--muted); font-size:0.72rem;">No poster</small></div>';
+      : '<div class="custom-list-search-poster live-preview-poster-placeholder u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px" style="display:flex;" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
 
     const isAlreadyAdded = existingKeys.has(draftKey(itemKind, r.title, r.year));
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
-    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn customListAddBtn';
+    const btnClass = isAlreadyAdded ? 'lc-btn list-add-btn secondary customListAddBtn' : 'lc-btn list-add-btn customListAddBtn';
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
 
     return '<div class="custom-list-search-card"' +
@@ -323,7 +323,7 @@ function renderCustomListSearchResults(results) {
       '<div class="custom-list-search-meta">' +
         (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
       '</div>' +
-      '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:0.72rem; font-weight:600; border-radius:var(--radius-pill);"' +
+      '<button type="button" class="' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs u-fw-600 u-br-v_radius_pill" style="width:100%;"' +
         disabledAttr +
         ' data-searchtype="' + itemType + '"' +
         ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
@@ -335,7 +335,7 @@ function renderCustomListSearchResults(results) {
     '</div>';
   }).join('');
 
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:12px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-12px">' + cardsHtml + '</div>';
   if (typeof resolveMissingPostersInDom === 'function') {
     resolveMissingPostersInDom(box);
   }
@@ -421,10 +421,10 @@ function renderCustomListDraftList() {
   const box = document.getElementById('customListDraftList');
   if (!box) return;
   if (!customListDraftItems.length) {
-    box.innerHTML = '<div style="text-align:center; padding:28px 16px; border:1.5px dashed var(--border); border-radius:10px; background:var(--surface); margin-top:8px;">' +
-      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); margin-bottom:8px; opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
-      '<div style="font-weight:600; font-size:0.9rem; color:var(--text); margin-bottom:4px;">No titles in this list yet</div>' +
-      '<p style="color:var(--muted); font-size:0.82rem; margin:0 auto; max-width:340px;">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
+    box.innerHTML = '<div class="u-ta-center u-p-28px_16px u-bd-1_5px_dashed_v_border u-br-v_radius_md u-bg-v_surface u-mt-8px">' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="u-c-v_muted u-mb-8px" style="opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
+      '<div class="u-fw-600 u-fs-v_font_size_base u-c-v_text u-mb-4px">No titles in this list yet</div>' +
+      '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0_auto u-maxw-340px">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
     '</div>';
     return;
   }
@@ -434,7 +434,7 @@ function renderCustomListDraftList() {
     const typeLabel = itType === 'series' ? 'Show' : 'Movie';
     const yearSub = (it.year ? it.year + ' \u2022 ' : '') + typeLabel;
     const posBox = '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-      '<input type="number" class="pos customListPosInput" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:0.75rem; text-align:center; border-radius:6px; background:rgba(0,0,0,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
+      '<input type="number" class="pos customListPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
     '</div>';
     const removeBtn = '<button type="button" class="cw-remove-btn customListRemovePickBtn" title="Remove from list" aria-label="Remove from list" style="z-index:4;">\u2715</button>';
 
@@ -452,9 +452,9 @@ function renderCustomListDraftList() {
     const pickPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster || '') : it.poster;
     const posterEl = pickPoster
       ? '<img class="live-preview-poster" src="' + escapeAttr(pickPoster) + '" alt="" loading="lazy">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder"><small style="color:var(--muted); font-size:0.7rem;">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     
-    return '<div class="live-preview-poster-card custom-list-pick" data-idx="' + i + '" style="position:relative; cursor:grab; user-select:none; touch-action:manipulation;">' +
+    return '<div class="live-preview-poster-card custom-list-pick u-cur-grab u-us-none u-touchaction-manipulation" data-idx="' + i + '" style="position:relative;">' +
       '<div style="position:relative; width:100%;">' +
         posterEl +
         posBox +
@@ -464,7 +464,7 @@ function renderCustomListDraftList() {
       '<div class="live-preview-poster-year">' + escapeHtml(yearSub) + '</div>' +
     '</div>';
   }).join('');
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:10px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cardsHtml + '</div>';
   initCustomListHoldDrag();
 }
 
@@ -2049,7 +2049,7 @@ window.toggleWatchStatus = function(id, type, name, poster) {
   const btn = document.getElementById('btnMarkWatched');
   if (btn) {
     if (window._watchedItemIds.has(id)) {
-      btn.innerHTML = '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched';
+      btn.innerHTML = '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched';
       btn.classList.remove('primary');
       btn.classList.add('secondary');
     } else {
@@ -2332,7 +2332,7 @@ window.markShowWatched = async function(imdbId) {
     if (failedSeasons > 0) {
       btn.innerHTML = "Couldn't load episodes -- try again";
     } else {
-      btn.innerHTML = wasFullyWatched ? '<span style="margin-right:4px;">&#x2713;</span> Mark Show Unwatched' : 'Mark Show Watched';
+      btn.innerHTML = wasFullyWatched ? '<span class="u-mr-4px">&#x2713;</span> Mark Show Unwatched' : 'Mark Show Watched';
       // Every season is still to come, so there is genuinely nothing to
       // mark. Silence here read as a broken button.
       if (typeof showAddedToast === 'function') {
@@ -2441,7 +2441,7 @@ window.markShowWatched = async function(imdbId) {
   }
   btn.disabled = false;
   if (nowWatched) {
-    btn.innerHTML = '<span style="margin-right:4px;">&#x2713;</span> Mark Show Unwatched';
+    btn.innerHTML = '<span class="u-mr-4px">&#x2713;</span> Mark Show Unwatched';
     btn.classList.remove('primary');
     btn.classList.add('secondary');
   } else {
@@ -2467,7 +2467,7 @@ window.markShowWatched = async function(imdbId) {
       return;
     }
     if (nowWatched) {
-      seasonBtn.innerHTML = '<span style="margin-right:4px;">&#x2713;</span> Mark Season Unwatched';
+      seasonBtn.innerHTML = '<span class="u-mr-4px">&#x2713;</span> Mark Season Unwatched';
       seasonBtn.classList.remove('primary');
       seasonBtn.classList.add('secondary');
     } else {
@@ -4266,8 +4266,8 @@ function buildAiringNextCardHtml() {
     const isMobileEnd = (i === 2 && shown.length > 3);
     const isDesktopEnd = (i === shown.length - 1 && shown.length >= 4);
     let overlays = '';
-    if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only airingNextViewBtn" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
-    if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only airingNextViewBtn" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+    if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only airingNextViewBtn u-cur-pointer">' + totalCount + ' &rsaquo;</div>';
+    if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only airingNextViewBtn u-cur-pointer">' + totalCount + ' &rsaquo;</div>';
     const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
     const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
     let dateBadge = '';
@@ -4309,12 +4309,12 @@ function buildAiringNextCardHtml() {
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
       (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
 
   const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, 'series', 'airing-next') : false;
-  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn list-add-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="airing-next">' + (isAdded ? 'Remove' : '+ Add') + '</button>';
 
