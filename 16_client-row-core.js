@@ -128,6 +128,11 @@ const IS_CONFIGURE = ${isConfigureMode};
 // checks this before falling back to the older #/list?... hash format for
 // anything that isn't one of these known charts.
 const SERVER_DEEP_LINK_LIST = ${jsonForScript(deepLinkList)};
+// The site's Trakt app id. Public (it is in every trakt.tv sign-in address the
+// site sends people to); the page asks Trakt for a connect code with it
+// straight from the browser (requestTraktDeviceCode, 17_). It is the Worker's
+// variable, so it lives here and not in the shared bundle.
+const TRAKT_PUBLIC_CLIENT_ID = ${jsonForScript(TRAKT_CLIENT_ID)};
 // The signed-in person's OAuth tokens. These are the reason the preamble
 // exists at all: they are specific to one page load and must never end up
 // in the shared bundle below, which is cached publicly under a URL that is

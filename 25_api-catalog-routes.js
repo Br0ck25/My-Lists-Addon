@@ -205,6 +205,22 @@ self.addEventListener('fetch', (e) => {
 });
 `.trim();
 
+// What Trakt said when it refused a request with 429, in a few words for the
+// person and for a screenshot: Cloudflare's own block (error 1015, on Trakt's
+// side, aimed at the address the request came from), or Trakt's limit by name
+// (its X-Ratelimit header), and how long it asked to wait.
+function traktLimitNote(res, text, retrySec) {
+  const parts = [];
+  if (/\b1015\b/.test(String(text || ""))) parts.push("Cloudflare 1015");
+  try {
+    const rl = JSON.parse((res && res.headers && res.headers.get("X-Ratelimit")) || "null");
+    if (rl && rl.name) parts.push(String(rl.name).slice(0, 60));
+  } catch {}
+  const wait = Number(retrySec) || 0;
+  parts.push(wait >= 120 ? `wait about ${Math.round(wait / 60)} minutes` : `wait ${wait || 2} seconds`);
+  return parts.join(", ");
+}
+
 async function handleFetch(request, env, ctx) {
     // Point the env-backed API key globals (00_constants.js) at whatever
     // this Worker owner configured, before anything can read them. A feature
@@ -3797,7 +3813,11 @@ function generateSearchVariations(query) {
         if (!tokenRes || !tokenRes.ok) {
           let detail = tokenRes ? `HTTP ${tokenRes.status}` : "Network failed";
           try {
-            if (tokenRes) {
+            if (tokenRes && tokenRes.status === 429) {
+              // A rate limit: say which one, not a page of Cloudflare HTML.
+              const retrySec = parseInt(tokenRes.headers.get("Retry-After") || "0", 10) || 0;
+              detail = `HTTP 429: ${traktLimitNote(tokenRes, await tokenRes.text().catch(() => ""), retrySec)}`;
+            } else if (tokenRes) {
               const text = await tokenRes.text();
               try {
                 const errBody = JSON.parse(text);
@@ -3865,7 +3885,9 @@ function generateSearchVariations(query) {
       }
     }
 
-    // /api/trakt/device/code -> starts Trakt device activation flow (bypasses browser redirects & 1015)
+    // /api/trakt/device/code -> starts Trakt device activation flow (bypasses browser redirects & 1015).
+    // The page asks Trakt itself first (requestTraktDeviceCode, 17_); this is
+    // the fallback.
     if (path === "/api/trakt/device/code" && request.method === "POST") {
       let body = {};
       try { body = await request.json(); } catch {}
@@ -3885,13 +3907,15 @@ function generateSearchVariations(query) {
         });
 
         // Rate limited: hand Trakt's wait straight back instead of sleeping
-        // inside the request. The page waits it out and asks once more (see
-        // startTraktDeviceLogin, 17_client-my-lists-and-trakt-oauth.js).
+        // inside the request. The page waits out a short one and asks once
+        // more (see startTraktDeviceLogin, 17_client-my-lists-and-trakt-oauth.js);
+        // a long one is said, with what Trakt said (traktLimitNote).
         if (res.status === 429) {
-          const retrySec = Math.min(30, Math.max(1, parseInt(res.headers.get("Retry-After") || "2", 10) || 2));
+          const retrySec = Math.min(3600, Math.max(1, parseInt(res.headers.get("Retry-After") || "2", 10) || 2));
+          const note = traktLimitNote(res, await res.text().catch(() => ""), retrySec);
           return json({
             ok: false,
-            error: "Trakt is busy (rate limit). Please wait a few seconds and try again.",
+            error: `Trakt is limiting requests from this site right now (${note}). Please try again later.`,
             retryAfter: retrySec,
           }, 429, { "Retry-After": String(retrySec) });
         }

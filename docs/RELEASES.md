@@ -36,7 +36,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **`FF_MATERIALIZER` and `FF_CANONICAL_IDS` are on** (2026-10-05, owner's screenshot). `INSTALL_MIGRATION_PERCENT` is `10`. `CF_ANALYTICS_TOKEN` and `FF_SCROBBLE_ST_ONLY` are gone; `CF_ANALYTICS_ACCOUNT_ID` is still set and no longer needed (only the one-time recovery used it).
 - **`main`** is brought up to date by PR #12 (Releases 14–16), PR #13 (17–18), PR #14 (19) and PR #15 (20).
 - **Release 21** went live on 2026-10-05. The owner reports everything looks good, and deleted the `FF_NEW_UI` variable. The classic page is retired, and the screens taken off the new interface are deleted. Details under Release 21.
-- **Release 22** (prepared, not yet live): the design system, phase 1. Details under Release 22.
+- **Release 22** is live (the owner, 2026-10-06), and so is everything merged into `main` after it up to PR #21 (the UI consistency pass, Pictorium, RatingPosterDB, combined channels, the Ko-fi strip): `/admin` showed *Release 22 (build e9e1445b49)*, which is `main` at `b6c72a5`. Connect Trakt worked on 22, then the PIN / code window answered *Trakt is busy (rate limit)* every time: Release 23.
+- **Release 23** went live on 2026-10-06. The owner reports Trakt connects again. Connect Trakt with a code asks Trakt from the browser. Details under Release 23.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1569,3 +1570,39 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 3. Look around: Settings (all six tabs, `/settings/display`), Discover → All, the custom list editor search, Quick Add.
 
 **Rollback:** paste the 21 file.
+
+## Release 23: Connect Trakt with a code, asked from the browser
+
+**Branch point:** `main` at `b6c72a5` (PR #21), which is live as *Release 22 (build e9e1445b49)*.
+
+**The problem (owner, 2026-10-06):** Settings → Trakt → *Connect with PIN / Code* showed **ERROR** and *Trakt is busy (rate limit). Please wait a few seconds and try again*, every time. Connect Trakt had worked on Release 22, and none of the Trakt connect code changed after it. Trakt was refusing the Worker: the code request went out from the Worker, which shares its address and the site's Trakt app with every catalog row the site loads from Trakt, and Trakt answered 429.
+
+### What it changes
+
+- **The code is asked for from the visitor's browser first** (`requestTraktDeviceCode`, `17_`). Trakt answers the code request without any secret and allows pages on other sites to call it: a real preflight from `https://mylistsaddon.com` returned `access-control-allow-origin: *` with `trakt-api-key` allowed. So the request goes out from the person's own connection, which Trakt is not limiting. The page's security policy already allows it (`connect-src https:`).
+  - The page gets the site's Trakt app id in its per-visit preamble (`TRAKT_PUBLIC_CLIENT_ID`, `16_`), not in the shared bundle. It is not a secret: it is in every trakt.tv sign-in address the site sends people to. A person's own Client ID, when they set one, is used instead, as before.
+  - The Worker route `/api/trakt/device/code` stays as the fallback (a browser that cannot reach Trakt).
+- **Approving still goes through the Worker** (`/api/trakt/device/token`), because it needs the site's Trakt secret. When Trakt slows those checks down, the window now says so (*Trakt is answering slowly...*) instead of sitting silent until the code expires.
+- **A refusal says what Trakt said** (`traktLimitNote`, `25_`): Cloudflare's own block on Trakt's side (*Cloudflare 1015*) or Trakt's limit by name (its `X-Ratelimit` header), and how long it asked to wait. Used by the code route and by the browser sign-in's token exchange (*Connect Trakt Account*), whose error used to show a slice of Cloudflare's HTML.
+- **A long wait is said, not cut short.** The route handed back at most 30 seconds of Trakt's `Retry-After`, and the page retried once after it, into a limit that lasted minutes. Now the whole wait is handed back, and the page retries only a wait of 30 seconds or less.
+- `/admin` shows **Release 23**.
+
+### Checked
+
+- `tests/trakt-connect.test.mjs` (7 tests). Six fail on the live `main` and pass here:
+  - the code comes from Trakt directly, with the app id only, and the Worker is not asked;
+  - a long wait is said and not retried early;
+  - a slowed approval says so;
+  - the route names Trakt's limit, or Cloudflare 1015, and the whole wait;
+  - the app id is in the per-visit preamble, not the shared bundle.
+  The seventh (the Worker fallback) passes on both.
+- Real Chromium, with Trakt's answer played by the test: the page calls `https://api.trakt.tv/oauth/device/code` itself (the security policy and CORS let it through), shows the code, and the Worker is asked only for the approval check.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-23-NEW-worker.js`. Check that `/admin` says **Release 23**.
+2. Settings → Trakt → **Connect with PIN / Code**. A code should appear. Enter it at trakt.tv/activate and wait for *Trakt Connected*.
+3. If the window shows an error, send a screenshot: it now names what Trakt said.
+
+**Rollback:** paste the live `main` file (Release 22, build e9e1445b49).
+
