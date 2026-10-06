@@ -1779,6 +1779,7 @@ const DESIGN_TOKENS_CSS = `
     --color-rating-high:    #1F7A35;
     --color-rating-mid:     #B25000;
     --color-rating-low:     #C41E14;
+    --color-rating-none:    #48484A;
 
     /* Elevation & Shadows */
     --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.06);
@@ -1926,6 +1927,7 @@ const DESIGN_TOKENS_CSS = `
     --color-rating-high:    #1F7A35;
     --color-rating-mid:     #B25000;
     --color-rating-low:     #C41E14;
+    --color-rating-none:    #48484A;
 
     /* Shadows & Elevation (Dark Mode) */
     --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.35);

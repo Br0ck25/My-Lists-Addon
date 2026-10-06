@@ -4882,7 +4882,7 @@ async function renderCreatorDashboard(options) {
             syncBtnHtml +
             shareBtn +
             deleteBtnHtml +
-            '<button type="button" class="lc-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
+            '<button type="button" class="lc-btn list-add-btn secondary creatorListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
               (isAdded ? 'style="color:var(--danger);"' : '') +
               ' data-slug="' + escapeAttr(l.slug) + '">' +
               (isAdded ? 'Remove' : '+ Add') +
@@ -5247,7 +5247,7 @@ function buildLocalListCardHtml(l) {
     }
   }
 
-  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn list-add-btn secondary localListAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="' + escapeAttr(l.slug) + '">' +
     (isAdded ? 'Remove' : '+ Add') +

@@ -306,7 +306,7 @@ function renderMyMdblistLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
+    const addBtns = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -1275,7 +1275,7 @@ function renderMyPrivateTraktLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn myPrivateListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
+    const addBtns = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn myPrivateListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -1705,7 +1705,7 @@ function renderMyTmdbLists(lists) {
     const isAdded = typeof isListAddedToConfig === 'function'
       ? (isListAddedToConfig(l.url, targetType) || isListAddedToConfig(null, targetType, l.url) || isListAddedToConfig(l.url, 'movie') || isListAddedToConfig(l.url, 'series') || isListAddedToConfig(l.url))
       : (alreadyAdded.has(l.url + '|' + targetType) || alreadyAdded.has(l.url + '|movie') || alreadyAdded.has(l.url + '|series'));
-    const addBtns = '<button type="button" class="lc-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
+    const addBtns = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn' + (isAdded ? ' is-added' : '') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(targetType) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -2286,7 +2286,7 @@ function renderMySimklLists(lists) {
     const markWatchedBtn = isCompleted
       ? '<button type="button" class="lc-btn secondary" data-url="' + escapeAttr(l.url) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(type) + '" data-act="markSimklListAllWatched" data-act-args="[&quot;@self&quot;]">Mark all as Watched</button>'
       : '';
-    const addBtn = '<button type="button" class="lc-btn secondary myListAddBtn' + (added ? ' is-added' : '') + '" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
+    const addBtn = '<button type="button" class="lc-btn list-add-btn secondary myListAddBtn' + (added ? ' is-added' : '') + '" ' + (added ? 'style="color:var(--danger);"' : '') + ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + type + '">' + (added ? 'Remove' : '+ Add') + '</button>';
 
     const previewItems = filteredItems.slice(0, 9);
     let posterThumbs = '';

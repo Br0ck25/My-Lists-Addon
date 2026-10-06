@@ -4,6 +4,9 @@
 // (00_constants.js) and to DESIGN_SYSTEM.md first.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { makeEnv, call } from "./harness.mjs";
 
 // The generated u-* helpers (UTILITY_CSS) are faithful copies of what used to be
@@ -80,5 +83,23 @@ describe("design system: shared stylesheet", () => {
       /background(-color)?:\s*var\(--(accent|color-brand|brand)\)/.test(b) &&
       /(^|[;\s{])color:\s*(var\(--color-on-brand\)|var\(--color-text-inverse[^)]*\)|#fff)/.test(b));
     assert.deepEqual(bad, []);
+  });
+});
+
+describe("design system: add/remove list buttons share one class", () => {
+  // The add/remove button look lives in `.list-add-btn` rules (09_page-shell.js).
+  // A button built with one of the legacy names but without the shared class
+  // would silently lose its styling, so every place that builds one must carry it.
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const legacy = /\b(localListAddToConfigBtn|creatorListAddToConfigBtn|myListAddBtn|searchAddBtn|curatedAddBtn|channelAddBtn|customListAddBtn|detailAddBtn)\b/;
+  it("every button that is built with a legacy add-button name also has list-add-btn", () => {
+    const missing = [];
+    for (const f of fs.readdirSync(root).filter((n) => /^\d\d_.*\.js$/.test(n))) {
+      fs.readFileSync(path.join(root, f), "utf8").split("\n").forEach((line, i) => {
+        const builds = /<button[^>]*class="[^"]*\blc-btn\b/.test(line) || /'lc-btn (secondary )?customListAddBtn'/.test(line);
+        if (builds && legacy.test(line) && !/list-add-btn/.test(line)) missing.push(`${f}:${i + 1}`);
+      });
+    }
+    assert.deepEqual(missing, []);
   });
 });

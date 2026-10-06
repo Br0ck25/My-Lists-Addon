@@ -303,7 +303,7 @@ function renderCustomListSearchResults(results) {
 
     const isAlreadyAdded = existingKeys.has(draftKey(itemKind, r.title, r.year));
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
-    const btnClass = isAlreadyAdded ? 'lc-btn secondary customListAddBtn' : 'lc-btn customListAddBtn';
+    const btnClass = isAlreadyAdded ? 'lc-btn list-add-btn secondary customListAddBtn' : 'lc-btn list-add-btn customListAddBtn';
     const disabledAttr = isAlreadyAdded ? ' disabled' : '';
 
     return '<div class="custom-list-search-card"' +
@@ -4314,7 +4314,7 @@ function buildAiringNextCardHtml() {
   }).join('');
 
   const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, 'series', 'airing-next') : false;
-  const addBtnHtml = '<button type="button" class="lc-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
+  const addBtnHtml = '<button type="button" class="lc-btn list-add-btn secondary localListAddToConfigBtn airingNextAddToConfigBtn' + (isAdded ? ' is-added' : '') + '" ' +
     (isAdded ? 'style="color:var(--danger);"' : '') +
     ' data-slug="airing-next">' + (isAdded ? 'Remove' : '+ Add') + '</button>';
 

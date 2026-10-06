@@ -1071,7 +1071,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     let addBtnHtml = '';
     if ((item.source === 'My Lists Addon' || item.source === 'Profile') && usernameSlug) {
       likeBtnHtml = '<button type="button" class="lc-btn searchLikeBtn' + (alreadyLikedProfile ? ' liked' : '') + '" data-username-slug="' + escapeAttr(usernameSlug) + '">' + (alreadyLikedProfile ? '&#9829;' : '&#9825;') + '</button>';
-      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn list-add-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + (item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
@@ -1080,7 +1080,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
       likeBtnHtml = '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLikedExt ? ' liked' : '') + '" data-url="' + escapeAttr(item.url) + '">' +
         (alreadyLikedExt ? '&#9829;' : '&#9825;') +
         '</button>';
-      addBtnHtml = '<button type="button" class="lc-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+      addBtnHtml = '<button type="button" class="lc-btn list-add-btn ' + (addedDirect ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
         (addedDirect ? 'style="color:var(--danger);"' : '') +
         ' data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(item.type || 'movie') + '">' +
         (addedDirect ? 'Remove' : '+ Add') +
@@ -1910,7 +1910,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
 
   const isAdded = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(null, type, customUrl) || isListAddedToConfig(customUrl, type));
   const addBtnHtml = renderCustomizeButtonHtml(title, customUrl, type) +
-    '<button type="button" class="lc-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
+    '<button type="button" class="lc-btn list-add-btn ' + (isAdded ? 'secondary curatedAddBtn is-added' : 'primary curatedAddBtn') + '" ' +
       (isAdded ? 'style="color:var(--danger);"' : '') +
       ' data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
       (isAdded ? 'Remove' : '+ Add') +
@@ -2207,7 +2207,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                 '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLiked ? ' liked' : '') + '" data-url="' + escapeAttr(l.url) + '">' +
                   (alreadyLiked ? '&#9829;' : '&#9825;') +
                 '</button>' +
-                '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+                '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
                   (added ? 'style="color:var(--danger);"' : '') +
                   ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
                   (added ? 'Remove' : '+ Add') +
@@ -2258,7 +2258,7 @@ async function loadCuratedListsFeed(forceRefresh) {
                 '<button type="button" class="lc-btn searchLikeExternalBtn' + (alreadyLiked ? ' liked' : '') + '" data-url="' + escapeAttr(l.url) + '">' +
                   (alreadyLiked ? '&#9829;' : '&#9825;') +
                 '</button>' +
-                '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+                '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
                   (added ? 'style="color:var(--danger);"' : '') +
                   ' data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
                   (added ? 'Remove' : '+ Add') +
@@ -2540,7 +2540,7 @@ function render5PosterListsFeed(container, lists) {
         '<div class="list-card-actions">' +
           likeBtnHtml +
           renderCustomizeButtonHtml(displayName.replace(/:\\s*(Movies|Shows)$/i, '').trim(), l.url || '', type) +
-          '<button type="button" class="lc-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
+          '<button type="button" class="lc-btn list-add-btn ' + (added ? 'secondary searchAddBtn is-added' : 'primary searchAddBtn') + '" ' +
             (added ? 'style="color:var(--danger);"' : '') +
             ' data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '">' +
             (added ? 'Remove' : '+ Add') +
