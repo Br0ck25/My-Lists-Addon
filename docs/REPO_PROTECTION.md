@@ -31,7 +31,3 @@ GitHub, repository **Settings -> Branches -> Add branch ruleset** (or classic br
 5. **Settings -> Actions -> General -> Workflow permissions:** set to **Read repository contents** (CI already asks for no more).
 6. **Settings -> Code security:** turn on **Secret scanning** and **Push protection**, and **Dependabot alerts**.
 7. **Delete old branches** that are merged or abandoned (the `arena/*`, `claude/*`, `audit/*` ones). Nothing in them is needed once their pull request is merged.
-
-## Secrets: one thing to confirm
-
-`.gitignore` records that a full account backup, `my-lists-full-backup1.json`, was once committed with live Trakt, MDBList and Simkl tokens and an Account Key in it. That was before the history of this repository (a search of every commit here, 288 of them, finds no such file or token). If that file lived in the older public repository (`Br0ck25/My-Lists`), the tokens are still readable there, so: confirm they were revoked or rotated, and that the file was removed from that repository's history.
