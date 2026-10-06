@@ -369,6 +369,8 @@ Observed conventions (enforce for new copy):
 
 Fixed in the consistency pass (2026-10-06): shared tokens for the admin and backup pages; darker brand fills and status-text tokens (contrast); toast type styling; dead `.action-toast`/`.undo-toast` removed; duplicate `.modal-close-x` merged; invalid `.list-card` transition and undefined variables fixed; `html.dark-theme`/`body.dark-theme` selectors removed; font sizes, radii and spacing snapped to tokens; z-index layers (modals now above the bottom nav); `transition: all` removed; breakpoints folded into 640/641; `!important` removed from `.lc-btn` and the Search button; 44px touch hit areas on phones; the backup page follows the system theme like the app.
 
+Verified: the whole app (signed out and signed in, phone and desktop, light and dark; 122 + 61 layout snapshots and about 3,900 controls in rest, hover, pressed and keyboard-focus states) renders identically to the state before the helper-class and `!important` changes.
+
 Still open. Do not copy these; fix them opportunistically:
 
 | # | Deviation | Where | Do instead |
