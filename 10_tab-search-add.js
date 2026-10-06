@@ -23,7 +23,7 @@
 
     <div class="row u-mb-12px u-gap-8px">
       <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
-      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" style="flex:none; width:auto;">
+      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" class="u-flex-none" style="width:auto;">
         <option value="">All groups</option>
       </select>
     </div>
@@ -37,7 +37,7 @@
 
     <!-- 24-Hour Randomizer Controls -->
     <div class="u-mt-16px u-p-12px_16px u-bg-v_surface u-br-v_radius_md u-bd-1px_solid_v_border">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-4px u-ai-center u-gap-6px" style="display:flex;">
         <span>Daily Randomizer</span>
       </div>
       <div>

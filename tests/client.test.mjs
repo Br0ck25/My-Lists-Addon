@@ -3152,11 +3152,11 @@ describe("client: Storylines, Sagas & Universes rating badges", () => {
     const client = loadClient({ routes: batchRoute({ [KONOSUBA_SHOW_ID]: 7.6 }) });
     client.call("renderStorylinesUniverseList", "all");
     const html = client.get("document").getElementById("storylinesUniverseList").innerHTML;
-    const yearLineWithSlot = /list-card-mini-poster-year"[^>]*><span>[^<]*<\/span><span class="storyline-rating-slot" data-rating-id="tt5312384">/;
+    const yearLineWithSlot = /list-card-mini-poster-year[ "][^>]*><span>[^<]*<\/span><span class="storyline-rating-slot" data-rating-id="tt5312384">/;
     assert.match(html, yearLineWithSlot,
       "the rating slot sits inside the year line, beside the year, not overlaid on the poster image");
 
-    const imgWrapBlocks = [...html.matchAll(/list-card-mini-poster-img-wrap"[\s\S]*?(?=<div class="list-card-mini-poster-name")/g)];
+    const imgWrapBlocks = [...html.matchAll(/list-card-mini-poster-img-wrap[ "][\s\S]*?(?=<div class="list-card-mini-poster-name")/g)];
     assert.ok(imgWrapBlocks.length > 0, "sanity check: the grid rendered at least one poster tile");
     imgWrapBlocks.forEach((m) => {
       assert.equal(m[0].includes("storyline-rating-slot"), false,

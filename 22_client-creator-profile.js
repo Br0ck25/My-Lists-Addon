@@ -573,7 +573,7 @@ function renderAccountKeySection() {
   if (!activeCreator) {
     box.innerHTML =
       '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
-      '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:12px;">' +
+      '<div class="actions u-fd-row u-gap-8px u-fw2-wrap u-mt-12px" style="width:auto;">' +
       '<button type="button" class="primary" data-act="openCreateProfileModal">Create Free Account</button>' +
       '<button type="button" class="secondary" data-act="openRestoreModal">Login</button>' +
       '</div>';
@@ -582,7 +582,7 @@ function renderAccountKeySection() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   const hasRecovery = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
   box.innerHTML =
-    '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">' +
+    '<div class="u-ai-center u-jc-space_between u-mb-12px u-fw2-wrap u-gap-8px" style="display:flex;">' +
     '<div>' +
     '<span class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700">Signed in as</span>' +
     '<h3 class="u-m-2px_0_0 u-fs-v_font_size_lg u-fw-800 u-c-v_text">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
@@ -601,7 +601,7 @@ function renderAccountKeySection() {
       '<p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
     '<div class="recovery-section u-mt-16px u-p-14px_16px u-bd-1px_solid_rgba_255_255_255_0_12 u-br-v_radius_md u-bg-rgba_255_255_255_0_03">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
+      '<div class="u-jc-space_between u-ai-center u-mb-6px u-fw2-wrap u-gap-6px" style="display:flex;">' +
         '<div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Account Recovery</div>' +
         '<span style="font-size:var(--font-size-xs); font-weight:700; padding:2px 8px; border-radius:var(--radius-sm);' + (hasRecovery ? ' background:rgba(52,199,89,0.15); color:var(--color-success-text);' : ' background:rgba(255,149,0,0.15); color:var(--color-warn-text);') + '">' +
           (hasRecovery ? '\u2713 Configured' : '\u26A0 Not Set') +
@@ -618,7 +618,7 @@ function renderAccountKeySection() {
     '</div>' +
     '<details class="danger-zone-disclosure">' +
       '<summary class="danger-zone-summary">' +
-        '<span style="display:flex; align-items:center; gap:8px;">' +
+        '<span class="u-ai-center u-gap-8px" style="display:flex;">' +
           '<span class="u-fs-v_font_size_base">&#x26A0;</span>' +
           '<span>Danger Zone (Reset or Delete Account)</span>' +
         '</span>' +
@@ -628,12 +628,12 @@ function renderAccountKeySection() {
         '<div class="u-bd-1px_solid_rgba_255_149_0_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_149_0_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_color_warn_text u-mb-4px">Reset Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-          '<button type="button" class="lc-btn" style="background:var(--color-warn); color:var(--color-on-brand); border:none; padding:6px 14px; font-weight:700; font-size:var(--font-size-sm); border-radius:var(--radius-sm); cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_warn u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
         '</div>' +
         '<div class="u-bd-1px_solid_rgba_255_59_48_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_59_48_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_danger_v_color_danger u-mb-4px">Delete Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-          '<button type="button" class="lc-btn" style="background:var(--color-danger); color:var(--color-on-brand); border:none; padding:6px 14px; font-weight:700; font-size:var(--font-size-sm); border-radius:var(--radius-sm); cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_danger u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
         '</div>' +
       '</div>' +
     '</details>';
@@ -854,12 +854,12 @@ function openShareListModal(listName, listUrl) {
     '<div class="modal-body">' +
       '<h2 class="panel-title u-mb-6px">Share List</h2>' +
       '<p class="u-m-0_0_14px u-fs-v_font_size_sm u-c-v_muted">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
-      '<div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">' +
+      '<div class="u-gap-8px u-ai-center u-mb-14px" style="display:flex;">' +
         '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_base u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
-        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" data-act="copyShareListUrl" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
+        '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_16px" id="shareListCopyBtn" data-act="copyShareListUrl">Copy Link</button>' +
       '</div>' +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
-        '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' +
+        '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' +
         '<button type="button" class="secondary lc-btn" data-act="closeModal">Close</button>' +
       '</div>' +
     '</div>'
@@ -1069,7 +1069,7 @@ function renderHiddenListsSettingsSection() {
     return '<label class="settings-check-item">' +
       '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
       '<div class="u-flex-1 u-minw-0">' +
-        '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text u-overflowwrap-anywhere">' + escapeHtml(r.name) + '</span>' +
         '<div class="u-c-v_muted u-fs-v_font_size_xs u-mt-2px">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
@@ -1174,12 +1174,12 @@ function renderTrackPlaybackSection() {
       '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
       '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
-        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" class="u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-rgba_0_0_0_0_3 u-c-v_text u-ff-monospace u-fs-v_font_size_sm">' +
-        '<button type="button" class="secondary lc-btn" data-act="copyScrobbleWebhookUrl" style="padding:8px 14px; font-size:var(--font-size-sm);">Copy Webhook URL</button>' +
-        '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:var(--font-size-sm);">Regenerate</button>' +
+        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
+        '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="copyScrobbleWebhookUrl">Copy Webhook URL</button>' +
+        '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been.">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+      '<div class="u-m-12px_0_0 u-p-12px_0 u-bdt-1px_solid_v_border u-bs-border_box u-maxw-100" style="width:100%;">' +
         '<div class="settings-toggle-row u-p-0_0_4px u-bdb-none">' +
           '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
             '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Enable Media Server User Filtering</span>' +
@@ -1191,21 +1191,21 @@ function renderTrackPlaybackSection() {
           '</label>' +
         '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
-          '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
+          '<div class="u-ai-center u-jc-space_between u-mb-6px" style="display:flex;">' +
             '<p class="u-m-0 u-fs-v_font_size_sm u-fw-600 u-c-v_text">Select Allowed Users:</p>' +
-            '<button type="button" class="secondary lc-btn" data-act="loadScrobbleSeenUsers" style="padding:3px 8px; font-size:var(--font-size-xs);">Refresh Users</button>' +
+            '<button type="button" class="secondary lc-btn u-p-3px_8px u-fs-v_font_size_xs" data-act="loadScrobbleSeenUsers">Refresh Users</button>' +
           '</div>' +
           '<div id="scrobbleSeenUsersBox" class="u-fs-v_font_size_sm u-c-v_muted u-mb-10px"><small>Loading\u2026</small></div>' +
           '<p class="u-m-0_0_4px u-fs-v_font_size_sm u-c-v_muted">Additional / Manual Usernames (comma-separated):</p>' +
-          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:var(--font-size-sm);">' +
-          '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:var(--font-size-sm); user-select:none; margin:0;">' +
-            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" class="u-bs-border_box u-mb-8px u-fs-v_font_size_sm" style="width:100%;">' +
+          '<label class="u-ai-flex_start u-gap-8px u-cur-pointer u-fs-v_font_size_sm u-us-none u-m-0" style="display:flex;">' +
+            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" class="u-mt-2px u-cur-pointer u-flex-none" style="width:16px; height:16px;">' +
             '<span>Block scrobbles with no username in the payload</span>' +
           '</label>' +
         '</div>' +
       '</div>' +
 
-      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+      '<div class="u-m-12px_0_0 u-p-12px_0 u-bdt-1px_solid_v_border u-bs-border_box u-maxw-100" style="width:100%;">' +
         '<div class="settings-toggle-row u-p-0_0_10px">' +
           '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
             '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Automatically sync media server scrobbles to your Watch History list</span>' +
@@ -1225,11 +1225,11 @@ function renderTrackPlaybackSection() {
           '</label>' +
         '</div>' +
         '<div>' +
-          '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:var(--font-size-sm); white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
+          '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm u-ws-normal u-lh-1_35 u-ta-center u-maxw-100 u-bs-border_box" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="width:100%;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
       '</div>' +
 
-      '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap:8px; margin-top:10px; width:100%; max-width:100%; box-sizing:border-box;">' +
+      '<div class="u-gtc-repeat_auto_fit_minmax_min_100_200px_1fr u-gap-8px u-mt-10px u-maxw-100 u-bs-border_box" style="display:grid; width:100%;">' +
         '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
           '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Plex Webhook Setup</summary>' +
           '<p class="u-m-6px_0_4px u-c-v_muted">1. Open <strong>Plex Web &rarr; Settings &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Click <strong>Save Changes</strong>.</p>' +
@@ -1403,7 +1403,7 @@ async function loadScrobbleSeenUsers() {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
-    let html = '<div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">';
+    let html = '<div class="u-fd-column u-gap-4px u-mt-4px" style="display:flex;">';
     for (const [username, info] of Object.entries(data.users)) {
       const isChecked = allowed.includes(username.toLowerCase());
       let timeStr = '';
@@ -1420,8 +1420,8 @@ async function loadScrobbleSeenUsers() {
       }
       const serverName = (info && info.server) || 'Media Server';
       html +=
-        '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:var(--font-size-sm); padding:3px 0;">' +
-          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
+        '<label class="u-ai-center u-gap-8px u-cur-pointer u-fs-v_font_size_sm u-p-3px_0" style="display:flex;">' +
+          '<input type="checkbox" class="scrobble-user-cb u-cur-pointer u-flex-none" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px;">' +
           '<span><strong>' + escapeHtml(username) + '</strong> <span class="u-c-v_muted u-fs-v_font_size_xs">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
         '</label>';
     }
@@ -1482,7 +1482,7 @@ async function refreshTrackPlaybackStatus() {
     });
     const data = await res.json();
     if (!data.ok || !data.lastPingAt) {
-      statusBox.innerHTML = '<div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(255,255,255,0.03); border-radius:var(--radius-sm); font-size:var(--font-size-sm); color:var(--muted);"><span class="u-c-v_muted">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
+      statusBox.innerHTML = '<div class="u-ai-center u-gap-8px u-p-8px_12px u-bg-rgba_255_255_255_0_03 u-br-v_radius_sm u-fs-v_font_size_sm u-c-v_muted" style="display:flex;"><span class="u-c-v_muted">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
       return;
     }
     const when = new Date(data.lastPingAt).toLocaleString();
@@ -1495,7 +1495,7 @@ async function refreshTrackPlaybackStatus() {
       const formName = data.legacyAuthForm === 'key' ? 'Account Key (?creator=&key=)' : 'Install Link (?config=)';
       legacyBanner =
         '<div class="u-mt-10px u-p-10px_12px u-bg-rgba_255_149_0_0_12 u-bd-1px_solid_rgba_255_149_0_0_35 u-br-v_radius_sm u-fs-v_font_size_sm u-c-v_text">' +
-          '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+          '<div class="u-ai-flex_start u-gap-8px" style="display:flex;">' +
             '<span class="u-c-v_warning_v_color_warn u-fs-v_font_size_lg u-lh-1_2">&#x26A0;</span>' +
             '<div>' +
               '<div class="u-fw-700 u-c-v_warning_v_color_warn u-mb-2px">Outdated Webhook URL Detected</div>' +
@@ -1507,7 +1507,7 @@ async function refreshTrackPlaybackStatus() {
     }
     statusBox.innerHTML =
       '<div class="u-p-10px_12px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_25 u-br-v_radius_sm u-fs-v_font_size_sm">' +
-        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+        '<div class="u-ai-center u-jc-space_between u-mb-4px" style="display:flex;">' +
           '<span class="u-c-v_accent u-fw-700">\u2713 Last Scrobble Activity</span>' +
           '<span class="u-c-v_muted u-fs-v_font_size_xs">' + escapeHtml(when) + '</span>' +
         '</div>' +
@@ -1745,7 +1745,7 @@ function openRestoreModal() {
     '<button type="button" class="primary" id="restoreSubmitBtn" data-act="submitRestoreProfile">Login</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openCreateProfileModal">Need an account? Create one</button>' +
     '</div>' +
-    '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:var(--font-size-sm);">' +
+    '<div class="u-jc-space_between u-ai-center u-mt-14px u-fs-v_font_size_sm" style="display:flex;">' +
     '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotKeyModal">Forgot key?</a>' +
     '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotUsernameModal">Forgot username?</a>' +
     '</div>'
@@ -4021,12 +4021,12 @@ function openVisibilityModal() {
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title u-mt-0">Save Custom List</h2>' +
       '<p class="u-m-0_0_16px u-fs-v_font_size_sm u-c-v_muted">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
-      '<div class="visibility-choice" style="display:flex; flex-direction:column; gap:12px; margin: 16px 0 20px;">' +
-        '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg);">' +
+      '<div class="visibility-choice u-fd-column u-gap-12px u-m-16px_0_20px" style="display:flex;">' +
+        '<label class="u-ai-flex_start u-gap-12px u-cur-pointer u-p-12px_14px u-bd-1px_solid_v_border u-br-v_radius_md u-bg-v_bg" style="display:flex;">' +
           '<input type="radio" name="listVisibility" value="public" checked class="u-mt-3px u-acc-v_brand">' +
           '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Public</strong><br><small class="u-c-v_muted">Anyone with the link can view, like, and add this list to their catalogs.</small></span>' +
         '</label>' +
-        '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg);">' +
+        '<label class="u-ai-flex_start u-gap-12px u-cur-pointer u-p-12px_14px u-bd-1px_solid_v_border u-br-v_radius_md u-bg-v_bg" style="display:flex;">' +
           '<input type="radio" name="listVisibility" value="private" class="u-mt-3px u-acc-v_brand">' +
           '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Private</strong><br><small class="u-c-v_muted">Only you can view and edit this list when logged into your account.</small></span>' +
         '</label>' +
@@ -4054,14 +4054,14 @@ function showSavedCustomListModal(listName, visibility, url) {
           '</div>'
         : '<div class="u-mb-16px">' +
             '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
-            '<div style="display:flex; gap:8px; align-items:center;">' +
+            '<div class="u-gap-8px u-ai-center" style="display:flex;">' +
               '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
-              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_14px" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
-        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
+        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
@@ -4852,7 +4852,7 @@ async function renderCreatorDashboard(options) {
             '</div>' +
             '<div class="list-card-mini-poster-name">' + escapeHtml(label.title || it.title || it.name || '') + '</div>' +
             (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
           '</div>';
       }).join('');
       const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, l.type, l.slug) : false;
@@ -5217,7 +5217,7 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
       (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
   const typeLabel = l.type === 'series' ? 'Shows' : l.type === 'movie' ? 'Movies' : 'Mixed';

@@ -1929,7 +1929,7 @@ async function generate() {
     }
   }
   box.style.display = 'block';
-  box.innerHTML = '<div class="install-result-card u-ai-center u-jc-center u-p-24px u-c-v_muted"><span class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle;"></span> Generating install link\u2026</div>';
+  box.innerHTML = '<div class="install-result-card u-ai-center u-jc-center u-p-24px u-c-v_muted"><span class="spinner u-bd-2px_solid_v_border u-bordertopcolor-v_accent u-br-50 u-mr-8px u-va-middle" style="display:inline-block; width:20px; height:20px; animation:spin 0.8s linear infinite;"></span> Generating install link\u2026</div>';
 
   // Prefer a short, KV-backed id (see /api/save) so the install URL stays a
   // fixed short length no matter how many lists are configured. If this
@@ -2008,14 +2008,14 @@ async function generate() {
 
       \${sizeWarning}
 
-      <div class="install-actions-bar" style="display:flex; flex-wrap:wrap; gap:10px;">
-        <a href="\${stremioInstallUrl}" class="btn-stremio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-base);">
+      <div class="install-actions-bar u-fw2-wrap u-gap-10px" style="display:flex;">
+        <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-base);">
+        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Nuvio
         </a>
-        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary" style="display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; font-weight:600; border-radius:var(--radius-pill); text-align:center; font-size:var(--font-size-sm); text-decoration:none;">
+        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>
       </div>
@@ -2025,9 +2025,9 @@ async function generate() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
           <span>Manifest Link</span>
         </div>
-        <div class="install-url-input-group" style="display:flex; align-items:stretch; gap:8px; width:100%; flex-wrap:wrap;">
-          <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="flex:1 1 220px; min-width:0; margin:0; display:flex; align-items:center;">\${installUrl}</div>
-          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:var(--font-size-sm); border-radius:var(--radius-pill);">
+        <div class="install-url-input-group u-ai-stretch u-gap-8px u-fw2-wrap" style="display:flex; width:100%;">
+          <div class="install-url-box u-flex-1_1_220px u-minw-0 u-m-0 u-ai-center" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="display:flex;">\${installUrl}</div>
+          <button type="button" class="install-url-copy-btn primary lc-btn u-flex-none u-p-0_16px u-minh-38px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_sm u-br-v_radius_pill" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="height:auto; display:inline-flex;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
@@ -2790,7 +2790,7 @@ function appShellDialog(options) {
   let html = '';
   if (o.title) html += '<h3 class="u-m-0_0_10px u-fs-v_font_size_md">' + escapeHtml(o.title) + '</h3>';
   if (o.message) html += '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm u-lh-1_45 u-ws-pre_wrap">' + escapeHtml(o.message) + '</p>';
-  html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
+  html += '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">';
   if (cancelLabel) html += '<button type="button" class="btn-secondary u-minw-80px u-p-8px_16px" id="appShellDialogCancel">' + escapeHtml(cancelLabel) + '</button>';
   html += '<button type="button" class="' + (o.destructive ? 'btn-danger' : 'btn-primary') + ' u-minw-80px u-p-8px_16px" id="appShellDialogConfirm">' + escapeHtml(confirmLabel) + '</button>';
   html += '</div>';
@@ -3467,7 +3467,7 @@ function appShellImportFinishedHtml() {
       '</div>' + appShellImportUnmatchedHtml();
     return html;
   }
-  html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+  html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
     '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(appShellImportListName()) + '">' +
     '<label class="app-shell-dedupe" for="appShellImportHomeToggle">' +
     '<input type="checkbox" id="appShellImportHomeToggle" checked>' +
@@ -3528,7 +3528,7 @@ function appShellRenderImports() {
       html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
         (chosen === 'movie' ? 'movies' : 'shows') + ' -- pick the other chip afterwards for the rest.</p>';
     }
-    html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+    html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
       '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
       '<div class="app-shell-actions u-mt-10px">' +
       '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +

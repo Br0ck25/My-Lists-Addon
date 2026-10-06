@@ -18,13 +18,13 @@
       <div class="settings-row-group">
         <!-- Region -->
         <div class="settings-row-item u-pb-14px u-bdb-1px_solid_v_border">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+          <div class="u-jc-space_between u-ai-flex_start u-gap-16px u-fw2-wrap" style="display:flex;">
             <div class="u-flex-1 u-minw-240px">
               <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Content Region</span>
               <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
             </div>
-            <div style="flex:none; width:100%; max-width:320px;">
-              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+            <div class="u-flex-none u-maxw-320px" style="width:100%;">
+              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
                 ${buildRegionOptionsHtml(initialRegion)}
               </select>
             </div>
@@ -140,17 +140,17 @@
             </div>
           </label>
         </div>
-        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
+        <div class="u-gap-16px u-fw2-wrap u-mt-6px" style="display:flex;">
           <div class="u-flex-1 u-minw-220px u-maxw-320px">
-            <label for="betterPostersRatingSourceSelect" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Rating source</label>
-            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+            <label for="betterPostersRatingSourceSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Rating source</label>
+            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
               ${betterPostersRatingSourceOptionsHtml}
             </select>
             <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Which score the rating is taken from.</p>
           </div>
           <div class="u-flex-1 u-minw-220px u-maxw-320px">
-            <label for="betterPostersLangSelect" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Poster language</label>
-            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+            <label for="betterPostersLangSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster language</label>
+            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
               ${betterPostersLangOptionsHtml}
             </select>
             <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Language BetterPosters draws text in.</p>
@@ -179,10 +179,10 @@
       </div>
       <div id="rpdbOptions" style="display:${initialRpdb ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div>
-          <label for="rpdbKeyInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">API key</label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <label for="rpdbKeyInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">API key</label>
+          <div class="u-gap-8px u-fw2-wrap u-ai-center" style="display:flex;">
             <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" class="u-flex-1 u-minw-200px u-maxw-380px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box">
-            <button type="button" class="secondary lc-btn" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]" style="border-radius:var(--radius-pill);">Test key</button>
+            <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]">Test key</button>
           </div>
           <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
         </div>
@@ -209,8 +209,8 @@
       </div>
       <div id="pictoriumOptions" style="display:${initialPictorium ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div>
-          <label for="pictoriumUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Poster link</label>
-          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+          <label for="pictoriumUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster link</label>
+          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
           <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
         </div>
       </div>
@@ -235,8 +235,8 @@
     <div class="panel u-mt-12px">
       <h2 class="panel-title">Poster Badges &amp; Labels</h2>
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
-      <div style="display:flex; flex-direction:column; gap:16px;">
-        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+      <div class="u-fd-column u-gap-16px" style="display:flex;">
+        <div class="u-bdb-1px_solid_v_border u-pb-14px u-fd-column u-gap-6px" style="display:flex;">
           <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Website &amp; Dashboard</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
@@ -284,7 +284,7 @@
           </div>
         </div>
 
-        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+        <div class="u-bdb-1px_solid_v_border u-pb-14px u-fd-column u-gap-6px" style="display:flex;">
           <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Stremio &amp; Nuvio (Artwork Overlays)</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
@@ -318,7 +318,7 @@
           </div>
         </div>
 
-        <div style="display:flex; flex-direction:column; gap:6px;">
+        <div class="u-fd-column u-gap-6px" style="display:flex;">
           <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Badge Types</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
@@ -399,7 +399,7 @@
         </div>
       </div>
       <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
-      <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div id="watchHistorySettingsSection" class="u-gap-10px u-fw2-wrap" style="display:flex;">
         <button type="button" class="btn-danger btn-sm" data-act="clearWatchHistoryAll">Clear Watch History</button>
         <button type="button" class="btn-danger btn-sm" data-act="clearContinueWatchingAll">Clear Continue Watching</button>
       </div>
@@ -422,7 +422,7 @@
       <div class="provider-card" id="tmdbSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">The Movie Database (TMDB)</span>
               <span id="tmdbConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -430,7 +430,7 @@
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="tmdbConnectBtn" data-act="startTmdbConnect" style="font-weight:600;">Connect TMDB Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
         </div>
         <details class="provider-advanced-disclosure">
@@ -439,7 +439,7 @@
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div class="u-mt-10px">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="u-c-v_accent_2">themoviedb.org/settings/api</a>.</p>
           </div>
         </details>
@@ -449,7 +449,7 @@
       <div class="provider-card" id="traktSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">Trakt</span>
               <span id="traktConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -457,7 +457,7 @@
           </div>
         </div>
         <div class="provider-card-actions trakt-connect-actions">
-          <button type="button" class="secondary lc-btn" id="traktConnectBtn" data-act="startTraktConnect" style="font-weight:600;">Connect Trakt Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
           <button type="button" class="secondary lc-btn" id="traktDeviceBtn" data-act="startTraktDeviceLogin" title="Connect from a TV or secondary device via trakt.tv/activate">Connect with PIN / Code</button>
           <button type="button" class="secondary lc-btn btn-danger" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
@@ -473,7 +473,7 @@
             </label>
           </div>
           <div class="u-mt-8px">
-            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -481,9 +481,9 @@
             <span>Advanced: Custom Trakt Client ID &amp; Username</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
-            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+          <div class="u-mt-10px u-fd-column u-gap-8px" style="display:flex;">
+            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" class="u-c-v_accent_2">trakt.tv/oauth/applications</a>.</p>
           </div>
         </details>
@@ -493,7 +493,7 @@
       <div class="provider-card" id="mdblistSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">MDBList</span>
               <span id="mdblistConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -501,7 +501,7 @@
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect" style="font-weight:600;">Connect MDBList Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
         <div id="mdblistSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
@@ -516,7 +516,7 @@
             </label>
           </div>
           <div class="u-mt-8px">
-            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -525,7 +525,7 @@
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div class="u-mt-10px">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" class="u-c-v_accent_2">mdblist.com/preferences</a>.</p>
           </div>
         </details>
@@ -535,7 +535,7 @@
       <div class="provider-card" id="simklSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">Simkl</span>
               <span id="simklConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -543,7 +543,7 @@
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="simklConnectBtn" data-act="startSimklConnect" style="font-weight:600;">Connect Simkl Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
         <div id="simklSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
@@ -558,7 +558,7 @@
             </label>
           </div>
           <div class="u-mt-8px">
-            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -567,7 +567,7 @@
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div class="u-mt-10px">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" class="u-c-v_accent_2">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
@@ -579,10 +579,10 @@
       <h2 class="panel-title">Import List</h2>
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
 
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:12px;">
+      <div class="u-gtc-repeat_auto_fit_minmax_260px_1fr u-gap-12px u-mb-12px" style="display:grid;">
         <div>
-          <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:var(--font-size-sm); margin-bottom:6px; color:var(--text);">Source (optional)</label>
-          <select id="importListSourceSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+          <label for="importListSourceSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Source (optional)</label>
+          <select id="importListSourceSelect" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
             <option value="auto">Auto-detect</option>
             <option value="imdb">IMDb</option>
             <option value="letterboxd">Letterboxd</option>
@@ -594,21 +594,21 @@
         </div>
 
         <div>
-          <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:var(--font-size-sm); margin-bottom:6px; color:var(--text);">Import to which list?</label>
-          <select id="importTargetListSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;" data-act="onImportTargetListChange">
+          <label for="importTargetListSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Import to which list?</label>
+          <select id="importTargetListSelect" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;" data-act="onImportTargetListChange">
             <!-- Populated dynamically -->
           </select>
         </div>
       </div>
 
-      <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
-        <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:var(--font-size-sm); margin-bottom:6px; color:var(--text);">New List Name</label>
-        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; max-width:400px; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+      <div id="importNewListInputWrap" class="u-mb-12px" style="display:none;">
+        <label for="importNewListNameInput" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">New List Name</label>
+        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" class="u-maxw-400px u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
       </div>
 
       <div class="u-mb-14px">
         <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); opacity:0.8; margin-bottom:2px;" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="u-c-v_muted u-mb-2px" style="opacity:0.8;" aria-hidden="true">
             <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
             <path d="M12 12v9"></path>
             <path d="m16 16-4-4-4 4"></path>
@@ -617,7 +617,7 @@
             <div class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Choose files or drag &amp; drop here</div>
             <div class="u-mt-3px u-c-v_muted u-fs-v_font_size_xs">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
           </div>
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 16px; font-size:var(--font-size-sm); margin-top:2px;">Select files&hellip;</button>
+          <button type="button" class="secondary lc-btn u-p-6px_16px u-fs-v_font_size_sm u-mt-2px" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">Select files&hellip;</button>
           <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
         </div>
         <div id="unifiedImportSelectedCount" class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">No files selected</div>
@@ -634,7 +634,7 @@
       </div>
 
       <div class="actions u-mt-8px">
-        <button type="button" class="primary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:var(--font-size-base); font-weight:600;" data-act="runUnifiedListImport">Start Import</button>
+        <button type="button" class="primary lc-btn u-p-10px_24px u-fs-v_font_size_base u-fw-600" id="btnUnifiedImport" data-act="runUnifiedListImport">Start Import</button>
       </div>
 
       <div id="unifiedImportResult" class="u-mt-12px"></div>
@@ -644,16 +644,16 @@
   <!-- Submenu 3: Feedback & Support -->
   <div class="settings-subpanel" id="settingsSubFeedback" style="display:none;">
     <div class="panel">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+      <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px u-mb-12px" style="display:flex;">
         <div>
           <h2 class="panel-title u-m-0">Support &amp; Developer Chat</h2>
           <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
         </div>
-        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]" style="padding:6px 14px; font-size:var(--font-size-sm);">+ New Message</button>
+        <button type="button" class="secondary lc-btn u-p-6px_14px u-fs-v_font_size_sm" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]">+ New Message</button>
       </div>
 
       <!-- Active Threads Selector -->
-      <div id="supportThreadsBar" class="support-threads-bar" style="display:none; margin-bottom:12px;"></div>
+      <div id="supportThreadsBar" class="support-threads-bar u-mb-12px" style="display:none;"></div>
 
       <div class="feedback-container">
         <!-- Chat View -->
@@ -661,18 +661,18 @@
           <div id="supportMessagesStream" class="support-messages-stream"></div>
           <div class="support-reply-composer u-mt-10px">
             <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
-            <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
+            <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+          <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
             <span id="supportChatStatus" class="u-fs-v_font_size_sm u-c-v_muted"></span>
-            <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:var(--font-size-xs); border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+            <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
           </div>
         </div>
 
         <!-- New Message / Initial Form -->
         <div id="newFeedbackFormWrap">
           <div class="row">
-            <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Category</label>
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Category</label>
             <select id="feedbackCategorySelect" aria-label="Feedback category" class="u-maxw-320px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-7px_12px u-fs-v_font_size_sm">
               <option value="bug">Bug Report</option>
               <option value="improvement">Improvement / Feature Request</option>
@@ -681,15 +681,15 @@
             </select>
           </div>
           <div class="row u-mt-10px">
-            <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Message</label>
-            <textarea id="feedbackMessageInput" rows="4" style="width:100%; max-width:680px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:10px 12px; font-size:var(--font-size-sm); box-sizing:border-box;" placeholder="What would you like help with or what did you find?"></textarea>
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Message</label>
+            <textarea id="feedbackMessageInput" rows="4" class="u-maxw-680px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-10px_12px u-fs-v_font_size_sm u-bs-border_box" style="width:100%;" placeholder="What would you like help with or what did you find?"></textarea>
           </div>
           <div class="row u-mt-10px">
-            <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Contact Info (optional)</label>
-            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" style="width:100%; max-width:440px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:8px 12px; font-size:var(--font-size-sm); box-sizing:border-box;">
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Contact Info (optional)</label>
+            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" class="u-maxw-440px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-8px_12px u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
           </div>
           <div class="actions u-mt-12px u-gap-8px u-jc-flex_start">
-            <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback" style="padding:8px 20px; font-size:var(--font-size-sm); font-weight:600;">Send Message</button>
+            <button type="button" class="primary lc-btn u-p-8px_20px u-fs-v_font_size_sm u-fw-600" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
             <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
           </div>
           <p id="feedbackStatus" class="u-mt-8px u-fs-v_font_size_sm"></p>
@@ -708,7 +708,7 @@
             <div class="resource-card-title">User Guide &amp; Docs</div>
             <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:var(--font-size-sm); pointer-events:none;">Open Guide &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
         <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener" class="resource-card">
@@ -716,7 +716,7 @@
             <div class="resource-card-title">Support on Ko-fi</div>
             <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:var(--font-size-sm); pointer-events:none;">Support Project &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Support Project &rarr;</span>
         </a>
 
         <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="resource-card">
@@ -724,7 +724,7 @@
             <div class="resource-card-title">TorBox Debrid</div>
             <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:var(--font-size-sm); pointer-events:none;">Try TorBox (Referral) &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Try TorBox (Referral) &rarr;</span>
         </a>
       </div>
     </div>

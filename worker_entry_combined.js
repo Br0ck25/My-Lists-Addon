@@ -1803,6 +1803,15 @@ const DESIGN_TOKENS_CSS = `
     --color-rating-mid:     #B25000;
     --color-rating-low:     #C41E14;
     --color-rating-none:    #48484A;
+    --color-badge-finale-text: #FFD166;
+
+    /* Third-party brand colours (fixed by the brands, the same in both themes) */
+    --brand-netflix: #E50914; --brand-prime: #00A8E1; --brand-apple: #000000;
+    --brand-disney: #113CCF; --brand-max: #5B00C5; --brand-hulu: #1CE783; --brand-hulu-text: #000000;
+    --brand-paramount: #0064FF; --brand-peacock: #000000; --brand-discovery: #002244; --brand-kids: #FF9900;
+    --brand-stremio-from: #9B8FFF; --brand-stremio-to: #6D48FF;
+    --brand-nuvio-from: #FF5E3A; --brand-nuvio-to: #FF2A68;
+    --brand-wako-from: #007AFF; --brand-wako-to: #34AADC;
 
     /* Elevation & Shadows */
     --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.06);
@@ -1978,83 +1987,130 @@ const DESIGN_TOKENS_CSS = `
 const UTILITY_CSS = `
 .u-acc-v_accent{accent-color:var(--accent) !important}
 .u-acc-v_brand{accent-color:var(--brand) !important}
-.u-ai-center{align-items:center !important}
-.u-ai-flex_start{align-items:flex-start !important}
-.u-bd-1_5px_dashed_v_border{border:1.5px dashed var(--border) !important}
-.u-bd-1_5px_solid_v_border_strong{border:1.5px solid var(--border-strong) !important}
-.u-bd-1px_solid_rgba_0_122_255_0_2{border:1px solid rgba(0,122,255,0.2) !important}
-.u-bd-1px_solid_rgba_0_122_255_0_25{border:1px solid rgba(0,122,255,0.25) !important}
-.u-bd-1px_solid_rgba_255_149_0_0_3{border:1px solid rgba(255,149,0,0.3) !important}
-.u-bd-1px_solid_rgba_255_149_0_0_35{border:1px solid rgba(255,149,0,0.35) !important}
-.u-bd-1px_solid_rgba_255_255_255_0_12{border:1px solid rgba(255,255,255,0.12) !important}
-.u-bd-1px_solid_rgba_255_59_48_0_25{border:1px solid rgba(255,59,48,0.25) !important}
-.u-bd-1px_solid_rgba_255_59_48_0_3{border:1px solid rgba(255,59,48,0.3) !important}
-.u-bd-1px_solid_v_border{border:1px solid var(--border) !important}
-.u-bd-1px_solid_v_color_danger{border:1px solid var(--color-danger) !important}
-.u-bd-2px_dashed_v_accent{border:2px dashed var(--accent) !important}
-.u-bd-none{border:none !important}
+.u-ai-center{align-items:center}
+.u-ai-flex_end{align-items:flex-end}
+.u-ai-flex_start{align-items:flex-start}
+.u-ai-stretch{align-items:stretch}
+.u-as-flex_start{align-self:flex-start !important}
+.u-aspectratio-16_9{aspect-ratio:16/9 !important}
+.u-bd-0{border:0}
+.u-bd-1_5px_dashed_v_border{border:1.5px dashed var(--border)}
+.u-bd-1_5px_solid_v_border_strong{border:1.5px solid var(--border-strong)}
+.u-bd-1px_solid_rgba_0_0_0_0_15{border:1px solid rgba(0,0,0,0.15)}
+.u-bd-1px_solid_rgba_0_122_255_0_2{border:1px solid rgba(0,122,255,0.2)}
+.u-bd-1px_solid_rgba_0_122_255_0_25{border:1px solid rgba(0,122,255,0.25)}
+.u-bd-1px_solid_rgba_0_122_255_0_3{border:1px solid rgba(0,122,255,0.3)}
+.u-bd-1px_solid_rgba_255_149_0_0_3{border:1px solid rgba(255,149,0,0.3)}
+.u-bd-1px_solid_rgba_255_149_0_0_35{border:1px solid rgba(255,149,0,0.35)}
+.u-bd-1px_solid_rgba_255_255_255_0_12{border:1px solid rgba(255,255,255,0.12)}
+.u-bd-1px_solid_rgba_255_255_255_0_3{border:1px solid rgba(255,255,255,0.3)}
+.u-bd-1px_solid_rgba_255_59_48_0_25{border:1px solid rgba(255,59,48,0.25)}
+.u-bd-1px_solid_rgba_255_59_48_0_3{border:1px solid rgba(255,59,48,0.3)}
+.u-bd-1px_solid_v_border{border:1px solid var(--border)}
+.u-bd-1px_solid_v_border_strong{border:1px solid var(--border-strong)}
+.u-bd-1px_solid_v_color_border_strong{border:1px solid var(--color-border-strong)}
+.u-bd-1px_solid_v_color_danger{border:1px solid var(--color-danger)}
+.u-bd-2px_dashed_v_accent{border:2px dashed var(--accent)}
+.u-bd-2px_solid_v_accent{border:2px solid var(--accent)}
+.u-bd-2px_solid_v_border{border:2px solid var(--border)}
+.u-bd-none{border:none}
 .u-bdb-1px_solid_v_border{border-bottom:1px solid var(--border) !important}
 .u-bdb-none{border-bottom:none !important}
-.u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3) !important}
-.u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35) !important}
-.u-bdc-v_color_danger{border-color:var(--color-danger) !important}
+.u-bdc-rgba_255_149_0_0_4{border-color:rgba(255,149,0,0.4)}
+.u-bdc-rgba_255_59_48_0_25{border-color:rgba(255,59,48,0.25)}
+.u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3)}
+.u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35)}
+.u-bdc-rgba_255_59_48_0_4{border-color:rgba(255,59,48,0.4)}
+.u-bdc-v_color_danger{border-color:var(--color-danger)}
+.u-bdc-v_danger{border-color:var(--danger)}
 .u-bdt-1px_dashed_v_border{border-top:1px dashed var(--border) !important}
 .u-bdt-1px_solid_v_border{border-top:1px solid var(--border) !important}
-.u-bg-F2F2F7{background:#F2F2F7 !important}
-.u-bg-rgba_0_0_0_0_3{background:rgba(0,0,0,0.3) !important}
-.u-bg-rgba_0_122_255_0_08{background:rgba(0,122,255,0.08) !important}
-.u-bg-rgba_255_149_0_0_05{background:rgba(255,149,0,0.05) !important}
-.u-bg-rgba_255_149_0_0_12{background:rgba(255,149,0,0.12) !important}
-.u-bg-rgba_255_255_255_0_03{background:rgba(255,255,255,0.03) !important}
-.u-bg-rgba_255_59_48_0_05{background:rgba(255,59,48,0.05) !important}
-.u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08) !important}
-.u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12) !important}
-.u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15) !important}
-.u-bg-v_bg{background:var(--bg) !important}
-.u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03)) !important}
-.u-bg-v_card_bg{background:var(--card-bg) !important}
-.u-bg-v_color_danger{background:var(--color-danger) !important}
-.u-bg-v_color_success_subtle{background:var(--color-success-subtle) !important}
-.u-bg-v_panel_strong{background:var(--panel-strong) !important}
-.u-bg-v_surface{background:var(--surface) !important}
-.u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04)) !important}
+.u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08{border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08)) !important}
+.u-bg-222{background:#222}
+.u-bg-F2F2F7{background:#F2F2F7}
+.u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100{background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%)}
+.u-bg-none{background:none}
+.u-bg-rgba_0_0_0_0_2{background:rgba(0,0,0,0.2)}
+.u-bg-rgba_0_0_0_0_3{background:rgba(0,0,0,0.3)}
+.u-bg-rgba_0_0_0_0_5{background:rgba(0,0,0,0.5)}
+.u-bg-rgba_0_0_0_0_75{background:rgba(0,0,0,0.75)}
+.u-bg-rgba_0_122_255_0_08{background:rgba(0,122,255,0.08)}
+.u-bg-rgba_255_149_0_0_05{background:rgba(255,149,0,0.05)}
+.u-bg-rgba_255_149_0_0_12{background:rgba(255,149,0,0.12)}
+.u-bg-rgba_255_255_255_0_03{background:rgba(255,255,255,0.03)}
+.u-bg-rgba_255_59_48_0_05{background:rgba(255,59,48,0.05)}
+.u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08)}
+.u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12)}
+.u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15)}
+.u-bg-v_accent{background:var(--accent)}
+.u-bg-v_bg{background:var(--bg)}
+.u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03))}
+.u-bg-v_border{background:var(--border)}
+.u-bg-v_card_bg{background:var(--card-bg)}
+.u-bg-v_color_bg_elevated{background:var(--color-bg-elevated)}
+.u-bg-v_color_bg_overlay{background:var(--color-bg-overlay)}
+.u-bg-v_color_bg_sunken{background:var(--color-bg-sunken)}
+.u-bg-v_color_danger{background:var(--color-danger)}
+.u-bg-v_color_on_brand{background:var(--color-on-brand)}
+.u-bg-v_color_success_subtle{background:var(--color-success-subtle)}
+.u-bg-v_color_warn{background:var(--color-warn)}
+.u-bg-v_panel_strong{background:var(--panel-strong)}
+.u-bg-v_surface{background:var(--surface)}
+.u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04))}
+.u-bordercollapse-collapse{border-collapse:collapse !important}
+.u-bordertopcolor-transparent{border-top-color:transparent !important}
+.u-bordertopcolor-v_accent{border-top-color:var(--accent) !important}
+.u-br-50{border-radius:50% !important}
 .u-br-v_radius{border-radius:var(--radius) !important}
+.u-br-v_radius_lg{border-radius:var(--radius-lg) !important}
 .u-br-v_radius_md{border-radius:var(--radius-md) !important}
 .u-br-v_radius_pill{border-radius:var(--radius-pill) !important}
 .u-br-v_radius_sm{border-radius:var(--radius-sm) !important}
+.u-br-v_radius_xl{border-radius:var(--radius-xl) !important}
 .u-br-v_radius_xs{border-radius:var(--radius-xs) !important}
 .u-bs-border_box{box-sizing:border-box !important}
+.u-bsh-0_1px_4px_rgba_0_0_0_0_4{box-shadow:0 1px 4px rgba(0,0,0,0.4) !important}
+.u-bsh-0_2px_6px_rgba_0_0_0_0_4{box-shadow:0 2px 6px rgba(0,0,0,0.4) !important}
+.u-bsh-0_4px_12px_rgba_0_0_0_0_5{box-shadow:0 4px 12px rgba(0,0,0,0.5) !important}
+.u-bsh-v_shadow_lg{box-shadow:var(--shadow-lg) !important}
 .u-bsh-v_shadow_sm{box-shadow:var(--shadow-sm) !important}
-.u-c-00e699{color:#00e699 !important}
-.u-c-01b4e4{color:#01b4e4 !important}
-.u-c-1C1C1E{color:#1C1C1E !important}
-.u-c-ed1c24{color:#ed1c24 !important}
-.u-c-f5c518{color:#f5c518 !important}
-.u-c-v_accent{color:var(--accent) !important}
-.u-c-v_accent_2{color:var(--accent-2) !important}
-.u-c-v_brand{color:var(--brand) !important}
-.u-c-v_color_danger_text{color:var(--color-danger-text) !important}
-.u-c-v_color_on_brand{color:var(--color-on-brand) !important}
-.u-c-v_color_success_text{color:var(--color-success-text) !important}
-.u-c-v_color_warn_text{color:var(--color-warn-text) !important}
-.u-c-v_danger{color:var(--danger) !important}
-.u-c-v_danger_v_color_danger{color:var(--danger, var(--color-danger)) !important}
-.u-c-v_muted{color:var(--muted) !important}
-.u-c-v_text{color:var(--text) !important}
-.u-c-v_text_2{color:var(--text-2) !important}
-.u-c-v_warning_v_color_warn{color:var(--warning, var(--color-warn)) !important}
+.u-c-00e699{color:#00e699}
+.u-c-01b4e4{color:#01b4e4}
+.u-c-1C1C1E{color:#1C1C1E}
+.u-c-ed1c24{color:#ed1c24}
+.u-c-f5c518{color:#f5c518}
+.u-c-red{color:red}
+.u-c-v_accent{color:var(--accent)}
+.u-c-v_accent_2{color:var(--accent-2)}
+.u-c-v_brand{color:var(--brand)}
+.u-c-v_color_danger_text{color:var(--color-danger-text)}
+.u-c-v_color_on_brand{color:var(--color-on-brand)}
+.u-c-v_color_success_text{color:var(--color-success-text)}
+.u-c-v_color_warn_text{color:var(--color-warn-text)}
+.u-c-v_danger{color:var(--danger)}
+.u-c-v_danger_v_color_danger{color:var(--danger, var(--color-danger))}
+.u-c-v_muted{color:var(--muted)}
+.u-c-v_text{color:var(--text)}
+.u-c-v_text_2{color:var(--text-2)}
+.u-c-v_warning_v_color_warn{color:var(--warning, var(--color-warn))}
 .u-cur-default{cursor:default !important}
 .u-cur-grab{cursor:grab !important}
+.u-cur-not_allowed{cursor:not-allowed !important}
 .u-cur-pointer{cursor:pointer !important}
 .u-fd-column{flex-direction:column !important}
 .u-fd-row{flex-direction:row !important}
+.u-ff-inherit{font-family:inherit !important}
 .u-ff-monospace{font-family:monospace !important}
 .u-ff-sans_serif{font-family:sans-serif !important}
 .u-ff-serif{font-family:serif !important}
+.u-ff-v_font_mono_monospace{font-family:var(--font-mono, monospace) !important}
 .u-flex-0_0_300px{flex:0 0 300px !important}
 .u-flex-0_0_auto{flex:0 0 auto !important}
 .u-flex-1{flex:1 !important}
+.u-flex-1_1_220px{flex:1 1 220px !important}
 .u-flex-1_1_320px{flex:1 1 320px !important}
+.u-flex-none{flex:none !important}
+.u-fs-13px{font-size:13px !important}
 .u-fs-2_5rem{font-size:2.5rem !important}
 .u-fs-2rem{font-size:2rem !important}
 .u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}
@@ -2074,14 +2130,27 @@ const UTILITY_CSS = `
 .u-fw-bold{font-weight:bold !important}
 .u-fw-normal{font-weight:normal !important}
 .u-fw2-wrap{flex-wrap:wrap !important}
-.u-gap-10px{gap:10px !important}
-.u-gap-12px{gap:12px !important}
-.u-gap-6px{gap:6px !important}
-.u-gap-8px{gap:8px !important}
+.u-gap-0{gap:0}
+.u-gap-10px{gap:10px}
+.u-gap-12px{gap:12px}
+.u-gap-16px{gap:16px}
+.u-gap-20px{gap:20px}
+.u-gap-24px{gap:24px}
+.u-gap-32px{gap:32px}
+.u-gap-4px{gap:4px}
+.u-gap-5px{gap:5px}
+.u-gap-6px{gap:6px}
+.u-gap-8px{gap:8px}
+.u-gridcolumn-1_1{grid-column:1 / -1 !important}
+.u-gtc-repeat_auto_fill_minmax_140px_1fr{grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)) !important}
+.u-gtc-repeat_auto_fill_minmax_90px_1fr{grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)) !important}
+.u-gtc-repeat_auto_fit_minmax_260px_1fr{grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)) !important}
+.u-gtc-repeat_auto_fit_minmax_min_100_200px_1fr{grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)) !important}
 .u-jc-center{justify-content:center !important}
 .u-jc-flex_end{justify-content:flex-end !important}
 .u-jc-flex_start{justify-content:flex-start !important}
 .u-jc-space_between{justify-content:space-between !important}
+.u-lh-1{line-height:1 !important}
 .u-lh-1_2{line-height:1.2 !important}
 .u-lh-1_35{line-height:1.35 !important}
 .u-lh-1_4{line-height:1.4 !important}
@@ -2092,65 +2161,84 @@ const UTILITY_CSS = `
 .u-ls-0_05em{letter-spacing:0.05em !important}
 .u-ls-0_5px{letter-spacing:0.5px !important}
 .u-ls-4px{letter-spacing:4px !important}
-.u-m-0{margin:0 !important}
-.u-m-0_0_10px{margin:0 0 10px !important}
-.u-m-0_0_12px{margin:0 0 12px !important}
-.u-m-0_0_12px_18px{margin:0 0 12px 18px !important}
-.u-m-0_0_14px{margin:0 0 14px !important}
-.u-m-0_0_16px{margin:0 0 16px !important}
-.u-m-0_0_18px{margin:0 0 18px !important}
-.u-m-0_0_2px{margin:0 0 2px !important}
-.u-m-0_0_4px{margin:0 0 4px !important}
-.u-m-0_0_6px{margin:0 0 6px !important}
-.u-m-0_0_8px{margin:0 0 8px !important}
-.u-m-0_6px_6px_0{margin:0 6px 6px 0 !important}
-.u-m-0_auto{margin:0 auto !important}
-.u-m-10px_0{margin:10px 0 !important}
-.u-m-10px_0_0{margin:10px 0 0 !important}
-.u-m-10px_0_4px{margin:10px 0 4px !important}
-.u-m-12px_0{margin:12px 0 !important}
-.u-m-12px_0_20px{margin:12px 0 20px !important}
-.u-m-12px_0_8px{margin:12px 0 8px !important}
-.u-m-14px_0_4px{margin:14px 0 4px !important}
-.u-m-16px_0{margin:16px 0 !important}
-.u-m-16px_0_6px{margin:16px 0 6px !important}
-.u-m-20px_0_4px{margin:20px 0 4px !important}
-.u-m-2px_0_0{margin:2px 0 0 !important}
-.u-m-2px_0_0_24px{margin:2px 0 0 24px !important}
-.u-m-32px_0_16px{margin:32px 0 16px !important}
-.u-m-3px_0_0{margin:3px 0 0 !important}
-.u-m-4px_0_0{margin:4px 0 0 !important}
-.u-m-4px_0_6px{margin:4px 0 6px !important}
-.u-m-6px_0_0{margin:6px 0 0 !important}
-.u-m-6px_0_0_24px{margin:6px 0 0 24px !important}
-.u-m-6px_0_4px{margin:6px 0 4px !important}
-.u-m-8px_0{margin:8px 0 !important}
-.u-m-8px_0_0{margin:8px 0 0 !important}
-.u-m-8px_0_14px{margin:8px 0 14px !important}
-.u-m-8px_0_16px{margin:8px 0 16px !important}
+.u-m-0{margin:0}
+.u-m-0_0_10px{margin:0 0 10px}
+.u-m-0_0_12px{margin:0 0 12px}
+.u-m-0_0_12px_18px{margin:0 0 12px 18px}
+.u-m-0_0_14px{margin:0 0 14px}
+.u-m-0_0_16px{margin:0 0 16px}
+.u-m-0_0_18px{margin:0 0 18px}
+.u-m-0_0_2px{margin:0 0 2px}
+.u-m-0_0_4px{margin:0 0 4px}
+.u-m-0_0_6px{margin:0 0 6px}
+.u-m-0_0_8px{margin:0 0 8px}
+.u-m-0_6px_6px_0{margin:0 6px 6px 0}
+.u-m-0_auto{margin:0 auto}
+.u-m-10px_0{margin:10px 0}
+.u-m-10px_0_0{margin:10px 0 0}
+.u-m-10px_0_4px{margin:10px 0 4px}
+.u-m-12px_0{margin:12px 0}
+.u-m-12px_0_0{margin:12px 0 0}
+.u-m-12px_0_20px{margin:12px 0 20px}
+.u-m-12px_0_8px{margin:12px 0 8px}
+.u-m-14px_0_4px{margin:14px 0 4px}
+.u-m-16px_0{margin:16px 0}
+.u-m-16px_0_20px{margin:16px 0 20px}
+.u-m-16px_0_6px{margin:16px 0 6px}
+.u-m-20px_0_4px{margin:20px 0 4px}
+.u-m-2px_0_0{margin:2px 0 0}
+.u-m-2px_0_0_24px{margin:2px 0 0 24px}
+.u-m-2px_4px_2px_0{margin:2px 4px 2px 0}
+.u-m-32px_0_16px{margin:32px 0 16px}
+.u-m-3px_0_0{margin:3px 0 0}
+.u-m-4px_0_0{margin:4px 0 0}
+.u-m-4px_0_1px{margin:4px 0 1px}
+.u-m-4px_0_6px{margin:4px 0 6px}
+.u-m-6px_0_0{margin:6px 0 0}
+.u-m-6px_0_0_24px{margin:6px 0 0 24px}
+.u-m-6px_0_4px{margin:6px 0 4px}
+.u-m-8px_0{margin:8px 0}
+.u-m-8px_0_0{margin:8px 0 0}
+.u-m-8px_0_0_24px{margin:8px 0 0 24px}
+.u-m-8px_0_12px{margin:8px 0 12px}
+.u-m-8px_0_14px{margin:8px 0 14px}
+.u-m-8px_0_16px{margin:8px 0 16px}
 .u-maxh-340px{max-height:340px !important}
+.u-maxh-55vh{max-height:55vh !important}
+.u-maxh-85vh{max-height:85vh !important}
 .u-maxw-100{max-width:100% !important}
 .u-maxw-220px{max-width:220px !important}
 .u-maxw-320px{max-width:320px !important}
 .u-maxw-340px{max-width:340px !important}
 .u-maxw-380px{max-width:380px !important}
+.u-maxw-400px{max-width:400px !important}
+.u-maxw-420px{max-width:420px !important}
+.u-maxw-440px{max-width:440px !important}
 .u-maxw-480px{max-width:480px !important}
 .u-maxw-500px{max-width:500px !important}
 .u-maxw-520px{max-width:520px !important}
-.u-mb-0{margin-bottom:0 !important}
-.u-mb-10px{margin-bottom:10px !important}
-.u-mb-12px{margin-bottom:12px !important}
-.u-mb-14px{margin-bottom:14px !important}
-.u-mb-16px{margin-bottom:16px !important}
-.u-mb-18px{margin-bottom:18px !important}
-.u-mb-20px{margin-bottom:20px !important}
-.u-mb-24px{margin-bottom:24px !important}
-.u-mb-2px{margin-bottom:2px !important}
-.u-mb-4px{margin-bottom:4px !important}
-.u-mb-6px{margin-bottom:6px !important}
-.u-mb-8px{margin-bottom:8px !important}
+.u-maxw-540px{max-width:540px !important}
+.u-maxw-680px{max-width:680px !important}
+.u-mb-0{margin-bottom:0}
+.u-mb-10px{margin-bottom:10px}
+.u-mb-12px{margin-bottom:12px}
+.u-mb-14px{margin-bottom:14px}
+.u-mb-16px{margin-bottom:16px}
+.u-mb-18px{margin-bottom:18px}
+.u-mb-20px{margin-bottom:20px}
+.u-mb-24px{margin-bottom:24px}
+.u-mb-2px{margin-bottom:2px}
+.u-mb-4px{margin-bottom:4px}
+.u-mb-6px{margin-bottom:6px}
+.u-mb-8px{margin-bottom:8px}
+.u-minh-120px{min-height:120px !important}
+.u-minh-30px{min-height:30px !important}
+.u-minh-38px{min-height:38px !important}
+.u-minh-44px{min-height:44px !important}
+.u-minh-70px{min-height:70px !important}
 .u-minh-unset{min-height:unset !important}
 .u-minw-0{min-width:0 !important}
+.u-minw-140px{min-width:140px !important}
 .u-minw-160px{min-width:160px !important}
 .u-minw-180px{min-width:180px !important}
 .u-minw-200px{min-width:200px !important}
@@ -2161,85 +2249,132 @@ const UTILITY_CSS = `
 .u-minw-300px{min-width:300px !important}
 .u-minw-320px{min-width:320px !important}
 .u-minw-80px{min-width:80px !important}
-.u-ml-26px{margin-left:26px !important}
-.u-ml-6px{margin-left:6px !important}
-.u-ml-auto{margin-left:auto !important}
-.u-mr-0{margin-right:0 !important}
-.u-mr-4px{margin-right:4px !important}
-.u-mr-6px{margin-right:6px !important}
-.u-mt-0{margin-top:0 !important}
-.u-mt-10px{margin-top:10px !important}
-.u-mt-12px{margin-top:12px !important}
-.u-mt-14px{margin-top:14px !important}
-.u-mt-16px{margin-top:16px !important}
-.u-mt-18px{margin-top:18px !important}
-.u-mt-20px{margin-top:20px !important}
-.u-mt-24px{margin-top:24px !important}
-.u-mt-28px{margin-top:28px !important}
-.u-mt-2px{margin-top:2px !important}
-.u-mt-32px{margin-top:32px !important}
-.u-mt-3px{margin-top:3px !important}
-.u-mt-48px{margin-top:48px !important}
-.u-mt-4px{margin-top:4px !important}
-.u-mt-6px{margin-top:6px !important}
-.u-mt-8px{margin-top:8px !important}
-.u-ov-auto{overflow:auto !important}
-.u-ov-hidden{overflow:hidden !important}
-.u-ovx-auto{overflow-x:auto !important}
+.u-minw-90px{min-width:90px !important}
+.u-minw-auto{min-width:auto !important}
+.u-ml-26px{margin-left:26px}
+.u-ml-4px{margin-left:4px}
+.u-ml-6px{margin-left:6px}
+.u-ml-8px{margin-left:8px}
+.u-ml-auto{margin-left:auto}
+.u-mr-0{margin-right:0}
+.u-mr-4px{margin-right:4px}
+.u-mr-6px{margin-right:6px}
+.u-mr-8px{margin-right:8px}
+.u-mt-0{margin-top:0}
+.u-mt-10px{margin-top:10px}
+.u-mt-12px{margin-top:12px}
+.u-mt-14px{margin-top:14px}
+.u-mt-16px{margin-top:16px}
+.u-mt-18px{margin-top:18px}
+.u-mt-20px{margin-top:20px}
+.u-mt-24px{margin-top:24px}
+.u-mt-28px{margin-top:28px}
+.u-mt-2px{margin-top:2px}
+.u-mt-32px{margin-top:32px}
+.u-mt-3px{margin-top:3px}
+.u-mt-48px{margin-top:48px}
+.u-mt-4px{margin-top:4px}
+.u-mt-6px{margin-top:6px}
+.u-mt-8px{margin-top:8px}
+.u-objectfit-cover{object-fit:cover !important}
+.u-ol-none{outline:none !important}
+.u-ov-auto{overflow:auto}
+.u-ov-hidden{overflow:hidden}
+.u-overflowwrap-anywhere{overflow-wrap:anywhere !important}
+.u-ovx-auto{overflow-x:auto}
+.u-ovy-auto{overflow-y:auto}
 .u-p-0{padding:0 !important}
 .u-p-0_0_10px{padding:0 0 10px !important}
 .u-p-0_0_12px{padding:0 0 12px !important}
 .u-p-0_0_4px{padding:0 0 4px !important}
+.u-p-0_14px_14px{padding:0 14px 14px !important}
+.u-p-0_16px{padding:0 16px !important}
+.u-p-0_18px{padding:0 18px !important}
+.u-p-0_20px{padding:0 20px !important}
 .u-p-10px{padding:10px !important}
+.u-p-10px_0{padding:10px 0 !important}
 .u-p-10px_0_12px{padding:10px 0 12px !important}
 .u-p-10px_12px{padding:10px 12px !important}
 .u-p-10px_14px{padding:10px 14px !important}
+.u-p-10px_16px{padding:10px 16px !important}
+.u-p-10px_24px{padding:10px 24px !important}
 .u-p-12px{padding:12px !important}
+.u-p-12px_0{padding:12px 0 !important}
 .u-p-12px_14px{padding:12px 14px !important}
 .u-p-12px_16px{padding:12px 16px !important}
 .u-p-12px_28px{padding:12px 28px !important}
 .u-p-14px_0{padding:14px 0 !important}
 .u-p-14px_16px{padding:14px 16px !important}
+.u-p-14px_18px{padding:14px 18px !important}
 .u-p-16px{padding:16px !important}
+.u-p-16px_18px{padding:16px 18px !important}
 .u-p-18px{padding:18px !important}
 .u-p-20px{padding:20px !important}
+.u-p-22px{padding:22px !important}
 .u-p-24px{padding:24px !important}
 .u-p-24px_16px{padding:24px 16px !important}
 .u-p-28px_16px{padding:28px 16px !important}
+.u-p-2px{padding:2px !important}
 .u-p-2px_10px{padding:2px 10px !important}
 .u-p-2px_6px{padding:2px 6px !important}
 .u-p-2px_8px{padding:2px 8px !important}
+.u-p-3px_0{padding:3px 0 !important}
+.u-p-3px_8px{padding:3px 8px !important}
 .u-p-40px{padding:40px !important}
+.u-p-4px{padding:4px !important}
 .u-p-4px_0{padding:4px 0 !important}
 .u-p-4px_10px{padding:4px 10px !important}
 .u-p-4px_10px_4px_0{padding:4px 10px 4px 0 !important}
+.u-p-4px_6px{padding:4px 6px !important}
 .u-p-4px_8px_4px_0{padding:4px 8px 4px 0 !important}
 .u-p-5px_8px{padding:5px 8px !important}
+.u-p-6px{padding:6px !important}
 .u-p-6px_10px{padding:6px 10px !important}
+.u-p-6px_12px{padding:6px 12px !important}
+.u-p-6px_14px{padding:6px 14px !important}
+.u-p-6px_16px{padding:6px 16px !important}
 .u-p-7px_12px{padding:7px 12px !important}
+.u-p-8px{padding:8px !important}
 .u-p-8px_0{padding:8px 0 !important}
 .u-p-8px_10px{padding:8px 10px !important}
 .u-p-8px_12px{padding:8px 12px !important}
+.u-p-8px_14px{padding:8px 14px !important}
 .u-p-8px_16px{padding:8px 16px !important}
+.u-p-8px_18px{padding:8px 18px !important}
+.u-p-8px_20px{padding:8px 20px !important}
+.u-p-8px_24px{padding:8px 24px !important}
+.u-p-9px_12px{padding:9px 12px !important}
+.u-p-9px_14px{padding:9px 14px !important}
 .u-pb-12px{padding-bottom:12px !important}
 .u-pb-14px{padding-bottom:14px !important}
+.u-pb-56_25{padding-bottom:56.25% !important}
 .u-pl-18px{padding-left:18px !important}
 .u-pl-38px{padding-left:38px !important}
-.u-pr-10px{padding-right:10px !important}
-.u-pr-12px{padding-right:12px !important}
-.u-pr-8px{padding-right:8px !important}
+.u-pr-10px{padding-right:10px}
+.u-pr-12px{padding-right:12px}
+.u-pr-38px{padding-right:38px}
+.u-pr-4px{padding-right:4px}
+.u-pr-8px{padding-right:8px}
+.u-pt-10px{padding-top:10px !important}
 .u-pt-12px{padding-top:12px !important}
 .u-pt-14px{padding-top:14px !important}
 .u-pt-4px{padding-top:4px !important}
+.u-rs-vertical{resize:vertical !important}
 .u-ta-center{text-align:center !important}
 .u-ta-left{text-align:left !important}
 .u-ta-right{text-align:right !important}
+.u-td-none{text-decoration:none !important}
 .u-to-ellipsis{text-overflow:ellipsis !important}
+.u-touchaction-manipulation{touch-action:manipulation !important}
+.u-tt-none{text-transform:none !important}
 .u-tt-uppercase{text-transform:uppercase !important}
-.u-us-all{user-select:all !important}
+.u-us-all{user-select:all}
+.u-us-none{user-select:none}
+.u-va-middle{vertical-align:middle !important}
 .u-va-top{vertical-align:top !important}
 .u-wb-break_all{word-break:break-all !important}
 .u-wb-break_word{word-break:break-word !important}
+.u-ws-normal{white-space:normal !important}
 .u-ws-nowrap{white-space:nowrap !important}
 .u-ws-pre_wrap{white-space:pre-wrap !important}
 `;
@@ -13226,7 +13361,7 @@ async function renderAdminDashboard(env) {
         // attribute escaping here the same way it already does for the two
         // <td> values above; resetCreatorKey reads the values back off the
         // element at click time instead of receiving them as literals.
-        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:var(--font-size-sm);" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
+        `<td><button type="button" class="lc-btn secondary u-p-4px_10px u-fs-v_font_size_sm" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
     )
     .join("");
   const creatorTruncatedNote = shownCreatorCount < totalCreatorCount
@@ -13567,8 +13702,8 @@ ${UTILITY_CSS}
         <option value="idea">Idea</option>
         <option value="other">Other</option>
       </select>
-      <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:var(--font-size-base); resize:vertical;"></textarea>
-      <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
+      <textarea id="newFeedbackMessage" placeholder="What did you find?" class="u-minh-70px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1px_solid_rgba_0_0_0_0_15 u-ff-inherit u-fs-v_font_size_base u-rs-vertical" style="width:100%;"></textarea>
+      <div class="u-mt-8px u-ai-center u-gap-10px" style="display:flex;">
         <button type="button" class="admin-select u-cur-pointer" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
         <span id="newFeedbackStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
@@ -13579,21 +13714,21 @@ ${UTILITY_CSS}
   <!-- Edit Feedback Modal -->
   <div id="editFeedbackModal" class="modal-overlay" style="display:none;">
     <div class="modal-card u-maxw-500px">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
         <h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-c-v_text">Edit Feedback</h3>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeEditFeedbackModal">&#x2715;</button>
       </div>
       <input type="hidden" id="editFeedbackId">
-      <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:6px;">Category</label>
-      <select class="admin-select" id="editFeedbackCategory" style="margin-bottom:14px; width:100%; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text);">
+      <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px" style="display:block;">Category</label>
+      <select class="admin-select u-mb-14px u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text" id="editFeedbackCategory" style="width:100%;">
         <option value="bug">bug</option>
         <option value="improvement">improvement</option>
         <option value="idea">idea</option>
         <option value="other">other</option>
       </select>
-      <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:6px;">Message</label>
-      <textarea id="editFeedbackMessage" style="width:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-family:inherit; font-size:var(--font-size-base); resize:vertical; margin-bottom:16px; outline:none;"></textarea>
-      <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px" style="display:block;">Message</label>
+      <textarea id="editFeedbackMessage" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-16px u-ol-none" style="width:100%;"></textarea>
+      <div class="u-jc-flex_end u-gap-10px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
       </div>
@@ -13617,7 +13752,7 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Find a provider's id</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div class="u-gap-8px u-ai-center" style="display:flex;">
         <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
         <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
         <span id="providerLookupStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
@@ -13625,12 +13760,12 @@ ${UTILITY_CSS}
       <div id="providerLookupResults" class="u-mt-10px"></div>
     </div>
 
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+    <div class="u-gap-8px u-ai-center u-mb-16px u-fw2-wrap" style="display:flex;">
       <label class="u-fs-v_font_size_sm u-c-v_muted">Provider id
-        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select" style="margin-right:0; width:60px;" value="8" placeholder="8">
+        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select u-mr-0" style="width:60px;" value="8" placeholder="8">
       </label>
       <label class="u-fs-v_font_size_sm u-c-v_muted">Region
-        <input type="text" id="netflixPreviewRegionInput" class="admin-select" style="margin-right:0; width:70px; text-transform:uppercase;" value="US" maxlength="2" placeholder="US">
+        <input type="text" id="netflixPreviewRegionInput" class="admin-select u-mr-0 u-tt-uppercase" style="width:70px;" value="US" maxlength="2" placeholder="US">
       </label>
       <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
       <span id="netflixPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
@@ -13642,17 +13777,17 @@ ${UTILITY_CSS}
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
-      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); margin-bottom:14px;">
+      <label class="u-ai-center u-gap-8px u-fw-600 u-fs-v_font_size_base u-mb-14px" style="display:flex;">
         <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
       </label>
-      <label style="display:block; font-size:var(--font-size-sm); color:var(--muted); margin-bottom:12px;">Monthly goal (US dollars)
-        <input type="number" id="supportGoalAmount" class="admin-select" min="0" max="100000" step="1" style="display:block; margin:4px 0 0; width:160px;" placeholder="60">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-12px" style="display:block;">Monthly goal (US dollars)
+        <input type="number" id="supportGoalAmount" class="admin-select u-m-4px_0_0" min="0" max="100000" step="1" style="display:block; width:160px;" placeholder="60">
       </label>
-      <label style="display:block; font-size:var(--font-size-sm); color:var(--muted); margin-bottom:6px;">Given so far this month (US dollars)
-        <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Given so far this month (US dollars)
+        <input type="number" id="supportGoalRaised" class="admin-select u-m-4px_0_0" min="0" step="0.01" style="display:block; width:160px;" placeholder="0">
       </label>
       <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
         <span id="supportGoalStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
@@ -13678,13 +13813,13 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Sweep status</div>
       <div id="nosStatus" class="u-fs-v_font_size_sm u-c-v_muted">Loading&hellip;</div>
-      <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="u-mt-12px u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
         <label class="u-fs-v_font_size_sm u-c-v_muted">Pages
-          <input type="number" id="nosSweepUnits" class="admin-select" style="margin-right:0; width:70px;" value="30" min="1" max="100">
+          <input type="number" id="nosSweepUnits" class="admin-select u-mr-0" style="width:70px;" value="30" min="1" max="100">
         </label>
         <button type="button" class="admin-select u-cur-pointer" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-warn-text); border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
+        <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_warn_text u-bdc-rgba_255_149_0_0_4" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
         <span id="nosSweepStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
@@ -13703,7 +13838,7 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Add / Sync Title to Catalog</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <input type="text" id="nosAddTitleInput" class="admin-select" placeholder="Title, IMDb ID (tt...) or TMDB ID" style="width:240px;">
         <select class="admin-select" id="nosAddServiceSelect">
           <option value="netflix">Netflix</option>
@@ -13728,7 +13863,7 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Preview the catalog</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+      <div class="u-gap-8px u-ai-center u-mb-12px u-fw2-wrap" style="display:flex;">
         <select class="admin-select" id="nosPreviewType" data-act="nosResetAndPreview">
           <option value="all" selected>All (Movies &amp; Shows)</option>
           <option value="movie">Movies</option>
@@ -13753,9 +13888,9 @@ ${UTILITY_CSS}
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
+        <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_4" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
         <span id="cpStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
@@ -14137,13 +14272,13 @@ ${UTILITY_CSS}
       overlay.id = 'resetKeyOverlay';
       overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999;';
       overlay.innerHTML =
-        '<div style="background:var(--color-on-brand); border-radius:var(--radius-md); padding:24px; max-width:380px; width:90%;">' +
+        '<div class="u-bg-v_color_on_brand u-br-v_radius_md u-p-24px u-maxw-380px" style="width:90%;">' +
           '<h3 class="u-mt-0">New key for ' + escapeHtmlAdmin(displayName) + '</h3>' +
           '<p class="u-c-v_muted u-fs-v_font_size_base">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
           '<div id="resetKeyDisplay" class="u-ff-monospace u-fs-v_font_size_lg u-bg-F2F2F7 u-br-v_radius_sm u-p-10px u-ta-center u-m-12px_0 u-us-all">' + escapeHtmlAdmin(creatorKey) + '</div>' +
-          '<div style="display:flex; gap:8px;">' +
-            '<button type="button" class="lc-btn secondary" style="flex:1;" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
-            '<button type="button" class="lc-btn" style="flex:1;" data-act="closeResetKeyOverlay">Done</button>' +
+          '<div class="u-gap-8px" style="display:flex;">' +
+            '<button type="button" class="lc-btn secondary u-flex-1" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
+            '<button type="button" class="lc-btn u-flex-1" data-act="closeResetKeyOverlay">Done</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -15085,7 +15220,7 @@ ${UTILITY_CSS}
             '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+        results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
           '<thead><tr class="u-c-v_muted u-ta-left">' +
           '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
           '<th class="u-pr-8px u-ta-right">Items</th>' +
@@ -15312,7 +15447,7 @@ ${UTILITY_CSS}
               '</tr>';
           }).join('');
           if (reset || !results.querySelector('tbody')) {
-            results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+            results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
               '<thead><tr class="u-c-v_muted u-ta-left">' +
               '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
               '<th class="u-pr-8px u-ta-right">Items</th>' +
@@ -15378,7 +15513,7 @@ ${UTILITY_CSS}
             '</td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+        results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
           '<thead><tr class="u-c-v_muted u-ta-left">' +
           '<th class="u-pr-8px">Code</th><th class="u-pr-8px">Name</th>' +
           '<th class="u-pr-8px">Owner</th>' +
@@ -15697,7 +15832,7 @@ ${UTILITY_CSS}
           'Unapplied migration' + ((data.pendingMigrations || []).length === 1 ? '' : 's') + ': ' +
           escapeHtmlAdmin((data.pendingMigrations || []).join(', ')) +
           '. Apply the matching file(s) under <code>migrations/</code> in the D1 Console, in filename order.</p>' +
-          '<div class="u-ovx-auto"><table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+          '<div class="u-ovx-auto"><table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
           '<thead><tr class="u-c-v_muted u-ta-left"><th class="u-pr-10px">Migration</th><th class="u-pr-10px">Missing</th><th>What does not work without it</th></tr></thead>' +
           '<tbody>' + rows + '</tbody></table></div>' + dbStatsNote + indexNote;
       } catch (e) {
@@ -16123,7 +16258,7 @@ ${UTILITY_CSS}
             }
 
             return dayHeader + '<tr><td>' + (skip + i + 1) + '</td>' +
-              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" style="width:38px; height:56px; object-fit:cover; border-radius:var(--radius-xs); display:block;">' : '') + '</td>' +
+              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" class="u-objectfit-cover u-br-v_radius_xs" style="width:38px; height:56px; display:block;">' : '') + '</td>' +
               '<td><strong>' + escapeHtmlAdmin(it.name || '') + '</strong></td>' +
               '<td>' + typeBadge + '</td>' +
               '<td>' + svcBadges + '</td>' +
@@ -16176,8 +16311,8 @@ ${UTILITY_CSS}
             '<td>' + (net.cached ? net.itemCount : '--') + '</td>' +
             '<td class="u-ws-nowrap">' + cpAgoText(net.builtAt) + '</td>' +
             '<td class="u-ws-nowrap">' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm);" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm); color:var(--color-danger-text);" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
+              '<button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
+              '<button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm u-c-v_color_danger_text" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -16350,9 +16485,9 @@ ${UTILITY_CSS}
         '<div class="u-mt-10px">' + messagesHtml + '</div>' +
         '<div class="feedback-meta u-mt-8px">' + when + ' \u2014 ' + who + contact + '</div>' +
         (!isSelfLogged ?
-          '<div style="margin-top:10px; display:flex; gap:8px; align-items:center;">' +
+          '<div class="u-mt-10px u-gap-8px u-ai-center" style="display:flex;">' +
             '<input type="text" id="adminReplyInput_' + escapeHtmlAdmin(f.id) + '" class="admin-select fb-reply-input u-flex-1 u-mr-0 u-p-8px_10px" data-id="' + escapeHtmlAdmin(f.id) + '" placeholder="Type reply to ' + who + '...">' +
-            '<button type="button" class="secondary lc-btn fb-reply-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="padding:6px 14px; font-size:var(--font-size-sm);">Reply</button>' +
+            '<button type="button" class="secondary lc-btn fb-reply-btn u-p-6px_14px u-fs-v_font_size_sm" data-id="' + escapeHtmlAdmin(f.id) + '">Reply</button>' +
           '</div>' : ''
         ) +
       '</div>';
@@ -16531,16 +16666,16 @@ ${UTILITY_CSS}
       const icon = isSuccess ? '\u2713' : '\u2715';
       const iconColor = isSuccess ? 'var(--success, #34C759)' : 'var(--danger, #FF3B30)';
       const html =
-        '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
+        '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+          '<h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-ai-center u-gap-8px u-c-v_text" style="display:flex;">' +
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
-        '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-          '<button type="button" class="lc-btn primary" data-act="closeAdminModal" style="min-width:80px;">OK</button>' +
+        '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+          '<button type="button" class="lc-btn primary u-minw-80px" data-act="closeAdminModal">OK</button>' +
         '</div>';
       showAdminModal(html);
     }
@@ -16550,15 +16685,15 @@ ${UTILITY_CSS}
       const iconColor = isDanger ? 'var(--danger, #FF3B30)' : 'var(--accent, #007AFF)';
       const btnClass = isDanger ? 'lc-btn danger' : 'lc-btn primary';
       const html =
-        '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
+        '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+          '<h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-ai-center u-gap-8px u-c-v_text" style="display:flex;">' +
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
-        '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
+        '<div class="u-jc-flex_end u-gap-10px" style="display:flex;">' +
           '<button type="button" class="lc-btn secondary" data-act="closeAdminModal">Cancel</button>' +
           '<button type="button" class="' + btnClass + '" id="adminConfirmOkBtn">' + escapeHtmlAdmin(confirmBtnText || 'Confirm') + '</button>' +
         '</div>';
@@ -29610,7 +29745,7 @@ function buildAppShellNavHtml(style) {
     return `<a ${attrs}>\n      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">\n        ${APP_SHELL_TAB_ICONS[t.id] || ""}\n      </svg>\n      ${t.label}\n    </a>`;
   }).join("\n    ");
   if (isDesktop) {
-    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" style="display:flex; gap:8px; overflow-x:auto; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
+    return `<div class="tab-bar" id="appShellDesktopNav">\n    <nav aria-label="Main navigation" class="u-gap-8px u-ovx-auto" style="display:flex; width:100%;">\n    ${items}\n    </nav>\n  </div>`;
   }
   return `<nav class="bottom-nav" id="appShellMobileNav" aria-label="Main navigation">\n    ${items}\n  </nav>`;
 }
@@ -30522,10 +30657,10 @@ ${UTILITY_CSS}
     body { padding: calc(12px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
     .bottom-nav {
       display: flex;
-      position: fixed !important;
-      bottom: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
       z-index: var(--z-nav);
       background: rgba(255,255,255,0.94);
       -webkit-backdrop-filter: saturate(180%) blur(20px);
@@ -30548,10 +30683,10 @@ ${UTILITY_CSS}
       gap: var(--space-1);
       padding: var(--space-1) var(--space-0-5);
       min-height: 62px;
-      background: transparent !important;
-      border: none !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
       color: var(--muted);
       font-size: var(--font-size-xs);
       font-weight: 600;
@@ -30714,14 +30849,14 @@ ${UTILITY_CSS}
     right: 12px;
     width: 22px;
     height: 22px;
-    min-height: 22px !important;
-    max-height: 22px !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border: none !important;
-    border-radius: 50% !important;
-    background: transparent !important;
-    box-shadow: none !important;
+    min-height: 22px;
+    max-height: 22px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
     color: var(--muted);
     opacity: 0.55;
     align-items: center;
@@ -30733,8 +30868,8 @@ ${UTILITY_CSS}
   .search-clear-btn:hover {
     opacity: 1;
     color: var(--text);
-    background: transparent !important;
-    border: none !important;
+    background: transparent;
+    border: none;
     transform: scale(1.12);
   }
   .search-clear-btn:active {
@@ -30790,16 +30925,16 @@ ${UTILITY_CSS}
     color: var(--color-on-brand);
     flex: none;
   }
-  .provider-chip-icon.netflix { background: #E50914; }
-  .provider-chip-icon.prime   { background: #00A8E1; }
-  .provider-chip-icon.apple   { background: #000000; color: #FFFFFF; }
-  .provider-chip-icon.disney  { background: #113CCF; }
-  .provider-chip-icon.max     { background: #5B00C5; }
-  .provider-chip-icon.hulu    { background: #1CE783; color: #000; }
-  .provider-chip-icon.paramount { background: #0064FF; }
-  .provider-chip-icon.peacock { background: #000000; color: #FFFFFF; }
-  .provider-chip-icon.discovery { background: #002244; }
-  .provider-chip-icon.kids { background: #FF9900; }
+  .provider-chip-icon.netflix { background: var(--brand-netflix); }
+  .provider-chip-icon.prime   { background: var(--brand-prime); }
+  .provider-chip-icon.apple   { background: var(--brand-apple); color: var(--color-on-brand); }
+  .provider-chip-icon.disney  { background: var(--brand-disney); }
+  .provider-chip-icon.max     { background: var(--brand-max); }
+  .provider-chip-icon.hulu    { background: var(--brand-hulu); color: var(--brand-hulu-text); }
+  .provider-chip-icon.paramount { background: var(--brand-paramount); }
+  .provider-chip-icon.peacock { background: var(--brand-peacock); color: var(--color-on-brand); }
+  .provider-chip-icon.discovery { background: var(--brand-discovery); }
+  .provider-chip-icon.kids { background: var(--brand-kids); }
   /* --- Discover Chart Cards & Quick Grids -------------------------------- */
   .quick-grid {
     display: grid;
@@ -30995,20 +31130,20 @@ ${UTILITY_CSS}
     align-items: center;
   }
   .qa-add-all-btn {
-    font-size: var(--font-size-sm) !important;
-    font-weight: 600 !important;
-    padding: var(--space-1) var(--space-3) !important;
-    border-radius: var(--radius-pill) !important;
-    color: var(--accent) !important;
-    border: 1.5px solid var(--border-strong) !important;
-    background: var(--surface) !important;
-    box-shadow: var(--shadow-sm) !important;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
+    color: var(--accent);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     transition: background-color var(--duration-base) ease, color var(--duration-base) ease, border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
   }
   .qa-add-all-btn:hover:not(:disabled) {
-    background: var(--color-brand-subtle) !important;
-    border-color: var(--accent) !important;
-    color: var(--accent-hover) !important;
+    background: var(--color-brand-subtle);
+    border-color: var(--accent);
+    color: var(--accent-hover);
   }
   /* The line under a Quick Add card's title. Shared with Channels -> Quick
      Add, which is where the pattern comes from -- one class so a change to
@@ -31538,43 +31673,43 @@ ${UTILITY_CSS}
   }
   /* --- Soft Brand-Tinted Add/Remove Action Buttons (one shared selector list) --- */
   .list-add-btn:not(.is-added):not(:disabled) {
-    background: var(--color-brand-wash) !important;
-    border-color: var(--color-brand-line) !important;
-    color: var(--color-brand) !important;
+    background: var(--color-brand-wash);
+    border-color: var(--color-brand-line);
+    color: var(--color-brand);
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn:not(.is-added):hover:not(:disabled) {
-    background: var(--color-brand-tint) !important;
-    border-color: var(--color-brand) !important;
-    color: var(--color-brand) !important;
+    background: var(--color-brand-tint);
+    border-color: var(--color-brand);
+    color: var(--color-brand);
   }
   .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
-    background: var(--color-brand-tint) !important;
+    background: var(--color-brand-tint);
   }
   .list-add-btn.is-added {
-    color: var(--color-danger-text) !important;
-    background: var(--color-danger-wash) !important;
-    border-color: var(--color-danger-line) !important;
+    color: var(--color-danger-text);
+    background: var(--color-danger-wash);
+    border-color: var(--color-danger-line);
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn.is-added:hover:not(:disabled) {
-    background: var(--color-danger-tint) !important;
-    border-color: var(--color-danger) !important;
-    color: var(--color-danger-text) !important;
+    background: var(--color-danger-tint);
+    border-color: var(--color-danger);
+    color: var(--color-danger-text);
   }
   .list-add-btn.is-added:active:not(:disabled) {
     transform: scale(0.97);
-    background: var(--color-danger-tint) !important;
+    background: var(--color-danger-tint);
   }
   .channelQuickAddBtn.is-added {
-    border-color: var(--color-brand) !important;
-    color: var(--color-brand) !important;
-    background: var(--color-brand-subtle) !important;
+    border-color: var(--color-brand);
+    color: var(--color-brand);
+    background: var(--color-brand-subtle);
     font-weight: 600;
   }
   .channelQuickAddBtn.is-added:hover:not(:disabled) {
-    background: var(--color-brand-tint) !important;
+    background: var(--color-brand-tint);
   }
   .lc-btn.view-btn {
     color: var(--color-brand);
@@ -32437,7 +32572,7 @@ ${UTILITY_CSS}
   }
   .cw-date-badge-finale-date {
     background: rgba(20, 20, 24, 0.92);
-    color: #ffd166;
+    color: var(--color-badge-finale-text);
     border: 1px solid rgba(255, 149, 0, 0.35);
     top: auto;
     bottom: 4px;
@@ -32662,26 +32797,26 @@ ${UTILITY_CSS}
 
   /* --- Merged Channels Chips & Inline Add Selector ------------------------ */
   .merge-chip-remove-btn {
-    background: transparent !important;
-    border: none !important;
-    color: var(--muted) !important;
-    font-size: var(--font-size-base) !important;
-    font-weight: 700 !important;
-    line-height: 1 !important;
-    cursor: pointer !important;
-    padding: 0 0 0 var(--space-1) !important;
-    margin: 0 !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    transition: color var(--duration-base) !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    width: auto !important;
-    height: auto !important;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0 0 var(--space-1);
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--duration-base);
+    border-radius: 0;
+    box-shadow: none;
+    width: auto;
+    height: auto;
   }
   .merge-chip-remove-btn:hover {
-    color: var(--danger) !important;
+    color: var(--danger);
   }
   .merge-add-channel-select {
     padding: var(--space-1) var(--space-2);
@@ -33377,9 +33512,9 @@ ${UTILITY_CSS}
     background: var(--color-border-strong);
   }
 
-  .btn-stremio { background: linear-gradient(135deg, #9B8FFF, #6D48FF); color: var(--color-on-brand); border: none; }
-  .btn-nuvio   { background: linear-gradient(135deg, #FF5E3A, #FF2A68); color: var(--color-on-brand); border: none; }
-  .btn-wako    { background: linear-gradient(135deg, #007AFF, #34AADC); color: var(--color-on-brand); border: none; }
+  .btn-stremio { background: linear-gradient(135deg, var(--brand-stremio-from), var(--brand-stremio-to)); color: var(--color-on-brand); border: none; }
+  .btn-nuvio   { background: linear-gradient(135deg, var(--brand-nuvio-from), var(--brand-nuvio-to)); color: var(--color-on-brand); border: none; }
+  .btn-wako    { background: linear-gradient(135deg, var(--brand-wako-from), var(--brand-wako-to)); color: var(--color-on-brand); border: none; }
   .actions { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); }
 
   /* Catalog actions bar: side-by-side on mobile, spread on desktop */
@@ -33883,12 +34018,12 @@ ${UTILITY_CSS}
   }
   .ec-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-strong); }
   .ec-btn.danger {
-    color: var(--color-danger, #d70015);
+    color: var(--color-danger);
     border-color: var(--color-danger-line);
     background: var(--color-danger-wash);
   }
   :root.dark-theme .ec-btn.danger {
-    color: var(--color-danger, #ff453a);
+    color: var(--color-danger);
     border-color: var(--color-danger-line);
     background: var(--color-danger-tint);
   }
@@ -34005,21 +34140,21 @@ ${UTILITY_CSS}
     line-height: inherit;
   }
   .live-preview-shelf-title .text-action-btn:hover:not(:disabled) {
-    background: transparent !important;
-    color: var(--accent) !important;
+    background: transparent;
+    color: var(--accent);
     text-decoration: underline;
-    box-shadow: none !important;
-    transform: none !important;
+    box-shadow: none;
+    transform: none;
   }
   .live-preview-shelf-title .text-action-btn:active:not(:disabled) {
-    background: transparent !important;
-    color: var(--accent) !important;
-    transform: none !important;
+    background: transparent;
+    color: var(--accent);
+    transform: none;
   }
   .live-preview-shelf-title .text-action-btn:disabled {
     opacity: 0.35;
     cursor: default;
-    background: transparent !important;
+    background: transparent;
     text-decoration: none;
   }
   .live-preview-posters {
@@ -34147,7 +34282,7 @@ ${UTILITY_CSS}
   .season-header-poster-placeholder {
     width: 80px;
     height: 120px;
-    background: #333;
+    background: var(--color-bg-sunken);
     border-radius: var(--radius-xs);
     flex-shrink: 0;
   }
@@ -34379,11 +34514,11 @@ ${UTILITY_CSS}
   }
   .custom-list-type-pill:has(input:checked),
   .custom-list-type-pill.active {
-    background: var(--color-brand-subtle) !important;
-    border-color: var(--color-brand-line) !important;
-    color: var(--accent) !important;
-    font-weight: 700 !important;
-    box-shadow: none !important;
+    background: var(--color-brand-subtle);
+    border-color: var(--color-brand-line);
+    color: var(--accent);
+    font-weight: 700;
+    box-shadow: none;
   }
   :root.dark-theme .custom-list-type-pill:has(input:checked),
   :root.dark-theme .custom-list-type-pill.active {
@@ -34865,10 +35000,10 @@ ${appShellMobileNavHtml}
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
     <div class="u-mb-20px">
-      <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: var(--font-size-base);">&larr; Back</button>
+      <button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_base" data-act="navigateBackFromDetail">&larr; Back</button>
     </div>
     <div class="detail-header-info u-mb-14px">
-      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div class="u-ai-center u-gap-10px u-fw2-wrap" style="display:flex;">
         <!-- A list opened before its own "nice" name is available (e.g. a
              row whose configured name is itself a pasted URL) shows that
              raw URL here. As a flex item, an <h1> defaults to
@@ -34877,32 +35012,32 @@ ${appShellMobileNavHtml}
              can exceed the viewport on mobile, forcing this whole row
              (and the like/+Add buttons with it, via their margin-left:
              auto) past the screen edge instead of wrapping in place. -->
-        <h1 id="detailTitle" style="min-width:0; overflow-wrap:anywhere;">List Title</h1>
-        <div style="display:flex; gap:10px; align-items:center; margin-left:auto;">
+        <h1 id="detailTitle" class="u-minw-0 u-overflowwrap-anywhere">List Title</h1>
+        <div class="u-gap-10px u-ai-center u-ml-auto" style="display:flex;">
           <button type="button" class="lc-btn searchLikeExternalBtn" id="detailLikeBtn" aria-label="Like this list">&#9825;</button>
           <button type="button" class="lc-btn list-add-btn primary" id="detailAddBtn">+ Add</button>
         </div>
       </div>
-      <p id="detailSubtitle" style="margin-top:4px;">Loading&hellip;</p>
+      <p id="detailSubtitle" class="u-mt-4px">Loading&hellip;</p>
     </div>
     <div id="detailFilterBar" class="detail-filter-bar" style="display:none;">
-      <div id="whFilterControls" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
+      <div id="whFilterControls" class="u-gap-6px u-fw2-wrap u-ai-center" style="display:flex; width:100%;">
         <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
-        <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:var(--font-size-sm); color:var(--text); user-select:none;">
+        <label class="wh-group-shows-toggle u-ai-center u-gap-6px u-ml-8px u-cur-pointer u-fs-v_font_size_sm u-c-v_text u-us-none" style="display:inline-flex;">
           <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" class="u-acc-v_accent u-cur-pointer">
           <span>Shows instead of episodes</span>
         </label>
         <button type="button" class="btn-danger btn-sm u-ml-auto" id="whClearHistoryBtn" data-act="clearWatchHistoryAll">Clear History</button>
       </div>
-      <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
+      <div id="genericTypeFilterControls" class="u-gap-6px u-fw2-wrap u-ai-center" style="display:none; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
-        <button type="button" class="btn-danger btn-sm" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; margin-left:auto;">Clear All</button>
+        <button type="button" class="btn-danger btn-sm u-ml-auto" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none;">Clear All</button>
       </div>
-      <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
+      <div id="whSortControls" class="u-ai-center u-gap-8px" style="display:flex;">
         <label for="whSortSelect" class="u-fs-v_font_size_xs u-c-v_muted u-fw-700 u-tt-uppercase u-ls-0_02em">Sort</label>
         <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
@@ -34918,21 +35053,21 @@ ${appShellMobileNavHtml}
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
     <button type="button" class="item-back-btn" data-act="navigateBackFromDetail" aria-label="Back">&larr; Back</button>
-    <div id="itemDetailsBody" style="display: flex; flex-direction: column; gap: 24px;">
+    <div id="itemDetailsBody" class="u-fd-column u-gap-24px" style="display:flex;">
       <!-- Filled dynamically -->
     </div>
   </div>
 
-  <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createListModalTitle">Create List</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
       <div class="u-mb-12px">
-        <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Save To</label>
-        <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act="onChangeCreateListDestination">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Save To</label>
+        <select id="createListModalDestination" aria-label="Destination" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act="onChangeCreateListDestination">
           <option value="custom">My Lists (Local / Profile)</option>
           <option value="trakt">Trakt List</option>
           <option value="tmdb">TMDB List</option>
@@ -34942,18 +35077,18 @@ ${appShellMobileNavHtml}
       </div>
       
       <div class="u-mb-12px">
-        <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
-        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">List Name *</label>
+        <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
       <div class="u-mb-12px">
-        <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); resize:vertical; font-family:inherit;"></textarea>
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
       
       <div class="u-mb-14px">
-        <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
-        <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Content Type</label>
+        <select id="createListModalType" aria-label="Content type" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
           <option value="mixed">Mixed (Movies &amp; Shows)</option>
@@ -34961,92 +35096,92 @@ ${appShellMobileNavHtml}
       </div>
       
       <div id="createListModalPublicWrap" class="u-mb-18px">
-        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
+        <label class="u-ai-flex_start u-gap-10px u-cur-pointer" style="display:flex;">
           <input type="checkbox" id="createListModalPublic" class="u-mt-3px u-fsh-0">
           <div>
-            <span style="font-size:var(--font-size-base); font-weight:600; color:var(--text); display:block;">Make list public</span>
-            <span style="font-size:var(--font-size-xs); color:var(--muted); display:block; margin-top:2px; line-height:1.35;">When enabled, this list is visible on your public creator profile and community directory.</span>
+            <span class="u-fs-v_font_size_base u-fw-600 u-c-v_text" style="display:block;">Make list public</span>
+            <span class="u-fs-v_font_size_xs u-c-v_muted u-mt-2px u-lh-1_35" style="display:block;">When enabled, this list is visible on your public creator profile and community directory.</span>
           </div>
         </label>
       </div>
       
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="createListModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitCreateListModal">Create</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="createListModalBtn" style="opacity:0.5;" disabled data-act="submitCreateListModal">Create</button>
       </div>
     </div>
   </div>
 
   <!-- Add Catalog Modal -->
-  <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">New Catalog</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
       </div>
       
       <div class="u-mb-12px">
-        <label for="addShelfModalName" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog Name</label>
-        <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="validateAddShelfModal">
+        <label for="addShelfModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Catalog Name</label>
+        <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="validateAddShelfModal">
       </div>
       
       <div class="u-mb-12px">
-        <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog URL</label>
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Catalog URL</label>
         <div id="addShelfModalLinksContainer">
-          <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <div class="add-shelf-link-row u-ai-center u-gap-8px u-mb-8px" style="display:flex;">
             <input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
-        <button type="button" class="lc-btn secondary" style="width: 100%; font-size: var(--font-size-sm); padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
-        <small style="display:block; color:var(--muted); font-size:var(--font-size-xs); margin-top:4px;">Combine multiple list URLs into a single catalog row on your home screen.</small>
+        <button type="button" class="lc-btn secondary u-fs-v_font_size_sm u-p-6px_12px u-mt-4px" style="width:100%;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
+        <small class="u-c-v_muted u-fs-v_font_size_xs u-mt-4px" style="display:block;">Combine multiple list URLs into a single catalog row on your home screen.</small>
       </div>
       
       <div class="u-mb-16px">
-        <label for="addShelfModalType" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
-        <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act="validateAddShelfModal">
+        <label for="addShelfModalType" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Content Type</label>
+        <select id="addShelfModalType" aria-label="Catalog type" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
           <option value="series">Shows</option>
         </select>
       </div>
       
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="appActHideAddShelfModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="addShelfModalBtn" style="opacity: 0.5; min-width: 80px;" disabled data-act="submitAddShelfModal">Add Catalog</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="addShelfModalBtn" style="opacity:0.5;" disabled data-act="submitAddShelfModal">Add Catalog</button>
       </div>
     </div>
   </div>
 
   <!-- Import List Modal -->
-  <div id="importListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import List from Link</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportListModal">&#x2715;</button>
       </div>
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
       <div class="u-mb-12px">
-        <label for="modalCustomListImportUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List URL</label>
-        <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+        <label for="modalCustomListImportUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">List URL</label>
+        <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
       </div>
       <div class="u-mb-14px">
-        <label for="modalCustomListImportNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name (Optional)</label>
-        <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+        <label for="modalCustomListImportNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">List Name (Optional)</label>
+        <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
       </div>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:18px;">
+      <label class="u-ai-center u-gap-8px u-cur-pointer u-mb-18px" style="display:flex;">
         <input type="checkbox" id="modalCustomListImportSyncCheck" checked>
         <span class="u-fs-v_font_size_sm u-c-v_text">Keep custom list synced with external link</span>
       </label>
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeImportListModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="modalCustomListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import List</button>
+        <button type="button" class="lc-btn primary u-minw-90px" id="modalCustomListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import List</button>
       </div>
     </div>
   </div>
 
   <!-- Import Channel Modal -->
-  <div id="importChannelModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
-    <div class="modal-card" style="width: 100%; max-width: 440px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-440px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Channel</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportChannelModal">&#x2715;</button>
       </div>
@@ -35061,20 +35196,20 @@ ${appShellMobileNavHtml}
       <div id="importChannelPanelLink">
         <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
         <div class="u-mb-12px">
-          <label for="modalChannelImportUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Show List URL</label>
-          <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+          <label for="modalChannelImportUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Show List URL</label>
+          <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
         <div class="u-mb-12px">
-          <label for="modalChannelImportNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Name</label>
-          <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+          <label for="modalChannelImportNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Channel Name</label>
+          <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
-        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:18px;">
+        <label class="u-ai-flex_start u-gap-8px u-cur-pointer u-mb-18px" style="display:flex;">
           <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked class="u-mt-2px">
           <span class="u-fs-v_font_size_sm u-c-v_text u-lh-1_35">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
         </label>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
-          <button type="button" class="lc-btn primary" id="modalChannelImportBtn" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Import Channel</button>
+          <button type="button" class="lc-btn primary u-minw-90px" id="modalChannelImportBtn" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import Channel</button>
         </div>
       </div>
 
@@ -35082,41 +35217,41 @@ ${appShellMobileNavHtml}
       <div id="importChannelPanelCode" style="display:none;">
         <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
         <div class="u-mb-14px">
-          <label for="modalChannelShareCodeInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Share Link or Code</label>
-          <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+          <label for="modalChannelShareCodeInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Channel Share Link or Code</label>
+          <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
         <div id="modalChannelShareImportStatus" class="u-mb-14px u-fs-v_font_size_sm"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
-          <button type="button" class="lc-btn primary" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Add Channel</button>
+          <button type="button" class="lc-btn primary u-minw-90px" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add Channel</button>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="selectListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index: 10001; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
-    <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-maxh-85vh" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <div>
           <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Add / Remove from Lists</h2>
           <p class="u-m-4px_0_0 u-fs-v_font_size_sm u-c-v_muted">Check to add, uncheck to remove.</p>
         </div>
         <button type="button" class="modal-close-x" aria-label="Close" id="selectListModalCloseBtn">&#x2715;</button>
       </div>
-      <div id="selectListModalBody" style="display: flex; flex-direction: column; gap: 0; max-height: 55vh; overflow-y: auto; margin-bottom: 18px; padding-right: 4px;">
+      <div id="selectListModalBody" class="u-fd-column u-gap-0 u-maxh-55vh u-ovy-auto u-mb-18px u-pr-4px" style="display:flex;">
         <!-- Filled dynamically -->
       </div>
-      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" id="selectListModalCancelBtn" data-act="closeSelectListModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="addSelectedListsBtn" style="min-width: 90px;">Done</button>
+        <button type="button" class="lc-btn primary u-minw-90px" id="addSelectedListsBtn">Done</button>
       </div>
     </div>
   </div>
 
   <!-- Trakt Device Activation Modal -->
-  <div id="traktDeviceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index: 10002; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
-    <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; text-align: center;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index:10002; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-420px u-p-24px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-ta-center" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Connect Trakt</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
@@ -35126,13 +35261,13 @@ ${appShellMobileNavHtml}
         <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
-        <a id="traktDeviceActivateLink" href="https://trakt.tv/activate" target="_blank" rel="noopener noreferrer" class="lc-btn primary" style="padding: 12px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <div class="u-fd-column u-gap-10px u-mb-16px" style="display:flex;">
+        <a id="traktDeviceActivateLink" href="https://trakt.tv/activate" target="_blank" rel="noopener noreferrer" class="lc-btn primary u-p-12px u-fw-700 u-td-none u-ai-center u-jc-center u-gap-8px" style="display:flex;">
           Open trakt.tv/activate &#x2197;
         </a>
       </div>
 
-      <div id="traktDevicePollingStatus" style="font-size: var(--font-size-sm); color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <div id="traktDevicePollingStatus" class="u-fs-v_font_size_sm u-c-v_muted u-ai-center u-jc-center u-gap-8px" style="display:flex;">
         Waiting for authorization on Trakt...
       </div>
 
@@ -35188,7 +35323,7 @@ if ('serviceWorker' in navigator) {
 
     <div class="row u-mb-12px u-gap-8px">
       <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
-      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" style="flex:none; width:auto;">
+      <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" class="u-flex-none" style="width:auto;">
         <option value="">All groups</option>
       </select>
     </div>
@@ -35202,7 +35337,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- 24-Hour Randomizer Controls -->
     <div class="u-mt-16px u-p-12px_16px u-bg-v_surface u-br-v_radius_md u-bd-1px_solid_v_border">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-4px u-ai-center u-gap-6px" style="display:flex;">
         <span>Daily Randomizer</span>
       </div>
       <div>
@@ -35485,7 +35620,7 @@ if ('serviceWorker' in navigator) {
           <h2 class="shelf-title sr-only">Your Custom Lists</h2>
           <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Custom lists you've created locally or on your profile.</p>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
+        <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
           <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
           ${refreshButtonHtml('appActRefreshCreatorDashboard', 'Refresh lists')}
@@ -35497,7 +35632,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel u-mt-12px" id="myListsSectionPanel-mdblist">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your MDBList Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" data-act="toggleListsMdblistConnection">Connect MDBList</button>
         </div>
       </div>
@@ -35508,7 +35643,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel u-mt-12px" id="myListsSectionPanel-trakt">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Trakt Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" data-act="toggleListsTraktConnection">Connect Trakt</button>
         </div>
       </div>
@@ -35520,7 +35655,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel u-mt-12px" id="myListsSectionPanel-tmdb">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your TMDB Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" data-act="toggleListsTmdbConnection">Connect TMDB</button>
         </div>
       </div>
@@ -35531,7 +35666,7 @@ if ('serviceWorker' in navigator) {
     <div class="panel u-mt-12px" id="myListsSectionPanel-simkl">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Simkl Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" data-act="toggleListsSimklConnection">Connect Simkl</button>
         </div>
       </div>
@@ -35565,14 +35700,14 @@ if ('serviceWorker' in navigator) {
       <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm">Curate, reorder, and manage titles for this custom list.</p>
 
       <!-- 1. List Name & Content Type Header Group -->
-      <div style="display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+      <div class="u-gap-20px u-ai-flex_end u-fw2-wrap u-mb-16px" style="display:flex;">
         <div class="u-flex-1_1_320px u-maxw-480px u-minw-0">
-          <label for="customListNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
-          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+          <label for="customListNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">List Name</label>
+          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" class="u-p-9px_14px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
         <div class="u-flex-0_0_auto">
-          <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
-          <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
+          <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">Content Type</label>
+          <div id="customListTypeToggles" class="u-gap-8px u-ai-center" style="display:flex;">
             <label class="custom-list-type-pill active">
               <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
               <span class="check-icon">&#x2713;</span><span>Movies</span>
@@ -35590,7 +35725,7 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- 2. Public List Toggle -->
-      <div id="customListVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+      <div id="customListVisibilityRow" class="u-p-10px_14px u-bg-v_surface u-bd-1px_solid_v_border u-br-v_radius_md u-jc-space_between u-ai-center u-gap-12px u-mb-16px" style="display:flex;">
         <div>
           <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public List</span>
           <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this list visible on your public creator profile and discoverable in the community directory</p>
@@ -35603,12 +35738,12 @@ if ('serviceWorker' in navigator) {
 
       <!-- 3. Inline Search & Quick Add Bar -->
       <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
-        <label for="customListSearchInput" style="display:block; font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
+        <label for="customListSearchInput" class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px" style="display:block;">Add Titles to List</label>
         <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
         <div class="search-input-box">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
-          <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
+          <button type="button" id="customListSearchClearBtn" class="search-clear-btn u-bg-none u-bd-none u-c-v_muted u-cur-pointer u-p-4px" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
         </div>
@@ -35616,13 +35751,13 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- 4. Picks in This List -->
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; margin-bottom:8px;">
+      <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px u-mt-8px u-mb-8px" style="display:flex;">
         <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
           Picks in this list <span id="customListDraftCount" class="u-fw-normal u-fs-v_font_size_sm u-c-v_muted">(0 items)</span>
         </div>
-        <div class="actions" id="customListDraftActions" style="margin:0; gap:8px; display:none;">
-          <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft" style="font-size:var(--font-size-sm);">Shuffle Picks Now</button>
-          <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25); font-size:var(--font-size-sm);" data-act="removeAllCustomListDraftPicks">Remove All</button>
+        <div class="actions u-m-0 u-gap-8px" id="customListDraftActions" style="display:none;">
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_sm" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
+          <button type="button" class="secondary lc-btn u-c-v_danger u-bdc-rgba_255_59_48_0_25 u-fs-v_font_size_sm" data-act="removeAllCustomListDraftPicks">Remove All</button>
         </div>
       </div>
       <div id="customListDraftList">
@@ -35631,12 +35766,12 @@ if ('serviceWorker' in navigator) {
 
       <!-- 5. Advanced Settings (Progressive Disclosure) -->
       <details class="channel-advanced-details u-mt-16px u-bd-1px_solid_v_border u-br-v_radius_md u-p-12px_16px u-bg-v_surface u-bsh-v_shadow_sm">
-        <summary style="font-weight:600; font-size:var(--font-size-sm); cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
+        <summary class="u-fw-600 u-fs-v_font_size_sm u-cur-pointer u-us-none u-c-v_text u-ai-center u-jc-space_between" style="display:flex;">
           <span>Advanced Settings</span>
           <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order &amp; watch history rules</span>
         </summary>
         <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
+          <div class="u-ai-center u-gap-10px u-mb-6px u-fw2-wrap" style="display:flex;">
             <label for="customListPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap u-c-v_text">Play order:</label>
             <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-maxw-320px u-fs-v_font_size_sm u-p-7px_12px u-bg-v_surface u-c-v_text u-bd-1_5px_solid_v_border_strong u-br-v_radius_pill">
               <option value="as-listed">Creation order (as listed)</option>
@@ -35648,7 +35783,7 @@ if ('serviceWorker' in navigator) {
           </div>
           <p id="customListPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+          <div class="u-jc-space_between u-ai-center u-gap-12px u-mt-12px u-pt-10px u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08" style="display:flex;">
             <div>
               <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Hide watched</span>
               <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Skip items already in your watch history (requires Auto-track playback signed in)</p>
@@ -35664,7 +35799,7 @@ if ('serviceWorker' in navigator) {
       <!-- 6. Bottom Action Bar -->
       <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
-        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Create List</button>
+        <button type="button" class="primary lc-btn u-p-8px_24px u-fw-600" id="customListSaveBtn" data-act="saveCustomList">Create List</button>
       </div>
     </div>
   </div>
@@ -35683,7 +35818,7 @@ if ('serviceWorker' in navigator) {
         <input type="text" id="customListImportNameInput" placeholder="Name (e.g. My Favorites)">
         <button type="button" class="secondary" id="customListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import list</button>
       </div>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
+      <label class="u-ai-center u-gap-8px u-cur-pointer u-mt-10px" style="display:flex;">
         <input type="checkbox" id="customListImportSyncCheck" checked>
         <span class="u-fs-v_font_size_sm">Keep custom list synced with external link</span>
       </label>
@@ -35728,7 +35863,7 @@ if ('serviceWorker' in navigator) {
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;animation&quot;,&quot;@self&quot;]">Animation &amp; Anime</button>
       </div>
 
-      <div id="storylinesUniverseList" style="display:flex; flex-direction:column; gap:16px;"></div>
+      <div id="storylinesUniverseList" class="u-fd-column u-gap-16px" style="display:flex;"></div>
     </div>
   </div>
 
@@ -35740,7 +35875,7 @@ if ('serviceWorker' in navigator) {
           <h2 class="shelf-title sr-only">My Channels</h2>
           <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <div class="u-gap-8px u-fw2-wrap u-ai-center" style="display:flex;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
           <button type="button" class="primary lc-btn" data-act="openBuildCustomChannel">+ Create Channel</button>
           <button type="button" class="secondary lc-btn" data-act="openImportChannelModal" title="Import channel from link or share code">Import</button>
@@ -35753,7 +35888,7 @@ if ('serviceWorker' in navigator) {
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
         </div>
-        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
+        <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="recent">Recently updated</option>
           <option value="created">Recently created</option>
           <option value="name">Name (A&ndash;Z)</option>
@@ -35761,7 +35896,7 @@ if ('serviceWorker' in navigator) {
           <option value="manual">My order (drag to arrange)</option>
         </select>
       </div>
-      <div id="myChannelsUndoBar" style="display:none; margin-bottom:10px;"></div>
+      <div id="myChannelsUndoBar" class="u-mb-10px" style="display:none;"></div>
       <div id="myCreatedChannelsList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
     </div>
 
@@ -35779,17 +35914,17 @@ if ('serviceWorker' in navigator) {
         <div class="shelf-header u-mb-8px">
           <h3 class="u-fs-v_font_size_base u-fw-700 u-m-0">Create Merged Catalog or Channel</h3>
         </div>
-        <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
-          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:var(--font-size-sm); user-select:none;">
+        <div id="channelMergeSelectAllWrap" class="actions u-mb-8px u-jc-flex_end" style="display:none;">
+          <label class="u-ai-center u-gap-6px u-cur-pointer u-fs-v_font_size_sm u-us-none" style="display:flex;">
             <input type="checkbox" id="channelMergeSelectAllCheck" data-act="toggleAllChannelMergeChecks" data-act-args="[&quot;@self&quot;]">
             <span>Select all</span>
           </label>
         </div>
         <div id="channelMergeList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No saved channels yet.</small></p></div>
-        <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
-          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
-          <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
-          <button type="button" class="secondary lc-btn" data-act="combineChannelsIntoChannel" data-act-args="[&quot;@self&quot;]" title="Make a new channel with every episode of the checked channels, duplicates left out" style="border-radius:var(--radius-pill);">Combine into one channel</button>
+        <div class="row u-mt-10px u-gap-8px" id="channelMergeControls" style="display:none;">
+          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" class="u-maxw-380px u-br-v_radius_pill" style="width:100%;">
+          <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="mergeChannelsIntoRow">Merge into catalog</button>
+          <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="combineChannelsIntoChannel" data-act-args="[&quot;@self&quot;]" title="Make a new channel with every episode of the checked channels, duplicates left out">Combine into one channel</button>
         </div>
       </div>
     </div>
@@ -35802,7 +35937,7 @@ if ('serviceWorker' in navigator) {
         <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
-      <div class="channel-quick-sections" style="display:flex; flex-direction:column; gap:16px; margin-top:14px;">
+      <div class="channel-quick-sections u-fd-column u-gap-16px u-mt-14px" style="display:flex;">
         <div>
           <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Major Broadcast</div>
           <div class="channel-quick-grid">
@@ -35879,7 +36014,7 @@ if ('serviceWorker' in navigator) {
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
         </div>
-        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
+        <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="newest">Newest</option>
           <option value="added">Most added</option>
           <option value="liked">Most liked</option>
@@ -35935,12 +36070,12 @@ if ('serviceWorker' in navigator) {
 
       <!-- 1. Channel Name -->
       <div class="u-mb-16px u-maxw-480px">
-        <label for="channelNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">Channel Name</label>
+        <label for="channelNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">Channel Name</label>
         <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)">
       </div>
 
       <!-- 2. Public Channel Toggle -->
-      <div id="channelVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+      <div id="channelVisibilityRow" class="u-p-10px_14px u-bg-v_surface u-bd-1px_solid_v_border u-br-v_radius_md u-jc-space_between u-ai-center u-gap-12px u-mb-16px" style="display:flex;">
         <div>
           <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public Channel</span>
           <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this channel visible on your public creator profile and discoverable in the community directory</p>
@@ -35953,7 +36088,7 @@ if ('serviceWorker' in navigator) {
 
       <!-- 3. Search & Add Titles -->
       <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
-        <label for="channelSearchInput" style="display:block; font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to Channel</label>
+        <label for="channelSearchInput" class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px" style="display:block;">Add Titles to Channel</label>
         <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search any TV show or movie to add to your channel.</p>
       <div class="subnav-pills-bar u-mb-10px" id="channelSearchTypeChips">
         <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
@@ -35970,7 +36105,7 @@ if ('serviceWorker' in navigator) {
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
 
-      <div id="channelCrossoverSuggestions" style="display:none; margin-top:14px;"></div>
+      <div id="channelCrossoverSuggestions" class="u-mt-14px" style="display:none;"></div>
       </div>
 
       <p class="u-mt-14px u-mb-6px u-fw-600 u-fs-v_font_size_sm">Picks in this channel: <span id="channelDraftCountBadge" class="u-c-v_muted u-fw-500"></span></p>
@@ -35980,9 +36115,9 @@ if ('serviceWorker' in navigator) {
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
         </div>
-        <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
+        <button type="button" class="secondary lc-btn u-flex-none u-ws-nowrap" id="channelDraftSelectModeBtn" style="width:auto;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
-      <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface);">
+      <div id="channelDraftBulkBar" class="u-fw2-wrap u-gap-6px u-ai-center u-mb-8px u-p-8px u-bd-1px_solid_v_border u-br-v_radius_sm u-bg-v_surface" style="display:none;">
         <span id="channelDraftSelectionCount" class="u-fs-v_font_size_sm u-fw-600">0 selected</span>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[true]">Select shown</button>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[false]">Clear</button>
@@ -35994,21 +36129,21 @@ if ('serviceWorker' in navigator) {
         <button type="button" class="secondary lc-btn" data-act="unpairChannelDraftSelection" title="Drop any hand-made pairing on these picks">Unpair</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;top&quot;]">To top</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;bottom&quot;]">To bottom</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeChannelDraftSelection">Remove selected</button>
+        <button type="button" class="secondary lc-btn u-c-v_danger u-bdc-rgba_255_59_48_0_25" data-act="removeChannelDraftSelection">Remove selected</button>
       </div>
       <div id="channelDraftList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
       <div class="actions u-mt-8px u-jc-flex_start u-gap-8px">
         <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
-        <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
+        <button type="button" class="secondary lc-btn u-c-v_danger u-bdc-rgba_255_59_48_0_25" data-act="removeAllChannelDraftPicks">Remove All</button>
       </div>
       <!-- Advanced Settings (Progressive Disclosure) -->
       <details class="channel-advanced-details u-mt-14px u-bd-1px_solid_v_border u-br-v_radius_sm u-p-10px_14px u-bg-v_surface">
-        <summary style="font-weight:600; font-size:var(--font-size-sm); cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
+        <summary class="u-fw-600 u-fs-v_font_size_sm u-cur-pointer u-us-none u-c-v_text u-ai-center u-jc-space_between" style="display:flex;">
           <span>Advanced Settings</span>
           <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order, rotation &amp; broadcast schedule</span>
         </summary>
         <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+          <div class="u-ai-center u-gap-8px u-mb-6px u-fw2-wrap" style="display:flex;">
             <label for="channelPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap">Play order:</label>
             <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-flex-1 u-minw-210px u-fs-v_font_size_sm u-p-6px_10px u-bg-v_surface u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">
               <option value="as-listed">Creation order (as listed)</option>
@@ -36029,7 +36164,7 @@ if ('serviceWorker' in navigator) {
               <input type="checkbox" id="channelDailyRotateCheck" data-act="updateChannelBroadcastControls">
               <span>Daily Broadcast Schedule &mdash; run a fresh lineup out of these picks every day</span>
             </label>
-            <div id="channelDailyRotateDials" style="display:none; margin:8px 0 0 24px; flex-wrap:wrap; gap:10px;">
+            <div id="channelDailyRotateDials" class="u-m-8px_0_0_24px u-fw2-wrap u-gap-10px" style="display:none;">
               <label class="channel-dial">Shows per day
                 <input type="number" id="channelRotateShowsInput" min="1" max="48" step="1" value="24" data-act="updateChannelBroadcastControls">
               </label>
@@ -36064,7 +36199,7 @@ if ('serviceWorker' in navigator) {
               <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
               <span>Automatically add new episodes</span>
             </label>
-            <div id="channelNewEpisodesRow" style="display:none; margin:6px 0 0 24px;">
+            <div id="channelNewEpisodesRow" class="u-m-6px_0_0_24px" style="display:none;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelNewEpisodesTopCheck">
                 <span>Put new episodes at the top</span>
@@ -36072,7 +36207,7 @@ if ('serviceWorker' in navigator) {
             </div>
             <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; this channel plays the picks below and nothing else.</p>
 
-            <div id="channelLiveSyncRow" style="display:none; margin-top:10px;">
+            <div id="channelLiveSyncRow" class="u-mt-10px" style="display:none;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelLiveSyncCheck">
                 <span>Live Cloud Sync &mdash; refresh this channel from its source list</span>
@@ -36086,18 +36221,18 @@ if ('serviceWorker' in navigator) {
       </details>
 
       <!-- Channel Poster Selection Section -->
-      <div id="channelPosterPickerSection" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px; display:none;">
+      <div id="channelPosterPickerSection" class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px" style="display:none;">
         <p class="u-m-0_0_4px u-fw-600 u-fs-v_font_size_sm">Channel Poster:</p>
         <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Choose a show poster (ranked by most episodes) or choose our custom channel poster.</p>
-        <div id="channelPosterChoicesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:10px;"></div>
+        <div id="channelPosterChoicesGrid" class="u-gtc-repeat_auto_fill_minmax_90px_1fr u-gap-10px" style="display:grid;"></div>
         <div class="u-mt-12px">
           <p class="u-m-0_0_6px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
           <div class="row u-gap-8px">
             <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" class="u-flex-1 u-fs-v_font_size_sm">
             <button type="button" class="secondary u-ws-nowrap u-fs-v_font_size_sm" data-act="applyChannelPosterUrl">Use This</button>
           </div>
-          <div id="channelPosterUrlPreview" style="margin-top:8px; align-items:center; gap:10px; display:none;">
-            <img id="channelPosterUrlImg" src="" alt="Poster preview" style="width:54px; height:80px; object-fit:cover; border-radius:var(--radius-xs); border:2px solid var(--accent);" loading="lazy">
+          <div id="channelPosterUrlPreview" class="u-mt-8px u-ai-center u-gap-10px" style="display:none;">
+            <img id="channelPosterUrlImg" src="" alt="Poster preview" class="u-objectfit-cover u-br-v_radius_xs u-bd-2px_solid_v_accent" style="width:54px; height:80px;" loading="lazy">
             <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs u-c-v_muted"></span>
           </div>
         </div>
@@ -36106,7 +36241,7 @@ if ('serviceWorker' in navigator) {
       <!-- Bottom Action Bar -->
       <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="channelCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditChannel">Cancel</button>
-        <button type="button" class="primary lc-btn" id="channelSaveBtn" data-act="saveChannel" style="padding:8px 24px; font-weight:600;">Create Channel</button>
+        <button type="button" class="primary lc-btn u-p-8px_24px u-fw-600" id="channelSaveBtn" data-act="saveChannel">Create Channel</button>
       </div>
     </div>
   </div>
@@ -36121,7 +36256,7 @@ if ('serviceWorker' in navigator) {
     <div class="search-input-wrapper">
       <div class="search-input-box">
         <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." style="width:100%; padding-left:38px; padding-right:38px;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." class="u-pl-38px u-pr-38px" style="width:100%;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
         <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">
           <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" /></svg>
         </button>
@@ -36129,14 +36264,14 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div class="search-filters-toolbar">
-      <div class="subnav-pills-bar" id="catalogSearchTypeChips" style="margin:0; width:auto; padding:0; flex-shrink:0;">
+      <div class="subnav-pills-bar u-m-0 u-p-0 u-fsh-0" id="catalogSearchTypeChips" style="width:auto;">
         <button type="button" class="subnav-pill active" data-act="setCatalogSearchFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Movies</button>
         <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]">Shows</button>
         <button type="button" class="subnav-pill" data-act="setCatalogSearchFilter" data-act-args="[&quot;lists&quot;,&quot;@self&quot;]">Lists</button>
       </div>
 
       <!-- Quick Filter Dropdowns for Movies & Shows -->
-      <div id="catalogSearchFiltersRow" style="display:flex; flex-wrap:wrap; gap:8px; margin:0; align-items:center;">
+      <div id="catalogSearchFiltersRow" class="u-fw2-wrap u-gap-8px u-m-0 u-ai-center" style="display:flex;">
         <select id="catalogSearchGenreSelect" class="search-filter-select" aria-label="Filter by genre" data-act="applySearchFilters">
           <option value="">All Genres</option>
           <option value="28,10759">Action &amp; Adventure</option>
@@ -36178,7 +36313,7 @@ if ('serviceWorker' in navigator) {
           <option value="5.0">5.0+ ⭐</option>
         </select>
 
-        <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn" data-act="resetSearchFilters" style="font-size:var(--font-size-sm); padding:4px 10px; min-height:30px; height:30px; border-radius:var(--radius-pill); display:none;">Reset</button>
+        <button type="button" id="catalogSearchResetFiltersBtn" class="secondary lc-btn u-fs-v_font_size_sm u-p-4px_10px u-minh-30px u-br-v_radius_pill" data-act="resetSearchFilters" style="height:30px; display:none;">Reset</button>
       </div>
     </div>
     <!-- Where the lists come from, and in what order: the chips
@@ -36216,17 +36351,17 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 2: Presets & Backup -->
   <div class="settings-subpanel" id="settingsSubBackup" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div class="shelf-header u-mb-10px u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px" style="display:flex;">
         <h2 class="shelf-title u-m-0">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
         <div>
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:6px 14px; font-size:var(--font-size-sm);">Upload preset file</button>
+          <button type="button" class="secondary lc-btn u-ws-nowrap u-p-6px_14px u-fs-v_font_size_sm" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]">Upload preset file</button>
           <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
         </div>
       </div>
       <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Save your current setup as a named preset to reuse or download as a file.</p>
-      <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; max-width:540px;">
+      <div class="preset-create-group u-gap-8px u-ai-stretch u-mb-10px u-maxw-540px" style="display:flex;">
         <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" class="u-flex-1 u-minw-0 u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base">
-        <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 18px;">Save preset</button>
+        <button type="button" class="primary lc-btn u-ws-nowrap u-p-0_18px" data-act="saveCurrentAsPreset">Save preset</button>
       </div>
       <div id="presetsList" class="u-mt-10px"></div>
     </div>
@@ -36236,25 +36371,25 @@ if ('serviceWorker' in navigator) {
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       
       <div class="backup-quick-grid">
-        <div style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+        <div class="u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px_18px u-bg-v_surface u-bsh-v_shadow_sm u-fd-column u-jc-space_between u-gap-12px" style="display:flex;">
           <div>
             <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Download Backup
             </div>
             <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
           </div>
-          <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
+          <button type="button" class="secondary lc-btn u-as-flex_start u-p-8px_18px u-fw-600" data-act="downloadConfigJson">Download Backup File</button>
         </div>
 
-        <div style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
+        <div class="u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px_18px u-bg-v_surface u-bsh-v_shadow_sm u-fd-column u-jc-space_between u-gap-12px" style="display:flex;">
           <div>
             <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Restore from File
             </div>
             <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Restore your previous setup from an exported backup .json file.</p>
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]" style="padding:8px 18px; font-weight:600;">Upload &amp; Restore File</button>
+          <div class="u-ai-center u-gap-8px" style="display:flex;">
+            <button type="button" class="secondary lc-btn u-p-8px_18px u-fw-600" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]">Upload &amp; Restore File</button>
             <input type="file" id="configFileInput" aria-label="Choose a backup file to restore" accept="application/json,.json" style="display:none;" data-act="uploadConfigFile" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
@@ -36265,9 +36400,9 @@ if ('serviceWorker' in navigator) {
           <span>Advanced: Direct JSON Configuration Payload</span>
           <span class="backup-advanced-arrow">&#x25BE;</span>
         </summary>
-        <div style="padding:0 14px 14px; display:flex; flex-direction:column; gap:10px;">
-          <textarea id="configJsonBox" rows="5" style="width:100%; font-family:var(--font-mono, monospace); font-size:13px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg); color:var(--text); padding:8px 10px; box-sizing:border-box;" placeholder="Paste config JSON here to restore..."></textarea>
-          <div class="backup-actions-grid" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="u-p-0_14px_14px u-fd-column u-gap-10px" style="display:flex;">
+          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-13px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore..."></textarea>
+          <div class="backup-actions-grid u-gap-8px u-fw2-wrap" style="display:flex;">
             <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current to box</button>
             <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON from box</button>
           </div>
@@ -36285,8 +36420,8 @@ if ('serviceWorker' in navigator) {
       <h2 class="panel-title">Export Lists &amp; History</h2>
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
       
-      <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:var(--radius-md);">
+      <div class="u-fd-column u-gap-12px" style="display:flex;">
+        <div class="u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px u-p-14px_18px u-bg-v_surface u-bd-1px_solid_v_border u-bsh-v_shadow_sm u-br-v_radius_md" style="display:flex;">
           <div>
             <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Watch History</div>
             <div class="u-fs-v_font_size_sm u-c-v_muted">All watched movies, shows, and episodes with timestamps</div>
@@ -36298,7 +36433,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:var(--radius-md);">
+        <div class="u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px u-p-14px_18px u-bg-v_surface u-bd-1px_solid_v_border u-bsh-v_shadow_sm u-br-v_radius_md" style="display:flex;">
           <div>
             <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">All Custom Lists &amp; Watchlist</div>
             <div class="u-fs-v_font_size_sm u-c-v_muted">Export all created lists, watchlist, and continue watching items</div>
@@ -36331,13 +36466,13 @@ if ('serviceWorker' in navigator) {
       <div class="settings-row-group">
         <!-- Region -->
         <div class="settings-row-item u-pb-14px u-bdb-1px_solid_v_border">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+          <div class="u-jc-space_between u-ai-flex_start u-gap-16px u-fw2-wrap" style="display:flex;">
             <div class="u-flex-1 u-minw-240px">
               <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Content Region</span>
               <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
             </div>
-            <div style="flex:none; width:100%; max-width:320px;">
-              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+            <div class="u-flex-none u-maxw-320px" style="width:100%;">
+              <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
                 ${buildRegionOptionsHtml(initialRegion)}
               </select>
             </div>
@@ -36453,17 +36588,17 @@ if ('serviceWorker' in navigator) {
             </div>
           </label>
         </div>
-        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
+        <div class="u-gap-16px u-fw2-wrap u-mt-6px" style="display:flex;">
           <div class="u-flex-1 u-minw-220px u-maxw-320px">
-            <label for="betterPostersRatingSourceSelect" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Rating source</label>
-            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+            <label for="betterPostersRatingSourceSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Rating source</label>
+            <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
               ${betterPostersRatingSourceOptionsHtml}
             </select>
             <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Which score the rating is taken from.</p>
           </div>
           <div class="u-flex-1 u-minw-220px u-maxw-320px">
-            <label for="betterPostersLangSelect" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Poster language</label>
-            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+            <label for="betterPostersLangSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster language</label>
+            <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
               ${betterPostersLangOptionsHtml}
             </select>
             <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Language BetterPosters draws text in.</p>
@@ -36492,10 +36627,10 @@ if ('serviceWorker' in navigator) {
       </div>
       <div id="rpdbOptions" style="display:${initialRpdb ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div>
-          <label for="rpdbKeyInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">API key</label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <label for="rpdbKeyInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">API key</label>
+          <div class="u-gap-8px u-fw2-wrap u-ai-center" style="display:flex;">
             <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" class="u-flex-1 u-minw-200px u-maxw-380px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box">
-            <button type="button" class="secondary lc-btn" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]" style="border-radius:var(--radius-pill);">Test key</button>
+            <button type="button" class="secondary lc-btn u-br-v_radius_pill" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]">Test key</button>
           </div>
           <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
         </div>
@@ -36522,8 +36657,8 @@ if ('serviceWorker' in navigator) {
       </div>
       <div id="pictoriumOptions" style="display:${initialPictorium ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         <div>
-          <label for="pictoriumUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Poster link</label>
-          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+          <label for="pictoriumUrlInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Poster link</label>
+          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" class="u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
           <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
         </div>
       </div>
@@ -36548,8 +36683,8 @@ if ('serviceWorker' in navigator) {
     <div class="panel u-mt-12px">
       <h2 class="panel-title">Poster Badges &amp; Labels</h2>
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
-      <div style="display:flex; flex-direction:column; gap:16px;">
-        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+      <div class="u-fd-column u-gap-16px" style="display:flex;">
+        <div class="u-bdb-1px_solid_v_border u-pb-14px u-fd-column u-gap-6px" style="display:flex;">
           <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Website &amp; Dashboard</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
@@ -36597,7 +36732,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
+        <div class="u-bdb-1px_solid_v_border u-pb-14px u-fd-column u-gap-6px" style="display:flex;">
           <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Stremio &amp; Nuvio (Artwork Overlays)</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
@@ -36631,7 +36766,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <div style="display:flex; flex-direction:column; gap:6px;">
+        <div class="u-fd-column u-gap-6px" style="display:flex;">
           <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Badge Types</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
@@ -36712,7 +36847,7 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
       <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
-      <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div id="watchHistorySettingsSection" class="u-gap-10px u-fw2-wrap" style="display:flex;">
         <button type="button" class="btn-danger btn-sm" data-act="clearWatchHistoryAll">Clear Watch History</button>
         <button type="button" class="btn-danger btn-sm" data-act="clearContinueWatchingAll">Clear Continue Watching</button>
       </div>
@@ -36735,7 +36870,7 @@ if ('serviceWorker' in navigator) {
       <div class="provider-card" id="tmdbSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">The Movie Database (TMDB)</span>
               <span id="tmdbConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -36743,7 +36878,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="tmdbConnectBtn" data-act="startTmdbConnect" style="font-weight:600;">Connect TMDB Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="tmdbConnectBtn" data-act="startTmdbConnect">Connect TMDB Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="tmdbDisconnectBtn" style="display:none;" data-act="disconnectTmdb">Disconnect</button>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36752,7 +36887,7 @@ if ('serviceWorker' in navigator) {
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div class="u-mt-10px">
-            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="u-c-v_accent_2">themoviedb.org/settings/api</a>.</p>
           </div>
         </details>
@@ -36762,7 +36897,7 @@ if ('serviceWorker' in navigator) {
       <div class="provider-card" id="traktSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">Trakt</span>
               <span id="traktConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -36770,7 +36905,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
         <div class="provider-card-actions trakt-connect-actions">
-          <button type="button" class="secondary lc-btn" id="traktConnectBtn" data-act="startTraktConnect" style="font-weight:600;">Connect Trakt Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="traktConnectBtn" data-act="startTraktConnect">Connect Trakt Account</button>
           <button type="button" class="secondary lc-btn" id="traktDeviceBtn" data-act="startTraktDeviceLogin" title="Connect from a TV or secondary device via trakt.tv/activate">Connect with PIN / Code</button>
           <button type="button" class="secondary lc-btn btn-danger" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
@@ -36786,7 +36921,7 @@ if ('serviceWorker' in navigator) {
             </label>
           </div>
           <div class="u-mt-8px">
-            <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36794,9 +36929,9 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom Trakt Client ID &amp; Username</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
-            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+          <div class="u-mt-10px u-fd-column u-gap-8px" style="display:flex;">
+            <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+            <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" class="u-c-v_accent_2">trakt.tv/oauth/applications</a>.</p>
           </div>
         </details>
@@ -36806,7 +36941,7 @@ if ('serviceWorker' in navigator) {
       <div class="provider-card" id="mdblistSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">MDBList</span>
               <span id="mdblistConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -36814,7 +36949,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect" style="font-weight:600;">Connect MDBList Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="mdblistConnectBtn" data-act="startMdblistConnect">Connect MDBList Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
         <div id="mdblistSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
@@ -36829,7 +36964,7 @@ if ('serviceWorker' in navigator) {
             </label>
           </div>
           <div class="u-mt-8px">
-            <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36838,7 +36973,7 @@ if ('serviceWorker' in navigator) {
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div class="u-mt-10px">
-            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" class="u-c-v_accent_2">mdblist.com/preferences</a>.</p>
           </div>
         </details>
@@ -36848,7 +36983,7 @@ if ('serviceWorker' in navigator) {
       <div class="provider-card" id="simklSection">
         <div class="provider-card-header">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
               <span class="provider-card-title">Simkl</span>
               <span id="simklConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
@@ -36856,7 +36991,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
         <div class="provider-card-actions">
-          <button type="button" class="secondary lc-btn" id="simklConnectBtn" data-act="startSimklConnect" style="font-weight:600;">Connect Simkl Account</button>
+          <button type="button" class="secondary lc-btn u-fw-600" id="simklConnectBtn" data-act="startSimklConnect">Connect Simkl Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
         <div id="simklSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
@@ -36871,7 +37006,7 @@ if ('serviceWorker' in navigator) {
             </label>
           </div>
           <div class="u-mt-8px">
-            <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]">Sync Current Watch History Now</button>
           </div>
         </div>
         <details class="provider-advanced-disclosure">
@@ -36880,7 +37015,7 @@ if ('serviceWorker' in navigator) {
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
           <div class="u-mt-10px">
-            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
+            <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" class="u-c-v_accent_2">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
@@ -36892,10 +37027,10 @@ if ('serviceWorker' in navigator) {
       <h2 class="panel-title">Import List</h2>
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
 
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:12px;">
+      <div class="u-gtc-repeat_auto_fit_minmax_260px_1fr u-gap-12px u-mb-12px" style="display:grid;">
         <div>
-          <label for="importListSourceSelect" style="display:block; font-weight:600; font-size:var(--font-size-sm); margin-bottom:6px; color:var(--text);">Source (optional)</label>
-          <select id="importListSourceSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+          <label for="importListSourceSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Source (optional)</label>
+          <select id="importListSourceSelect" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
             <option value="auto">Auto-detect</option>
             <option value="imdb">IMDb</option>
             <option value="letterboxd">Letterboxd</option>
@@ -36907,21 +37042,21 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <label for="importTargetListSelect" style="display:block; font-weight:600; font-size:var(--font-size-sm); margin-bottom:6px; color:var(--text);">Import to which list?</label>
-          <select id="importTargetListSelect" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;" data-act="onImportTargetListChange">
+          <label for="importTargetListSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Import to which list?</label>
+          <select id="importTargetListSelect" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;" data-act="onImportTargetListChange">
             <!-- Populated dynamically -->
           </select>
         </div>
       </div>
 
-      <div id="importNewListInputWrap" style="display:none; margin-bottom:12px;">
-        <label for="importNewListNameInput" style="display:block; font-weight:600; font-size:var(--font-size-sm); margin-bottom:6px; color:var(--text);">New List Name</label>
-        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; max-width:400px; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+      <div id="importNewListInputWrap" class="u-mb-12px" style="display:none;">
+        <label for="importNewListNameInput" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">New List Name</label>
+        <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" class="u-maxw-400px u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
       </div>
 
       <div class="u-mb-14px">
         <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); opacity:0.8; margin-bottom:2px;" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="u-c-v_muted u-mb-2px" style="opacity:0.8;" aria-hidden="true">
             <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
             <path d="M12 12v9"></path>
             <path d="m16 16-4-4-4 4"></path>
@@ -36930,7 +37065,7 @@ if ('serviceWorker' in navigator) {
             <div class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Choose files or drag &amp; drop here</div>
             <div class="u-mt-3px u-c-v_muted u-fs-v_font_size_xs">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
           </div>
-          <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 16px; font-size:var(--font-size-sm); margin-top:2px;">Select files&hellip;</button>
+          <button type="button" class="secondary lc-btn u-p-6px_16px u-fs-v_font_size_sm u-mt-2px" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">Select files&hellip;</button>
           <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
         </div>
         <div id="unifiedImportSelectedCount" class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">No files selected</div>
@@ -36947,7 +37082,7 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div class="actions u-mt-8px">
-        <button type="button" class="primary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:var(--font-size-base); font-weight:600;" data-act="runUnifiedListImport">Start Import</button>
+        <button type="button" class="primary lc-btn u-p-10px_24px u-fs-v_font_size_base u-fw-600" id="btnUnifiedImport" data-act="runUnifiedListImport">Start Import</button>
       </div>
 
       <div id="unifiedImportResult" class="u-mt-12px"></div>
@@ -36957,16 +37092,16 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 3: Feedback & Support -->
   <div class="settings-subpanel" id="settingsSubFeedback" style="display:none;">
     <div class="panel">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+      <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px u-mb-12px" style="display:flex;">
         <div>
           <h2 class="panel-title u-m-0">Support &amp; Developer Chat</h2>
           <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
         </div>
-        <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]" style="padding:6px 14px; font-size:var(--font-size-sm);">+ New Message</button>
+        <button type="button" class="secondary lc-btn u-p-6px_14px u-fs-v_font_size_sm" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]">+ New Message</button>
       </div>
 
       <!-- Active Threads Selector -->
-      <div id="supportThreadsBar" class="support-threads-bar" style="display:none; margin-bottom:12px;"></div>
+      <div id="supportThreadsBar" class="support-threads-bar u-mb-12px" style="display:none;"></div>
 
       <div class="feedback-container">
         <!-- Chat View -->
@@ -36974,18 +37109,18 @@ if ('serviceWorker' in navigator) {
           <div id="supportMessagesStream" class="support-messages-stream"></div>
           <div class="support-reply-composer u-mt-10px">
             <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
-            <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
+            <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+          <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
             <span id="supportChatStatus" class="u-fs-v_font_size_sm u-c-v_muted"></span>
-            <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:var(--font-size-xs); border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
+            <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
           </div>
         </div>
 
         <!-- New Message / Initial Form -->
         <div id="newFeedbackFormWrap">
           <div class="row">
-            <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Category</label>
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Category</label>
             <select id="feedbackCategorySelect" aria-label="Feedback category" class="u-maxw-320px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-7px_12px u-fs-v_font_size_sm">
               <option value="bug">Bug Report</option>
               <option value="improvement">Improvement / Feature Request</option>
@@ -36994,15 +37129,15 @@ if ('serviceWorker' in navigator) {
             </select>
           </div>
           <div class="row u-mt-10px">
-            <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Message</label>
-            <textarea id="feedbackMessageInput" rows="4" style="width:100%; max-width:680px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:10px 12px; font-size:var(--font-size-sm); box-sizing:border-box;" placeholder="What would you like help with or what did you find?"></textarea>
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Message</label>
+            <textarea id="feedbackMessageInput" rows="4" class="u-maxw-680px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-10px_12px u-fs-v_font_size_sm u-bs-border_box" style="width:100%;" placeholder="What would you like help with or what did you find?"></textarea>
           </div>
           <div class="row u-mt-10px">
-            <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Contact Info (optional)</label>
-            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" style="width:100%; max-width:440px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:8px 12px; font-size:var(--font-size-sm); box-sizing:border-box;">
+            <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-4px" style="display:block;">Contact Info (optional)</label>
+            <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" class="u-maxw-440px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-8px_12px u-fs-v_font_size_sm u-bs-border_box" style="width:100%;">
           </div>
           <div class="actions u-mt-12px u-gap-8px u-jc-flex_start">
-            <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback" style="padding:8px 20px; font-size:var(--font-size-sm); font-weight:600;">Send Message</button>
+            <button type="button" class="primary lc-btn u-p-8px_20px u-fs-v_font_size_sm u-fw-600" id="feedbackSubmitBtn" data-act="submitFeedback">Send Message</button>
             <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
           </div>
           <p id="feedbackStatus" class="u-mt-8px u-fs-v_font_size_sm"></p>
@@ -37021,7 +37156,7 @@ if ('serviceWorker' in navigator) {
             <div class="resource-card-title">User Guide &amp; Docs</div>
             <div class="resource-card-desc">Step-by-step how-to guides covering catalogs, channels, storylines, and list importing.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:var(--font-size-sm); pointer-events:none;">Open Guide &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
         <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener" class="resource-card">
@@ -37029,7 +37164,7 @@ if ('serviceWorker' in navigator) {
             <div class="resource-card-title">Support on Ko-fi</div>
             <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:var(--font-size-sm); pointer-events:none;">Support Project &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Support Project &rarr;</span>
         </a>
 
         <a href="https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1" target="_blank" rel="noopener" class="resource-card">
@@ -37037,7 +37172,7 @@ if ('serviceWorker' in navigator) {
             <div class="resource-card-title">TorBox Debrid</div>
             <div class="resource-card-desc">Fast, modern debrid provider with fast torrent caching and Usenet support.</div>
           </div>
-          <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:var(--font-size-sm); pointer-events:none;">Try TorBox (Referral) &rarr;</span>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Try TorBox (Referral) &rarr;</span>
         </a>
       </div>
     </div>
@@ -38741,9 +38876,9 @@ function renderMediaCard(item, options = {}) {
   if (subtitle === undefined) {
     const ratingSpan = (typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(item, options) : '';
     if (ratingSpan && year) {
-      subtitle = '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(String(year)) + '</span>' + ratingSpan + '</div>';
+      subtitle = '<div class="u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(String(year)) + '</span>' + ratingSpan + '</div>';
     } else if (ratingSpan) {
-      subtitle = '<div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; width:100%;">' + ratingSpan + '</div>';
+      subtitle = '<div class="u-ai-center u-jc-flex_end u-gap-4px" style="display:flex; width:100%;">' + ratingSpan + '</div>';
     } else {
       subtitle = year ? escapeHtml(String(year)) : '';
     }
@@ -39409,22 +39544,22 @@ function openSupportGoal() {
   const left = Math.max(0, g.goal - g.raised);
   const pct = Math.max(0, Math.min(100, (g.raised / g.goal) * 100));
   const row = function(label, value, strong) {
-    return '<div style="display:flex; justify-content:space-between;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
+    return '<div class="u-jc-space_between" style="display:flex;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
   };
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-6px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg">Keeping My Lists Addon running</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
     '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">It is free, with no ads. Donations only cover the hosting bill.</p>' +
     '<div class="u-fs-v_font_size_2xl u-fw-800">' + supportMoney(g.raised) + ' <small class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted">of ' + supportMoney(g.goal) + ' this month</small></div>' +
-    '<div style="height:10px; border-radius:var(--radius-md); background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
-    '<div style="display:grid; gap:6px; font-size:var(--font-size-sm); color:var(--text); margin-bottom:14px;">' +
+    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div class="u-gap-6px u-fs-v_font_size_sm u-c-v_text u-mb-14px" style="display:grid;">' +
       row('Hosting this month', supportMoney(g.goal), false) +
       row('Given so far', supportMoney(g.raised), false) +
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
-    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:var(--accent); color:var(--color-on-brand); border-radius:var(--radius); padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
     '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 1st of each month.</p>';
   showModal(html);
 }
@@ -39438,15 +39573,15 @@ function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
   const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:var(--font-size-lg); display:flex; align-items:center; gap:8px;">' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-base); line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
+    '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
       '<button type="button" class="primary u-minw-80px u-p-8px_16px" data-act="closeModal">OK</button>' +
     '</div>';
   showModal(html);
@@ -39485,11 +39620,11 @@ if (typeof window !== 'undefined') {
 // and the caller's own result dialog still arrives.
 function showAppBusy(title, message) {
   const html =
-    '<h3 style="margin:0 0 12px; font-size:var(--font-size-lg); display:flex; align-items:center; gap:10px;">' +
+    '<h3 class="u-m-0_0_12px u-fs-v_font_size_lg u-ai-center u-gap-10px" style="display:flex;">' +
       '<span class="app-spinner" aria-hidden="true"></span> ' +
       escapeHtml(title) +
     '</h3>' +
-    '<p role="status" aria-live="polite" style="margin:0; color:var(--muted); font-size:var(--font-size-base); line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message || '') + '</p>';
+    '<p role="status" aria-live="polite" class="u-m-0 u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message || '') + '</p>';
   showModal(html);
 }
 
@@ -39498,15 +39633,15 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
   const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
   const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-      '<h3 style="margin:0; font-size:var(--font-size-lg); display:flex; align-items:center; gap:8px;">' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
         '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
         escapeHtml(title) +
       '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
-    '<p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-base); line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">' + escapeHtml(message) + '</p>' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
+    '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
       '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
       '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
@@ -39671,13 +39806,13 @@ function confirmDialog(message, title = 'Confirm Action', confirmBtnText = 'Conf
 
 function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
-    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg">' + escapeHtml(title) + '</h3>' +
-      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-md); line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+      '<button type="button" class="action-btn u-minh-unset u-p-0 u-br-50 u-bg-v_bg u-c-v_muted u-bd-1px_solid_v_border_strong u-ai-center u-jc-center u-fs-v_font_size_md u-lh-1 u-cur-pointer u-flex-none" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; display:inline-flex;">\u2715</button>' +
     '</div>' +
     (message ? '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_base">' + escapeHtml(message) + '</p>' : '') +
-    '<input type="text" id="appPromptInput" class="input" style="width:100%; margin-bottom:16px;" value="' + escapeAttr(defaultValue || '') + '" />' +
-    '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
+    '<input type="text" id="appPromptInput" class="input u-mb-16px" style="width:100%;" value="' + escapeAttr(defaultValue || '') + '" />' +
+    '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
       '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
       '<button type="button" class="primary u-minw-80px u-p-8px_16px" id="appPromptBtn">OK</button>' +
     '</div>';
@@ -40924,7 +41059,7 @@ function entryAvatarColor(s) {
 function openAddShelfModal() {
   document.getElementById('addShelfModalName').value = '';
   document.getElementById('addShelfModalLinksContainer').innerHTML = 
-    '<div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
+    '<div class="add-shelf-link-row u-ai-center u-gap-8px u-mb-8px" style="display:flex;">' +
       '<input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
     '</div>';
   document.getElementById('addShelfModalType').value = 'movie';
@@ -40943,7 +41078,7 @@ function addShelfModalAddLink() {
   div.style.marginBottom = '8px';
   div.innerHTML = 
     '<input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="Additional URL" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">' +
-    '<button type="button" class="lc-btn secondary" aria-label="Remove this URL" style="padding: 6px 12px; height: 38px; min-height: 38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
+    '<button type="button" class="lc-btn secondary u-p-6px_12px u-minh-38px" aria-label="Remove this URL" style="height:38px;" data-act="appActRemoveShelfLinkRow" data-act-args="[&quot;@self&quot;]">&#x2715;</button>';
   container.appendChild(div);
   validateAddShelfModal();
 }
@@ -41066,8 +41201,8 @@ function addRow(name, url, type, enabled, group, channelId) {
 
   div.innerHTML =
     '<div class="entry-card-top u-fd-column">' +
-      '<div class="entry-ctrl-row" style="width: 100%; justify-content: flex-start; margin-bottom: 2px;">' +
-        '<div class="entry-pos-wrap" style="display:flex; align-items:center;">' +
+      '<div class="entry-ctrl-row u-jc-flex_start u-mb-2px" style="width:100%;">' +
+        '<div class="entry-pos-wrap u-ai-center" style="display:flex;">' +
           '<input type="number" class="pos" min="1" title="Type a position number to move this list there" data-act="movePosTo" data-act-args="[&quot;@self&quot;]">' +
         '</div>' +
         '<span class="drag-handle ec-btn u-cur-grab" title="Drag to reorder"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
@@ -41083,8 +41218,8 @@ function addRow(name, url, type, enabled, group, channelId) {
           '</svg>' +
         '</button>' +
       '</div>' +
-      '<div style="display: flex; gap: 8px; width: 100%; align-items: center;">' +
-        '<div class="entry-card-body" style="flex-direction: row; gap: 10px; align-items: center; width: 100%;">' +
+      '<div class="u-gap-8px u-ai-center" style="display:flex; width:100%;">' +
+        '<div class="entry-card-body u-fd-row u-gap-10px u-ai-center" style="width:100%;">' +
           '<div class="entry-name-row u-flex-1">' +
             '<input type="text" placeholder="Name (e.g. Trending Movies)" class="name" value="' + escapeAttr(name || '') + '">' +
           '</div>' +
@@ -41618,7 +41753,7 @@ function renderMyMdblistLists(lists) {
     '</button>';
 
     const isCustomUserList = !isHistory && !isWatchlist && !isAiringNext && !isUpNext && !l.dynamic;
-    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn" style="color:var(--danger); border-color:var(--danger);" data-provider="mdblist" data-list-id="' + escapeAttr(l.id || l.slug) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
+    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn u-c-v_danger u-bdc-v_danger" data-provider="mdblist" data-list-id="' + escapeAttr(l.id || l.slug) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
 
     let postersHtml = '';
     if (isUpNext) {
@@ -41676,7 +41811,7 @@ function renderMyMdblistLists(lists) {
             const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbUpNextRemoveBtn +
                 overlays +
@@ -41738,7 +41873,7 @@ function renderMyMdblistLists(lists) {
             const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbAiringNextRemoveBtn +
                 overlays +
@@ -41749,7 +41884,7 @@ function renderMyMdblistLists(lists) {
           }).join('') +
         '</div>';
       } else if (_mdblistAiringNextEnriching) {
-        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span class="u-bd-2px_solid_v_accent u-bordertopcolor-transparent u-br-50 u-va-middle u-mr-6px" style="display:inline-block; width:12px; height:12px; animation:spin 0.8s linear infinite;"></span>Checking upcoming air dates&hellip;</p>';
       } else {
         postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
       }
@@ -42227,7 +42362,7 @@ async function startTraktDeviceLogin(retried) {
     if (!data.ok || !data.user_code) {
       if (codeEl) codeEl.innerText = 'ERROR';
       if (statusEl) {
-        statusEl.innerHTML = '<span class="u-c-v_danger">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:var(--font-size-xs);" data-act="startTraktDeviceLogin">Try Again</button>';
+        statusEl.innerHTML = '<span class="u-c-v_danger">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary u-ml-8px u-p-3px_8px u-fs-v_font_size_xs" data-act="startTraktDeviceLogin">Try Again</button>';
       }
       return;
     }
@@ -42250,7 +42385,7 @@ async function startTraktDeviceLogin(retried) {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
-        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:var(--font-size-xs);" data-act="startTraktDeviceLogin">Get New Code</button>';
+        if (statusEl) statusEl.innerHTML = 'Activation code expired. <button type="button" class="lc-btn secondary u-ml-8px u-p-3px_8px u-fs-v_font_size_xs" data-act="startTraktDeviceLogin">Get New Code</button>';
         return;
       }
 
@@ -42298,7 +42433,7 @@ async function startTraktDeviceLogin(retried) {
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
-    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:var(--font-size-xs);" data-act="startTraktDeviceLogin">Try Again</button>';
+    if (statusEl) statusEl.innerHTML = 'Network error requesting device code. <button type="button" class="lc-btn secondary u-ml-8px u-p-3px_8px u-fs-v_font_size_xs" data-act="startTraktDeviceLogin">Try Again</button>';
   }
 }
 
@@ -42588,7 +42723,7 @@ function renderMyPrivateTraktLists(lists) {
 
     const isCustomUserList = !isHistory && !isWatchlist && !isAiringNext && !isContinueWatching;
     const traktListId = (l.ids && l.ids.trakt) || l.id || l.slug || '';
-    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn" style="color:var(--danger); border-color:var(--danger);" data-provider="trakt" data-list-id="' + escapeAttr(traktListId) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
+    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn u-c-v_danger u-bdc-v_danger" data-provider="trakt" data-list-id="' + escapeAttr(traktListId) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
 
     let postersHtml = '';
     if (isContinueWatching) {
@@ -42643,14 +42778,14 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             const progPercent = Math.min(100, Math.max(0, it.progress || 0));
             const progressOverlay = progPercent > 0
-              ? '<div class="playback-progress-bar" style="position:absolute; bottom:0; left:0; right:0; height:4px; background:rgba(0,0,0,0.5); z-index:2;"><div style="width:' + progPercent + '%; height:100%; background:var(--accent);"></div></div>'
+              ? '<div class="playback-progress-bar u-bg-rgba_0_0_0_0_5" style="position:absolute; bottom:0; left:0; right:0; height:4px; z-index:2;"><div style="width:' + progPercent + '%; height:100%; background:var(--accent);"></div></div>'
               : '';
 
             const epSubtitle = it.episodeTitle || (it.seasonNum != null && it.episodeNum != null ? ('S' + it.seasonNum + 'E' + it.episodeNum) : '');
 
             return '<div class="list-card-mini-poster-tile trakt-continue-watching-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(it.type || 'mixed') + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 progressOverlay +
                 (dateBadge + bottomBadge) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
@@ -42712,7 +42847,7 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
@@ -42723,7 +42858,7 @@ function renderMyPrivateTraktLists(lists) {
           }).join('') +
         '</div>';
       } else if (_traktAiringNextEnriching) {
-        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span class="u-bd-2px_solid_v_accent u-bordertopcolor-transparent u-br-50 u-va-middle u-mr-6px" style="display:inline-block; width:12px; height:12px; animation:spin 0.8s linear infinite;"></span>Checking upcoming air dates&hellip;</p>';
       } else {
         postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
       }
@@ -43044,14 +43179,14 @@ function renderMyTmdbLists(lists) {
               overlays +
             '</div>' +
             '<div class="list-card-mini-poster-name">' + escapeHtml(it.title || '') + '</div>' +
-            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
           '</div>';
         }).join('') +
       '</div>';
     }
 
     const isCustomUserList = !isWatchlist && !isFavorites;
-    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn" style="color:var(--danger); border-color:var(--danger);" data-provider="tmdb" data-list-id="' + escapeAttr(listIdStr) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
+    const deleteBtn = isCustomUserList ? '<button type="button" class="lc-btn secondary myListDeleteBtn u-c-v_danger u-bdc-v_danger" data-provider="tmdb" data-list-id="' + escapeAttr(listIdStr) + '" data-name="' + escapeAttr(l.name) + '">Delete</button>' : '';
 
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '">' +
       '<div class="list-card-header">' +
@@ -43649,7 +43784,7 @@ function renderMySimklLists(lists) {
           const smkPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(it, it.poster) : it.poster;
           return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
             '<div class="list-card-mini-poster-img-wrap">' +
-              (smkPoster ? '<img src="' + escapeAttr(smkPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(smkPoster || '') + '" alt="" loading="lazy">' : '<div style="width:100%;height:100%;background:var(--bg-card);"></div>') +
+              (smkPoster ? '<img src="' + escapeAttr(smkPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(smkPoster || '') + '" alt="" loading="lazy">' : '<div class="u-bg-v_color_bg_sunken" style="width:100%; height:100%;"></div>') +
               (isAiringNext ? (dateBadge + bottomBadge) : '') +
               removeBtn +
               overlays +
@@ -45064,22 +45199,22 @@ function renderDiscoveredCategories() {
 
   let html = '<div class="u-mt-10px u-bdt-1px_solid_v_border u-pt-12px">' +
     '<p class="u-fw-600 u-fs-v_font_size_base u-mb-8px u-c-v_text">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
-    '<div style="display:flex; flex-direction:column; gap:10px;">';
+    '<div class="u-fd-column u-gap-10px" style="display:flex;">';
 
   discoveredImportCategories.forEach((cat, idx) => {
     const isWatchedOrDiary = cat.isWatchCategory || cat.id.includes('watch') || cat.id.includes('diary') || cat.id.includes('history');
     const watchToggle = isWatchedOrDiary
-      ? '<div class="u-ml-26px u-mt-4px"><label style="font-size:var(--font-size-sm); color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
+      ? '<div class="u-ml-26px u-mt-4px"><label class="u-fs-v_font_size_sm u-c-v_muted u-cur-pointer u-ai-center u-gap-5px" style="display:inline-flex;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
       : '';
 
     html += '<div class="row u-fd-column u-ai-flex_start u-p-10px_12px u-bg-v_bg_2_rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm">' +
-      '<div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:8px;">' +
-        '<label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); cursor:pointer; color:var(--text);">' +
+      '<div class="u-ai-center u-jc-space_between u-fw2-wrap u-gap-8px" style="display:flex; width:100%;">' +
+        '<label class="u-ai-center u-gap-8px u-fw-600 u-fs-v_font_size_base u-cur-pointer u-c-v_text" style="display:inline-flex;">' +
           '<input type="checkbox" class="importCatCheck" data-cat-index="' + idx + '" checked> ' +
           escapeHtml(cat.label) +
           ' <span class="u-fw-normal u-c-v_muted u-fs-v_font_size_sm">(' + cat.items.length + ' entries)</span>' +
         '</label>' +
-        '<div style="display:inline-flex; align-items:center; gap:6px;">' +
+        '<div class="u-ai-center u-gap-6px" style="display:inline-flex;">' +
           '<span class="u-fs-v_font_size_sm u-c-v_muted">Destination:</span>' +
           '<select class="importCatTargetSelect u-p-6px_10px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text" data-cat-index="' + idx + '">' +
             buildCategoryTargetOptionsHtml(cat.defaultTarget, cat.defaultNewName) +
@@ -46614,7 +46749,7 @@ async function executeUnifiedListSearch(rawQuery, targetBox) {
 
 function renderCustomizeButtonHtml(name, url, type) {
   return '<button type="button" class="lc-btn secondary customizeListBtn" data-name="' + escapeAttr(name || '') + '" data-url="' + escapeAttr(url || '') + '" data-type="' + escapeAttr(type || 'movie') + '" title="Customize in List Builder" aria-label="Customize in List Builder">' +
-    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none; flex-shrink:0;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="u-fsh-0" style="pointer-events:none;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>' +
     '<span class="customize-btn-text">Customize</span>' +
   '</button>';
 }
@@ -47077,7 +47212,7 @@ async function loadPosterSlot(slot) {
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';
@@ -47591,7 +47726,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
         overlays +
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(s.name) + '</div>' +
-      ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
 
@@ -47964,7 +48099,7 @@ async function loadCuratedListsFeed(forceRefresh) {
 
     if (!sectionsHtml) {
       container.innerHTML =
-        '<div class="u-ta-center u-p-24px_16px u-bg-v_card_bg u-bd-1px_solid_v_border u-br-v_radius">' +
+        '<div class="u-ta-center u-p-24px_16px u-bd-1px_solid_v_border u-br-v_radius">' +
           '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '</div>';
       return;
@@ -47980,7 +48115,7 @@ async function loadCuratedListsFeed(forceRefresh) {
   } catch (err) {
     console.error('Curated lists error:', err);
     container.innerHTML =
-      '<div class="u-ta-center u-p-24px_16px u-bg-v_card_bg u-bd-1px_solid_v_border u-br-v_radius">' +
+      '<div class="u-ta-center u-p-24px_16px u-bd-1px_solid_v_border u-br-v_radius">' +
         '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '<button type="button" class="lc-btn primary" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;]">Explore Discover</button>' +
       '</div>';
@@ -48719,9 +48854,9 @@ function openEpisodeDetails(epNum) {
 
   const innerHtml = 
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-    '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap; margin-top:20px;">' +
+    '<div class="u-fd-row u-gap-32px u-fw2-wrap u-mt-20px" style="display:flex;">' +
       '<div class="u-flex-0_0_300px u-maxw-100">' +
-        (still ? '<img src="' + still + '" style="width:100%; border-radius:var(--radius-sm); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
+        (still ? '<img src="' + still + '" class="u-br-v_radius_sm u-bsh-0_4px_12px_rgba_0_0_0_0_5" style="width:100%;">' : '') +
       '</div>' +
       '<div class="u-flex-1 u-minw-300px">' +
         '<h1 class="u-m-0_0_16px u-fs-2_5rem u-ff-serif">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
@@ -49173,7 +49308,7 @@ function renderItemStorylinesWatchOrder(d, type) {
           (isWatched && !isCurrent ? '<span class="item-storyline-watched-badge" title="Watched">&#x2713;</span>' : '') +
         '</div>' +
         '<div class="item-storyline-title">' + escapeHtml(displayTitle) + '</div>' +
-        '<div class="item-storyline-meta" style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
+        '<div class="item-storyline-meta u-ai-center u-jc-space_between u-gap-6px" style="display:flex;">' +
           '<span class="u-ov-hidden u-to-ellipsis u-ws-nowrap">' + escapeHtml(formatSubtitle) + '</span>' +
           ratingSlot +
         '</div>' +
@@ -49361,14 +49496,14 @@ async function openItemDetailsModal(id, type, opts) {
     
     const trailerHtml = d.trailerKey ? 
       '<h3 class="u-m-0_0_16px u-ff-serif u-fs-v_font_size_2xl">Trailer</h3>' +
-      '<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:var(--radius-sm);">' +
-      '<iframe style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
+      '<div class="u-pb-56_25 u-ov-hidden u-br-v_radius_sm" style="position:relative; height:0;">' +
+      '<iframe class="u-bd-0" style="position:absolute; top:0; left:0; width:100%; height:100%;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
       '</div>' : '';
 
     let seasonsHtml = '';
     if (d.seasonsData && d.seasonsData.length > 0) {
       seasonsHtml += '<h3 class="u-m-32px_0_16px u-ff-serif u-fs-v_font_size_2xl">Seasons</h3>';
-      seasonsHtml += '<div style="display:flex; flex-direction:column; gap:16px;">';
+      seasonsHtml += '<div class="u-fd-column u-gap-16px" style="display:flex;">';
       // Specials (season 0) are real seasons too -- just listed last, below
       // every numbered season, since TMDB itself orders them first.
       const regularSeasons = d.seasonsData.filter(season => season.season_number !== 0);
@@ -49399,8 +49534,8 @@ async function openItemDetailsModal(id, type, opts) {
                 '</button>' +
               '</div>' +
             '</div>' +
-            '<div class="season-episodes-container" style="display:none; padding:16px; border-top:1px solid var(--border); background:rgba(0,0,0,0.2);">' +
-              '<div class="episodes-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:16px;"></div>' +
+            '<div class="season-episodes-container u-p-16px u-bdt-1px_solid_v_border u-bg-rgba_0_0_0_0_2" style="display:none;">' +
+              '<div class="episodes-grid u-gtc-repeat_auto_fill_minmax_140px_1fr u-gap-16px" style="display:grid;"></div>' +
             '</div>' +
           '</div>';
       });
@@ -49534,7 +49669,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   container.style.display = 'block';
   if (grid.innerHTML.trim() !== '') return; // already loaded
   
-  grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding: 20px; color:var(--muted);">Loading episodes...</div>';
+  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes...</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -49562,18 +49697,18 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
       window._episodeDataCache[ep.episode_number] = ep;
       const still = ep.still_path ? escapeAttr(ep.still_path) : (fallbackStill ? escapeAttr(fallbackStill) : '');
       epsHtml +=
-        '<div class="clickable-episode" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex; flex-direction:column; gap:4px; cursor:pointer;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
-          '<div style="width:100%; aspect-ratio:16/9; background:#222; border-radius:var(--radius-sm); overflow:hidden; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.4);">' +
-            (still ? '<img src="' + still + '" style="width:100%; height:100%; object-fit:cover;">' : '') +
-            '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:var(--color-on-brand); padding:2px 6px; border-radius:var(--radius-xs); font-weight:bold; font-size:var(--font-size-sm); box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
+        '<div class="clickable-episode u-fd-column u-gap-4px u-cur-pointer" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
+          '<div class="u-aspectratio-16_9 u-bg-222 u-br-v_radius_sm u-ov-hidden u-bsh-0_2px_6px_rgba_0_0_0_0_4" style="width:100%; position:relative;">' +
+            (still ? '<img src="' + still + '" class="u-objectfit-cover" style="width:100%; height:100%;">' : '') +
+            '<div class="episode-num-badge u-bg-v_accent u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
           '</div>' +
           '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
     });
-    grid.innerHTML = epsHtml || '<div style="grid-column: 1 / -1; color:var(--muted);">No episodes found.</div>';
+    grid.innerHTML = epsHtml || '<div class="u-gridcolumn-1_1 u-c-v_muted">No episodes found.</div>';
     if (typeof updateSeasonWatchedButton === 'function') updateSeasonWatchedButton(seasonNum);
   } catch (err) {
-    grid.innerHTML = '<div style="grid-column: 1 / -1; color:red;">Error loading episodes.</div>';
+    grid.innerHTML = '<div class="u-gridcolumn-1_1 u-c-red">Error loading episodes.</div>';
   }
 }
 
@@ -49892,33 +50027,33 @@ function openSelectListModal(id, type, title, poster) {
       }
       
       html += 
-        '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+        '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+          '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
             '<input type="checkbox" class="list-select-cb" data-type="custom" data-idx="' + idx + '" data-initially-checked="' + (isChecked ? 'true' : 'false') + '" ' + (isChecked ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
             '<span class="u-fw-500">' + escapeHtml(displayName) + '</span>' +
             (isChecked ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
-          (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isChecked ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: Trakt
   if (hasTrakt) {
-    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span class="u-c-ed1c24 u-fw-bold">\u25CF</span> Trakt ' + (traktUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-ed1c24 u-fw-bold">\u25CF</span> Trakt ' + (traktUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
     '</div>';
 
     const traktWl = Array.isArray(window._myTraktLists) ? window._myTraktLists.find(l => l.slug === 'watchlist' || l.url === 'trakt:watchlist') : null;
     const inTraktWatchlist = isItemInExternalList('trakt', 'watchlist', 'watchlist', id, traktWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-name="Trakt Watchlist" data-initially-checked="' + (inTraktWatchlist ? 'true' : 'false') + '" ' + (inTraktWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>Trakt Watchlist</span>' +
           (inTraktWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTraktWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTraktLists)) {
@@ -49926,13 +50061,13 @@ function openSelectListModal(id, type, title, poster) {
         if (!tl || tl.slug === 'watchlist' || tl.url === 'trakt:watchlist') return;
         const inList = isItemInExternalList('trakt', 'custom', tl.id || tl.slug || '', id, tl);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="custom" data-list-id="' + escapeAttr(tl.id || tl.slug || '') + '" data-name="' + escapeAttr(tl.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tl.name || 'Trakt List') + '</span>' +
               (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -49940,8 +50075,8 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Simkl
   if (hasSimkl) {
-    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span class="u-c-00e699 u-fw-bold">\u25CF</span> Simkl ' + (simklUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-00e699 u-fw-bold">\u25CF</span> Simkl ' + (simklUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
     '</div>';
 
     const simklStatuses = [
@@ -49956,45 +50091,45 @@ function openSelectListModal(id, type, title, poster) {
       const foundList = Array.isArray(window._mySimklLists) ? window._mySimklLists.find(l => l.url && l.url.includes(st.key) && (type === 'series' ? l.type === 'series' : l.type === 'movie')) : null;
       const isPresent = isItemInExternalList('simkl', 'status', st.key, id, foundList);
       html += 
-        '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-          '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+        '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+          '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
             '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="simkl" data-target="status" data-status="' + st.key + '" data-list-id="' + st.key + '" data-name="Simkl ' + escapeAttr(st.label) + '" data-initially-checked="' + (isPresent ? 'true' : 'false') + '" ' + (isPresent ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
             '<span>' + escapeHtml(st.label) + '</span>' +
             (isPresent ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
-          (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
+          (isPresent ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
     });
   }
 
   // SECTION: TMDB
   if (hasTmdb) {
-    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span class="u-c-01b4e4 u-fw-bold">\u25CF</span> TMDB ' + (tmdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-01b4e4 u-fw-bold">\u25CF</span> TMDB ' + (tmdbUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
     '</div>';
 
     const tmdbWl = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('watchlist')) : null;
     const inTmdbWatchlist = isItemInExternalList('tmdb', 'watchlist', 'watchlist', id, tmdbWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="watchlist" data-list-id="watchlist" data-name="TMDB Watchlist" data-initially-checked="' + (inTmdbWatchlist ? 'true' : 'false') + '" ' + (inTmdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Watchlist</span>' +
           (inTmdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     const tmdbFav = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('favorites')) : null;
     const inTmdbFav = isItemInExternalList('tmdb', 'favorite', 'favorite', id, tmdbFav);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="favorite" data-list-id="favorite" data-name="TMDB Favorites" data-initially-checked="' + (inTmdbFav ? 'true' : 'false') + '" ' + (inTmdbFav ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Favorites</span>' +
           (inTmdbFav ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inTmdbFav ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myTmdbLists)) {
@@ -50002,13 +50137,13 @@ function openSelectListModal(id, type, title, poster) {
         if (!tml || (tml.url && (tml.url.includes('watchlist') || tml.url.includes('favorites')))) return;
         const inList = isItemInExternalList('tmdb', 'custom', tml.id || '', id, tml);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="custom" data-list-id="' + escapeAttr(tml.id || '') + '" data-name="' + escapeAttr(tml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tml.name || 'TMDB List') + '</span>' +
               (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -50016,20 +50151,20 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: MDBList
   if (hasMdblist) {
-    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span class="u-c-f5c518 u-fw-bold">\u25CF</span> MDBList ' + (mdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-16px_0_6px u-ai-center u-gap-6px" style="display:flex;">' +
+      '<span class="u-c-f5c518 u-fw-bold">\u25CF</span> MDBList ' + (mdbUser ? '<small class="u-tt-none u-fw-normal" style="opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
     '</div>';
 
     const mdbWl = Array.isArray(window._myMdblistLists) ? window._myMdblistLists.find(l => l.slug === 'watchlist' || l.url === 'mdblist:watchlist') : null;
     const inMdbWatchlist = isItemInExternalList('mdblist', 'watchlist', 'watchlist', id, mdbWl);
     html += 
-      '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-        '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+      '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+        '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-name="MDBList Watchlist" data-initially-checked="' + (inMdbWatchlist ? 'true' : 'false') + '" ' + (inMdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>MDBList Watchlist</span>' +
           (inMdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
-        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
+        (inMdbWatchlist ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
 
     if (Array.isArray(window._myMdblistLists)) {
@@ -50037,13 +50172,13 @@ function openSelectListModal(id, type, title, poster) {
         if (!ml || ml.slug === 'watchlist' || ml.slug === 'history' || ml.url === 'mdblist:watchlist' || ml.url === 'mdblist:history') return;
         const inList = isItemInExternalList('mdblist', 'custom', ml.id || ml.slug || '', id, ml);
         html += 
-          '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
-            '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
+          '<div class="select-list-row u-ai-center u-jc-space_between u-p-10px_0 u-bdb-1px_solid_v_border" style="display:flex;">' +
+            '<label class="u-ai-center u-gap-10px u-cur-pointer u-flex-1 u-c-v_text u-fs-v_font_size_base" style="display:flex;">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="custom" data-list-id="' + escapeAttr(ml.id || ml.slug || '') + '" data-name="' + escapeAttr(ml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(ml.name || 'MDBList List') + '</span>' +
               (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
-            (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
+            (inList ? '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
       });
     }
@@ -50051,7 +50186,7 @@ function openSelectListModal(id, type, title, poster) {
 
   if (html) {
     html += '<div class="u-mt-16px u-pt-12px u-bdt-1px_dashed_v_border u-ta-center">' +
-      '<button type="button" class="lc-btn secondary" style="width:100%; font-size:var(--font-size-base);" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
+      '<button type="button" class="lc-btn secondary u-fs-v_font_size_base" style="width:100%;" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
     '</div>';
   }
 
@@ -50109,7 +50244,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -50139,7 +50274,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -50173,7 +50308,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -50210,7 +50345,7 @@ function openSelectListModal(id, type, title, poster) {
                 const label = row.querySelector('label');
                 if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
-                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
+                  row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary u-p-3px_8px u-fs-v_font_size_xs u-c-v_danger u-bdc-v_danger u-minw-auto u-lh-1" style="height:26px;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
               }
             }
@@ -50899,7 +51034,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
     const type = currentCatalogSearchType === 'tv' ? 'series' : 'movie';
     const id = 'tmdb:' + m.tmdbId;
     const ratingHtml = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(m) : '';
-    const subtitleHtml = '<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;">' +
+    const subtitleHtml = '<div class="u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;">' +
       '<span>' + escapeHtml(m.year || '') + '</span>' +
       ratingHtml +
     '</div>';
@@ -51186,18 +51321,18 @@ function renderChannelTitleResults(results, searchType = 'tv') {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : (r.poster);
     const posterImg = rPoster
       ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy">'
-      : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;cursor:pointer;">No poster</div>';
+      : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px u-cur-pointer" style="display:flex;">No poster</div>';
     const btnLabel = isMovie ? '+ Add Movie' : '+ Browse';
     const cardClass = isMovie ? 'channelMovieCard' : 'channelTitleCard';
     const btnClass = isMovie ? 'channelAddMovieBtn' : 'channelTitleBtn';
-    return '<div class="custom-list-search-item ' + cardClass + '" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' +
+    return '<div class="custom-list-search-item ' + cardClass + ' u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' +
       ' data-tmdbid="' + r.tmdbId + '" data-title="' + escapeAttr(r.title) + '" data-year="' + escapeAttr(r.year || '') + '" data-poster="' + escapeAttr(r.poster || '') + '" data-backdrop="' + escapeAttr(r.backdrop || '') + '">' +
       posterImg +
-      '<div style="width:100%; font-size:var(--font-size-xs); font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(r.title) + '">' +
+      '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(r.title) + '">' +
         escapeHtml(r.title) +
       '</div>' +
-      (r.year ? '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px">' + escapeHtml(r.year) + '</div>' : '<div style="height:14px; margin-bottom:4px;"></div>') +
-      '<button type="button" class="lc-btn secondary ' + btnClass + '" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' +
+      (r.year ? '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px">' + escapeHtml(r.year) + '</div>' : '<div class="u-mb-4px" style="height:14px;"></div>') +
+      '<button type="button" class="lc-btn secondary ' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' +
       ' data-tmdbid="' + r.tmdbId + '" data-title="' + escapeAttr(r.title) + '" data-year="' + escapeAttr(r.year || '') + '" data-poster="' + escapeAttr(r.poster || '') + '" data-backdrop="' + escapeAttr(r.backdrop || '') + '">' + btnLabel + '</button>' +
       '</div>';
   }).join('');
@@ -52275,11 +52410,11 @@ function renderChannelDraftList() {
     const selecting = channelDraftSelectMode;
     const selectBox = selecting
       ? '<div style="position:absolute; top:4px; left:4px; z-index:5;">' +
-          '<input type="checkbox" class="channelPickCheck" data-idx="' + i + '"' + (isChannelDraftSelected(i) ? ' checked' : '') +
-          ' aria-label="Select this pick" style="width:20px; height:20px; accent-color:var(--accent); cursor:pointer;">' +
+          '<input type="checkbox" class="channelPickCheck u-acc-v_accent u-cur-pointer" data-idx="' + i + '"' + (isChannelDraftSelected(i) ? ' checked' : '') +
+          ' aria-label="Select this pick" style="width:20px; height:20px;">' +
         '</div>'
       : '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-          '<input type="number" class="pos channelPosInput" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:var(--font-size-xs); text-align:center; border-radius:var(--radius-sm); background:rgba(0,0,0,0.75); color:var(--color-on-brand); border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
+          '<input type="number" class="pos channelPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
         '</div>';
     const removeBtn = selecting ? '' : '<button type="button" class="cw-remove-btn channelRemovePickBtn" title="Remove pick" aria-label="Remove pick" style="z-index:4;">\u2715</button>';
 
@@ -52396,7 +52531,7 @@ function renderChannelPosterPicker() {
 
   // 1. Custom Channel Poster Option
   let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
-    '<div class="channel-poster-thumb-wrap custom-preview" style="background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; border:1px solid rgba(0,122,255,0.3);">' +
+    '<div class="channel-poster-thumb-wrap custom-preview u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100 u-fd-column u-ai-center u-jc-center u-gap-4px u-p-6px u-bd-1px_solid_rgba_0_122_255_0_3" style="display:flex;">' +
       '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
@@ -58928,7 +59063,7 @@ function renderChannelCrossoverSuggestions() {
       '<p class="channel-crossover-desc">' + escapeHtml(event.description) + '</p>' +
       '<div class="channel-crossover-parts">' + chipsHtml + '</div>' +
       '<div class="channel-crossover-actions">' +
-        '<button type="button" class="primary lc-btn" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '" style="padding:6px 14px; font-size:var(--font-size-sm);">' + escapeHtml(btnLabel) + '</button>' +
+        '<button type="button" class="primary lc-btn u-p-6px_14px u-fs-v_font_size_sm" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '">' + escapeHtml(btnLabel) + '</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -60656,12 +60791,12 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
         : '';
 
       return '<div class="list-card-mini-poster-tile">' +
-        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
+        '<div class="list-card-mini-poster-img-wrap u-cur-pointer" style="position:relative;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
           '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' +
           overlays +
         '</div>' +
         '<div class="list-card-mini-poster-name" title="' + escapeAttr(itemTitle) + '">' + escapeHtml(itemTitle) + '</div>' +
-        '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(yearOrSeason) + '</span>' + ratingSlot + '</div>' +
+        '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(yearOrSeason) + '</span>' + ratingSlot + '</div>' +
       '</div>';
     }).join('');
 
@@ -61737,7 +61872,7 @@ function renderMyCreatedChannelsList() {
       
       const imgHtml = p
         ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-        : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:var(--font-size-2xs);text-align:center;padding:4px;">No poster</div>';
+        : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
       
       // Each tile opens that item's own details -- was previously
       // unclickable itself (only the shared container-level onclick below
@@ -61782,11 +61917,11 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
-            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
+            ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
+          '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           addBtnHtml +
         '</div>' +
       '</div>' +
@@ -62882,15 +63017,15 @@ function renderChannelPersonResults(results) {
     const pPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(p, p.poster || '') : (p.poster);
     const img = pPoster
       ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(pPoster) + '" alt="" loading="lazy">'
-      : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;cursor:pointer;">No photo</div>';
+      : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px u-cur-pointer" style="display:flex;">No photo</div>';
     const data = ' data-personid="' + escapeAttr(String(p.personId)) + '" data-personname="' + escapeAttr(p.name) + '"';
-    return '<div class="custom-list-search-item channelPersonCard" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' + data + '>' +
+    return '<div class="custom-list-search-item channelPersonCard u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' + data + '>' +
       img +
-      '<div style="width:100%; font-size:var(--font-size-xs); font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</div>' +
-      '<div style="font-size:var(--font-size-xs); color:var(--muted); text-align:center; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;" title="' + escapeAttr(p.knownFor || p.department || '') + '">' +
+      '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</div>' +
+      '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px u-ov-hidden u-to-ellipsis u-ws-nowrap" style="width:100%;" title="' + escapeAttr(p.knownFor || p.department || '') + '">' +
         escapeHtml(p.knownFor || p.department || '') +
       '</div>' +
-      '<button type="button" class="lc-btn secondary channelPersonBtn" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' + data + '>+ Browse</button>' +
+      '<button type="button" class="lc-btn secondary channelPersonBtn u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' + data + '>+ Browse</button>' +
       '</div>';
   }).join('');
   box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cards + '</div>';
@@ -62948,7 +63083,7 @@ function channelPersonCreditCardHtml(credit, isShow) {
   const poster = typeof resolveClientPoster === 'function' ? resolveClientPoster(credit, credit.poster || '') : (credit.poster || '');
   const img = poster
     ? '<img class="preview-thumb" src="' + escapeAttr(poster) + '" alt="" loading="lazy">'
-    : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;">No poster</div>';
+    : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px" style="display:flex;">No poster</div>';
   const data =
     ' data-tmdbid="' + escapeAttr(String(credit.tmdbId)) + '"' +
     ' data-title="' + escapeAttr(credit.title) + '"' +
@@ -62959,13 +63094,13 @@ function channelPersonCreditCardHtml(credit, isShow) {
   const btnClass = isShow ? 'channelPersonShowBtn' : 'channelPersonMovieBtn';
   const btnLabel = isShow ? '+ Their episodes' : '+ Add';
   const sub = [credit.year, credit.role].filter(Boolean).join(' \u00b7 ');
-  return '<div class="custom-list-search-item ' + cardClass + '" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' + data + '>' +
+  return '<div class="custom-list-search-item ' + cardClass + ' u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' + data + '>' +
     img +
-    '<div style="width:100%; font-size:var(--font-size-xs); font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(credit.title) + '">' +
+    '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(credit.title) + '">' +
       escapeHtml(credit.title) +
     '</div>' +
-    '<div style="font-size:var(--font-size-xs); color:var(--muted); text-align:center; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;" title="' + escapeAttr(sub) + '">' + escapeHtml(sub) + '</div>' +
-    '<button type="button" class="lc-btn secondary ' + btnClass + '" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' + data + '>' + btnLabel + '</button>' +
+    '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px u-ov-hidden u-to-ellipsis u-ws-nowrap" style="width:100%;" title="' + escapeAttr(sub) + '">' + escapeHtml(sub) + '</div>' +
+    '<button type="button" class="lc-btn secondary ' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' + data + '>' + btnLabel + '</button>' +
     '</div>';
 }
 
@@ -62978,7 +63113,7 @@ function renderChannelPersonCredits() {
     return;
   }
   const header =
-    '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
+    '<div class="u-ai-center u-gap-10px u-fw2-wrap u-mb-10px" style="display:flex;">' +
       '<p class="u-m-0 u-fw-600 u-fs-v_font_size_base u-flex-1 u-minw-160px">' +
         escapeHtml(c.name) + ' \u2014 ' + c.movies.length + ' film' + (c.movies.length === 1 ? '' : 's') +
         (c.shows.length ? ' and ' + c.shows.length + ' show' + (c.shows.length === 1 ? '' : 's') : '') +
@@ -63430,14 +63565,14 @@ function showSavedChannelModal(channelName, visibility, url) {
           '</div>'
         : '<div class="u-mb-16px">' +
             '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
-            '<div style="display:flex; gap:8px; align-items:center;">' +
+            '<div class="u-gap-8px u-ai-center" style="display:flex;">' +
               '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
-              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_14px" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
-        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
+        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
@@ -63730,8 +63865,8 @@ function renderChannelDirectory() {
   feed.innerHTML = shown.map((e) => {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
-      : '<button type="button" class="lc-btn list-add-btn channelAddBtn primary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
+      ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger u-bdc-v_danger" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
+      : '<button type="button" class="lc-btn list-add-btn channelAddBtn primary u-p-6px_12px u-fs-v_font_size_sm" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
@@ -63739,7 +63874,7 @@ function renderChannelDirectory() {
         ' data-act="toggleChannelDirectoryLike" data-act-args="' + appActArgs([e.code, "@self"]) + '">' +
         (_channelDirectoryLiked[e.code] ? '\u2665' : '\u2661') + (e.likes ? ' ' + e.likes : '') +
       '</button>' +
-      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
+      '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
       actionBtn,
       ''
     );
@@ -64004,7 +64139,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
           ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-          : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:var(--font-size-2xs);text-align:center;padding:4px;">No poster</div>';
+          : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId
@@ -64029,7 +64164,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
     art = ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(entry.name || 'Channel') + '&format=landscape&v=6';
   }
   const thumb = (!postersHtml && art)
-    ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" style="width:88px; height:56px; object-fit:cover; border-radius:var(--radius-sm); border:1px solid var(--border); flex:0 0 auto;">'
+    ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" class="u-objectfit-cover u-br-v_radius_sm u-bd-1px_solid_v_border u-flex-0_0_auto" style="width:88px; height:56px;">'
     : '';
   const openAttr = entry.code
     ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '" title="See everything in this channel"'
@@ -64142,8 +64277,8 @@ function renderChannelPublishList() {
 
   const mine = channels.map((ch) => {
     const action = ch.sharePublished
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger);" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
+      ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
+      : '<button type="button" class="lc-btn primary u-p-6px_12px u-fs-v_font_size_sm" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
     const extra =
       // A published channel's link lives here, on screen, rather than only
       // in the modal that announced it -- that modal closes and takes the
@@ -64151,7 +64286,7 @@ function renderChannelPublishList() {
       (ch.shareCode
         ? '<div class="row u-mt-8px u-gap-8px">' +
             '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" class="u-fs-v_font_size_sm">' +
-            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
+            '<button type="button" class="secondary lc-btn u-flex-none u-ws-nowrap" style="width:auto;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
           '</div>'
         : '');
     return channelListingCardHtml(channelAsListingEntry(ch), action, extra);
@@ -64161,7 +64296,7 @@ function renderChannelPublishList() {
   // because there is nothing to edit, publish or copy -- only to withdraw.
   const orphans = _orphanedPublishedChannels.map((entry) => channelListingCardHtml(
     entry,
-    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger);" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
+    '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
     ''
   )).join('');
 
@@ -64694,7 +64829,7 @@ function renderChannelMergeList() {
           const ch = channelsMap[chId];
           const chName = ch ? ch.name : 'Unknown Channel';
           if (ch && Array.isArray(ch.items)) totalEpisodes += ch.items.length;
-          return '<span class="badge" style="display:inline-flex; align-items:center; gap:5px; padding:3px 8px; font-size:var(--font-size-sm); background:var(--panel-strong); border:1px solid var(--border); border-radius:var(--radius-sm); margin:2px 4px 2px 0;">' +
+          return '<span class="badge u-ai-center u-gap-5px u-p-3px_8px u-fs-v_font_size_sm u-bg-v_panel_strong u-bd-1px_solid_v_border u-br-v_radius_sm u-m-2px_4px_2px_0" style="display:inline-flex;">' +
             escapeHtml(chName) +
             '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" data-act="removeChannelFromMerge" data-act-args="' + appActArgs([merged.mergedId, chId]) + '">\u2715</button>' +
           '</span>';
@@ -64710,10 +64845,10 @@ function renderChannelMergeList() {
             options +
           '</select>';
         } else {
-          addSelectHtml = '<select class="merge-add-channel-select" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65; cursor:not-allowed;">' +
+          addSelectHtml = '<select class="merge-add-channel-select u-cur-not_allowed" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65;">' +
             '<option value="">All saved channels added</option>' +
           '</select>' +
-          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:var(--font-size-xs); margin-left:4px;" data-act="appActGoToQuickAdd">+ Quick Add</button>';
+          ' <button type="button" class="lc-btn secondary u-p-2px_8px u-fs-v_font_size_xs u-ml-4px" data-act="appActGoToQuickAdd">+ Quick Add</button>';
         }
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
@@ -64727,14 +64862,14 @@ function renderChannelMergeList() {
             '<div class="list-card-body">' +
               '<div class="list-card-title">' + escapeHtml(merged.name) + '</div>' +
               '<div class="list-card-meta"><span>' + countText + '</span></div>' +
-              '<div style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center;">' +
+              '<div class="u-mt-6px u-fw2-wrap u-ai-center" style="display:flex;">' +
                 '<strong class="u-fs-v_font_size_xs u-c-v_muted u-mr-6px">Merged:</strong>' +
                 (channelChips || '<span class="u-c-v_muted u-fs-v_font_size_sm u-mr-4px">None</span>') +
                 addSelectHtml +
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
+              '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
             '</div>' +
           '</div>' +
@@ -65083,7 +65218,7 @@ function renderCustomListSearchResults(results) {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : r.poster;
     const posterImg = rPoster
       ? '<img class="custom-list-search-poster" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="custom-list-search-poster live-preview-poster-placeholder" style="display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:var(--font-size-xs); text-align:center; padding:4px;" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
+      : '<div class="custom-list-search-poster live-preview-poster-placeholder u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px" style="display:flex;" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
 
     const isAlreadyAdded = existingKeys.has(draftKey(itemKind, r.title, r.year));
     const btnText = isAlreadyAdded ? 'Added \u2713' : '+ Add';
@@ -65107,7 +65242,7 @@ function renderCustomListSearchResults(results) {
       '<div class="custom-list-search-meta">' +
         (r.year ? escapeHtml(r.year) + ' \u2022 ' : '') + typeLabel +
       '</div>' +
-      '<button type="button" class="' + btnClass + '" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs); font-weight:600; border-radius:var(--radius-pill);"' +
+      '<button type="button" class="' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs u-fw-600 u-br-v_radius_pill" style="width:100%;"' +
         disabledAttr +
         ' data-searchtype="' + itemType + '"' +
         ' data-tmdbid="' + escapeAttr(String(tmdbIdNum)) + '"' +
@@ -65206,7 +65341,7 @@ function renderCustomListDraftList() {
   if (!box) return;
   if (!customListDraftItems.length) {
     box.innerHTML = '<div class="u-ta-center u-p-28px_16px u-bd-1_5px_dashed_v_border u-br-v_radius_md u-bg-v_surface u-mt-8px">' +
-      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); margin-bottom:8px; opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="u-c-v_muted u-mb-8px" style="opacity:0.7;" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>' +
       '<div class="u-fw-600 u-fs-v_font_size_base u-c-v_text u-mb-4px">No titles in this list yet</div>' +
       '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0_auto u-maxw-340px">Search above to add movies or shows, or tap "+" on any title while browsing Discover, Charts, or Search.</p>' +
     '</div>';
@@ -65218,7 +65353,7 @@ function renderCustomListDraftList() {
     const typeLabel = itType === 'series' ? 'Show' : 'Movie';
     const yearSub = (it.year ? it.year + ' \u2022 ' : '') + typeLabel;
     const posBox = '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-      '<input type="number" class="pos customListPosInput" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:var(--font-size-xs); text-align:center; border-radius:var(--radius-sm); background:rgba(0,0,0,0.75); color:var(--color-on-brand); border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
+      '<input type="number" class="pos customListPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
     '</div>';
     const removeBtn = '<button type="button" class="cw-remove-btn customListRemovePickBtn" title="Remove from list" aria-label="Remove from list" style="z-index:4;">\u2715</button>';
 
@@ -65238,7 +65373,7 @@ function renderCustomListDraftList() {
       ? '<img class="live-preview-poster" src="' + escapeAttr(pickPoster) + '" alt="" loading="lazy">'
       : '<div class="live-preview-poster live-preview-poster-placeholder"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     
-    return '<div class="live-preview-poster-card custom-list-pick" data-idx="' + i + '" style="position:relative; cursor:grab; user-select:none; touch-action:manipulation;">' +
+    return '<div class="live-preview-poster-card custom-list-pick u-cur-grab u-us-none u-touchaction-manipulation" data-idx="' + i + '" style="position:relative;">' +
       '<div style="position:relative; width:100%;">' +
         posterEl +
         posBox +
@@ -69093,7 +69228,7 @@ function buildAiringNextCardHtml() {
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
       (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
 
@@ -69872,7 +70007,7 @@ function renderAccountKeySection() {
   if (!activeCreator) {
     box.innerHTML =
       '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
-      '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:12px;">' +
+      '<div class="actions u-fd-row u-gap-8px u-fw2-wrap u-mt-12px" style="width:auto;">' +
       '<button type="button" class="primary" data-act="openCreateProfileModal">Create Free Account</button>' +
       '<button type="button" class="secondary" data-act="openRestoreModal">Login</button>' +
       '</div>';
@@ -69881,7 +70016,7 @@ function renderAccountKeySection() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   const hasRecovery = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
   box.innerHTML =
-    '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">' +
+    '<div class="u-ai-center u-jc-space_between u-mb-12px u-fw2-wrap u-gap-8px" style="display:flex;">' +
     '<div>' +
     '<span class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700">Signed in as</span>' +
     '<h3 class="u-m-2px_0_0 u-fs-v_font_size_lg u-fw-800 u-c-v_text">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
@@ -69900,7 +70035,7 @@ function renderAccountKeySection() {
       '<p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
     '<div class="recovery-section u-mt-16px u-p-14px_16px u-bd-1px_solid_rgba_255_255_255_0_12 u-br-v_radius_md u-bg-rgba_255_255_255_0_03">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
+      '<div class="u-jc-space_between u-ai-center u-mb-6px u-fw2-wrap u-gap-6px" style="display:flex;">' +
         '<div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Account Recovery</div>' +
         '<span style="font-size:var(--font-size-xs); font-weight:700; padding:2px 8px; border-radius:var(--radius-sm);' + (hasRecovery ? ' background:rgba(52,199,89,0.15); color:var(--color-success-text);' : ' background:rgba(255,149,0,0.15); color:var(--color-warn-text);') + '">' +
           (hasRecovery ? '\u2713 Configured' : '\u26A0 Not Set') +
@@ -69917,7 +70052,7 @@ function renderAccountKeySection() {
     '</div>' +
     '<details class="danger-zone-disclosure">' +
       '<summary class="danger-zone-summary">' +
-        '<span style="display:flex; align-items:center; gap:8px;">' +
+        '<span class="u-ai-center u-gap-8px" style="display:flex;">' +
           '<span class="u-fs-v_font_size_base">&#x26A0;</span>' +
           '<span>Danger Zone (Reset or Delete Account)</span>' +
         '</span>' +
@@ -69927,12 +70062,12 @@ function renderAccountKeySection() {
         '<div class="u-bd-1px_solid_rgba_255_149_0_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_149_0_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_color_warn_text u-mb-4px">Reset Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-          '<button type="button" class="lc-btn" style="background:var(--color-warn); color:var(--color-on-brand); border:none; padding:6px 14px; font-weight:700; font-size:var(--font-size-sm); border-radius:var(--radius-sm); cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_warn u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
         '</div>' +
         '<div class="u-bd-1px_solid_rgba_255_59_48_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_59_48_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_danger_v_color_danger u-mb-4px">Delete Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-          '<button type="button" class="lc-btn" style="background:var(--color-danger); color:var(--color-on-brand); border:none; padding:6px 14px; font-weight:700; font-size:var(--font-size-sm); border-radius:var(--radius-sm); cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_danger u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
         '</div>' +
       '</div>' +
     '</details>';
@@ -70153,12 +70288,12 @@ function openShareListModal(listName, listUrl) {
     '<div class="modal-body">' +
       '<h2 class="panel-title u-mb-6px">Share List</h2>' +
       '<p class="u-m-0_0_14px u-fs-v_font_size_sm u-c-v_muted">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
-      '<div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">' +
+      '<div class="u-gap-8px u-ai-center u-mb-14px" style="display:flex;">' +
         '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_base u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
-        '<button type="button" class="lc-btn primary" id="shareListCopyBtn" data-act="copyShareListUrl" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
+        '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_16px" id="shareListCopyBtn" data-act="copyShareListUrl">Copy Link</button>' +
       '</div>' +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
-        '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' +
+        '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' +
         '<button type="button" class="secondary lc-btn" data-act="closeModal">Close</button>' +
       '</div>' +
     '</div>'
@@ -70368,7 +70503,7 @@ function renderHiddenListsSettingsSection() {
     return '<label class="settings-check-item">' +
       '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
       '<div class="u-flex-1 u-minw-0">' +
-        '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text u-overflowwrap-anywhere">' + escapeHtml(r.name) + '</span>' +
         '<div class="u-c-v_muted u-fs-v_font_size_xs u-mt-2px">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
@@ -70473,12 +70608,12 @@ function renderTrackPlaybackSection() {
       '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
       '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
-        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" class="u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-rgba_0_0_0_0_3 u-c-v_text u-ff-monospace u-fs-v_font_size_sm">' +
-        '<button type="button" class="secondary lc-btn" data-act="copyScrobbleWebhookUrl" style="padding:8px 14px; font-size:var(--font-size-sm);">Copy Webhook URL</button>' +
-        '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:var(--font-size-sm);">Regenerate</button>' +
+        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
+        '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="copyScrobbleWebhookUrl">Copy Webhook URL</button>' +
+        '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been.">Regenerate</button>' +
       '</div>' +
 
-      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+      '<div class="u-m-12px_0_0 u-p-12px_0 u-bdt-1px_solid_v_border u-bs-border_box u-maxw-100" style="width:100%;">' +
         '<div class="settings-toggle-row u-p-0_0_4px u-bdb-none">' +
           '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
             '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Enable Media Server User Filtering</span>' +
@@ -70490,21 +70625,21 @@ function renderTrackPlaybackSection() {
           '</label>' +
         '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
-          '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
+          '<div class="u-ai-center u-jc-space_between u-mb-6px" style="display:flex;">' +
             '<p class="u-m-0 u-fs-v_font_size_sm u-fw-600 u-c-v_text">Select Allowed Users:</p>' +
-            '<button type="button" class="secondary lc-btn" data-act="loadScrobbleSeenUsers" style="padding:3px 8px; font-size:var(--font-size-xs);">Refresh Users</button>' +
+            '<button type="button" class="secondary lc-btn u-p-3px_8px u-fs-v_font_size_xs" data-act="loadScrobbleSeenUsers">Refresh Users</button>' +
           '</div>' +
           '<div id="scrobbleSeenUsersBox" class="u-fs-v_font_size_sm u-c-v_muted u-mb-10px"><small>Loading\u2026</small></div>' +
           '<p class="u-m-0_0_4px u-fs-v_font_size_sm u-c-v_muted">Additional / Manual Usernames (comma-separated):</p>' +
-          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:var(--font-size-sm);">' +
-          '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:var(--font-size-sm); user-select:none; margin:0;">' +
-            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
+          '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" class="u-bs-border_box u-mb-8px u-fs-v_font_size_sm" style="width:100%;">' +
+          '<label class="u-ai-flex_start u-gap-8px u-cur-pointer u-fs-v_font_size_sm u-us-none u-m-0" style="display:flex;">' +
+            '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" class="u-mt-2px u-cur-pointer u-flex-none" style="width:16px; height:16px;">' +
             '<span>Block scrobbles with no username in the payload</span>' +
           '</label>' +
         '</div>' +
       '</div>' +
 
-      '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
+      '<div class="u-m-12px_0_0 u-p-12px_0 u-bdt-1px_solid_v_border u-bs-border_box u-maxw-100" style="width:100%;">' +
         '<div class="settings-toggle-row u-p-0_0_10px">' +
           '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
             '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Automatically sync media server scrobbles to your Watch History list</span>' +
@@ -70524,11 +70659,11 @@ function renderTrackPlaybackSection() {
           '</label>' +
         '</div>' +
         '<div>' +
-          '<button type="button" class="secondary lc-btn" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="padding:8px 14px; font-size:var(--font-size-sm); white-space:normal; line-height:1.35; text-align:center; max-width:100%; width:100%; box-sizing:border-box;">Sync Current Watch History to Connected Accounts Now</button>' +
+          '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm u-ws-normal u-lh-1_35 u-ta-center u-maxw-100 u-bs-border_box" data-act="syncAllConnectedAccountsNow" data-act-args="[&quot;@self&quot;]" style="width:100%;">Sync Current Watch History to Connected Accounts Now</button>' +
         '</div>' +
       '</div>' +
 
-      '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap:8px; margin-top:10px; width:100%; max-width:100%; box-sizing:border-box;">' +
+      '<div class="u-gtc-repeat_auto_fit_minmax_min_100_200px_1fr u-gap-8px u-mt-10px u-maxw-100 u-bs-border_box" style="display:grid; width:100%;">' +
         '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
           '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Plex Webhook Setup</summary>' +
           '<p class="u-m-6px_0_4px u-c-v_muted">1. Open <strong>Plex Web &rarr; Settings &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Click <strong>Save Changes</strong>.</p>' +
@@ -70702,7 +70837,7 @@ async function loadScrobbleSeenUsers() {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
-    let html = '<div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">';
+    let html = '<div class="u-fd-column u-gap-4px u-mt-4px" style="display:flex;">';
     for (const [username, info] of Object.entries(data.users)) {
       const isChecked = allowed.includes(username.toLowerCase());
       let timeStr = '';
@@ -70719,8 +70854,8 @@ async function loadScrobbleSeenUsers() {
       }
       const serverName = (info && info.server) || 'Media Server';
       html +=
-        '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:var(--font-size-sm); padding:3px 0;">' +
-          '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
+        '<label class="u-ai-center u-gap-8px u-cur-pointer u-fs-v_font_size_sm u-p-3px_0" style="display:flex;">' +
+          '<input type="checkbox" class="scrobble-user-cb u-cur-pointer u-flex-none" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px;">' +
           '<span><strong>' + escapeHtml(username) + '</strong> <span class="u-c-v_muted u-fs-v_font_size_xs">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
         '</label>';
     }
@@ -70781,7 +70916,7 @@ async function refreshTrackPlaybackStatus() {
     });
     const data = await res.json();
     if (!data.ok || !data.lastPingAt) {
-      statusBox.innerHTML = '<div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(255,255,255,0.03); border-radius:var(--radius-sm); font-size:var(--font-size-sm); color:var(--muted);"><span class="u-c-v_muted">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
+      statusBox.innerHTML = '<div class="u-ai-center u-gap-8px u-p-8px_12px u-bg-rgba_255_255_255_0_03 u-br-v_radius_sm u-fs-v_font_size_sm u-c-v_muted" style="display:flex;"><span class="u-c-v_muted">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
       return;
     }
     const when = new Date(data.lastPingAt).toLocaleString();
@@ -70794,7 +70929,7 @@ async function refreshTrackPlaybackStatus() {
       const formName = data.legacyAuthForm === 'key' ? 'Account Key (?creator=&key=)' : 'Install Link (?config=)';
       legacyBanner =
         '<div class="u-mt-10px u-p-10px_12px u-bg-rgba_255_149_0_0_12 u-bd-1px_solid_rgba_255_149_0_0_35 u-br-v_radius_sm u-fs-v_font_size_sm u-c-v_text">' +
-          '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+          '<div class="u-ai-flex_start u-gap-8px" style="display:flex;">' +
             '<span class="u-c-v_warning_v_color_warn u-fs-v_font_size_lg u-lh-1_2">&#x26A0;</span>' +
             '<div>' +
               '<div class="u-fw-700 u-c-v_warning_v_color_warn u-mb-2px">Outdated Webhook URL Detected</div>' +
@@ -70806,7 +70941,7 @@ async function refreshTrackPlaybackStatus() {
     }
     statusBox.innerHTML =
       '<div class="u-p-10px_12px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_25 u-br-v_radius_sm u-fs-v_font_size_sm">' +
-        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+        '<div class="u-ai-center u-jc-space_between u-mb-4px" style="display:flex;">' +
           '<span class="u-c-v_accent u-fw-700">\u2713 Last Scrobble Activity</span>' +
           '<span class="u-c-v_muted u-fs-v_font_size_xs">' + escapeHtml(when) + '</span>' +
         '</div>' +
@@ -71044,7 +71179,7 @@ function openRestoreModal() {
     '<button type="button" class="primary" id="restoreSubmitBtn" data-act="submitRestoreProfile">Login</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openCreateProfileModal">Need an account? Create one</button>' +
     '</div>' +
-    '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:var(--font-size-sm);">' +
+    '<div class="u-jc-space_between u-ai-center u-mt-14px u-fs-v_font_size_sm" style="display:flex;">' +
     '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotKeyModal">Forgot key?</a>' +
     '<a href="#" data-act="closeModal" data-act-prevent data-act-then="openForgotUsernameModal">Forgot username?</a>' +
     '</div>'
@@ -73320,12 +73455,12 @@ function openVisibilityModal() {
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title u-mt-0">Save Custom List</h2>' +
       '<p class="u-m-0_0_16px u-fs-v_font_size_sm u-c-v_muted">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
-      '<div class="visibility-choice" style="display:flex; flex-direction:column; gap:12px; margin: 16px 0 20px;">' +
-        '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg);">' +
+      '<div class="visibility-choice u-fd-column u-gap-12px u-m-16px_0_20px" style="display:flex;">' +
+        '<label class="u-ai-flex_start u-gap-12px u-cur-pointer u-p-12px_14px u-bd-1px_solid_v_border u-br-v_radius_md u-bg-v_bg" style="display:flex;">' +
           '<input type="radio" name="listVisibility" value="public" checked class="u-mt-3px u-acc-v_brand">' +
           '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Public</strong><br><small class="u-c-v_muted">Anyone with the link can view, like, and add this list to their catalogs.</small></span>' +
         '</label>' +
-        '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg);">' +
+        '<label class="u-ai-flex_start u-gap-12px u-cur-pointer u-p-12px_14px u-bd-1px_solid_v_border u-br-v_radius_md u-bg-v_bg" style="display:flex;">' +
           '<input type="radio" name="listVisibility" value="private" class="u-mt-3px u-acc-v_brand">' +
           '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Private</strong><br><small class="u-c-v_muted">Only you can view and edit this list when logged into your account.</small></span>' +
         '</label>' +
@@ -73353,14 +73488,14 @@ function showSavedCustomListModal(listName, visibility, url) {
           '</div>'
         : '<div class="u-mb-16px">' +
             '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
-            '<div style="display:flex; gap:8px; align-items:center;">' +
+            '<div class="u-gap-8px u-ai-center" style="display:flex;">' +
               '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
-              '<button type="button" class="lc-btn primary" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_14px" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
-        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
+        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
@@ -74151,7 +74286,7 @@ async function renderCreatorDashboard(options) {
             '</div>' +
             '<div class="list-card-mini-poster-name">' + escapeHtml(label.title || it.title || it.name || '') + '</div>' +
             (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+            ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
           '</div>';
       }).join('');
       const isAdded = typeof isListAddedToConfig === 'function' ? isListAddedToConfig(null, l.type, l.slug) : false;
@@ -74516,7 +74651,7 @@ function buildLocalListCardHtml(l) {
       '</div>' +
       '<div class="list-card-mini-poster-name">' + escapeHtml(label.title) + '</div>' +
       (label.subtitle ? '<div class="list-card-mini-poster-subtitle">' + escapeHtml(label.subtitle) + '</div>' : '') +
-      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
+      ((it.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(it.year ? String(it.year) : '') + '</span>' + ratingSpan + '</div>' : '') +
     '</div>';
   }).join('');
   const typeLabel = l.type === 'series' ? 'Shows' : l.type === 'movie' ? 'Movies' : 'Mixed';
@@ -78262,11 +78397,11 @@ function livePreviewPosterHtml(m) {
   let subtitleHtml = '';
   const subText = m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : ''));
   if (subText && ratingSpan) {
-    subtitleHtml = '<div class="live-preview-poster-subtitle" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
+    subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
   } else if (subText) {
     subtitleHtml = '<div class="live-preview-poster-subtitle">' + escapeHtml(subText) + '</div>';
   } else if (ratingSpan) {
-    subtitleHtml = '<div class="live-preview-poster-subtitle" style="display:flex; align-items:center; justify-content:flex-end; gap:4px; width:100%;">' + ratingSpan + '</div>';
+    subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-flex_end u-gap-4px" style="display:flex; width:100%;">' + ratingSpan + '</div>';
   }
   const extraCardClass = isTraktCwContext ? ' detail-page-trakt-continue-watching' : (isMdblistUpNextContext ? ' detail-page-mdblist-up-next' : '');
   // resolvedPoster, not m.poster: this attribute is what the poster modal
@@ -81975,7 +82110,7 @@ async function generate() {
     }
   }
   box.style.display = 'block';
-  box.innerHTML = '<div class="install-result-card u-ai-center u-jc-center u-p-24px u-c-v_muted"><span class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle;"></span> Generating install link\u2026</div>';
+  box.innerHTML = '<div class="install-result-card u-ai-center u-jc-center u-p-24px u-c-v_muted"><span class="spinner u-bd-2px_solid_v_border u-bordertopcolor-v_accent u-br-50 u-mr-8px u-va-middle" style="display:inline-block; width:20px; height:20px; animation:spin 0.8s linear infinite;"></span> Generating install link\u2026</div>';
 
   // Prefer a short, KV-backed id (see /api/save) so the install URL stays a
   // fixed short length no matter how many lists are configured. If this
@@ -82054,14 +82189,14 @@ async function generate() {
 
       \${sizeWarning}
 
-      <div class="install-actions-bar" style="display:flex; flex-wrap:wrap; gap:10px;">
-        <a href="\${stremioInstallUrl}" class="btn-stremio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-base);">
+      <div class="install-actions-bar u-fw2-wrap u-gap-10px" style="display:flex;">
+        <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio" style="flex:1; min-width:140px; padding:10px 16px; font-weight:700; border-radius:var(--radius-pill); text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; font-size:var(--font-size-base);">
+        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Nuvio
         </a>
-        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary" style="display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; font-weight:600; border-radius:var(--radius-pill); text-align:center; font-size:var(--font-size-sm); text-decoration:none;">
+        <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>
       </div>
@@ -82071,9 +82206,9 @@ async function generate() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
           <span>Manifest Link</span>
         </div>
-        <div class="install-url-input-group" style="display:flex; align-items:stretch; gap:8px; width:100%; flex-wrap:wrap;">
-          <div class="install-url-box" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="flex:1 1 220px; min-width:0; margin:0; display:flex; align-items:center;">\${installUrl}</div>
-          <button type="button" class="install-url-copy-btn primary lc-btn" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="flex:none; padding:0 16px; min-height:38px; height:auto; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:var(--font-size-sm); border-radius:var(--radius-pill);">
+        <div class="install-url-input-group u-ai-stretch u-gap-8px u-fw2-wrap" style="display:flex; width:100%;">
+          <div class="install-url-box u-flex-1_1_220px u-minw-0 u-m-0 u-ai-center" id="manifestLinkDisplay" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Click to copy" style="display:flex;">\${installUrl}</div>
+          <button type="button" class="install-url-copy-btn primary lc-btn u-flex-none u-p-0_16px u-minh-38px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_sm u-br-v_radius_pill" id="copyUrlBtn" data-act="copyLink" data-act-args="\${appActArgs([installUrl])}" title="Copy manifest link" style="height:auto; display:inline-flex;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Copy Link</span>
           </button>
@@ -82836,7 +82971,7 @@ function appShellDialog(options) {
   let html = '';
   if (o.title) html += '<h3 class="u-m-0_0_10px u-fs-v_font_size_md">' + escapeHtml(o.title) + '</h3>';
   if (o.message) html += '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm u-lh-1_45 u-ws-pre_wrap">' + escapeHtml(o.message) + '</p>';
-  html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
+  html += '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">';
   if (cancelLabel) html += '<button type="button" class="btn-secondary u-minw-80px u-p-8px_16px" id="appShellDialogCancel">' + escapeHtml(cancelLabel) + '</button>';
   html += '<button type="button" class="' + (o.destructive ? 'btn-danger' : 'btn-primary') + ' u-minw-80px u-p-8px_16px" id="appShellDialogConfirm">' + escapeHtml(confirmLabel) + '</button>';
   html += '</div>';
@@ -83513,7 +83648,7 @@ function appShellImportFinishedHtml() {
       '</div>' + appShellImportUnmatchedHtml();
     return html;
   }
-  html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+  html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
     '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(appShellImportListName()) + '">' +
     '<label class="app-shell-dedupe" for="appShellImportHomeToggle">' +
     '<input type="checkbox" id="appShellImportHomeToggle" checked>' +
@@ -83574,7 +83709,7 @@ function appShellRenderImports() {
       html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
         (chosen === 'movie' ? 'movies' : 'shows') + ' -- pick the other chip afterwards for the rest.</p>';
     }
-    html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
+    html += '<label class="app-shell-muted u-m-6px_0_4px" for="appShellImportName" style="display:block;">List name</label>' +
       '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
       '<div class="app-shell-actions u-mt-10px">' +
       '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +

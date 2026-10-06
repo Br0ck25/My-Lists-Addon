@@ -14,7 +14,7 @@
           <h2 class="shelf-title sr-only">Your Custom Lists</h2>
           <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Custom lists you've created locally or on your profile.</p>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
+        <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
           <button type="button" class="secondary lc-btn" data-act="openImportListModal">Import</button>
           ${refreshButtonHtml('appActRefreshCreatorDashboard', 'Refresh lists')}
@@ -26,7 +26,7 @@
     <div class="panel u-mt-12px" id="myListsSectionPanel-mdblist">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your MDBList Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" data-act="toggleListsMdblistConnection">Connect MDBList</button>
         </div>
       </div>
@@ -37,7 +37,7 @@
     <div class="panel u-mt-12px" id="myListsSectionPanel-trakt">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Trakt Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" data-act="toggleListsTraktConnection">Connect Trakt</button>
         </div>
       </div>
@@ -49,7 +49,7 @@
     <div class="panel u-mt-12px" id="myListsSectionPanel-tmdb">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your TMDB Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" data-act="toggleListsTmdbConnection">Connect TMDB</button>
         </div>
       </div>
@@ -60,7 +60,7 @@
     <div class="panel u-mt-12px" id="myListsSectionPanel-simkl">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Simkl Lists</h2>
-        <div style="display:flex; gap:8px;">
+        <div class="u-gap-8px" style="display:flex;">
           <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" data-act="toggleListsSimklConnection">Connect Simkl</button>
         </div>
       </div>
@@ -94,14 +94,14 @@
       <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm">Curate, reorder, and manage titles for this custom list.</p>
 
       <!-- 1. List Name & Content Type Header Group -->
-      <div style="display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+      <div class="u-gap-20px u-ai-flex_end u-fw2-wrap u-mb-16px" style="display:flex;">
         <div class="u-flex-1_1_320px u-maxw-480px u-minw-0">
-          <label for="customListNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
-          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
+          <label for="customListNameInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">List Name</label>
+          <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" class="u-p-9px_14px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-bs-border_box" style="width:100%;">
         </div>
         <div class="u-flex-0_0_auto">
-          <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
-          <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
+          <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-mb-6px" style="display:block;">Content Type</label>
+          <div id="customListTypeToggles" class="u-gap-8px u-ai-center" style="display:flex;">
             <label class="custom-list-type-pill active">
               <input type="radio" name="customListTypeRadio" value="movie" data-act="setCustomListDraftTypeToggle" data-act-args="[&quot;movie&quot;]" checked>
               <span class="check-icon">&#x2713;</span><span>Movies</span>
@@ -119,7 +119,7 @@
       </div>
 
       <!-- 2. Public List Toggle -->
-      <div id="customListVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+      <div id="customListVisibilityRow" class="u-p-10px_14px u-bg-v_surface u-bd-1px_solid_v_border u-br-v_radius_md u-jc-space_between u-ai-center u-gap-12px u-mb-16px" style="display:flex;">
         <div>
           <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public List</span>
           <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this list visible on your public creator profile and discoverable in the community directory</p>
@@ -132,12 +132,12 @@
 
       <!-- 3. Inline Search & Quick Add Bar -->
       <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
-        <label for="customListSearchInput" style="display:block; font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
+        <label for="customListSearchInput" class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px" style="display:block;">Add Titles to List</label>
         <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
         <div class="search-input-box">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
-          <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
+          <button type="button" id="customListSearchClearBtn" class="search-clear-btn u-bg-none u-bd-none u-c-v_muted u-cur-pointer u-p-4px" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
         </div>
@@ -145,13 +145,13 @@
       </div>
 
       <!-- 4. Picks in This List -->
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; margin-bottom:8px;">
+      <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-8px u-mt-8px u-mb-8px" style="display:flex;">
         <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
           Picks in this list <span id="customListDraftCount" class="u-fw-normal u-fs-v_font_size_sm u-c-v_muted">(0 items)</span>
         </div>
-        <div class="actions" id="customListDraftActions" style="margin:0; gap:8px; display:none;">
-          <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft" style="font-size:var(--font-size-sm);">Shuffle Picks Now</button>
-          <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25); font-size:var(--font-size-sm);" data-act="removeAllCustomListDraftPicks">Remove All</button>
+        <div class="actions u-m-0 u-gap-8px" id="customListDraftActions" style="display:none;">
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_sm" data-act="shuffleCustomListDraft">Shuffle Picks Now</button>
+          <button type="button" class="secondary lc-btn u-c-v_danger u-bdc-rgba_255_59_48_0_25 u-fs-v_font_size_sm" data-act="removeAllCustomListDraftPicks">Remove All</button>
         </div>
       </div>
       <div id="customListDraftList">
@@ -160,12 +160,12 @@
 
       <!-- 5. Advanced Settings (Progressive Disclosure) -->
       <details class="channel-advanced-details u-mt-16px u-bd-1px_solid_v_border u-br-v_radius_md u-p-12px_16px u-bg-v_surface u-bsh-v_shadow_sm">
-        <summary style="font-weight:600; font-size:var(--font-size-sm); cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
+        <summary class="u-fw-600 u-fs-v_font_size_sm u-cur-pointer u-us-none u-c-v_text u-ai-center u-jc-space_between" style="display:flex;">
           <span>Advanced Settings</span>
           <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order &amp; watch history rules</span>
         </summary>
         <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
+          <div class="u-ai-center u-gap-10px u-mb-6px u-fw2-wrap" style="display:flex;">
             <label for="customListPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap u-c-v_text">Play order:</label>
             <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-maxw-320px u-fs-v_font_size_sm u-p-7px_12px u-bg-v_surface u-c-v_text u-bd-1_5px_solid_v_border_strong u-br-v_radius_pill">
               <option value="as-listed">Creation order (as listed)</option>
@@ -177,7 +177,7 @@
           </div>
           <p id="customListPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+          <div class="u-jc-space_between u-ai-center u-gap-12px u-mt-12px u-pt-10px u-bdt-1px_solid_v_border_subtle_rgba_255_255_255_0_08" style="display:flex;">
             <div>
               <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Hide watched</span>
               <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Skip items already in your watch history (requires Auto-track playback signed in)</p>
@@ -193,7 +193,7 @@
       <!-- 6. Bottom Action Bar -->
       <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
-        <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Create List</button>
+        <button type="button" class="primary lc-btn u-p-8px_24px u-fw-600" id="customListSaveBtn" data-act="saveCustomList">Create List</button>
       </div>
     </div>
   </div>
@@ -212,7 +212,7 @@
         <input type="text" id="customListImportNameInput" placeholder="Name (e.g. My Favorites)">
         <button type="button" class="secondary" id="customListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import list</button>
       </div>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
+      <label class="u-ai-center u-gap-8px u-cur-pointer u-mt-10px" style="display:flex;">
         <input type="checkbox" id="customListImportSyncCheck" checked>
         <span class="u-fs-v_font_size_sm">Keep custom list synced with external link</span>
       </label>

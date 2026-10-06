@@ -61,13 +61,13 @@ describe("design system: shared stylesheet", () => {
     assert.deepEqual(lits, []);
   });
 
-  it("does not grow new hard-coded hex colours (provider brand colours aside)", async () => {
+  it("has no hard-coded hex colours (brand colours live in DESIGN_TOKENS_CSS)", async () => {
     const css = await appCss();
     const rules = css.replace(/:root(\.dark-theme)?\s*\{[^}]*\}/g, "");
     const hex = [...rules.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((m) => m[0].toLowerCase());
     // Provider brand colours, platform gradients and the support strip are
     // the documented exceptions (DESIGN_SYSTEM.md section 9).
-    assert.ok(hex.length <= 30, `${hex.length} hex literals in component CSS; the budget is 30. Use a token.`);
+    assert.deepEqual(hex, [], "hard-coded hex colours in component CSS; use a token (DESIGN_TOKENS_CSS)");
   });
 
   it("modals sit above the mobile bottom nav", async () => {

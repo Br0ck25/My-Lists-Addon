@@ -108,18 +108,18 @@ function renderChannelTitleResults(results, searchType = 'tv') {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : (r.poster);
     const posterImg = rPoster
       ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy">'
-      : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;cursor:pointer;">No poster</div>';
+      : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px u-cur-pointer" style="display:flex;">No poster</div>';
     const btnLabel = isMovie ? '+ Add Movie' : '+ Browse';
     const cardClass = isMovie ? 'channelMovieCard' : 'channelTitleCard';
     const btnClass = isMovie ? 'channelAddMovieBtn' : 'channelTitleBtn';
-    return '<div class="custom-list-search-item ' + cardClass + '" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' +
+    return '<div class="custom-list-search-item ' + cardClass + ' u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' +
       ' data-tmdbid="' + r.tmdbId + '" data-title="' + escapeAttr(r.title) + '" data-year="' + escapeAttr(r.year || '') + '" data-poster="' + escapeAttr(r.poster || '') + '" data-backdrop="' + escapeAttr(r.backdrop || '') + '">' +
       posterImg +
-      '<div style="width:100%; font-size:var(--font-size-xs); font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(r.title) + '">' +
+      '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(r.title) + '">' +
         escapeHtml(r.title) +
       '</div>' +
-      (r.year ? '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px">' + escapeHtml(r.year) + '</div>' : '<div style="height:14px; margin-bottom:4px;"></div>') +
-      '<button type="button" class="lc-btn secondary ' + btnClass + '" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' +
+      (r.year ? '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px">' + escapeHtml(r.year) + '</div>' : '<div class="u-mb-4px" style="height:14px;"></div>') +
+      '<button type="button" class="lc-btn secondary ' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' +
       ' data-tmdbid="' + r.tmdbId + '" data-title="' + escapeAttr(r.title) + '" data-year="' + escapeAttr(r.year || '') + '" data-poster="' + escapeAttr(r.poster || '') + '" data-backdrop="' + escapeAttr(r.backdrop || '') + '">' + btnLabel + '</button>' +
       '</div>';
   }).join('');
@@ -1197,11 +1197,11 @@ function renderChannelDraftList() {
     const selecting = channelDraftSelectMode;
     const selectBox = selecting
       ? '<div style="position:absolute; top:4px; left:4px; z-index:5;">' +
-          '<input type="checkbox" class="channelPickCheck" data-idx="' + i + '"' + (isChannelDraftSelected(i) ? ' checked' : '') +
-          ' aria-label="Select this pick" style="width:20px; height:20px; accent-color:var(--accent); cursor:pointer;">' +
+          '<input type="checkbox" class="channelPickCheck u-acc-v_accent u-cur-pointer" data-idx="' + i + '"' + (isChannelDraftSelected(i) ? ' checked' : '') +
+          ' aria-label="Select this pick" style="width:20px; height:20px;">' +
         '</div>'
       : '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-          '<input type="number" class="pos channelPosInput" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px; min-height:unset; padding:2px; font-size:var(--font-size-xs); text-align:center; border-radius:var(--radius-sm); background:rgba(0,0,0,0.75); color:var(--color-on-brand); border:1px solid rgba(255,255,255,0.3); font-weight:700;">' +
+          '<input type="number" class="pos channelPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
         '</div>';
     const removeBtn = selecting ? '' : '<button type="button" class="cw-remove-btn channelRemovePickBtn" title="Remove pick" aria-label="Remove pick" style="z-index:4;">\u2715</button>';
 
@@ -1318,7 +1318,7 @@ function renderChannelPosterPicker() {
 
   // 1. Custom Channel Poster Option
   let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
-    '<div class="channel-poster-thumb-wrap custom-preview" style="background:linear-gradient(135deg,#0b0d14 0%,#131726 50%,#06070a 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:6px; border:1px solid rgba(0,122,255,0.3);">' +
+    '<div class="channel-poster-thumb-wrap custom-preview u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100 u-fd-column u-ai-center u-jc-center u-gap-4px u-p-6px u-bd-1px_solid_rgba_0_122_255_0_3" style="display:flex;">' +
       '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
@@ -7850,7 +7850,7 @@ function renderChannelCrossoverSuggestions() {
       '<p class="channel-crossover-desc">' + escapeHtml(event.description) + '</p>' +
       '<div class="channel-crossover-parts">' + chipsHtml + '</div>' +
       '<div class="channel-crossover-actions">' +
-        '<button type="button" class="primary lc-btn" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '" style="padding:6px 14px; font-size:var(--font-size-sm);">' + escapeHtml(btnLabel) + '</button>' +
+        '<button type="button" class="primary lc-btn u-p-6px_14px u-fs-v_font_size_sm" data-act="spliceCrossoverEvent" data-act-args="' + appActArgs([event.id, "@self"]) + '">' + escapeHtml(btnLabel) + '</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -9578,12 +9578,12 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
         : '';
 
       return '<div class="list-card-mini-poster-tile">' +
-        '<div class="list-card-mini-poster-img-wrap" style="position:relative; cursor:pointer;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
+        '<div class="list-card-mini-poster-img-wrap u-cur-pointer" style="position:relative;" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' +
           '<img src="' + escapeAttr(typeof resolveClientPoster === 'function' ? resolveClientPoster(ep, posterUrl) : (posterUrl)) + '" alt="" loading="lazy" data-tmdb-id="' + escapeAttr(String(ep.tmdbId || '')) + '" data-poster-kind="' + (isMovie ? 'movie' : 'show') + '" data-poster-title="' + escapeAttr(itemTitle) + '" data-act="handleStorylinePosterError" data-act-args="[&quot;@self&quot;]">' +
           overlays +
         '</div>' +
         '<div class="list-card-mini-poster-name" title="' + escapeAttr(itemTitle) + '">' + escapeHtml(itemTitle) + '</div>' +
-        '<div class="list-card-mini-poster-year" style="display:flex; align-items:center; justify-content:space-between; gap:4px; width:100%;"><span>' + escapeHtml(yearOrSeason) + '</span>' + ratingSlot + '</div>' +
+        '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(yearOrSeason) + '</span>' + ratingSlot + '</div>' +
       '</div>';
     }).join('');
 
@@ -10659,7 +10659,7 @@ function renderMyCreatedChannelsList() {
       
       const imgHtml = p
         ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-        : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:var(--font-size-2xs);text-align:center;padding:4px;">No poster</div>';
+        : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
       
       // Each tile opens that item's own details -- was previously
       // unclickable itself (only the shared container-level onclick below
@@ -10704,11 +10704,11 @@ function renderMyCreatedChannelsList() {
           (summaryLine ? '<div class="list-card-meta"><span>' + escapeHtml(summaryLine) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions">' +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="editChannelById" data-act-args="' + appActArgs([ch.channelId]) + '">Edit</button>' +
           ((ch.sharePublished || ch.visibility === 'public')
-            ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
+            ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="shareChannelById" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '" title="Share this channel">Share</button>'
             : '') +
-          '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
+          '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="deleteLocalChannel" data-act-args="' + appActArgs([ch.channelId, ch.name]) + '">Delete</button>' +
           addBtnHtml +
         '</div>' +
       '</div>' +
@@ -11804,15 +11804,15 @@ function renderChannelPersonResults(results) {
     const pPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(p, p.poster || '') : (p.poster);
     const img = pPoster
       ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(pPoster) + '" alt="" loading="lazy">'
-      : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;cursor:pointer;">No photo</div>';
+      : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px u-cur-pointer" style="display:flex;">No photo</div>';
     const data = ' data-personid="' + escapeAttr(String(p.personId)) + '" data-personname="' + escapeAttr(p.name) + '"';
-    return '<div class="custom-list-search-item channelPersonCard" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' + data + '>' +
+    return '<div class="custom-list-search-item channelPersonCard u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' + data + '>' +
       img +
-      '<div style="width:100%; font-size:var(--font-size-xs); font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</div>' +
-      '<div style="font-size:var(--font-size-xs); color:var(--muted); text-align:center; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;" title="' + escapeAttr(p.knownFor || p.department || '') + '">' +
+      '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(p.name) + '">' + escapeHtml(p.name) + '</div>' +
+      '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px u-ov-hidden u-to-ellipsis u-ws-nowrap" style="width:100%;" title="' + escapeAttr(p.knownFor || p.department || '') + '">' +
         escapeHtml(p.knownFor || p.department || '') +
       '</div>' +
-      '<button type="button" class="lc-btn secondary channelPersonBtn" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' + data + '>+ Browse</button>' +
+      '<button type="button" class="lc-btn secondary channelPersonBtn u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' + data + '>+ Browse</button>' +
       '</div>';
   }).join('');
   box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cards + '</div>';
@@ -11870,7 +11870,7 @@ function channelPersonCreditCardHtml(credit, isShow) {
   const poster = typeof resolveClientPoster === 'function' ? resolveClientPoster(credit, credit.poster || '') : (credit.poster || '');
   const img = poster
     ? '<img class="preview-thumb" src="' + escapeAttr(poster) + '" alt="" loading="lazy">'
-    : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;">No poster</div>';
+    : '<div class="preview-thumb u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_xs u-ta-center u-p-4px" style="display:flex;">No poster</div>';
   const data =
     ' data-tmdbid="' + escapeAttr(String(credit.tmdbId)) + '"' +
     ' data-title="' + escapeAttr(credit.title) + '"' +
@@ -11881,13 +11881,13 @@ function channelPersonCreditCardHtml(credit, isShow) {
   const btnClass = isShow ? 'channelPersonShowBtn' : 'channelPersonMovieBtn';
   const btnLabel = isShow ? '+ Their episodes' : '+ Add';
   const sub = [credit.year, credit.role].filter(Boolean).join(' \u00b7 ');
-  return '<div class="custom-list-search-item ' + cardClass + '" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' + data + '>' +
+  return '<div class="custom-list-search-item ' + cardClass + ' u-fd-column u-ai-center u-minw-0 u-cur-pointer" style="display:flex; width:100%;"' + data + '>' +
     img +
-    '<div style="width:100%; font-size:var(--font-size-xs); font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(credit.title) + '">' +
+    '<div class="u-fs-v_font_size_xs u-fw-600 u-ta-center u-ov-hidden u-to-ellipsis u-ws-nowrap u-m-4px_0_1px" style="width:100%;" title="' + escapeAttr(credit.title) + '">' +
       escapeHtml(credit.title) +
     '</div>' +
-    '<div style="font-size:var(--font-size-xs); color:var(--muted); text-align:center; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;" title="' + escapeAttr(sub) + '">' + escapeHtml(sub) + '</div>' +
-    '<button type="button" class="lc-btn secondary ' + btnClass + '" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' + data + '>' + btnLabel + '</button>' +
+    '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px u-ov-hidden u-to-ellipsis u-ws-nowrap" style="width:100%;" title="' + escapeAttr(sub) + '">' + escapeHtml(sub) + '</div>' +
+    '<button type="button" class="lc-btn secondary ' + btnClass + ' u-p-4px_6px u-fs-v_font_size_xs" style="width:100%;"' + data + '>' + btnLabel + '</button>' +
     '</div>';
 }
 
@@ -11900,7 +11900,7 @@ function renderChannelPersonCredits() {
     return;
   }
   const header =
-    '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
+    '<div class="u-ai-center u-gap-10px u-fw2-wrap u-mb-10px" style="display:flex;">' +
       '<p class="u-m-0 u-fw-600 u-fs-v_font_size_base u-flex-1 u-minw-160px">' +
         escapeHtml(c.name) + ' \u2014 ' + c.movies.length + ' film' + (c.movies.length === 1 ? '' : 's') +
         (c.shows.length ? ' and ' + c.shows.length + ' show' + (c.shows.length === 1 ? '' : 's') : '') +
@@ -12352,14 +12352,14 @@ function showSavedChannelModal(channelName, visibility, url) {
           '</div>'
         : '<div class="u-mb-16px">' +
             '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
-            '<div style="display:flex; gap:8px; align-items:center;">' +
+            '<div class="u-gap-8px u-ai-center" style="display:flex;">' +
               '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
-              '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
+              '<button type="button" class="lc-btn primary u-ws-nowrap u-p-10px_14px" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
-        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
+        (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn u-td-none u-ai-center" style="display:inline-flex;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
     '</div>'
@@ -12652,8 +12652,8 @@ function renderChannelDirectory() {
   feed.innerHTML = shown.map((e) => {
     const isAdded = isDirectoryChannelAdded(e.code);
     const actionBtn = isAdded
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger); border-color:var(--danger);" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
-      : '<button type="button" class="lc-btn list-add-btn channelAddBtn primary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
+      ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger u-bdc-v_danger" data-act="removeDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">Remove</button>'
+      : '<button type="button" class="lc-btn list-add-btn channelAddBtn primary u-p-6px_12px u-fs-v_font_size_sm" data-act="addDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">+ Add</button>';
     return channelListingCardHtml(
       e,
       '<button type="button" class="lc-btn searchLikeExternalBtn' + (_channelDirectoryLiked[e.code] ? ' liked' : '') + '"' +
@@ -12661,7 +12661,7 @@ function renderChannelDirectory() {
         ' data-act="toggleChannelDirectoryLike" data-act-args="' + appActArgs([e.code, "@self"]) + '">' +
         (_channelDirectoryLiked[e.code] ? '\u2665' : '\u2661') + (e.likes ? ' ' + e.likes : '') +
       '</button>' +
-      '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
+      '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([e.code, "@self"]) + '">See all</button>' +
       actionBtn,
       ''
     );
@@ -12926,7 +12926,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
           ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-          : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:var(--font-size-2xs);text-align:center;padding:4px;">No poster</div>';
+          : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId
@@ -12951,7 +12951,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
     art = ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(entry.name || 'Channel') + '&format=landscape&v=6';
   }
   const thumb = (!postersHtml && art)
-    ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" style="width:88px; height:56px; object-fit:cover; border-radius:var(--radius-sm); border:1px solid var(--border); flex:0 0 auto;">'
+    ? '<img src="' + escapeAttr(art) + '" alt="" loading="lazy" class="u-objectfit-cover u-br-v_radius_sm u-bd-1px_solid_v_border u-flex-0_0_auto" style="width:88px; height:56px;">'
     : '';
   const openAttr = entry.code
     ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '" title="See everything in this channel"'
@@ -13064,8 +13064,8 @@ function renderChannelPublishList() {
 
   const mine = channels.map((ch) => {
     const action = ch.sharePublished
-      ? '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger);" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
-      : '<button type="button" class="lc-btn primary" style="padding:6px 12px; font-size:var(--font-size-sm);" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
+      ? '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="unpublishChannelFromDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Unpublish</button>'
+      : '<button type="button" class="lc-btn primary u-p-6px_12px u-fs-v_font_size_sm" data-act="publishChannelToDirectory" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Publish</button>';
     const extra =
       // A published channel's link lives here, on screen, rather than only
       // in the modal that announced it -- that modal closes and takes the
@@ -13073,7 +13073,7 @@ function renderChannelPublishList() {
       (ch.shareCode
         ? '<div class="row u-mt-8px u-gap-8px">' +
             '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" class="u-fs-v_font_size_sm">' +
-            '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
+            '<button type="button" class="secondary lc-btn u-flex-none u-ws-nowrap" style="width:auto;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
           '</div>'
         : '');
     return channelListingCardHtml(channelAsListingEntry(ch), action, extra);
@@ -13083,7 +13083,7 @@ function renderChannelPublishList() {
   // because there is nothing to edit, publish or copy -- only to withdraw.
   const orphans = _orphanedPublishedChannels.map((entry) => channelListingCardHtml(
     entry,
-    '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger);" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
+    '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="unpublishOrphanedChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '">Unpublish</button>',
     ''
   )).join('');
 
@@ -13616,7 +13616,7 @@ function renderChannelMergeList() {
           const ch = channelsMap[chId];
           const chName = ch ? ch.name : 'Unknown Channel';
           if (ch && Array.isArray(ch.items)) totalEpisodes += ch.items.length;
-          return '<span class="badge" style="display:inline-flex; align-items:center; gap:5px; padding:3px 8px; font-size:var(--font-size-sm); background:var(--panel-strong); border:1px solid var(--border); border-radius:var(--radius-sm); margin:2px 4px 2px 0;">' +
+          return '<span class="badge u-ai-center u-gap-5px u-p-3px_8px u-fs-v_font_size_sm u-bg-v_panel_strong u-bd-1px_solid_v_border u-br-v_radius_sm u-m-2px_4px_2px_0" style="display:inline-flex;">' +
             escapeHtml(chName) +
             '<button type="button" class="merge-chip-remove-btn" title="Remove ' + escapeAttr(chName) + ' from merge" aria-label="Remove ' + escapeAttr(chName) + ' from merge" data-act="removeChannelFromMerge" data-act-args="' + appActArgs([merged.mergedId, chId]) + '">\u2715</button>' +
           '</span>';
@@ -13632,10 +13632,10 @@ function renderChannelMergeList() {
             options +
           '</select>';
         } else {
-          addSelectHtml = '<select class="merge-add-channel-select" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65; cursor:not-allowed;">' +
+          addSelectHtml = '<select class="merge-add-channel-select u-cur-not_allowed" disabled title="All your current saved channels are already in this merge. Build or Quick Add more channels to add them here." style="opacity:0.65;">' +
             '<option value="">All saved channels added</option>' +
           '</select>' +
-          ' <button type="button" class="lc-btn secondary" style="padding:2px 8px; font-size:var(--font-size-xs); margin-left:4px;" data-act="appActGoToQuickAdd">+ Quick Add</button>';
+          ' <button type="button" class="lc-btn secondary u-p-2px_8px u-fs-v_font_size_xs u-ml-4px" data-act="appActGoToQuickAdd">+ Quick Add</button>';
         }
         
         const countText = (merged.channelIds ? merged.channelIds.length : 0) + ' channels &middot; ' + totalEpisodes + ' episodes';
@@ -13649,14 +13649,14 @@ function renderChannelMergeList() {
             '<div class="list-card-body">' +
               '<div class="list-card-title">' + escapeHtml(merged.name) + '</div>' +
               '<div class="list-card-meta"><span>' + countText + '</span></div>' +
-              '<div style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center;">' +
+              '<div class="u-mt-6px u-fw2-wrap u-ai-center" style="display:flex;">' +
                 '<strong class="u-fs-v_font_size_xs u-c-v_muted u-mr-6px">Merged:</strong>' +
                 (channelChips || '<span class="u-c-v_muted u-fs-v_font_size_sm u-mr-4px">None</span>') +
                 addSelectHtml +
               '</div>' +
             '</div>' +
             '<div class="list-card-actions">' +
-              '<button type="button" class="lc-btn secondary" style="padding:6px 12px; font-size:var(--font-size-sm); color:var(--danger);" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
+              '<button type="button" class="lc-btn secondary u-p-6px_12px u-fs-v_font_size_sm u-c-v_danger" data-act="deleteLocalMergedChannel" data-act-args="' + appActArgs([merged.mergedId]) + '">Delete</button>' +
               addBtnHtml +
             '</div>' +
           '</div>' +

@@ -1138,22 +1138,22 @@ function renderDiscoveredCategories() {
 
   let html = '<div class="u-mt-10px u-bdt-1px_solid_v_border u-pt-12px">' +
     '<p class="u-fw-600 u-fs-v_font_size_base u-mb-8px u-c-v_text">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
-    '<div style="display:flex; flex-direction:column; gap:10px;">';
+    '<div class="u-fd-column u-gap-10px" style="display:flex;">';
 
   discoveredImportCategories.forEach((cat, idx) => {
     const isWatchedOrDiary = cat.isWatchCategory || cat.id.includes('watch') || cat.id.includes('diary') || cat.id.includes('history');
     const watchToggle = isWatchedOrDiary
-      ? '<div class="u-ml-26px u-mt-4px"><label style="font-size:var(--font-size-sm); color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
+      ? '<div class="u-ml-26px u-mt-4px"><label class="u-fs-v_font_size_sm u-c-v_muted u-cur-pointer u-ai-center u-gap-5px" style="display:inline-flex;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
       : '';
 
     html += '<div class="row u-fd-column u-ai-flex_start u-p-10px_12px u-bg-v_bg_2_rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm">' +
-      '<div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:8px;">' +
-        '<label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); cursor:pointer; color:var(--text);">' +
+      '<div class="u-ai-center u-jc-space_between u-fw2-wrap u-gap-8px" style="display:flex; width:100%;">' +
+        '<label class="u-ai-center u-gap-8px u-fw-600 u-fs-v_font_size_base u-cur-pointer u-c-v_text" style="display:inline-flex;">' +
           '<input type="checkbox" class="importCatCheck" data-cat-index="' + idx + '" checked> ' +
           escapeHtml(cat.label) +
           ' <span class="u-fw-normal u-c-v_muted u-fs-v_font_size_sm">(' + cat.items.length + ' entries)</span>' +
         '</label>' +
-        '<div style="display:inline-flex; align-items:center; gap:6px;">' +
+        '<div class="u-ai-center u-gap-6px" style="display:inline-flex;">' +
           '<span class="u-fs-v_font_size_sm u-c-v_muted">Destination:</span>' +
           '<select class="importCatTargetSelect u-p-6px_10px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text" data-cat-index="' + idx + '">' +
             buildCategoryTargetOptionsHtml(cat.defaultTarget, cat.defaultNewName) +

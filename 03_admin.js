@@ -2545,7 +2545,7 @@ async function renderAdminDashboard(env) {
         // attribute escaping here the same way it already does for the two
         // <td> values above; resetCreatorKey reads the values back off the
         // element at click time instead of receiving them as literals.
-        `<td><button type="button" class="lc-btn secondary" style="padding:4px 10px; font-size:var(--font-size-sm);" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
+        `<td><button type="button" class="lc-btn secondary u-p-4px_10px u-fs-v_font_size_sm" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
     )
     .join("");
   const creatorTruncatedNote = shownCreatorCount < totalCreatorCount
@@ -2886,8 +2886,8 @@ ${UTILITY_CSS}
         <option value="idea">Idea</option>
         <option value="other">Other</option>
       </select>
-      <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:var(--font-size-base); resize:vertical;"></textarea>
-      <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
+      <textarea id="newFeedbackMessage" placeholder="What did you find?" class="u-minh-70px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1px_solid_rgba_0_0_0_0_15 u-ff-inherit u-fs-v_font_size_base u-rs-vertical" style="width:100%;"></textarea>
+      <div class="u-mt-8px u-ai-center u-gap-10px" style="display:flex;">
         <button type="button" class="admin-select u-cur-pointer" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
         <span id="newFeedbackStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
@@ -2898,21 +2898,21 @@ ${UTILITY_CSS}
   <!-- Edit Feedback Modal -->
   <div id="editFeedbackModal" class="modal-overlay" style="display:none;">
     <div class="modal-card u-maxw-500px">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
         <h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-c-v_text">Edit Feedback</h3>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeEditFeedbackModal">&#x2715;</button>
       </div>
       <input type="hidden" id="editFeedbackId">
-      <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:6px;">Category</label>
-      <select class="admin-select" id="editFeedbackCategory" style="margin-bottom:14px; width:100%; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text);">
+      <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px" style="display:block;">Category</label>
+      <select class="admin-select u-mb-14px u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text" id="editFeedbackCategory" style="width:100%;">
         <option value="bug">bug</option>
         <option value="improvement">improvement</option>
         <option value="idea">idea</option>
         <option value="other">other</option>
       </select>
-      <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:6px;">Message</label>
-      <textarea id="editFeedbackMessage" style="width:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-family:inherit; font-size:var(--font-size-base); resize:vertical; margin-bottom:16px; outline:none;"></textarea>
-      <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px" style="display:block;">Message</label>
+      <textarea id="editFeedbackMessage" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-16px u-ol-none" style="width:100%;"></textarea>
+      <div class="u-jc-flex_end u-gap-10px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
       </div>
@@ -2936,7 +2936,7 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Find a provider's id</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div class="u-gap-8px u-ai-center" style="display:flex;">
         <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
         <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
         <span id="providerLookupStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
@@ -2944,12 +2944,12 @@ ${UTILITY_CSS}
       <div id="providerLookupResults" class="u-mt-10px"></div>
     </div>
 
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+    <div class="u-gap-8px u-ai-center u-mb-16px u-fw2-wrap" style="display:flex;">
       <label class="u-fs-v_font_size_sm u-c-v_muted">Provider id
-        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select" style="margin-right:0; width:60px;" value="8" placeholder="8">
+        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select u-mr-0" style="width:60px;" value="8" placeholder="8">
       </label>
       <label class="u-fs-v_font_size_sm u-c-v_muted">Region
-        <input type="text" id="netflixPreviewRegionInput" class="admin-select" style="margin-right:0; width:70px; text-transform:uppercase;" value="US" maxlength="2" placeholder="US">
+        <input type="text" id="netflixPreviewRegionInput" class="admin-select u-mr-0 u-tt-uppercase" style="width:70px;" value="US" maxlength="2" placeholder="US">
       </label>
       <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
       <span id="netflixPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
@@ -2961,17 +2961,17 @@ ${UTILITY_CSS}
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
-      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); margin-bottom:14px;">
+      <label class="u-ai-center u-gap-8px u-fw-600 u-fs-v_font_size_base u-mb-14px" style="display:flex;">
         <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
       </label>
-      <label style="display:block; font-size:var(--font-size-sm); color:var(--muted); margin-bottom:12px;">Monthly goal (US dollars)
-        <input type="number" id="supportGoalAmount" class="admin-select" min="0" max="100000" step="1" style="display:block; margin:4px 0 0; width:160px;" placeholder="60">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-12px" style="display:block;">Monthly goal (US dollars)
+        <input type="number" id="supportGoalAmount" class="admin-select u-m-4px_0_0" min="0" max="100000" step="1" style="display:block; width:160px;" placeholder="60">
       </label>
-      <label style="display:block; font-size:var(--font-size-sm); color:var(--muted); margin-bottom:6px;">Given so far this month (US dollars)
-        <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Given so far this month (US dollars)
+        <input type="number" id="supportGoalRaised" class="admin-select u-m-4px_0_0" min="0" step="0.01" style="display:block; width:160px;" placeholder="0">
       </label>
       <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
         <span id="supportGoalStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
@@ -2997,13 +2997,13 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Sweep status</div>
       <div id="nosStatus" class="u-fs-v_font_size_sm u-c-v_muted">Loading&hellip;</div>
-      <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="u-mt-12px u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
         <label class="u-fs-v_font_size_sm u-c-v_muted">Pages
-          <input type="number" id="nosSweepUnits" class="admin-select" style="margin-right:0; width:70px;" value="30" min="1" max="100">
+          <input type="number" id="nosSweepUnits" class="admin-select u-mr-0" style="width:70px;" value="30" min="1" max="100">
         </label>
         <button type="button" class="admin-select u-cur-pointer" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-warn-text); border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
+        <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_warn_text u-bdc-rgba_255_149_0_0_4" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
         <span id="nosSweepStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
@@ -3022,7 +3022,7 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Add / Sync Title to Catalog</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <input type="text" id="nosAddTitleInput" class="admin-select" placeholder="Title, IMDb ID (tt...) or TMDB ID" style="width:240px;">
         <select class="admin-select" id="nosAddServiceSelect">
           <option value="netflix">Netflix</option>
@@ -3047,7 +3047,7 @@ ${UTILITY_CSS}
     <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Preview the catalog</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+      <div class="u-gap-8px u-ai-center u-mb-12px u-fw2-wrap" style="display:flex;">
         <select class="admin-select" id="nosPreviewType" data-act="nosResetAndPreview">
           <option value="all" selected>All (Movies &amp; Shows)</option>
           <option value="movie">Movies</option>
@@ -3072,9 +3072,9 @@ ${UTILITY_CSS}
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="u-gap-8px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
-        <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
+        <button type="button" class="secondary lc-btn u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_4" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
         <span id="cpStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
       <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
@@ -3456,13 +3456,13 @@ ${UTILITY_CSS}
       overlay.id = 'resetKeyOverlay';
       overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999;';
       overlay.innerHTML =
-        '<div style="background:var(--color-on-brand); border-radius:var(--radius-md); padding:24px; max-width:380px; width:90%;">' +
+        '<div class="u-bg-v_color_on_brand u-br-v_radius_md u-p-24px u-maxw-380px" style="width:90%;">' +
           '<h3 class="u-mt-0">New key for ' + escapeHtmlAdmin(displayName) + '</h3>' +
           '<p class="u-c-v_muted u-fs-v_font_size_base">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
           '<div id="resetKeyDisplay" class="u-ff-monospace u-fs-v_font_size_lg u-bg-F2F2F7 u-br-v_radius_sm u-p-10px u-ta-center u-m-12px_0 u-us-all">' + escapeHtmlAdmin(creatorKey) + '</div>' +
-          '<div style="display:flex; gap:8px;">' +
-            '<button type="button" class="lc-btn secondary" style="flex:1;" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
-            '<button type="button" class="lc-btn" style="flex:1;" data-act="closeResetKeyOverlay">Done</button>' +
+          '<div class="u-gap-8px" style="display:flex;">' +
+            '<button type="button" class="lc-btn secondary u-flex-1" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
+            '<button type="button" class="lc-btn u-flex-1" data-act="closeResetKeyOverlay">Done</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -4404,7 +4404,7 @@ ${UTILITY_CSS}
             '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+        results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
           '<thead><tr class="u-c-v_muted u-ta-left">' +
           '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
           '<th class="u-pr-8px u-ta-right">Items</th>' +
@@ -4631,7 +4631,7 @@ ${UTILITY_CSS}
               '</tr>';
           }).join('');
           if (reset || !results.querySelector('tbody')) {
-            results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+            results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
               '<thead><tr class="u-c-v_muted u-ta-left">' +
               '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
               '<th class="u-pr-8px u-ta-right">Items</th>' +
@@ -4697,7 +4697,7 @@ ${UTILITY_CSS}
             '</td>' +
             '</tr>';
         }).join('');
-        results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+        results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
           '<thead><tr class="u-c-v_muted u-ta-left">' +
           '<th class="u-pr-8px">Code</th><th class="u-pr-8px">Name</th>' +
           '<th class="u-pr-8px">Owner</th>' +
@@ -5016,7 +5016,7 @@ ${UTILITY_CSS}
           'Unapplied migration' + ((data.pendingMigrations || []).length === 1 ? '' : 's') + ': ' +
           escapeHtmlAdmin((data.pendingMigrations || []).join(', ')) +
           '. Apply the matching file(s) under <code>migrations/</code> in the D1 Console, in filename order.</p>' +
-          '<div class="u-ovx-auto"><table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+          '<div class="u-ovx-auto"><table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
           '<thead><tr class="u-c-v_muted u-ta-left"><th class="u-pr-10px">Migration</th><th class="u-pr-10px">Missing</th><th>What does not work without it</th></tr></thead>' +
           '<tbody>' + rows + '</tbody></table></div>' + dbStatsNote + indexNote;
       } catch (e) {
@@ -5442,7 +5442,7 @@ ${UTILITY_CSS}
             }
 
             return dayHeader + '<tr><td>' + (skip + i + 1) + '</td>' +
-              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" style="width:38px; height:56px; object-fit:cover; border-radius:var(--radius-xs); display:block;">' : '') + '</td>' +
+              '<td>' + (it.poster ? '<img src="' + escapeHtmlAdmin(it.poster) + '" alt="" class="u-objectfit-cover u-br-v_radius_xs" style="width:38px; height:56px; display:block;">' : '') + '</td>' +
               '<td><strong>' + escapeHtmlAdmin(it.name || '') + '</strong></td>' +
               '<td>' + typeBadge + '</td>' +
               '<td>' + svcBadges + '</td>' +
@@ -5495,8 +5495,8 @@ ${UTILITY_CSS}
             '<td>' + (net.cached ? net.itemCount : '--') + '</td>' +
             '<td class="u-ws-nowrap">' + cpAgoText(net.builtAt) + '</td>' +
             '<td class="u-ws-nowrap">' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm);" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
-              '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm); color:var(--color-danger-text);" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
+              '<button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
+              '<button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm u-c-v_color_danger_text" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -5669,9 +5669,9 @@ ${UTILITY_CSS}
         '<div class="u-mt-10px">' + messagesHtml + '</div>' +
         '<div class="feedback-meta u-mt-8px">' + when + ' \u2014 ' + who + contact + '</div>' +
         (!isSelfLogged ?
-          '<div style="margin-top:10px; display:flex; gap:8px; align-items:center;">' +
+          '<div class="u-mt-10px u-gap-8px u-ai-center" style="display:flex;">' +
             '<input type="text" id="adminReplyInput_' + escapeHtmlAdmin(f.id) + '" class="admin-select fb-reply-input u-flex-1 u-mr-0 u-p-8px_10px" data-id="' + escapeHtmlAdmin(f.id) + '" placeholder="Type reply to ' + who + '...">' +
-            '<button type="button" class="secondary lc-btn fb-reply-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="padding:6px 14px; font-size:var(--font-size-sm);">Reply</button>' +
+            '<button type="button" class="secondary lc-btn fb-reply-btn u-p-6px_14px u-fs-v_font_size_sm" data-id="' + escapeHtmlAdmin(f.id) + '">Reply</button>' +
           '</div>' : ''
         ) +
       '</div>';
@@ -5850,16 +5850,16 @@ ${UTILITY_CSS}
       const icon = isSuccess ? '\u2713' : '\u2715';
       const iconColor = isSuccess ? 'var(--success, #34C759)' : 'var(--danger, #FF3B30)';
       const html =
-        '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
+        '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+          '<h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-ai-center u-gap-8px u-c-v_text" style="display:flex;">' +
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
-        '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
-          '<button type="button" class="lc-btn primary" data-act="closeAdminModal" style="min-width:80px;">OK</button>' +
+        '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
+          '<button type="button" class="lc-btn primary u-minw-80px" data-act="closeAdminModal">OK</button>' +
         '</div>';
       showAdminModal(html);
     }
@@ -5869,15 +5869,15 @@ ${UTILITY_CSS}
       const iconColor = isDanger ? 'var(--danger, #FF3B30)' : 'var(--accent, #007AFF)';
       const btnClass = isDanger ? 'lc-btn danger' : 'lc-btn primary';
       const html =
-        '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">' +
-          '<h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; display:flex; align-items:center; gap:8px; color:var(--text);">' +
+        '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
+          '<h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-ai-center u-gap-8px u-c-v_text" style="display:flex;">' +
             '<span style="color:' + iconColor + '; font-weight:bold; font-size:var(--font-size-lg);">' + icon + '</span> ' +
             escapeHtmlAdmin(title) +
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
         '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
-        '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
+        '<div class="u-jc-flex_end u-gap-10px" style="display:flex;">' +
           '<button type="button" class="lc-btn secondary" data-act="closeAdminModal">Cancel</button>' +
           '<button type="button" class="' + btnClass + '" id="adminConfirmOkBtn">' + escapeHtmlAdmin(confirmBtnText || 'Confirm') + '</button>' +
         '</div>';
