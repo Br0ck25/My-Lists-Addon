@@ -89,7 +89,7 @@ jobs:
           dump mylists-activity "$ACTIVITY_D1_DATABASE_ID"
           ls -l backup
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: d1-backup-${{ github.run_id }}
           path: backup/*.sql.gz.gpg
