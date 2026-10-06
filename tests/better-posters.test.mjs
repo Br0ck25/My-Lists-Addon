@@ -201,7 +201,7 @@ describe("betterPostersOptionsFrom", () => {
   it("maps an empty config onto btttr.cc's own defaults", () => {
     assert.deepEqual(BP.betterPostersOptionsFrom({}), {
       genre: true, rating: true, quality: false, age: false,
-      trendTags: true, todayOrder: false, pictoriumTemplate: "", rpdbBase: "", lang: "en", ratingSource: "avg",
+      trendTags: true, pictoriumTemplate: "", rpdbBase: "", lang: "en", ratingSource: "avg",
     });
   });
 

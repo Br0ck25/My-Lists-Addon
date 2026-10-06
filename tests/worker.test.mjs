@@ -8311,8 +8311,8 @@ describe("audit II §11.1: a provider answering 200 with nothing must not erase 
       "the per-user Trakt/MDBList caches must not refuse an empty result");
     const shared = fs.readFileSync(path.join(REPO_ROOT, "07_source-fetchers-tmdb-simkl.js"), "utf8");
     const optedIn = (shared.match(/refuseEmptyOverwrite: true/g) || []).length;
-    assert.equal(optedIn, 5,
-      "the five shared chart/collection caches should opt in (Simkl, Trakt, TMDB charts, TMDB collections and the Better Posters lists)");
+    assert.equal(optedIn, 4,
+      "the four shared chart/collection caches should opt in (Simkl, Trakt, TMDB charts and TMDB collections)");
   });
 });
 

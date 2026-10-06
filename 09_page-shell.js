@@ -115,7 +115,6 @@ function renderBuilder(
   const initialBetterPostersRating = initialKeys.betterPostersRating !== false;
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
-  const initialBetterPostersTodayOrder = !!initialKeys.betterPostersTodayOrder;
   // Pictorium (opt-in, with the poster link pasted from the person's own space)
   // and "Use My Lists Addon metadata" (on unless switched off) -- see
   // INSTALL_CONFIG_FIELDS (00_constants.js).

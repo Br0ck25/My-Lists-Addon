@@ -1318,16 +1318,6 @@ const D1_SCHEMA_MANIFEST = [
 // buildBetterPosterUrl (05_catalog-core.js) assembles the base properly.
 const BETTER_POSTERS_ORIGIN = "https://btttr.cc";
 
-// btttr.cc's own public Stremio catalog that its "#N Today" corner tag is drawn
-// from (used by the Order Today tags setting): the catalog is in rank order and
-// each entry carries that rank as "_rank". btttr.cc names the shows catalog
-// differently from the movies one.
-const BETTER_POSTERS_CATALOGS = {
-  today: { movie: "tmdb-today", series: "tmdb-today-shows" },
-};
-// Its catalogs move through the day, so a stored copy is good for half an hour.
-const BETTER_POSTERS_CATALOG_REFRESH_SECONDS = 1800;
-
 // Rating sources btttr.cc accepts for "rs", straight off its configurator's
 // own dropdown. "avg" is its default and is sent as no parameter at all.
 const BETTER_POSTERS_RATING_SOURCES = [
@@ -1543,7 +1533,6 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
-  { name: "betterPostersTodayOrder", kind: "flag", requires: "betterPosters" },
   { name: "rpdb", kind: "flag" },
   { name: "rpdbKey", kind: "choice", default: "", requires: "rpdb", valid: isValidRpdbKey },
   { name: "pictorium", kind: "flag" },
@@ -17378,10 +17367,6 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   const bpo = keys.betterPostersOptions || {};
   if ((keys.betterPosters || bpo.pictoriumTemplate || bpo.rpdbBase) && Array.isArray(result) && result.length > 0) {
     result = applyBetterPostersToMetas(result, bpo);
-    // "Keep Today tags in order": only meaningful while Better Posters' tags are drawn.
-    if (bpo.todayOrder && bpo.trendTags !== false && !bpo.pictoriumTemplate && !bpo.rpdbBase) {
-      result = await orderByBetterPostersToday(result, entry.type, keys.env, keys.ctx);
-    }
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -18201,28 +18186,20 @@ function parseBetterPosterPath(pathname, searchParams) {
   const lang = BETTER_POSTERS_LANGS.some((l) => l.value === langRaw && l.value !== "en") ? langRaw : "";
   const rsRaw = searchParams.get("rs") || "";
   const rs = BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === rsRaw && r.value !== "avg") ? rsRaw : "";
-  // "rk" is the title's rank today (Order Today tags). btttr.cc is never told
-  // about it: it only gives the stored copy a new name, so a title that moved
-  // up or down the ranking is drawn again with its new "#N Today" tag instead
-  // of keeping the day-old copy.
-  const rkRaw = /^\d{1,2}$/.test(searchParams.get("rk") || "") ? Number(searchParams.get("rk")) : 0;
-  const rk = rkRaw >= 1 ? String(rkRaw) : "";
   const params = [];
   if (tag) params.push("tag=none");
   if (lang) params.push("lang=" + encodeURIComponent(lang));
   if (rs) params.push("rs=" + encodeURIComponent(rs));
   const qs = params.length ? "?" + params.join("&") : "";
-  const ownQs = rk ? (qs ? qs + "&rk=" + rk : "?rk=" + rk) : qs;
   return {
     style: m[1],
     imdbId: m[2],
     tag,
     lang,
     rs,
-    rk,
-    path: `/bp/${m[1]}/${m[2]}.jpg${ownQs}`,
+    path: `/bp/${m[1]}/${m[2]}.jpg${qs}`,
     upstream: `${BETTER_POSTERS_ORIGIN}/${m[1]}/imdb/poster-default/${m[2]}.jpg${qs}`,
-    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}` + (rk ? `:${rk}` : ""),
+    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}`,
   };
 }
 
@@ -18774,7 +18751,6 @@ function betterPostersOptionsFrom(cfg, origin, configParam) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
-    todayOrder: !!c.betterPostersTodayOrder,
     // Pictorium wins over Better Posters when both are on: only one of them
     // can draw a poster.
     pictoriumTemplate: c.pictorium && isValidPictoriumTemplate(c.pictoriumUrl) ? c.pictoriumUrl : "",
@@ -26488,87 +26464,6 @@ async function fetchMostWatchedCatalog(entry, skip = 0, keys = {}) {
   return page;
 }
 
-// --- Better Posters: "#N Today" order ------------------------------------------
-//
-// btttr.cc's daily ranking (BETTER_POSTERS_CATALOGS, 00_constants.js), the one
-// its "#N Today" corner tag is drawn from, in rank order. Used by the Order
-// Today tags setting (orderByBetterPostersToday, below).
-
-// One btttr.cc catalog, in its own order, kept 30 minutes and served stale
-// (up to a day) when btttr.cc is down. Each item: { id, type, name, poster,
-// releaseInfo, rank } -- rank is btttr.cc's "_rank" where it gives one.
-async function loadBetterPostersCatalog(env, ctx, key, type) {
-  const catalogId = BETTER_POSTERS_CATALOGS[key][type];
-  const kvKey = `bp:catalog:${catalogId}:${type}`;
-  return await fetchWithPerUserCacheAndCircuitBreaker({
-    cacheKey: `user_cache:${kvKey}`,
-    kvKey,
-    env,
-    ctx,
-    freshTtlSec: BETTER_POSTERS_CATALOG_REFRESH_SECONDS,
-    staleTtlSec: 86400,
-    kvTtlSec: 86400,
-    refuseEmptyOverwrite: true,
-    providerLabel: "Better Posters",
-    fetchFn: async () => {
-      const res = await fetchWithTimeout(`${BETTER_POSTERS_ORIGIN}/catalog/${type}/${catalogId}.json`, {
-        headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}`, "Accept": "application/json" },
-      });
-      if (!res.ok) throw new Error(`Better Posters list request failed (HTTP ${res.status}).`);
-      const data = await res.json();
-      const out = [];
-      for (const m of (data && Array.isArray(data.metas) ? data.metas : [])) {
-        const id = m && typeof m.id === "string" ? m.id.trim() : "";
-        // Only a real title id charts, as in Most Watched.
-        if (!/^(tt\d+|tmdb:\d+)$/.test(id) || !m.name) continue;
-        const poster = /^tt\d+$/.test(id) ? `https://images.metahub.space/poster/medium/${id}/img` : m.poster;
-        if (!poster) continue;
-        out.push({
-          id, type, name: m.name, poster,
-          releaseInfo: m.releaseInfo ? String(m.releaseInfo) : undefined,
-          rank: Number.isFinite(m._rank) ? m._rank : undefined,
-        });
-      }
-      return out;
-    },
-  });
-}
-
-// The "keep Today tags in order" setting (betterPostersTodayOrder): a title
-// the poster tags "#N Today" is moved so #2 never sits in front of #1 -- the
-// tagged titles keep the places they already had in the list and are put in
-// rank order among those places; everything else stays exactly where it was.
-// Each tagged title also carries its rank (todayRank), and its Better Poster is
-// asked for under that rank, so the tag drawn on it matches the order.
-// A failed lookup leaves the list as it was.
-async function orderByBetterPostersToday(metas, type, env, ctx) {
-  if (!Array.isArray(metas) || !metas.length || (type !== "movie" && type !== "series")) return metas;
-  try {
-    const ranked = await loadBetterPostersCatalog(env, ctx, "today", type);
-    const rankOf = new Map(ranked.filter((r) => r.rank !== undefined).map((r) => [r.id, r.rank]));
-    const slots = [];
-    const tagged = metas.map((m, i) => {
-      const id = betterPostersImdbId(m);
-      if (!id || !rankOf.has(id)) return m;
-      slots.push(i);
-      const rank = rankOf.get(id);
-      // The poster is asked for under today's rank, so the "#N Today" drawn on
-      // it is the one this order uses (see parseBetterPosterPath, "rk").
-      const own = typeof m.poster === "string" && m.poster.includes("/bp/") && !m.poster.includes("rk=");
-      return { ...m, todayRank: rank, ...(own && rank >= 1 && rank <= 99 ? { poster: m.poster + (m.poster.includes("?") ? "&" : "?") + "rk=" + rank } : {}) };
-    });
-    tagged.totalItems = metas.totalItems;
-    if (slots.length < 2) return slots.length ? tagged : metas;
-    const sorted = slots.map((i) => tagged[i]).sort((a, b) => a.todayRank - b.todayRank);
-    const out = tagged.slice();
-    slots.forEach((i, n) => { out[i] = sorted[n]; });
-    out.totalItems = metas.totalItems;
-    return out;
-  } catch (e) {
-    return metas;
-  }
-}
-
 // --- Anime Unpacking & Multi-Season Parts Resolution -------------------------
 // Fixes TMDB cataloging that compresses multi-season anime (e.g. MASHLE 24 eps,
 // Re:ZERO 85 eps, Jujutsu Kaisen 59 eps) into a single monolithic season.
@@ -29314,7 +29209,6 @@ function renderBuilder(
   const initialBetterPostersRating = initialKeys.betterPostersRating !== false;
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
-  const initialBetterPostersTodayOrder = !!initialKeys.betterPostersTodayOrder;
   // Pictorium (opt-in, with the poster link pasted from the person's own space)
   // and "Use My Lists Addon metadata" (on unless switched off) -- see
   // INSTALL_CONFIG_FIELDS (00_constants.js).
@@ -36351,13 +36245,6 @@ if ('serviceWorker' in navigator) {
             <div style="flex:1; min-width:0;">
               <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Age rating</span>
               <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">Certification chip (PG-13, TV-MA, and so on).</p>
-            </div>
-          </label>
-          <label class="settings-check-item">
-            <input type="checkbox" id="betterPostersTodayOrderCheckbox" ${initialBetterPostersTodayOrder ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTodayOrder&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Order Today tags</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In a list, titles tagged #1 Today, #2 Today and so on are put in that order, so #3 never comes before #2. Needs Trend tags. Applies in Stremio, Nuvio and the lists on the website.</p>
             </div>
           </label>
         </div>
@@ -45936,7 +45823,7 @@ function betterPostersWebImdbId(it) {
   return '';
 }
 
-function betterPostersWebUrl(imdbId, todayRank) {
+function betterPostersWebUrl(imdbId) {
   const get = (typeof getBetterPostersSetting === 'function') ? getBetterPostersSetting : function(k, d) { return !!d; };
   const pick = (typeof getBetterPostersChoice === 'function') ? getBetterPostersChoice : function(k, d) { return d; };
   const genre = get('betterPostersGenre', true);
@@ -45954,8 +45841,6 @@ function betterPostersWebUrl(imdbId, todayRank) {
   if (lang && lang !== 'en') params.push('lang=' + encodeURIComponent(lang));
   const rs = pick('betterPostersRatingSource', 'avg');
   if (rs && rs !== 'avg') params.push('rs=' + encodeURIComponent(rs));
-  // Order Today tags: the title's rank today, so the tag drawn matches the order.
-  if (todayRank >= 1 && todayRank <= 99) params.push('rk=' + todayRank);
   return betterPosterMirrorPrefix() + base + '/' + imdbId + '.jpg' +
     (params.length ? '?' + params.join('&') : '');
 }
@@ -46026,7 +45911,7 @@ function applyBetterPosterWeb(it, poster) {
   // Rebuilt from the current settings every time rather than kept, so
   // changing a style option re-renders with the new one instead of keeping
   // whatever URL happened to be produced first.
-  return betterPostersWebUrl(imdbId, it && it.todayRank);
+  return betterPostersWebUrl(imdbId);
 }
 window.applyBetterPosterWeb = applyBetterPosterWeb;
 
@@ -46799,7 +46684,6 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
-    if (typeof previewTodayOrderOn === 'function' && previewTodayOrderOn()) payload.todayOrder = true;
     const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -72712,7 +72596,6 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox' },
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
-        { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox' },
         { key: 'rpdb', id: 'rpdbCheckbox' },
         { key: 'pictorium', id: 'pictoriumCheckbox' },
         { key: 'provideMetadata', id: 'provideMetadataCheckbox' },
@@ -76756,7 +76639,6 @@ function collectKeys() {
     betterPostersTrendTags: getBetterPostersSetting('betterPostersTrendTags', true),
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
-    betterPostersTodayOrder: getBetterPostersSetting('betterPostersTodayOrder', false),
     rpdb: getBetterPostersSetting('rpdb', false),
     rpdbKey: getBetterPostersChoice('rpdbKey', ''),
     pictorium: getBetterPostersSetting('pictorium', false),
@@ -76977,8 +76859,8 @@ function toggleBetterPostersSetting(key, value) {
   }
   if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
   if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
-  // A cached preview was ordered under the old setting.
-  if (key === 'betterPostersTodayOrder' || key === 'betterPosters' || key === 'betterPostersTrendTags') {
+  // A cached preview was drawn under the old setting.
+  if (key === 'betterPosters' || key === 'betterPostersTrendTags') {
     if (window._listPreviewCache) window._listPreviewCache.clear();
     if (window._discoverFeedsCache) window._discoverFeedsCache = {};
   }
@@ -77071,17 +76953,6 @@ async function testRpdbKey(btn) {
 }
 window.testRpdbKey = testRpdbKey;
 
-// Whether a list preview should come back with its "#N Today" titles in rank
-// order: Better Posters is the poster source, its trend tags are drawn, and
-// Order Today tags is on -- the same three things the Worker checks for a
-// Stremio or Nuvio catalog (fetchCatalog, 05_catalog-core.js).
-function previewTodayOrderOn() {
-  return getBetterPostersSetting('betterPosters', false)
-    && getBetterPostersSetting('betterPostersTrendTags', true)
-    && getBetterPostersSetting('betterPostersTodayOrder', false);
-}
-window.previewTodayOrderOn = previewTodayOrderOn;
-
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
   { key: 'betterPostersGenre', id: 'betterPostersGenreCheckbox', on: true },
@@ -77089,7 +76960,6 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox', on: true },
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
-  { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox', on: false },
   { key: 'rpdb', id: 'rpdbCheckbox', on: false },
   { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
   { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
@@ -77426,8 +77296,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
-        if (previewTodayOrderOn()) body.todayOrder = true;
-        const res = await creatorApiFetch(ORIGIN + '/api/preview', {
+          const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -79893,7 +79762,6 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
-      if (previewTodayOrderOn()) body.todayOrder = true;
       const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86450,9 +86318,6 @@ Sitemap: ${url.origin}/sitemap.xml`;
     // link is never going to hit that limit).
     if (path === "/api/preview") {
       let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region;
-      // The Order Today tags setting, as the page sends it (previewTodayOrderOn,
-      // 23_client-list-management.js): "#N Today" titles come back in rank order.
-      let todayOrder = false;
       if (request.method === "POST") {
         let reqBody;
         try {
@@ -86474,7 +86339,6 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = reqBody.region || "";
         hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
         adultContentFilter = !!reqBody.adultContentFilter;
-        todayOrder = reqBody.todayOrder === true;
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
         skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
       } else {
@@ -86540,7 +86404,6 @@ Sitemap: ${url.origin}/sitemap.xml`;
       let body;
       try {
         let metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
-        if (todayOrder) metas = await orderByBetterPostersToday(metas, type, env, ctx);
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.
@@ -86572,7 +86435,6 @@ Sitemap: ${url.origin}/sitemap.xml`;
             type: m.type || (m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv" ? "series" : (m.mediatype === "episode" ? "episode" : (type === "series" ? "series" : "movie"))),
             name: m.name,
             poster: m.poster,
-            todayRank: m.todayRank || undefined,
             year: m.releaseInfo,
             showTitle: m.showTitle,
             posterShape: m.posterShape,
@@ -112227,7 +112089,7 @@ function betterPostersInR2(env) {
 }
 
 function betterPosterR2Key(bp) {
-  return `img/bp/${bp.style}/${bp.imdbId}/${bp.tag || "-"}.${bp.lang || "-"}.${bp.rs || "-"}${bp.rk ? "." + bp.rk : ""}.jpg`;
+  return `img/bp/${bp.style}/${bp.imdbId}/${bp.tag || "-"}.${bp.lang || "-"}.${bp.rs || "-"}.jpg`;
 }
 
 async function storeBetterPosterR2(env, bp, bytes, contentType) {

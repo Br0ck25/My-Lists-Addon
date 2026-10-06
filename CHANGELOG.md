@@ -6,7 +6,7 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
-- Order Today tags: a tagged title's poster is now asked for under its rank today (`rk`), so the "#N Today" drawn on it matches the order instead of a day-old copy.
+- Removed the Order Today tags setting: the "#N Today" numbers btttr.cc draws on posters come from data it does not publish, so the order could not be made to match them. Ko-fi strip shows on every page, has its progress bar back, reads "Server Costs", and its X hides it for 30 days. "+ Add to List" / "Mark as Watched" stay phone-sized on desktop.
 - Ko-fi strip shows on every page, has its progress bar back, reads "Server Costs", and its X hides it for 30 days. "+ Add to List" / "Mark as Watched" stay phone-sized on desktop.
 
 ### ☕ Ko-fi support strip, with the goal set in the admin page
@@ -34,7 +34,7 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 - **"Could Not Update Like – That URL can't be liked" is fixed for the add-on's own lists.** Most Watched, New on Streaming and combined charts (Trending, Streaming Top 10 (All Services) and the like) are now likeable. The like check only knew provider links and a short list of built-in chart IDs, so these were refused. A combined chart can be liked when every line of it can be. Personal shelves (Watchlist, History, Continue Watching) still can't be, since they are a different list for everyone.
 
-### 🖼️ Ordering the Today tags, Pictorium, RatingPosterDB, metadata off, and combining channels
+### 🖼️ Pictorium, RatingPosterDB, metadata off, and combining channels
 
 - **Channels → My Channels → "Combine into one channel".** Check two or more saved channels, name the result and press the new button next to "Merge into catalog": you get a new channel with every pick from the checked channels, and a pick that two of them share (same show and episode, or the same movie) counted once. The first channel's copy is kept and the order is the channels' order. Quick Add network channels use their full lineup, not the small copy saved on the device. Rotation options any of the channels has on stay on; story locks, hand-made pairs, Live Cloud Sync and the network link are not carried over. The original channels are left as they are, a channel holds at most 5,000 picks, and Next Up can't be combined because it has no picks of its own.
 
@@ -42,7 +42,6 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 - **Pictorium artwork (Settings → Pictorium, off by default).** Posters drawn by your own [Pictorium](https://github.com/Eful97/Pictorium) space instead of plain artwork, in Stremio and Nuvio and on the website. Paste the **AIOMetadata** poster link from your space's editor (a Nuvio link works too; its `{shape}` is dropped). It needs your own Pictorium space and TMDB key. Turning it on turns Better Posters off, and the other way round. The link is checked on save (https, a real host name, `/api/poster/`, `{type}` and `{tmdb_id|imdb_id}`); anything else is ignored. Pictorium draws its own badges, so Airing Next and date badges are not drawn over its posters.
 - **New setting, Settings → Metadata → Use My Lists Addon metadata (on by default).** Off makes the add-on lists-only: its manifest stops offering the details page (synopsis, cast, trailers, episodes), so Stremio and Nuvio ask another add-on for it. Reinstall the add-on after changing it. TV Channel titles keep their details page, since no other add-on has them. Posters on the list tiles still come from this add-on (its Better Posters or Pictorium setting), not from the other add-on.
 
-- **New setting, Settings → Better Posters → Order Today tags (off by default).** Titles Better Posters tags "#N Today" are put in that order, so #3 never comes before #2. They keep the places they had in the list and everything else stays put. It needs Better Posters and Trend tags on. If btttr.cc's ranking can't be read, the list is left as it was. It applies in Stremio and Nuvio catalogs and in the website's list previews (each page of a long list on its own).
 
 ---
 

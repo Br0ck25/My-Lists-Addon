@@ -612,7 +612,6 @@ function collectKeys() {
     betterPostersTrendTags: getBetterPostersSetting('betterPostersTrendTags', true),
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
-    betterPostersTodayOrder: getBetterPostersSetting('betterPostersTodayOrder', false),
     rpdb: getBetterPostersSetting('rpdb', false),
     rpdbKey: getBetterPostersChoice('rpdbKey', ''),
     pictorium: getBetterPostersSetting('pictorium', false),
@@ -833,8 +832,8 @@ function toggleBetterPostersSetting(key, value) {
   }
   if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
   if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
-  // A cached preview was ordered under the old setting.
-  if (key === 'betterPostersTodayOrder' || key === 'betterPosters' || key === 'betterPostersTrendTags') {
+  // A cached preview was drawn under the old setting.
+  if (key === 'betterPosters' || key === 'betterPostersTrendTags') {
     if (window._listPreviewCache) window._listPreviewCache.clear();
     if (window._discoverFeedsCache) window._discoverFeedsCache = {};
   }
@@ -927,17 +926,6 @@ async function testRpdbKey(btn) {
 }
 window.testRpdbKey = testRpdbKey;
 
-// Whether a list preview should come back with its "#N Today" titles in rank
-// order: Better Posters is the poster source, its trend tags are drawn, and
-// Order Today tags is on -- the same three things the Worker checks for a
-// Stremio or Nuvio catalog (fetchCatalog, 05_catalog-core.js).
-function previewTodayOrderOn() {
-  return getBetterPostersSetting('betterPosters', false)
-    && getBetterPostersSetting('betterPostersTrendTags', true)
-    && getBetterPostersSetting('betterPostersTodayOrder', false);
-}
-window.previewTodayOrderOn = previewTodayOrderOn;
-
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
   { key: 'betterPostersGenre', id: 'betterPostersGenreCheckbox', on: true },
@@ -945,7 +933,6 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox', on: true },
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
-  { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox', on: false },
   { key: 'rpdb', id: 'rpdbCheckbox', on: false },
   { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
   { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
@@ -1282,8 +1269,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
-        if (previewTodayOrderOn()) body.todayOrder = true;
-        const res = await creatorApiFetch(ORIGIN + '/api/preview', {
+          const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -3749,7 +3735,6 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
-      if (previewTodayOrderOn()) body.todayOrder = true;
       const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

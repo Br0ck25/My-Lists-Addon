@@ -1295,16 +1295,6 @@ const D1_SCHEMA_MANIFEST = [
 // buildBetterPosterUrl (05_catalog-core.js) assembles the base properly.
 const BETTER_POSTERS_ORIGIN = "https://btttr.cc";
 
-// btttr.cc's own public Stremio catalog that its "#N Today" corner tag is drawn
-// from (used by the Order Today tags setting): the catalog is in rank order and
-// each entry carries that rank as "_rank". btttr.cc names the shows catalog
-// differently from the movies one.
-const BETTER_POSTERS_CATALOGS = {
-  today: { movie: "tmdb-today", series: "tmdb-today-shows" },
-};
-// Its catalogs move through the day, so a stored copy is good for half an hour.
-const BETTER_POSTERS_CATALOG_REFRESH_SECONDS = 1800;
-
 // Rating sources btttr.cc accepts for "rs", straight off its configurator's
 // own dropdown. "avg" is its default and is sent as no parameter at all.
 const BETTER_POSTERS_RATING_SOURCES = [
@@ -1520,7 +1510,6 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
-  { name: "betterPostersTodayOrder", kind: "flag", requires: "betterPosters" },
   { name: "rpdb", kind: "flag" },
   { name: "rpdbKey", kind: "choice", default: "", requires: "rpdb", valid: isValidRpdbKey },
   { name: "pictorium", kind: "flag" },

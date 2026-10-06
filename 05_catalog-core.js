@@ -185,10 +185,6 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   const bpo = keys.betterPostersOptions || {};
   if ((keys.betterPosters || bpo.pictoriumTemplate || bpo.rpdbBase) && Array.isArray(result) && result.length > 0) {
     result = applyBetterPostersToMetas(result, bpo);
-    // "Keep Today tags in order": only meaningful while Better Posters' tags are drawn.
-    if (bpo.todayOrder && bpo.trendTags !== false && !bpo.pictoriumTemplate && !bpo.rpdbBase) {
-      result = await orderByBetterPostersToday(result, entry.type, keys.env, keys.ctx);
-    }
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -1008,28 +1004,20 @@ function parseBetterPosterPath(pathname, searchParams) {
   const lang = BETTER_POSTERS_LANGS.some((l) => l.value === langRaw && l.value !== "en") ? langRaw : "";
   const rsRaw = searchParams.get("rs") || "";
   const rs = BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === rsRaw && r.value !== "avg") ? rsRaw : "";
-  // "rk" is the title's rank today (Order Today tags). btttr.cc is never told
-  // about it: it only gives the stored copy a new name, so a title that moved
-  // up or down the ranking is drawn again with its new "#N Today" tag instead
-  // of keeping the day-old copy.
-  const rkRaw = /^\d{1,2}$/.test(searchParams.get("rk") || "") ? Number(searchParams.get("rk")) : 0;
-  const rk = rkRaw >= 1 ? String(rkRaw) : "";
   const params = [];
   if (tag) params.push("tag=none");
   if (lang) params.push("lang=" + encodeURIComponent(lang));
   if (rs) params.push("rs=" + encodeURIComponent(rs));
   const qs = params.length ? "?" + params.join("&") : "";
-  const ownQs = rk ? (qs ? qs + "&rk=" + rk : "?rk=" + rk) : qs;
   return {
     style: m[1],
     imdbId: m[2],
     tag,
     lang,
     rs,
-    rk,
-    path: `/bp/${m[1]}/${m[2]}.jpg${ownQs}`,
+    path: `/bp/${m[1]}/${m[2]}.jpg${qs}`,
     upstream: `${BETTER_POSTERS_ORIGIN}/${m[1]}/imdb/poster-default/${m[2]}.jpg${qs}`,
-    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}` + (rk ? `:${rk}` : ""),
+    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}`,
   };
 }
 
@@ -1581,7 +1569,6 @@ function betterPostersOptionsFrom(cfg, origin, configParam) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
-    todayOrder: !!c.betterPostersTodayOrder,
     // Pictorium wins over Better Posters when both are on: only one of them
     // can draw a poster.
     pictoriumTemplate: c.pictorium && isValidPictoriumTemplate(c.pictoriumUrl) ? c.pictoriumUrl : "",

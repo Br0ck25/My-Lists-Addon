@@ -3500,7 +3500,6 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox' },
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
-        { key: 'betterPostersTodayOrder', id: 'betterPostersTodayOrderCheckbox' },
         { key: 'rpdb', id: 'rpdbCheckbox' },
         { key: 'pictorium', id: 'pictoriumCheckbox' },
         { key: 'provideMetadata', id: 'provideMetadataCheckbox' },

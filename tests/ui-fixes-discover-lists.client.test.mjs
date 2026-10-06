@@ -138,13 +138,4 @@ describe("client: Lists -> Liked is current when you come back to it", () => {
   });
 });
 
-describe("client: Order Today tags in website previews", () => {
-  const on = (storage) => loadClient({ storage }).call("previewTodayOrderOn");
-  it("needs Better Posters, Trend tags and the setting all on", () => {
-    assert.equal(on({ "myListAddon:betterPosters": "1", "myListAddon:betterPostersTodayOrder": "1" }), true);
-    assert.equal(on({ "myListAddon:betterPostersTodayOrder": "1" }), false);
-    assert.equal(on({ "myListAddon:betterPosters": "1" }), false);
-    assert.equal(on({ "myListAddon:betterPosters": "1", "myListAddon:betterPostersTodayOrder": "1", "myListAddon:betterPostersTrendTags": "0" }), false);
-  });
-});
 
