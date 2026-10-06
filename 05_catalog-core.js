@@ -6,7 +6,7 @@
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -21,8 +21,12 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
   // tiles get filtered out of the row by strict clients and their detail pages
   // are never routed back here by any client. This file's own placeholder tile
   // already cites that behaviour ("some clients filter out anything else").
-  const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["tt", "tmdb:", "channel_"] }];
-  const idPrefixes = ["tt", "tmdb:", "channel_"];
+  // "Use My Lists Addon metadata" off: this add-on answers only for its own TV
+  // Channel ids (no other add-on has those), so every real title's detail page
+  // goes to whichever other add-on has it.
+  const metaPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : ["channel_"];
+  const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: metaPrefixes }];
+  const idPrefixes = metaPrefixes;
   // Stremio/wako call every installed addon's subtitles resource the
   // instant ANY video starts playing (checking for subtitle tracks) --
   // regardless of which addon's catalog the video came from, or whether
@@ -178,8 +182,9 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // would throw the badged poster away. Running it first means a badged
   // poster is a badge drawn over BetterPosters artwork, which is the point.
   // The adult-content filter still runs after both and still wins.
-  if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
-    result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
+  const bpo = keys.betterPostersOptions || {};
+  if ((keys.betterPosters || bpo.pictoriumTemplate || bpo.rpdbBase) && Array.isArray(result) && result.length > 0) {
+    result = applyBetterPostersToMetas(result, bpo);
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -1354,11 +1359,206 @@ async function serveBetterPoster(env, ctx, bp, origin, request) {
   return new Response(null, { status: 502, headers: unavailable });
 }
 
+// --- RatingPosterDB posters, through this Worker -------------------------------
+//
+// /rpdb/<install config>/<imdb id>.jpg. The person's RPDB key lives in their
+// install config and never appears in a poster URL; every image RPDB serves is
+// one request against that key's monthly limit, so this route is what keeps
+// the add-on from spending it:
+//
+//   - a poster is fetched from RPDB once and kept (R2 when bound, else KV),
+//     per key, so a hundred renders on any number of devices cost one request;
+//     a copy is re-fetched when RPDB_REFRESH_MS old, and an older one is still
+//     served when RPDB cannot be asked;
+//   - fetches are capped at RPDB_FETCHES_PER_MINUTE per key, so a page of
+//     titles never seen before is filled in over a few minutes -- the rest get
+//     the title's ordinary poster until their turn;
+//   - the key's own usage is read from RPDB (/requests, kept an hour) and
+//     nothing is fetched once RPDB_STOP_AT_SHARE of the limit is used;
+//   - a 429 or server error backs off for RPDB_BACKOFF_SECONDS, and a key RPDB
+//     refuses (401/403) is not asked with again for the same time.
+// Whatever cannot be served from RPDB is a redirect to the ordinary poster,
+// never an error tile.
+
+const RPDB_IMDB_RE = /^tt\d{5,12}$/;
+const RPDB_IN_FLIGHT = new Map();
+const RPDB_BACKOFF = new Map();   // key hash -> ms until which RPDB is not asked
+const RPDB_USAGE = new Map();     // key hash -> { req, limit, at }
+
+async function rpdbKeyHash(key) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("rpdb:" + key));
+  return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function rpdbStoredKey(hash, imdbId) {
+  return `rpdbimg:v1:${hash}:${imdbId}`;
+}
+
+async function rpdbReadStored(env, hash, imdbId) {
+  try {
+    if (env && env.BLOBS && typeof env.BLOBS.get === "function") {
+      const obj = await env.BLOBS.get(`img/rpdb/${hash}/${imdbId}.jpg`);
+      if (obj) {
+        const m = obj.customMetadata || {};
+        return { bytes: await obj.arrayBuffer(), contentType: m.ct || "image/jpeg", at: Number(m.at) || 0 };
+      }
+    }
+    if (env && env.CONFIGS) {
+      const got = await env.CONFIGS.getWithMetadata(rpdbStoredKey(hash, imdbId), { type: "arrayBuffer" });
+      if (got && got.value) {
+        const meta = got.metadata || {};
+        return { bytes: got.value, contentType: meta.ct || "image/jpeg", at: Number(meta.at) || 0 };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function rpdbWriteStored(env, hash, imdbId, bytes, contentType) {
+  try {
+    if (env && env.BLOBS && typeof env.BLOBS.put === "function") {
+      await env.BLOBS.put(`img/rpdb/${hash}/${imdbId}.jpg`, bytes, {
+        httpMetadata: { contentType },
+        customMetadata: { ct: contentType, at: String(Date.now()) },
+      });
+    } else if (env && env.CONFIGS) {
+      await env.CONFIGS.put(rpdbStoredKey(hash, imdbId), bytes, {
+        expirationTtl: RPDB_KEEP_SECONDS,
+        metadata: { ct: contentType, at: Date.now() },
+      });
+    }
+  } catch {}
+}
+
+// { req, limit } for a key, from RPDB's own /requests, or null when it cannot
+// be read (then only the per-minute cap holds). Kept an hour in this isolate
+// and in KV, so it costs about one call an hour per key, not one per poster.
+async function rpdbUsage(env, key, hash) {
+  const now = Date.now();
+  const mem = RPDB_USAGE.get(hash);
+  if (mem && now - mem.at < RPDB_USAGE_TTL_SECONDS * 1000) return mem;
+  const kvKey = `rpdb:usage:v1:${hash}`;
+  try {
+    if (env && env.CONFIGS) {
+      const raw = await env.CONFIGS.get(kvKey);
+      const kv = raw ? JSON.parse(raw) : null;
+      if (kv && Number.isFinite(kv.req) && Number.isFinite(kv.limit) && now - kv.at < RPDB_USAGE_TTL_SECONDS * 1000) {
+        RPDB_USAGE.set(hash, kv);
+        return kv;
+      }
+    }
+  } catch {}
+  try {
+    const res = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/requests`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !Number.isFinite(data.req) || !Number.isFinite(data.limit)) return null;
+    const usage = { req: data.req, limit: data.limit, at: now };
+    RPDB_USAGE.set(hash, usage);
+    if (env && env.CONFIGS) await env.CONFIGS.put(kvKey, JSON.stringify(usage), { expirationTtl: RPDB_USAGE_TTL_SECONDS * 2 }).catch(() => {});
+    return usage;
+  } catch {
+    return null;
+  }
+}
+
+// May one more poster be asked of RPDB for this key right now?
+async function rpdbMayFetch(env, ctx, key, hash) {
+  if ((RPDB_BACKOFF.get(hash) || 0) > Date.now()) return false;
+  const usage = await rpdbUsage(env, key, hash);
+  if (usage && usage.limit > 0 && usage.req >= usage.limit * RPDB_STOP_AT_SHARE) return false;
+  // True from consumeRateLimit means over the limit.
+  return !(await consumeRateLimit(env, ctx, "rpdbfetch", hash, RPDB_FETCHES_PER_MINUTE, 60));
+}
+
+// One request to RPDB. fallback=true makes RPDB itself answer with the ordinary
+// poster for a title it has no ratings for, so a miss is still a picture.
+async function rpdbFetchUpstream(env, ctx, key, hash, imdbId) {
+  const flightKey = hash + ":" + imdbId;
+  if (RPDB_IN_FLIGHT.has(flightKey)) return RPDB_IN_FLIGHT.get(flightKey);
+  const p = (async () => {
+    try {
+      const res = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/imdb/poster-default/${imdbId}.jpg?fallback=true`, {
+        headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
+      }, RPDB_FETCH_TIMEOUT_MS);
+      if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
+        // A refused key and a spent or struggling service are both left alone
+        // for a while rather than asked again poster by poster.
+        RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
+        return null;
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || !contentType.startsWith("image/")) return null;
+      const bytes = await res.arrayBuffer();
+      if (!bytes.byteLength || bytes.byteLength > RPDB_MAX_BYTES) return null;
+      await rpdbWriteStored(env, hash, imdbId, bytes, contentType);
+      return { bytes, contentType };
+    } catch {
+      return null;
+    } finally {
+      RPDB_IN_FLIGHT.delete(flightKey);
+    }
+  })();
+  RPDB_IN_FLIGHT.set(flightKey, p);
+  return p;
+}
+
+function rpdbImageResponse(bytes, contentType) {
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      "Content-Type": contentType || "image/jpeg",
+      "Cache-Control": "public, max-age=21600, stale-while-revalidate=86400",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+// Short-lived, so the RPDB poster takes over as soon as it can.
+function rpdbFallbackResponse(imdbId) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "Location": `https://images.metahub.space/poster/medium/${imdbId}/img`,
+      "Cache-Control": "public, max-age=300",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+async function serveRpdbPoster(env, ctx, configParam, imdbId) {
+  if (!RPDB_IMDB_RE.test(imdbId)) return new Response(null, { status: 404 });
+  let cfg = null;
+  try { cfg = await resolveConfig(configParam, env); } catch {}
+  if (!cfg || !cfg.rpdb || !isValidRpdbKey(cfg.rpdbKey)) return rpdbFallbackResponse(imdbId);
+  const key = cfg.rpdbKey;
+  const hash = await rpdbKeyHash(key);
+
+  const stored = await rpdbReadStored(env, hash, imdbId);
+  const fresh = stored && Date.now() - stored.at < RPDB_REFRESH_MS;
+  if (fresh) return rpdbImageResponse(stored.bytes, stored.contentType);
+
+  // Stale or missing: ask RPDB only if the budget allows. A stale copy is
+  // served at once and refreshed behind the response.
+  if (stored) {
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil((async () => {
+        if (await rpdbMayFetch(env, ctx, key, hash)) await rpdbFetchUpstream(env, ctx, key, hash, imdbId);
+      })());
+    }
+    return rpdbImageResponse(stored.bytes, stored.contentType);
+  }
+  if (!(await rpdbMayFetch(env, ctx, key, hash))) return rpdbFallbackResponse(imdbId);
+  const got = await rpdbFetchUpstream(env, ctx, key, hash, imdbId);
+  return got ? rpdbImageResponse(got.bytes, got.contentType) : rpdbFallbackResponse(imdbId);
+}
+
 // Packs a resolved config's betterPosters* keys into the shape
 // buildBetterPosterUrl reads. Each default matches btttr.cc's own default for
 // that option, so an install that never touched the style controls gets the
 // same artwork its configurator hands out.
-function betterPostersOptionsFrom(cfg, origin) {
+function betterPostersOptionsFrom(cfg, origin, configParam) {
   const c = cfg || {};
   return {
     // This Worker's own origin, so posters are served from its copy (see
@@ -1369,9 +1569,26 @@ function betterPostersOptionsFrom(cfg, origin) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
+    // Pictorium wins over Better Posters when both are on: only one of them
+    // can draw a poster.
+    pictoriumTemplate: c.pictorium && isValidPictoriumTemplate(c.pictoriumUrl) ? c.pictoriumUrl : "",
+    // RatingPosterDB, through this Worker's /rpdb/ route (serveRpdbPoster):
+    // the base every poster URL starts with, or "" when it is off. Pictorium
+    // wins over it, and it wins over Better Posters.
+    rpdbBase: c.rpdb && isValidRpdbKey(c.rpdbKey) && origin && configParam ? `${origin}/rpdb/${encodeURIComponent(configParam)}` : "",
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
+}
+
+// A Pictorium poster link for one title, from the link as pasted in Settings.
+// Only the type and id are filled in; "shape" is dropped (Pictorium's default
+// is the portrait poster) and any other placeholder is left as it is.
+function fillPictoriumTemplate(template, imdbId, type) {
+  return String(template)
+    .split(PICTORIUM_SHAPE_PARAM).join("")
+    .replace(PICTORIUM_TYPE_TOKEN, type === "series" ? "series" : "movie")
+    .replace(PICTORIUM_ID_TOKEN, imdbId);
 }
 
 // Single-meta form, for the /meta/ detail route.
@@ -1393,6 +1610,8 @@ function applyBetterPostersToMetas(metas, opts) {
     if (m.posterShape === "landscape") return m;
     const imdbId = betterPostersImdbId(m);
     if (!imdbId) return m;
+    if (opts && opts.pictoriumTemplate) return { ...m, poster: fillPictoriumTemplate(opts.pictoriumTemplate, imdbId, m.type) };
+    if (opts && opts.rpdbBase) return { ...m, poster: `${opts.rpdbBase}/${imdbId}.jpg` };
     return { ...m, poster: buildBetterPosterUrl(imdbId, opts) };
   });
   mapped.totalItems = tot;
@@ -1403,7 +1622,7 @@ function applyBadgedPostersToMetas(metas, origin) {
   if (!Array.isArray(metas) || !metas.length || !origin) return metas;
   const tot = metas.totalItems;
   const mapped = metas.map((m) => {
-    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster")) return m;
+    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster") || m.poster.includes("/api/poster/") || m.poster.includes("/rpdb/")) return m;
     const isPremiereEp = m.episodeNumber === 1 || m.episodeNum === 1 || (m.episodeNum == null && m.episodeNumber == null);
     const hasAired = m.airDate && typeof isEpisodeAired === "function" ? isEpisodeAired(m.airDate) : false;
     const hasPremiere = !!(m.isSeasonPremiere && isPremiereEp && !hasAired);

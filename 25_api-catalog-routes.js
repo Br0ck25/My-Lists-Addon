@@ -392,6 +392,84 @@ async function handleFetch(request, env, ctx) {
       return await serveBetterPoster(env, ctx, bp, url.origin, request);
     }
 
+    // /rpdb/<config>/<imdb id>.jpg -> a RatingPosterDB poster from this Worker's
+    // own copy, see serveRpdbPoster (05_catalog-core.js).
+    const rpdbMatch = path.match(/^\/rpdb\/([^/]+)\/(tt\d+)\.jpg$/);
+    if (rpdbMatch && (request.method === "GET" || request.method === "HEAD")) {
+      return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
+    }
+
+    // /api/support-goal -> what the Ko-fi support strip shows, or enabled:false
+    // until the admin turns it on. See readSupportGoal (03_admin.js).
+    if (path === "/api/support-goal" && request.method === "GET") {
+      const view = publicSupportGoal(await readSupportGoal(env));
+      return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
+    }
+
+    // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
+    // payment to the support strip's total. Ko-fi posts form data whose `data`
+    // field is a JSON string; the verification token inside it has to match the
+    // KOFI_VERIFICATION_TOKEN secret. Ko-fi retries until it gets a 200, so a
+    // message_id already counted is answered 200 and not counted twice.
+    if (path === "/api/kofi-webhook" && request.method === "POST") {
+      if (!env || !env.KOFI_VERIFICATION_TOKEN || !env.CONFIGS) {
+        return json({ ok: false, error: "Not set up." }, 503, { "Cache-Control": "no-store" });
+      }
+      const kofiIp = clientIpKey(request);
+      if (!kofiIp || await consumeRateLimit(env, ctx, "kofiwebhook", kofiIp, 120, 60)) {
+        return json({ ok: false, error: "Too many requests." }, 429, { "Cache-Control": "no-store" });
+      }
+      if ((Number(request.headers.get("content-length")) || 0) > KOFI_WEBHOOK_BODY_MAX) {
+        return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+      }
+      let data = null;
+      try {
+        // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
+        // (and multipart) alike.
+        const raw = (await request.formData()).get("data");
+        if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
+        data = JSON.parse(raw);
+      } catch {
+        return json({ ok: false, error: "Bad request." }, 400, { "Cache-Control": "no-store" });
+      }
+      if (!data || typeof data !== "object" || !(await timingSafeEqualSecret(data.verification_token, env.KOFI_VERIFICATION_TOKEN))) {
+        return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
+      }
+      const amount = kofiAmountToCount(data);
+      const messageId = String(data.message_id || "");
+      if (amount === null || !KOFI_MESSAGE_ID_RE.test(messageId)) {
+        return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
+      }
+      const seenKey = `kofi:msg:${messageId}`;
+      if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+      const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
+      await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
+      await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
+    // key works and how much of its monthly limit is spent, for Settings.
+    if (path === "/api/rpdb-check" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" }); }
+      const key = body && typeof body.key === "string" ? body.key.trim() : "";
+      if (!isValidRpdbKey(key)) return json({ ok: false, error: "That does not look like an RPDB key (it starts with t1- to t4-)." }, 400, { "Cache-Control": "no-store" });
+      const checkIp = clientIpKey(request);
+      if (!checkIp || await consumeRateLimit(env, ctx, "rpdbcheck", checkIp, 10, 60)) {
+        return json({ ok: false, error: "Too many requests just now." }, 429, { "Cache-Control": "no-store" });
+      }
+      try {
+        const valid = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/isValid`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        if (!valid.ok) return json({ ok: true, valid: false }, 200, { "Cache-Control": "no-store" });
+        const usage = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/requests`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        const data = usage.ok ? await usage.json() : null;
+        return json({ ok: true, valid: true, used: data && Number.isFinite(data.req) ? data.req : null, limit: data && Number.isFinite(data.limit) ? data.limit : null }, 200, { "Cache-Control": "no-store" });
+      } catch {
+        return json({ ok: false, error: "RatingPosterDB did not answer. Try again in a moment." }, 502, { "Cache-Control": "no-store" });
+      }
+    }
+
     // /api/bp/warm  (POST)  { urls: ["/bp/...", ...] } -> { ok, stored, fetched, ready: [...] }
     //
     // Fetches, from btttr.cc, any of these posters this Worker does not hold
@@ -939,7 +1017,7 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false),
         200,
         hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
@@ -1222,8 +1300,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
-        if (searchConfig.betterPosters) {
-          metas = applyBetterPostersToMetas(metas, betterPostersOptionsFrom(searchConfig, url.origin));
+        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin, config);
+        if (searchConfig.betterPosters || searchArt.pictoriumTemplate || searchArt.rpdbBase) {
+          metas = applyBetterPostersToMetas(metas, searchArt);
         }
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
       }
@@ -1303,7 +1382,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
+        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin, config), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
         // FF_MATERIALIZER (P5-11, 54_materializer.js): with de-duplication, the
         // first page of every non-personal row is built once per install and
         // de-duplicated in one pass, instead of each row rebuilding the rows
@@ -1539,7 +1618,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
 
       let body;
       try {
-        const metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.
@@ -1705,8 +1784,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // opened. Only the poster is touched -- background, logo, cast and
           // the episode list all stay exactly as fetchStandardItemMeta built
           // them, and a non-IMDB id (tmdb:...) is left alone.
-          if (metaConfig.betterPosters) {
-            meta = applyBetterPosterToMeta(meta, betterPostersOptionsFrom(metaConfig, url.origin));
+          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin, config);
+          if (metaConfig.betterPosters || metaArt.pictoriumTemplate || metaArt.rpdbBase) {
+            meta = applyBetterPosterToMeta(meta, metaArt);
           }
           return jsonPublic(
             { meta },
@@ -7731,7 +7811,7 @@ function generateSearchVariations(query) {
       // unbounded attacker-controlled keyspace.
       const normalizedUrl = normalizeExternalListUrl(rawUrl);
       if (!normalizedUrl) {
-        return json({ ok: false, error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl, and Letterboxd list links are supported." }, 400);
+        return json({ ok: false, error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl and Letterboxd list links and this add-on's own charts are supported." }, 400);
       }
       const unlike = body.action === "unlike";
 

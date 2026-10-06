@@ -278,7 +278,6 @@ function normalizeListsSubmenu(raw) {
 
     // 5. Discover submenu early sync
     var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
-    if (discSub === 'all') discSub = 'movie';
     var discBar = document.getElementById('discoverSubnavBar');
     if (discBar) {
       discBar.querySelectorAll('.subnav-pill').forEach(function(p) {
@@ -1114,7 +1113,7 @@ function updateAllListAddButtons() {
   document.querySelectorAll('.list-search-add-btn, .searchAddBtn').forEach((btn) => {
     const url = btn.dataset.url;
     const type = btn.dataset.type;
-    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type)) : false;
     btn.classList.toggle('is-added', isAdded);
     btn.classList.toggle('secondary', isAdded);
     btn.classList.toggle('primary', !isAdded);
@@ -1385,6 +1384,14 @@ function switchTab(name) {
         }
       });
       switchListsSubmenu(savedSub, targetBtn || pills[0]);
+    } else {
+      // Coming back to Lists lands on the sub-page it was left on. Liked is the
+      // one whose contents change from elsewhere (a heart on Discover or
+      // Search), so it is refreshed on return. renderLikedListsFeed does
+      // nothing when the liked count it last drew still matches.
+      let current = '';
+      try { current = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu')); } catch (e) {}
+      if (current === 'liked' && typeof renderLikedListsFeed === 'function') renderLikedListsFeed();
     }
   }
   if (name === 'settings') {
@@ -1446,8 +1453,7 @@ function switchTab(name) {
       try {
         savedFilter = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       } catch (e) {}
-      if (savedFilter === 'all') savedFilter = 'movie';
-      const activeFilter = (window._currentDiscoverFilter && window._currentDiscoverFilter !== 'all') ? window._currentDiscoverFilter : savedFilter;
+      const activeFilter = window._currentDiscoverFilter || savedFilter;
       window._currentDiscoverFilter = activeFilter;
       const pills = document.querySelectorAll('#discoverSubnavBar .subnav-pill');
       let targetBtn = null;
@@ -2296,6 +2302,88 @@ function closeModal() {
     try { _modalReturnFocus.focus(); } catch (e) {}
   }
   _modalReturnFocus = null;
+}
+
+// --- The Ko-fi support strip ---------------------------------------------------
+//
+// A goal for the month's hosting and how much has been given, set by the admin
+// (Management & Tools -> Support Goal) and read from /api/support-goal. The
+// strip stays hidden until the admin has turned it on. Its X hides it for the
+// next 30 days in this browser only; after that it is back.
+let _supportGoal = null;
+
+function supportMoney(n) {
+  const v = Number(n) || 0;
+  return '$' + (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2));
+}
+
+function supportDismissedRecently() {
+  try {
+    const at = Number(localStorage.getItem('myListAddon:supportDismissed'));
+    return at > 0 && Date.now() - at < 30 * 86400000;
+  } catch (e) { return false; }
+}
+
+function renderSupportStrip() {
+  const strip = document.getElementById('supportStrip');
+  const g = _supportGoal;
+  if (!strip) return;
+  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedRecently()) { strip.hidden = true; return; }
+  const covered = g.raised >= g.goal;
+  strip.classList.toggle('is-covered', covered);
+  const text = document.getElementById('supportStripText');
+  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server Costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
+  const fill = document.getElementById('supportStripFill');
+  if (fill) fill.style.width = Math.max(0, Math.min(100, (g.raised / g.goal) * 100)) + '%';
+  strip.hidden = false;
+}
+
+function initSupportStrip() {
+  if (!document.getElementById('supportStrip')) return;
+  try {
+    fetch(ORIGIN + '/api/support-goal')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.ok) { _supportGoal = data; renderSupportStrip(); }
+      })
+      .catch(function() {});
+  } catch (e) {}
+}
+
+function dismissSupportStrip() {
+  try { localStorage.setItem('myListAddon:supportDismissed', String(Date.now())); } catch (e) {}
+  renderSupportStrip();
+}
+
+function openSupportGoal() {
+  const g = _supportGoal;
+  if (!g || !g.enabled) return;
+  const left = Math.max(0, g.goal - g.raised);
+  const pct = Math.max(0, Math.min(100, (g.raised / g.goal) * 100));
+  const row = function(label, value, strong) {
+    return '<div style="display:flex; justify-content:space-between;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
+  };
+  const html =
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
+      '<h3 style="margin:0; font-size:1.1rem;">Keeping My Lists Addon running</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '</div>' +
+    '<p style="margin:0 0 12px; color:var(--muted); font-size:0.88rem; line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
+    '<div style="font-size:1.8rem; font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:0.85rem; font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
+    '<div style="height:10px; border-radius:10px; background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:10px; background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div style="display:grid; gap:6px; font-size:0.88rem; color:var(--text); margin-bottom:14px;">' +
+      row('Hosting this month', supportMoney(g.goal), false) +
+      row('Given so far', supportMoney(g.raised), false) +
+      row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
+    '</div>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:var(--accent); color:#fff; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
+    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
+  showModal(html);
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSupportStrip);
+  else initSupportStrip();
 }
 
 function showAppAlert(title, message, isSuccess = false) {

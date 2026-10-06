@@ -10574,7 +10574,7 @@ function renderMyCreatedChannelsList() {
     // differently from one that does not, and the card is the only place
     // that is visible without opening the editor.
     const orderLabel = channelPlayOrderLabel(ch);
-    const metaBits = ['24/7 TV Channel'];
+    const metaBits = [];
     if (ch.dynamic === 'next-up') metaBits.push('fills itself in from Continue Watching');
     else metaBits.push(totalEpisodes + ' episode' + (totalEpisodes === 1 ? '' : 's'));
     if (ch.dailyRotate) {
@@ -10797,7 +10797,7 @@ function updateChannelSaveButtonLabel() {
       if (!chName.toLowerCase().endsWith('channel')) chName += ' Channel';
       titleEl.textContent = 'Edit ' + chName;
     } else {
-      titleEl.textContent = 'Build Custom Channel';
+      titleEl.textContent = 'Create a Custom Channel';
     }
   }
   if (!saveBtn) return;
@@ -10808,7 +10808,7 @@ function updateChannelSaveButtonLabel() {
       cancelBtn.style.display = '';
     }
   } else {
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = 'Create Channel';
     if (cancelBtn) cancelBtn.style.display = 'none';
   }
 }
@@ -13470,6 +13470,116 @@ function mergeChannelsIntoRow() {
   renderChannelMergeList();
   renderMyCreatedChannelsList();
   showAddedToast('Merged ' + channelIds.length + ' channels into "' + combinedName + '".');
+}
+
+// --- Combine channels into ONE channel ---------------------------------------
+//
+// mergeChannelsIntoRow above keeps each channel separate inside one catalog
+// row. This makes a NEW channel instead: every pick of every chosen channel,
+// once. A pick is the same pick when it is the same show and episode (or the
+// same movie) -- channelDraftPairKey, the client twin of the Worker's
+// channelItemStreamId -- so an episode two of the channels both carry plays
+// once. The first channel's copy wins and the order is the order the channels
+// were listed in, then each channel's own order.
+//
+// The originals are left as they are. A Quick Add network channel only holds a
+// small sample locally (CHANNEL_POINTER_SAMPLE_ITEMS) next to its presetNetworkId,
+// so its full pool is fetched first, the same call resolveThinPresetChannels
+// makes; if that fails, what is held locally is used and the person is told.
+async function channelFullPicks(ch) {
+  const held = Array.isArray(ch.items) ? ch.items : [];
+  if (!ch.presetNetworkId || held.length > CHANNEL_POINTER_SAMPLE_ITEMS) return { items: held, partial: false };
+  try {
+    const r = await fetch(ORIGIN + '/api/channel-preset?networkId=' + encodeURIComponent(ch.presetNetworkId) + '&name=' + encodeURIComponent(ch.name || ''), { cache: 'no-store' });
+    const data = await r.json();
+    if (data && data.ok && data.channel && Array.isArray(data.channel.items) && data.channel.items.length >= held.length) {
+      return { items: data.channel.items.map(normalizeChannelItemFromStorage), partial: false };
+    }
+  } catch (e) {}
+  return { items: held, partial: true };
+}
+
+async function combineChannelsIntoChannel(btn) {
+  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
+  const alertMsg = (msg) => {
+    if (typeof showAppAlert === 'function') showAppAlert('Combine Channels', msg);
+    else showToast(msg, 'error');
+  };
+  const checks = document.querySelectorAll('#channelMergeList .channelMergeCheck:checked');
+  if (checks.length < 2) { alertMsg('Check at least two channels to combine.'); return; }
+  const nameInput = document.getElementById('channelMergeNameInput');
+  const combinedName = nameInput.value.trim();
+  if (!combinedName) { alertMsg('Name the combined channel first.'); return; }
+
+  const channelsMap = loadLocalChannels();
+  const picked = [...checks].map((cb) => channelsMap[cb.dataset.channelid]).filter(Boolean);
+  // Next Up is worked out live from what is being watched; it has no picks of
+  // its own to copy.
+  const chosen = picked.filter((ch) => ch.dynamic !== 'next-up');
+  if (chosen.length < 2) { alertMsg('Pick at least two channels that have episodes of their own (Next Up is worked out live, so it cannot be combined).'); return; }
+
+  if (btn) btn.disabled = true;
+  try {
+    const seen = new Set();
+    const items = [];
+    let duplicates = 0;
+    let anyPartial = false;
+    let capped = false;
+    for (const ch of chosen) {
+      const pool = await channelFullPicks(ch);
+      if (pool.partial) anyPartial = true;
+      for (const it of pool.items) {
+        const key = channelDraftPairKey(it);
+        // A pick with no usable id cannot be matched against another, so it is kept.
+        if (key && seen.has(key)) { duplicates++; continue; }
+        if (items.length >= CHANNEL_POOL_MAX_ITEMS) { capped = true; continue; }
+        if (key) seen.add(key);
+        items.push(it);
+      }
+    }
+
+    // Rotation and arrangement settings come from the first channel that
+    // rotates daily (else the first channel); an option any of them has on stays on.
+    // Story locks, hand-made pairs, Live Cloud Sync and the network pointer
+    // belong to the individual channels and are not carried over.
+    const base = chosen.find((c) => c.dailyRotate) || chosen[0];
+    const fields = channelBroadcastFields(Object.assign({}, base, {
+      storyLocked: [], storyLockedSince: {}, pairedGroups: [], liveSync: false, sourceUrl: '', dynamic: '',
+      dailyRotate: chosen.some((c) => c.dailyRotate),
+      hideWatched: chosen.some((c) => c.hideWatched),
+      pairParts: chosen.some((c) => c.pairParts),
+      autoNewEpisodes: chosen.some((c) => c.autoNewEpisodes),
+    }));
+    const withArt = chosen.find((c) => c.poster) || chosen[0];
+    const channelId = generateChannelId();
+    const saved = saveLocalChannel(Object.assign({
+      channelId: channelId,
+      name: combinedName,
+      poster: withArt.poster || null,
+      backdrop: withArt.backdrop || null,
+      items: items,
+      shuffle: chosen.some((c) => c.shuffle),
+      autoSort: '',
+      sortByAired: false,
+      presetNetworkId: '',
+    }, fields));
+    addRow(combinedName, channelRowUrl(saved), 'series', true, 'Channels', channelId);
+    nameInput.value = '';
+    if (typeof saveState === 'function') saveState();
+    if (typeof renderLivePreview === 'function') renderLivePreview();
+    renderChannelMergeList();
+    renderMyCreatedChannelsList();
+    showAddedToast('Combined ' + chosen.length + ' channels into "' + combinedName + '": ' + items.length + ' picks, ' + duplicates + ' duplicate' + (duplicates === 1 ? '' : 's') + ' left out.');
+    if (anyPartial || capped || picked.length !== chosen.length) {
+      alertMsg(
+        (anyPartial ? 'A Quick Add network channel could not load its full lineup just now, so only the part saved on this device was used. ' : '') +
+        (capped ? 'A channel holds at most ' + CHANNEL_POOL_MAX_ITEMS + ' picks, so the rest were left out. ' : '') +
+        (picked.length !== chosen.length ? 'Next Up was left out: it is worked out live and has no picks of its own. ' : '')
+      );
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function toggleAllChannelMergeChecks(checkbox) {

@@ -447,6 +447,7 @@ async function schemaWriteGate(request, env) {
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
 // 2. OAuth provider callbacks and starts (/api/*/oauth/*)
 // 3. Admin form login and logout (/admin/login, /admin/logout)
+// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
 function verifyCsrf(request) {
   const method = (request.method || "GET").toUpperCase();
   if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
@@ -466,6 +467,11 @@ function verifyCsrf(request) {
     return null;
   }
   if (path.includes("/oauth/")) {
+    return null;
+  }
+  // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
+  // proves itself with its verification token (handled in the route).
+  if (path === "/api/kofi-webhook") {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {
@@ -4185,38 +4191,55 @@ const EXTERNAL_LIKE_HOSTS = new Set([
 const LIKEABLE_SENTINEL_PREFIXES = [
   "tmdb:chart:", "tmdb:top10:", "tmdb:kids:", "tmdb:holiday:", "tmdb:genre:", "tmdb:collection:",
   "trakt:chart:", "simkl:chart:",
+  // This add-on's own Most Watched charts.
+  "mylists:most-watched:",
 ];
-const LIKEABLE_SENTINEL_EXACT = new Set(["tmdb:hidden-gems"]);
+const LIKEABLE_SENTINEL_EXACT = new Set(["tmdb:hidden-gems", "tmdb:new-on-streaming"]);
+// A combined chart (Trending, Streaming Top 10 (All Services)...) is several
+// of these, one per line. Each line has to be likeable on its own.
+const LIKEABLE_COMBINED_LINES_MAX = 12;
+const LIKEABLE_COMBINED_URL_MAX = 3000;
 
 function normalizeExternalListUrl(rawUrl) {
-  const s = String(rawUrl || "").trim();
-  if (!s || s.length > 300) return null;
-  const lower = s.toLowerCase();
-  if (
-    LIKEABLE_SENTINEL_EXACT.has(lower) ||
-    (LIKEABLE_SENTINEL_PREFIXES.some((p) => lower.startsWith(p)) && /^[a-z0-9:_-]+$/.test(lower))
-  ) {
-    return lower;
-  }
-  let u;
-  try {
-    u = new URL(s);
-  } catch {
-    return null;
-  }
-  // Blocks javascript:, data:, file:, and anything else non-web outright.
-  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-  const host = u.hostname.toLowerCase();
-  if (!EXTERNAL_LIKE_HOSTS.has(host)) return null;
-  // Normalized so the same list liked via http/https, with or without a
-  // "www." prefix, with a trailing slash, or with tracking query params
-  // all land on ONE ledger instead of fragmenting the count across
-  // near-duplicate keys. The "www." strip matters most: trakt.tv and
-  // www.trakt.tv are the same list to a human, and were otherwise counted
-  // separately.
-  const bareHost = host.replace(/^www\./, "");
-  const path = u.pathname.replace(/\/+$/, "") || "/";
-  return `https://${bareHost}${path}`;
+  const whole = String(rawUrl || "").trim();
+  if (!whole || whole.length > LIKEABLE_COMBINED_URL_MAX) return null;
+
+  const one = (line) => {
+    const s = String(line || "").trim();
+    if (!s || s.length > 300) return null;
+    const lower = s.toLowerCase();
+    if (
+      LIKEABLE_SENTINEL_EXACT.has(lower) ||
+      (LIKEABLE_SENTINEL_PREFIXES.some((p) => lower.startsWith(p)) && /^[a-z0-9:_-]+$/.test(lower))
+    ) {
+      return lower;
+    }
+    let u;
+    try {
+      u = new URL(s);
+    } catch {
+      return null;
+    }
+    // Blocks javascript:, data:, file:, and anything else non-web outright.
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    const host = u.hostname.toLowerCase();
+    if (!EXTERNAL_LIKE_HOSTS.has(host)) return null;
+    // Normalized so the same list liked via http/https, with or without a
+    // "www." prefix, with a trailing slash, or with tracking query params
+    // all land on ONE ledger instead of fragmenting the count across
+    // near-duplicate keys. The "www." strip matters most: trakt.tv and
+    // www.trakt.tv are the same list to a human, and were otherwise counted
+    // separately.
+    const bareHost = host.replace(/^www\./, "");
+    const path = u.pathname.replace(/\/+$/, "") || "/";
+    return `https://${bareHost}${path}`;
+  };
+
+  if (!whole.includes("\n")) return one(whole);
+  const lines = whole.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2 || lines.length > LIKEABLE_COMBINED_LINES_MAX) return null;
+  const parts = lines.map(one);
+  return parts.every(Boolean) ? parts.join("\n") : null;
 }
 
 // ---------------------------------------------------------------------------

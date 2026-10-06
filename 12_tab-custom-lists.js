@@ -72,11 +72,11 @@
   <!-- Submenu 2: Liked Lists Feed -->
   <div class="lists-subpanel" id="listsSubLiked" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Lists You Liked</h2>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Lists You Liked</h2>
+        <p>Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
         ${refreshButtonHtml('renderLikedListsFeed', 'Refresh liked lists', [true])}
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
            overwrites it on every switch to this tab and is authoritative for
            the empty case -- nothing may read this element's children to decide
@@ -87,10 +87,6 @@
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
-    <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
-         title is in the draft this panel already saves. -->
-    <div id="appShellAddTitles"></div>
-
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
@@ -138,12 +134,9 @@
       <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
         <label for="customListSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
         <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
-        <div style="position:relative; width:100%;">
-          <input type="text" id="customListSearchInput" placeholder="Search a title to add..." style="width:100%; padding:10px 14px 10px 38px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;" aria-hidden="true">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
+        <div class="search-input-box">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
           <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>

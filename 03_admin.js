@@ -1995,6 +1995,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
   "/admin/api/recover-stats-from-analytics": "admin.recover.stats-from-analytics",
+  "/admin/api/support-goal": "admin.support-goal.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -2319,6 +2320,115 @@ function adminActArgs(values) {
     out.push(v === undefined || v === null ? "" : v);
   }
   return escapeHtmlServer(JSON.stringify(out));
+}
+
+// --- The support goal (the strip at the top of Catalogs) ---------------------
+//
+// What the Ko-fi support strip shows: a monthly hosting goal and how much has
+// been given so far this month, both typed in under Management & Tools ->
+// Support Goal. It stays hidden until it is turned on there. The amount given
+// belongs to the month it was entered in and counts as 0 in the next one, so
+// the bar starts over on the 1st by itself.
+const SUPPORT_GOAL_KEY = "support:goal:v1";
+const SUPPORT_GOAL_URL = "https://ko-fi.com/mylistsaddon";
+// Ko-fi's webhook (POST /api/kofi-webhook, below) adds each USD donation to the
+// month's total by itself. These are the payment types it counts: tips and
+// monthly memberships. Commissions and shop orders are sales, not support.
+const KOFI_COUNTED_TYPES = new Set(["Donation", "Subscription"]);
+const KOFI_WEBHOOK_BODY_MAX = 20000;
+const KOFI_MESSAGE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+const SUPPORT_GOAL_MAX = 100000;
+
+function supportGoalMonth(now = new Date()) {
+  return easternDateKey(now).slice(0, 7);
+}
+
+// What is stored, as it is read: always complete, whatever was written.
+async function readSupportGoal(env) {
+  let stored = null;
+  try {
+    const raw = env && env.CONFIGS ? await env.CONFIGS.get(SUPPORT_GOAL_KEY) : null;
+    stored = raw ? JSON.parse(raw) : null;
+  } catch {
+    stored = null;
+  }
+  const s = stored && typeof stored === "object" ? stored : {};
+  const num = (v, max) => (Number.isFinite(v) && v >= 0 ? Math.min(max, Math.round(v * 100) / 100) : 0);
+  return {
+    enabled: s.enabled === true,
+    goal: num(s.goal, SUPPORT_GOAL_MAX),
+    raised: num(s.raised, SUPPORT_GOAL_MAX * 10),
+    raisedMonth: typeof s.raisedMonth === "string" ? s.raisedMonth : "",
+    updatedAt: Number.isFinite(s.updatedAt) ? s.updatedAt : 0,
+    // The last payment Ko-fi told us about, for the admin page.
+    lastPayment: s.lastPayment && Number.isFinite(s.lastPayment.at) && Number.isFinite(s.lastPayment.amount)
+      ? { at: s.lastPayment.at, amount: s.lastPayment.amount }
+      : null,
+  };
+}
+
+// One Ko-fi payment (the webhook's `data` object) as a dollar amount to count,
+// or null when it is not one: the wrong type, not US dollars (the goal is in
+// dollars, and there is no exchange rate to convert with), or a number that
+// makes no sense. Whether the donor chose to be public does not matter here:
+// only the total is ever shown, never who gave.
+function kofiAmountToCount(data) {
+  if (!data || typeof data !== "object") return null;
+  if (!KOFI_COUNTED_TYPES.has(String(data.type || ""))) return null;
+  if (String(data.currency || "").toUpperCase() !== "USD") return null;
+  const amount = Number(data.amount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > SUPPORT_GOAL_MAX) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+// The stored goal with one payment added to the month's total. A total that
+// belongs to an earlier month starts again from 0 first.
+function addKofiPaymentToSupportGoal(stored, amount, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const base = stored.raisedMonth === month ? stored.raised : 0;
+  return {
+    ...stored,
+    raised: Math.round((base + amount) * 100) / 100,
+    raisedMonth: month,
+    lastPayment: { at: now.getTime(), amount },
+    updatedAt: now.getTime(),
+  };
+}
+
+// What the page gets: nothing at all until it is on and has a goal, and the
+// month's amount only while it is still that month's.
+function publicSupportGoal(stored, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const on = stored.enabled && stored.goal > 0;
+  return {
+    enabled: on,
+    goal: on ? stored.goal : 0,
+    raised: on && stored.raisedMonth === month ? stored.raised : 0,
+    month,
+    url: SUPPORT_GOAL_URL,
+  };
+}
+
+// The admin's save: only what is a sensible number is accepted, and an amount
+// not sent keeps what was there.
+function applySupportGoalUpdate(stored, body, now = new Date()) {
+  const b = body && typeof body === "object" ? body : {};
+  const out = { ...stored };
+  if (typeof b.enabled === "boolean") out.enabled = b.enabled;
+  if (b.goal !== undefined) {
+    const goal = Number(b.goal);
+    if (!Number.isFinite(goal) || goal < 0 || goal > SUPPORT_GOAL_MAX) return { error: "The goal has to be a number from 0 to " + SUPPORT_GOAL_MAX + "." };
+    out.goal = Math.round(goal * 100) / 100;
+  }
+  if (b.raised !== undefined) {
+    const raised = Number(b.raised);
+    if (!Number.isFinite(raised) || raised < 0 || raised > SUPPORT_GOAL_MAX * 10) return { error: "The amount given has to be a number, 0 or more." };
+    out.raised = Math.round(raised * 100) / 100;
+    out.raisedMonth = supportGoalMonth(now);
+  }
+  if (out.enabled && !(out.goal > 0)) return { error: "Set a goal above 0 before turning the strip on." };
+  out.updatedAt = now.getTime();
+  return { value: out };
 }
 
 async function renderAdminDashboard(env) {
@@ -2662,6 +2772,7 @@ async function renderAdminDashboard(env) {
     <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
+    <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support Goal</button>
     <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
@@ -2888,6 +2999,38 @@ async function renderAdminDashboard(env) {
     </div>
     <div id="netflixPreviewMovies"></div>
     <div id="netflixPreviewShows" style="margin-top:28px;"></div>
+  </div>
+
+  <div class="admin-tab-panel" data-admin-panel="supportgoal">
+    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; margin-bottom:14px;">
+        <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
+      </label>
+      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:12px;">Monthly goal (US dollars)
+        <input type="number" id="supportGoalAmount" class="admin-select" min="0" max="100000" step="1" style="display:block; margin:4px 0 0; width:160px;" placeholder="60">
+      </label>
+      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:6px;">Given so far this month (US dollars)
+        <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
+      </label>
+      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
+        <span id="supportGoalStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+      </div>
+    </div>
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Automatic totals from Ko-fi</div>
+      <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; color:#8E8E93; line-height:1.5;">
+        <li>In Ko-fi, go to <strong>Settings &rarr; API &rarr; Webhooks</strong> and paste this as the Webhook URL, then press Update:
+          <div><code id="supportGoalWebhookUrl" style="user-select:all;"></code></div></li>
+        <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
+        <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
+      </ol>
+      <div style="font-size:0.85rem;">Token: <span id="supportGoalTokenState" style="color:#8E8E93;">checking&hellip;</span></div>
+      <div style="font-size:0.85rem; margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:#8E8E93;">none yet</span></div>
+      <div style="font-size:0.78rem; color:#8E8E93; margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
+    </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
@@ -3191,6 +3334,7 @@ async function renderAdminDashboard(env) {
       netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
+      supportgoal: 'management',
       maintenance: 'management',
     };
 
@@ -3241,6 +3385,54 @@ async function renderAdminDashboard(env) {
       if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
+      if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
+    }
+
+    async function loadSupportGoal() {
+      const status = document.getElementById('supportGoalStatus');
+      try {
+        const res = await fetch('/admin/api/support-goal', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok) { if (status) status.textContent = (data && data.error) || 'Could not load.'; return; }
+        document.getElementById('supportGoalEnabled').checked = !!data.enabled;
+        document.getElementById('supportGoalAmount').value = data.goal ? data.goal : '';
+        document.getElementById('supportGoalRaised').value = data.raised ? data.raised : '';
+        const m = document.getElementById('supportGoalMonth');
+        if (m) m.textContent = data.month || 'this month';
+        const w = document.getElementById('supportGoalWebhookUrl');
+        if (w) w.textContent = data.webhookUrl || '';
+        const t = document.getElementById('supportGoalTokenState');
+        if (t) { t.textContent = data.kofiTokenSet ? 'set' : 'not set yet'; t.style.color = data.kofiTokenSet ? '#30d158' : '#ff9f0a'; }
+        const l = document.getElementById('supportGoalLastPayment');
+        if (l && data.lastPayment) l.textContent = '$' + data.lastPayment.amount + ' on ' + new Date(data.lastPayment.at).toLocaleString();
+      } catch (e) {
+        if (status) status.textContent = 'Could not load.';
+      }
+    }
+
+    async function saveSupportGoal() {
+      const status = document.getElementById('supportGoalStatus');
+      const say = (text, color) => { if (status) { status.textContent = text; status.style.color = color || '#8E8E93'; } };
+      const goalText = document.getElementById('supportGoalAmount').value.trim();
+      const raisedText = document.getElementById('supportGoalRaised').value.trim();
+      say('Saving...');
+      try {
+        const res = await fetch('/admin/api/support-goal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: document.getElementById('supportGoalEnabled').checked,
+            goal: goalText === '' ? 0 : Number(goalText),
+            raised: raisedText === '' ? 0 : Number(raisedText),
+          }),
+        });
+        const data = await res.json();
+        if (!data || !data.ok) { say((data && data.error) || 'Could not save.', '#ff453a'); return; }
+        say('Saved. The site shows it within five minutes.', '#30d158');
+        loadSupportGoal();
+      } catch (e) {
+        say('Could not save.', '#ff453a');
+      }
     }
 
     function restoreAdminActiveTab() {

@@ -6,6 +6,45 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
+- Create a Custom List no longer has a second "Add titles" box above it. "Build Custom Channel" is now "Create a Custom Channel" with the same layout as a custom list (name, Public toggle, Add Titles card, picks, Create Channel at the bottom). Every search box now shares one pill style (`.search-input-box`), including the Search tab.
+
+- Removed the Order Today tags setting: the "#N Today" numbers btttr.cc draws on posters come from data it does not publish, so the order could not be made to match them. Ko-fi strip shows on every page, has its progress bar back, reads "Server Costs", and its X hides it for 30 days. "+ Add to List" / "Mark as Watched" stay phone-sized on desktop.
+- Ko-fi strip shows on every page, has its progress bar back, reads "Server Costs", and its X hides it for 30 days. "+ Add to List" / "Mark as Watched" stay phone-sized on desktop.
+
+### ☕ Ko-fi support strip, with the goal set in the admin page
+
+- **Donations moved from Buy Me a Coffee to [Ko-fi](https://ko-fi.com/mylistsaddon)**: the Settings card, the FAQ, the footer, the README and the new strip all point there now.
+- **A slim strip at the top of Catalogs** shows "Server costs: $42 of $60" with a progress bar. Tapping it opens a small window with the amounts and a **Support on Ko-fi** button. When the goal is met it turns green and says "Covered this month. Thank you!". Its ✕ hides it for the rest of the month in that browser only.
+- **Admin → Management & Tools → Support Goal:** turn the strip on or off, set the monthly goal, and correct the amount given so far if needed. The strip stays hidden until you turn it on. The amount belongs to the month it counts for and is 0 the month after, so the bar starts again on the 1st. The site picks up a change within five minutes.
+- **Ko-fi adds payments by itself.** Give Ko-fi the webhook address shown in that admin tab (`/api/kofi-webhook`) and add Ko-fi's verification token as the Worker secret `KOFI_VERIFICATION_TOKEN`. Each US-dollar donation or membership payment then goes into the month's total (a payment Ko-fi sends again is counted once). Other currencies, shop orders and commissions are skipped, and who gave is never shown.
+
+### 🐛 Quick Add, Lists and Discover fixes
+
+- **The Ko-fi strip is flatter.** One plain bar with a thin progress line along its bottom edge and a plain ✕, and no blue highlight when tapped (the page's button styles were leaking in: a blue fill, and a round bordered pill around the ✕).
+- **Item details page, on a wide screen:** "+ Add to List" and "Mark as Watched" keep their natural width side by side at the left (both filled blue), instead of stretching across the page. Phones are unchanged.
+
+- **Lists → Liked is current when you come back to it.** A list liked from Discover or Search now shows there without pressing Refresh. Lists only redrew its page the first time you opened it in a visit, so coming back to a remembered Liked page showed the old list.
+- **Channel cards no longer say "24/7 TV Channel"** in their line of details.
+
+- **Quick Add: "+ Add all" sits beside the title** at the far right on a phone too, instead of stretching full width under it.
+- **Lists → Liked** has its refresh button where the other pages have it (after the description), and each liked list says who it is by: "My Lists Addon" for the add-on's own charts, the service for a provider's chart (TMDB, Trakt, Simkl), or the owner of an MDBList, Trakt or Letterboxd list. It said "Community" for all of them. Charts of ours now show their real names.
+- **Discover → All: adding "New on Streaming: Movies" no longer turns the Shows button into Remove.** Both share one link, and the add buttons treated a list as added in any type. Each button now follows its own type, and Remove removes only that one.
+- **Search → Lists: the TMDB chip is gone** (TMDB has no list directory to browse; its lists still turn up when you type a search under All sources), and **"My Lists community" is now "My Lists Addon"**.
+- **Discover reopens on the tab you were on** (All, Shows and so on) when you come back from another page, instead of always Movies. A full page reload now keeps All too (it used to turn All into Movies), like the other pages.
+
+### 🐛 Liking this add-on's own charts
+
+- **"Could Not Update Like – That URL can't be liked" is fixed for the add-on's own lists.** Most Watched, New on Streaming and combined charts (Trending, Streaming Top 10 (All Services) and the like) are now likeable. The like check only knew provider links and a short list of built-in chart IDs, so these were refused. A combined chart can be liked when every line of it can be. Personal shelves (Watchlist, History, Continue Watching) still can't be, since they are a different list for everyone.
+
+### 🖼️ Pictorium, RatingPosterDB, metadata off, and combining channels
+
+- **Channels → My Channels → "Combine into one channel".** Check two or more saved channels, name the result and press the new button next to "Merge into catalog": you get a new channel with every pick from the checked channels, and a pick that two of them share (same show and episode, or the same movie) counted once. The first channel's copy is kept and the order is the channels' order. Quick Add network channels use their full lineup, not the small copy saved on the device. Rotation options any of the channels has on stay on; story locks, hand-made pairs, Live Cloud Sync and the network link are not carried over. The original channels are left as they are, a channel holds at most 5,000 picks, and Next Up can't be combined because it has no picks of its own.
+
+- **RatingPosterDB artwork (Settings → RatingPosterDB, off by default).** Posters with ratings drawn on, from [RatingPosterDB](https://ratingposterdb.com/), in Stremio and Nuvio. Needs your own paid RPDB key (**Test key** shows whether it works and how much of the month's limit is used). Every poster RPDB sends counts against that key's monthly limit, so posters are never loaded from RPDB directly: they go through this add-on's own `/rpdb/` address, which fetches each poster once and keeps it for three days (every device is served from that copy), asks RPDB for at most 20 new posters a minute (the rest show the ordinary poster until their turn), reads the key's usage from RPDB about once an hour and stops asking at 95% of the limit, and backs off for five minutes after a 429, a server error or a refused key. The key is never in a poster link. Turning it on turns Better Posters and Pictorium off. Airing Next and date badges are not drawn over these posters, and the website keeps its normal posters.
+- **Pictorium artwork (Settings → Pictorium, off by default).** Posters drawn by your own [Pictorium](https://github.com/Eful97/Pictorium) space instead of plain artwork, in Stremio and Nuvio and on the website. Paste the **AIOMetadata** poster link from your space's editor (a Nuvio link works too; its `{shape}` is dropped). It needs your own Pictorium space and TMDB key. Turning it on turns Better Posters off, and the other way round. The link is checked on save (https, a real host name, `/api/poster/`, `{type}` and `{tmdb_id|imdb_id}`); anything else is ignored. Pictorium draws its own badges, so Airing Next and date badges are not drawn over its posters.
+- **New setting, Settings → Metadata → Use My Lists Addon metadata (on by default).** Off makes the add-on lists-only: its manifest stops offering the details page (synopsis, cast, trailers, episodes), so Stremio and Nuvio ask another add-on for it. Reinstall the add-on after changing it. TV Channel titles keep their details page, since no other add-on has them. Posters on the list tiles still come from this add-on (its Better Posters or Pictorium setting), not from the other add-on.
+
+
 ---
 
 ## [1.5.6] - 2026-10-05

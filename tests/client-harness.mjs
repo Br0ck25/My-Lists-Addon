@@ -246,6 +246,12 @@ export function loadClient(opts = {}) {
     async fetch(input, init = {}) {
       const url = String(input && input.url ? input.url : input);
       const { pathname } = new URL(url, "https://example.com");
+      // The page asks for the Ko-fi support strip's goal as it loads. That is
+      // not what a test is about, so it is answered (strip off) and not
+      // counted, unless the test stubs the route itself.
+      if (pathname === "/api/support-goal" && !routes[pathname]) {
+        return new Response(JSON.stringify({ ok: true, enabled: false, goal: 0, raised: 0 }), { status: 200, headers: { "content-type": "application/json" } });
+      }
       let body = null;
       if (init.body) { try { body = JSON.parse(init.body); } catch { body = init.body; } }
       const record = {

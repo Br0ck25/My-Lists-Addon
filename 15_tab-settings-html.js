@@ -159,6 +159,78 @@
       </div>
     </div>
 
+    <!-- RatingPosterDB Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">RatingPosterDB</h2>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">RatingPosterDB</a> posters with ratings drawn on, styled the way you set them up at <a href="https://manager.ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">manager.ratingposterdb.com</a>. Needs your own paid RPDB API key.</p>
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use RatingPosterDB artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio. Turns Better Posters and Pictorium off, because only one can draw a poster.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How your request limit is protected</summary>
+            <p style="margin:4px 0 0;">Every poster RatingPosterDB sends counts against your key's monthly limit, so posters are not loaded from it directly. This add-on fetches each poster once, keeps it for three days, and shows it to every device from that copy. It asks RatingPosterDB for at most 20 new posters a minute, so a page of new titles fills in over a few minutes (the ordinary poster shows meanwhile), and it stops asking once 95% of your monthly limit is used. Only titles with an IMDb ID are affected. Airing Next and date badges are not drawn over these posters. The website keeps its normal posters.</p>
+          </details>
+        </div>
+        <label class="ui-toggle" aria-label="Use RatingPosterDB artwork">
+          <input type="checkbox" id="rpdbCheckbox" ${initialRpdb ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdb&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+      <div id="rpdbOptions" style="display:${initialRpdb ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div>
+          <label for="rpdbKeyInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">API key</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" style="flex:1; min-width:200px; max-width:380px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+            <button type="button" class="secondary lc-btn" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]" style="border-radius:var(--radius-pill);">Test key</button>
+          </div>
+          <p id="rpdbKeyStatus" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pictorium Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Pictorium</h2>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for posters drawn by your own <a href="https://github.com/Eful97/Pictorium" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">Pictorium</a> space &mdash; ratings, streaming quality, Netflix Top 10 ribbons, awards and more, styled the way you set them up there. Needs a Pictorium space with your own TMDB key.</p>
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Pictorium artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters and RatingPosterDB off, because only one can draw a poster.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
+            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
+          </details>
+        </div>
+        <label class="ui-toggle" aria-label="Use Pictorium artwork">
+          <input type="checkbox" id="pictoriumCheckbox" ${initialPictorium ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictorium&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+      <div id="pictoriumOptions" style="display:${initialPictorium ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div>
+          <label for="pictoriumUrlInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Poster link</label>
+          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+          <p id="pictoriumUrlHint" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Metadata</h2>
+      <div class="settings-toggle-row" style="padding:0; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use My Lists Addon metadata</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
+        </div>
+        <label class="ui-toggle" aria-label="Use My Lists Addon metadata">
+          <input type="checkbox" id="provideMetadataCheckbox" ${initialProvideMetadata ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;provideMetadata&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
     <!-- Poster Badges & Labels Panel (P3) -->
     <div class="panel" style="margin-top:12px;">
       <h2 class="panel-title">Poster Badges &amp; Labels</h2>
@@ -639,9 +711,9 @@
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
-        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
+        <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener" class="resource-card">
           <div>
-            <div class="resource-card-title">Buy Me a Coffee</div>
+            <div class="resource-card-title">Support on Ko-fi</div>
             <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>

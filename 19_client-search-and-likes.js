@@ -291,8 +291,23 @@ function isBetterPosterUrl(p) {
   return typeof p === 'string' && (p.indexOf(BETTER_POSTERS_ORIGIN_WEB) === 0 || p.indexOf(betterPosterMirrorPrefix()) === 0);
 }
 
+// The Pictorium poster link when Pictorium is on and the link is usable, else
+// ''. While it is set, Better Posters stands down on the website: only one of
+// them draws a poster. Plain string checks, as above (no regex in here).
+function pictoriumTemplateWeb() {
+  if (typeof getBetterPostersSetting !== 'function' || !getBetterPostersSetting('pictorium', false)) return '';
+  const t = (typeof getBetterPostersChoice === 'function' ? getBetterPostersChoice('pictoriumUrl', '') : '').trim();
+  if (t.indexOf('https://') !== 0 || t.indexOf('/api/poster/') < 0 || t.indexOf('{type}') < 0 || t.indexOf('{tmdb_id|imdb_id}') < 0) return '';
+  return t;
+}
+function pictoriumWebUrl(template, imdbId, type) {
+  return template.split('&shape={shape}').join('')
+    .replace('{type}', type === 'series' ? 'series' : 'movie')
+    .replace('{tmdb_id|imdb_id}', imdbId);
+}
+
 function betterPostersOnWeb() {
-  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false);
+  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false) && !pictoriumTemplateWeb();
 }
 window.betterPostersOnWeb = betterPostersOnWeb;
 
@@ -383,6 +398,17 @@ function betterPosterOriginalFor(url) {
 }
 
 function applyBetterPosterWeb(it, poster) {
+  const pictorium = pictoriumTemplateWeb();
+  if (pictorium) {
+    // Same exclusions as Better Posters below: generated artwork, landscape
+    // tiles and an episode's own still keep what they have.
+    if (isGeneratedPosterUrl(poster)) return poster;
+    if (it && it.posterShape === 'landscape') return poster;
+    if (it && it.thumbnail && poster === it.thumbnail) return poster;
+    const picId = betterPostersWebImdbId(it);
+    if (!picId) return poster;
+    return pictoriumWebUrl(pictorium, picId, it && (it.type === 'series' || it.mediaType === 'series' || it.mediaType === 'tv') ? 'series' : 'movie');
+  }
   if (!betterPostersOnWeb()) return poster;
   const alreadyBetter = isBetterPosterUrl(poster);
   if (!alreadyBetter) {
@@ -1015,7 +1041,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     const addedMovie = alreadyAdded.has(item.url + '|movie');
     const addedSeries = alreadyAdded.has(item.url + '|series');
     const addedDirect = typeof isListAddedToConfig === 'function'
-      ? (isListAddedToConfig(item.url, item.type) || isListAddedToConfig(item.url, 'movie') || isListAddedToConfig(item.url, 'series') || isListAddedToConfig(item.url))
+      ? (isListAddedToConfig(item.url, item.type))
       : (alreadyAdded.has(item.url + '|' + item.type) || addedMovie || addedSeries);
     const alreadyLikedExt = getLikedListsSet().has(item.url);
 
@@ -1433,12 +1459,23 @@ function getLikedListsSet() {
   }
 }
 
+// The Liked page skips redrawing while the count it last drew still matches.
+// A like and an unlike in between leave the count alone and the page wrong, so
+// any change to the set clears what it remembers and the next visit redraws.
+function likedFeedIsStale() {
+  try {
+    const feed = document.getElementById('likedListsFeed');
+    if (feed && feed.dataset) delete feed.dataset.likedCount;
+  } catch (e) {}
+}
+
 function rememberLikedList(usernameSlug) {
   const set = getLikedListsSet();
   set.add(usernameSlug);
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 function forgetLikedList(usernameSlug) {
@@ -1447,6 +1484,7 @@ function forgetLikedList(usernameSlug) {
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 // "username/slug" for one of this add-on's own list pages
@@ -1546,15 +1584,18 @@ document.addEventListener('click', async (e) => {
     const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = addBtn.dataset.url || '';
     const listType = addBtn.dataset.type || 'movie';
-    const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)));
+    const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType)));
     if (isAdded) {
       if (typeof removeListFromConfig === 'function') {
+        // This button's own type only: New on Streaming's Movies and Shows
+        // share one link, and removing one must leave the other. A mixed list
+        // is the one that is added as both.
         removeListFromConfig(listUrl, listType);
-        removeListFromConfig(listUrl, 'movie');
-        removeListFromConfig(listUrl, 'series');
-        removeListFromConfig(listUrl, 'mixed');
-        removeListFromConfig(listUrl);
         removeListFromConfig(null, listType, listUrl);
+        if (listType === 'mixed' || listType === 'unknown') {
+          removeListFromConfig(listUrl, 'movie');
+          removeListFromConfig(listUrl, 'series');
+        }
       }
       addBtn.classList.remove('is-added', 'secondary');
       addBtn.classList.add('primary');
@@ -2297,13 +2338,13 @@ async function renderLikedListsFeed(forceRefresh) {
           return placeholder;
         }
       }
-      const name = guessNameFromUrl(u);
+      const info = likedListInfo(u);
       const isSeries = u.toLowerCase().includes('show') || u.toLowerCase().includes('series') || u.toLowerCase().includes('tv');
       return {
         url: u,
-        name: name,
-        user: 'Community',
-        type: isSeries ? 'series' : 'movie',
+        name: info.name || guessNameFromUrl(u),
+        user: info.user,
+        type: info.type || (isSeries ? 'series' : 'movie'),
         items: 50,
         likes: 1
       };
@@ -2350,6 +2391,53 @@ async function renderLikedListsFeed(forceRefresh) {
   } catch (e) {
     container.innerHTML = '<p class="testresult err">&#x2717; Error loading liked lists.</p>';
   }
+}
+
+// Who a liked list is by, and what it is called, from its link alone. This
+// app's own charts (and a combined chart, which is several links, one per
+// line) are "My Lists Addon"; a provider's chart is the provider; a list on a
+// provider's site is its owner, from the link. Only when nothing says is it
+// "Community". Plain string work: no backslashes in here (the outer template
+// literal would eat them).
+function likedListInfo(link) {
+  const whole = String(link || '').trim();
+  const info = { user: 'Community', name: '', type: '' };
+  if (!whole) return info;
+  if (typeof CHART_SLUG_ENTRIES !== 'undefined' && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const hit = CHART_SLUG_ENTRIES.find(function(e) { return e.movieUrl === whole || e.showUrl === whole; });
+    if (hit) {
+      info.name = hit.name;
+      info.type = (hit.showUrl === whole && hit.movieUrl !== whole) ? 'series' : 'movie';
+    }
+  }
+  if (whole.indexOf(String.fromCharCode(10)) >= 0) { info.user = 'My Lists Addon'; return info; }
+  const lower = whole.toLowerCase();
+  if (lower.indexOf('mylists:') === 0 || lower.indexOf('tmdb:new-on-streaming') === 0) { info.user = 'My Lists Addon'; return info; }
+  if (lower.indexOf('tmdb:') === 0) { info.user = 'TMDB'; return info; }
+  if (lower.indexOf('trakt:') === 0) { info.user = 'Trakt'; return info; }
+  if (lower.indexOf('simkl:') === 0) { info.user = 'Simkl'; return info; }
+  let u = null;
+  try { u = new URL(whole); } catch (e) { return info; }
+  const host = u.hostname.toLowerCase().replace(/^www[.]/, '');
+  const parts = u.pathname.split('/').filter(Boolean).map(function(p) { try { return decodeURIComponent(p); } catch (e) { return p; } });
+  if (host === 'themoviedb.org') { info.user = 'TMDB'; return info; }
+  if (host === 'simkl.com') { info.user = 'Simkl'; return info; }
+  if (host === 'mdblist.com') {
+    // mdblist.com/lists/<owner>/<list>, or lists/official/... for MDBList's own.
+    const owner = parts[0] === 'lists' ? parts[1] : '';
+    info.user = (!owner || owner.toLowerCase() === 'official') ? 'MDBList' : owner;
+    return info;
+  }
+  if (host === 'trakt.tv') {
+    const owner = parts[0] === 'users' ? parts[1] : '';
+    info.user = owner || 'Trakt';
+    return info;
+  }
+  if (host === 'letterboxd.com') {
+    info.user = parts[0] || 'Letterboxd';
+    return info;
+  }
+  return info;
 }
 
 function render5PosterListsFeed(container, lists) {
@@ -4819,7 +4907,6 @@ const CATALOG_LIST_SEARCH_SOURCES = {
   mylists: ['My Lists Addon', 'Profile'],
   mdblist: ['MDBList'],
   trakt: ['Trakt'],
-  tmdb: ['TMDB', 'Simkl'],
 };
 
 function catalogListSearchChipsOn() {
@@ -5195,13 +5282,9 @@ async function renderDefaultCatalogSearch(force) {
     window._rawCatalogTitleItems = [];
     // With the source chips (new UI) the lists to browse follow the chosen
     // source: MDBList's and Trakt's popular lists as well as this site's.
-    // TMDB publishes no list directory, so it can only be searched.
+    // TMDB publishes no list directory, so it has no chip here; its lists
+    // turn up in a typed search under All sources.
     const chips = catalogListSearchChipsOn();
-    if (chips && catalogListSearchSource === 'tmdb') {
-      resEl.innerHTML = '<p><small>TMDB has no list directory to browse. Type a search above to find TMDB lists.</small></p>';
-      markCatalogSearchRendered();
-      return;
-    }
     try {
       const [pubRes, mdbPopular, traktPopular] = await Promise.all([
         (!chips || catalogListSearchWants('mylists'))

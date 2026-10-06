@@ -115,6 +115,14 @@ function renderBuilder(
   const initialBetterPostersRating = initialKeys.betterPostersRating !== false;
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
+  // Pictorium (opt-in, with the poster link pasted from the person's own space)
+  // and "Use My Lists Addon metadata" (on unless switched off) -- see
+  // INSTALL_CONFIG_FIELDS (00_constants.js).
+  const initialRpdb = !!initialKeys.rpdb;
+  const initialRpdbKey = typeof initialKeys.rpdbKey === "string" ? initialKeys.rpdbKey : "";
+  const initialPictorium = !!initialKeys.pictorium;
+  const initialPictoriumUrl = typeof initialKeys.pictoriumUrl === "string" ? initialKeys.pictoriumUrl : "";
+  const initialProvideMetadata = initialKeys.provideMetadata !== false;
   const initialBetterPostersTrendTags = initialKeys.betterPostersTrendTags !== false;
   const betterPostersLangOptionsHtml = buildBetterPostersLangOptionsHtml(initialKeys.betterPostersLang || "en");
   const betterPostersRatingSourceOptionsHtml = buildBetterPostersRatingSourceOptionsHtml(initialKeys.betterPostersRatingSource || "avg");
@@ -270,7 +278,6 @@ ${seoHeadHtml}
       if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
       var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
-      if (discSub === 'all') discSub = 'movie';
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
   })();
@@ -1099,6 +1106,11 @@ ${seoHeadHtml}
     flex: 1 1 160px; justify-content: center;
     padding: 10px 16px; font-size: 0.95rem;
   }
+  /* On a wide screen the two buttons stay the size they are on a phone (about
+     180px each, side by side at the left) instead of stretching across. */
+  @media (min-width: 720px) {
+    .item-actions .lc-btn { flex: 0 0 180px; }
+  }
   .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
   .item-genre-chip {
     padding: 5px 14px; min-height: unset; font-size: 0.85rem; font-weight: 600; font-family: inherit;
@@ -1302,9 +1314,17 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
   }
+  /* Every search box on the site: a pill with the magnifier inside it on the
+     left (and, where there is one, a clear button on the right). */
   .search-input-box input {
     width: 100%;
     box-sizing: border-box;
+    padding: 10px 38px;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
   }
   .search-input-icon {
     position: absolute;
@@ -1506,6 +1526,92 @@ ${seoHeadHtml}
      needs. The larger gap is because these are now separate cards rather
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
+  /* The Ko-fi support strip at the top of Catalogs (initSupportStrip): one flat
+     bar, a small progress bar under the text, and a plain X. Its two
+     buttons say what they look like here because the page's own button rules
+     (blue fill on hover, focus and press; a round, bordered pill) are written
+     to win over a bare class. */
+  .support-strip {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 10px;
+    padding: 0 2px 0 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .support-strip[hidden] { display: none; }
+  .support-strip .support-strip-main,
+  .support-strip .support-strip-main:hover,
+  .support-strip .support-strip-main:focus,
+  .support-strip .support-strip-main:active {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 10px 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    color: var(--text);
+    text-align: left;
+    white-space: normal;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .support-strip .support-strip-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .support-strip-cup { font-size: 16px; line-height: 1; }
+  .support-strip-body { flex: 1; min-width: 0; display: block; }
+  .support-strip-row { display: flex; justify-content: space-between; gap: 8px; line-height: 1.25; }
+  .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .support-strip-bar {
+    display: block;
+    margin-top: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border-strong);
+    overflow: hidden;
+  }
+  .support-strip-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 3px;
+    background: #ff8a00;
+  }
+  .support-strip.is-covered { border-color: #bfe8c9; }
+  .support-strip.is-covered .support-strip-bar i { background: #34c759; }
+  .support-strip .support-strip-x,
+  .support-strip .support-strip-x:hover,
+  .support-strip .support-strip-x:focus,
+  .support-strip .support-strip-x:active {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    box-shadow: none;
+    transform: none;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 400;
+    cursor: pointer;
+  }
+  .support-strip .support-strip-x:hover { color: var(--text); }
+  .support-strip .support-strip-x:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .qa-shelf-card {
     margin-bottom: 16px;
     gap: 0;
@@ -1618,6 +1724,7 @@ ${seoHeadHtml}
     border-width: 0;
   }
   #discoverListsFeedHeader,
+  #listsSubLiked .shelf-header,
   #discoverSubPopular .shelf-header,
   #discoverSubCurated .shelf-header {
     display: flex;
@@ -1629,6 +1736,7 @@ ${seoHeadHtml}
     min-height: 32px;
   }
   #discoverListsFeedDesc,
+  #listsSubLiked .shelf-header p,
   #discoverSubPopular .shelf-header p,
   #discoverSubCurated .shelf-header p {
     margin: 0;
@@ -2536,6 +2644,20 @@ ${seoHeadHtml}
     .shelf-header > div {
       width: 100%;
       min-width: 0;
+    }
+    /* A Quick Add card keeps its title and "+ Add all" on one row on a
+       phone, the button at the far right, instead of stacking it full width
+       under the title like the other headers. */
+    .qa-shelf-card .shelf-header {
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      flex-wrap: nowrap !important;
+    }
+    .qa-shelf-card .shelf-header .qa-add-all-btn {
+      width: auto !important;
+      flex: none;
+      white-space: nowrap;
     }
     .list-card-header {
       display: flex !important;
@@ -5445,6 +5567,19 @@ ${appShellMobileNavHtml}
 
   <!-- Action Notification Toast -->
   <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
+
+  <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
+       (16_client-row-core.js) only when the admin has turned it on. -->
+  <div class="support-strip" id="supportStrip" hidden>
+    <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server Costs this month: see details">
+      <span class="support-strip-cup" aria-hidden="true">&#9749;</span>
+      <span class="support-strip-body">
+        <span class="support-strip-row"><span id="supportStripText"></span><span class="support-strip-go">Support &rsaquo;</span></span>
+        <span class="support-strip-bar" aria-hidden="true"><i id="supportStripFill"></i></span>
+      </span>
+    </button>
+    <button type="button" class="support-strip-x" data-act="dismissSupportStrip" aria-label="Hide this for 30 days">&#10005;</button>
+  </div>
 
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>

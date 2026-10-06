@@ -198,6 +198,7 @@ The following environment variables, secrets, and Cloudflare bindings configure 
 | `CLOUDFLARE_API_TOKEN` | Secret | Alias for `CF_ANALYTICS_TOKEN` |
 | `CLOUDFLARE_ACCOUNT_ID` | Variable | Alias for `CF_ANALYTICS_ACCOUNT_ID` |
 | `RAPIDAPI_KEY` | Secret | RapidAPI key for optional provider lookups |
+| `KOFI_VERIFICATION_TOKEN` | Secret | Optional. Ko-fi's webhook verification token; lets the support strip's monthly total update itself (set the webhook URL shown in `/admin` → Support Goal in Ko-fi) |
 | `STREAMING_AVAILABILITY_API_KEY` | Secret | Streaming Availability API key for optional provider lookups |
 | `NEW_ON_STREAMING_ENGINE` | Variable | Configuration selector for New on Streaming catalog backend |
 | `ACTIVITY_SHARD_COUNT` | Variable | Activity sharding factor for high-throughput activity writes |
@@ -237,7 +238,7 @@ For system architecture details, operational checklists, deployment runbooks, an
 
 My Lists Addon is a free community service with no ads or subscriptions. If you enjoy using the platform and want to help cover hosting and infrastructure costs or support ongoing development:
 
-- **Buy Me A Coffee**: [buymeacoffee.com/brock25](https://buymeacoffee.com/brock25)
+- **Ko-fi**: [ko-fi.com/mylistsaddon](https://ko-fi.com/mylistsaddon)
 - **TorBox Debrid (Referral)**: [torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1](https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1)
 
 ---

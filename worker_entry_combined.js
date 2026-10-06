@@ -1406,6 +1406,69 @@ function isPersonalShelfUrl(url) {
 const IMDB_ID_LOOKUP_MAX = 100;
 const IMDB_ID_LOOKUP_CONCURRENCY = 8;
 
+// Pictorium (https://github.com/Eful97/Pictorium) -- optional replacement
+// artwork, drawn by the person's OWN Pictorium space (it needs their TMDB key,
+// so there is no shared instance to point at). They paste the "AIOMetadata"
+// poster link from their space's editor:
+//
+//   https://<host>/api/poster/{type}/{tmdb_id|imdb_id}?u=<space>&live=1&rv=<n>[&shape={shape}]
+//
+// Kept as the template it was pasted as; fillPictoriumTemplate (05) swaps in
+// the type and IMDb id and drops the optional shape, which Pictorium leaves to
+// its default. It ends up as a poster URL in the apps, so it is checked at the
+// door like every other install field: https, a real host name (no IP address
+// or local name), the /api/poster/ path, no credentials.
+const PICTORIUM_TYPE_TOKEN = "{type}";
+const PICTORIUM_ID_TOKEN = "{tmdb_id|imdb_id}";
+const PICTORIUM_SHAPE_PARAM = "&shape={shape}";
+const PICTORIUM_URL_MAX = 600;
+
+function isValidPictoriumTemplate(v) {
+  if (typeof v !== "string" || !v || v.length > PICTORIUM_URL_MAX) return false;
+  if (!v.includes(PICTORIUM_TYPE_TOKEN) || !v.includes(PICTORIUM_ID_TOKEN)) return false;
+  let u;
+  try {
+    u = new URL(v.split(PICTORIUM_SHAPE_PARAM).join("").replace(PICTORIUM_TYPE_TOKEN, "movie").replace(PICTORIUM_ID_TOKEN, "tt0000001"));
+  } catch (e) {
+    return false;
+  }
+  if (u.protocol !== "https:" || u.username || u.password || u.hash) return false;
+  const host = u.hostname.toLowerCase();
+  if (!host.includes(".") || host.startsWith("[") || /^[0-9.]+$/.test(host)) return false;
+  if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) return false;
+  return u.pathname.startsWith("/api/poster/");
+}
+
+// RatingPosterDB (https://ratingposterdb.com) -- optional replacement artwork
+// with the ratings drawn on. Needs the person's own paid RPDB key (t1- to t4-),
+// and every image fetched counts against that key's MONTHLY request limit
+// (50,000 to 750,000 by tier), so posters are never pointed at RPDB directly:
+// they go through this Worker's own /rpdb/ route (serveRpdbPoster, 05), which
+// keeps each poster per key for a few days, caps how fast it asks RPDB, and
+// stops asking altogether near the key's limit. RPDB's docs allow caching.
+const RPDB_ORIGIN = "https://api.ratingposterdb.com";
+const RPDB_KEY_RE = /^t[0-9]-[A-Za-z0-9_-]{3,64}$/;
+function isValidRpdbKey(v) {
+  return typeof v === "string" && RPDB_KEY_RE.test(v);
+}
+// A stored poster is good this long before it is fetched again (RPDB's ratings
+// move slowly), and kept this long so an RPDB outage or a spent limit still
+// has something to show.
+const RPDB_REFRESH_MS = 3 * 86400 * 1000;
+const RPDB_KEEP_SECONDS = 30 * 86400;
+// New posters fetched per key per minute. A page of uncached titles is spread
+// over several minutes (the rest show the ordinary poster meanwhile) instead of
+// being fired at RPDB at once.
+const RPDB_FETCHES_PER_MINUTE = 20;
+// Stop asking RPDB once this share of the key's monthly limit is used, per its
+// own /requests answer (kept RPDB_USAGE_TTL_SECONDS).
+const RPDB_STOP_AT_SHARE = 0.95;
+const RPDB_USAGE_TTL_SECONDS = 3600;
+// After a 429 or a server error from RPDB, ask nothing for this long.
+const RPDB_BACKOFF_SECONDS = 300;
+const RPDB_FETCH_TIMEOUT_MS = 8000;
+const RPDB_MAX_BYTES = 5 * 1024 * 1024;
+
 // The Stremio/Nuvio artwork-overlay toggles, as stored in an install config.
 // Named in one place because they have to agree across four: the builder
 // page's save request, /api/save's stored payload, resolveConfig's read, and
@@ -1470,6 +1533,13 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  { name: "rpdb", kind: "flag" },
+  { name: "rpdbKey", kind: "choice", default: "", requires: "rpdb", valid: isValidRpdbKey },
+  { name: "pictorium", kind: "flag" },
+  { name: "pictoriumUrl", kind: "choice", default: "", requires: "pictorium", valid: isValidPictoriumTemplate },
+  // Off hands every title's detail page to another add-on: the manifest stops
+  // declaring the meta resource (buildManifest), so this one is lists only.
+  { name: "provideMetadata", kind: "flagOn" },
   {
     name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
     allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
@@ -1491,7 +1561,7 @@ function readInstallConfigFields(parsed) {
     if (f.kind === "account") out[f.name] = typeof v === "string" ? v : "";
     else if (f.kind === "flag") out[f.name] = !!v;
     else if (f.kind === "flagOn") out[f.name] = v !== false;
-    else out[f.name] = (typeof v === "string" && v) ? v : f.default;
+    else out[f.name] = (typeof v === "string" && v && (!f.valid || f.valid(v))) ? v : f.default;
   }
   return out;
 }
@@ -1511,7 +1581,7 @@ function storedInstallConfigFields(body, withAccountFields) {
       if (v) out[f.name] = true;
     } else if (f.kind === "flagOn") {
       if (v === false) out[f.name] = false;
-    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v))) {
+    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v)) && (!f.valid || f.valid(v))) {
       out[f.name] = v;
     }
   }
@@ -3556,6 +3626,7 @@ async function schemaWriteGate(request, env) {
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
 // 2. OAuth provider callbacks and starts (/api/*/oauth/*)
 // 3. Admin form login and logout (/admin/login, /admin/logout)
+// 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
 function verifyCsrf(request) {
   const method = (request.method || "GET").toUpperCase();
   if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
@@ -3575,6 +3646,11 @@ function verifyCsrf(request) {
     return null;
   }
   if (path.includes("/oauth/")) {
+    return null;
+  }
+  // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
+  // proves itself with its verification token (handled in the route).
+  if (path === "/api/kofi-webhook") {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {
@@ -7294,38 +7370,55 @@ const EXTERNAL_LIKE_HOSTS = new Set([
 const LIKEABLE_SENTINEL_PREFIXES = [
   "tmdb:chart:", "tmdb:top10:", "tmdb:kids:", "tmdb:holiday:", "tmdb:genre:", "tmdb:collection:",
   "trakt:chart:", "simkl:chart:",
+  // This add-on's own Most Watched charts.
+  "mylists:most-watched:",
 ];
-const LIKEABLE_SENTINEL_EXACT = new Set(["tmdb:hidden-gems"]);
+const LIKEABLE_SENTINEL_EXACT = new Set(["tmdb:hidden-gems", "tmdb:new-on-streaming"]);
+// A combined chart (Trending, Streaming Top 10 (All Services)...) is several
+// of these, one per line. Each line has to be likeable on its own.
+const LIKEABLE_COMBINED_LINES_MAX = 12;
+const LIKEABLE_COMBINED_URL_MAX = 3000;
 
 function normalizeExternalListUrl(rawUrl) {
-  const s = String(rawUrl || "").trim();
-  if (!s || s.length > 300) return null;
-  const lower = s.toLowerCase();
-  if (
-    LIKEABLE_SENTINEL_EXACT.has(lower) ||
-    (LIKEABLE_SENTINEL_PREFIXES.some((p) => lower.startsWith(p)) && /^[a-z0-9:_-]+$/.test(lower))
-  ) {
-    return lower;
-  }
-  let u;
-  try {
-    u = new URL(s);
-  } catch {
-    return null;
-  }
-  // Blocks javascript:, data:, file:, and anything else non-web outright.
-  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-  const host = u.hostname.toLowerCase();
-  if (!EXTERNAL_LIKE_HOSTS.has(host)) return null;
-  // Normalized so the same list liked via http/https, with or without a
-  // "www." prefix, with a trailing slash, or with tracking query params
-  // all land on ONE ledger instead of fragmenting the count across
-  // near-duplicate keys. The "www." strip matters most: trakt.tv and
-  // www.trakt.tv are the same list to a human, and were otherwise counted
-  // separately.
-  const bareHost = host.replace(/^www\./, "");
-  const path = u.pathname.replace(/\/+$/, "") || "/";
-  return `https://${bareHost}${path}`;
+  const whole = String(rawUrl || "").trim();
+  if (!whole || whole.length > LIKEABLE_COMBINED_URL_MAX) return null;
+
+  const one = (line) => {
+    const s = String(line || "").trim();
+    if (!s || s.length > 300) return null;
+    const lower = s.toLowerCase();
+    if (
+      LIKEABLE_SENTINEL_EXACT.has(lower) ||
+      (LIKEABLE_SENTINEL_PREFIXES.some((p) => lower.startsWith(p)) && /^[a-z0-9:_-]+$/.test(lower))
+    ) {
+      return lower;
+    }
+    let u;
+    try {
+      u = new URL(s);
+    } catch {
+      return null;
+    }
+    // Blocks javascript:, data:, file:, and anything else non-web outright.
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    const host = u.hostname.toLowerCase();
+    if (!EXTERNAL_LIKE_HOSTS.has(host)) return null;
+    // Normalized so the same list liked via http/https, with or without a
+    // "www." prefix, with a trailing slash, or with tracking query params
+    // all land on ONE ledger instead of fragmenting the count across
+    // near-duplicate keys. The "www." strip matters most: trakt.tv and
+    // www.trakt.tv are the same list to a human, and were otherwise counted
+    // separately.
+    const bareHost = host.replace(/^www\./, "");
+    const path = u.pathname.replace(/\/+$/, "") || "/";
+    return `https://${bareHost}${path}`;
+  };
+
+  if (!whole.includes("\n")) return one(whole);
+  const lines = whole.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2 || lines.length > LIKEABLE_COMBINED_LINES_MAX) return null;
+  const parts = lines.map(one);
+  return parts.every(Boolean) ? parts.join("\n") : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -12073,6 +12166,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
   "/admin/api/recover-stats-from-analytics": "admin.recover.stats-from-analytics",
+  "/admin/api/support-goal": "admin.support-goal.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -12397,6 +12491,115 @@ function adminActArgs(values) {
     out.push(v === undefined || v === null ? "" : v);
   }
   return escapeHtmlServer(JSON.stringify(out));
+}
+
+// --- The support goal (the strip at the top of Catalogs) ---------------------
+//
+// What the Ko-fi support strip shows: a monthly hosting goal and how much has
+// been given so far this month, both typed in under Management & Tools ->
+// Support Goal. It stays hidden until it is turned on there. The amount given
+// belongs to the month it was entered in and counts as 0 in the next one, so
+// the bar starts over on the 1st by itself.
+const SUPPORT_GOAL_KEY = "support:goal:v1";
+const SUPPORT_GOAL_URL = "https://ko-fi.com/mylistsaddon";
+// Ko-fi's webhook (POST /api/kofi-webhook, below) adds each USD donation to the
+// month's total by itself. These are the payment types it counts: tips and
+// monthly memberships. Commissions and shop orders are sales, not support.
+const KOFI_COUNTED_TYPES = new Set(["Donation", "Subscription"]);
+const KOFI_WEBHOOK_BODY_MAX = 20000;
+const KOFI_MESSAGE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+const SUPPORT_GOAL_MAX = 100000;
+
+function supportGoalMonth(now = new Date()) {
+  return easternDateKey(now).slice(0, 7);
+}
+
+// What is stored, as it is read: always complete, whatever was written.
+async function readSupportGoal(env) {
+  let stored = null;
+  try {
+    const raw = env && env.CONFIGS ? await env.CONFIGS.get(SUPPORT_GOAL_KEY) : null;
+    stored = raw ? JSON.parse(raw) : null;
+  } catch {
+    stored = null;
+  }
+  const s = stored && typeof stored === "object" ? stored : {};
+  const num = (v, max) => (Number.isFinite(v) && v >= 0 ? Math.min(max, Math.round(v * 100) / 100) : 0);
+  return {
+    enabled: s.enabled === true,
+    goal: num(s.goal, SUPPORT_GOAL_MAX),
+    raised: num(s.raised, SUPPORT_GOAL_MAX * 10),
+    raisedMonth: typeof s.raisedMonth === "string" ? s.raisedMonth : "",
+    updatedAt: Number.isFinite(s.updatedAt) ? s.updatedAt : 0,
+    // The last payment Ko-fi told us about, for the admin page.
+    lastPayment: s.lastPayment && Number.isFinite(s.lastPayment.at) && Number.isFinite(s.lastPayment.amount)
+      ? { at: s.lastPayment.at, amount: s.lastPayment.amount }
+      : null,
+  };
+}
+
+// One Ko-fi payment (the webhook's `data` object) as a dollar amount to count,
+// or null when it is not one: the wrong type, not US dollars (the goal is in
+// dollars, and there is no exchange rate to convert with), or a number that
+// makes no sense. Whether the donor chose to be public does not matter here:
+// only the total is ever shown, never who gave.
+function kofiAmountToCount(data) {
+  if (!data || typeof data !== "object") return null;
+  if (!KOFI_COUNTED_TYPES.has(String(data.type || ""))) return null;
+  if (String(data.currency || "").toUpperCase() !== "USD") return null;
+  const amount = Number(data.amount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > SUPPORT_GOAL_MAX) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+// The stored goal with one payment added to the month's total. A total that
+// belongs to an earlier month starts again from 0 first.
+function addKofiPaymentToSupportGoal(stored, amount, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const base = stored.raisedMonth === month ? stored.raised : 0;
+  return {
+    ...stored,
+    raised: Math.round((base + amount) * 100) / 100,
+    raisedMonth: month,
+    lastPayment: { at: now.getTime(), amount },
+    updatedAt: now.getTime(),
+  };
+}
+
+// What the page gets: nothing at all until it is on and has a goal, and the
+// month's amount only while it is still that month's.
+function publicSupportGoal(stored, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const on = stored.enabled && stored.goal > 0;
+  return {
+    enabled: on,
+    goal: on ? stored.goal : 0,
+    raised: on && stored.raisedMonth === month ? stored.raised : 0,
+    month,
+    url: SUPPORT_GOAL_URL,
+  };
+}
+
+// The admin's save: only what is a sensible number is accepted, and an amount
+// not sent keeps what was there.
+function applySupportGoalUpdate(stored, body, now = new Date()) {
+  const b = body && typeof body === "object" ? body : {};
+  const out = { ...stored };
+  if (typeof b.enabled === "boolean") out.enabled = b.enabled;
+  if (b.goal !== undefined) {
+    const goal = Number(b.goal);
+    if (!Number.isFinite(goal) || goal < 0 || goal > SUPPORT_GOAL_MAX) return { error: "The goal has to be a number from 0 to " + SUPPORT_GOAL_MAX + "." };
+    out.goal = Math.round(goal * 100) / 100;
+  }
+  if (b.raised !== undefined) {
+    const raised = Number(b.raised);
+    if (!Number.isFinite(raised) || raised < 0 || raised > SUPPORT_GOAL_MAX * 10) return { error: "The amount given has to be a number, 0 or more." };
+    out.raised = Math.round(raised * 100) / 100;
+    out.raisedMonth = supportGoalMonth(now);
+  }
+  if (out.enabled && !(out.goal > 0)) return { error: "Set a goal above 0 before turning the strip on." };
+  out.updatedAt = now.getTime();
+  return { value: out };
 }
 
 async function renderAdminDashboard(env) {
@@ -12740,6 +12943,7 @@ async function renderAdminDashboard(env) {
     <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
+    <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support Goal</button>
     <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
@@ -12966,6 +13170,38 @@ async function renderAdminDashboard(env) {
     </div>
     <div id="netflixPreviewMovies"></div>
     <div id="netflixPreviewShows" style="margin-top:28px;"></div>
+  </div>
+
+  <div class="admin-tab-panel" data-admin-panel="supportgoal">
+    <p style="color:#8E8E93; margin-top:0; font-size:0.9rem;">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:0.9rem; margin-bottom:14px;">
+        <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
+      </label>
+      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:12px;">Monthly goal (US dollars)
+        <input type="number" id="supportGoalAmount" class="admin-select" min="0" max="100000" step="1" style="display:block; margin:4px 0 0; width:160px;" placeholder="60">
+      </label>
+      <label style="display:block; font-size:0.85rem; color:#8E8E93; margin-bottom:6px;">Given so far this month (US dollars)
+        <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
+      </label>
+      <div style="font-size:0.8rem; color:#8E8E93; margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
+        <span id="supportGoalStatus" style="color:#8E8E93; font-size:0.85rem;"></span>
+      </div>
+    </div>
+    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:8px;">Automatic totals from Ko-fi</div>
+      <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; color:#8E8E93; line-height:1.5;">
+        <li>In Ko-fi, go to <strong>Settings &rarr; API &rarr; Webhooks</strong> and paste this as the Webhook URL, then press Update:
+          <div><code id="supportGoalWebhookUrl" style="user-select:all;"></code></div></li>
+        <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
+        <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
+      </ol>
+      <div style="font-size:0.85rem;">Token: <span id="supportGoalTokenState" style="color:#8E8E93;">checking&hellip;</span></div>
+      <div style="font-size:0.85rem; margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:#8E8E93;">none yet</span></div>
+      <div style="font-size:0.78rem; color:#8E8E93; margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
+    </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
@@ -13269,6 +13505,7 @@ async function renderAdminDashboard(env) {
       netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
+      supportgoal: 'management',
       maintenance: 'management',
     };
 
@@ -13319,6 +13556,54 @@ async function renderAdminDashboard(env) {
       if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
+      if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
+    }
+
+    async function loadSupportGoal() {
+      const status = document.getElementById('supportGoalStatus');
+      try {
+        const res = await fetch('/admin/api/support-goal', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok) { if (status) status.textContent = (data && data.error) || 'Could not load.'; return; }
+        document.getElementById('supportGoalEnabled').checked = !!data.enabled;
+        document.getElementById('supportGoalAmount').value = data.goal ? data.goal : '';
+        document.getElementById('supportGoalRaised').value = data.raised ? data.raised : '';
+        const m = document.getElementById('supportGoalMonth');
+        if (m) m.textContent = data.month || 'this month';
+        const w = document.getElementById('supportGoalWebhookUrl');
+        if (w) w.textContent = data.webhookUrl || '';
+        const t = document.getElementById('supportGoalTokenState');
+        if (t) { t.textContent = data.kofiTokenSet ? 'set' : 'not set yet'; t.style.color = data.kofiTokenSet ? '#30d158' : '#ff9f0a'; }
+        const l = document.getElementById('supportGoalLastPayment');
+        if (l && data.lastPayment) l.textContent = '$' + data.lastPayment.amount + ' on ' + new Date(data.lastPayment.at).toLocaleString();
+      } catch (e) {
+        if (status) status.textContent = 'Could not load.';
+      }
+    }
+
+    async function saveSupportGoal() {
+      const status = document.getElementById('supportGoalStatus');
+      const say = (text, color) => { if (status) { status.textContent = text; status.style.color = color || '#8E8E93'; } };
+      const goalText = document.getElementById('supportGoalAmount').value.trim();
+      const raisedText = document.getElementById('supportGoalRaised').value.trim();
+      say('Saving...');
+      try {
+        const res = await fetch('/admin/api/support-goal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: document.getElementById('supportGoalEnabled').checked,
+            goal: goalText === '' ? 0 : Number(goalText),
+            raised: raisedText === '' ? 0 : Number(raisedText),
+          }),
+        });
+        const data = await res.json();
+        if (!data || !data.ok) { say((data && data.error) || 'Could not save.', '#ff453a'); return; }
+        say('Saved. The site shows it within five minutes.', '#30d158');
+        loadSupportGoal();
+      } catch (e) {
+        say('Could not save.', '#ff453a');
+      }
     }
 
     function restoreAdminActiveTab() {
@@ -16903,7 +17188,7 @@ async function searchTraktLists(query, traktKeyOverride) {
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -16918,8 +17203,12 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
   // tiles get filtered out of the row by strict clients and their detail pages
   // are never routed back here by any client. This file's own placeholder tile
   // already cites that behaviour ("some clients filter out anything else").
-  const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["tt", "tmdb:", "channel_"] }];
-  const idPrefixes = ["tt", "tmdb:", "channel_"];
+  // "Use My Lists Addon metadata" off: this add-on answers only for its own TV
+  // Channel ids (no other add-on has those), so every real title's detail page
+  // goes to whichever other add-on has it.
+  const metaPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : ["channel_"];
+  const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: metaPrefixes }];
+  const idPrefixes = metaPrefixes;
   // Stremio/wako call every installed addon's subtitles resource the
   // instant ANY video starts playing (checking for subtitle tracks) --
   // regardless of which addon's catalog the video came from, or whether
@@ -17075,8 +17364,9 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // would throw the badged poster away. Running it first means a badged
   // poster is a badge drawn over BetterPosters artwork, which is the point.
   // The adult-content filter still runs after both and still wins.
-  if (keys.betterPosters && Array.isArray(result) && result.length > 0) {
-    result = applyBetterPostersToMetas(result, keys.betterPostersOptions || {});
+  const bpo = keys.betterPostersOptions || {};
+  if ((keys.betterPosters || bpo.pictoriumTemplate || bpo.rpdbBase) && Array.isArray(result) && result.length > 0) {
+    result = applyBetterPostersToMetas(result, bpo);
   }
 
   if (keys.isStremioCatalog === true && keys.origin && Array.isArray(result) && result.length > 0) {
@@ -18251,11 +18541,206 @@ async function serveBetterPoster(env, ctx, bp, origin, request) {
   return new Response(null, { status: 502, headers: unavailable });
 }
 
+// --- RatingPosterDB posters, through this Worker -------------------------------
+//
+// /rpdb/<install config>/<imdb id>.jpg. The person's RPDB key lives in their
+// install config and never appears in a poster URL; every image RPDB serves is
+// one request against that key's monthly limit, so this route is what keeps
+// the add-on from spending it:
+//
+//   - a poster is fetched from RPDB once and kept (R2 when bound, else KV),
+//     per key, so a hundred renders on any number of devices cost one request;
+//     a copy is re-fetched when RPDB_REFRESH_MS old, and an older one is still
+//     served when RPDB cannot be asked;
+//   - fetches are capped at RPDB_FETCHES_PER_MINUTE per key, so a page of
+//     titles never seen before is filled in over a few minutes -- the rest get
+//     the title's ordinary poster until their turn;
+//   - the key's own usage is read from RPDB (/requests, kept an hour) and
+//     nothing is fetched once RPDB_STOP_AT_SHARE of the limit is used;
+//   - a 429 or server error backs off for RPDB_BACKOFF_SECONDS, and a key RPDB
+//     refuses (401/403) is not asked with again for the same time.
+// Whatever cannot be served from RPDB is a redirect to the ordinary poster,
+// never an error tile.
+
+const RPDB_IMDB_RE = /^tt\d{5,12}$/;
+const RPDB_IN_FLIGHT = new Map();
+const RPDB_BACKOFF = new Map();   // key hash -> ms until which RPDB is not asked
+const RPDB_USAGE = new Map();     // key hash -> { req, limit, at }
+
+async function rpdbKeyHash(key) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("rpdb:" + key));
+  return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function rpdbStoredKey(hash, imdbId) {
+  return `rpdbimg:v1:${hash}:${imdbId}`;
+}
+
+async function rpdbReadStored(env, hash, imdbId) {
+  try {
+    if (env && env.BLOBS && typeof env.BLOBS.get === "function") {
+      const obj = await env.BLOBS.get(`img/rpdb/${hash}/${imdbId}.jpg`);
+      if (obj) {
+        const m = obj.customMetadata || {};
+        return { bytes: await obj.arrayBuffer(), contentType: m.ct || "image/jpeg", at: Number(m.at) || 0 };
+      }
+    }
+    if (env && env.CONFIGS) {
+      const got = await env.CONFIGS.getWithMetadata(rpdbStoredKey(hash, imdbId), { type: "arrayBuffer" });
+      if (got && got.value) {
+        const meta = got.metadata || {};
+        return { bytes: got.value, contentType: meta.ct || "image/jpeg", at: Number(meta.at) || 0 };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function rpdbWriteStored(env, hash, imdbId, bytes, contentType) {
+  try {
+    if (env && env.BLOBS && typeof env.BLOBS.put === "function") {
+      await env.BLOBS.put(`img/rpdb/${hash}/${imdbId}.jpg`, bytes, {
+        httpMetadata: { contentType },
+        customMetadata: { ct: contentType, at: String(Date.now()) },
+      });
+    } else if (env && env.CONFIGS) {
+      await env.CONFIGS.put(rpdbStoredKey(hash, imdbId), bytes, {
+        expirationTtl: RPDB_KEEP_SECONDS,
+        metadata: { ct: contentType, at: Date.now() },
+      });
+    }
+  } catch {}
+}
+
+// { req, limit } for a key, from RPDB's own /requests, or null when it cannot
+// be read (then only the per-minute cap holds). Kept an hour in this isolate
+// and in KV, so it costs about one call an hour per key, not one per poster.
+async function rpdbUsage(env, key, hash) {
+  const now = Date.now();
+  const mem = RPDB_USAGE.get(hash);
+  if (mem && now - mem.at < RPDB_USAGE_TTL_SECONDS * 1000) return mem;
+  const kvKey = `rpdb:usage:v1:${hash}`;
+  try {
+    if (env && env.CONFIGS) {
+      const raw = await env.CONFIGS.get(kvKey);
+      const kv = raw ? JSON.parse(raw) : null;
+      if (kv && Number.isFinite(kv.req) && Number.isFinite(kv.limit) && now - kv.at < RPDB_USAGE_TTL_SECONDS * 1000) {
+        RPDB_USAGE.set(hash, kv);
+        return kv;
+      }
+    }
+  } catch {}
+  try {
+    const res = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/requests`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !Number.isFinite(data.req) || !Number.isFinite(data.limit)) return null;
+    const usage = { req: data.req, limit: data.limit, at: now };
+    RPDB_USAGE.set(hash, usage);
+    if (env && env.CONFIGS) await env.CONFIGS.put(kvKey, JSON.stringify(usage), { expirationTtl: RPDB_USAGE_TTL_SECONDS * 2 }).catch(() => {});
+    return usage;
+  } catch {
+    return null;
+  }
+}
+
+// May one more poster be asked of RPDB for this key right now?
+async function rpdbMayFetch(env, ctx, key, hash) {
+  if ((RPDB_BACKOFF.get(hash) || 0) > Date.now()) return false;
+  const usage = await rpdbUsage(env, key, hash);
+  if (usage && usage.limit > 0 && usage.req >= usage.limit * RPDB_STOP_AT_SHARE) return false;
+  // True from consumeRateLimit means over the limit.
+  return !(await consumeRateLimit(env, ctx, "rpdbfetch", hash, RPDB_FETCHES_PER_MINUTE, 60));
+}
+
+// One request to RPDB. fallback=true makes RPDB itself answer with the ordinary
+// poster for a title it has no ratings for, so a miss is still a picture.
+async function rpdbFetchUpstream(env, ctx, key, hash, imdbId) {
+  const flightKey = hash + ":" + imdbId;
+  if (RPDB_IN_FLIGHT.has(flightKey)) return RPDB_IN_FLIGHT.get(flightKey);
+  const p = (async () => {
+    try {
+      const res = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/imdb/poster-default/${imdbId}.jpg?fallback=true`, {
+        headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
+      }, RPDB_FETCH_TIMEOUT_MS);
+      if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
+        // A refused key and a spent or struggling service are both left alone
+        // for a while rather than asked again poster by poster.
+        RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
+        return null;
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || !contentType.startsWith("image/")) return null;
+      const bytes = await res.arrayBuffer();
+      if (!bytes.byteLength || bytes.byteLength > RPDB_MAX_BYTES) return null;
+      await rpdbWriteStored(env, hash, imdbId, bytes, contentType);
+      return { bytes, contentType };
+    } catch {
+      return null;
+    } finally {
+      RPDB_IN_FLIGHT.delete(flightKey);
+    }
+  })();
+  RPDB_IN_FLIGHT.set(flightKey, p);
+  return p;
+}
+
+function rpdbImageResponse(bytes, contentType) {
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      "Content-Type": contentType || "image/jpeg",
+      "Cache-Control": "public, max-age=21600, stale-while-revalidate=86400",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+// Short-lived, so the RPDB poster takes over as soon as it can.
+function rpdbFallbackResponse(imdbId) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "Location": `https://images.metahub.space/poster/medium/${imdbId}/img`,
+      "Cache-Control": "public, max-age=300",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+async function serveRpdbPoster(env, ctx, configParam, imdbId) {
+  if (!RPDB_IMDB_RE.test(imdbId)) return new Response(null, { status: 404 });
+  let cfg = null;
+  try { cfg = await resolveConfig(configParam, env); } catch {}
+  if (!cfg || !cfg.rpdb || !isValidRpdbKey(cfg.rpdbKey)) return rpdbFallbackResponse(imdbId);
+  const key = cfg.rpdbKey;
+  const hash = await rpdbKeyHash(key);
+
+  const stored = await rpdbReadStored(env, hash, imdbId);
+  const fresh = stored && Date.now() - stored.at < RPDB_REFRESH_MS;
+  if (fresh) return rpdbImageResponse(stored.bytes, stored.contentType);
+
+  // Stale or missing: ask RPDB only if the budget allows. A stale copy is
+  // served at once and refreshed behind the response.
+  if (stored) {
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil((async () => {
+        if (await rpdbMayFetch(env, ctx, key, hash)) await rpdbFetchUpstream(env, ctx, key, hash, imdbId);
+      })());
+    }
+    return rpdbImageResponse(stored.bytes, stored.contentType);
+  }
+  if (!(await rpdbMayFetch(env, ctx, key, hash))) return rpdbFallbackResponse(imdbId);
+  const got = await rpdbFetchUpstream(env, ctx, key, hash, imdbId);
+  return got ? rpdbImageResponse(got.bytes, got.contentType) : rpdbFallbackResponse(imdbId);
+}
+
 // Packs a resolved config's betterPosters* keys into the shape
 // buildBetterPosterUrl reads. Each default matches btttr.cc's own default for
 // that option, so an install that never touched the style controls gets the
 // same artwork its configurator hands out.
-function betterPostersOptionsFrom(cfg, origin) {
+function betterPostersOptionsFrom(cfg, origin, configParam) {
   const c = cfg || {};
   return {
     // This Worker's own origin, so posters are served from its copy (see
@@ -18266,9 +18751,26 @@ function betterPostersOptionsFrom(cfg, origin) {
     quality: !!c.betterPostersQuality,
     age: !!c.betterPostersAge,
     trendTags: c.betterPostersTrendTags !== false,
+    // Pictorium wins over Better Posters when both are on: only one of them
+    // can draw a poster.
+    pictoriumTemplate: c.pictorium && isValidPictoriumTemplate(c.pictoriumUrl) ? c.pictoriumUrl : "",
+    // RatingPosterDB, through this Worker's /rpdb/ route (serveRpdbPoster):
+    // the base every poster URL starts with, or "" when it is off. Pictorium
+    // wins over it, and it wins over Better Posters.
+    rpdbBase: c.rpdb && isValidRpdbKey(c.rpdbKey) && origin && configParam ? `${origin}/rpdb/${encodeURIComponent(configParam)}` : "",
     lang: c.betterPostersLang || "en",
     ratingSource: c.betterPostersRatingSource || "avg",
   };
+}
+
+// A Pictorium poster link for one title, from the link as pasted in Settings.
+// Only the type and id are filled in; "shape" is dropped (Pictorium's default
+// is the portrait poster) and any other placeholder is left as it is.
+function fillPictoriumTemplate(template, imdbId, type) {
+  return String(template)
+    .split(PICTORIUM_SHAPE_PARAM).join("")
+    .replace(PICTORIUM_TYPE_TOKEN, type === "series" ? "series" : "movie")
+    .replace(PICTORIUM_ID_TOKEN, imdbId);
 }
 
 // Single-meta form, for the /meta/ detail route.
@@ -18290,6 +18792,8 @@ function applyBetterPostersToMetas(metas, opts) {
     if (m.posterShape === "landscape") return m;
     const imdbId = betterPostersImdbId(m);
     if (!imdbId) return m;
+    if (opts && opts.pictoriumTemplate) return { ...m, poster: fillPictoriumTemplate(opts.pictoriumTemplate, imdbId, m.type) };
+    if (opts && opts.rpdbBase) return { ...m, poster: `${opts.rpdbBase}/${imdbId}.jpg` };
     return { ...m, poster: buildBetterPosterUrl(imdbId, opts) };
   });
   mapped.totalItems = tot;
@@ -18300,7 +18804,7 @@ function applyBadgedPostersToMetas(metas, origin) {
   if (!Array.isArray(metas) || !metas.length || !origin) return metas;
   const tot = metas.totalItems;
   const mapped = metas.map((m) => {
-    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster")) return m;
+    if (!m || !m.poster || m.poster.startsWith("data:image/svg") || m.poster.includes("/api/poster-badge") || m.poster.includes("/api/safe-poster") || m.poster.includes("/api/poster/") || m.poster.includes("/rpdb/")) return m;
     const isPremiereEp = m.episodeNumber === 1 || m.episodeNum === 1 || (m.episodeNum == null && m.episodeNumber == null);
     const hasAired = m.airDate && typeof isEpisodeAired === "function" ? isEpisodeAired(m.airDate) : false;
     const hasPremiere = !!(m.isSeasonPremiere && isPremiereEp && !hasAired);
@@ -28705,6 +29209,14 @@ function renderBuilder(
   const initialBetterPostersRating = initialKeys.betterPostersRating !== false;
   const initialBetterPostersQuality = !!initialKeys.betterPostersQuality;
   const initialBetterPostersAge = !!initialKeys.betterPostersAge;
+  // Pictorium (opt-in, with the poster link pasted from the person's own space)
+  // and "Use My Lists Addon metadata" (on unless switched off) -- see
+  // INSTALL_CONFIG_FIELDS (00_constants.js).
+  const initialRpdb = !!initialKeys.rpdb;
+  const initialRpdbKey = typeof initialKeys.rpdbKey === "string" ? initialKeys.rpdbKey : "";
+  const initialPictorium = !!initialKeys.pictorium;
+  const initialPictoriumUrl = typeof initialKeys.pictoriumUrl === "string" ? initialKeys.pictoriumUrl : "";
+  const initialProvideMetadata = initialKeys.provideMetadata !== false;
   const initialBetterPostersTrendTags = initialKeys.betterPostersTrendTags !== false;
   const betterPostersLangOptionsHtml = buildBetterPostersLangOptionsHtml(initialKeys.betterPostersLang || "en");
   const betterPostersRatingSourceOptionsHtml = buildBetterPostersRatingSourceOptionsHtml(initialKeys.betterPostersRatingSource || "avg");
@@ -28860,7 +29372,6 @@ ${seoHeadHtml}
       if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
       var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
-      if (discSub === 'all') discSub = 'movie';
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
   })();
@@ -29689,6 +30200,11 @@ ${seoHeadHtml}
     flex: 1 1 160px; justify-content: center;
     padding: 10px 16px; font-size: 0.95rem;
   }
+  /* On a wide screen the two buttons stay the size they are on a phone (about
+     180px each, side by side at the left) instead of stretching across. */
+  @media (min-width: 720px) {
+    .item-actions .lc-btn { flex: 0 0 180px; }
+  }
   .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
   .item-genre-chip {
     padding: 5px 14px; min-height: unset; font-size: 0.85rem; font-weight: 600; font-family: inherit;
@@ -29892,9 +30408,17 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
   }
+  /* Every search box on the site: a pill with the magnifier inside it on the
+     left (and, where there is one, a clear button on the right). */
   .search-input-box input {
     width: 100%;
     box-sizing: border-box;
+    padding: 10px 38px;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
   }
   .search-input-icon {
     position: absolute;
@@ -30096,6 +30620,92 @@ ${seoHeadHtml}
      needs. The larger gap is because these are now separate cards rather
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
+  /* The Ko-fi support strip at the top of Catalogs (initSupportStrip): one flat
+     bar, a small progress bar under the text, and a plain X. Its two
+     buttons say what they look like here because the page's own button rules
+     (blue fill on hover, focus and press; a round, bordered pill) are written
+     to win over a bare class. */
+  .support-strip {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 10px;
+    padding: 0 2px 0 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .support-strip[hidden] { display: none; }
+  .support-strip .support-strip-main,
+  .support-strip .support-strip-main:hover,
+  .support-strip .support-strip-main:focus,
+  .support-strip .support-strip-main:active {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 10px 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    color: var(--text);
+    text-align: left;
+    white-space: normal;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .support-strip .support-strip-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .support-strip-cup { font-size: 16px; line-height: 1; }
+  .support-strip-body { flex: 1; min-width: 0; display: block; }
+  .support-strip-row { display: flex; justify-content: space-between; gap: 8px; line-height: 1.25; }
+  .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .support-strip-bar {
+    display: block;
+    margin-top: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border-strong);
+    overflow: hidden;
+  }
+  .support-strip-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 3px;
+    background: #ff8a00;
+  }
+  .support-strip.is-covered { border-color: #bfe8c9; }
+  .support-strip.is-covered .support-strip-bar i { background: #34c759; }
+  .support-strip .support-strip-x,
+  .support-strip .support-strip-x:hover,
+  .support-strip .support-strip-x:focus,
+  .support-strip .support-strip-x:active {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    box-shadow: none;
+    transform: none;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 400;
+    cursor: pointer;
+  }
+  .support-strip .support-strip-x:hover { color: var(--text); }
+  .support-strip .support-strip-x:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .qa-shelf-card {
     margin-bottom: 16px;
     gap: 0;
@@ -30208,6 +30818,7 @@ ${seoHeadHtml}
     border-width: 0;
   }
   #discoverListsFeedHeader,
+  #listsSubLiked .shelf-header,
   #discoverSubPopular .shelf-header,
   #discoverSubCurated .shelf-header {
     display: flex;
@@ -30219,6 +30830,7 @@ ${seoHeadHtml}
     min-height: 32px;
   }
   #discoverListsFeedDesc,
+  #listsSubLiked .shelf-header p,
   #discoverSubPopular .shelf-header p,
   #discoverSubCurated .shelf-header p {
     margin: 0;
@@ -31126,6 +31738,20 @@ ${seoHeadHtml}
     .shelf-header > div {
       width: 100%;
       min-width: 0;
+    }
+    /* A Quick Add card keeps its title and "+ Add all" on one row on a
+       phone, the button at the far right, instead of stacking it full width
+       under the title like the other headers. */
+    .qa-shelf-card .shelf-header {
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      flex-wrap: nowrap !important;
+    }
+    .qa-shelf-card .shelf-header .qa-add-all-btn {
+      width: auto !important;
+      flex: none;
+      white-space: nowrap;
     }
     .list-card-header {
       display: flex !important;
@@ -34036,6 +34662,19 @@ ${appShellMobileNavHtml}
   <!-- Action Notification Toast -->
   <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
 
+  <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
+       (16_client-row-core.js) only when the admin has turned it on. -->
+  <div class="support-strip" id="supportStrip" hidden>
+    <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server Costs this month: see details">
+      <span class="support-strip-cup" aria-hidden="true">&#9749;</span>
+      <span class="support-strip-body">
+        <span class="support-strip-row"><span id="supportStripText"></span><span class="support-strip-go">Support &rsaquo;</span></span>
+        <span class="support-strip-bar" aria-hidden="true"><i id="supportStripFill"></i></span>
+      </span>
+    </button>
+    <button type="button" class="support-strip-x" data-act="dismissSupportStrip" aria-label="Hide this for 30 days">&#10005;</button>
+  </div>
+
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
     <div style="margin-bottom: 20px;">
@@ -34723,11 +35362,11 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 2: Liked Lists Feed -->
   <div class="lists-subpanel" id="listsSubLiked" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title">Lists You Liked</h2>
+      <div class="shelf-header">
+        <h2 class="shelf-title sr-only">Lists You Liked</h2>
+        <p>Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
         ${refreshButtonHtml('renderLikedListsFeed', 'Refresh liked lists', [true])}
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:0.85rem;">Lists you've saved with the heart, from the community directory and from your connected accounts.</p>
       <!-- The placeholder here is the pre-JS state only. renderLikedListsFeed
            overwrites it on every switch to this tab and is authoritative for
            the empty case -- nothing may read this element's children to decide
@@ -34738,10 +35377,6 @@ if ('serviceWorker' in navigator) {
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
-    <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
-         title is in the draft this panel already saves. -->
-    <div id="appShellAddTitles"></div>
-
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
@@ -34789,12 +35424,9 @@ if ('serviceWorker' in navigator) {
       <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
         <label for="customListSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
         <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
-        <div style="position:relative; width:100%;">
-          <input type="text" id="customListSearchInput" placeholder="Search a title to add..." style="width:100%; padding:10px 14px 10px 38px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;" aria-hidden="true">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
+        <div class="search-input-box">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
           <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
@@ -34956,7 +35588,7 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header" style="margin-bottom:8px;">
         <h2 class="shelf-title">Merge Saved Channels into One Catalog</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Combine multiple saved TV channels into a single catalog row on your Catalogs shelf.</p>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
       
       <div id="savedMergedChannelsSection" style="margin-bottom:16px;">
         <div id="savedMergedChannelsList"></div>
@@ -34964,7 +35596,7 @@ if ('serviceWorker' in navigator) {
 
       <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
         <div class="shelf-header" style="margin-bottom:8px;">
-          <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog</h3>
+          <h3 style="font-size:0.95rem; font-weight:700; margin:0;">Create Merged Catalog or Channel</h3>
         </div>
         <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; user-select:none;">
@@ -34974,8 +35606,9 @@ if ('serviceWorker' in navigator) {
         </div>
         <div id="channelMergeList"><p style="color:var(--muted); font-size:0.85rem;"><small>No saved channels yet.</small></p></div>
         <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
-          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog name" placeholder="Combined catalog name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
+          <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
           <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
+          <button type="button" class="secondary lc-btn" data-act="combineChannelsIntoChannel" data-act-args="[&quot;@self&quot;]" title="Make a new channel with every episode of the checked channels, duplicates left out" style="border-radius:var(--radius-pill);">Combine into one channel</button>
         </div>
       </div>
     </div>
@@ -35115,27 +35748,57 @@ if ('serviceWorker' in navigator) {
   <div class="channels-subpanel" id="channelsSubBuild" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title" id="channelEditorTitle">Build Custom Channel</h2>
+        <h2 class="shelf-title" id="channelEditorTitle">Create a Custom Channel</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search any TV show or movie to add to your channel, and reorder or remove picks:</p>
+      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage picks for this custom channel.</p>
+
+      <!-- 1. Channel Name -->
+      <div style="margin-bottom:16px; max-width:480px;">
+        <label for="channelNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Channel Name</label>
+        <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)">
+      </div>
+
+      <!-- 2. Public Channel Toggle -->
+      <div id="channelVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+        <div>
+          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public Channel</span>
+          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this channel visible on your public creator profile and discoverable in the community directory</p>
+        </div>
+        <label class="ui-toggle" aria-label="Make channel public">
+          <input type="checkbox" id="channelPublicToggle" checked>
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- 3. Search & Add Titles -->
+      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+        <label for="channelSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to Channel</label>
+        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search any TV show or movie to add to your channel.</p>
       <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
         <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
         <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
-      <div class="row">
-        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
-        <button type="button" class="secondary" data-act="runChannelTitleSearch">Search</button>
+      <div class="row" style="gap:8px;">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+        </div>
+        <button type="button" class="secondary lc-btn" data-act="runChannelTitleSearch">Search</button>
       </div>
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
 
       <div id="channelCrossoverSuggestions" style="display:none; margin-top:14px;"></div>
+      </div>
 
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
       <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;"></div>
       <div class="row" style="margin-bottom:8px; gap:8px;">
-        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        </div>
         <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
@@ -35156,13 +35819,6 @@ if ('serviceWorker' in navigator) {
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
         <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
         <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
-      </div>
-      <div id="channelVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
-        <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
-        <label class="ui-toggle">
-          <input type="checkbox" id="channelPublicToggle" checked>
-          <span class="ui-toggle-slider"></span>
-        </label>
       </div>
       <!-- Advanced Settings (Progressive Disclosure) -->
       <details class="channel-advanced-details" style="margin-top:14px; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface);">
@@ -35266,10 +35922,10 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
 
-      <div class="row" style="margin-top:12px;">
-        <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)" style="flex:1;">
-        <button type="button" class="primary" id="channelSaveBtn" data-act="saveChannel">Save</button>
-        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditChannel">Cancel</button>
+      <!-- Bottom Action Bar -->
+      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+        <button type="button" id="channelCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditChannel">Cancel</button>
+        <button type="button" class="primary lc-btn" id="channelSaveBtn" data-act="saveChannel" style="padding:8px 24px; font-weight:600;">Create Channel</button>
       </div>
     </div>
   </div>
@@ -35350,10 +36006,9 @@ if ('serviceWorker' in navigator) {
     <div id="catalogListSearchChips" class="catalog-list-chips" style="display:none;">
       <div class="catalog-list-chip-row" role="group" aria-label="Where the lists come from">
         <button type="button" class="catalog-list-chip active" data-chip-kind="source" data-chip-value="all" aria-pressed="true" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;all&quot;]">All sources</button>
-        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists community</button>
+        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mylists" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mylists&quot;]">My Lists Addon</button>
         <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="mdblist" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;mdblist&quot;]">MDBList</button>
         <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="trakt" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;trakt&quot;]">Trakt</button>
-        <button type="button" class="catalog-list-chip" data-chip-kind="source" data-chip-value="tmdb" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;source&quot;,&quot;tmdb&quot;]">TMDB</button>
       </div>
       <div class="catalog-list-chip-row" role="group" aria-label="Order">
         <button type="button" class="catalog-list-chip" data-chip-kind="sort" data-chip-value="popular" aria-pressed="false" data-act="setCatalogListSearchChip" data-act-args="[&quot;sort&quot;,&quot;popular&quot;]">Most liked</button>
@@ -35633,6 +36288,78 @@ if ('serviceWorker' in navigator) {
             <p style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Language BetterPosters draws text in.</p>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- RatingPosterDB Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">RatingPosterDB</h2>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for <a href="https://ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">RatingPosterDB</a> posters with ratings drawn on, styled the way you set them up at <a href="https://manager.ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">manager.ratingposterdb.com</a>. Needs your own paid RPDB API key.</p>
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use RatingPosterDB artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio. Turns Better Posters and Pictorium off, because only one can draw a poster.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How your request limit is protected</summary>
+            <p style="margin:4px 0 0;">Every poster RatingPosterDB sends counts against your key's monthly limit, so posters are not loaded from it directly. This add-on fetches each poster once, keeps it for three days, and shows it to every device from that copy. It asks RatingPosterDB for at most 20 new posters a minute, so a page of new titles fills in over a few minutes (the ordinary poster shows meanwhile), and it stops asking once 95% of your monthly limit is used. Only titles with an IMDb ID are affected. Airing Next and date badges are not drawn over these posters. The website keeps its normal posters.</p>
+          </details>
+        </div>
+        <label class="ui-toggle" aria-label="Use RatingPosterDB artwork">
+          <input type="checkbox" id="rpdbCheckbox" ${initialRpdb ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdb&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+      <div id="rpdbOptions" style="display:${initialRpdb ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div>
+          <label for="rpdbKeyInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">API key</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" style="flex:1; min-width:200px; max-width:380px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+            <button type="button" class="secondary lc-btn" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]" style="border-radius:var(--radius-pill);">Test key</button>
+          </div>
+          <p id="rpdbKeyStatus" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pictorium Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Pictorium</h2>
+      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Swap plain poster artwork for posters drawn by your own <a href="https://github.com/Eful97/Pictorium" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">Pictorium</a> space &mdash; ratings, streaming quality, Netflix Top 10 ribbons, awards and more, styled the way you set them up there. Needs a Pictorium space with your own TMDB key.</p>
+      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use Pictorium artwork</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters and RatingPosterDB off, because only one can draw a poster.</p>
+          <details style="margin-top:6px; font-size:0.8rem; color:var(--muted);">
+            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
+            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
+          </details>
+        </div>
+        <label class="ui-toggle" aria-label="Use Pictorium artwork">
+          <input type="checkbox" id="pictoriumCheckbox" ${initialPictorium ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictorium&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+      <div id="pictoriumOptions" style="display:${initialPictorium ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <div>
+          <label for="pictoriumUrlInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:4px;">Poster link</label>
+          <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.86rem; box-sizing:border-box;">
+          <p id="pictoriumUrlHint" style="margin:4px 0 0; color:var(--muted); font-size:0.78rem;">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Panel -->
+    <div class="panel" style="margin-top:12px;">
+      <h2 class="panel-title">Metadata</h2>
+      <div class="settings-toggle-row" style="padding:0; border-bottom:none;">
+        <div style="flex:1; min-width:0; padding-right:12px;">
+          <span style="font-weight:600; font-size:0.92rem; color:var(--text);">Use My Lists Addon metadata</span>
+          <p style="margin:3px 0 0; color:var(--muted); font-size:0.8rem; line-height:1.35;">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
+        </div>
+        <label class="ui-toggle" aria-label="Use My Lists Addon metadata">
+          <input type="checkbox" id="provideMetadataCheckbox" ${initialProvideMetadata ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;provideMetadata&quot;,&quot;@checked&quot;]">
+          <span class="ui-toggle-slider"></span>
+        </label>
       </div>
     </div>
 
@@ -36116,9 +36843,9 @@ if ('serviceWorker' in navigator) {
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Open Guide &rarr;</span>
         </a>
 
-        <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener" class="resource-card">
+        <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener" class="resource-card">
           <div>
-            <div class="resource-card-title">Buy Me a Coffee</div>
+            <div class="resource-card-title">Support on Ko-fi</div>
             <div class="resource-card-desc">Support the continued development and hosting costs of the free public server.</div>
           </div>
           <span class="secondary lc-btn" style="align-self:flex-start; padding:6px 14px; font-size:0.8rem; pointer-events:none;">Support Project &rarr;</span>
@@ -36418,7 +37145,6 @@ function normalizeListsSubmenu(raw) {
 
     // 5. Discover submenu early sync
     var discSub = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
-    if (discSub === 'all') discSub = 'movie';
     var discBar = document.getElementById('discoverSubnavBar');
     if (discBar) {
       discBar.querySelectorAll('.subnav-pill').forEach(function(p) {
@@ -37254,7 +37980,7 @@ function updateAllListAddButtons() {
   document.querySelectorAll('.list-search-add-btn, .searchAddBtn').forEach((btn) => {
     const url = btn.dataset.url;
     const type = btn.dataset.type;
-    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type) || isListAddedToConfig(url, 'movie') || isListAddedToConfig(url, 'series') || isListAddedToConfig(url)) : false;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(url, type)) : false;
     btn.classList.toggle('is-added', isAdded);
     btn.classList.toggle('secondary', isAdded);
     btn.classList.toggle('primary', !isAdded);
@@ -37525,6 +38251,14 @@ function switchTab(name) {
         }
       });
       switchListsSubmenu(savedSub, targetBtn || pills[0]);
+    } else {
+      // Coming back to Lists lands on the sub-page it was left on. Liked is the
+      // one whose contents change from elsewhere (a heart on Discover or
+      // Search), so it is refreshed on return. renderLikedListsFeed does
+      // nothing when the liked count it last drew still matches.
+      let current = '';
+      try { current = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu')); } catch (e) {}
+      if (current === 'liked' && typeof renderLikedListsFeed === 'function') renderLikedListsFeed();
     }
   }
   if (name === 'settings') {
@@ -37586,8 +38320,7 @@ function switchTab(name) {
       try {
         savedFilter = localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
       } catch (e) {}
-      if (savedFilter === 'all') savedFilter = 'movie';
-      const activeFilter = (window._currentDiscoverFilter && window._currentDiscoverFilter !== 'all') ? window._currentDiscoverFilter : savedFilter;
+      const activeFilter = window._currentDiscoverFilter || savedFilter;
       window._currentDiscoverFilter = activeFilter;
       const pills = document.querySelectorAll('#discoverSubnavBar .subnav-pill');
       let targetBtn = null;
@@ -38436,6 +39169,88 @@ function closeModal() {
     try { _modalReturnFocus.focus(); } catch (e) {}
   }
   _modalReturnFocus = null;
+}
+
+// --- The Ko-fi support strip ---------------------------------------------------
+//
+// A goal for the month's hosting and how much has been given, set by the admin
+// (Management & Tools -> Support Goal) and read from /api/support-goal. The
+// strip stays hidden until the admin has turned it on. Its X hides it for the
+// next 30 days in this browser only; after that it is back.
+let _supportGoal = null;
+
+function supportMoney(n) {
+  const v = Number(n) || 0;
+  return '$' + (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2));
+}
+
+function supportDismissedRecently() {
+  try {
+    const at = Number(localStorage.getItem('myListAddon:supportDismissed'));
+    return at > 0 && Date.now() - at < 30 * 86400000;
+  } catch (e) { return false; }
+}
+
+function renderSupportStrip() {
+  const strip = document.getElementById('supportStrip');
+  const g = _supportGoal;
+  if (!strip) return;
+  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedRecently()) { strip.hidden = true; return; }
+  const covered = g.raised >= g.goal;
+  strip.classList.toggle('is-covered', covered);
+  const text = document.getElementById('supportStripText');
+  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server Costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
+  const fill = document.getElementById('supportStripFill');
+  if (fill) fill.style.width = Math.max(0, Math.min(100, (g.raised / g.goal) * 100)) + '%';
+  strip.hidden = false;
+}
+
+function initSupportStrip() {
+  if (!document.getElementById('supportStrip')) return;
+  try {
+    fetch(ORIGIN + '/api/support-goal')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.ok) { _supportGoal = data; renderSupportStrip(); }
+      })
+      .catch(function() {});
+  } catch (e) {}
+}
+
+function dismissSupportStrip() {
+  try { localStorage.setItem('myListAddon:supportDismissed', String(Date.now())); } catch (e) {}
+  renderSupportStrip();
+}
+
+function openSupportGoal() {
+  const g = _supportGoal;
+  if (!g || !g.enabled) return;
+  const left = Math.max(0, g.goal - g.raised);
+  const pct = Math.max(0, Math.min(100, (g.raised / g.goal) * 100));
+  const row = function(label, value, strong) {
+    return '<div style="display:flex; justify-content:space-between;"><span>' + label + '</span>' + (strong ? '<b>' + value + '</b>' : '<span>' + value + '</span>') + '</div>';
+  };
+  const html =
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">' +
+      '<h3 style="margin:0; font-size:1.1rem;">Keeping My Lists Addon running</h3>' +
+      '<button type="button" class="action-btn" aria-label="Close" data-act="closeModal" style="width:32px; height:32px; min-height:unset; padding:0; border-radius:50%; background:var(--bg); color:var(--muted); border:1px solid var(--border-strong); display:inline-flex; align-items:center; justify-content:center; font-size:1rem; line-height:1; cursor:pointer; flex:none;">\u2715</button>' +
+    '</div>' +
+    '<p style="margin:0 0 12px; color:var(--muted); font-size:0.88rem; line-height:1.4;">It is free, with no ads. Donations only cover the hosting bill.</p>' +
+    '<div style="font-size:1.8rem; font-weight:800;">' + supportMoney(g.raised) + ' <small style="font-size:0.85rem; font-weight:600; color:var(--muted);">of ' + supportMoney(g.goal) + ' this month</small></div>' +
+    '<div style="height:10px; border-radius:10px; background:var(--border); overflow:hidden; margin:8px 0 12px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:10px; background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div style="display:grid; gap:6px; font-size:0.88rem; color:var(--text); margin-bottom:14px;">' +
+      row('Hosting this month', supportMoney(g.goal), false) +
+      row('Given so far', supportMoney(g.raised), false) +
+      row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
+    '</div>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:var(--accent); color:#fff; border-radius:26px; padding:12px; font-weight:800; text-decoration:none;">&#9749; Support on Ko-fi</a>' +
+    '<p style="margin:10px 0 0; text-align:center; color:var(--muted); font-size:0.78rem;">Starts again on the 1st of each month.</p>';
+  showModal(html);
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSupportStrip);
+  else initSupportStrip();
 }
 
 function showAppAlert(title, message, isSuccess = false) {
@@ -44987,8 +45802,23 @@ function isBetterPosterUrl(p) {
   return typeof p === 'string' && (p.indexOf(BETTER_POSTERS_ORIGIN_WEB) === 0 || p.indexOf(betterPosterMirrorPrefix()) === 0);
 }
 
+// The Pictorium poster link when Pictorium is on and the link is usable, else
+// ''. While it is set, Better Posters stands down on the website: only one of
+// them draws a poster. Plain string checks, as above (no regex in here).
+function pictoriumTemplateWeb() {
+  if (typeof getBetterPostersSetting !== 'function' || !getBetterPostersSetting('pictorium', false)) return '';
+  const t = (typeof getBetterPostersChoice === 'function' ? getBetterPostersChoice('pictoriumUrl', '') : '').trim();
+  if (t.indexOf('https://') !== 0 || t.indexOf('/api/poster/') < 0 || t.indexOf('{type}') < 0 || t.indexOf('{tmdb_id|imdb_id}') < 0) return '';
+  return t;
+}
+function pictoriumWebUrl(template, imdbId, type) {
+  return template.split('&shape={shape}').join('')
+    .replace('{type}', type === 'series' ? 'series' : 'movie')
+    .replace('{tmdb_id|imdb_id}', imdbId);
+}
+
 function betterPostersOnWeb() {
-  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false);
+  return typeof getBetterPostersSetting === 'function' && getBetterPostersSetting('betterPosters', false) && !pictoriumTemplateWeb();
 }
 window.betterPostersOnWeb = betterPostersOnWeb;
 
@@ -45079,6 +45909,17 @@ function betterPosterOriginalFor(url) {
 }
 
 function applyBetterPosterWeb(it, poster) {
+  const pictorium = pictoriumTemplateWeb();
+  if (pictorium) {
+    // Same exclusions as Better Posters below: generated artwork, landscape
+    // tiles and an episode's own still keep what they have.
+    if (isGeneratedPosterUrl(poster)) return poster;
+    if (it && it.posterShape === 'landscape') return poster;
+    if (it && it.thumbnail && poster === it.thumbnail) return poster;
+    const picId = betterPostersWebImdbId(it);
+    if (!picId) return poster;
+    return pictoriumWebUrl(pictorium, picId, it && (it.type === 'series' || it.mediaType === 'series' || it.mediaType === 'tv') ? 'series' : 'movie');
+  }
   if (!betterPostersOnWeb()) return poster;
   const alreadyBetter = isBetterPosterUrl(poster);
   if (!alreadyBetter) {
@@ -45711,7 +46552,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     const addedMovie = alreadyAdded.has(item.url + '|movie');
     const addedSeries = alreadyAdded.has(item.url + '|series');
     const addedDirect = typeof isListAddedToConfig === 'function'
-      ? (isListAddedToConfig(item.url, item.type) || isListAddedToConfig(item.url, 'movie') || isListAddedToConfig(item.url, 'series') || isListAddedToConfig(item.url))
+      ? (isListAddedToConfig(item.url, item.type))
       : (alreadyAdded.has(item.url + '|' + item.type) || addedMovie || addedSeries);
     const alreadyLikedExt = getLikedListsSet().has(item.url);
 
@@ -46129,12 +46970,23 @@ function getLikedListsSet() {
   }
 }
 
+// The Liked page skips redrawing while the count it last drew still matches.
+// A like and an unlike in between leave the count alone and the page wrong, so
+// any change to the set clears what it remembers and the next visit redraws.
+function likedFeedIsStale() {
+  try {
+    const feed = document.getElementById('likedListsFeed');
+    if (feed && feed.dataset) delete feed.dataset.likedCount;
+  } catch (e) {}
+}
+
 function rememberLikedList(usernameSlug) {
   const set = getLikedListsSet();
   set.add(usernameSlug);
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 function forgetLikedList(usernameSlug) {
@@ -46143,6 +46995,7 @@ function forgetLikedList(usernameSlug) {
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 // "username/slug" for one of this add-on's own list pages
@@ -46242,15 +47095,18 @@ document.addEventListener('click', async (e) => {
     const listName = rawName.replace(/:\\s*(Movies|Shows)$/i, '').trim();
     const listUrl = addBtn.dataset.url || '';
     const listType = addBtn.dataset.type || 'movie';
-    const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)));
+    const isAdded = addBtn.classList.contains('is-added') || (typeof isListAddedToConfig === 'function' && (isListAddedToConfig(listUrl, listType)));
     if (isAdded) {
       if (typeof removeListFromConfig === 'function') {
+        // This button's own type only: New on Streaming's Movies and Shows
+        // share one link, and removing one must leave the other. A mixed list
+        // is the one that is added as both.
         removeListFromConfig(listUrl, listType);
-        removeListFromConfig(listUrl, 'movie');
-        removeListFromConfig(listUrl, 'series');
-        removeListFromConfig(listUrl, 'mixed');
-        removeListFromConfig(listUrl);
         removeListFromConfig(null, listType, listUrl);
+        if (listType === 'mixed' || listType === 'unknown') {
+          removeListFromConfig(listUrl, 'movie');
+          removeListFromConfig(listUrl, 'series');
+        }
       }
       addBtn.classList.remove('is-added', 'secondary');
       addBtn.classList.add('primary');
@@ -46993,13 +47849,13 @@ async function renderLikedListsFeed(forceRefresh) {
           return placeholder;
         }
       }
-      const name = guessNameFromUrl(u);
+      const info = likedListInfo(u);
       const isSeries = u.toLowerCase().includes('show') || u.toLowerCase().includes('series') || u.toLowerCase().includes('tv');
       return {
         url: u,
-        name: name,
-        user: 'Community',
-        type: isSeries ? 'series' : 'movie',
+        name: info.name || guessNameFromUrl(u),
+        user: info.user,
+        type: info.type || (isSeries ? 'series' : 'movie'),
         items: 50,
         likes: 1
       };
@@ -47046,6 +47902,53 @@ async function renderLikedListsFeed(forceRefresh) {
   } catch (e) {
     container.innerHTML = '<p class="testresult err">&#x2717; Error loading liked lists.</p>';
   }
+}
+
+// Who a liked list is by, and what it is called, from its link alone. This
+// app's own charts (and a combined chart, which is several links, one per
+// line) are "My Lists Addon"; a provider's chart is the provider; a list on a
+// provider's site is its owner, from the link. Only when nothing says is it
+// "Community". Plain string work: no backslashes in here (the outer template
+// literal would eat them).
+function likedListInfo(link) {
+  const whole = String(link || '').trim();
+  const info = { user: 'Community', name: '', type: '' };
+  if (!whole) return info;
+  if (typeof CHART_SLUG_ENTRIES !== 'undefined' && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const hit = CHART_SLUG_ENTRIES.find(function(e) { return e.movieUrl === whole || e.showUrl === whole; });
+    if (hit) {
+      info.name = hit.name;
+      info.type = (hit.showUrl === whole && hit.movieUrl !== whole) ? 'series' : 'movie';
+    }
+  }
+  if (whole.indexOf(String.fromCharCode(10)) >= 0) { info.user = 'My Lists Addon'; return info; }
+  const lower = whole.toLowerCase();
+  if (lower.indexOf('mylists:') === 0 || lower.indexOf('tmdb:new-on-streaming') === 0) { info.user = 'My Lists Addon'; return info; }
+  if (lower.indexOf('tmdb:') === 0) { info.user = 'TMDB'; return info; }
+  if (lower.indexOf('trakt:') === 0) { info.user = 'Trakt'; return info; }
+  if (lower.indexOf('simkl:') === 0) { info.user = 'Simkl'; return info; }
+  let u = null;
+  try { u = new URL(whole); } catch (e) { return info; }
+  const host = u.hostname.toLowerCase().replace(/^www[.]/, '');
+  const parts = u.pathname.split('/').filter(Boolean).map(function(p) { try { return decodeURIComponent(p); } catch (e) { return p; } });
+  if (host === 'themoviedb.org') { info.user = 'TMDB'; return info; }
+  if (host === 'simkl.com') { info.user = 'Simkl'; return info; }
+  if (host === 'mdblist.com') {
+    // mdblist.com/lists/<owner>/<list>, or lists/official/... for MDBList's own.
+    const owner = parts[0] === 'lists' ? parts[1] : '';
+    info.user = (!owner || owner.toLowerCase() === 'official') ? 'MDBList' : owner;
+    return info;
+  }
+  if (host === 'trakt.tv') {
+    const owner = parts[0] === 'users' ? parts[1] : '';
+    info.user = owner || 'Trakt';
+    return info;
+  }
+  if (host === 'letterboxd.com') {
+    info.user = parts[0] || 'Letterboxd';
+    return info;
+  }
+  return info;
 }
 
 function render5PosterListsFeed(container, lists) {
@@ -49515,7 +50418,6 @@ const CATALOG_LIST_SEARCH_SOURCES = {
   mylists: ['My Lists Addon', 'Profile'],
   mdblist: ['MDBList'],
   trakt: ['Trakt'],
-  tmdb: ['TMDB', 'Simkl'],
 };
 
 function catalogListSearchChipsOn() {
@@ -49891,13 +50793,9 @@ async function renderDefaultCatalogSearch(force) {
     window._rawCatalogTitleItems = [];
     // With the source chips (new UI) the lists to browse follow the chosen
     // source: MDBList's and Trakt's popular lists as well as this site's.
-    // TMDB publishes no list directory, so it can only be searched.
+    // TMDB publishes no list directory, so it has no chip here; its lists
+    // turn up in a typed search under All sources.
     const chips = catalogListSearchChipsOn();
-    if (chips && catalogListSearchSource === 'tmdb') {
-      resEl.innerHTML = '<p><small>TMDB has no list directory to browse. Type a search above to find TMDB lists.</small></p>';
-      markCatalogSearchRendered();
-      return;
-    }
     try {
       const [pubRes, mdbPopular, traktPopular] = await Promise.all([
         (!chips || catalogListSearchWants('mylists'))
@@ -60575,7 +61473,7 @@ function renderMyCreatedChannelsList() {
     // differently from one that does not, and the card is the only place
     // that is visible without opening the editor.
     const orderLabel = channelPlayOrderLabel(ch);
-    const metaBits = ['24/7 TV Channel'];
+    const metaBits = [];
     if (ch.dynamic === 'next-up') metaBits.push('fills itself in from Continue Watching');
     else metaBits.push(totalEpisodes + ' episode' + (totalEpisodes === 1 ? '' : 's'));
     if (ch.dailyRotate) {
@@ -60798,7 +61696,7 @@ function updateChannelSaveButtonLabel() {
       if (!chName.toLowerCase().endsWith('channel')) chName += ' Channel';
       titleEl.textContent = 'Edit ' + chName;
     } else {
-      titleEl.textContent = 'Build Custom Channel';
+      titleEl.textContent = 'Create a Custom Channel';
     }
   }
   if (!saveBtn) return;
@@ -60809,7 +61707,7 @@ function updateChannelSaveButtonLabel() {
       cancelBtn.style.display = '';
     }
   } else {
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = 'Create Channel';
     if (cancelBtn) cancelBtn.style.display = 'none';
   }
 }
@@ -63471,6 +64369,116 @@ function mergeChannelsIntoRow() {
   renderChannelMergeList();
   renderMyCreatedChannelsList();
   showAddedToast('Merged ' + channelIds.length + ' channels into "' + combinedName + '".');
+}
+
+// --- Combine channels into ONE channel ---------------------------------------
+//
+// mergeChannelsIntoRow above keeps each channel separate inside one catalog
+// row. This makes a NEW channel instead: every pick of every chosen channel,
+// once. A pick is the same pick when it is the same show and episode (or the
+// same movie) -- channelDraftPairKey, the client twin of the Worker's
+// channelItemStreamId -- so an episode two of the channels both carry plays
+// once. The first channel's copy wins and the order is the order the channels
+// were listed in, then each channel's own order.
+//
+// The originals are left as they are. A Quick Add network channel only holds a
+// small sample locally (CHANNEL_POINTER_SAMPLE_ITEMS) next to its presetNetworkId,
+// so its full pool is fetched first, the same call resolveThinPresetChannels
+// makes; if that fails, what is held locally is used and the person is told.
+async function channelFullPicks(ch) {
+  const held = Array.isArray(ch.items) ? ch.items : [];
+  if (!ch.presetNetworkId || held.length > CHANNEL_POINTER_SAMPLE_ITEMS) return { items: held, partial: false };
+  try {
+    const r = await fetch(ORIGIN + '/api/channel-preset?networkId=' + encodeURIComponent(ch.presetNetworkId) + '&name=' + encodeURIComponent(ch.name || ''), { cache: 'no-store' });
+    const data = await r.json();
+    if (data && data.ok && data.channel && Array.isArray(data.channel.items) && data.channel.items.length >= held.length) {
+      return { items: data.channel.items.map(normalizeChannelItemFromStorage), partial: false };
+    }
+  } catch (e) {}
+  return { items: held, partial: true };
+}
+
+async function combineChannelsIntoChannel(btn) {
+  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
+  const alertMsg = (msg) => {
+    if (typeof showAppAlert === 'function') showAppAlert('Combine Channels', msg);
+    else showToast(msg, 'error');
+  };
+  const checks = document.querySelectorAll('#channelMergeList .channelMergeCheck:checked');
+  if (checks.length < 2) { alertMsg('Check at least two channels to combine.'); return; }
+  const nameInput = document.getElementById('channelMergeNameInput');
+  const combinedName = nameInput.value.trim();
+  if (!combinedName) { alertMsg('Name the combined channel first.'); return; }
+
+  const channelsMap = loadLocalChannels();
+  const picked = [...checks].map((cb) => channelsMap[cb.dataset.channelid]).filter(Boolean);
+  // Next Up is worked out live from what is being watched; it has no picks of
+  // its own to copy.
+  const chosen = picked.filter((ch) => ch.dynamic !== 'next-up');
+  if (chosen.length < 2) { alertMsg('Pick at least two channels that have episodes of their own (Next Up is worked out live, so it cannot be combined).'); return; }
+
+  if (btn) btn.disabled = true;
+  try {
+    const seen = new Set();
+    const items = [];
+    let duplicates = 0;
+    let anyPartial = false;
+    let capped = false;
+    for (const ch of chosen) {
+      const pool = await channelFullPicks(ch);
+      if (pool.partial) anyPartial = true;
+      for (const it of pool.items) {
+        const key = channelDraftPairKey(it);
+        // A pick with no usable id cannot be matched against another, so it is kept.
+        if (key && seen.has(key)) { duplicates++; continue; }
+        if (items.length >= CHANNEL_POOL_MAX_ITEMS) { capped = true; continue; }
+        if (key) seen.add(key);
+        items.push(it);
+      }
+    }
+
+    // Rotation and arrangement settings come from the first channel that
+    // rotates daily (else the first channel); an option any of them has on stays on.
+    // Story locks, hand-made pairs, Live Cloud Sync and the network pointer
+    // belong to the individual channels and are not carried over.
+    const base = chosen.find((c) => c.dailyRotate) || chosen[0];
+    const fields = channelBroadcastFields(Object.assign({}, base, {
+      storyLocked: [], storyLockedSince: {}, pairedGroups: [], liveSync: false, sourceUrl: '', dynamic: '',
+      dailyRotate: chosen.some((c) => c.dailyRotate),
+      hideWatched: chosen.some((c) => c.hideWatched),
+      pairParts: chosen.some((c) => c.pairParts),
+      autoNewEpisodes: chosen.some((c) => c.autoNewEpisodes),
+    }));
+    const withArt = chosen.find((c) => c.poster) || chosen[0];
+    const channelId = generateChannelId();
+    const saved = saveLocalChannel(Object.assign({
+      channelId: channelId,
+      name: combinedName,
+      poster: withArt.poster || null,
+      backdrop: withArt.backdrop || null,
+      items: items,
+      shuffle: chosen.some((c) => c.shuffle),
+      autoSort: '',
+      sortByAired: false,
+      presetNetworkId: '',
+    }, fields));
+    addRow(combinedName, channelRowUrl(saved), 'series', true, 'Channels', channelId);
+    nameInput.value = '';
+    if (typeof saveState === 'function') saveState();
+    if (typeof renderLivePreview === 'function') renderLivePreview();
+    renderChannelMergeList();
+    renderMyCreatedChannelsList();
+    showAddedToast('Combined ' + chosen.length + ' channels into "' + combinedName + '": ' + items.length + ' picks, ' + duplicates + ' duplicate' + (duplicates === 1 ? '' : 's') + ' left out.');
+    if (anyPartial || capped || picked.length !== chosen.length) {
+      alertMsg(
+        (anyPartial ? 'A Quick Add network channel could not load its full lineup just now, so only the part saved on this device was used. ' : '') +
+        (capped ? 'A channel holds at most ' + CHANNEL_POOL_MAX_ITEMS + ' picks, so the rest were left out. ' : '') +
+        (picked.length !== chosen.length ? 'Next Up was left out: it is worked out live and has no picks of its own. ' : '')
+      );
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function toggleAllChannelMergeChecks(checkbox) {
@@ -71612,6 +72620,9 @@ async function loadCreatorSync(opts) {
         { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox' },
         { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox' },
         { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox' },
+        { key: 'rpdb', id: 'rpdbCheckbox' },
+        { key: 'pictorium', id: 'pictoriumCheckbox' },
+        { key: 'provideMetadata', id: 'provideMetadataCheckbox' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'boolean') {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key] ? '1' : '0'); } catch (e) {}
@@ -71622,6 +72633,8 @@ async function loadCreatorSync(opts) {
       [
         { key: 'betterPostersLang', id: 'betterPostersLangSelect' },
         { key: 'betterPostersRatingSource', id: 'betterPostersRatingSourceSelect' },
+        { key: 'pictoriumUrl', id: 'pictoriumUrlInput' },
+        { key: 'rpdbKey', id: 'rpdbKeyInput' },
       ].forEach(({ key, id }) => {
         if (typeof synced.keys[key] === 'string' && synced.keys[key]) {
           try { localStorage.setItem('myListAddon:' + key, synced.keys[key]); } catch (e) {}
@@ -75650,6 +76663,11 @@ function collectKeys() {
     betterPostersTrendTags: getBetterPostersSetting('betterPostersTrendTags', true),
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
+    rpdb: getBetterPostersSetting('rpdb', false),
+    rpdbKey: getBetterPostersChoice('rpdbKey', ''),
+    pictorium: getBetterPostersSetting('pictorium', false),
+    pictoriumUrl: getBetterPostersChoice('pictoriumUrl', ''),
+    provideMetadata: getBetterPostersSetting('provideMetadata', true),
     betterPostersLang: getBetterPostersChoice('betterPostersLang', 'en'),
     betterPostersRatingSource: getBetterPostersChoice('betterPostersRatingSource', 'avg'),
     showBadgesAiringNext: getBadgeSetting('showBadgesAiringNext'),
@@ -75846,11 +76864,30 @@ window.getBetterPostersChoice = getBetterPostersChoice;
 
 // One handler for both the checkboxes and the two dropdowns -- a boolean is
 // stored as 1/0, a dropdown value as itself.
+// Each has its own "<key>Checkbox" on the Settings page.
+const BETTER_POSTERS_ARTWORK_SOURCES = ['betterPosters', 'pictorium', 'rpdb'];
+
 function toggleBetterPostersSetting(key, value) {
   try {
     localStorage.setItem('myListAddon:' + key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
   } catch (e) {}
-  if (key === 'betterPosters') applyBetterPostersOptionsVisibility();
+  // Better Posters, Pictorium and RatingPosterDB all replace the poster, so
+  // switching one on switches the others off.
+  if (value === true && BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) {
+    BETTER_POSTERS_ARTWORK_SOURCES.forEach((other) => {
+      if (other === key) return;
+      try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
+      const otherBox = document.getElementById(other + 'Checkbox');
+      if (otherBox) otherBox.checked = false;
+    });
+  }
+  if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
+  if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
+  // A cached preview was drawn under the old setting.
+  if (key === 'betterPosters' || key === 'betterPostersTrendTags') {
+    if (window._listPreviewCache) window._listPreviewCache.clear();
+    if (window._discoverFeedsCache) window._discoverFeedsCache = {};
+  }
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
   if (typeof saveState === 'function') saveState();
@@ -75882,8 +76919,63 @@ function applyBetterPostersOptionsVisibility() {
   const wrap = document.getElementById('betterPostersOptions');
   if (!wrap) return;
   wrap.style.display = getBetterPostersSetting('betterPosters', false) ? 'flex' : 'none';
+  const pic = document.getElementById('pictoriumOptions');
+  if (pic) pic.style.display = getBetterPostersSetting('pictorium', false) ? 'flex' : 'none';
+  const rp = document.getElementById('rpdbOptions');
+  if (rp) rp.style.display = getBetterPostersSetting('rpdb', false) ? 'flex' : 'none';
 }
 window.applyBetterPostersOptionsVisibility = applyBetterPostersOptionsVisibility;
+
+// The same checks the Worker makes (isValidPictoriumTemplate, 00_constants.js),
+// roughly, so a bad paste is said out loud instead of silently not saving.
+function pictoriumLinkProblem(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  if (s.indexOf('https://') !== 0) return 'The link has to start with https://';
+  if (s.indexOf('/api/poster/') < 0) return 'This does not look like a Pictorium poster link (no /api/poster/ in it).';
+  if (s.indexOf('{type}') < 0 || s.indexOf('{tmdb_id|imdb_id}') < 0) return 'Paste the AIOMetadata link as it is, with {type} and {tmdb_id|imdb_id} left in.';
+  return '';
+}
+function updatePictoriumUrlHint(v) {
+  const hint = document.getElementById('pictoriumUrlHint');
+  if (!hint) return;
+  const problem = pictoriumLinkProblem(v);
+  hint.style.color = problem ? 'var(--danger, #d33)' : 'var(--muted)';
+  if (problem) hint.textContent = problem;
+}
+window.updatePictoriumUrlHint = updatePictoriumUrlHint;
+
+// Settings -> RatingPosterDB -> Test key: whether the key works and how much of
+// its monthly limit is used, asked of RatingPosterDB by the Worker (the key is
+// never put in a URL the browser loads).
+async function testRpdbKey(btn) {
+  const input = document.getElementById('rpdbKeyInput');
+  const status = document.getElementById('rpdbKeyStatus');
+  if (!input || !status) return;
+  const say = (text, color) => { status.textContent = text; status.style.color = color || 'var(--muted)'; };
+  const key = String(input.value || '').trim();
+  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--danger, #d33)'); return; }
+  if (btn) btn.disabled = true;
+  say('Checking…');
+  try {
+    const res = await fetch(ORIGIN + '/api/rpdb-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--danger, #d33)'); return; }
+    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--danger, #d33)'); return; }
+    say(data.used != null && data.limit != null
+      ? 'The key works. ' + data.used.toLocaleString() + ' of ' + data.limit.toLocaleString() + ' requests used this month.'
+      : 'The key works.');
+  } catch (e) {
+    say('Could not check the key just now.', 'var(--danger, #d33)');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.testRpdbKey = testRpdbKey;
 
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
@@ -75892,6 +76984,9 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox', on: true },
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
+  { key: 'rpdb', id: 'rpdbCheckbox', on: false },
+  { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
+  { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
 ];
 
 function initBetterPostersSettingsUI() {
@@ -75903,6 +76998,10 @@ function initBetterPostersSettingsUI() {
   if (langEl) langEl.value = getBetterPostersChoice('betterPostersLang', 'en');
   const rsEl = document.getElementById('betterPostersRatingSourceSelect');
   if (rsEl) rsEl.value = getBetterPostersChoice('betterPostersRatingSource', 'avg');
+  const picEl = document.getElementById('pictoriumUrlInput');
+  if (picEl) picEl.value = getBetterPostersChoice('pictoriumUrl', '');
+  const rpdbEl = document.getElementById('rpdbKeyInput');
+  if (rpdbEl) rpdbEl.value = getBetterPostersChoice('rpdbKey', '');
   applyBetterPostersOptionsVisibility();
 }
 window.initBetterPostersSettingsUI = initBetterPostersSettingsUI;
@@ -76221,7 +77320,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
-        const res = await creatorApiFetch(ORIGIN + '/api/preview', {
+          const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -78166,7 +79265,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         [...row.querySelectorAll('.url')].some((u) => u.value.includes(chId))
       );
     } else {
-      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     }
     if (isAdded) {
       addBtn.textContent = 'Remove';
@@ -78386,7 +79485,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       }
       return;
     }
-    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     if (isAdded) {
       if (typeof removeListFromConfig === 'function') {
         removeListFromConfig(listUrl, type);
@@ -81727,109 +82826,8 @@ function appShellSchedulePreview() {
   return true;
 }
 
-// --- the inline "Add titles" search (P6-4) -----------------------------------
-//
-// In the list editor (12_), so creating a list and editing one are the same
-// thing: type, tap Add, and the title is in the draft. Save (the panel's own
-// button) writes it, which is where "Saved" comes from. The search is
-// /api/title-search, the same endpoint the Search tab uses, and adding is
-// addToCustomListDraft (21_).
-//
-// The rest of the Lists view (the "Your lists" cards, with Share, Show on home
-// screen, Save to an account and Export) was taken off the page at the
-// owner's request and deleted in Release 21. The list dashboard underneath has
-// all of it.
-
-// The results of the last title search.
-let appShellTitleResults = [];
-let appShellTitleSearchSeq = 0;
-var appShellTitleSearchTimer = null;
-
-function appShellListsEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellAddTitlesHost() {
-  return document.getElementById('appShellAddTitles');
-}
-
-function appShellTitleResultHtml(result, index) {
-  const year = result && result.year ? ' &middot; ' + appShellListsEscape(result.year) : '';
-  return '<div class="app-shell-row"><div class="app-shell-row-main">' +
-    '<strong>' + appShellListsEscape((result && result.title) || 'Untitled') + '</strong>' +
-    '<br><span class="app-shell-muted">' + (result && result.type === 'tv' ? 'Show' : 'Movie') + year + '</span></div>' +
-    '<div class="app-shell-row-controls"><button type="button" class="primary lc-btn" data-app-shell-action="title-add" data-app-shell-id="' + index + '">Add</button></div></div>';
-}
-
-function appShellRenderAddTitles(message) {
-  const host = appShellAddTitlesHost();
-  if (!host) return false;
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
-    '<h2 class="panel-title">Add titles</h2>' +
-    '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
-    '<div class="row"><input type="text" id="appShellAddTitlesInput" placeholder="Add titles\u2026" aria-label="Search for a title to add" spellcheck="false"></div>';
-  if (message) html += '<p class="app-shell-muted">' + appShellListsEscape(message) + '</p>';
-  if (appShellTitleResults.length) {
-    html += '<div class="app-shell-review">' + appShellTitleResults.map(appShellTitleResultHtml).join('') + '</div>';
-  }
-  html += '</div>';
-  host.innerHTML = html;
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input && input.addEventListener) {
-    input.addEventListener('input', function () {
-      const value = input.value || '';
-      if (appShellTitleSearchTimer) clearTimeout(appShellTitleSearchTimer);
-      appShellTitleSearchTimer = setTimeout(function () {
-        appShellTitleSearchTimer = null;
-        appShellSearchTitles(value);
-      }, 300);
-    });
-  }
-  return true;
-}
-
-async function appShellSearchTitles(query) {
-  const q = String(query || '').trim();
-  if (!q) {
-    appShellTitleResults = [];
-    appShellRenderAddTitles('');
-    return [];
-  }
-  const seq = ++appShellTitleSearchSeq;
-  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
-  const res = await appShellApiFetch('/api/title-search?q=' + encodeURIComponent(q) + '&type=' + kind);
-  if (seq !== appShellTitleSearchSeq) return [];
-  if (!res.ok) {
-    appShellTitleResults = [];
-    appShellRenderAddTitles(res.error || 'Could not search just now.');
-    return [];
-  }
-  const results = (res.data && res.data.results) || [];
-  appShellTitleResults = results.slice(0, 8);
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input) input.value = q;
-  appShellRenderAddTitles(appShellTitleResults.length ? '' : 'Nothing found for that.');
-  return appShellTitleResults;
-}
-
-async function appShellAddTitle(index) {
-  const item = appShellTitleResults[Number(index)];
-  if (!item) return false;
-  if (typeof addToCustomListDraft !== 'function') return false;
-  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
-  await addToCustomListDraft(kind, item.tmdbId, item.title, item.year, item.poster, null);
-  showToast('Added "' + (item.title || 'that title') + '" to the list. Save it when you are done.', 'success');
-  return true;
-}
-
-// Which of the dispatchers an action belongs to (see appShellOnClick).
-const APP_SHELL_LISTS_ACTION = /^title-/;
+// Which action names belong to the Import view (see appShellOnClick).
 const APP_SHELL_IMPORTS_ACTION = /^import-/;
-
-async function appShellListsAction(action, id) {
-  if (String(action || '') === 'title-add') return appShellAddTitle(id);
-  return false;
-}
 
 // --- Imports (P6-6) ----------------------------------------------------------
 //
@@ -82556,7 +83554,13 @@ function appShellApplyRoute(route) {
   if (tab.id === 'discover') {
     if (rawSub === 'movies') rawSub = 'movie';
     if (rawSub === 'shows') rawSub = 'series';
-    if (!rawSub) rawSub = 'movie';
+    // No tab named (the bottom bar, Back from a list): the one the person was
+    // on, in this visit, else the one last used -- not always Movies.
+    if (!rawSub) {
+      let remembered = '';
+      try { remembered = localStorage.getItem('myListAddon:discoverSubmenu') || ''; } catch (e) {}
+      rawSub = (typeof window !== 'undefined' && window._currentDiscoverFilter) || remembered || 'movie';
+    }
   }
   const sub = (rawSub && tab.subs.indexOf(rawSub) !== -1) ? rawSub : '';
   appShellApplyingRoute = true;
@@ -82576,7 +83580,6 @@ function appShellApplyRoute(route) {
   appShellState.set({ route: { tab: tab.id, sub: sub } });
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
   if (tab.id === 'lists') {
-    if (sub === 'create-list') appShellRenderAddTitles('');
     if (sub === 'import') {
       appShellRenderImports();
       appShellResumeImport();
@@ -82641,10 +83644,7 @@ function appShellOnClick(e) {
     e.preventDefault();
     const action = actionEl.getAttribute('data-app-shell-action');
     const id = actionEl.getAttribute('data-app-shell-id') || '';
-    // The Add titles search (P6-4) and the Import view share this one
-    // listener, so the action names decide which module answers.
-    if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
-    else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
+    if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
     return;
   }
   const link = target.closest('a[data-app-route]');
@@ -82793,7 +83793,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Yes, 100% free with no subscriptions, ads, or paywalls. Use the hosted instance at mylistsaddon.com -- optional support is available via Buy Me a Coffee.",
+            "Yes, 100% free with no subscriptions, ads, or paywalls. Use the hosted instance at mylistsaddon.com -- optional support is available on Ko-fi.",
         },
       },
     ],
@@ -83661,7 +84661,7 @@ function renderGuidePage(origin) {
 
     <div class="faq-item">
       <div class="faq-q">Is My Lists Addon completely free?</div>
-      <div class="faq-a">Yes! It runs on your own free Cloudflare Workers account, which comfortably covers normal personal use at no cost. There's no subscription, no ads, and no paid tier. Optional support is available via Buy Me a Coffee.</div>
+      <div class="faq-a">Yes! It runs on your own free Cloudflare Workers account, which comfortably covers normal personal use at no cost. There's no subscription, no ads, and no paid tier. Optional support is available on Ko-fi.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Do I need to sign up or create an account?</div>
@@ -83694,7 +84694,7 @@ function renderGuidePage(origin) {
 
   <!-- Footer Navigation -->
   <footer class="footer-nav">
-    <p>&copy; ${new Date().getFullYear()} ${ADDON_NAME} &bull; <a href="${origin}/">Web App</a> &bull; <a href="https://buymeacoffee.com/brock25" target="_blank" rel="noopener">Support on Buy Me a Coffee</a></p>
+    <p>&copy; ${new Date().getFullYear()} ${ADDON_NAME} &bull; <a href="${origin}/">Web App</a> &bull; <a href="https://ko-fi.com/mylistsaddon" target="_blank" rel="noopener">Support on Ko-fi</a></p>
   </footer>
 </div>
 
@@ -84094,6 +85094,84 @@ async function handleFetch(request, env, ctx) {
       const bp = parseBetterPosterPath(path, url.searchParams);
       if (!bp) return new Response(null, { status: 404 });
       return await serveBetterPoster(env, ctx, bp, url.origin, request);
+    }
+
+    // /rpdb/<config>/<imdb id>.jpg -> a RatingPosterDB poster from this Worker's
+    // own copy, see serveRpdbPoster (05_catalog-core.js).
+    const rpdbMatch = path.match(/^\/rpdb\/([^/]+)\/(tt\d+)\.jpg$/);
+    if (rpdbMatch && (request.method === "GET" || request.method === "HEAD")) {
+      return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
+    }
+
+    // /api/support-goal -> what the Ko-fi support strip shows, or enabled:false
+    // until the admin turns it on. See readSupportGoal (03_admin.js).
+    if (path === "/api/support-goal" && request.method === "GET") {
+      const view = publicSupportGoal(await readSupportGoal(env));
+      return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
+    }
+
+    // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
+    // payment to the support strip's total. Ko-fi posts form data whose `data`
+    // field is a JSON string; the verification token inside it has to match the
+    // KOFI_VERIFICATION_TOKEN secret. Ko-fi retries until it gets a 200, so a
+    // message_id already counted is answered 200 and not counted twice.
+    if (path === "/api/kofi-webhook" && request.method === "POST") {
+      if (!env || !env.KOFI_VERIFICATION_TOKEN || !env.CONFIGS) {
+        return json({ ok: false, error: "Not set up." }, 503, { "Cache-Control": "no-store" });
+      }
+      const kofiIp = clientIpKey(request);
+      if (!kofiIp || await consumeRateLimit(env, ctx, "kofiwebhook", kofiIp, 120, 60)) {
+        return json({ ok: false, error: "Too many requests." }, 429, { "Cache-Control": "no-store" });
+      }
+      if ((Number(request.headers.get("content-length")) || 0) > KOFI_WEBHOOK_BODY_MAX) {
+        return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+      }
+      let data = null;
+      try {
+        // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
+        // (and multipart) alike.
+        const raw = (await request.formData()).get("data");
+        if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
+        data = JSON.parse(raw);
+      } catch {
+        return json({ ok: false, error: "Bad request." }, 400, { "Cache-Control": "no-store" });
+      }
+      if (!data || typeof data !== "object" || !(await timingSafeEqualSecret(data.verification_token, env.KOFI_VERIFICATION_TOKEN))) {
+        return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
+      }
+      const amount = kofiAmountToCount(data);
+      const messageId = String(data.message_id || "");
+      if (amount === null || !KOFI_MESSAGE_ID_RE.test(messageId)) {
+        return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
+      }
+      const seenKey = `kofi:msg:${messageId}`;
+      if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+      const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
+      await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
+      await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
+    // key works and how much of its monthly limit is spent, for Settings.
+    if (path === "/api/rpdb-check" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" }); }
+      const key = body && typeof body.key === "string" ? body.key.trim() : "";
+      if (!isValidRpdbKey(key)) return json({ ok: false, error: "That does not look like an RPDB key (it starts with t1- to t4-)." }, 400, { "Cache-Control": "no-store" });
+      const checkIp = clientIpKey(request);
+      if (!checkIp || await consumeRateLimit(env, ctx, "rpdbcheck", checkIp, 10, 60)) {
+        return json({ ok: false, error: "Too many requests just now." }, 429, { "Cache-Control": "no-store" });
+      }
+      try {
+        const valid = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/isValid`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        if (!valid.ok) return json({ ok: true, valid: false }, 200, { "Cache-Control": "no-store" });
+        const usage = await fetchWithTimeout(`${RPDB_ORIGIN}/${key}/requests`, { headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` } }, RPDB_FETCH_TIMEOUT_MS);
+        const data = usage.ok ? await usage.json() : null;
+        return json({ ok: true, valid: true, used: data && Number.isFinite(data.req) ? data.req : null, limit: data && Number.isFinite(data.limit) ? data.limit : null }, 200, { "Cache-Control": "no-store" });
+      } catch {
+        return json({ ok: false, error: "RatingPosterDB did not answer. Try again in a moment." }, 502, { "Cache-Control": "no-store" });
+      }
     }
 
     // /api/bp/warm  (POST)  { urls: ["/bp/...", ...] } -> { ok, stored, fetched, ready: [...] }
@@ -84643,7 +85721,7 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false),
         200,
         hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
@@ -84926,8 +86004,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // This route builds its metas directly rather than through
         // fetchCatalog, so it needs its own call -- otherwise search results
         // would be the one row in Stremio still showing the old artwork.
-        if (searchConfig.betterPosters) {
-          metas = applyBetterPostersToMetas(metas, betterPostersOptionsFrom(searchConfig, url.origin));
+        const searchArt = betterPostersOptionsFrom(searchConfig, url.origin, config);
+        if (searchConfig.betterPosters || searchArt.pictoriumTemplate || searchArt.rpdbBase) {
+          metas = applyBetterPostersToMetas(metas, searchArt);
         }
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
       }
@@ -85007,7 +86086,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // to a config that PROVED it belongs to that account. See resolveConfig
         // (04_config-resolution.js) for how that is established and
         // mayReadTrackedShelf (02_http-and-creator-utils.js) for what it gates.
-        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
+        const catalogKeys = { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, configParam: config, trackCreatorName, verifiedOwner: trackOwner, region, hideNonDigitalReleases, adultContentFilter, isStremioCatalog: true, canonicalIds: true, betterPosters, betterPostersOptions: betterPostersOptionsFrom(resolvedConfig, url.origin, config), showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, env, ctx, origin: url.origin };
         // FF_MATERIALIZER (P5-11, 54_materializer.js): with de-duplication, the
         // first page of every non-personal row is built once per install and
         // de-duplicated in one pass, instead of each row rebuilding the rows
@@ -85243,7 +86322,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
 
       let body;
       try {
-        const metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.
@@ -85409,8 +86488,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // opened. Only the poster is touched -- background, logo, cast and
           // the episode list all stay exactly as fetchStandardItemMeta built
           // them, and a non-IMDB id (tmdb:...) is left alone.
-          if (metaConfig.betterPosters) {
-            meta = applyBetterPosterToMeta(meta, betterPostersOptionsFrom(metaConfig, url.origin));
+          const metaArt = betterPostersOptionsFrom(metaConfig, url.origin, config);
+          if (metaConfig.betterPosters || metaArt.pictoriumTemplate || metaArt.rpdbBase) {
+            meta = applyBetterPosterToMeta(meta, metaArt);
           }
           return jsonPublic(
             { meta },
@@ -91435,7 +92515,7 @@ function generateSearchVariations(query) {
       // unbounded attacker-controlled keyspace.
       const normalizedUrl = normalizeExternalListUrl(rawUrl);
       if (!normalizedUrl) {
-        return json({ ok: false, error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl, and Letterboxd list links are supported." }, 400);
+        return json({ ok: false, error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl and Letterboxd list links and this add-on's own charts are supported." }, 400);
       }
       const unlike = body.action === "unlike";
 
@@ -99371,6 +100451,30 @@ function generateSearchVariations(query) {
     // against) versus observed (a genuine arrival this add-on watched happen).
     // The seeded/observed split is the one number that says whether the list
     // is working yet: observed only starts growing after walk 0 completes.
+    // /admin/api/support-goal -> the Ko-fi support strip's goal and the amount
+    // given so far (GET), and the save (POST). See readSupportGoal (03_admin.js).
+    if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
+      const stored = await readSupportGoal(env);
+      if (request.method === "POST") {
+        let body = {};
+        try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+        const next = applySupportGoalUpdate(stored, body);
+        if (next.error) return json({ ok: false, error: next.error }, 400);
+        await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next.value));
+        return json({ ok: true, ...publicSupportGoal(next.value), goal: next.value.goal, raised: next.value.raised, enabled: next.value.enabled }, 200, { "Cache-Control": "no-store" });
+      }
+      const month = supportGoalMonth();
+      return json({
+        ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month,
+        webhookUrl: `${url.origin}/api/kofi-webhook`,
+        kofiTokenSet: !!(env && env.KOFI_VERIFICATION_TOKEN),
+        lastPayment: stored.lastPayment,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (path === "/admin/api/new-on-streaming" && request.method === "GET") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
@@ -103948,7 +105052,7 @@ async function resolveLikeTarget(env, type, rawId) {
   }
   const normalized = normalizeExternalListUrl(decoded);
   if (!normalized) {
-    return { error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl, and Letterboxd list links are supported.", status: 400 };
+    return { error: "That URL can't be liked -- only MDBList, Trakt, TMDB, Simkl and Letterboxd list links and this add-on's own charts are supported.", status: 400 };
   }
   return { type, targetId: await hashStringForKey(normalized), table: null, key: null };
 }

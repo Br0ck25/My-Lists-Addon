@@ -612,6 +612,11 @@ function collectKeys() {
     betterPostersTrendTags: getBetterPostersSetting('betterPostersTrendTags', true),
     betterPostersQuality: getBetterPostersSetting('betterPostersQuality', false),
     betterPostersAge: getBetterPostersSetting('betterPostersAge', false),
+    rpdb: getBetterPostersSetting('rpdb', false),
+    rpdbKey: getBetterPostersChoice('rpdbKey', ''),
+    pictorium: getBetterPostersSetting('pictorium', false),
+    pictoriumUrl: getBetterPostersChoice('pictoriumUrl', ''),
+    provideMetadata: getBetterPostersSetting('provideMetadata', true),
     betterPostersLang: getBetterPostersChoice('betterPostersLang', 'en'),
     betterPostersRatingSource: getBetterPostersChoice('betterPostersRatingSource', 'avg'),
     showBadgesAiringNext: getBadgeSetting('showBadgesAiringNext'),
@@ -808,11 +813,30 @@ window.getBetterPostersChoice = getBetterPostersChoice;
 
 // One handler for both the checkboxes and the two dropdowns -- a boolean is
 // stored as 1/0, a dropdown value as itself.
+// Each has its own "<key>Checkbox" on the Settings page.
+const BETTER_POSTERS_ARTWORK_SOURCES = ['betterPosters', 'pictorium', 'rpdb'];
+
 function toggleBetterPostersSetting(key, value) {
   try {
     localStorage.setItem('myListAddon:' + key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
   } catch (e) {}
-  if (key === 'betterPosters') applyBetterPostersOptionsVisibility();
+  // Better Posters, Pictorium and RatingPosterDB all replace the poster, so
+  // switching one on switches the others off.
+  if (value === true && BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) {
+    BETTER_POSTERS_ARTWORK_SOURCES.forEach((other) => {
+      if (other === key) return;
+      try { localStorage.setItem('myListAddon:' + other, '0'); } catch (e) {}
+      const otherBox = document.getElementById(other + 'Checkbox');
+      if (otherBox) otherBox.checked = false;
+    });
+  }
+  if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
+  if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
+  // A cached preview was drawn under the old setting.
+  if (key === 'betterPosters' || key === 'betterPostersTrendTags') {
+    if (window._listPreviewCache) window._listPreviewCache.clear();
+    if (window._discoverFeedsCache) window._discoverFeedsCache = {};
+  }
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
   if (typeof saveState === 'function') saveState();
@@ -844,8 +868,63 @@ function applyBetterPostersOptionsVisibility() {
   const wrap = document.getElementById('betterPostersOptions');
   if (!wrap) return;
   wrap.style.display = getBetterPostersSetting('betterPosters', false) ? 'flex' : 'none';
+  const pic = document.getElementById('pictoriumOptions');
+  if (pic) pic.style.display = getBetterPostersSetting('pictorium', false) ? 'flex' : 'none';
+  const rp = document.getElementById('rpdbOptions');
+  if (rp) rp.style.display = getBetterPostersSetting('rpdb', false) ? 'flex' : 'none';
 }
 window.applyBetterPostersOptionsVisibility = applyBetterPostersOptionsVisibility;
+
+// The same checks the Worker makes (isValidPictoriumTemplate, 00_constants.js),
+// roughly, so a bad paste is said out loud instead of silently not saving.
+function pictoriumLinkProblem(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  if (s.indexOf('https://') !== 0) return 'The link has to start with https://';
+  if (s.indexOf('/api/poster/') < 0) return 'This does not look like a Pictorium poster link (no /api/poster/ in it).';
+  if (s.indexOf('{type}') < 0 || s.indexOf('{tmdb_id|imdb_id}') < 0) return 'Paste the AIOMetadata link as it is, with {type} and {tmdb_id|imdb_id} left in.';
+  return '';
+}
+function updatePictoriumUrlHint(v) {
+  const hint = document.getElementById('pictoriumUrlHint');
+  if (!hint) return;
+  const problem = pictoriumLinkProblem(v);
+  hint.style.color = problem ? 'var(--danger, #d33)' : 'var(--muted)';
+  if (problem) hint.textContent = problem;
+}
+window.updatePictoriumUrlHint = updatePictoriumUrlHint;
+
+// Settings -> RatingPosterDB -> Test key: whether the key works and how much of
+// its monthly limit is used, asked of RatingPosterDB by the Worker (the key is
+// never put in a URL the browser loads).
+async function testRpdbKey(btn) {
+  const input = document.getElementById('rpdbKeyInput');
+  const status = document.getElementById('rpdbKeyStatus');
+  if (!input || !status) return;
+  const say = (text, color) => { status.textContent = text; status.style.color = color || 'var(--muted)'; };
+  const key = String(input.value || '').trim();
+  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--danger, #d33)'); return; }
+  if (btn) btn.disabled = true;
+  say('Checking…');
+  try {
+    const res = await fetch(ORIGIN + '/api/rpdb-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--danger, #d33)'); return; }
+    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--danger, #d33)'); return; }
+    say(data.used != null && data.limit != null
+      ? 'The key works. ' + data.used.toLocaleString() + ' of ' + data.limit.toLocaleString() + ' requests used this month.'
+      : 'The key works.');
+  } catch (e) {
+    say('Could not check the key just now.', 'var(--danger, #d33)');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.testRpdbKey = testRpdbKey;
 
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
@@ -854,6 +933,9 @@ const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPostersTrendTags', id: 'betterPostersTrendTagsCheckbox', on: true },
   { key: 'betterPostersQuality', id: 'betterPostersQualityCheckbox', on: false },
   { key: 'betterPostersAge', id: 'betterPostersAgeCheckbox', on: false },
+  { key: 'rpdb', id: 'rpdbCheckbox', on: false },
+  { key: 'pictorium', id: 'pictoriumCheckbox', on: false },
+  { key: 'provideMetadata', id: 'provideMetadataCheckbox', on: true },
 ];
 
 function initBetterPostersSettingsUI() {
@@ -865,6 +947,10 @@ function initBetterPostersSettingsUI() {
   if (langEl) langEl.value = getBetterPostersChoice('betterPostersLang', 'en');
   const rsEl = document.getElementById('betterPostersRatingSourceSelect');
   if (rsEl) rsEl.value = getBetterPostersChoice('betterPostersRatingSource', 'avg');
+  const picEl = document.getElementById('pictoriumUrlInput');
+  if (picEl) picEl.value = getBetterPostersChoice('pictoriumUrl', '');
+  const rpdbEl = document.getElementById('rpdbKeyInput');
+  if (rpdbEl) rpdbEl.value = getBetterPostersChoice('rpdbKey', '');
   applyBetterPostersOptionsVisibility();
 }
 window.initBetterPostersSettingsUI = initBetterPostersSettingsUI;
@@ -1183,7 +1269,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
-        const res = await creatorApiFetch(ORIGIN + '/api/preview', {
+          const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -3128,7 +3214,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         [...row.querySelectorAll('.url')].some((u) => u.value.includes(chId))
       );
     } else {
-      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+      isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     }
     if (isAdded) {
       addBtn.textContent = 'Remove';
@@ -3348,7 +3434,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       }
       return;
     }
-    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl) || isListAddedToConfig(listUrl, 'movie') || isListAddedToConfig(listUrl, 'series') || isListAddedToConfig(listUrl)) : false;
+    const isAdded = typeof isListAddedToConfig === 'function' ? (isListAddedToConfig(listUrl, type) || isListAddedToConfig(null, type, listUrl)) : false;
     if (isAdded) {
       if (typeof removeListFromConfig === 'function') {
         removeListFromConfig(listUrl, type);

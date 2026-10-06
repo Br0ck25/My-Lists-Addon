@@ -7759,6 +7759,30 @@
     // against) versus observed (a genuine arrival this add-on watched happen).
     // The seeded/observed split is the one number that says whether the list
     // is working yet: observed only starts growing after walk 0 completes.
+    // /admin/api/support-goal -> the Ko-fi support strip's goal and the amount
+    // given so far (GET), and the save (POST). See readSupportGoal (03_admin.js).
+    if (path === "/admin/api/support-goal" && (request.method === "GET" || request.method === "POST")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
+      const stored = await readSupportGoal(env);
+      if (request.method === "POST") {
+        let body = {};
+        try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+        const next = applySupportGoalUpdate(stored, body);
+        if (next.error) return json({ ok: false, error: next.error }, 400);
+        await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next.value));
+        return json({ ok: true, ...publicSupportGoal(next.value), goal: next.value.goal, raised: next.value.raised, enabled: next.value.enabled }, 200, { "Cache-Control": "no-store" });
+      }
+      const month = supportGoalMonth();
+      return json({
+        ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month,
+        webhookUrl: `${url.origin}/api/kofi-webhook`,
+        kofiTokenSet: !!(env && env.KOFI_VERIFICATION_TOKEN),
+        lastPayment: stored.lastPayment,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (path === "/admin/api/new-on-streaming" && request.method === "GET") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);

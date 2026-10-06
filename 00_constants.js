@@ -1383,6 +1383,69 @@ function isPersonalShelfUrl(url) {
 const IMDB_ID_LOOKUP_MAX = 100;
 const IMDB_ID_LOOKUP_CONCURRENCY = 8;
 
+// Pictorium (https://github.com/Eful97/Pictorium) -- optional replacement
+// artwork, drawn by the person's OWN Pictorium space (it needs their TMDB key,
+// so there is no shared instance to point at). They paste the "AIOMetadata"
+// poster link from their space's editor:
+//
+//   https://<host>/api/poster/{type}/{tmdb_id|imdb_id}?u=<space>&live=1&rv=<n>[&shape={shape}]
+//
+// Kept as the template it was pasted as; fillPictoriumTemplate (05) swaps in
+// the type and IMDb id and drops the optional shape, which Pictorium leaves to
+// its default. It ends up as a poster URL in the apps, so it is checked at the
+// door like every other install field: https, a real host name (no IP address
+// or local name), the /api/poster/ path, no credentials.
+const PICTORIUM_TYPE_TOKEN = "{type}";
+const PICTORIUM_ID_TOKEN = "{tmdb_id|imdb_id}";
+const PICTORIUM_SHAPE_PARAM = "&shape={shape}";
+const PICTORIUM_URL_MAX = 600;
+
+function isValidPictoriumTemplate(v) {
+  if (typeof v !== "string" || !v || v.length > PICTORIUM_URL_MAX) return false;
+  if (!v.includes(PICTORIUM_TYPE_TOKEN) || !v.includes(PICTORIUM_ID_TOKEN)) return false;
+  let u;
+  try {
+    u = new URL(v.split(PICTORIUM_SHAPE_PARAM).join("").replace(PICTORIUM_TYPE_TOKEN, "movie").replace(PICTORIUM_ID_TOKEN, "tt0000001"));
+  } catch (e) {
+    return false;
+  }
+  if (u.protocol !== "https:" || u.username || u.password || u.hash) return false;
+  const host = u.hostname.toLowerCase();
+  if (!host.includes(".") || host.startsWith("[") || /^[0-9.]+$/.test(host)) return false;
+  if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) return false;
+  return u.pathname.startsWith("/api/poster/");
+}
+
+// RatingPosterDB (https://ratingposterdb.com) -- optional replacement artwork
+// with the ratings drawn on. Needs the person's own paid RPDB key (t1- to t4-),
+// and every image fetched counts against that key's MONTHLY request limit
+// (50,000 to 750,000 by tier), so posters are never pointed at RPDB directly:
+// they go through this Worker's own /rpdb/ route (serveRpdbPoster, 05), which
+// keeps each poster per key for a few days, caps how fast it asks RPDB, and
+// stops asking altogether near the key's limit. RPDB's docs allow caching.
+const RPDB_ORIGIN = "https://api.ratingposterdb.com";
+const RPDB_KEY_RE = /^t[0-9]-[A-Za-z0-9_-]{3,64}$/;
+function isValidRpdbKey(v) {
+  return typeof v === "string" && RPDB_KEY_RE.test(v);
+}
+// A stored poster is good this long before it is fetched again (RPDB's ratings
+// move slowly), and kept this long so an RPDB outage or a spent limit still
+// has something to show.
+const RPDB_REFRESH_MS = 3 * 86400 * 1000;
+const RPDB_KEEP_SECONDS = 30 * 86400;
+// New posters fetched per key per minute. A page of uncached titles is spread
+// over several minutes (the rest show the ordinary poster meanwhile) instead of
+// being fired at RPDB at once.
+const RPDB_FETCHES_PER_MINUTE = 20;
+// Stop asking RPDB once this share of the key's monthly limit is used, per its
+// own /requests answer (kept RPDB_USAGE_TTL_SECONDS).
+const RPDB_STOP_AT_SHARE = 0.95;
+const RPDB_USAGE_TTL_SECONDS = 3600;
+// After a 429 or a server error from RPDB, ask nothing for this long.
+const RPDB_BACKOFF_SECONDS = 300;
+const RPDB_FETCH_TIMEOUT_MS = 8000;
+const RPDB_MAX_BYTES = 5 * 1024 * 1024;
+
 // The Stremio/Nuvio artwork-overlay toggles, as stored in an install config.
 // Named in one place because they have to agree across four: the builder
 // page's save request, /api/save's stored payload, resolveConfig's read, and
@@ -1447,6 +1510,13 @@ const INSTALL_CONFIG_FIELDS = [
   { name: "betterPostersTrendTags", kind: "flagOn", requires: "betterPosters" },
   { name: "betterPostersQuality", kind: "flag", requires: "betterPosters" },
   { name: "betterPostersAge", kind: "flag", requires: "betterPosters" },
+  { name: "rpdb", kind: "flag" },
+  { name: "rpdbKey", kind: "choice", default: "", requires: "rpdb", valid: isValidRpdbKey },
+  { name: "pictorium", kind: "flag" },
+  { name: "pictoriumUrl", kind: "choice", default: "", requires: "pictorium", valid: isValidPictoriumTemplate },
+  // Off hands every title's detail page to another add-on: the manifest stops
+  // declaring the meta resource (buildManifest), so this one is lists only.
+  { name: "provideMetadata", kind: "flagOn" },
   {
     name: "betterPostersLang", kind: "choice", default: "en", requires: "betterPosters",
     allowed: BETTER_POSTERS_LANGS.map((l) => l.value),
@@ -1468,7 +1538,7 @@ function readInstallConfigFields(parsed) {
     if (f.kind === "account") out[f.name] = typeof v === "string" ? v : "";
     else if (f.kind === "flag") out[f.name] = !!v;
     else if (f.kind === "flagOn") out[f.name] = v !== false;
-    else out[f.name] = (typeof v === "string" && v) ? v : f.default;
+    else out[f.name] = (typeof v === "string" && v && (!f.valid || f.valid(v))) ? v : f.default;
   }
   return out;
 }
@@ -1488,7 +1558,7 @@ function storedInstallConfigFields(body, withAccountFields) {
       if (v) out[f.name] = true;
     } else if (f.kind === "flagOn") {
       if (v === false) out[f.name] = false;
-    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v))) {
+    } else if (typeof v === "string" && v && v !== f.default && (!f.allowed || f.allowed.includes(v)) && (!f.valid || f.valid(v))) {
       out[f.name] = v;
     }
   }
