@@ -1323,7 +1323,7 @@ function renderChannelPosterPicker() {
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
       '</svg>' +
-      '<span class="u-fs-v_font_size_2xs u-fw-700 u-c-v_color_on_brand u-tt-uppercase u-ls-0_5px u-ta-center">Custom</span>' +
+      '<span class="u-fs-v_font_size_3xs u-fw-700 u-c-v_color_on_brand u-tt-uppercase u-ls-0_5px u-ta-center">Custom</span>' +
     '</div>' +
     '<div class="channel-poster-check">\u2713</div>' +
     '<div class="channel-poster-title" title="Custom Channel Poster">Custom Poster</div>' +
@@ -10662,7 +10662,7 @@ function renderMyCreatedChannelsList() {
       
       const imgHtml = p
         ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-        : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
+        : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_3xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
       
       // Each tile opens that item's own details -- was previously
       // unclickable itself (only the shared container-level onclick below
@@ -12928,7 +12928,7 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
           ? '<img src="' + escapeAttr(p) + '" alt="" loading="lazy">'
-          : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_2xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
+          : '<div class="u-ai-center u-jc-center u-c-v_muted u-fs-v_font_size_3xs u-ta-center u-p-4px" style="display:flex; height:100%;">No poster</div>';
         const itemId = it.id || it.imdbId || '';
         const itemType = (it.kind === 'movie' || it.type === 'movie') ? 'movie' : 'series';
         const posterClickAttr = itemId
