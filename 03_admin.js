@@ -2191,6 +2191,7 @@ function renderAdminLoginPage(errorMsg, accessOn) {
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; }
   body {
     font-family: var(--font-body);
@@ -2253,7 +2254,6 @@ ${DESIGN_TOKENS_CSS}
   }
   button:hover { opacity: 0.85; }
   .err { color: var(--danger); margin: 14px 0 0; font-size: 0.85rem; }
-${UTILITY_CSS}
 </style></head>
 <body>
   <div class="login-wrap">
@@ -2590,6 +2590,7 @@ async function renderAdminDashboard(env) {
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; }
   body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,system-ui,sans-serif; max-width:900px; margin:0 auto; padding:20px 14px; }
   h1 { margin-bottom:4px; font-size:1.6rem; color:var(--text); }
@@ -2694,7 +2695,6 @@ ${DESIGN_TOKENS_CSS}
     .feedback-actions { width: 100%; }
     .feedback-actions button { flex-grow: 1; text-align: center; }
   }
-${UTILITY_CSS}
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>

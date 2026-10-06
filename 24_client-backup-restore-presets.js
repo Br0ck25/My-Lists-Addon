@@ -3923,6 +3923,7 @@ function renderGuidePage(origin) {
      origin at all. See docs/DECISIONS.md D-20. -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; background: var(--bg); }
   body {
@@ -4289,7 +4290,6 @@ ${DESIGN_TOKENS_CSS}
     .guide-block { padding: 24px 18px; }
     .step-card { flex-direction: column; gap: 10px; }
   }
-${UTILITY_CSS}
 </style>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
   function applyTheme(t) {

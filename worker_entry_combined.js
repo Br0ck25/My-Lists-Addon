@@ -12870,6 +12870,7 @@ function renderAdminLoginPage(errorMsg, accessOn) {
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; }
   body {
     font-family: var(--font-body);
@@ -12932,7 +12933,6 @@ ${DESIGN_TOKENS_CSS}
   }
   button:hover { opacity: 0.85; }
   .err { color: var(--danger); margin: 14px 0 0; font-size: 0.85rem; }
-${UTILITY_CSS}
 </style></head>
 <body>
   <div class="login-wrap">
@@ -13269,6 +13269,7 @@ async function renderAdminDashboard(env) {
 </script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; }
   body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,system-ui,sans-serif; max-width:900px; margin:0 auto; padding:20px 14px; }
   h1 { margin-bottom:4px; font-size:1.6rem; color:var(--text); }
@@ -13373,7 +13374,6 @@ ${DESIGN_TOKENS_CSS}
     .feedback-actions { width: 100%; }
     .feedback-actions button { flex-grow: 1; text-align: center; }
   }
-${UTILITY_CSS}
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
@@ -29851,6 +29851,7 @@ ${seoHeadHtml}
 -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_CSS_START*/
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   /* A visible keyboard focus indicator, restored.
@@ -34742,7 +34743,6 @@ ${DESIGN_TOKENS_CSS}
     }
     .subnav-pills-bar { padding-top: var(--space-3); padding-bottom: var(--space-4); }
   }
-${UTILITY_CSS}
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
      It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
@@ -83967,6 +83967,7 @@ function renderGuidePage(origin) {
      origin at all. See docs/DECISIONS.md D-20. -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; background: var(--bg); }
   body {
@@ -84333,7 +84334,6 @@ ${DESIGN_TOKENS_CSS}
     .guide-block { padding: 24px 18px; }
     .step-card { flex-direction: column; gap: 10px; }
   }
-${UTILITY_CSS}
 </style>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
   function applyTheme(t) {

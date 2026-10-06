@@ -292,6 +292,7 @@ ${seoHeadHtml}
 -->
 <style nonce="${CSP_NONCE_PLACEHOLDER}">/*MYLISTS_APP_CSS_START*/
 ${DESIGN_TOKENS_CSS}
+${UTILITY_CSS}
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   /* A visible keyboard focus indicator, restored.
@@ -5183,7 +5184,6 @@ ${DESIGN_TOKENS_CSS}
     }
     .subnav-pills-bar { padding-top: var(--space-3); padding-bottom: var(--space-4); }
   }
-${UTILITY_CSS}
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
      It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
