@@ -779,10 +779,6 @@ const TMDB_CHART_PATHS = {
   top_rated: { movie: "movie/top_rated", tv: "tv/top_rated" },
   now_playing: { movie: "movie/now_playing", tv: "tv/airing_today" },
   upcoming: { movie: "movie/upcoming", tv: "tv/on_the_air" },
-  // Shows only (the Better Posters lists, 08): TMDB's "Returning Series"
-  // status, and its "Miniseries" type, most popular first.
-  returning: { tv: "discover/tv?sort_by=popularity.desc&with_status=0" },
-  limited: { tv: "discover/tv?sort_by=popularity.desc&with_type=2" },
   netflix: tmdbProviderChartPaths(8),
   netflixkids: tmdbProviderChartPaths(175),
   appletv: tmdbProviderChartPaths(350),
@@ -3323,17 +3319,11 @@ async function fetchMostWatchedCatalog(entry, skip = 0, keys = {}) {
   return page;
 }
 
-// --- Better Posters lists ------------------------------------------------------
+// --- Better Posters: "#N Today" order ------------------------------------------
 //
-// mylists:better-posters:today|trending|popular|top -- btttr.cc's own public
-// catalogs (BETTER_POSTERS_CATALOGS, 00_constants.js). "today" is the ranking
-// its "#N Today" corner tag comes from, in rank order.
-
-function parseBetterPostersChart(url) {
-  const m = /^mylists:better-posters:([a-z]+)$/i.exec(String(url || "").trim());
-  const key = m ? m[1].toLowerCase() : "";
-  return Object.prototype.hasOwnProperty.call(BETTER_POSTERS_CATALOGS, key) ? key : null;
-}
+// btttr.cc's daily ranking (BETTER_POSTERS_CATALOGS, 00_constants.js), the one
+// its "#N Today" corner tag is drawn from, in rank order. Used by the Order
+// Today tags setting (orderByBetterPostersToday, below).
 
 // One btttr.cc catalog, in its own order, kept 30 minutes and served stale
 // (up to a day) when btttr.cc is down. Each item: { id, type, name, poster,
@@ -3373,20 +3363,6 @@ async function loadBetterPostersCatalog(env, ctx, key, type) {
       return out;
     },
   });
-}
-
-async function fetchBetterPostersCatalog(entry, skip = 0, keys = {}) {
-  const key = parseBetterPostersChart(entry && entry.url);
-  if (!key) throw new Error("Unknown Better Posters list.");
-  const type = entry && entry.type === "series" ? "series" : "movie";
-  const pageSize = Number.isFinite(keys.limit) && keys.limit > 0 ? Math.min(100, Math.floor(keys.limit)) : PAGE_SIZE;
-  const all = await loadBetterPostersCatalog(keys.env, keys.ctx, key, type);
-  const start = Math.max(0, skip);
-  const page = all.slice(start, start + pageSize).map(({ rank, ...m }) => m);
-  page.totalItems = all.length;
-  page.limit = pageSize;
-  page.skip = start;
-  return page;
 }
 
 // The "keep Today tags in order" setting (betterPostersTodayOrder): a title

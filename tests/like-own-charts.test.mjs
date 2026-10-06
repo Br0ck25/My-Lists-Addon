@@ -15,8 +15,6 @@ describe("liking this add-on's own charts", () => {
     "mylists:most-watched:today",
     "mylists:most-watched:30",
     "tmdb:new-on-streaming",
-    "mylists:better-posters:trending",
-    "tmdb:chart:returning",
     COMBINED,
   ]) {
     it(`likes and unlikes ${JSON.stringify(url).slice(0, 48)}`, async () => {

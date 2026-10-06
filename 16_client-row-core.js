@@ -1384,6 +1384,14 @@ function switchTab(name) {
         }
       });
       switchListsSubmenu(savedSub, targetBtn || pills[0]);
+    } else {
+      // Coming back to Lists lands on the sub-page it was left on. Liked is the
+      // one whose contents change from elsewhere (a heart on Discover or
+      // Search), so it is refreshed on return. renderLikedListsFeed does
+      // nothing when the liked count it last drew still matches.
+      let current = '';
+      try { current = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu')); } catch (e) {}
+      if (current === 'liked' && typeof renderLikedListsFeed === 'function') renderLikedListsFeed();
     }
   }
   if (name === 'settings') {
@@ -3276,14 +3284,6 @@ function renderDiscoverChartsList(type, forceRefresh) {
     if (window._CHARTS_MY_LISTS_ADDON) {
       window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
     }
-    // Better Posters lists (BETTER_POSTERS_CHARTS, 08). A row with a url is
-    // single-type (In Cinema: movies only).
-    if (window._CHARTS_BETTER_POSTERS) {
-      window._CHARTS_BETTER_POSTERS.forEach(function(p) {
-        if (p.url) pushSingle(p.name, p.url, p.type, 'Better Posters');
-        else pushPair(p.name, p.movieUrl, p.showUrl, 'Better Posters');
-      });
-    }
     if (type === 'movie' || type === 'all') {
       pushSingle(type === 'all' ? 'New Releases: Movies' : 'New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
     }
@@ -4122,7 +4122,6 @@ ${buildAddAllFnJs("addAllKidsCharts", buildAddAllPairsCallsJs(KIDS_LISTS, "Kids"
 ${buildAddAllFnJs("addAllHolidayCharts", buildAddAllPairsCallsJs(HOLIDAY_LISTS, "Holidays", ""))}
 ${buildAddAllFnJs("addAllGenreCharts", buildAddAllPairsCallsJs(GENRE_LISTS, "Genres", ""))}
 ${buildAddAllFnJs("addAllMyListsAddonCharts", buildAddAllPairsCallsJs(MY_LISTS_ADDON_CHARTS, "My Lists Addon Charts", ""))}
-${buildAddAllFnJs("addAllBetterPostersCharts", buildAddAllPairsCallsJs(BETTER_POSTERS_CHARTS.filter((p) => p.movieUrl), "Better Posters", "") + "\n" + buildAddAllSimpleCallsJs(BETTER_POSTERS_CHARTS.filter((p) => p.url), "Better Posters"))}
 
 function addAllHiddenGems() {
   addRow("Hidden Gems", "tmdb:hidden-gems", "movie", true, "Hidden Gems");
@@ -4148,7 +4147,6 @@ document.addEventListener('click', (e) => {
   else if (action === 'holidays') addAllHolidayCharts();
   else if (action === 'genres') addAllGenreCharts();
   else if (action === 'mylists-charts') addAllMyListsAddonCharts();
-  else if (action === 'better-posters-charts') addAllBetterPostersCharts();
 });
 
 // Adds a blank source row to an existing entry -- this is how a normal

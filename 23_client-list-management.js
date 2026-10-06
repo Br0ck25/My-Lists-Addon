@@ -833,6 +833,11 @@ function toggleBetterPostersSetting(key, value) {
   }
   if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
   if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
+  // A cached preview was ordered under the old setting.
+  if (key === 'betterPostersTodayOrder' || key === 'betterPosters' || key === 'betterPostersTrendTags') {
+    if (window._listPreviewCache) window._listPreviewCache.clear();
+    if (window._discoverFeedsCache) window._discoverFeedsCache = {};
+  }
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
   if (typeof saveState === 'function') saveState();
@@ -921,6 +926,17 @@ async function testRpdbKey(btn) {
   }
 }
 window.testRpdbKey = testRpdbKey;
+
+// Whether a list preview should come back with its "#N Today" titles in rank
+// order: Better Posters is the poster source, its trend tags are drawn, and
+// Order Today tags is on -- the same three things the Worker checks for a
+// Stremio or Nuvio catalog (fetchCatalog, 05_catalog-core.js).
+function previewTodayOrderOn() {
+  return getBetterPostersSetting('betterPosters', false)
+    && getBetterPostersSetting('betterPostersTrendTags', true)
+    && getBetterPostersSetting('betterPostersTodayOrder', false);
+}
+window.previewTodayOrderOn = previewTodayOrderOn;
 
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
@@ -1266,6 +1282,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (previewTodayOrderOn()) body.todayOrder = true;
         const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3732,6 +3749,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
+      if (previewTodayOrderOn()) body.todayOrder = true;
       const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

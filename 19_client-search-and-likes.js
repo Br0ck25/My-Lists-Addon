@@ -1197,6 +1197,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
+    if (typeof previewTodayOrderOn === 'function' && previewTodayOrderOn()) payload.todayOrder = true;
     const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1459,12 +1460,23 @@ function getLikedListsSet() {
   }
 }
 
+// The Liked page skips redrawing while the count it last drew still matches.
+// A like and an unlike in between leave the count alone and the page wrong, so
+// any change to the set clears what it remembers and the next visit redraws.
+function likedFeedIsStale() {
+  try {
+    const feed = document.getElementById('likedListsFeed');
+    if (feed && feed.dataset) delete feed.dataset.likedCount;
+  } catch (e) {}
+}
+
 function rememberLikedList(usernameSlug) {
   const set = getLikedListsSet();
   set.add(usernameSlug);
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 function forgetLikedList(usernameSlug) {
@@ -1473,6 +1485,7 @@ function forgetLikedList(usernameSlug) {
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 // "username/slug" for one of this add-on's own list pages

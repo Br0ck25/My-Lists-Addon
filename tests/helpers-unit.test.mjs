@@ -92,12 +92,10 @@ describe("URL allowlists", () => {
     assert.equal(H.normalizeExternalListUrl("TMDB:CHART:popular"), "tmdb:chart:popular");
   });
 
-  it("like-external accepts this add-on's own charts: Most Watched, New on Streaming, Better Posters", () => {
+  it("like-external accepts this add-on's own charts: Most Watched and New on Streaming", () => {
     assert.equal(H.normalizeExternalListUrl("mylists:most-watched:today"), "mylists:most-watched:today");
     assert.equal(H.normalizeExternalListUrl("mylists:most-watched:7"), "mylists:most-watched:7");
     assert.equal(H.normalizeExternalListUrl("tmdb:new-on-streaming"), "tmdb:new-on-streaming");
-    assert.equal(H.normalizeExternalListUrl("mylists:better-posters:today"), "mylists:better-posters:today");
-    assert.equal(H.normalizeExternalListUrl("tmdb:chart:returning"), "tmdb:chart:returning");
   });
 
   it("like-external accepts a combined chart when every line of it is likeable", () => {

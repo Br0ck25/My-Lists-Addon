@@ -10574,7 +10574,7 @@ function renderMyCreatedChannelsList() {
     // differently from one that does not, and the card is the only place
     // that is visible without opening the editor.
     const orderLabel = channelPlayOrderLabel(ch);
-    const metaBits = ['24/7 TV Channel'];
+    const metaBits = [];
     if (ch.dynamic === 'next-up') metaBits.push('fills itself in from Continue Watching');
     else metaBits.push(totalEpisodes + ' episode' + (totalEpisodes === 1 ? '' : 's'));
     if (ch.dailyRotate) {

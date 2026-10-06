@@ -17,9 +17,6 @@
     <!-- My Lists Addon Charts Shelf -->
     ${myListsAddonChartsHtml}
 
-    <!-- Better Posters Shelf -->
-    ${betterPostersChartsHtml}
-
     <!-- Combined Charts Shelf -->
     ${combinedChartsHtml}
 

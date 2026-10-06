@@ -4191,8 +4191,8 @@ const EXTERNAL_LIKE_HOSTS = new Set([
 const LIKEABLE_SENTINEL_PREFIXES = [
   "tmdb:chart:", "tmdb:top10:", "tmdb:kids:", "tmdb:holiday:", "tmdb:genre:", "tmdb:collection:",
   "trakt:chart:", "simkl:chart:",
-  // This add-on's own charts: Most Watched, and the Better Posters lists.
-  "mylists:most-watched:", "mylists:better-posters:",
+  // This add-on's own Most Watched charts.
+  "mylists:most-watched:",
 ];
 const LIKEABLE_SENTINEL_EXACT = new Set(["tmdb:hidden-gems", "tmdb:new-on-streaming"]);
 // A combined chart (Trending, Streaming Top 10 (All Services)...) is several

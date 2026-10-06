@@ -140,8 +140,6 @@ function renderBuilder(
   const genresHtml = buildGenresHtml();
   // New on Streaming + My Lists Addon Most Watched -- see MY_LISTS_ADDON_CHARTS (08).
   const myListsAddonChartsHtml = buildMyListsAddonChartsHtml();
-  // Better Posters lists -- see BETTER_POSTERS_CHARTS (08).
-  const betterPostersChartsHtml = buildBetterPostersChartsHtml();
   // Precomputed here (same pattern as the *Html fragments above) rather
   // than built inline inside the giant HTML template literal below --
   // this file's template literal has bitten past changes before with
@@ -5833,7 +5831,6 @@ window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
 window._CHARTS_MY_LISTS_ADDON = ${jsonForScript(MY_LISTS_ADDON_CHARTS)};
-window._CHARTS_BETTER_POSTERS = ${jsonForScript(BETTER_POSTERS_CHARTS)};
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then(function(reg) {
     if (reg) reg.update().catch(function() {});

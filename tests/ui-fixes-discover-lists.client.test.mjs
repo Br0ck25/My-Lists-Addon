@@ -100,3 +100,51 @@ describe("client: Discover reopens on the tab it was on", () => {
     assert.deepEqual(opened, ["all"]);
   });
 });
+
+describe("client: Lists -> Liked is current when you come back to it", () => {
+  const likedSpy = (client) => {
+    const calls = [];
+    client.set("renderLikedListsFeed", (force) => { calls.push(force === true ? "forced" : "plain"); });
+    return calls;
+  };
+
+  it("redraws on every return to Lists while Liked is the page it was left on", () => {
+    const client = loadClient({ storage: { "myListAddon:listsSubmenu": "liked" } });
+    const calls = likedSpy(client);
+    client.call("switchTab", "lists");   // first visit: switchListsSubmenu('liked')
+    client.call("switchTab", "catalogs");
+    client.call("switchTab", "lists");   // a return, after a heart elsewhere
+    client.call("switchTab", "lists");
+    assert.ok(calls.length >= 3, "drawn on the first visit and again on each return: " + calls.length);
+  });
+
+  it("does not touch the feed when Lists is left on another page", () => {
+    const client = loadClient({ storage: { "myListAddon:listsSubmenu": "my-lists" } });
+    const calls = likedSpy(client);
+    client.call("switchTab", "lists");
+    client.call("switchTab", "lists");
+    assert.equal(calls.length, 0);
+  });
+
+  it("a like or an unlike makes the page draw again even when the count is the same", () => {
+    const client = loadClient({});
+    const feed = client.get("document").getElementById("likedListsFeed");
+    feed.dataset = { likedCount: "2" };
+    client.call("rememberLikedList", "bob/faves");
+    assert.equal(feed.dataset.likedCount, undefined);
+    feed.dataset.likedCount = "2";
+    client.call("forgetLikedList", "bob/faves");
+    assert.equal(feed.dataset.likedCount, undefined);
+  });
+});
+
+describe("client: Order Today tags in website previews", () => {
+  const on = (storage) => loadClient({ storage }).call("previewTodayOrderOn");
+  it("needs Better Posters, Trend tags and the setting all on", () => {
+    assert.equal(on({ "myListAddon:betterPosters": "1", "myListAddon:betterPostersTodayOrder": "1" }), true);
+    assert.equal(on({ "myListAddon:betterPostersTodayOrder": "1" }), false);
+    assert.equal(on({ "myListAddon:betterPosters": "1" }), false);
+    assert.equal(on({ "myListAddon:betterPosters": "1", "myListAddon:betterPostersTodayOrder": "1", "myListAddon:betterPostersTrendTags": "0" }), false);
+  });
+});
+

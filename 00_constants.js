@@ -1295,16 +1295,12 @@ const D1_SCHEMA_MANIFEST = [
 // buildBetterPosterUrl (05_catalog-core.js) assembles the base properly.
 const BETTER_POSTERS_ORIGIN = "https://btttr.cc";
 
-// btttr.cc's own public Stremio catalogs, which the Better Posters lists
-// (mylists:better-posters:<key>, BETTER_POSTERS_CHARTS in 08) are read from.
-// "today" is the ranking its "#N Today" corner tag is drawn from: the catalog
-// is in rank order and each entry carries that rank as "_rank". btttr.cc names
-// the shows catalog differently from the movies one.
+// btttr.cc's own public Stremio catalog that its "#N Today" corner tag is drawn
+// from (used by the Order Today tags setting): the catalog is in rank order and
+// each entry carries that rank as "_rank". btttr.cc names the shows catalog
+// differently from the movies one.
 const BETTER_POSTERS_CATALOGS = {
   today: { movie: "tmdb-today", series: "tmdb-today-shows" },
-  trending: { movie: "trakt-trending", series: "trakt-trending" },
-  popular: { movie: "trakt-popular", series: "trakt-popular" },
-  top: { movie: "tmdb-top", series: "tmdb-top" },
 };
 // Its catalogs move through the day, so a stored copy is good for half an hour.
 const BETTER_POSTERS_CATALOG_REFRESH_SECONDS = 1800;

@@ -437,14 +437,6 @@ const CATALOG_SOURCES = [
     match: (s) => s.startsWith("mylists:most-watched:"),
     fetchPage: (ref, { entry, skip, keys }) => fetchMostWatchedCatalog(entry, skip, keys),
   },
-  // The Better Posters lists ("mylists:better-posters:today|trending|popular|top"),
-  // read from btttr.cc's public catalogs (fetchBetterPostersCatalog). No
-  // provider key is spent.
-  {
-    name: "mylists-better-posters", provider: "mylists", kind: "chart", apiUse: null,
-    match: (s) => s.startsWith("mylists:better-posters:"),
-    fetchPage: (ref, { entry, skip, keys }) => fetchBetterPostersCatalog(entry, skip, keys),
-  },
   {
     name: "trakt-chart", provider: "trakt", kind: "chart", apiUse: "trakt",
     snapshot: {},
@@ -726,8 +718,7 @@ function isAllowedCatalogSourceUrl(raw) {
     s.startsWith("autotrack:") ||
     s.startsWith("custom:") ||
     s.startsWith("curated:") ||
-    s.startsWith("mylists:most-watched:") ||
-    s.startsWith("mylists:better-posters:")
+    s.startsWith("mylists:most-watched:")
   ) {
     return true;
   }

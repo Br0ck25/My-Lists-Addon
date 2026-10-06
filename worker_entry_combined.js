@@ -1318,16 +1318,12 @@ const D1_SCHEMA_MANIFEST = [
 // buildBetterPosterUrl (05_catalog-core.js) assembles the base properly.
 const BETTER_POSTERS_ORIGIN = "https://btttr.cc";
 
-// btttr.cc's own public Stremio catalogs, which the Better Posters lists
-// (mylists:better-posters:<key>, BETTER_POSTERS_CHARTS in 08) are read from.
-// "today" is the ranking its "#N Today" corner tag is drawn from: the catalog
-// is in rank order and each entry carries that rank as "_rank". btttr.cc names
-// the shows catalog differently from the movies one.
+// btttr.cc's own public Stremio catalog that its "#N Today" corner tag is drawn
+// from (used by the Order Today tags setting): the catalog is in rank order and
+// each entry carries that rank as "_rank". btttr.cc names the shows catalog
+// differently from the movies one.
 const BETTER_POSTERS_CATALOGS = {
   today: { movie: "tmdb-today", series: "tmdb-today-shows" },
-  trending: { movie: "trakt-trending", series: "trakt-trending" },
-  popular: { movie: "trakt-popular", series: "trakt-popular" },
-  top: { movie: "tmdb-top", series: "tmdb-top" },
 };
 // Its catalogs move through the day, so a stored copy is good for half an hour.
 const BETTER_POSTERS_CATALOG_REFRESH_SECONDS = 1800;
@@ -7385,8 +7381,8 @@ const EXTERNAL_LIKE_HOSTS = new Set([
 const LIKEABLE_SENTINEL_PREFIXES = [
   "tmdb:chart:", "tmdb:top10:", "tmdb:kids:", "tmdb:holiday:", "tmdb:genre:", "tmdb:collection:",
   "trakt:chart:", "simkl:chart:",
-  // This add-on's own charts: Most Watched, and the Better Posters lists.
-  "mylists:most-watched:", "mylists:better-posters:",
+  // This add-on's own Most Watched charts.
+  "mylists:most-watched:",
 ];
 const LIKEABLE_SENTINEL_EXACT = new Set(["tmdb:hidden-gems", "tmdb:new-on-streaming"]);
 // A combined chart (Trending, Streaming Top 10 (All Services)...) is several
@@ -16707,14 +16703,6 @@ const CATALOG_SOURCES = [
     match: (s) => s.startsWith("mylists:most-watched:"),
     fetchPage: (ref, { entry, skip, keys }) => fetchMostWatchedCatalog(entry, skip, keys),
   },
-  // The Better Posters lists ("mylists:better-posters:today|trending|popular|top"),
-  // read from btttr.cc's public catalogs (fetchBetterPostersCatalog). No
-  // provider key is spent.
-  {
-    name: "mylists-better-posters", provider: "mylists", kind: "chart", apiUse: null,
-    match: (s) => s.startsWith("mylists:better-posters:"),
-    fetchPage: (ref, { entry, skip, keys }) => fetchBetterPostersCatalog(entry, skip, keys),
-  },
   {
     name: "trakt-chart", provider: "trakt", kind: "chart", apiUse: "trakt",
     snapshot: {},
@@ -16996,8 +16984,7 @@ function isAllowedCatalogSourceUrl(raw) {
     s.startsWith("autotrack:") ||
     s.startsWith("custom:") ||
     s.startsWith("curated:") ||
-    s.startsWith("mylists:most-watched:") ||
-    s.startsWith("mylists:better-posters:")
+    s.startsWith("mylists:most-watched:")
   ) {
     return true;
   }
@@ -23953,10 +23940,6 @@ const TMDB_CHART_PATHS = {
   top_rated: { movie: "movie/top_rated", tv: "tv/top_rated" },
   now_playing: { movie: "movie/now_playing", tv: "tv/airing_today" },
   upcoming: { movie: "movie/upcoming", tv: "tv/on_the_air" },
-  // Shows only (the Better Posters lists, 08): TMDB's "Returning Series"
-  // status, and its "Miniseries" type, most popular first.
-  returning: { tv: "discover/tv?sort_by=popularity.desc&with_status=0" },
-  limited: { tv: "discover/tv?sort_by=popularity.desc&with_type=2" },
   netflix: tmdbProviderChartPaths(8),
   netflixkids: tmdbProviderChartPaths(175),
   appletv: tmdbProviderChartPaths(350),
@@ -26497,17 +26480,11 @@ async function fetchMostWatchedCatalog(entry, skip = 0, keys = {}) {
   return page;
 }
 
-// --- Better Posters lists ------------------------------------------------------
+// --- Better Posters: "#N Today" order ------------------------------------------
 //
-// mylists:better-posters:today|trending|popular|top -- btttr.cc's own public
-// catalogs (BETTER_POSTERS_CATALOGS, 00_constants.js). "today" is the ranking
-// its "#N Today" corner tag comes from, in rank order.
-
-function parseBetterPostersChart(url) {
-  const m = /^mylists:better-posters:([a-z]+)$/i.exec(String(url || "").trim());
-  const key = m ? m[1].toLowerCase() : "";
-  return Object.prototype.hasOwnProperty.call(BETTER_POSTERS_CATALOGS, key) ? key : null;
-}
+// btttr.cc's daily ranking (BETTER_POSTERS_CATALOGS, 00_constants.js), the one
+// its "#N Today" corner tag is drawn from, in rank order. Used by the Order
+// Today tags setting (orderByBetterPostersToday, below).
 
 // One btttr.cc catalog, in its own order, kept 30 minutes and served stale
 // (up to a day) when btttr.cc is down. Each item: { id, type, name, poster,
@@ -26547,20 +26524,6 @@ async function loadBetterPostersCatalog(env, ctx, key, type) {
       return out;
     },
   });
-}
-
-async function fetchBetterPostersCatalog(entry, skip = 0, keys = {}) {
-  const key = parseBetterPostersChart(entry && entry.url);
-  if (!key) throw new Error("Unknown Better Posters list.");
-  const type = entry && entry.type === "series" ? "series" : "movie";
-  const pageSize = Number.isFinite(keys.limit) && keys.limit > 0 ? Math.min(100, Math.floor(keys.limit)) : PAGE_SIZE;
-  const all = await loadBetterPostersCatalog(keys.env, keys.ctx, key, type);
-  const start = Math.max(0, skip);
-  const page = all.slice(start, start + pageSize).map(({ rank, ...m }) => m);
-  page.totalItems = all.length;
-  page.limit = pageSize;
-  page.skip = start;
-  return page;
 }
 
 // The "keep Today tags in order" setting (betterPostersTodayOrder): a title
@@ -29105,38 +29068,6 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
-// --- Better Posters lists -----------------------------------------------------
-//
-// Lists that go with the Better Posters corner tags (Settings -> Better
-// Posters): "#2 Today" is a title's place in btttr.cc's own daily ranking, so
-// the Top Today list IS that ranking, in that order. Trending, Popular and Top
-// Rated are btttr.cc's other public catalogs (BETTER_POSTERS_CATALOGS, 00).
-// The rest are built from TMDB and this add-on's own New on Streaming list,
-// to match what the tag says rather than read from btttr.cc (which publishes
-// no title lists for them): In Cinema is TMDB Now Playing (movies), New Movie
-// and New Series are TMDB titles released in the last 30 days, Just Added is
-// New on Streaming, Returning is shows TMDB marks "Returning Series" and
-// Limited Series is shows it types "Miniseries".
-// They work with Better Posters off too; the tags are just not drawn then.
-// Same shape as MY_LISTS_ADDON_CHARTS, except In Cinema, which has no shows
-// side (or no movies side) and so carries url/type as the Trakt Box Office row does.
-const BETTER_POSTERS_CHARTS = [
-  { name: "Better Posters Top Today", movieUrl: "mylists:better-posters:today", showUrl: "mylists:better-posters:today" },
-  { name: "Better Posters Trending", movieUrl: "mylists:better-posters:trending", showUrl: "mylists:better-posters:trending" },
-  { name: "Better Posters Popular", movieUrl: "mylists:better-posters:popular", showUrl: "mylists:better-posters:popular" },
-  { name: "Better Posters Top Rated", movieUrl: "mylists:better-posters:top", showUrl: "mylists:better-posters:top" },
-  { name: "Better Posters In Cinema", url: "tmdb:chart:now_playing", type: "movie" },
-  { name: "Better Posters New Movie", url: "tmdb:chart:new_movies", type: "movie" },
-  { name: "Better Posters New Series", url: "tmdb:chart:new_shows", type: "series" },
-  { name: "Better Posters Just Added", movieUrl: "tmdb:new-on-streaming", showUrl: "tmdb:new-on-streaming" },
-  { name: "Better Posters Returning", url: "tmdb:chart:returning", type: "series" },
-  { name: "Better Posters Limited Series", url: "tmdb:chart:limited", type: "series" },
-];
-
-function buildBetterPostersChartsHtml() {
-  return buildStreamingRowsHtml(BETTER_POSTERS_CHARTS, "", "Better Posters");
-}
-
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -29181,8 +29112,7 @@ const CHART_SLUG_ENTRIES = (() => {
     ...HOLIDAY_LISTS,
     ...GENRE_LISTS,
     ...MY_LISTS_ADDON_CHARTS,
-    ...BETTER_POSTERS_CHARTS,
-  ].forEach((p) => add(p.name, p.movieUrl || p.url, p.showUrl || p.url));
+  ].forEach((p) => add(p.name, p.movieUrl, p.showUrl));
   [...TRAKT_BOXOFFICE_LIST, SIMKL_ANIME_LIST[0]].forEach((p) => add(p.name, p.url, p.url));
   COMBINED_CHART_LISTS.forEach((p) => add(p.name, p.movieUrls.join("\n"), p.showUrls.join("\n")));
   return entries;
@@ -29392,8 +29322,6 @@ function renderBuilder(
   const genresHtml = buildGenresHtml();
   // New on Streaming + My Lists Addon Most Watched -- see MY_LISTS_ADDON_CHARTS (08).
   const myListsAddonChartsHtml = buildMyListsAddonChartsHtml();
-  // Better Posters lists -- see BETTER_POSTERS_CHARTS (08).
-  const betterPostersChartsHtml = buildBetterPostersChartsHtml();
   // Precomputed here (same pattern as the *Html fragments above) rather
   // than built inline inside the giant HTML template literal below --
   // this file's template literal has bitten past changes before with
@@ -35085,7 +35013,6 @@ window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
 window._CHARTS_MY_LISTS_ADDON = ${jsonForScript(MY_LISTS_ADDON_CHARTS)};
-window._CHARTS_BETTER_POSTERS = ${jsonForScript(BETTER_POSTERS_CHARTS)};
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then(function(reg) {
     if (reg) reg.update().catch(function() {});
@@ -35226,16 +35153,6 @@ if ('serviceWorker' in navigator) {
       ${myListsAddonChartsHtml}
     </div>
 
-    <!-- Better Posters Shelf (BETTER_POSTERS_CHARTS, 08). -->
-    <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
-        <h2 class="shelf-title">Better Posters</h2>
-        <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="better-posters-charts">+ Add all</button>
-      </div>
-      <p class="qa-shelf-sub">Lists that go with the Better Posters tags: what is #1, #2, #3 Today, what is trending and popular, what is in cinemas, and new, just added, returning and limited series. Turn on Better Posters in Settings to see the tags on the posters:</p>
-      ${betterPostersChartsHtml}
-    </div>
-
     <!-- Combined Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
       <div class="shelf-header" style="margin-bottom:8px;">
@@ -35357,9 +35274,6 @@ if ('serviceWorker' in navigator) {
   <div id="discoverShelvesContainer" style="display:none;">
     <!-- My Lists Addon Charts Shelf -->
     ${myListsAddonChartsHtml}
-
-    <!-- Better Posters Shelf -->
-    ${betterPostersChartsHtml}
 
     <!-- Combined Charts Shelf -->
     ${combinedChartsHtml}
@@ -36402,7 +36316,7 @@ if ('serviceWorker' in navigator) {
             <input type="checkbox" id="betterPostersTodayOrderCheckbox" ${initialBetterPostersTodayOrder ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTodayOrder&quot;,&quot;@checked&quot;]">
             <div style="flex:1; min-width:0;">
               <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Order Today tags</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In a list, titles tagged #1 Today, #2 Today and so on are put in that order, so #3 never comes before #2. Needs Trend tags. Applies to the lists in Stremio and Nuvio.</p>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In a list, titles tagged #1 Today, #2 Today and so on are put in that order, so #3 never comes before #2. Needs Trend tags. Applies in Stremio, Nuvio and the lists on the website.</p>
             </div>
           </label>
         </div>
@@ -38385,6 +38299,14 @@ function switchTab(name) {
         }
       });
       switchListsSubmenu(savedSub, targetBtn || pills[0]);
+    } else {
+      // Coming back to Lists lands on the sub-page it was left on. Liked is the
+      // one whose contents change from elsewhere (a heart on Discover or
+      // Search), so it is refreshed on return. renderLikedListsFeed does
+      // nothing when the liked count it last drew still matches.
+      let current = '';
+      try { current = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu')); } catch (e) {}
+      if (current === 'liked' && typeof renderLikedListsFeed === 'function') renderLikedListsFeed();
     }
   }
   if (name === 'settings') {
@@ -40277,14 +40199,6 @@ function renderDiscoverChartsList(type, forceRefresh) {
     if (window._CHARTS_MY_LISTS_ADDON) {
       window._CHARTS_MY_LISTS_ADDON.forEach(function(p) { pushPair(p.name, p.movieUrl, p.showUrl, 'My Lists Addon'); });
     }
-    // Better Posters lists (BETTER_POSTERS_CHARTS, 08). A row with a url is
-    // single-type (In Cinema: movies only).
-    if (window._CHARTS_BETTER_POSTERS) {
-      window._CHARTS_BETTER_POSTERS.forEach(function(p) {
-        if (p.url) pushSingle(p.name, p.url, p.type, 'Better Posters');
-        else pushPair(p.name, p.movieUrl, p.showUrl, 'Better Posters');
-      });
-    }
     if (type === 'movie' || type === 'all') {
       pushSingle(type === 'all' ? 'New Releases: Movies' : 'New Releases', 'tmdb:chart:new_movies', 'movie', 'TMDB');
     }
@@ -41123,7 +41037,6 @@ ${buildAddAllFnJs("addAllKidsCharts", buildAddAllPairsCallsJs(KIDS_LISTS, "Kids"
 ${buildAddAllFnJs("addAllHolidayCharts", buildAddAllPairsCallsJs(HOLIDAY_LISTS, "Holidays", ""))}
 ${buildAddAllFnJs("addAllGenreCharts", buildAddAllPairsCallsJs(GENRE_LISTS, "Genres", ""))}
 ${buildAddAllFnJs("addAllMyListsAddonCharts", buildAddAllPairsCallsJs(MY_LISTS_ADDON_CHARTS, "My Lists Addon Charts", ""))}
-${buildAddAllFnJs("addAllBetterPostersCharts", buildAddAllPairsCallsJs(BETTER_POSTERS_CHARTS.filter((p) => p.movieUrl), "Better Posters", "") + "\n" + buildAddAllSimpleCallsJs(BETTER_POSTERS_CHARTS.filter((p) => p.url), "Better Posters"))}
 
 function addAllHiddenGems() {
   addRow("Hidden Gems", "tmdb:hidden-gems", "movie", true, "Hidden Gems");
@@ -41149,7 +41062,6 @@ document.addEventListener('click', (e) => {
   else if (action === 'holidays') addAllHolidayCharts();
   else if (action === 'genres') addAllGenreCharts();
   else if (action === 'mylists-charts') addAllMyListsAddonCharts();
-  else if (action === 'better-posters-charts') addAllBetterPostersCharts();
 });
 
 // Adds a blank source row to an existing entry -- this is how a normal
@@ -46843,6 +46755,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   payload.simklKey = (skInput && skInput.value ? skInput.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
   try {
+    if (typeof previewTodayOrderOn === 'function' && previewTodayOrderOn()) payload.todayOrder = true;
     const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47105,12 +47018,23 @@ function getLikedListsSet() {
   }
 }
 
+// The Liked page skips redrawing while the count it last drew still matches.
+// A like and an unlike in between leave the count alone and the page wrong, so
+// any change to the set clears what it remembers and the next visit redraws.
+function likedFeedIsStale() {
+  try {
+    const feed = document.getElementById('likedListsFeed');
+    if (feed && feed.dataset) delete feed.dataset.likedCount;
+  } catch (e) {}
+}
+
 function rememberLikedList(usernameSlug) {
   const set = getLikedListsSet();
   set.add(usernameSlug);
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 function forgetLikedList(usernameSlug) {
@@ -47119,6 +47043,7 @@ function forgetLikedList(usernameSlug) {
   try {
     localStorage.setItem('myListAddon:likedLists', JSON.stringify([...set]));
   } catch (e) {}
+  likedFeedIsStale();
 }
 
 // "username/slug" for one of this add-on's own list pages
@@ -61596,7 +61521,7 @@ function renderMyCreatedChannelsList() {
     // differently from one that does not, and the card is the only place
     // that is visible without opening the editor.
     const orderLabel = channelPlayOrderLabel(ch);
-    const metaBits = ['24/7 TV Channel'];
+    const metaBits = [];
     if (ch.dynamic === 'next-up') metaBits.push('fills itself in from Continue Watching');
     else metaBits.push(totalEpisodes + ' episode' + (totalEpisodes === 1 ? '' : 's'));
     if (ch.dailyRotate) {
@@ -77008,6 +76933,11 @@ function toggleBetterPostersSetting(key, value) {
   }
   if (BETTER_POSTERS_ARTWORK_SOURCES.indexOf(key) >= 0) applyBetterPostersOptionsVisibility();
   if (key === 'pictoriumUrl') updatePictoriumUrlHint(value);
+  // A cached preview was ordered under the old setting.
+  if (key === 'betterPostersTodayOrder' || key === 'betterPosters' || key === 'betterPostersTrendTags') {
+    if (window._listPreviewCache) window._listPreviewCache.clear();
+    if (window._discoverFeedsCache) window._discoverFeedsCache = {};
+  }
   refreshBetterPostersSurfaces();
   if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
   if (typeof saveState === 'function') saveState();
@@ -77096,6 +77026,17 @@ async function testRpdbKey(btn) {
   }
 }
 window.testRpdbKey = testRpdbKey;
+
+// Whether a list preview should come back with its "#N Today" titles in rank
+// order: Better Posters is the poster source, its trend tags are drawn, and
+// Order Today tags is on -- the same three things the Worker checks for a
+// Stremio or Nuvio catalog (fetchCatalog, 05_catalog-core.js).
+function previewTodayOrderOn() {
+  return getBetterPostersSetting('betterPosters', false)
+    && getBetterPostersSetting('betterPostersTrendTags', true)
+    && getBetterPostersSetting('betterPostersTodayOrder', false);
+}
+window.previewTodayOrderOn = previewTodayOrderOn;
 
 const BETTER_POSTERS_TOGGLES = [
   { key: 'betterPosters', id: 'betterPostersCheckbox', on: false },
@@ -77441,6 +77382,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (previewTodayOrderOn()) body.todayOrder = true;
         const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -79907,6 +79849,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
+      if (previewTodayOrderOn()) body.todayOrder = true;
       const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86463,6 +86406,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
     // link is never going to hit that limit).
     if (path === "/api/preview") {
       let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region;
+      // The Order Today tags setting, as the page sends it (previewTodayOrderOn,
+      // 23_client-list-management.js): "#N Today" titles come back in rank order.
+      let todayOrder = false;
       if (request.method === "POST") {
         let reqBody;
         try {
@@ -86484,6 +86430,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = reqBody.region || "";
         hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
         adultContentFilter = !!reqBody.adultContentFilter;
+        todayOrder = reqBody.todayOrder === true;
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
         skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
       } else {
@@ -86548,7 +86495,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
 
       let body;
       try {
-        const metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        if (todayOrder) metas = await orderByBetterPostersToday(metas, type, env, ctx);
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.

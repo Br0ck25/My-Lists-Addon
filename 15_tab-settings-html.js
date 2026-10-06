@@ -143,7 +143,7 @@
             <input type="checkbox" id="betterPostersTodayOrderCheckbox" ${initialBetterPostersTodayOrder ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTodayOrder&quot;,&quot;@checked&quot;]">
             <div style="flex:1; min-width:0;">
               <span style="font-weight:600; font-size:0.88rem; color:var(--text);">Order Today tags</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In a list, titles tagged #1 Today, #2 Today and so on are put in that order, so #3 never comes before #2. Needs Trend tags. Applies to the lists in Stremio and Nuvio.</p>
+              <p style="margin:2px 0 0; color:var(--muted); font-size:0.78rem;">In a list, titles tagged #1 Today, #2 Today and so on are put in that order, so #3 never comes before #2. Needs Trend tags. Applies in Stremio, Nuvio and the lists on the website.</p>
             </div>
           </label>
         </div>
