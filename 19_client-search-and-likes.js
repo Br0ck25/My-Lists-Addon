@@ -1095,7 +1095,7 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
     const cardHtml = '<div class="list-card" data-list-type="' + escapeAttr(item.type || 'mixed') + '" data-name="' + escapeAttr(item.name) + '" data-url="' + escapeAttr(item.url) + '" data-type="' + escapeAttr(slotType) + '" data-creator="' + escapeAttr(item.user || '') + '" data-items="' + escapeAttr(item.items || '') + '" data-likes="' + escapeAttr(item.likes || 0) + '" data-source="' + escapeAttr(item.source) + '">' +
       '<div class="list-card-header">' +
       '<div class="list-card-body">' +
-      '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + sourceBadgeHtml + escapeHtml(item.name) + '</div>' +
+      '<div class="list-card-title searchViewListBtn u-cur-pointer">' + sourceBadgeHtml + escapeHtml(item.name) + '</div>' +
       '<div class="list-card-meta">' +
       (creatorLabel ? '<span>' + creatorLabel + '</span>' : '') +
       (creatorLabel ? '<span class="list-card-meta-sep">&middot;</span>' : '') +
@@ -1120,10 +1120,10 @@ function renderListSearchResults(mdblistMatches, traktMatches, traktError, myLis
   let html = topCards.map(c => c.html).join('');
 
   if (topCards.length === 0) {
-    html = '<p style="color:var(--muted); font-size:var(--font-size-base); padding:8px 0;"><small>No lists match that search.</small></p>';
+    html = '<p class="u-c-v_muted u-fs-v_font_size_base u-p-8px_0"><small>No lists match that search.</small></p>';
   }
   if (traktError) {
-    html += '<p class="testresult err" style="margin-top:8px;">&#10007; Trakt search: ' + escapeHtml(traktError) + '</p>';
+    html += '<p class="testresult err u-mt-8px">&#10007; Trakt search: ' + escapeHtml(traktError) + '</p>';
   }
   box.innerHTML = html;
 
@@ -1357,10 +1357,10 @@ async function loadPosterSlot(slot) {
 
             let overlays = '';
             if (isMobileEnd) {
-              overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+              overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' + totalCount + ' &rsaquo;</div>';
             }
             if (isDesktopEnd) {
-              overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+              overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' + totalCount + ' &rsaquo;</div>';
             }
 
             let removeBtn = '';
@@ -1887,10 +1887,10 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
     const isDesktopEnd = (i === previewPosters.length - 1 && previewPosters.length >= 4);
     let overlays = '';
     if (isMobileEnd) {
-      overlays += '<div class="list-card-count-overlay mobile-only curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay mobile-only curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + totalCount + ' &rsaquo;</div>';
     }
     if (isDesktopEnd) {
-      overlays += '<div class="list-card-count-overlay desktop-only curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay desktop-only curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + totalCount + ' &rsaquo;</div>';
     }
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
     const tilePoster = resolveClientPoster(s, s.poster || '');
@@ -1919,7 +1919,7 @@ function buildCuratedRecommendationCard(title, type, customUrl, subtitle, items)
   return '<div class="list-card" data-name="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' +
     '<div class="list-card-header">' +
       '<div class="list-card-body">' +
-        '<div class="list-card-title curatedViewBtn" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '" style="cursor:pointer;">' + escapeHtml(title) + '</div>' +
+        '<div class="list-card-title curatedViewBtn u-cur-pointer" data-title="' + escapeAttr(title) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(customUrl) + '">' + escapeHtml(title) + '</div>' +
         '<div class="list-card-meta">' +
           '<span>' + escapeHtml(subtitle) + '</span>' +
           '<span class="list-card-meta-sep">&middot;</span>' +
@@ -2185,7 +2185,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       const recommendedLists = scored.slice(0, 10).map(function(s) { return s.list; });
 
       if (recommendedLists.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:var(--font-size-base); margin:0 0 2px;">Recommended Community Lists</h3><p style="margin:0; font-size:var(--font-size-sm); color:var(--muted);">Top community and curated lists you might like</p></div>';
+        sectionsHtml += '<div class="u-mt-24px u-mb-8px"><h3 class="u-fs-v_font_size_base u-m-0_0_2px">Recommended Community Lists</h3><p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Top community and curated lists you might like</p></div>';
         sectionsHtml += recommendedLists.map(l => {
           const type = l.type || 'movie';
           const added = alreadyAdded.has(l.url + '|' + type);
@@ -2194,7 +2194,7 @@ async function loadCuratedListsFeed(forceRefresh) {
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
               '<div class="list-card-body">' +
-                '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+                '<div class="list-card-title searchViewListBtn u-cur-pointer">' + escapeHtml(l.name) + '</div>' +
                 '<div class="list-card-meta">' +
                   '<span>by ' + escapeHtml(author) + '</span>' +
                   '<span class="list-card-meta-sep">&middot;</span>' +
@@ -2229,7 +2229,7 @@ async function loadCuratedListsFeed(forceRefresh) {
       }).slice(0, 5);
 
       if (similarToCustom.length) {
-        sectionsHtml += '<div style="margin-top:24px; margin-bottom:8px;"><h3 style="font-size:var(--font-size-base); margin:0 0 2px;">Lists Similar to Your Custom Lists</h3><p style="margin:0; font-size:var(--font-size-sm); color:var(--muted);">Public lists matching the themes of custom lists you created</p></div>';
+        sectionsHtml += '<div class="u-mt-24px u-mb-8px"><h3 class="u-fs-v_font_size_base u-m-0_0_2px">Lists Similar to Your Custom Lists</h3><p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Public lists matching the themes of custom lists you created</p></div>';
         const alreadyAdded = new Set();
         document.querySelectorAll('#lists .entry').forEach(function(entry) {
           const t = entry.querySelector('.type') ? entry.querySelector('.type').value : '';
@@ -2245,7 +2245,7 @@ async function loadCuratedListsFeed(forceRefresh) {
           return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(l.items || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             '<div class="list-card-header">' +
               '<div class="list-card-body">' +
-                '<div class="list-card-title searchViewListBtn" style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+                '<div class="list-card-title searchViewListBtn u-cur-pointer">' + escapeHtml(l.name) + '</div>' +
                 '<div class="list-card-meta">' +
                   '<span>by ' + escapeHtml(author) + '</span>' +
                   '<span class="list-card-meta-sep">&middot;</span>' +
@@ -2274,8 +2274,8 @@ async function loadCuratedListsFeed(forceRefresh) {
 
     if (!sectionsHtml) {
       container.innerHTML =
-        '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius);">' +
-          '<p style="margin:0; font-size:var(--font-size-sm); color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+        '<div class="u-ta-center u-p-24px_16px u-bg-v_card_bg u-bd-1px_solid_v_border u-br-v_radius">' +
+          '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '</div>';
       return;
     }
@@ -2290,8 +2290,8 @@ async function loadCuratedListsFeed(forceRefresh) {
   } catch (err) {
     console.error('Curated lists error:', err);
     container.innerHTML =
-      '<div style="text-align:center; padding:24px 16px; background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius);">' +
-        '<p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted);">Watch more items or like community lists to build personalized recommendations.</p>' +
+      '<div class="u-ta-center u-p-24px_16px u-bg-v_card_bg u-bd-1px_solid_v_border u-br-v_radius">' +
+        '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Watch more items or like community lists to build personalized recommendations.</p>' +
         '<button type="button" class="lc-btn primary" data-act="filterDiscoverShelves" data-act-args="[&quot;movie&quot;]">Explore Discover</button>' +
       '</div>';
   }
@@ -2525,7 +2525,7 @@ function render5PosterListsFeed(container, lists) {
     return '<div class="list-card" data-list-type="' + escapeAttr(type) + '" data-name="' + escapeAttr(displayName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title searchViewListBtn" style="cursor:pointer;" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
+          '<div class="list-card-title searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(displayName) + '" data-type="' + escapeAttr(type) + '" data-url="' + escapeAttr(l.url || '') + '" data-creator="' + escapeAttr(author) + '" data-items="' + escapeAttr(itemCount || '') + '" data-likes="' + escapeAttr(l.likes || 0) + '">' +
             sourceBadgeHtml +
             escapeHtml(displayName) +
           '</div>' +
@@ -2760,7 +2760,7 @@ function seasonWatchedButtonState(d, seasonMeta) {
 // call site).
 function watchedSeasonButtonState(watched) {
   return watched
-    ? { upcoming: false, label: '<span style="margin-right:4px;">&#x2713;</span> Mark Season Unwatched', className: 'secondary', title: '' }
+    ? { upcoming: false, label: '<span class="u-mr-4px">&#x2713;</span> Mark Season Unwatched', className: 'secondary', title: '' }
     : { upcoming: false, label: 'Mark Season Watched', className: 'primary', title: '' };
 }
 
@@ -2791,7 +2791,7 @@ function episodeWatchButtonHtml(ep, isWatched) {
   const hasAired = typeof isEpisodeAired !== 'function' || isEpisodeAired(ep);
   if (hasAired || isWatched) {
     return '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isWatched ? 'secondary' : 'primary') + '" data-act="toggleEpisodeWatchStatusFromModal">' +
-      (isWatched ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+      (isWatched ? '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
       '</button>';
   }
   const airDate = (ep && (ep.air_date || ep.airDate)) || '';
@@ -2995,10 +2995,10 @@ function openEpisodeDetails(epNum) {
   const airTimeLabel = typeof episodeAirTimeLabel === 'function' ? episodeAirTimeLabel(d, ep) : '';
 
   let infoHtml = '';
-  if (date) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(date) + '</div>';
-  if (airTimeLabel) infoHtml += '<div style="margin-bottom:6px; color:var(--brand);">' + escapeHtml(airTimeLabel) + '</div>';
-  if (runtime) infoHtml += '<div style="margin-bottom:6px;">' + escapeHtml(runtime) + '</div>';
-  if (ep.vote_average) infoHtml += '<div style="margin-bottom:6px;">\u2605 ' + escapeHtml(Number(ep.vote_average).toFixed(1)) + ' TMDB</div>';
+  if (date) infoHtml += '<div class="u-mb-6px">' + escapeHtml(date) + '</div>';
+  if (airTimeLabel) infoHtml += '<div class="u-mb-6px u-c-v_brand">' + escapeHtml(airTimeLabel) + '</div>';
+  if (runtime) infoHtml += '<div class="u-mb-6px">' + escapeHtml(runtime) + '</div>';
+  if (ep.vote_average) infoHtml += '<div class="u-mb-6px">\u2605 ' + escapeHtml(Number(ep.vote_average).toFixed(1)) + ' TMDB</div>';
   
   window._currentEpisodeDetails = ep;
   
@@ -3030,14 +3030,14 @@ function openEpisodeDetails(epNum) {
   const innerHtml = 
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<div style="display:flex; flex-direction:row; gap:32px; flex-wrap:wrap; margin-top:20px;">' +
-      '<div style="flex: 0 0 300px; max-width: 100%;">' +
+      '<div class="u-flex-0_0_300px u-maxw-100">' +
         (still ? '<img src="' + still + '" style="width:100%; border-radius:var(--radius-sm); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">' : '') +
       '</div>' +
-      '<div style="flex: 1; min-width: 300px;">' +
-        '<h1 style="margin:0 0 16px; font-size:2.5rem; font-family: serif;">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
-          '<div style="margin-bottom:20px;">' + watchBtnHtml + '</div>' +
-        '<div style="margin-bottom:16px; color:var(--text); font-size:var(--font-size-md);">' + infoHtml + '</div>' +
-        '<p style="font-size:var(--font-size-md); line-height:1.6; color:var(--text); margin-bottom: 24px;">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
+      '<div class="u-flex-1 u-minw-300px">' +
+        '<h1 class="u-m-0_0_16px u-fs-2_5rem u-ff-serif">E' + ep.episode_number + ' - ' + escapeHtml(ep.name) + '</h1>' +
+          '<div class="u-mb-20px">' + watchBtnHtml + '</div>' +
+        '<div class="u-mb-16px u-c-v_text u-fs-v_font_size_md">' + infoHtml + '</div>' +
+        '<p class="u-fs-v_font_size_md u-lh-1_6 u-c-v_text u-mb-24px">' + escapeHtml(ep.overview || 'No overview available.') + '</p>' +
       '</div>' +
     '</div>';
     
@@ -3180,7 +3180,7 @@ window.updateSeasonEpisodeCounts = updateSeasonEpisodeCounts;
 // spelling out its own label and classes is how they came to disagree.
 function showWatchedButtonState(watched) {
   return watched
-    ? { label: '<span style="margin-right:4px;">&#x2713;</span> Mark Show Unwatched', className: 'secondary' }
+    ? { label: '<span class="u-mr-4px">&#x2713;</span> Mark Show Unwatched', className: 'secondary' }
     : { label: 'Mark Show Watched', className: 'primary' };
 }
 
@@ -3484,7 +3484,7 @@ function renderItemStorylinesWatchOrder(d, type) {
         '</div>' +
         '<div class="item-storyline-title">' + escapeHtml(displayTitle) + '</div>' +
         '<div class="item-storyline-meta" style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
-          '<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(formatSubtitle) + '</span>' +
+          '<span class="u-ov-hidden u-to-ellipsis u-ws-nowrap">' + escapeHtml(formatSubtitle) + '</span>' +
           ratingSlot +
         '</div>' +
       '</div>';
@@ -3512,7 +3512,7 @@ function renderItemStorylinesWatchOrder(d, type) {
   }).join('');
 
   const pillsHtml = (matchingEvents.length > 1) ?
-    '<div class="subnav-pills-bar" style="margin-bottom:16px; flex-wrap:wrap;">' +
+    '<div class="subnav-pills-bar u-mb-16px u-fw2-wrap">' +
       matchingEvents.map((ev, idx) =>
         '<button type="button" class="subnav-pill' + (idx === 0 ? ' active' : '') + '" data-act="switchItemStorylineTab" data-act-args="' + appActArgs([ev.id, "@self"]) + '">' +
           (idx === 0 ? '<span class="check-icon">&#x2713;</span> ' : '') + escapeHtml(ev.name) +
@@ -3532,8 +3532,8 @@ function renderItemStorylinesWatchOrder(d, type) {
   }
 
   return '<div class="item-storylines-section">' +
-    '<div class="shelf-header" style="margin-bottom:12px;">' +
-      '<h3 style="margin: 0; font-family:serif; font-size:var(--font-size-2xl);">Storylines, Sagas &amp; Universes</h3>' +
+    '<div class="shelf-header u-mb-12px">' +
+      '<h3 class="u-m-0 u-ff-serif u-fs-v_font_size_2xl">Storylines, Sagas &amp; Universes</h3>' +
     '</div>' +
     pillsHtml +
     '<div class="item-storylines-panels">' +
@@ -3596,7 +3596,7 @@ async function openItemDetailsModal(id, type, opts) {
   }
   
   const body = document.getElementById('itemDetailsBody');
-  body.innerHTML = '<p style="color:var(--muted); text-align:center; padding: 40px;">Fetching information from TMDB...</p>';
+  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB...</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -3670,14 +3670,14 @@ async function openItemDetailsModal(id, type, opts) {
     const infoHtml = pillParts.join('<span class="item-pill-sep" aria-hidden="true">\u2022</span>');
     
     const trailerHtml = d.trailerKey ? 
-      '<h3 style="margin: 0 0 16px; font-family:serif; font-size:var(--font-size-2xl);">Trailer</h3>' +
+      '<h3 class="u-m-0_0_16px u-ff-serif u-fs-v_font_size_2xl">Trailer</h3>' +
       '<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:var(--radius-sm);">' +
       '<iframe style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" src="https://www.youtube.com/embed/' + escapeAttr(d.trailerKey) + '" allowfullscreen></iframe>' +
       '</div>' : '';
 
     let seasonsHtml = '';
     if (d.seasonsData && d.seasonsData.length > 0) {
-      seasonsHtml += '<h3 style="margin: 32px 0 16px; font-family:serif; font-size:var(--font-size-2xl);">Seasons</h3>';
+      seasonsHtml += '<h3 class="u-m-32px_0_16px u-ff-serif u-fs-v_font_size_2xl">Seasons</h3>';
       seasonsHtml += '<div style="display:flex; flex-direction:column; gap:16px;">';
       // Specials (season 0) are real seasons too -- just listed last, below
       // every numbered season, since TMDB itself orders them first.
@@ -3753,7 +3753,7 @@ async function openItemDetailsModal(id, type, opts) {
           '</button>'
           :
           '<button type="button" id="btnMarkWatched" class="lc-btn ' + (isItemWatched(d.id, d.tmdbId, d.imdbId) ? 'secondary' : 'primary') + '" data-act="toggleMovieWatchStatusFromModal">' +
-            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span style="margin-right:4px;">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
+            (isItemWatched(d.id, d.tmdbId, d.imdbId) ? '<span class="u-mr-4px">&#x2713;</span> Mark as unwatched' : 'Mark as Watched') +
           '</button>') +
       '</div>' +
       genresHtml +
@@ -3761,13 +3761,13 @@ async function openItemDetailsModal(id, type, opts) {
         '<p class="item-synopsis" id="itemSynopsisText">' + escapeHtml(d.overview || 'No overview available.') + '</p>' +
         '<button type="button" class="item-synopsis-toggle" id="itemSynopsisToggle" aria-controls="itemSynopsisText" aria-expanded="false" hidden data-act="toggleItemSynopsis" data-act-args="[&quot;@self&quot;]">Read More</button>' +
       '</div>' +
-      (trailerHtml ? '<div style="margin-top:32px;">' + trailerHtml + '</div>' : '') +
-      (seasonsHtml ? '<div style="margin-top:32px;">' + seasonsHtml + '</div>' : '') +
-      (storylinesHtml ? '<div style="margin-top:32px;">' + storylinesHtml + '</div>' : '');
+      (trailerHtml ? '<div class="u-mt-32px">' + trailerHtml + '</div>' : '') +
+      (seasonsHtml ? '<div class="u-mt-32px">' + seasonsHtml + '</div>' : '') +
+      (storylinesHtml ? '<div class="u-mt-32px">' + storylinesHtml + '</div>' : '');
     syncItemSynopsisToggle();
       
   } catch (err) {
-    body.innerHTML = '<p class="testresult err" style="margin-top:48px;">\u2717 ' + escapeHtml(err.message) + '</p>';
+    body.innerHTML = '<p class="testresult err u-mt-48px">\u2717 ' + escapeHtml(err.message) + '</p>';
   }
 }
 
@@ -3877,7 +3877,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
             (still ? '<img src="' + still + '" style="width:100%; height:100%; object-fit:cover;">' : '') +
             '<div class="episode-num-badge" style="position:absolute; bottom:4px; left:4px; background:var(--accent); color:var(--color-on-brand); padding:2px 6px; border-radius:var(--radius-xs); font-weight:bold; font-size:var(--font-size-sm); box-shadow:0 1px 4px rgba(0,0,0,0.4);">E' + ep.episode_number + '</div>' +
           '</div>' +
-          '<div style="font-size:var(--font-size-base); color:var(--text); line-height:1.2; padding-top:4px;">' + escapeHtml(ep.name) + '</div>' +
+          '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
     });
     grid.innerHTML = epsHtml || '<div style="grid-column: 1 / -1; color:var(--muted);">No episodes found.</div>';
@@ -4187,7 +4187,7 @@ function openSelectListModal(id, type, title, poster) {
 
   // SECTION: Custom Lists
   if (customLists.length > 0) {
-    html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:4px 0 6px;">Custom Lists</div>';
+    html += '<div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_5px u-m-4px_0_6px">Custom Lists</div>';
     customLists.forEach((list, idx) => {
       let isChecked = false;
       try {
@@ -4205,8 +4205,8 @@ function openSelectListModal(id, type, title, poster) {
         '<div class="select-list-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom: 1px solid var(--border);">' +
           '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
             '<input type="checkbox" class="list-select-cb" data-type="custom" data-idx="' + idx + '" data-initially-checked="' + (isChecked ? 'true' : 'false') + '" ' + (isChecked ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
-            '<span style="font-weight:500;">' + escapeHtml(displayName) + '</span>' +
-            (isChecked ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+            '<span class="u-fw-500">' + escapeHtml(displayName) + '</span>' +
+            (isChecked ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
           (isChecked ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleCustomItemDirect" data-act-args="' + appActArgs([idx, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
@@ -4216,7 +4216,7 @@ function openSelectListModal(id, type, title, poster) {
   // SECTION: Trakt
   if (hasTrakt) {
     html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#ed1c24; font-weight:bold;">\u25CF</span> Trakt ' + (traktUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
+      '<span class="u-c-ed1c24 u-fw-bold">\u25CF</span> Trakt ' + (traktUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(traktUser) + ')</small>' : '') +
     '</div>';
 
     const traktWl = Array.isArray(window._myTraktLists) ? window._myTraktLists.find(l => l.slug === 'watchlist' || l.url === 'trakt:watchlist') : null;
@@ -4226,7 +4226,7 @@ function openSelectListModal(id, type, title, poster) {
         '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-name="Trakt Watchlist" data-initially-checked="' + (inTraktWatchlist ? 'true' : 'false') + '" ' + (inTraktWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>Trakt Watchlist</span>' +
-          (inTraktWatchlist ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+          (inTraktWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
         (inTraktWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
@@ -4240,7 +4240,7 @@ function openSelectListModal(id, type, title, poster) {
             '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="trakt" data-target="custom" data-list-id="' + escapeAttr(tl.id || tl.slug || '') + '" data-name="' + escapeAttr(tl.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tl.name || 'Trakt List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
             (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", "custom", tl.id || tl.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
@@ -4251,7 +4251,7 @@ function openSelectListModal(id, type, title, poster) {
   // SECTION: Simkl
   if (hasSimkl) {
     html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#00e699; font-weight:bold;">\u25CF</span> Simkl ' + (simklUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
+      '<span class="u-c-00e699 u-fw-bold">\u25CF</span> Simkl ' + (simklUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(simklUser) + ')</small>' : '') +
     '</div>';
 
     const simklStatuses = [
@@ -4270,7 +4270,7 @@ function openSelectListModal(id, type, title, poster) {
           '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
             '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="simkl" data-target="status" data-status="' + st.key + '" data-list-id="' + st.key + '" data-name="Simkl ' + escapeAttr(st.label) + '" data-initially-checked="' + (isPresent ? 'true' : 'false') + '" ' + (isPresent ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
             '<span>' + escapeHtml(st.label) + '</span>' +
-            (isPresent ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+            (isPresent ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
           '</label>' +
           (isPresent ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st.key, id, type, "@self"]) + '">Remove</button>' : '') +
         '</div>';
@@ -4280,7 +4280,7 @@ function openSelectListModal(id, type, title, poster) {
   // SECTION: TMDB
   if (hasTmdb) {
     html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#01b4e4; font-weight:bold;">\u25CF</span> TMDB ' + (tmdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
+      '<span class="u-c-01b4e4 u-fw-bold">\u25CF</span> TMDB ' + (tmdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(tmdbUser) + ')</small>' : '') +
     '</div>';
 
     const tmdbWl = Array.isArray(window._myTmdbLists) ? window._myTmdbLists.find(l => l.url && l.url.includes('watchlist')) : null;
@@ -4290,7 +4290,7 @@ function openSelectListModal(id, type, title, poster) {
         '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="watchlist" data-list-id="watchlist" data-name="TMDB Watchlist" data-initially-checked="' + (inTmdbWatchlist ? 'true' : 'false') + '" ' + (inTmdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Watchlist</span>' +
-          (inTmdbWatchlist ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+          (inTmdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
         (inTmdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
@@ -4302,7 +4302,7 @@ function openSelectListModal(id, type, title, poster) {
         '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="favorite" data-list-id="favorite" data-name="TMDB Favorites" data-initially-checked="' + (inTmdbFav ? 'true' : 'false') + '" ' + (inTmdbFav ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>TMDB Favorites</span>' +
-          (inTmdbFav ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+          (inTmdbFav ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
         (inTmdbFav ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "favorite", "favorite", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
@@ -4316,7 +4316,7 @@ function openSelectListModal(id, type, title, poster) {
             '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="tmdb" data-target="custom" data-list-id="' + escapeAttr(tml.id || '') + '" data-name="' + escapeAttr(tml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(tml.name || 'TMDB List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
             (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", "custom", tml.id || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
@@ -4327,7 +4327,7 @@ function openSelectListModal(id, type, title, poster) {
   // SECTION: MDBList
   if (hasMdblist) {
     html += '<div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin:16px 0 6px; display:flex; align-items:center; gap:6px;">' +
-      '<span style="color:#f5c518; font-weight:bold;">\u25CF</span> MDBList ' + (mdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
+      '<span class="u-c-f5c518 u-fw-bold">\u25CF</span> MDBList ' + (mdbUser ? '<small style="text-transform:none; font-weight:normal; opacity:0.8;">(@' + escapeHtml(mdbUser) + ')</small>' : '') +
     '</div>';
 
     const mdbWl = Array.isArray(window._myMdblistLists) ? window._myMdblistLists.find(l => l.slug === 'watchlist' || l.url === 'mdblist:watchlist') : null;
@@ -4337,7 +4337,7 @@ function openSelectListModal(id, type, title, poster) {
         '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
           '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-name="MDBList Watchlist" data-initially-checked="' + (inMdbWatchlist ? 'true' : 'false') + '" ' + (inMdbWatchlist ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
           '<span>MDBList Watchlist</span>' +
-          (inMdbWatchlist ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+          (inMdbWatchlist ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
         '</label>' +
         (inMdbWatchlist ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "watchlist", "watchlist", id, type, "@self"]) + '">Remove</button>' : '') +
       '</div>';
@@ -4351,7 +4351,7 @@ function openSelectListModal(id, type, title, poster) {
             '<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; color:var(--text); font-size:var(--font-size-base);">' +
               '<input type="checkbox" class="list-select-cb" data-type="external" data-provider="mdblist" data-target="custom" data-list-id="' + escapeAttr(ml.id || ml.slug || '') + '" data-name="' + escapeAttr(ml.name) + '" data-initially-checked="' + (inList ? 'true' : 'false') + '" ' + (inList ? 'checked ' : '') + 'style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent);">' +
               '<span>' + escapeHtml(ml.name || 'MDBList List') + '</span>' +
-              (inList ? '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>' : '') +
+              (inList ? '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>' : '') +
             '</label>' +
             (inList ? '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", "custom", ml.id || ml.slug || '', id, type, "@self"]) + '">Remove</button>' : '') +
           '</div>';
@@ -4360,14 +4360,14 @@ function openSelectListModal(id, type, title, poster) {
   }
 
   if (html) {
-    html += '<div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); text-align: center;">' +
+    html += '<div class="u-mt-16px u-pt-12px u-bdt-1px_dashed_v_border u-ta-center">' +
       '<button type="button" class="lc-btn secondary" style="width:100%; font-size:var(--font-size-base);" data-act="closeSelectListModal" data-act-then="openCreateListModal">+ Create New List</button>' +
     '</div>';
   }
 
   if (html === '') {
-    html = '<p style="text-align:center; padding:20px; color:var(--muted); font-size:var(--font-size-base);">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
-      '<a href="#" id="emptyCreateListLink" style="color:var(--accent); font-weight:600;">Create a Custom List</a> or connect Trakt/Simkl/TMDB/MDBList in <strong>Settings</strong>.</p>';
+    html = '<p class="u-ta-center u-p-20px u-c-v_muted u-fs-v_font_size_base">You do not have any Custom Lists or connected external accounts yet.<br><br>' +
+      '<a href="#" id="emptyCreateListLink" class="u-c-v_accent u-fw-600">Create a Custom List</a> or connect Trakt/Simkl/TMDB/MDBList in <strong>Settings</strong>.</p>';
     document.getElementById('addSelectedListsBtn').style.display = 'none';
     setTimeout(() => {
       const lnk = document.getElementById('emptyCreateListLink');
@@ -4417,7 +4417,7 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
                   row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["simkl", "status", st, id, type, "@self"]) + '">Remove</button>');
                 }
@@ -4447,7 +4447,7 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
                   row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["trakt", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
@@ -4481,7 +4481,7 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
                   row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["tmdb", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
@@ -4518,7 +4518,7 @@ function openSelectListModal(id, type, title, poster) {
               const row = cb.closest('.select-list-row');
               if (row && !row.querySelector('.in-list-badge')) {
                 const label = row.querySelector('label');
-                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge" style="font-size:var(--font-size-xs); background:var(--color-success-subtle); color:var(--color-success-text); padding:2px 6px; border-radius:var(--radius-xs); font-weight:600;">In List</span>');
+                if (label) label.insertAdjacentHTML('beforeend', '<span class="in-list-badge u-fs-v_font_size_xs u-bg-v_color_success_subtle u-c-v_color_success_text u-p-2px_6px u-br-v_radius_xs u-fw-600">In List</span>');
                 if (!row.querySelector('button')) {
                   row.insertAdjacentHTML('beforeend', '<button type="button" class="lc-btn secondary" style="padding:3px 8px; font-size:var(--font-size-xs); color:var(--danger); border-color:var(--danger); min-width:auto; height:26px; line-height:1;" data-act="removeSingleExternalItemDirect" data-act-args="' + appActArgs(["mdblist", target, listId, id, type, "@self"]) + '">Remove</button>');
                 }
@@ -5187,7 +5187,7 @@ function applySearchFilters() {
 
 function renderTitlePosterCards(items, totalCount, resEl) {
   if (!items || !items.length) {
-    resEl.innerHTML = '<p style="margin:16px 0; color:var(--muted); font-size:var(--font-size-base);"><small>No titles match the selected filters.</small></p>';
+    resEl.innerHTML = '<p class="u-m-16px_0 u-c-v_muted u-fs-v_font_size_base"><small>No titles match the selected filters.</small></p>';
     return;
   }
 
@@ -5198,10 +5198,10 @@ function renderTitlePosterCards(items, totalCount, resEl) {
   let countBadge = '';
   if (q) {
     countBadge = (typeof totalCount === 'number' && totalCount > items.length)
-      ? '<div style="margin-bottom:12px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
-      : '<div style="margin-bottom:12px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
+      ? '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Showing ' + items.length + ' of ' + totalCount + ' results for "' + escapeHtml(q) + '"</div>'
+      : '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">' + items.length + ' results found for "' + escapeHtml(q) + '"</div>';
   } else {
-    countBadge = '<div style="margin-bottom:12px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">Top Trending ' + typeLabel + ' Right Now</div>';
+    countBadge = '<div class="u-mb-12px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Top Trending ' + typeLabel + ' Right Now</div>';
   }
 
   const postersHtml = items.map(m => {
@@ -5229,7 +5229,7 @@ function renderTitlePosterCards(items, totalCount, resEl) {
 
     const posterEl = resolvedCardPoster
       ? '<img class="live-preview-poster" src="' + escapeAttr(resolvedCardPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     
     return '<div class="live-preview-poster-card clickable-poster" ' +
       'data-id="' + escapeAttr(id || '') + '" ' +

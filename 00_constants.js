@@ -1950,8 +1950,18 @@ const DESIGN_TOKENS_CSS = `
 // new, and use these only where a one-off spacing/colour tweak is needed.
 const UTILITY_CSS = `
 .u-acc-v_accent{accent-color:var(--accent)}
+.u-acc-v_brand{accent-color:var(--brand)}
 .u-ai-center{align-items:center}
+.u-ai-flex_start{align-items:flex-start}
+.u-bd-1_5px_dashed_v_border{border:1.5px dashed var(--border)}
 .u-bd-1_5px_solid_v_border_strong{border:1.5px solid var(--border-strong)}
+.u-bd-1px_solid_rgba_0_122_255_0_2{border:1px solid rgba(0,122,255,0.2)}
+.u-bd-1px_solid_rgba_0_122_255_0_25{border:1px solid rgba(0,122,255,0.25)}
+.u-bd-1px_solid_rgba_255_149_0_0_3{border:1px solid rgba(255,149,0,0.3)}
+.u-bd-1px_solid_rgba_255_149_0_0_35{border:1px solid rgba(255,149,0,0.35)}
+.u-bd-1px_solid_rgba_255_255_255_0_12{border:1px solid rgba(255,255,255,0.12)}
+.u-bd-1px_solid_rgba_255_59_48_0_25{border:1px solid rgba(255,59,48,0.25)}
+.u-bd-1px_solid_rgba_255_59_48_0_3{border:1px solid rgba(255,59,48,0.3)}
 .u-bd-1px_solid_v_border{border:1px solid var(--border)}
 .u-bd-1px_solid_v_color_danger{border:1px solid var(--color-danger)}
 .u-bd-2px_dashed_v_accent{border:2px dashed var(--accent)}
@@ -1960,37 +1970,68 @@ const UTILITY_CSS = `
 .u-bdb-none{border-bottom:none}
 .u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3)}
 .u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35)}
+.u-bdc-v_color_danger{border-color:var(--color-danger)}
+.u-bdt-1px_dashed_v_border{border-top:1px dashed var(--border)}
 .u-bdt-1px_solid_v_border{border-top:1px solid var(--border)}
 .u-bg-F2F2F7{background:#F2F2F7}
+.u-bg-rgba_0_0_0_0_3{background:rgba(0,0,0,0.3)}
+.u-bg-rgba_0_122_255_0_08{background:rgba(0,122,255,0.08)}
+.u-bg-rgba_255_149_0_0_05{background:rgba(255,149,0,0.05)}
+.u-bg-rgba_255_149_0_0_12{background:rgba(255,149,0,0.12)}
+.u-bg-rgba_255_255_255_0_03{background:rgba(255,255,255,0.03)}
+.u-bg-rgba_255_59_48_0_05{background:rgba(255,59,48,0.05)}
+.u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08)}
 .u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12)}
 .u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15)}
 .u-bg-v_bg{background:var(--bg)}
+.u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03))}
+.u-bg-v_card_bg{background:var(--card-bg)}
+.u-bg-v_color_danger{background:var(--color-danger)}
+.u-bg-v_color_success_subtle{background:var(--color-success-subtle)}
 .u-bg-v_panel_strong{background:var(--panel-strong)}
 .u-bg-v_surface{background:var(--surface)}
 .u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04))}
+.u-br-v_radius{border-radius:var(--radius)}
 .u-br-v_radius_md{border-radius:var(--radius-md)}
 .u-br-v_radius_pill{border-radius:var(--radius-pill)}
 .u-br-v_radius_sm{border-radius:var(--radius-sm)}
+.u-br-v_radius_xs{border-radius:var(--radius-xs)}
 .u-bs-border_box{box-sizing:border-box}
 .u-bsh-v_shadow_sm{box-shadow:var(--shadow-sm)}
+.u-c-00e699{color:#00e699}
+.u-c-01b4e4{color:#01b4e4}
 .u-c-1C1C1E{color:#1C1C1E}
+.u-c-ed1c24{color:#ed1c24}
 .u-c-f5c518{color:#f5c518}
 .u-c-v_accent{color:var(--accent)}
 .u-c-v_accent_2{color:var(--accent-2)}
+.u-c-v_brand{color:var(--brand)}
 .u-c-v_color_danger_text{color:var(--color-danger-text)}
+.u-c-v_color_on_brand{color:var(--color-on-brand)}
 .u-c-v_color_success_text{color:var(--color-success-text)}
 .u-c-v_color_warn_text{color:var(--color-warn-text)}
+.u-c-v_danger{color:var(--danger)}
+.u-c-v_danger_v_color_danger{color:var(--danger, var(--color-danger))}
 .u-c-v_muted{color:var(--muted)}
 .u-c-v_text{color:var(--text)}
 .u-c-v_text_2{color:var(--text-2)}
+.u-c-v_warning_v_color_warn{color:var(--warning, var(--color-warn))}
+.u-cur-default{cursor:default}
+.u-cur-grab{cursor:grab}
 .u-cur-pointer{cursor:pointer}
+.u-fd-column{flex-direction:column}
 .u-fd-row{flex-direction:row}
 .u-ff-monospace{font-family:monospace}
 .u-ff-sans_serif{font-family:sans-serif}
+.u-ff-serif{font-family:serif}
+.u-flex-0_0_300px{flex:0 0 300px}
 .u-flex-0_0_auto{flex:0 0 auto}
 .u-flex-1{flex:1}
 .u-flex-1_1_320px{flex:1 1 320px}
+.u-fs-2_5rem{font-size:2.5rem}
 .u-fs-2rem{font-size:2rem}
+.u-fs-v_font_size_2xl{font-size:var(--font-size-2xl)}
+.u-fs-v_font_size_2xs{font-size:var(--font-size-2xs)}
 .u-fs-v_font_size_base{font-size:var(--font-size-base)}
 .u-fs-v_font_size_lg{font-size:var(--font-size-lg)}
 .u-fs-v_font_size_md{font-size:var(--font-size-md)}
@@ -2003,21 +2044,26 @@ const UTILITY_CSS = `
 .u-fw-600{font-weight:600}
 .u-fw-700{font-weight:700}
 .u-fw-800{font-weight:800}
+.u-fw-bold{font-weight:bold}
 .u-fw-normal{font-weight:normal}
 .u-fw2-wrap{flex-wrap:wrap}
 .u-gap-10px{gap:10px}
 .u-gap-12px{gap:12px}
 .u-gap-6px{gap:6px}
 .u-gap-8px{gap:8px}
+.u-jc-center{justify-content:center}
 .u-jc-flex_end{justify-content:flex-end}
 .u-jc-flex_start{justify-content:flex-start}
 .u-jc-space_between{justify-content:space-between}
+.u-lh-1_2{line-height:1.2}
 .u-lh-1_35{line-height:1.35}
 .u-lh-1_4{line-height:1.4}
 .u-lh-1_45{line-height:1.45}
 .u-lh-1_5{line-height:1.5}
+.u-lh-1_6{line-height:1.6}
 .u-ls-0_02em{letter-spacing:0.02em}
 .u-ls-0_05em{letter-spacing:0.05em}
+.u-ls-0_5px{letter-spacing:0.5px}
 .u-ls-4px{letter-spacing:4px}
 .u-m-0{margin:0}
 .u-m-0_0_10px{margin:0 0 10px}
@@ -2026,25 +2072,40 @@ const UTILITY_CSS = `
 .u-m-0_0_14px{margin:0 0 14px}
 .u-m-0_0_16px{margin:0 0 16px}
 .u-m-0_0_18px{margin:0 0 18px}
+.u-m-0_0_2px{margin:0 0 2px}
 .u-m-0_0_4px{margin:0 0 4px}
 .u-m-0_0_6px{margin:0 0 6px}
 .u-m-0_0_8px{margin:0 0 8px}
 .u-m-0_6px_6px_0{margin:0 6px 6px 0}
+.u-m-0_auto{margin:0 auto}
 .u-m-10px_0{margin:10px 0}
 .u-m-10px_0_0{margin:10px 0 0}
+.u-m-10px_0_4px{margin:10px 0 4px}
 .u-m-12px_0{margin:12px 0}
+.u-m-12px_0_20px{margin:12px 0 20px}
 .u-m-12px_0_8px{margin:12px 0 8px}
+.u-m-14px_0_4px{margin:14px 0 4px}
+.u-m-16px_0{margin:16px 0}
+.u-m-16px_0_6px{margin:16px 0 6px}
 .u-m-20px_0_4px{margin:20px 0 4px}
 .u-m-2px_0_0{margin:2px 0 0}
 .u-m-2px_0_0_24px{margin:2px 0 0 24px}
+.u-m-32px_0_16px{margin:32px 0 16px}
 .u-m-3px_0_0{margin:3px 0 0}
 .u-m-4px_0_0{margin:4px 0 0}
+.u-m-4px_0_6px{margin:4px 0 6px}
 .u-m-6px_0_0{margin:6px 0 0}
 .u-m-6px_0_0_24px{margin:6px 0 0 24px}
+.u-m-6px_0_4px{margin:6px 0 4px}
+.u-m-8px_0{margin:8px 0}
 .u-m-8px_0_0{margin:8px 0 0}
+.u-m-8px_0_14px{margin:8px 0 14px}
+.u-m-8px_0_16px{margin:8px 0 16px}
 .u-maxh-340px{max-height:340px}
+.u-maxw-100{max-width:100%}
 .u-maxw-220px{max-width:220px}
 .u-maxw-320px{max-width:320px}
+.u-maxw-340px{max-width:340px}
 .u-maxw-380px{max-width:380px}
 .u-maxw-480px{max-width:480px}
 .u-maxw-500px{max-width:500px}
@@ -2056,17 +2117,24 @@ const UTILITY_CSS = `
 .u-mb-16px{margin-bottom:16px}
 .u-mb-18px{margin-bottom:18px}
 .u-mb-20px{margin-bottom:20px}
+.u-mb-24px{margin-bottom:24px}
+.u-mb-2px{margin-bottom:2px}
 .u-mb-4px{margin-bottom:4px}
 .u-mb-6px{margin-bottom:6px}
 .u-mb-8px{margin-bottom:8px}
+.u-minh-unset{min-height:unset}
 .u-minw-0{min-width:0}
+.u-minw-160px{min-width:160px}
 .u-minw-180px{min-width:180px}
 .u-minw-200px{min-width:200px}
 .u-minw-210px{min-width:210px}
 .u-minw-220px{min-width:220px}
 .u-minw-240px{min-width:240px}
 .u-minw-280px{min-width:280px}
+.u-minw-300px{min-width:300px}
 .u-minw-320px{min-width:320px}
+.u-minw-80px{min-width:80px}
+.u-ml-26px{margin-left:26px}
 .u-ml-6px{margin-left:6px}
 .u-ml-auto{margin-left:auto}
 .u-mr-0{margin-right:0}
@@ -2082,7 +2150,9 @@ const UTILITY_CSS = `
 .u-mt-24px{margin-top:24px}
 .u-mt-28px{margin-top:28px}
 .u-mt-2px{margin-top:2px}
+.u-mt-32px{margin-top:32px}
 .u-mt-3px{margin-top:3px}
+.u-mt-48px{margin-top:48px}
 .u-mt-4px{margin-top:4px}
 .u-mt-6px{margin-top:6px}
 .u-mt-8px{margin-top:8px}
@@ -2092,26 +2162,41 @@ const UTILITY_CSS = `
 .u-p-0{padding:0}
 .u-p-0_0_10px{padding:0 0 10px}
 .u-p-0_0_12px{padding:0 0 12px}
+.u-p-0_0_4px{padding:0 0 4px}
 .u-p-10px{padding:10px}
+.u-p-10px_0_12px{padding:10px 0 12px}
 .u-p-10px_12px{padding:10px 12px}
 .u-p-10px_14px{padding:10px 14px}
+.u-p-12px{padding:12px}
 .u-p-12px_14px{padding:12px 14px}
 .u-p-12px_16px{padding:12px 16px}
+.u-p-12px_28px{padding:12px 28px}
 .u-p-14px_0{padding:14px 0}
 .u-p-14px_16px{padding:14px 16px}
 .u-p-16px{padding:16px}
+.u-p-18px{padding:18px}
+.u-p-20px{padding:20px}
+.u-p-24px{padding:24px}
+.u-p-24px_16px{padding:24px 16px}
+.u-p-28px_16px{padding:28px 16px}
+.u-p-2px_10px{padding:2px 10px}
+.u-p-2px_6px{padding:2px 6px}
 .u-p-2px_8px{padding:2px 8px}
 .u-p-40px{padding:40px}
 .u-p-4px_0{padding:4px 0}
+.u-p-4px_10px{padding:4px 10px}
 .u-p-4px_10px_4px_0{padding:4px 10px 4px 0}
 .u-p-4px_8px_4px_0{padding:4px 8px 4px 0}
 .u-p-5px_8px{padding:5px 8px}
 .u-p-6px_10px{padding:6px 10px}
 .u-p-7px_12px{padding:7px 12px}
+.u-p-8px_0{padding:8px 0}
 .u-p-8px_10px{padding:8px 10px}
 .u-p-8px_12px{padding:8px 12px}
+.u-p-8px_16px{padding:8px 16px}
 .u-pb-12px{padding-bottom:12px}
 .u-pb-14px{padding-bottom:14px}
+.u-pl-18px{padding-left:18px}
 .u-pl-38px{padding-left:38px}
 .u-pr-10px{padding-right:10px}
 .u-pr-12px{padding-right:12px}
@@ -2126,6 +2211,7 @@ const UTILITY_CSS = `
 .u-tt-uppercase{text-transform:uppercase}
 .u-us-all{user-select:all}
 .u-va-top{vertical-align:top}
+.u-wb-break_all{word-break:break-all}
 .u-wb-break_word{word-break:break-word}
 .u-ws-nowrap{white-space:nowrap}
 .u-ws-pre_wrap{white-space:pre-wrap}

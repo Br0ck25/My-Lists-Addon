@@ -6,11 +6,14 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeEnv, call } from "./harness.mjs";
 
+// The generated u-* helpers (UTILITY_CSS) are faithful copies of what used to be
+// inline style="" values, literals included, so the checks below look at the
+// component CSS only. DESIGN_SYSTEM.md section 9 lists the literals they carry.
 async function appCss() {
   const env = makeEnv();
   const res = await call(env, "/app.css");
   assert.equal(res.status, 200);
-  return res.text;
+  return res.text.split("\n").filter((l) => !/^\.u-[\w-]+\{/.test(l)).join("\n");
 }
 
 describe("design system: shared stylesheet", () => {

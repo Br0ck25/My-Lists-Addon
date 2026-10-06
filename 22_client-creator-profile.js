@@ -572,7 +572,7 @@ function renderAccountKeySection() {
   if (!box) return;
   if (!activeCreator) {
     box.innerHTML =
-      '<p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Save and sync your lists, channels, presets, likes, and settings across all your devices automatically. No email or password needed &mdash; just a username and key.</p>' +
       '<div class="actions" style="flex-direction:row; width:auto; gap:8px; flex-wrap:wrap; margin-top:12px;">' +
       '<button type="button" class="primary" data-act="openCreateProfileModal">Create Free Account</button>' +
       '<button type="button" class="secondary" data-act="openRestoreModal">Login</button>' +
@@ -584,13 +584,13 @@ function renderAccountKeySection() {
   box.innerHTML =
     '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">' +
     '<div>' +
-    '<span style="font-size:var(--font-size-xs); text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Signed in as</span>' +
-    '<h3 style="margin:2px 0 0; font-size:var(--font-size-lg); font-weight:800; color:var(--text);">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
+    '<span class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700">Signed in as</span>' +
+    '<h3 class="u-m-2px_0_0 u-fs-v_font_size_lg u-fw-800 u-c-v_text">&#x1F464; ' + escapeHtml(activeCreator.displayName) + '</h3>' +
     '</div>' +
     '<button type="button" class="secondary lc-btn" data-act="switchCreatorProfile">Sign Out / Switch</button>' +
     '</div>' +
-    '<div style="margin-top:6px;">' +
-      '<div style="font-size:var(--font-size-xs); text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">Account Key</div>' +
+    '<div class="u-mt-6px">' +
+      '<div class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700 u-mb-6px">Account Key</div>' +
       '<div class="account-key-group">' +
         '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
         '<div class="account-key-actions">' +
@@ -598,16 +598,16 @@ function renderAccountKeySection() {
           '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
         '</div>' +
       '</div>' +
-      '<p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
+      '<p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Anyone with this key can sign in as you and edit your lists &mdash; keep it somewhere safe, and don&apos;t share it.</p>' +
     '</div>' +
-    '<div class="recovery-section" style="margin-top:16px; padding:14px 16px; border:1px solid rgba(255,255,255,0.12); border-radius:var(--radius-md); background:rgba(255,255,255,0.03);">' +
+    '<div class="recovery-section u-mt-16px u-p-14px_16px u-bd-1px_solid_rgba_255_255_255_0_12 u-br-v_radius_md u-bg-rgba_255_255_255_0_03">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
-        '<div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">Account Recovery</div>' +
+        '<div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Account Recovery</div>' +
         '<span style="font-size:var(--font-size-xs); font-weight:700; padding:2px 8px; border-radius:var(--radius-sm);' + (hasRecovery ? ' background:rgba(52,199,89,0.15); color:var(--color-success-text);' : ' background:rgba(255,149,0,0.15); color:var(--color-warn-text);') + '">' +
           (hasRecovery ? '\u2713 Configured' : '\u26A0 Not Set') +
         '</span>' +
       '</div>' +
-      '<p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted);">' +
+      '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">' +
         (hasRecovery
           ? 'Your recovery answer is active. It can reset your key if lost, or find your username.'
           : 'You have not set a recovery answer. Add one so you can recover your username or reset your key if you ever lose them.') +
@@ -619,20 +619,20 @@ function renderAccountKeySection() {
     '<details class="danger-zone-disclosure">' +
       '<summary class="danger-zone-summary">' +
         '<span style="display:flex; align-items:center; gap:8px;">' +
-          '<span style="font-size:var(--font-size-base);">&#x26A0;</span>' +
+          '<span class="u-fs-v_font_size_base">&#x26A0;</span>' +
           '<span>Danger Zone (Reset or Delete Account)</span>' +
         '</span>' +
         '<span class="danger-zone-arrow">&#x25BE;</span>' +
       '</summary>' +
       '<div class="danger-zone-content">' +
-        '<div style="border:1px solid rgba(255,149,0,0.3); border-radius:var(--radius-md); padding:12px 14px; background:rgba(255,149,0,0.05);">' +
-          '<div style="font-weight:700; font-size:var(--font-size-sm); color:var(--color-warn-text); margin-bottom:4px;">Reset Account</div>' +
-          '<p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted); line-height:1.4;">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
+        '<div class="u-bd-1px_solid_rgba_255_149_0_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_149_0_0_05">' +
+          '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_color_warn_text u-mb-4px">Reset Account</div>' +
+          '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
           '<button type="button" class="lc-btn" style="background:var(--color-warn); color:var(--color-on-brand); border:none; padding:6px 14px; font-weight:700; font-size:var(--font-size-sm); border-radius:var(--radius-sm); cursor:pointer;" data-act="openResetAccountModal">Reset Account Data</button>' +
         '</div>' +
-        '<div style="border:1px solid rgba(255,59,48,0.3); border-radius:var(--radius-md); padding:12px 14px; background:rgba(255,59,48,0.05);">' +
-          '<div style="font-weight:700; font-size:var(--font-size-sm); color:var(--danger, var(--color-danger)); margin-bottom:4px;">Delete Account</div>' +
-          '<p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted); line-height:1.4;">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
+        '<div class="u-bd-1px_solid_rgba_255_59_48_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_59_48_0_05">' +
+          '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_danger_v_color_danger u-mb-4px">Delete Account</div>' +
+          '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
           '<button type="button" class="lc-btn" style="background:var(--color-danger); color:var(--color-on-brand); border:none; padding:6px 14px; font-weight:700; font-size:var(--font-size-sm); border-radius:var(--radius-sm); cursor:pointer;" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
         '</div>' +
       '</div>' +
@@ -645,10 +645,10 @@ function openSetRecoveryAnswerModal() {
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '<h2>' + (hasRecovery ? 'Update Recovery Answer' : 'Set Recovery Answer') + '</h2>' +
     '<p class="modal-sub">Choose an answer you will remember (e.g. your childhood pet, first school, or a passphrase). Must be at least 8 characters.</p>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerInput" placeholder="Recovery Answer (8+ characters)" minlength="8"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="setRecoveryAnswerConfirmInput" placeholder="Confirm Recovery Answer" minlength="8"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="setRecoveryAnswerInput" placeholder="Recovery Answer (8+ characters)" minlength="8"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="setRecoveryAnswerConfirmInput" placeholder="Confirm Recovery Answer" minlength="8"></div>' +
     '<div id="setRecoveryAnswerError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="setRecoveryAnswerBtn" data-act="submitSetRecoveryAnswer">Save Recovery Answer</button>' +
     '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
     '</div>'
@@ -796,20 +796,20 @@ function openDeleteAccountModal() {
   if (!activeCreator) return;
   showModal(
     '<div class="modal-body">' +
-      '<h2 class="panel-title" style="color:var(--danger, var(--color-danger));">&#x26A0; Delete Account &amp; All Data</h2>' +
-      '<p style="margin:8px 0 14px; font-size:var(--font-size-base);">Are you sure you want to delete your account <strong>' + escapeHtml(activeCreator.displayName) + '</strong>?</p>' +
-      '<div style="background:rgba(255,59,48,0.08); border:1px solid rgba(255,59,48,0.25); border-radius:var(--radius-sm); padding:12px; margin-bottom:14px; font-size:var(--font-size-sm); color:var(--text);">' +
-        '<p style="margin:0 0 6px; font-weight:700; color:var(--danger, var(--color-danger));">&#x2717; This action is permanent and cannot be undone.</p>' +
-        '<ul style="margin:0; padding-left:18px; color:var(--muted);">' +
+      '<h2 class="panel-title u-c-v_danger_v_color_danger">&#x26A0; Delete Account &amp; All Data</h2>' +
+      '<p class="u-m-8px_0_14px u-fs-v_font_size_base">Are you sure you want to delete your account <strong>' + escapeHtml(activeCreator.displayName) + '</strong>?</p>' +
+      '<div class="u-bg-rgba_255_59_48_0_08 u-bd-1px_solid_rgba_255_59_48_0_25 u-br-v_radius_sm u-p-12px u-mb-14px u-fs-v_font_size_sm u-c-v_text">' +
+        '<p class="u-m-0_0_6px u-fw-700 u-c-v_danger_v_color_danger">&#x2717; This action is permanent and cannot be undone.</p>' +
+        '<ul class="u-m-0 u-pl-18px u-c-v_muted">' +
           '<li>All your published lists will be deleted from the server.</li>' +
           '<li>All synced backups, likes, and channel configurations will be erased.</li>' +
           '<li>Your account key will become permanently invalid.</li>' +
         '</ul>' +
       '</div>' +
       '<div id="deleteAccountStatus"></div>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary" style="background:var(--color-danger); border-color:var(--color-danger); color:var(--color-on-brand);" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger u-bdc-v_color_danger u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );
@@ -820,7 +820,7 @@ async function handleDeleteAccount() {
   const btn = document.getElementById('confirmDeleteAccountBtn');
   const status = document.getElementById('deleteAccountStatus');
   if (btn) btn.disabled = true;
-  if (status) status.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);">Deleting account and all data\u2026</p>';
+  if (status) status.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Deleting account and all data\u2026</p>';
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/delete-account', {
@@ -852,13 +852,13 @@ async function handleDeleteAccount() {
 function openShareListModal(listName, listUrl) {
   showModal(
     '<div class="modal-body">' +
-      '<h2 class="panel-title" style="margin-bottom:6px;">Share List</h2>' +
-      '<p style="margin:0 0 14px; font-size:var(--font-size-sm); color:var(--muted);">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
+      '<h2 class="panel-title u-mb-6px">Share List</h2>' +
+      '<p class="u-m-0_0_14px u-fs-v_font_size_sm u-c-v_muted">Share <strong>' + escapeHtml(listName || 'Custom List') + '</strong> with others or open it in your browser.</p>' +
       '<div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">' +
-        '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly style="flex:1; padding:10px 12px; font-size:var(--font-size-base); border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
+        '<input type="text" id="shareListUrlInput" value="' + escapeAttr(listUrl) + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_base u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
         '<button type="button" class="lc-btn primary" id="shareListCopyBtn" data-act="copyShareListUrl" style="white-space:nowrap; padding:10px 16px;">Copy Link</button>' +
       '</div>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<a href="' + escapeAttr(listUrl) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' +
         '<button type="button" class="secondary lc-btn" data-act="closeModal">Close</button>' +
       '</div>' +
@@ -921,9 +921,9 @@ function renderWatchlistPreferencesSection() {
   } catch (e) {}
   box.innerHTML =
     '<div class="settings-toggle-row">' +
-      '<div style="flex:1; min-width:0; padding-right:12px;">' +
-        '<span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Automatically remove watched items from Watchlist</span>' +
-        '<p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
+      '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+        '<span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Automatically remove watched items from Watchlist</span>' +
+        '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Movies are removed once watched. TV shows are only removed after every episode has been watched.</p>' +
       '</div>' +
       '<label class="ui-toggle" aria-label="Automatically remove watched items from Watchlist">' +
         '<input type="checkbox" id="removeWatchedFromWatchlistCheck" ' + (autoClean ? 'checked' : '') + ' data-act="onRemoveWatchedFromWatchlistToggle" data-act-args="[&quot;@self&quot;]">' +
@@ -1037,7 +1037,7 @@ function renderHiddenListsSettingsSection() {
   });
 
   if (!rows.length && Object.keys(MY_LISTS_SECTION_PANEL_IDS || {}).length === 0) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No lists found yet -- visit My Lists (and connect any providers you use) first, then come back here to manage what\u2019s shown.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No lists found yet -- visit My Lists (and connect any providers you use) first, then come back here to manage what\u2019s shown.</small></p>';
     return;
   }
 
@@ -1058,8 +1058,8 @@ function renderHiddenListsSettingsSection() {
     const checked = hiddenSections.has(section);
     return '<label class="settings-check-item">' +
       '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-section-id="' + escapeAttr(section) + '" data-act="onHiddenSectionToggle" data-act-args="[&quot;@self&quot;]">' +
-      '<div style="flex:1; min-width:0;">' +
-        '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">' + escapeHtml(sectionLabels[section]) + '</span>' +
+      '<div class="u-flex-1 u-minw-0">' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(sectionLabels[section]) + '</span>' +
       '</div>' +
     '</label>';
   }).join('') + '</div>';
@@ -1068,20 +1068,20 @@ function renderHiddenListsSettingsSection() {
     const checked = hiddenIds.has(String(r.id));
     return '<label class="settings-check-item">' +
       '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-list-id="' + escapeAttr(r.id) + '" data-act="onHiddenListToggle" data-act-args="[&quot;@self&quot;]">' +
-      '<div style="flex:1; min-width:0;">' +
+      '<div class="u-flex-1 u-minw-0">' +
         '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text); overflow-wrap:anywhere;">' + escapeHtml(r.name) + '</span>' +
-        '<div style="color:var(--muted); font-size:var(--font-size-xs); margin-top:2px;">' + escapeHtml(r.source) + '</div>' +
+        '<div class="u-c-v_muted u-fs-v_font_size_xs u-mt-2px">' + escapeHtml(r.source) + '</div>' +
       '</div>' +
     '</label>';
-  }).join('') + '</div>') : '<p style="color:var(--muted); font-size:var(--font-size-sm); margin-top:8px;"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
+  }).join('') + '</div>') : '<p class="u-c-v_muted u-fs-v_font_size_sm u-mt-8px"><small>No individual lists found yet -- visit My Lists (and connect any providers you use) first.</small></p>';
 
   box.innerHTML =
-    '<div style="margin-bottom:14px;">' +
-      '<div style="font-weight:700; font-size:var(--font-size-sm); color:var(--text); margin-bottom:6px;">Whole Sections</div>' +
+    '<div class="u-mb-14px">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-6px">Whole Sections</div>' +
       sectionsHtml +
     '</div>' +
-    '<div style="border-top:1px solid var(--border); padding-top:14px;">' +
-      '<div style="font-weight:700; font-size:var(--font-size-sm); color:var(--text); margin-bottom:6px;">Individual Lists</div>' +
+    '<div class="u-bdt-1px_solid_v_border u-pt-14px">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-6px">Individual Lists</div>' +
       rowsHtml +
     '</div>';
 }
@@ -1156,12 +1156,12 @@ function renderTrackPlaybackSection() {
   } catch (e) {}
 
   box.innerHTML =
-    '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
-      '<p style="margin:0 0 6px; font-weight:700; font-size:var(--font-size-base);">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
+    '<div class="u-mb-14px u-pb-14px u-bdb-1px_solid_v_border">' +
+      '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Streaming Apps &amp; Addon Players (Stremio, Nuvio, Wako, etc.)</p>' +
       '<div class="settings-toggle-row">' +
-        '<div style="flex:1; min-width:0; padding-right:12px;">' +
-          '<span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Enable In-App Playback Auto-Tracking</span>' +
-          '<p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+        '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+          '<span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Enable In-App Playback Auto-Tracking</span>' +
+          '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
         '</div>' +
         '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
           '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
@@ -1170,20 +1170,20 @@ function renderTrackPlaybackSection() {
       '</div>' +
     '</div>' +
 
-    '<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border);">' +
-      '<p style="margin:0 0 6px; font-weight:700; font-size:var(--font-size-base);">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
-      '<p style="margin:0 0 8px; color:var(--muted); font-size:var(--font-size-sm);">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
+    '<div class="u-mb-14px u-pb-14px u-bdb-1px_solid_v_border">' +
+      '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
+      '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
-        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
+        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" class="u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-rgba_0_0_0_0_3 u-c-v_text u-ff-monospace u-fs-v_font_size_sm">' +
         '<button type="button" class="secondary lc-btn" data-act="copyScrobbleWebhookUrl" style="padding:8px 14px; font-size:var(--font-size-sm);">Copy Webhook URL</button>' +
         '<button type="button" class="secondary lc-btn" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been." style="padding:8px 14px; font-size:var(--font-size-sm);">Regenerate</button>' +
       '</div>' +
 
       '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<div class="settings-toggle-row" style="padding:0 0 4px; border-bottom:none;">' +
-          '<div style="flex:1; min-width:0; padding-right:12px;">' +
-            '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Enable Media Server User Filtering</span>' +
-            '<p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-sm);">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
+        '<div class="settings-toggle-row u-p-0_0_4px u-bdb-none">' +
+          '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+            '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Enable Media Server User Filtering</span>' +
+            '<p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_sm">When enabled, only selected or specified media server user profiles will scrobble into your lists. Unselected users will be ignored.</p>' +
           '</div>' +
           '<label class="ui-toggle" aria-label="Enable Media Server User Filtering">' +
             '<input type="checkbox" id="scrobbleFilterUsersCb" ' + (filterUsers ? 'checked' : '') + ' data-act="onScrobbleFilterUsersToggle" data-act-args="[&quot;@self&quot;]">' +
@@ -1192,11 +1192,11 @@ function renderTrackPlaybackSection() {
         '</div>' +
         '<div id="scrobbleFilterDetails" style="' + (filterUsers ? '' : 'display:none;') + ' margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">' +
           '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
-            '<p style="margin:0; font-size:var(--font-size-sm); font-weight:600; color:var(--text);">Select Allowed Users:</p>' +
+            '<p class="u-m-0 u-fs-v_font_size_sm u-fw-600 u-c-v_text">Select Allowed Users:</p>' +
             '<button type="button" class="secondary lc-btn" data-act="loadScrobbleSeenUsers" style="padding:3px 8px; font-size:var(--font-size-xs);">Refresh Users</button>' +
           '</div>' +
-          '<div id="scrobbleSeenUsersBox" style="font-size:var(--font-size-sm); color:var(--muted); margin-bottom:10px;"><small>Loading\u2026</small></div>' +
-          '<p style="margin:0 0 4px; font-size:var(--font-size-sm); color:var(--muted);">Additional / Manual Usernames (comma-separated):</p>' +
+          '<div id="scrobbleSeenUsersBox" class="u-fs-v_font_size_sm u-c-v_muted u-mb-10px"><small>Loading\u2026</small></div>' +
+          '<p class="u-m-0_0_4px u-fs-v_font_size_sm u-c-v_muted">Additional / Manual Usernames (comma-separated):</p>' +
           '<input type="text" id="scrobbleAllowedUsersInput" placeholder="e.g. James, Alice" value="' + escapeHtml(allowedUsers) + '" data-act-on="input" data-act="onScrobbleAllowedUsersChange" style="width:100%; box-sizing:border-box; margin-bottom:8px; font-size:var(--font-size-sm);">' +
           '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:var(--font-size-sm); user-select:none; margin:0;">' +
             '<input type="checkbox" id="scrobbleBlockAnonCb" ' + (blockAnon ? 'checked' : '') + ' data-act="onScrobbleBlockAnonChange" data-act-args="[&quot;@self&quot;]" style="width:16px; height:16px; margin-top:2px; cursor:pointer; flex:none;">' +
@@ -1206,18 +1206,18 @@ function renderTrackPlaybackSection() {
       '</div>' +
 
       '<div style="margin:12px 0 0; padding:12px 0; border-top:1px solid var(--border); box-sizing:border-box; width:100%; max-width:100%;">' +
-        '<div class="settings-toggle-row" style="padding:0 0 10px;">' +
-          '<div style="flex:1; min-width:0; padding-right:12px;">' +
-            '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Automatically sync media server scrobbles to your Watch History list</span>' +
+        '<div class="settings-toggle-row u-p-0_0_10px">' +
+          '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+            '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Automatically sync media server scrobbles to your Watch History list</span>' +
           '</div>' +
           '<label class="ui-toggle" aria-label="Sync media server scrobbles to Watch History">' +
             '<input type="checkbox" id="syncMediaServerHistoryCb" checked data-act="toggleMediaServerSync" data-act-args="[&quot;@checked&quot;]">' +
             '<span class="ui-toggle-slider"></span>' +
           '</label>' +
         '</div>' +
-        '<div class="settings-toggle-row" style="padding:10px 0 12px; border-bottom:none;">' +
-          '<div style="flex:1; min-width:0; padding-right:12px;">' +
-            '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
+        '<div class="settings-toggle-row u-p-10px_0_12px u-bdb-none">' +
+          '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+            '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Forward scrobbles to connected external accounts (Trakt, Simkl, MDBList)</span>' +
           '</div>' +
           '<label class="ui-toggle" aria-label="Forward scrobbles to connected external accounts">' +
             '<input type="checkbox" id="forwardScrobbleToProvidersCb" checked data-act="toggleForwardScrobbles" data-act-args="[&quot;@checked&quot;]">' +
@@ -1230,22 +1230,22 @@ function renderTrackPlaybackSection() {
       '</div>' +
 
       '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap:8px; margin-top:10px; width:100%; max-width:100%; box-sizing:border-box;">' +
-        '<details style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; font-size:var(--font-size-sm);">' +
-          '<summary style="cursor:pointer; font-weight:600; color:var(--accent-2);">Plex Webhook Setup</summary>' +
-          '<p style="margin:6px 0 4px; color:var(--muted);">1. Open <strong>Plex Web &rarr; Settings &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Click <strong>Save Changes</strong>.</p>' +
+        '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
+          '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Plex Webhook Setup</summary>' +
+          '<p class="u-m-6px_0_4px u-c-v_muted">1. Open <strong>Plex Web &rarr; Settings &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Click <strong>Save Changes</strong>.</p>' +
         '</details>' +
-        '<details style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; font-size:var(--font-size-sm);">' +
-          '<summary style="cursor:pointer; font-weight:600; color:var(--accent-2);">Jellyfin Webhook Setup</summary>' +
-          '<p style="margin:6px 0 4px; color:var(--muted);">1. In Jellyfin <strong>Dashboard &rarr; Plugins</strong>, install the <strong>Webhook</strong> plugin.<br>2. Go to Webhook settings &rarr; <strong>Add Generic Destination</strong>.<br>3. Paste the URL and check <strong>Playback</strong> events.</p>' +
+        '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
+          '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Jellyfin Webhook Setup</summary>' +
+          '<p class="u-m-6px_0_4px u-c-v_muted">1. In Jellyfin <strong>Dashboard &rarr; Plugins</strong>, install the <strong>Webhook</strong> plugin.<br>2. Go to Webhook settings &rarr; <strong>Add Generic Destination</strong>.<br>3. Paste the URL and check <strong>Playback</strong> events.</p>' +
         '</details>' +
-        '<details style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; font-size:var(--font-size-sm);">' +
-          '<summary style="cursor:pointer; font-weight:600; color:var(--accent-2);">Emby Webhook Setup</summary>' +
-          '<p style="margin:6px 0 4px; color:var(--muted);">1. Open Emby Server <strong>Dashboard &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Check <strong>Playback</strong> / <strong>Scrobble</strong> events.</p>' +
+        '<details class="u-bg-rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm u-p-8px_10px u-fs-v_font_size_sm">' +
+          '<summary class="u-cur-pointer u-fw-600 u-c-v_accent_2">Emby Webhook Setup</summary>' +
+          '<p class="u-m-6px_0_4px u-c-v_muted">1. Open Emby Server <strong>Dashboard &rarr; Webhooks</strong>.<br>2. Click <strong>Add Webhook</strong> and paste the URL above.<br>3. Check <strong>Playback</strong> / <strong>Scrobble</strong> events.</p>' +
         '</details>' +
       '</div>' +
     '</div>' +
 
-    '<div id="trackPlaybackStatus" style="margin-top:8px;"></div>';
+    '<div id="trackPlaybackStatus" class="u-mt-8px"></div>';
 
   refreshTrackPlaybackStatus();
   loadScrobbleSeenUsers();
@@ -1386,7 +1386,7 @@ async function loadScrobbleSeenUsers() {
   const box = document.getElementById('scrobbleSeenUsersBox');
   if (!box || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  box.innerHTML = '<span style="color:var(--muted); font-size:var(--font-size-sm);">Checking detected users\u2026</span>';
+  box.innerHTML = '<span class="u-c-v_muted u-fs-v_font_size_sm">Checking detected users\u2026</span>';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-seen-users', {
       method: 'POST',
@@ -1395,7 +1395,7 @@ async function loadScrobbleSeenUsers() {
     });
     const data = await res.json();
     if (!data.ok || !data.users || !Object.keys(data.users).length) {
-      box.innerHTML = '<span style="color:var(--muted); font-size:var(--font-size-sm);">No users detected yet. Once Plex, Jellyfin, or Emby sends a webhook event, detected user profiles will appear here as selectable checkboxes.</span>';
+      box.innerHTML = '<span class="u-c-v_muted u-fs-v_font_size_sm">No users detected yet. Once Plex, Jellyfin, or Emby sends a webhook event, detected user profiles will appear here as selectable checkboxes.</span>';
       return;
     }
     const allowed = (localStorage.getItem('myListAddon:scrobbleAllowedUsers') || '')
@@ -1422,13 +1422,13 @@ async function loadScrobbleSeenUsers() {
       html +=
         '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:var(--font-size-sm); padding:3px 0;">' +
           '<input type="checkbox" class="scrobble-user-cb" value="' + escapeHtml(username) + '" ' + (isChecked ? 'checked' : '') + ' data-act="onScrobbleUserCheckboxToggle" style="width:15px; height:15px; cursor:pointer; flex:none;">' +
-          '<span><strong>' + escapeHtml(username) + '</strong> <span style="color:var(--muted); font-size:var(--font-size-xs);">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
+          '<span><strong>' + escapeHtml(username) + '</strong> <span class="u-c-v_muted u-fs-v_font_size_xs">(' + escapeHtml(serverName) + timeStr + ')</span></span>' +
         '</label>';
     }
     html += '</div>';
     box.innerHTML = html;
   } catch (err) {
-    box.innerHTML = '<span style="color:var(--muted); font-size:var(--font-size-sm);">Could not load detected users right now.</span>';
+    box.innerHTML = '<span class="u-c-v_muted u-fs-v_font_size_sm">Could not load detected users right now.</span>';
   }
 }
 
@@ -1473,7 +1473,7 @@ async function refreshTrackPlaybackStatus() {
   const statusBox = document.getElementById('trackPlaybackStatus');
   if (!statusBox || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  statusBox.innerHTML = '<small style="color:var(--muted);">Checking scrobble status\u2026</small>';
+  statusBox.innerHTML = '<small class="u-c-v_muted">Checking scrobble status\u2026</small>';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/track-status', {
       method: 'POST',
@@ -1482,7 +1482,7 @@ async function refreshTrackPlaybackStatus() {
     });
     const data = await res.json();
     if (!data.ok || !data.lastPingAt) {
-      statusBox.innerHTML = '<div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(255,255,255,0.03); border-radius:var(--radius-sm); font-size:var(--font-size-sm); color:var(--muted);"><span style="color:var(--muted);">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
+      statusBox.innerHTML = '<div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(255,255,255,0.03); border-radius:var(--radius-sm); font-size:var(--font-size-sm); color:var(--muted);"><span class="u-c-v_muted">&#x25CB;</span> <span>Ready for playback / scrobble events from Stremio, Plex, Jellyfin, or Emby.</span></div>';
       return;
     }
     const when = new Date(data.lastPingAt).toLocaleString();
@@ -1494,11 +1494,11 @@ async function refreshTrackPlaybackStatus() {
     if (data.legacyAuthForm) {
       const formName = data.legacyAuthForm === 'key' ? 'Account Key (?creator=&key=)' : 'Install Link (?config=)';
       legacyBanner =
-        '<div style="margin-top:10px; padding:10px 12px; background:rgba(255,149,0,0.12); border:1px solid rgba(255,149,0,0.35); border-radius:var(--radius-sm); font-size:var(--font-size-sm); color:var(--text);">' +
+        '<div class="u-mt-10px u-p-10px_12px u-bg-rgba_255_149_0_0_12 u-bd-1px_solid_rgba_255_149_0_0_35 u-br-v_radius_sm u-fs-v_font_size_sm u-c-v_text">' +
           '<div style="display:flex; align-items:flex-start; gap:8px;">' +
-            '<span style="color:var(--warning, var(--color-warn)); font-size:var(--font-size-lg); line-height:1.2;">&#x26A0;</span>' +
+            '<span class="u-c-v_warning_v_color_warn u-fs-v_font_size_lg u-lh-1_2">&#x26A0;</span>' +
             '<div>' +
-              '<div style="font-weight:700; color:var(--warning, var(--color-warn)); margin-bottom:2px;">Outdated Webhook URL Detected</div>' +
+              '<div class="u-fw-700 u-c-v_warning_v_color_warn u-mb-2px">Outdated Webhook URL Detected</div>' +
               'Your media server is using an older link format (' + escapeHtml(formName) + '). ' +
               'This format is deprecated and will be retired. Please copy your updated Webhook URL above (carrying your secure token) and paste it into Plex, Jellyfin, or Emby to keep syncing playback.' +
             '</div>' +
@@ -1506,18 +1506,18 @@ async function refreshTrackPlaybackStatus() {
         '</div>';
     }
     statusBox.innerHTML =
-      '<div style="padding:10px 12px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.25); border-radius:var(--radius-sm); font-size:var(--font-size-sm);">' +
+      '<div class="u-p-10px_12px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_25 u-br-v_radius_sm u-fs-v_font_size_sm">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
-          '<span style="color:var(--accent); font-weight:700;">\u2713 Last Scrobble Activity</span>' +
-          '<span style="color:var(--muted); font-size:var(--font-size-xs);">' + escapeHtml(when) + '</span>' +
+          '<span class="u-c-v_accent u-fw-700">\u2713 Last Scrobble Activity</span>' +
+          '<span class="u-c-v_muted u-fs-v_font_size_xs">' + escapeHtml(when) + '</span>' +
         '</div>' +
-        '<div style="color:var(--text);">' +
-          'Source: ' + serverLabel + userLabel + ' &bull; Matched: <code style="color:var(--accent-2);">' + escapeHtml(displayMatched) + '</code>' +
+        '<div class="u-c-v_text">' +
+          'Source: ' + serverLabel + userLabel + ' &bull; Matched: <code class="u-c-v_accent_2">' + escapeHtml(displayMatched) + '</code>' +
         '</div>' +
       '</div>' +
       legacyBanner;
   } catch (e) {
-    statusBox.innerHTML = '<small style="color:var(--muted);">Could not check status right now.</small>';
+    statusBox.innerHTML = '<small class="u-c-v_muted">Could not check status right now.</small>';
   }
 }
 
@@ -1739,9 +1739,9 @@ function openRestoreModal() {
     '<h2>Login</h2>' +
     '<p class="modal-sub">Enter your Username and Account Key to login and sync your lists.</p>' +
     '<div class="row"><input type="text" id="restoreNameInput" placeholder="Username"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="restoreKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="restoreKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
     '<div id="restoreModalError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="restoreSubmitBtn" data-act="submitRestoreProfile">Login</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openCreateProfileModal">Need an account? Create one</button>' +
     '</div>' +
@@ -1818,13 +1818,13 @@ function openForgotKeyModal() {
     '<h2>Reset Your Key</h2>' +
     '<p class="modal-sub">Enter your Username and the recovery answer you set when you created your account.</p>' +
     '<div class="row"><input type="text" id="forgotKeyNameInput" placeholder="Username"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="forgotKeyAnswerInput" placeholder="Recovery Answer"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="forgotKeyAnswerInput" placeholder="Recovery Answer"></div>' +
     '<div id="forgotKeyModalError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="forgotKeySubmitBtn" data-act="submitForgotKey">Reset Key</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>' +
-    '<p class="modal-sub" style="margin-top:14px;">Didn\\'t set a recovery answer, or don\\'t remember it? Reach out via Settings &gt; Feedback &amp; Support.</p>'
+    '<p class="modal-sub u-mt-14px">Didn\\'t set a recovery answer, or don\\'t remember it? Reach out via Settings &gt; Feedback &amp; Support.</p>'
   );
 }
 
@@ -1884,9 +1884,9 @@ function openForgotUsernameModal() {
     '<h2>Find Your Username</h2>' +
     '<p class="modal-sub">Enter your Account Key and Recovery Answer (if you set one) to retrieve your username.</p>' +
     '<div class="row"><input type="text" id="forgotUsernameKeyInput" placeholder="Key (e.g. MYL-XXXX-XXXX-XXXX)"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="forgotUsernameAnswerInput" placeholder="Recovery Answer (if set)"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="forgotUsernameAnswerInput" placeholder="Recovery Answer (if set)"></div>' +
     '<div id="forgotUsernameModalError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="forgotUsernameSubmitBtn" data-act="submitForgotUsername">Find Username</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Back to Login</button>' +
     '</div>'
@@ -1919,10 +1919,10 @@ async function submitForgotUsername() {
     showModal(
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2>Account Found</h2>' +
-      '<p class="modal-sub" style="margin-bottom:6px;">Your Username is:</p>' +
-      '<div class="creator-key-display" style="font-size:var(--font-size-lg); font-weight:700; user-select:all;">' + escapeHtml(username) + '</div>' +
-      (data.displayName && data.displayName !== username ? '<p class="modal-sub" style="margin-top:8px;">Display Name: <strong>' + escapeHtml(data.displayName) + '</strong></p>' : '') +
-      '<div class="actions" style="margin-top:18px;">' +
+      '<p class="modal-sub u-mb-6px">Your Username is:</p>' +
+      '<div class="creator-key-display u-fs-v_font_size_lg u-fw-700 u-us-all">' + escapeHtml(username) + '</div>' +
+      (data.displayName && data.displayName !== username ? '<p class="modal-sub u-mt-8px">Display Name: <strong>' + escapeHtml(data.displayName) + '</strong></p>' : '') +
+      '<div class="actions u-mt-18px">' +
       '<button type="button" class="primary" id="loginWithFoundUserBtn">Login with this Username</button>' +
       '<button type="button" class="secondary" data-act="closeModal">Done</button>' +
       '</div>'
@@ -3831,11 +3831,11 @@ function openCreateProfileModal() {
     '<h2>Create a Free Account</h2>' +
     '<p class="modal-sub">Save and sync your custom lists, presets, and channels from any device.<br>No email. No password. Just a username and key.</p>' +
     '<div class="row"><input type="text" id="createProfileNameInput" placeholder="Choose a Username" maxlength="25"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="createProfileDisplayInput" placeholder="Display name (optional)" maxlength="40"></div>' +
-    '<div class="row" style="margin-top:8px;"><input type="text" id="createProfileRecoveryInput" placeholder="Recovery Answer (optional, 8+ characters)" minlength="8"></div>' +
-    '<p class="modal-sub" style="font-size:var(--font-size-xs); margin-top:4px;">If you ever lose your key, this is the only way back in besides contacting us. It can reset your key on its own, so treat it like a password: at least 8 characters, something only you know -- not a public username or anything someone could look up.</p>' +
+    '<div class="row u-mt-8px"><input type="text" id="createProfileDisplayInput" placeholder="Display name (optional)" maxlength="40"></div>' +
+    '<div class="row u-mt-8px"><input type="text" id="createProfileRecoveryInput" placeholder="Recovery Answer (optional, 8+ characters)" minlength="8"></div>' +
+    '<p class="modal-sub u-fs-v_font_size_xs u-mt-4px">If you ever lose your key, this is the only way back in besides contacting us. It can reset your key on its own, so treat it like a password: at least 8 characters, something only you know -- not a public username or anything someone could look up.</p>' +
     '<div id="createProfileError"></div>' +
-    '<div class="actions" style="margin-top:14px;">' +
+    '<div class="actions u-mt-14px">' +
     '<button type="button" class="primary" id="createProfileSubmitBtn" data-act="submitCreateProfile">Create Account</button>' +
     '<button type="button" class="secondary" data-act="closeModal" data-act-then="openRestoreModal">Already have one? Login</button>' +
     '</div>'
@@ -3971,9 +3971,9 @@ async function submitCreateProfile() {
 function showKeyRevealModal(displayName, creatorKey) {
   showModal(
     '<h2>Profile Created</h2>' +
-    '<p class="modal-sub" style="margin-bottom:4px;">Username</p>' +
-    '<p style="margin:0 0 14px; font-weight:600;">' + escapeHtml(displayName) + '</p>' +
-    '<p class="modal-sub" style="margin-bottom:4px;">Key</p>' +
+    '<p class="modal-sub u-mb-4px">Username</p>' +
+    '<p class="u-m-0_0_14px u-fw-600">' + escapeHtml(displayName) + '</p>' +
+    '<p class="modal-sub u-mb-4px">Key</p>' +
     '<div class="creator-key-display" id="revealedCreatorKey">' + escapeHtml(creatorKey) + '</div>' +
     '<p class="modal-sub">Save this key somewhere safe. You\\'ll need it to edit your lists from another browser. You can view it again later from Settings.</p>' +
     '<div class="actions">' +
@@ -4019,19 +4019,19 @@ function openVisibilityModal() {
   showModal(
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-      '<h2 class="panel-title" style="margin-top:0;">Save Custom List</h2>' +
-      '<p style="margin:0 0 16px; font-size:var(--font-size-sm); color:var(--muted);">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
+      '<h2 class="panel-title u-mt-0">Save Custom List</h2>' +
+      '<p class="u-m-0_0_16px u-fs-v_font_size_sm u-c-v_muted">Choose visibility for <strong>' + escapeHtml(ctx.name || 'Custom List') + '</strong> on your Profile.</p>' +
       '<div class="visibility-choice" style="display:flex; flex-direction:column; gap:12px; margin: 16px 0 20px;">' +
         '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg);">' +
-          '<input type="radio" name="listVisibility" value="public" checked style="margin-top:3px; accent-color:var(--brand);">' +
-          '<span style="flex:1;"><strong style="color:var(--text); font-size:var(--font-size-base);">Public</strong><br><small style="color:var(--muted);">Anyone with the link can view, like, and add this list to their catalogs.</small></span>' +
+          '<input type="radio" name="listVisibility" value="public" checked class="u-mt-3px u-acc-v_brand">' +
+          '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Public</strong><br><small class="u-c-v_muted">Anyone with the link can view, like, and add this list to their catalogs.</small></span>' +
         '</label>' +
         '<label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg);">' +
-          '<input type="radio" name="listVisibility" value="private" style="margin-top:3px; accent-color:var(--brand);">' +
-          '<span style="flex:1;"><strong style="color:var(--text); font-size:var(--font-size-base);">Private</strong><br><small style="color:var(--muted);">Only you can view and edit this list when logged into your account.</small></span>' +
+          '<input type="radio" name="listVisibility" value="private" class="u-mt-3px u-acc-v_brand">' +
+          '<span class="u-flex-1"><strong class="u-c-v_text u-fs-v_font_size_base">Private</strong><br><small class="u-c-v_muted">Only you can view and edit this list when logged into your account.</small></span>' +
         '</label>' +
       '</div>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<button type="button" class="secondary lc-btn" data-act="closeModal">Cancel</button>' +
         '<button type="button" class="primary lc-btn" data-act="confirmSaveAsCreator">Save List</button>' +
       '</div>' +
@@ -4044,23 +4044,23 @@ function showSavedCustomListModal(listName, visibility, url) {
   showModal(
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-      '<h2 class="panel-title" style="margin-top:0;">\u2713 List Saved</h2>' +
-      '<p style="margin:8px 0 16px; font-size:var(--font-size-base); color:var(--text);">' +
+      '<h2 class="panel-title u-mt-0">\u2713 List Saved</h2>' +
+      '<p class="u-m-8px_0_16px u-fs-v_font_size_base u-c-v_text">' +
         '<strong>' + escapeHtml(listName || 'Custom List') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> list.' +
       '</p>' +
       (isPrivate
-        ? '<div style="padding:12px 14px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.2); border-radius:var(--radius-md); margin-bottom:16px;">' +
-            '<p style="margin:0; font-size:var(--font-size-sm); color:var(--text);">Only you can see this list from your profile when logged in.</p>' +
+        ? '<div class="u-p-12px_14px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_2 u-br-v_radius_md u-mb-16px">' +
+            '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Only you can see this list from your profile when logged in.</p>' +
           '</div>'
-        : '<div style="margin-bottom:16px;">' +
-            '<p style="margin:0 0 8px; font-size:var(--font-size-sm); color:var(--muted);">Public share link:</p>' +
+        : '<div class="u-mb-16px">' +
+            '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
-              '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:var(--font-size-sm); border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
+              '<input type="text" id="savedListUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
               '<button type="button" class="lc-btn primary" id="savedListCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedListUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
@@ -4140,8 +4140,8 @@ function showAppNoticeModal(title, message, isError) {
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
       '<h2 class="panel-title" style="margin-top:0;' + (isError ? ' color:var(--danger);' : '') + '">' + escapeHtml(title || 'Notice') + '</h2>' +
-      '<p style="margin:12px 0 20px; font-size:var(--font-size-base); color:var(--text); line-height:1.4;">' + escapeHtml(message || '') + '</p>' +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end;">' +
+      '<p class="u-m-12px_0_20px u-fs-v_font_size_base u-c-v_text u-lh-1_4">' + escapeHtml(message || '') + '</p>' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end">' +
         '<button type="button" class="primary lc-btn" data-act="closeModal">OK</button>' +
       '</div>' +
     '</div>'
@@ -4829,10 +4829,10 @@ async function renderCreatorDashboard(options) {
         const isDesktopEnd = (i === allPosters.length - 1 && allPosters.length >= 4);
         let overlays = '';
         if (isMobileEnd) {
-          overlays += '<div class="list-card-count-overlay mobile-only creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+          overlays += '<div class="list-card-count-overlay mobile-only creatorListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
         }
         if (isDesktopEnd) {
-          overlays += '<div class="list-card-count-overlay desktop-only creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+          overlays += '<div class="list-card-count-overlay desktop-only creatorListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
         }
         const removeBtn = isWatchlist
           ? '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>'
@@ -4842,7 +4842,7 @@ async function renderCreatorDashboard(options) {
         const label = formatWatchItemLabel(it);
         const posterEl = itemPoster
           ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || (it.tmdbId ? ('tmdb:' + it.tmdbId) : '')) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-          : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
+          : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
           const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
           return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(it.showId || it.imdbId || it.id || '') + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
             '<div class="list-card-mini-poster-img-wrap">' +
@@ -4862,7 +4862,7 @@ async function renderCreatorDashboard(options) {
         : '';
       return '<div class="list-card creator-list-row" data-slug="' + escapeAttr(l.slug) + '">' +
         '<div class="list-card-header">' +
-          '<div class="list-card-body creatorListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' +
+          '<div class="list-card-body creatorListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' +
             '<div class="list-card-title">' +
               '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
               escapeHtml(l.name) +
@@ -4889,7 +4889,7 @@ async function renderCreatorDashboard(options) {
             '</button>' +
           '</div>' +
         '</div>' +
-        (posterThumbs ? '<div class="list-card-posters poster-preview-static creatorListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
+        (posterThumbs ? '<div class="list-card-posters poster-preview-static creatorListViewTrigger u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + posterThumbs + '</div>' : '') +
       '</div>';
     }
 
@@ -4995,7 +4995,7 @@ async function renderCreatorDashboard(options) {
       : '<p><small>No lists yet \u2014 build one under Create List to get started.</small></p>';
 
     const prevScrollTop = box.scrollTop;
-    box.innerHTML = '<div id="creatorListRows" style="margin-bottom:14px;">' + rowsHtml + '</div>';
+    box.innerHTML = '<div id="creatorListRows" class="u-mb-14px">' + rowsHtml + '</div>';
     if (prevScrollTop) box.scrollTop = prevScrollTop;
     document.querySelectorAll('#creatorListRows .drag-handle-list').forEach((h) => initCreatorListTouchDrag(h));
     if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
@@ -5099,10 +5099,10 @@ function buildLocalListCardHtml(l) {
     const isDesktopEnd = (i === allPosters.length - 1 && allPosters.length >= 4);
     let overlays = '';
     if (isMobileEnd) {
-      overlays += '<div class="list-card-count-overlay mobile-only localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+      overlays += '<div class="list-card-count-overlay mobile-only localListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
     }
     if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only localListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type) + '">' + totalCount + ' &rsaquo;</div>';
     }
     const posterId = it.showId || it.imdbId || it.id || '';
     const posterType = it.kind || (it.type !== 'mixed' ? (it.type || '') : '') || (it.showId ? 'series' : (l.type === 'mixed' ? '' : (l.type || '')));
@@ -5205,7 +5205,7 @@ function buildLocalListCardHtml(l) {
 
     const posterEl = itemPoster
       ? '<img src="' + escapeAttr(itemPoster) + '" class="clickable-poster" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
     const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(it) : '';
     return '<div class="list-card-mini-poster-tile" data-id="' + escapeAttr(posterId) + '" data-type="' + escapeAttr(posterType) + '" data-title="' + escapeAttr(label.title || it.showTitle || it.title || it.name || '') + '">' +
       '<div class="list-card-mini-poster-img-wrap">' +
@@ -5264,7 +5264,7 @@ function buildLocalListCardHtml(l) {
 
   return '<div class="' + cardClass + '" data-slug="' + escapeAttr(l.slug) + '" data-list-type="' + escapeAttr(l.type || 'movie') + '">' +
     '<div class="list-card-header">' +
-      '<div class="list-card-body localListViewBtn" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' +
+      '<div class="list-card-body localListViewBtn u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '">' +
         '<div class="list-card-title">' +
           '<span class="drag-handle-list" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
           escapeHtml(l.name) +
@@ -5290,7 +5290,7 @@ function buildLocalListCardHtml(l) {
             addBtnHtml +
           '</div>') +
     '</div>' +
-    (posterThumbs ? '<div class="list-card-posters poster-preview-static localListViewTrigger" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '" style="cursor:pointer;">' + posterThumbs + '</div>' : '') +
+    (posterThumbs ? '<div class="list-card-posters poster-preview-static localListViewTrigger u-cur-pointer" data-slug="' + escapeAttr(l.slug) + '" data-name="' + escapeAttr(l.name) + '" data-type="' + escapeAttr(l.type || 'movie') + '">' + posterThumbs + '</div>' : '') +
   '</div>';
 }
 
@@ -5394,7 +5394,7 @@ function renderLocalCustomListsDashboard(box, silent) {
     ? visibleLists.map((l) => l.isAiringNext ? buildAiringNextCardHtml() : buildLocalListCardHtml(l)).join('')
     : '<p><small>No lists yet \u2014 build one under Create List to get started.</small></p>';
   const prevScrollTop = box ? box.scrollTop : 0;
-  box.innerHTML = '<div id="creatorListRows" style="margin-bottom:14px;">' + rowsHtml + '</div>';
+  box.innerHTML = '<div id="creatorListRows" class="u-mb-14px">' + rowsHtml + '</div>';
   if (prevScrollTop) box.scrollTop = prevScrollTop;
   document.querySelectorAll('#creatorListRows .drag-handle-list').forEach((h) => initCreatorListTouchDrag(h));
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();

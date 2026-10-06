@@ -1335,7 +1335,7 @@ function renderPresetsList() {
   const names = Object.keys(map).sort();
   if (badge) badge.textContent = names.length ? '(' + names.length + ' saved)' : '';
   if (!names.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:8px 0;"><small>No saved presets yet.</small></p>';
+    container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-8px_0"><small>No saved presets yet.</small></p>';
     return;
   }
   container.innerHTML = names.map((n) => {
@@ -1344,7 +1344,7 @@ function renderPresetsList() {
     const count = entries.length;
     return '<div class="preset-card" data-preset="' + escapeAttr(n) + '">' +
       '<div class="preset-card-header">' +
-        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small style="color:var(--muted); flex-shrink:0;">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
+        '<strong class="preset-card-title">' + escapeHtml(n) + '</strong> <small class="u-c-v_muted u-fsh-0">(' + count + ' list' + (count === 1 ? '' : 's') + ')</small>' +
       '</div>' +
       '<div class="preset-actions-cluster">' +
         '<button type="button" class="primary lc-btn preset-load-btn" title="Load this preset into your active catalogs">Load</button>' +
@@ -1355,7 +1355,7 @@ function renderPresetsList() {
             '<button type="button" class="preset-menu-item preset-download-btn">Download .json</button>' +
             '<button type="button" class="preset-menu-item preset-restore-lists-btn" title="Rebuild and restore custom lists &amp; channels from this preset into My Lists">Restore Lists</button>' +
             '<div class="preset-menu-divider"></div>' +
-            '<button type="button" class="preset-menu-item preset-delete-btn" style="color:var(--danger, var(--color-danger));">Delete Preset</button>' +
+            '<button type="button" class="preset-menu-item preset-delete-btn u-c-v_danger_v_color_danger">Delete Preset</button>' +
           '</div>' +
         '</details>' +
       '</div>' +
@@ -1904,8 +1904,8 @@ function installSaveBody(entries, keys) {
 // The rows a signed-out install link cannot carry, named, with a way in.
 function signInToInstallHtml(message, entries) {
   const names = (entries || []).filter((e) => rowNeedsAccount(e.url)).map((e) => e.name || 'Untitled');
-  return '<div class="install-result-card" style="padding:18px;">'
-    + '<p class="testresult err" style="margin:0 0 12px;">' + escapeHtml(message)
+  return '<div class="install-result-card u-p-18px">'
+    + '<p class="testresult err u-m-0_0_12px">' + escapeHtml(message)
     + (names.length ? (' Sign in, or remove ' + (names.length === 1 ? 'this row' : 'these rows') + ' first: ' + escapeHtml(names.join(', ')) + '.') : '')
     + '</p>'
     + '<button type="button" class="btn btn-primary" data-act="openRestoreModal">Log in or sign up</button>'
@@ -1929,7 +1929,7 @@ async function generate() {
     }
   }
   box.style.display = 'block';
-  box.innerHTML = '<div class="install-result-card" style="align-items:center; justify-content:center; padding:24px; color:var(--muted);"><span class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle;"></span> Generating install link\u2026</div>';
+  box.innerHTML = '<div class="install-result-card u-ai-center u-jc-center u-p-24px u-c-v_muted"><span class="spinner" style="display:inline-block; width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle;"></span> Generating install link\u2026</div>';
 
   // Prefer a short, KV-backed id (see /api/save) so the install URL stays a
   // fixed short length no matter how many lists are configured. If this
@@ -1966,8 +1966,8 @@ async function generate() {
     // hosted site always has it, so a failure here is transient: say so and
     // offer a retry.
     const errTxt = escapeHtml(saveErrorMessage || 'Unknown error');
-    box.innerHTML = '<div class="install-result-card" style="padding:18px;">'
-      + '<p class="testresult err" style="margin:0 0 12px;">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
+    box.innerHTML = '<div class="install-result-card u-p-18px">'
+      + '<p class="testresult err u-m-0_0_12px">Could not create your install link just now (' + errTxt + '). Nothing was lost - please try again.</p>'
       + '<button type="button" class="btn btn-primary" data-act="generate">Try again</button>'
       + '</div>';
     return;
@@ -2035,9 +2035,9 @@ async function generate() {
       </div>
 
       <div class="install-hint-box">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="u-fsh-0 u-mt-2px"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
         <div>
-          <span style="font-weight:600; color:var(--text);">To install manually, copy the manifest link above and paste it into:</span>
+          <span class="u-fw-600 u-c-v_text">To install manually, copy the manifest link above and paste it into:</span>
           <div class="install-hint-steps">
             <span>&bull; <strong>Stremio</strong> &rarr; Addons &rarr; Community &rarr; Paste URL</span>
             <span>&bull; <strong>Nuvio</strong> &rarr; Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
@@ -2788,11 +2788,11 @@ function appShellDialog(options) {
   const confirmLabel = o.confirmLabel || 'OK';
   const cancelLabel = o.cancelLabel;
   let html = '';
-  if (o.title) html += '<h3 style="margin:0 0 10px; font-size:var(--font-size-md);">' + escapeHtml(o.title) + '</h3>';
-  if (o.message) html += '<p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.45; white-space:pre-wrap;">' + escapeHtml(o.message) + '</p>';
+  if (o.title) html += '<h3 class="u-m-0_0_10px u-fs-v_font_size_md">' + escapeHtml(o.title) + '</h3>';
+  if (o.message) html += '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm u-lh-1_45 u-ws-pre_wrap">' + escapeHtml(o.message) + '</p>';
   html += '<div style="display:flex; justify-content:flex-end; gap:8px;">';
-  if (cancelLabel) html += '<button type="button" class="btn-secondary" id="appShellDialogCancel" style="min-width:80px; padding:8px 16px;">' + escapeHtml(cancelLabel) + '</button>';
-  html += '<button type="button" class="' + (o.destructive ? 'btn-danger' : 'btn-primary') + '" id="appShellDialogConfirm" style="min-width:80px; padding:8px 16px;">' + escapeHtml(confirmLabel) + '</button>';
+  if (cancelLabel) html += '<button type="button" class="btn-secondary u-minw-80px u-p-8px_16px" id="appShellDialogCancel">' + escapeHtml(cancelLabel) + '</button>';
+  html += '<button type="button" class="' + (o.destructive ? 'btn-danger' : 'btn-primary') + ' u-minw-80px u-p-8px_16px" id="appShellDialogConfirm">' + escapeHtml(confirmLabel) + '</button>';
   html += '</div>';
 
   return new Promise(function (resolve) {
@@ -2886,11 +2886,11 @@ function appShellRenderHomeEditor() {
   // Randomizer (10_tab-search-add.js). The paste box, the starter pack and
   // the check-links review that shared this panel were taken out at the
   // owner's request; + New Catalog and Catalogs -> Bulk Add do that job.
-  const html = '<div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:var(--radius-md); border:1px solid var(--border);">' +
-    '<div class="settings-toggle-row" style="padding:0;">' +
-      '<div style="flex:1; min-width:0; padding-right:12px;">' +
-        '<span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Hide titles already shown in rows above</span>' +
-        '<p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">The top row keeps everything; lower rows drop titles already shown above.</p>' +
+  const html = '<div class="u-mt-16px u-p-12px_16px u-bg-v_surface u-br-v_radius_md u-bd-1px_solid_v_border">' +
+    '<div class="settings-toggle-row u-p-0">' +
+      '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
+        '<span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Hide titles already shown in rows above</span>' +
+        '<p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">The top row keeps everything; lower rows drop titles already shown above.</p>' +
       '</div>' +
       '<label class="ui-toggle" aria-label="Hide titles already shown in rows above">' +
         '<input type="checkbox" id="appShellDedupeToggle"' + (dedupe ? ' checked' : '') + '>' +
@@ -3492,7 +3492,7 @@ function appShellRenderImports() {
   if (!host) return false;
   const typed = document.getElementById('appShellImportName');
   const typedValue = typed ? typed.value : '';
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
+  let html = '<div class="panel u-mb-12px">' +
     '<h2 class="panel-title">Import a file</h2>' +
     '<p class="app-shell-muted">A Letterboxd zip or CSV, an IMDb CSV, a Trakt export. Matching happens on the server, so you can close this page and come back.</p>';
 
@@ -3522,7 +3522,7 @@ function appShellRenderImports() {
     html += '<p class="app-shell-kv"><strong>' + appShellImportsEscape(appShellImportFile.name) + '</strong> &middot; ' +
       (counts.movie + counts.series) + ' titles' +
       (appShellImportFile.truncated ? ' (the first ' + APP_SHELL_IMPORT_ROWS_MAX + ')' : '') + '</p>' +
-      '<div class="app-shell-actions" style="margin-bottom:8px;">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
+      '<div class="app-shell-actions u-mb-8px">' + appShellImportKindChip('movie', 'Movies', counts.movie) +
       appShellImportKindChip('series', 'Shows', counts.series) + '</div>';
     if (counts.movie && counts.series) {
       html += '<p class="app-shell-muted">That file has both. One import is one kind, so this sends the ' + sending + ' ' +
@@ -3530,7 +3530,7 @@ function appShellRenderImports() {
     }
     html += '<label class="app-shell-muted" for="appShellImportName" style="display:block; margin:6px 0 4px;">List name</label>' +
       '<input type="text" id="appShellImportName" value="' + appShellImportsEscape(typedValue || appShellImportNameFromFile(appShellImportFile.name)) + '">' +
-      '<div class="app-shell-actions" style="margin-top:10px;">' +
+      '<div class="app-shell-actions u-mt-10px">' +
       '<button type="button" class="primary lc-btn" data-app-shell-action="import-start"' + (sending ? '' : ' disabled title="There are none of these in the chosen file."') + '>Start the import' + (sending ? ' (' + sending + (sending === 1 ? ' title)' : ' titles)') : '') + '</button>' +
       '<button type="button" class="secondary lc-btn" data-app-shell-action="import-clear">Choose another file</button>' +
       '</div>';
@@ -4289,6 +4289,7 @@ ${DESIGN_TOKENS_CSS}
     .guide-block { padding: 24px 18px; }
     .step-card { flex-direction: column; gap: 10px; }
   }
+${UTILITY_CSS}
 </style>
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
   function applyTheme(t) {
@@ -4362,7 +4363,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">1</div>
       <div>
         <h2>1. Quick Start</h2>
-        <p style="margin-bottom:0;">Get catalog rows running on Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol, with zero registration.</p>
+        <p class="u-mb-0">Get catalog rows running on Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol, with zero registration.</p>
       </div>
     </div>
 
@@ -4404,7 +4405,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">2</div>
       <div>
         <h2>2. Discover Tab</h2>
-        <p style="margin-bottom:0;">Browse everything available without typing a single URL.</p>
+        <p class="u-mb-0">Browse everything available without typing a single URL.</p>
       </div>
     </div>
 
@@ -4431,7 +4432,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">3</div>
       <div>
         <h2>3. Catalogs Tab</h2>
-        <p style="margin-bottom:0;">Where you add, arrange, and finalize what appears on your home screen.</p>
+        <p class="u-mb-0">Where you add, arrange, and finalize what appears on your home screen.</p>
       </div>
     </div>
 
@@ -4452,22 +4453,22 @@ ${DESIGN_TOKENS_CSS}
       <div class="provider-card">
         <h4>MDBList</h4>
         <span class="provider-tag">No Key Required</span>
-        <p style="margin-top:8px;">Paste any public list URL like <code>mdblist.com/lists/username/list-name</code>. Connect an account or API key under Settings to unlock your personal Watchlist and private lists.</p>
+        <p class="u-mt-8px">Paste any public list URL like <code>mdblist.com/lists/username/list-name</code>. Connect an account or API key under Settings to unlock your personal Watchlist and private lists.</p>
       </div>
       <div class="provider-card">
         <h4>Trakt.tv</h4>
         <span class="provider-tag">OAuth &amp; Public</span>
-        <p style="margin-top:8px;">Add public lists (<code>trakt.tv/users/username/lists/list-slug</code>) or connect your account to sync your Watchlist and History.</p>
+        <p class="u-mt-8px">Add public lists (<code>trakt.tv/users/username/lists/list-slug</code>) or connect your account to sync your Watchlist and History.</p>
       </div>
       <div class="provider-card">
         <h4>TheMovieDB (TMDB)</h4>
         <span class="provider-tag">Lists &amp; Charts</span>
-        <p style="margin-top:8px;">Add public lists (<code>themoviedb.org/list/12345</code>), or browse automated genre, network, and streaming-provider charts.</p>
+        <p class="u-mt-8px">Add public lists (<code>themoviedb.org/list/12345</code>), or browse automated genre, network, and streaming-provider charts.</p>
       </div>
       <div class="provider-card">
         <h4>Simkl</h4>
         <span class="provider-tag">Anime &amp; Trending</span>
-        <p style="margin-top:8px;">One-tap trending charts for Movies, Shows, and Anime. Connect an account to import personal lists and watch history.</p>
+        <p class="u-mt-8px">One-tap trending charts for Movies, Shows, and Anime. Connect an account to import personal lists and watch history.</p>
       </div>
     </div>
 
@@ -4495,7 +4496,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">4</div>
       <div>
         <h2>4. Lists Tab</h2>
-        <p style="margin-bottom:0;">Your personal, account-connected, and hand-built lists, separate from the catalog rows themselves.</p>
+        <p class="u-mb-0">Your personal, account-connected, and hand-built lists, separate from the catalog rows themselves.</p>
       </div>
     </div>
 
@@ -4534,7 +4535,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">5</div>
       <div>
         <h2>5. Channels Tab</h2>
-        <p style="margin-bottom:0;">Turn any set of shows into a continuous 24/7-style catalog row, like flipping on a real network.</p>
+        <p class="u-mb-0">Turn any set of shows into a continuous 24/7-style catalog row, like flipping on a real network.</p>
       </div>
     </div>
 
@@ -4569,7 +4570,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">6</div>
       <div>
         <h2>6. Storylines, Sagas &amp; Universes</h2>
-        <p style="margin-bottom:0;">Found inside the Channels tab &mdash; complete franchise viewing orders, pre-built for you.</p>
+        <p class="u-mb-0">Found inside the Channels tab &mdash; complete franchise viewing orders, pre-built for you.</p>
       </div>
     </div>
 
@@ -4590,7 +4591,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">7</div>
       <div>
         <h2>7. Search Tab</h2>
-        <p style="margin-bottom:0;">A unified search across movies, shows, and lists.</p>
+        <p class="u-mb-0">A unified search across movies, shows, and lists.</p>
       </div>
     </div>
 
@@ -4609,7 +4610,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">8</div>
       <div>
         <h2>8. Importing Lists &amp; Data From Other Sites</h2>
-        <p style="margin-bottom:0;">Two kinds of import: a single list by URL, and bulk files from other trackers.</p>
+        <p class="u-mb-0">Two kinds of import: a single list by URL, and bulk files from other trackers.</p>
       </div>
     </div>
 
@@ -4643,7 +4644,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">9</div>
       <div>
         <h2>9. Settings Tab</h2>
-        <p style="margin-bottom:0;">Connected accounts, region, watch history, and support.</p>
+        <p class="u-mb-0">Connected accounts, region, watch history, and support.</p>
       </div>
     </div>
 
@@ -4689,7 +4690,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">10</div>
       <div>
         <h2>10. Backups, Presets &amp; Data Export</h2>
-        <p style="margin-bottom:0;">Found under Settings &rarr; Presets &amp; Backup.</p>
+        <p class="u-mb-0">Found under Settings &rarr; Presets &amp; Backup.</p>
       </div>
     </div>
 
@@ -4721,7 +4722,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="block-icon">11</div>
       <div>
         <h2>11. Frequently Asked Questions</h2>
-        <p style="margin-bottom:0;">Quick answers to common questions and troubleshooting.</p>
+        <p class="u-mb-0">Quick answers to common questions and troubleshooting.</p>
       </div>
     </div>
 
@@ -4755,7 +4756,7 @@ ${DESIGN_TOKENS_CSS}
   <div class="footer-cta">
     <h3>Ready to Customize Your Home Screen?</h3>
     <p>Build your dream Stremio, Wako, and Nuvio catalog setup in under a minute with zero account required.</p>
-    <a href="${origin}/" class="btn btn-primary" style="font-size:var(--font-size-md); padding:12px 28px;">Go to mylistsaddon.com &rarr;</a>
+    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to mylistsaddon.com &rarr;</a>
   </div>
 
   <!-- Footer Navigation -->

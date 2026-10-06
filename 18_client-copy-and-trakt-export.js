@@ -1136,26 +1136,26 @@ function renderDiscoveredCategories() {
   if (globalTargetWrap) globalTargetWrap.style.display = discoveredImportCategories.length > 1 ? 'none' : '';
   if (globalNewWrap && discoveredImportCategories.length > 1) globalNewWrap.style.display = 'none';
 
-  let html = '<div style="margin-top:10px; border-top:1px solid var(--border); padding-top:12px;">' +
-    '<p style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px; color:var(--text);">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
+  let html = '<div class="u-mt-10px u-bdt-1px_solid_v_border u-pt-12px">' +
+    '<p class="u-fw-600 u-fs-v_font_size_base u-mb-8px u-c-v_text">Discovered Lists & Categories (' + discoveredImportCategories.length + '):</p>' +
     '<div style="display:flex; flex-direction:column; gap:10px;">';
 
   discoveredImportCategories.forEach((cat, idx) => {
     const isWatchedOrDiary = cat.isWatchCategory || cat.id.includes('watch') || cat.id.includes('diary') || cat.id.includes('history');
     const watchToggle = isWatchedOrDiary
-      ? '<div style="margin-left:26px; margin-top:4px;"><label style="font-size:var(--font-size-sm); color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
+      ? '<div class="u-ml-26px u-mt-4px"><label style="font-size:var(--font-size-sm); color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><input type="checkbox" class="importCatAlsoMarkWatchedCheck" data-cat-index="' + idx + '" checked> Also add to Watch History (marks watched)</label></div>'
       : '';
 
-    html += '<div class="row" style="flex-direction:column; align-items:flex-start; padding:10px 12px; background:var(--bg-2, rgba(255,255,255,0.03)); border:1px solid var(--border); border-radius:var(--radius-sm);">' +
+    html += '<div class="row u-fd-column u-ai-flex_start u-p-10px_12px u-bg-v_bg_2_rgba_255_255_255_0_03 u-bd-1px_solid_v_border u-br-v_radius_sm">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:8px;">' +
         '<label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); cursor:pointer; color:var(--text);">' +
           '<input type="checkbox" class="importCatCheck" data-cat-index="' + idx + '" checked> ' +
           escapeHtml(cat.label) +
-          ' <span style="font-weight:normal; color:var(--muted); font-size:var(--font-size-sm);">(' + cat.items.length + ' entries)</span>' +
+          ' <span class="u-fw-normal u-c-v_muted u-fs-v_font_size_sm">(' + cat.items.length + ' entries)</span>' +
         '</label>' +
         '<div style="display:inline-flex; align-items:center; gap:6px;">' +
-          '<span style="font-size:var(--font-size-sm); color:var(--muted);">Destination:</span>' +
-          '<select class="importCatTargetSelect" data-cat-index="' + idx + '" style="padding:6px 10px; font-size:var(--font-size-sm); border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
+          '<span class="u-fs-v_font_size_sm u-c-v_muted">Destination:</span>' +
+          '<select class="importCatTargetSelect u-p-6px_10px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text" data-cat-index="' + idx + '">' +
             buildCategoryTargetOptionsHtml(cat.defaultTarget, cat.defaultNewName) +
           '</select>' +
         '</div>' +
@@ -1190,7 +1190,7 @@ async function onUnifiedImportFilesSelected(input) {
   }
 
   if (box) {
-    box.innerHTML = '<p style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"><small>Scanning file(s)&hellip;</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"><small>Scanning file(s)&hellip;</small></p>';
   }
 
   const discovered = [];
@@ -1597,7 +1597,7 @@ async function runUnifiedListImport() {
     const rawItems = cat.items;
 
     if (resultBox) {
-      resultBox.innerHTML = '<p style="font-size:var(--font-size-sm); color:var(--muted);"><small>Processing ' + escapeHtml(cat.label) + ' (' + rawItems.length + ' items)&hellip;</small></p>';
+      resultBox.innerHTML = '<p class="u-fs-v_font_size_sm u-c-v_muted"><small>Processing ' + escapeHtml(cat.label) + ' (' + rawItems.length + ' items)&hellip;</small></p>';
     }
 
     // Resolve missing IMDb / Poster metadata via TMDB bulk-resolve
@@ -1716,18 +1716,18 @@ async function runUnifiedListImport() {
   if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
   if (typeof populateImportTargetLists === 'function') populateImportTargetLists();
 
-  let summaryHtml = '<div style="margin-top:12px;">';
+  let summaryHtml = '<div class="u-mt-12px">';
   if (createdSummary.length) {
     summaryHtml += '<p class="testresult ok">\u2713 Successfully imported:<br>' + createdSummary.map(escapeHtml).join('<br>') + '</p>';
   }
   if (totalWatchedAdded) {
-    summaryHtml += '<p style="margin-top:6px; font-size:var(--font-size-sm); color:var(--color-success-text);">\u2713 Marked ' + totalWatchedAdded + ' item(s) as watched in Watch History.</p>';
+    summaryHtml += '<p class="u-mt-6px u-fs-v_font_size_sm u-c-v_color_success_text">\u2713 Marked ' + totalWatchedAdded + ' item(s) as watched in Watch History.</p>';
   }
   if (errors.length) {
-    summaryHtml += '<p class="testresult err" style="margin-top:8px;">' + errors.map(escapeHtml).join('<br>') + '</p>';
+    summaryHtml += '<p class="testresult err u-mt-8px">' + errors.map(escapeHtml).join('<br>') + '</p>';
   }
   if (!createdSummary.length && !errors.length) {
-    summaryHtml += '<p style="color:var(--muted); font-size:var(--font-size-sm);">No new items were added (items may already exist in the target lists).</p>';
+    summaryHtml += '<p class="u-c-v_muted u-fs-v_font_size_sm">No new items were added (items may already exist in the target lists).</p>';
   }
   summaryHtml += '</div>';
 

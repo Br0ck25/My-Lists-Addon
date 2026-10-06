@@ -5143,7 +5143,7 @@ describe("client: air times", () => {
     let html = "";
     client.set("showModal", (inner) => { html = inner; });
     client.call("openEpisodeDetails", epNum);
-    return [...html.matchAll(/color:var\(--brand\);">([^<]*)</g)].map((m) => m[1]);
+    return [...html.matchAll(/class="[^"]*\bu-c-v_brand\b[^"]*">([^<]*)</g)].map((m) => m[1]);
   }
 
   it("puts the hour under the date, for tonight's episode and every later one", async () => {
@@ -7757,7 +7757,7 @@ describe("client: My Catalogs sub-heading and poster rating badges", () => {
 
     client.call("toggleTmdbRatingSetting", true);
     const tmdbSpan = client.call("formatRatingSpanHtml", item);
-    assert.match(tmdbSpan, /class="poster-rating"/);
+    assert.match(tmdbSpan, /class="poster-rating[ "]/);
     assert.match(tmdbSpan, /data-rating-type="tmdb"/);
     assert.match(tmdbSpan, /7\.7/);
 
@@ -7778,19 +7778,19 @@ describe("client: My Catalogs sub-heading and poster rating badges", () => {
       items: [{ id: "tt1234567", title: "Test Film", year: "2024", vote_average: 8.2 }]
     };
     const listCardHtml = client.call("buildLocalListCardHtml", listObj);
-    assert.match(listCardHtml, /class="poster-rating"/);
+    assert.match(listCardHtml, /class="poster-rating[ "]/);
     assert.match(listCardHtml, /8\.2/);
 
     // 2. Details page card (livePreviewPosterHtml)
     const detailsItem = { id: "tt1234567", name: "Test Film", year: "2024", vote_average: 8.2, isLivePreviewShelf: false };
     const detailsHtml = client.call("livePreviewPosterHtml", detailsItem);
-    assert.match(detailsHtml, /class="poster-rating"/);
+    assert.match(detailsHtml, /class="poster-rating[ "]/);
     assert.match(detailsHtml, /8\.2/);
 
     // 3. Live Preview shelf card (isLivePreviewShelf: true - suppressed)
     const shelfItem = { id: "tt1234567", name: "Test Film", year: "2024", vote_average: 8.2, isLivePreviewShelf: true };
     const shelfHtml = client.call("livePreviewPosterHtml", shelfItem);
-    assert.doesNotMatch(shelfHtml, /class="poster-rating"/);
+    assert.doesNotMatch(shelfHtml, /class="poster-rating[ "]/);
   });
 
   it("Continue Watching badges are not removed when a show is removed from Airing Next", () => {

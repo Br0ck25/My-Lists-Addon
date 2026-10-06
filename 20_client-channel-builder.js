@@ -100,14 +100,14 @@ async function runChannelTitleSearch() {
 function renderChannelTitleResults(results, searchType = 'tv') {
   const box = document.getElementById('channelSearchResult');
   if (!results.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No matches found.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No matches found.</small></p>';
     return;
   }
   const isMovie = searchType === 'movie';
   const cardsHtml = results.map((r) => {
     const rPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(r, r.poster || '') : (r.poster);
     const posterImg = rPoster
-      ? '<img class="preview-thumb" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy" style="cursor:pointer;">'
+      ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(rPoster) + '" alt="" loading="lazy">'
       : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;cursor:pointer;">No poster</div>';
     const btnLabel = isMovie ? '+ Add Movie' : '+ Browse';
     const cardClass = isMovie ? 'channelMovieCard' : 'channelTitleCard';
@@ -118,12 +118,12 @@ function renderChannelTitleResults(results, searchType = 'tv') {
       '<div style="width:100%; font-size:var(--font-size-xs); font-weight:600; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:4px 0 1px;" title="' + escapeAttr(r.title) + '">' +
         escapeHtml(r.title) +
       '</div>' +
-      (r.year ? '<div style="font-size:var(--font-size-xs); color:var(--muted); text-align:center; margin-bottom:4px;">' + escapeHtml(r.year) + '</div>' : '<div style="height:14px; margin-bottom:4px;"></div>') +
+      (r.year ? '<div class="u-fs-v_font_size_xs u-c-v_muted u-ta-center u-mb-4px">' + escapeHtml(r.year) + '</div>' : '<div style="height:14px; margin-bottom:4px;"></div>') +
       '<button type="button" class="lc-btn secondary ' + btnClass + '" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' +
       ' data-tmdbid="' + r.tmdbId + '" data-title="' + escapeAttr(r.title) + '" data-year="' + escapeAttr(r.year || '') + '" data-poster="' + escapeAttr(r.poster || '') + '" data-backdrop="' + escapeAttr(r.backdrop || '') + '">' + btnLabel + '</button>' +
       '</div>';
   }).join('');
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:10px;">' + cardsHtml + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cardsHtml + '</div>';
 }
 
 document.getElementById('channelSearchResult').addEventListener('click', (e) => {
@@ -246,7 +246,7 @@ async function browseChannelShow(tmdbId, showName, showPoster, showBackdrop) {
       escapeHtml(s.name || ('Season ' + s.season)) + ' (' + s.episodeCount + ')</button>'
     ).join(' ');
     box.innerHTML = '<p><small>Pick a season of <strong>' + escapeHtml(showName) + '</strong>, or:</small></p>' +
-      '<div class="actions" style="flex-wrap:wrap; margin-bottom:10px;">' +
+      '<div class="actions u-fw2-wrap u-mb-10px">' +
       '<button type="button" class="secondary channelAddAllSeasonsBtn"' +
       ' data-tmdbid="' + tmdbId + '" data-imdbid="' + escapeAttr(data.imdbId) + '"' +
       ' data-showname="' + escapeAttr(showName) + '" data-poster="' + escapeAttr(poster) + '"' +
@@ -407,13 +407,13 @@ async function loadChannelSeasonEpisodes(tmdbId, imdbId, showName, showPoster, s
       const epJson = escapeAttr(JSON.stringify({
         season: parseInt(season, 10), episode: ep.episode, title: ep.name, released: ep.released, thumbnail: ep.thumbnail, runtime: ep.runtime || 0,
       }));
-      return '<label class="row quick-row" style="cursor:pointer;">' +
+      return '<label class="row quick-row u-cur-pointer">' +
         '<span><input type="checkbox" class="channelEpisodeCheck" data-ep="' + epJson + '"> ' +
         'S' + season + 'E' + ep.episode + ' \u2014 ' + escapeHtml(ep.name || '') + '</span>' +
         '</label>';
     }).join('');
     listBox.innerHTML = rows +
-      '<div class="actions" style="margin-top:8px;">' +
+      '<div class="actions u-mt-8px">' +
       '<button type="button" class="secondary channelAddEpisodesBtn"' +
       ' data-imdbid="' + escapeAttr(imdbId) + '" data-tmdbid="' + escapeAttr(tmdbId) + '"' +
       ' data-showname="' + escapeAttr(showName) + '"' +
@@ -893,8 +893,8 @@ function renderChannelUndoBar() {
   }
   const name = _pendingChannelUndo.channel.name || 'Channel';
   bar.style.display = 'block';
-  bar.innerHTML = '<div class="row" style="gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface);">' +
-    '<span style="flex:1; font-size:var(--font-size-sm);">Deleted &ldquo;' + escapeHtml(name) + '&rdquo;.</span>' +
+  bar.innerHTML = '<div class="row u-gap-8px u-ai-center u-p-8px_10px u-bd-1px_solid_v_border u-br-v_radius_sm u-bg-v_surface">' +
+    '<span class="u-flex-1 u-fs-v_font_size_sm">Deleted &ldquo;' + escapeHtml(name) + '&rdquo;.</span>' +
     '<button type="button" class="secondary lc-btn" data-act="undoChannelDelete">Undo</button>' +
     '</div>';
 }
@@ -1136,7 +1136,7 @@ function renderChannelDraftList() {
   const badge = document.getElementById('channelDraftCountBadge');
   if (badge) badge.textContent = channelDraftItems.length ? '(' + channelDraftItems.length + ')' : '';
   if (!channelDraftItems.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Nothing added yet &mdash; search above to get started.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing added yet &mdash; search above to get started.</small></p>';
     renderChannelPosterPicker();
     renderChannelCrossoverSuggestions();
     updateChannelBroadcastControls();
@@ -1189,7 +1189,7 @@ function renderChannelDraftList() {
     const posterSrc = it.thumbnail || it.poster || it.showPoster || it.backdrop || '';
     const posterEl = posterSrc
       ? '<img class="live-preview-poster" src="' + escapeAttr(posterSrc) + '" alt="" loading="lazy">'
-      : '<div class="live-preview-poster live-preview-poster-placeholder"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>';
+      : '<div class="live-preview-poster live-preview-poster-placeholder"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>';
 
     // Dragging is off while selecting: a drag and a tap-to-select on the
     // same card are the same gesture on a touch screen, and one of the two
@@ -1228,8 +1228,8 @@ function renderChannelDraftList() {
   }).join('');
   
   box.innerHTML = visible.length
-    ? '<div class="poster-grid-3" style="margin-top:10px;">' + cardsHtml + '</div>'
-    : '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No pick in this channel matches that filter.</small></p>';
+    ? '<div class="poster-grid-3 u-mt-10px">' + cardsHtml + '</div>'
+    : '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No pick in this channel matches that filter.</small></p>';
   const bulkBar = document.getElementById('channelDraftBulkBar');
   if (bulkBar) bulkBar.style.display = channelDraftSelectMode ? 'flex' : 'none';
   const modeBtn = document.getElementById('channelDraftSelectModeBtn');
@@ -1323,7 +1323,7 @@ function renderChannelPosterPicker() {
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
       '</svg>' +
-      '<span style="font-size:var(--font-size-2xs); font-weight:700; color:var(--color-on-brand); text-transform:uppercase; letter-spacing:0.5px; text-align:center;">Custom</span>' +
+      '<span class="u-fs-v_font_size_2xs u-fw-700 u-c-v_color_on_brand u-tt-uppercase u-ls-0_5px u-ta-center">Custom</span>' +
     '</div>' +
     '<div class="channel-poster-check">\u2713</div>' +
     '<div class="channel-poster-title" title="Custom Channel Poster">Custom Poster</div>' +
@@ -8434,22 +8434,22 @@ function renderChannelStoryLock() {
     return '<label class="channel-rule-row" for="' + escapeAttr(id) + '">' +
       '<input type="checkbox" id="' + escapeAttr(id) + '"' + (isChannelShowStoryLocked(g.key) ? ' checked' : '') +
         ' data-act="toggleChannelStoryLock" data-act-args="' + appActArgs([g.key, "@checked"]) + '">' +
-      '<span>' + escapeHtml(g.name) + ' <small style="color:var(--muted);">(' + g.count + ')</small></span>' +
+      '<span>' + escapeHtml(g.name) + ' <small class="u-c-v_muted">(' + g.count + ')</small></span>' +
     '</label>';
   }).join('');
   box.innerHTML =
-    '<p style="margin:0 0 4px; font-weight:600; font-size:var(--font-size-sm);">Story Lock</p>' +
-    '<p style="margin:0 0 4px; color:var(--muted); font-size:var(--font-size-xs);">' +
+    '<p class="u-m-0_0_4px u-fw-600 u-fs-v_font_size_sm">Story Lock</p>' +
+    '<p class="u-m-0_0_4px u-c-v_muted u-fs-v_font_size_xs">' +
       'Shuffling suits a procedural &mdash; Seinfeld, The Office, Law &amp; Order. It ruins a serialized one. ' +
       'Tick a show here and it always advances to its next episode in order, while everything else keeps shuffling around it.' +
     '</p>' +
     (rotating
-      ? '<p style="margin:0 0 4px; color:var(--muted); font-size:var(--font-size-xs);">' +
+      ? '<p class="u-m-0_0_4px u-c-v_muted u-fs-v_font_size_xs">' +
           'On a daily schedule a locked show airs every day, starting from its first episode on the day you tick it and picking up where the day before stopped. ' +
           'With Hide watched on, it picks up from the first episode you have not seen instead. Untick and tick again to start it over.' +
         '</p>'
       : '') +
-    (active ? '' : '<p style="margin:0 0 4px; color:var(--muted); font-size:var(--font-size-xs);"><em>This channel plays in the order listed above, so nothing is being shuffled for a lock to protect against yet.</em></p>') +
+    (active ? '' : '<p class="u-m-0_0_4px u-c-v_muted u-fs-v_font_size_xs"><em>This channel plays in the order listed above, so nothing is being shuffled for a lock to protect against yet.</em></p>') +
     '<div class="channel-storylock-grid">' + rows + '</div>';
 }
 
@@ -9507,7 +9507,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
   });
 
   if (!filtered.length) {
-    container.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No sagas found in this category.</small></p>';
+    container.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No sagas found in this category.</small></p>';
     return;
   }
 
@@ -9558,10 +9558,10 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
       const isDesktopEnd = (i === previewPosters.length - 1 && totalCount >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' + totalCount + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' + totalCount + ' &rsaquo;</div>';
       }
 
       // The registry hands each entry a poster but never a rating -- these are
@@ -9590,7 +9590,7 @@ function renderStorylinesUniverseList(category = activeStorylineCategory) {
     return '<div class="list-card" data-universe-id="' + escapeAttr(event.id) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '" style="cursor:pointer;">' + escapeHtml(event.name) + '</div>' +
+          '<div class="list-card-title u-cur-pointer" data-act="openStorylineDetails" data-act-args="' + appActArgs([event.id]) + '">' + escapeHtml(event.name) + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + escapeHtml(event.franchise) + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span>' +
@@ -10552,7 +10552,7 @@ function renderMyCreatedChannelsList() {
   const map = ensureAllChannelsSyncedFromRows(loadLocalChannels());
   const channels = Object.values(map);
   if (!channels.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p>';
     return;
   }
   
@@ -10561,7 +10561,7 @@ function renderMyCreatedChannelsList() {
   if (sortSel && sortSel.value !== myChannelsSort) sortSel.value = myChannelsSort;
   const shown = sortMyChannels(filterMyChannels(channels));
   if (!shown.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No channel matches that search.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channel matches that search.</small></p>';
     return;
   }
 
@@ -10601,10 +10601,10 @@ function renderMyCreatedChannelsList() {
       const isDesktopEnd = (i === allPosters.length - 1 && allItems.length >= 4);
       let overlays = '';
       if (isMobileEnd) {
-        overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
       if (isDesktopEnd) {
-        overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
+        overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openChannelDetailsPage" data-act-stop data-act-args="' + appActArgs([ch.channelId]) + '">' + totalEpisodes + ' &rsaquo;</div>';
       }
 
       const p = it.thumbnail || it.poster || it.showPoster || it.backdrop || ch.poster || ch.backdrop || '';
@@ -10690,14 +10690,14 @@ function renderMyCreatedChannelsList() {
       (isAdded ? 'Remove' : '+ Add') +
     '</button>';
 
-    return '<div class="list-card" style="margin-bottom:12px;" data-channel-id="' + escapeAttr(ch.channelId) + '">' +
+    return '<div class="list-card u-mb-12px" data-channel-id="' + escapeAttr(ch.channelId) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" style="cursor:pointer;" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
+          '<div class="list-card-title u-cur-pointer" data-act="openChannelDetailsPage" data-act-args="' + appActArgs([ch.channelId]) + '" title="Open ' + escapeAttr(ch.name) + '">' +
             '<span class="drag-handle-list channel-drag-handle" title="Drag to reorder" data-act="appActNothing" data-act-stop><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>' +
             escapeHtml(ch.name) +
           '</div>' +
-          (ch.description ? '<div style="font-size:var(--font-size-sm); color:var(--text); margin-top:2px;">' + escapeHtml(ch.description) + '</div>' : '') +
+          (ch.description ? '<div class="u-fs-v_font_size_sm u-c-v_text u-mt-2px">' + escapeHtml(ch.description) + '</div>' : '') +
           '<div class="list-card-meta">' +
             '<span>' + metaText + '</span>' +
           '</div>' +
@@ -10856,7 +10856,7 @@ function updateQuickAddButtonsState() {
 
     if (isAdded) {
       btn.classList.add('is-added');
-      btn.innerHTML = '<span class="check-icon" style="margin-right:4px;">&#x2713;</span> ' + escapeHtml(netName);
+      btn.innerHTML = '<span class="check-icon u-mr-4px">&#x2713;</span> ' + escapeHtml(netName);
       btn.title = netName + ' (Already added to your channels)';
     } else {
       btn.classList.remove('is-added');
@@ -11128,7 +11128,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
             showAddedToast('Channel "' + name + '" added to your Catalogs.');
           }
           if (statusBox) {
-            statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + (payload.items ? payload.items.length : 0) + ' episodes with daily rotation)!</p>';
+            statusBox.innerHTML = '<p class="testresult ok u-m-4px_0_0">\u2713 Channel "' + escapeHtml(name) + '" added (' + (payload.items ? payload.items.length : 0) + ' episodes with daily rotation)!</p>';
             setTimeout(() => {
               if (statusBox) statusBox.innerHTML = '';
             }, 4000);
@@ -11217,7 +11217,7 @@ async function quickAddChannel(name, listUrl, networkId, btn, options) {
       showAddedToast('Channel "' + name + '" added to your Catalogs.');
     }
     if (statusBox) {
-      statusBox.innerHTML = '<p class="testresult ok" style="margin:4px 0 0;">\u2713 Channel "' + escapeHtml(name) + '" added (' + items.length + ' episodes with daily rotation)!</p>';
+      statusBox.innerHTML = '<p class="testresult ok u-m-4px_0_0">\u2713 Channel "' + escapeHtml(name) + '" added (' + items.length + ' episodes with daily rotation)!</p>';
       setTimeout(function() {
         if (statusBox) statusBox.innerHTML = '';
       }, 4000);
@@ -11453,13 +11453,13 @@ function createNextUpChannel(btn) {
   const say = (html) => { if (status) status.innerHTML = html; };
   const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator);
   if (!signedIn) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ A Next Up channel reads your watch history, so it needs a Creator Profile with Auto-track playback switched on.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ A Next Up channel reads your watch history, so it needs a Creator Profile with Auto-track playback switched on.</p>');
     return;
   }
   const map = loadLocalChannels();
   const already = Object.values(map).find((ch) => ch && ch.dynamic === 'next-up');
   if (already) {
-    say('<p class="testresult ok" style="margin:4px 0 0;">You already have one — "' + escapeHtml(already.name) + '".</p>');
+    say('<p class="testresult ok u-m-4px_0_0">You already have one — "' + escapeHtml(already.name) + '".</p>');
     openChannelDetailsPage(already.channelId);
     return;
   }
@@ -11495,7 +11495,7 @@ function createNextUpChannel(btn) {
     renderChannelMergeList();
     showAddedToast('"' + NEXT_UP_CHANNEL_NAME + '" added to your Catalogs.');
     const seeded = payload.items.length;
-    say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + NEXT_UP_CHANNEL_NAME + '" added with ' + seeded +
+    say('<p class="testresult ok u-m-4px_0_0">✓ "' + NEXT_UP_CHANNEL_NAME + '" added with ' + seeded +
       ' show' + (seeded === 1 ? '' : 's') + ' up next, and it refreshes itself from Continue Watching as you watch.' +
       (seeded ? '' : ' Nothing is in progress yet — it fills in once you have started something.') + '</p>');
     setTimeout(() => { if (status) status.innerHTML = ''; }, 8000);
@@ -11534,7 +11534,7 @@ async function runChannelWizard(btn) {
   const genres = (document.getElementById('channelWizardGenre') || {}).value || '';
   const limit = parseInt((document.getElementById('channelWizardSize') || {}).value, 10) || 8;
   if (!networkId && !era && !genres) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Choose at least one of network, era or genre first.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Choose at least one of network, era or genre first.</p>');
     return;
   }
   const name = channelWizardName();
@@ -11552,7 +11552,7 @@ async function runChannelWizard(btn) {
     const res = await fetch(ORIGIN + '/api/wizard-channel-shows?' + params, { cache: 'no-store' });
     const data = await res.json();
     if (!data.ok || !Array.isArray(data.shows) || !data.shows.length) {
-      say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(data.error || 'Nothing matched that combination.') + '</p>');
+      say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(data.error || 'Nothing matched that combination.') + '</p>');
       return;
     }
     const built = await buildChannelItemsFromShows(data.shows, {
@@ -11563,7 +11563,7 @@ async function runChannelWizard(btn) {
       },
     });
     if (!built.items.length) {
-      say('<p class="testresult err" style="margin:4px 0 0;">✗ Found those shows but could not read any episodes for them.</p>');
+      say('<p class="testresult err u-m-4px_0_0">✗ Found those shows but could not read any episodes for them.</p>');
       return;
     }
     const channelId = generateChannelId();
@@ -11585,12 +11585,12 @@ async function runChannelWizard(btn) {
     renderMyCreatedChannelsList();
     renderChannelMergeList();
     showAddedToast('Channel "' + name + '" added to your Catalogs.');
-    say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(name) + '" built from ' + data.shows.length +
+    say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(name) + '" built from ' + data.shows.length +
       ' shows (' + built.items.length + ' episodes), rotating a fresh lineup daily.</p>');
     const nameInput = document.getElementById('channelWizardNameInput');
     if (nameInput) nameInput.value = '';
   } catch (e) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while building that channel.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Network error while building that channel.</p>');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -11690,7 +11690,7 @@ async function runCatalogListWizard(targetType, btn) {
   const limit = parseInt((document.getElementById('catalogWizardSize') || {}).value, 10) || 20;
 
   if (!networkId && !era && !genres) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Choose at least one of network/studio, era or genre first.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Choose at least one of network/studio, era or genre first.</p>');
     return;
   }
 
@@ -11724,7 +11724,7 @@ async function runCatalogListWizard(targetType, btn) {
       }
 
       if (!movieItems.length && !showItems.length) {
-        say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(movieErr || showErr || 'Nothing matched that combination.') + '</p>');
+        say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(movieErr || showErr || 'Nothing matched that combination.') + '</p>');
         return;
       }
 
@@ -11740,7 +11740,7 @@ async function runCatalogListWizard(targetType, btn) {
 
       if (typeof renderLivePreview === 'function') renderLivePreview();
       showAddedToast('Added separate lists: ' + addedDesc.join(' and ') + ' to Catalogs.');
-      say('<p class="testresult ok" style="margin:4px 0 0;">✓ Built ' + addedDesc.join(' and ') + ' as separate catalog rows (not combined).</p>');
+      say('<p class="testresult ok u-m-4px_0_0">✓ Built ' + addedDesc.join(' and ') + ' as separate catalog rows (not combined).</p>');
     } else {
       const isMovie = targetType === 'movie';
       const suffix = isMovie ? '(Movies)' : '(Shows)';
@@ -11751,12 +11751,12 @@ async function runCatalogListWizard(targetType, btn) {
       addCatalogWizardList(listName, items, targetType);
       if (typeof renderLivePreview === 'function') renderLivePreview();
       showAddedToast('List "' + listName + '" added to your Catalogs.');
-      say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(listName) + '" built from ' + items.length + ' ' + (isMovie ? 'movies' : 'shows') + ' and added to your Catalogs.</p>');
+      say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(listName) + '" built from ' + items.length + ' ' + (isMovie ? 'movies' : 'shows') + ' and added to your Catalogs.</p>');
     }
     const nameInput = document.getElementById('catalogWizardNameInput');
     if (nameInput) nameInput.value = '';
   } catch (e) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(e.message || 'Network error while building lists.') + '</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(e.message || 'Network error while building lists.') + '</p>');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -11797,13 +11797,13 @@ async function runChannelPersonSearch(q) {
 function renderChannelPersonResults(results) {
   const box = document.getElementById('channelSearchResult');
   if (!results.length) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No one by that name.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No one by that name.</small></p>';
     return;
   }
   const cards = results.map((p) => {
     const pPoster = typeof resolveClientPoster === 'function' ? resolveClientPoster(p, p.poster || '') : (p.poster);
     const img = pPoster
-      ? '<img class="preview-thumb" src="' + escapeAttr(pPoster) + '" alt="" loading="lazy" style="cursor:pointer;">'
+      ? '<img class="preview-thumb u-cur-pointer" src="' + escapeAttr(pPoster) + '" alt="" loading="lazy">'
       : '<div class="preview-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-size-xs);text-align:center;padding:4px;cursor:pointer;">No photo</div>';
     const data = ' data-personid="' + escapeAttr(String(p.personId)) + '" data-personname="' + escapeAttr(p.name) + '"';
     return '<div class="custom-list-search-item channelPersonCard" style="display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; cursor:pointer;"' + data + '>' +
@@ -11815,7 +11815,7 @@ function renderChannelPersonResults(results) {
       '<button type="button" class="lc-btn secondary channelPersonBtn" style="width:100%; padding:4px 6px; font-size:var(--font-size-xs);"' + data + '>+ Browse</button>' +
       '</div>';
   }).join('');
-  box.innerHTML = '<div class="poster-grid-3" style="margin-top:10px;">' + cards + '</div>';
+  box.innerHTML = '<div class="poster-grid-3 u-mt-10px">' + cards + '</div>';
 }
 
 // --- browsing one person's filmography ----------------------------------
@@ -11901,26 +11901,26 @@ function renderChannelPersonCredits() {
   }
   const header =
     '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
-      '<p style="margin:0; font-weight:600; font-size:var(--font-size-base); flex:1; min-width:160px;">' +
+      '<p class="u-m-0 u-fw-600 u-fs-v_font_size_base u-flex-1 u-minw-160px">' +
         escapeHtml(c.name) + ' \u2014 ' + c.movies.length + ' film' + (c.movies.length === 1 ? '' : 's') +
         (c.shows.length ? ' and ' + c.shows.length + ' show' + (c.shows.length === 1 ? '' : 's') : '') +
       '</p>' +
-      '<label for="channelSpotlightSortSelect" style="font-size:var(--font-size-sm); font-weight:600;">Order:</label>' +
-      '<select id="channelSpotlightSortSelect" data-act="setChannelSpotlightSortAndReload" data-act-args="[&quot;@value&quot;]" style="font-size:var(--font-size-sm); padding:5px 8px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm);">' +
+      '<label for="channelSpotlightSortSelect" class="u-fs-v_font_size_sm u-fw-600">Order:</label>' +
+      '<select id="channelSpotlightSortSelect" data-act="setChannelSpotlightSortAndReload" data-act-args="[&quot;@value&quot;]" class="u-fs-v_font_size_sm u-p-5px_8px u-bg-v_surface u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">' +
         '<option value="chronological"' + (channelSpotlightSort === 'chronological' ? ' selected' : '') + '>Career order</option>' +
         '<option value="rating"' + (channelSpotlightSort === 'rating' ? ' selected' : '') + '>Best first</option>' +
       '</select>' +
     '</div>' +
-    '<div class="actions" style="flex-wrap:wrap; margin-bottom:10px;">' +
+    '<div class="actions u-fw2-wrap u-mb-10px">' +
       '<button type="button" class="secondary channelPersonAddAllBtn">Add everything as a Spotlight channel</button>' +
     '</div>';
   const movies = c.movies.length
-    ? '<p style="margin:10px 0 4px; font-weight:600; font-size:var(--font-size-sm);">Films</p>' +
+    ? '<p class="u-m-10px_0_4px u-fw-600 u-fs-v_font_size_sm">Films</p>' +
       '<div class="poster-grid-3">' + c.movies.map((m) => channelPersonCreditCardHtml(m, false)).join('') + '</div>'
     : '';
   const shows = c.shows.length
-    ? '<p style="margin:14px 0 4px; font-weight:600; font-size:var(--font-size-sm);">Television</p>' +
-      '<p style="margin:0 0 6px; color:var(--muted); font-size:var(--font-size-xs);">The button adds only the episodes they are actually in. Tap the poster instead to pick seasons and episodes yourself, the same way you would from the Shows tab.</p>' +
+    ? '<p class="u-m-14px_0_4px u-fw-600 u-fs-v_font_size_sm">Television</p>' +
+      '<p class="u-m-0_0_6px u-c-v_muted u-fs-v_font_size_xs">The button adds only the episodes they are actually in. Tap the poster instead to pick seasons and episodes yourself, the same way you would from the Shows tab.</p>' +
       '<div class="poster-grid-3">' + c.shows.map((sh) => channelPersonCreditCardHtml(sh, true)).join('') + '</div>' +
       '<div id="channelEpisodeList"></div>'
     : '<div id="channelEpisodeList"></div>';
@@ -12179,7 +12179,7 @@ async function addWholeSpotlightToDraft(btn) {
     setChannelPlayOrder('as-listed');
     renderChannelDraftList();
     updateChannelSaveButtonLabel();
-    say('<p class="testresult ok" style="margin:4px 0 0;">\u2713 Added ' + movieItems.length + ' film' + (movieItems.length === 1 ? '' : 's') +
+    say('<p class="testresult ok u-m-4px_0_0">\u2713 Added ' + movieItems.length + ' film' + (movieItems.length === 1 ? '' : 's') +
       (episodeItems.length ? ' and ' + episodeItems.length + ' episode' + (episodeItems.length === 1 ? '' : 's') : '') +
       ', ' + (channelSpotlightSort === 'rating' ? 'best first' : 'in career order') + '.' +
       (guestShows ? ' Guest appearances are only the episodes ' + escapeHtml(c.name) + ' is in.' : '') +
@@ -12342,23 +12342,23 @@ function showSavedChannelModal(channelName, visibility, url) {
   showModal(
     '<div class="modal-body">' +
       '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
-      '<h2 class="panel-title" style="margin-top:0;">\u2713 Channel Saved</h2>' +
-      '<p style="margin:8px 0 16px; font-size:var(--font-size-base); color:var(--text);">' +
+      '<h2 class="panel-title u-mt-0">\u2713 Channel Saved</h2>' +
+      '<p class="u-m-8px_0_16px u-fs-v_font_size_base u-c-v_text">' +
         '<strong>' + escapeHtml(channelName || 'Channel') + '</strong> has been saved to your Profile as a <strong>' + (isPrivate ? 'private' : 'public') + '</strong> channel.' +
       '</p>' +
       (isPrivate
-        ? '<div style="padding:12px 14px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.2); border-radius:var(--radius-md); margin-bottom:16px;">' +
-            '<p style="margin:0; font-size:var(--font-size-sm); color:var(--text);">Only you can see this channel from your profile when logged in.</p>' +
+        ? '<div class="u-p-12px_14px u-bg-rgba_0_122_255_0_08 u-bd-1px_solid_rgba_0_122_255_0_2 u-br-v_radius_md u-mb-16px">' +
+            '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Only you can see this channel from your profile when logged in.</p>' +
           '</div>'
-        : '<div style="margin-bottom:16px;">' +
-            '<p style="margin:0 0 8px; font-size:var(--font-size-sm); color:var(--muted);">Public share link:</p>' +
+        : '<div class="u-mb-16px">' +
+            '<p class="u-m-0_0_8px u-fs-v_font_size_sm u-c-v_muted">Public share link:</p>' +
             '<div style="display:flex; gap:8px; align-items:center;">' +
-              '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly style="flex:1; padding:10px 12px; font-size:var(--font-size-sm); border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg); color:var(--text);">' +
+              '<input type="text" id="savedChannelUrlInput" value="' + escapeAttr(url || '') + '" readonly class="u-flex-1 u-p-10px_12px u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text">' +
               '<button type="button" class="lc-btn primary" id="savedChannelCopyBtn" data-act="copyShareUrlById" data-act-args="[&quot;savedChannelUrlInput&quot;,&quot;@self&quot;]" style="white-space:nowrap; padding:10px 14px;">Copy Link</button>' +
             '</div>' +
           '</div>'
       ) +
-      '<div class="actions" style="margin-top:16px; flex-direction:row; justify-content:flex-end; gap:8px;">' +
+      '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         (!isPrivate && url ? '<a href="' + escapeAttr(url) + '" target="_blank" class="button secondary lc-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Open Link &nearr;</a>' : '') +
         '<button type="button" class="primary lc-btn" data-act="closeModal">Done</button>' +
       '</div>' +
@@ -12481,7 +12481,7 @@ async function importSharedChannel(btn) {
   };
   const code = parseChannelShareCode(input ? input.value : '');
   if (!code) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ That does not look like a channel share link or code.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ That does not look like a channel share link or code.</p>');
     return;
   }
   const originalLabel = btn ? btn.textContent : '';
@@ -12493,11 +12493,11 @@ async function importSharedChannel(btn) {
     say('<p><small>Fetching that channel…</small></p>');
     const data = await fetchSharedChannel(code);
     if (!data.ok || !data.channel) {
-      say('<p class="testresult err" style="margin:4px 0 0;">✗ ' + escapeHtml(data.error || 'That channel link could not be read.') + '</p>');
+      say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(data.error || 'That channel link could not be read.') + '</p>');
       return;
     }
     acceptSharedChannel(data.channel, code);
-    say('<p class="testresult ok" style="margin:4px 0 0;">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
+    say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(data.channel.name || 'Channel') + '" added (' +
       (data.channel.items || []).length + ' picks).</p>');
     if (input) input.value = '';
     if (modalInput) modalInput.value = '';
@@ -12509,7 +12509,7 @@ async function importSharedChannel(btn) {
       }, 900);
     }
   } catch (e) {
-    say('<p class="testresult err" style="margin:4px 0 0;">✗ Network error while fetching that channel.</p>');
+    say('<p class="testresult err u-m-4px_0_0">✗ Network error while fetching that channel.</p>');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -12569,7 +12569,7 @@ async function loadChannelDirectory(force) {
     return;
   }
   _channelDirectoryLoading = true;
-  if (feed) feed.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Loading published channels…</small></p>';
+  if (feed) feed.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Loading published channels…</small></p>';
   try {
     const res = await fetch(ORIGIN + '/api/channel/directory?limit=60&sort=' + encodeURIComponent(_channelDirectorySort),
       { cache: force ? 'no-store' : 'default' });
@@ -12603,7 +12603,7 @@ function renderChannelDirectory() {
   if (!feed) return;
   const entries = _channelDirectoryEntries || [];
   if (!entries.length) {
-    feed.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Nothing published yet. Build a channel and be the first — publish it from the panel below.</small></p>';
+    feed.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing published yet. Build a channel and be the first — publish it from the panel below.</small></p>';
     return;
   }
   const filterInput = document.getElementById('channelDirectorySearchInput');
@@ -12616,7 +12616,7 @@ function renderChannelDirectory() {
       ))
     : entries;
   if (!shown.length) {
-    feed.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No published channel matches that.</small></p>';
+    feed.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No published channel matches that.</small></p>';
     return;
   }
   const localChannelsMap = (typeof loadLocalChannels === 'function') ? loadLocalChannels() : {};
@@ -12920,8 +12920,8 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
         const isDesktopEnd = (i === sampleItems.length - 1 && sampleItems.length >= 4);
         let overlays = '';
         if (entry.code) {
-          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
-          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
+          if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
+          if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="previewDirectoryChannel" data-act-stop data-act-args="' + appActArgs([entry.code, "@self"]) + '">' + totalCount + ' &rsaquo;</div>';
         }
         const p = it.poster || it.thumbnail || it.showPoster || it.backdrop || entry.poster || entry.backdrop || '';
         const imgHtml = p
@@ -12956,12 +12956,12 @@ function channelListingCardHtml(entry, actionsHtml, extraHtml) {
   const openAttr = entry.code
     ? ' style="cursor:pointer;" data-act="previewDirectoryChannel" data-act-args="' + appActArgs([entry.code, "@self"]) + '" title="See everything in this channel"'
     : '';
-  return '<div class="list-card" style="margin-bottom:10px;">' +
-    '<div class="list-card-header" style="gap:10px; align-items:center;">' +
+  return '<div class="list-card u-mb-10px">' +
+    '<div class="list-card-header u-gap-10px u-ai-center">' +
       (thumb ? '<div' + openAttr + '>' + thumb + '</div>' : '') +
       '<div class="list-card-body">' +
         '<div class="list-card-title"' + openAttr + '>' + escapeHtml(entry.name || 'Channel') + '</div>' +
-        (entry.description ? '<div style="font-size:var(--font-size-sm); color:var(--text); margin-top:2px;">' + escapeHtml(entry.description) + '</div>' : '') +
+        (entry.description ? '<div class="u-fs-v_font_size_sm u-c-v_text u-mt-2px">' + escapeHtml(entry.description) + '</div>' : '') +
         '<div class="list-card-meta"><span>' + escapeHtml(channelDirectoryMetaLine(entry)) + '</span></div>' +
       '</div>' +
       '<div class="list-card-actions">' + actionsHtml + '</div>' +
@@ -13056,7 +13056,7 @@ function renderChannelPublishList() {
   if (!box) return;
   const signedIn = (typeof activeCreator !== 'undefined' && !!activeCreator);
   if (!signedIn) {
-    box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Sign in to a Creator Profile under <strong>Settings</strong> to publish a channel here. You can still share any channel privately with <strong>Share</strong> under My Channels.</small></p>';
+    box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>Sign in to a Creator Profile under <strong>Settings</strong> to publish a channel here. You can still share any channel privately with <strong>Share</strong> under My Channels.</small></p>';
     return;
   }
   const channels = Object.values(ensureAllChannelsSyncedFromRows(loadLocalChannels()));
@@ -13071,8 +13071,8 @@ function renderChannelPublishList() {
       // in the modal that announced it -- that modal closes and takes the
       // link with it.
       (ch.shareCode
-        ? '<div class="row" style="margin-top:8px; gap:8px;">' +
-            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" style="font-size:var(--font-size-sm);">' +
+        ? '<div class="row u-mt-8px u-gap-8px">' +
+            '<input type="text" readonly value="' + escapeAttr(channelShareUrl(ch.shareCode)) + '" data-act-on="click" data-act="appActSelectText" data-act-args="[&quot;@self&quot;]" class="u-fs-v_font_size_sm">' +
             '<button type="button" class="secondary lc-btn" style="flex:none; width:auto; white-space:nowrap;" data-act="copyChannelShareLink" data-act-args="' + appActArgs([ch.channelId, "@self"]) + '">Copy</button>' +
           '</div>'
         : '');
@@ -13088,10 +13088,10 @@ function renderChannelPublishList() {
   )).join('');
 
   box.innerHTML =
-    (channels.length ? mine : '<p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No channels yet \u2014 build one first.</small></p>') +
+    (channels.length ? mine : '<p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels yet \u2014 build one first.</small></p>') +
     (orphans
-      ? '<p style="margin:16px 0 6px; font-weight:600; font-size:var(--font-size-sm);">Still listed, but no longer on this device</p>' +
-        '<p style="margin:0 0 8px; color:var(--muted); font-size:var(--font-size-xs);">You published these and the channel has since been deleted here. They are still in Explore Channels until you take them down.</p>' +
+      ? '<p class="u-m-16px_0_6px u-fw-600 u-fs-v_font_size_sm">Still listed, but no longer on this device</p>' +
+        '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_xs">You published these and the channel has since been deleted here. They are still in Explore Channels until you take them down.</p>' +
         orphans
       : '');
 }
@@ -13597,7 +13597,7 @@ function renderChannelMergeList() {
   if (savedBox) {
     const mergedList = Object.values(mergedMap);
     if (!mergedList.length) {
-      savedBox.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;"><small>No merged catalogs created yet. Select channels below to combine them.</small></p>';
+      savedBox.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0"><small>No merged catalogs created yet. Select channels below to combine them.</small></p>';
     } else {
       mergedList.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
       savedBox.innerHTML = mergedList.map((merged) => {
@@ -13644,14 +13644,14 @@ function renderChannelMergeList() {
           (isAdded ? 'Remove' : '+ Add') +
         '</button>';
 
-        return '<div class="list-card" style="margin-bottom:10px;" data-merged-id="' + escapeAttr(merged.mergedId) + '">' +
+        return '<div class="list-card u-mb-10px" data-merged-id="' + escapeAttr(merged.mergedId) + '">' +
           '<div class="list-card-header">' +
             '<div class="list-card-body">' +
               '<div class="list-card-title">' + escapeHtml(merged.name) + '</div>' +
               '<div class="list-card-meta"><span>' + countText + '</span></div>' +
               '<div style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center;">' +
-                '<strong style="font-size:var(--font-size-xs); color:var(--muted); margin-right:6px;">Merged:</strong>' +
-                (channelChips || '<span style="color:var(--muted); font-size:var(--font-size-sm); margin-right:4px;">None</span>') +
+                '<strong class="u-fs-v_font_size_xs u-c-v_muted u-mr-6px">Merged:</strong>' +
+                (channelChips || '<span class="u-c-v_muted u-fs-v_font_size_sm u-mr-4px">None</span>') +
                 addSelectHtml +
               '</div>' +
             '</div>' +
@@ -13678,9 +13678,9 @@ function renderChannelMergeList() {
     if (selectAllWrap) selectAllWrap.style.display = 'none';
     if (controlsRow) controlsRow.style.display = 'none';
     if (channels.length === 1) {
-      box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
+      box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0"><small>You have 1 saved channel (<strong>' + escapeHtml(channels[0].name || 'Channel') + '</strong>). Create or quick-add at least one more channel to combine them into a merged catalog.</small></p>';
     } else {
-      box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
+      box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0"><small>No saved channels yet &mdash; build a custom channel or add a network above first.</small></p>';
     }
     return;
   }
@@ -13692,8 +13692,8 @@ function renderChannelMergeList() {
   
   box.innerHTML = channels.map((ch) => {
     const epCount = (ch.items || []).length;
-    const label = escapeHtml(ch.name) + ' <span style="color:var(--muted); font-size:var(--font-size-sm);">(' + epCount + ' ep)</span>';
-    return '<label class="row quick-row" style="cursor:pointer; margin-bottom:4px;">' +
+    const label = escapeHtml(ch.name) + ' <span class="u-c-v_muted u-fs-v_font_size_sm">(' + epCount + ' ep)</span>';
+    return '<label class="row quick-row u-cur-pointer u-mb-4px">' +
       '<span><input type="checkbox" class="channelMergeCheck" data-channelid="' + escapeAttr(ch.channelId) + '"> ' + label + '</span>' +
       '</label>';
   }).join('');

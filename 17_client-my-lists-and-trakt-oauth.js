@@ -25,10 +25,10 @@ async function runMyMdblistLists() {
   const token = isDisc ? '' : (mdblistAccessToken || readProviderSecret('myListAddon:mdblistAccessToken') || '');
   const key = isDisc ? '' : (manualKey || token || readProviderSecret('myListAddon:mdblistKey') || '');
   if (!key) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your MDBList account in Settings or click <strong>Connect MDBList</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your MDBList account in Settings or click <strong>Connect MDBList</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
     return;
   }
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your MDBList lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your MDBList lists\u2026</small></p>';
   try {
     // POST: an MDBList key or token is never put in a URL (the server refuses it).
     const res = await fetch(ORIGIN + '/api/mdblist-my-lists', {
@@ -214,7 +214,7 @@ function renderMyMdblistLists(lists) {
   window._myMdblistLists = lists || [];
   const box = document.getElementById('myMdblistListsResult');
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No lists found on your MDBList account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No lists found on your MDBList account.</small></p>';
     return;
   }
 
@@ -324,8 +324,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showMdbUpNextBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesMdblistUpNext') : true;
             const showAirDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -371,7 +371,7 @@ function renderMyMdblistLists(lists) {
             const mdbUpNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbUpNextRemoveBtn +
                 overlays +
@@ -382,7 +382,7 @@ function renderMyMdblistLists(lists) {
           }).join('') +
         '</div>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>No shows in progress.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>No shows in progress.</small></p>';
       }
     } else if (isAiringNext) {
       const previewItems = filteredItems.slice(0, 9);
@@ -392,8 +392,8 @@ function renderMyMdblistLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -433,7 +433,7 @@ function renderMyMdblistLists(lists) {
             const mdbAiringNextRemoveBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="mdblist" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from MDBList Watchlist" aria-label="Remove from MDBList Watchlist">\u2715</button>';
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>') +
+                (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 mdbAiringNextRemoveBtn +
                 overlays +
@@ -444,9 +444,9 @@ function renderMyMdblistLists(lists) {
           }).join('') +
         '</div>';
       } else if (_mdblistAiringNextEnriching) {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted); font-size:var(--font-size-sm);"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
       }
     } else {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
@@ -457,7 +457,7 @@ function renderMyMdblistLists(lists) {
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="MDBList" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" ' + titleClick + ' style="cursor:pointer;">' + escapeHtml(l.name) + (l.dynamic ? ' <span class="badge">Dynamic</span>' : '') + '</div>' +
+          '<div class="list-card-title u-cur-pointer" ' + titleClick + '>' + escapeHtml(l.name) + (l.dynamic ? ' <span class="badge">Dynamic</span>' : '') + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + typeLabel + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' items</span>' +
@@ -474,7 +474,7 @@ function renderMyMdblistLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
   if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
 }
@@ -532,7 +532,7 @@ async function runMyTraktLists() {
   const box = document.getElementById('myTraktListsResult');
   const isDisc = localStorage.getItem('myListAddon:traktDisconnected') === 'true';
   const token = isDisc ? '' : (traktAccessToken || readProviderSecret('myListAddon:traktAccessToken') || '');
-  const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+  const neutralMsg = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
   if (!token) {
     if (box) box.innerHTML = neutralMsg;
@@ -622,9 +622,9 @@ function renderMdblistConnectStatus() {
 
   if (statusEl) {
     if (token && user) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">\u2713 Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected as @' + escapeHtml(user) + '</span>';
     } else if (token) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">\u2713 Connected to MDBList</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected to MDBList</span>';
       if (!window._mdblistResolvingUser) {
         window._mdblistResolvingUser = true;
         setTimeout(() => {
@@ -633,9 +633,9 @@ function renderMdblistConnectStatus() {
         }, 100);
       }
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:var(--text-2); font-weight:600;">Custom MDBList API Key configured</span>';
+      statusEl.innerHTML = '<span class="u-c-v_text_2 u-fw-600">Custom MDBList API Key configured</span>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected.</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected.</span>';
     }
   }
   if (connectBtn) connectBtn.textContent = token ? 'Re-connect MDBList' : (key ? 'Update Key' : 'Connect MDBList Account');
@@ -747,7 +747,7 @@ function disconnectTrakt() {
   const box = document.getElementById('myPrivateTraktListsResult');
   if (box) box.innerHTML = '';
   const pubBox = document.getElementById('myTraktListsResult');
-  if (pubBox) pubBox.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+  if (pubBox) pubBox.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 }
 
 function toggleListsTraktConnection() {
@@ -781,13 +781,13 @@ function renderTraktConnectStatus() {
   
   if (statusEl) {
     if (token && user) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">✓ Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected as @' + escapeHtml(user) + '</span>';
     } else if (token) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">✓ Connected to Trakt</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected to Trakt</span>';
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">✓ Custom Trakt Client ID configured' + (user ? ' (@' + escapeHtml(user) + ')' : '') + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Custom Trakt Client ID configured' + (user ? ' (@' + escapeHtml(user) + ')' : '') + '</span>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected.</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected.</span>';
     }
   }
   if (connectBtn) connectBtn.textContent = token ? 'Re-connect Trakt' : (key ? 'Update Client ID' : 'Connect Trakt Account');
@@ -802,7 +802,7 @@ function renderTraktConnectStatus() {
   const pubBox = document.getElementById('myTraktListsResult');
   if (!isAccountConnected) {
     if (box) box.innerHTML = '';
-    if (pubBox) pubBox.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+    if (pubBox) pubBox.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Trakt account in Settings or click <strong>Connect Trakt</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
   }
 }
 
@@ -922,7 +922,7 @@ async function startTraktDeviceLogin(retried) {
     if (!data.ok || !data.user_code) {
       if (codeEl) codeEl.innerText = 'ERROR';
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color:var(--danger);">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:var(--font-size-xs);" data-act="startTraktDeviceLogin">Try Again</button>';
+        statusEl.innerHTML = '<span class="u-c-v_danger">' + escapeHtml(data.error || 'Could not get device code.') + '</span> <button type="button" class="lc-btn secondary" style="margin-left:8px; padding:3px 8px; font-size:var(--font-size-xs);" data-act="startTraktDeviceLogin">Try Again</button>';
       }
       return;
     }
@@ -932,7 +932,7 @@ async function startTraktDeviceLogin(retried) {
       linkEl.href = data.verification_url || 'https://trakt.tv/activate';
     }
     if (statusEl) {
-      statusEl.innerHTML = '<span style="color:var(--accent); font-weight:600;">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval...';
+      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval...';
     }
 
     const deviceCode = data.device_code;
@@ -1005,7 +1005,7 @@ async function runMyPrivateTraktLists() {
     box.innerHTML = '';
     return;
   }
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your Trakt lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your Trakt lists\u2026</small></p>';
   try {
     const res = await fetch(ORIGIN + '/api/trakt-my-private-lists', {
       method: 'POST',
@@ -1183,7 +1183,7 @@ function renderMyPrivateTraktLists(lists) {
   window._myPrivateTraktLists = lists || [];
   const box = document.getElementById('myPrivateTraktListsResult');
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No lists found on your Trakt account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No lists found on your Trakt account.</small></p>';
     return;
   }
 
@@ -1294,8 +1294,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showTraktCwBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesTraktContinueWatching') : true;
             const showAirDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -1345,7 +1345,7 @@ function renderMyPrivateTraktLists(lists) {
 
             return '<div class="list-card-mini-poster-tile trakt-continue-watching-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(it.type || 'mixed') + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 progressOverlay +
                 (dateBadge + bottomBadge) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
@@ -1357,7 +1357,7 @@ function renderMyPrivateTraktLists(lists) {
           }).join('') +
         '</div>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing in progress.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing in progress.</small></p>';
       }
     } else if (isAiringNext) {
       const previewItems = filteredItems.slice(0, 9);
@@ -1367,8 +1367,8 @@ function renderMyPrivateTraktLists(lists) {
             const isMobileEnd = (i === 2 && previewItems.length > 3);
             const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
             let overlays = '';
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:pointer;" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
             const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
             const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
@@ -1407,7 +1407,7 @@ function renderMyPrivateTraktLists(lists) {
             const traktPoster = resolveListCardItemPoster(it);
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
-                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small style="color:var(--muted); font-size:var(--font-size-xs);">No poster</small></div>') +
+                (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder" data-needs-fallback="1" style="width:100%;height:100%;background:var(--bg-card);"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 (dateBadge + bottomBadge) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
@@ -1418,9 +1418,9 @@ function renderMyPrivateTraktLists(lists) {
           }).join('') +
         '</div>';
       } else if (_traktAiringNextEnriching) {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted); font-size:var(--font-size-sm);"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted u-fs-v_font_size_sm"><span style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;"></span>Checking upcoming air dates&hellip;</p>';
       } else {
-        postersHtml = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
+        postersHtml = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
       }
     } else {
       postersHtml = '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + viewType + '"></div>';
@@ -1431,7 +1431,7 @@ function renderMyPrivateTraktLists(lists) {
     return '<div class="list-card" data-list-type="' + (isSingleType ? type : 'mixed') + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(viewType) + '" data-creator="Trakt" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" ' + titleClick + ' style="cursor:pointer;">' + escapeHtml(l.name) + (l.private && !isWatchlist && !isHistory && !isAiringNext && !isContinueWatching ? ' <span class="badge">Private</span>' : '') + '</div>' +
+          '<div class="list-card-title u-cur-pointer" ' + titleClick + '>' + escapeHtml(l.name) + (l.private && !isWatchlist && !isHistory && !isAiringNext && !isContinueWatching ? ' <span class="badge">Private</span>' : '') + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + typeLabel + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' items</span>' +
@@ -1448,7 +1448,7 @@ function renderMyPrivateTraktLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
   if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
 }
@@ -1595,13 +1595,13 @@ function renderTmdbConnectStatus() {
 
   if (statusEl) {
     if (sess && user) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">\u2713 Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected as @' + escapeHtml(user) + '</span>';
     } else if (sess) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">\u2713 TMDB Account Connected</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 TMDB Account Connected</span>';
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text);">\u2713 Custom TMDB Key configured</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text">\u2713 Custom TMDB Key configured</span>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected</span>';
     }
   }
 
@@ -1630,11 +1630,11 @@ async function runMyTmdbLists() {
   const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
 
   if (!sess && !acc) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your TMDB account in Settings or click <strong>Connect TMDB</strong> above to see your personal lists, watchlist, and favorites here.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect your TMDB account in Settings or click <strong>Connect TMDB</strong> above to see your personal lists, watchlist, and favorites here.</small></p>';
     return;
   }
 
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your TMDB lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your TMDB lists\u2026</small></p>';
   try {
     // POST: the TMDB session id is a credential and is never put in a URL.
     const res = await fetch(ORIGIN + '/api/tmdb-my-lists', {
@@ -1676,7 +1676,7 @@ function renderMyTmdbLists(lists) {
   const box = document.getElementById('myTmdbListsResult');
   if (!box) return;
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No lists found on your TMDB account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No lists found on your TMDB account.</small></p>';
     return;
   }
 
@@ -1721,10 +1721,10 @@ function renderMyTmdbLists(lists) {
           const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
           let overlays = '';
           if (isMobileEnd) {
-            overlays += '<div class="list-card-count-overlay mobile-only" style="cursor:default;">' + totalCount + ' &rsaquo;</div>';
+            overlays += '<div class="list-card-count-overlay mobile-only u-cur-default">' + totalCount + ' &rsaquo;</div>';
           }
           if (isDesktopEnd) {
-            overlays += '<div class="list-card-count-overlay desktop-only" style="cursor:default;">' + totalCount + ' &rsaquo;</div>';
+            overlays += '<div class="list-card-count-overlay desktop-only u-cur-default">' + totalCount + ' &rsaquo;</div>';
           }
           const posterType = it.type || (l.contentType === 'series' ? 'series' : 'movie');
           const tmdbTarget = isWatchlist ? 'watchlist' : (isFavorites ? 'favorite' : 'custom');
@@ -1767,7 +1767,7 @@ function renderMyTmdbLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
 }
 
@@ -2019,13 +2019,13 @@ function renderSimklConnectStatus() {
 
   if (statusEl) {
     if (token && user) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">\u2713 Connected as @' + escapeHtml(user) + '</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected as @' + escapeHtml(user) + '</span>';
     } else if (token) {
-      statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">\u2713 Connected to Simkl</span>';
+      statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">\u2713 Connected to Simkl</span>';
     } else if (hasKey) {
-      statusEl.innerHTML = '<span style="color:var(--text-2); font-weight:600;">Custom Simkl Client ID configured</span> <small style="color:var(--muted);">(Account not connected)</small>';
+      statusEl.innerHTML = '<span class="u-c-v_text_2 u-fw-600">Custom Simkl Client ID configured</span> <small class="u-c-v_muted">(Account not connected)</small>';
     } else {
-      statusEl.innerHTML = '<span style="color:var(--muted);">Not connected.</span>';
+      statusEl.innerHTML = '<span class="u-c-v_muted">Not connected.</span>';
     }
   }
 
@@ -2056,14 +2056,14 @@ async function runMySimklLists() {
   const input = document.getElementById('simklKeyInput');
   const key = (input ? input.value.trim() : '') || readProviderSecret('myListAddon:simklKey') || '';
 
-  const neutralMsg = '<p style="margin-top:10px; color:var(--muted);"><small>Connect your Simkl account in Settings or click <strong>Connect Simkl</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
+  const neutralMsg = '<p class="u-mt-10px u-c-v_muted"><small>Connect your Simkl account in Settings or click <strong>Connect Simkl</strong> above to see your personal lists, watchlist, and watch history here.</small></p>';
 
   if (!token) {
     box.innerHTML = neutralMsg;
     return;
   }
 
-  box.innerHTML = '<p style="margin-top:10px;"><small>Loading your Simkl lists\u2026</small></p>';
+  box.innerHTML = '<p class="u-mt-10px"><small>Loading your Simkl lists\u2026</small></p>';
   try {
     const res = await fetch(ORIGIN + '/api/simkl/my-lists', {
       method: 'POST',
@@ -2199,7 +2199,7 @@ function renderMySimklLists(lists) {
   const box = document.getElementById('mySimklListsResult');
   if (!box) return;
   if (!lists || !lists.length) {
-    box.innerHTML = '<p style="margin-top:10px; color:var(--muted);"><small>No items found on your Simkl account.</small></p>';
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No items found on your Simkl account.</small></p>';
     return;
   }
 
@@ -2297,11 +2297,11 @@ function renderMySimklLists(lists) {
           const isDesktopEnd = (i === previewItems.length - 1 && previewItems.length >= 4);
           let overlays = '';
           if (isAiringNext) {
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn" style="cursor:pointer;" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only simklAiringNextViewBtn u-cur-pointer" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only simklAiringNextViewBtn u-cur-pointer" data-act="openSimklAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
           } else {
-            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
-            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '" style="cursor:pointer;">' + totalCount + ' &rsaquo;</div>';
+            if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' + totalCount + ' &rsaquo;</div>';
+            if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only searchViewListBtn u-cur-pointer" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' + totalCount + ' &rsaquo;</div>';
           }
           const simklStatus = isAiringNext ? (it.status || 'watching') : (l.statusKey || (l.url ? l.url.split(':')[3] : 'plantowatch'));
           const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
@@ -2355,7 +2355,7 @@ function renderMySimklLists(lists) {
         }).join('') +
       '</div>';
     } else if (isAiringNext) {
-      posterThumbs = '<p style="margin-top:8px; color:var(--muted);"><small>Nothing scheduled yet.</small></p>';
+      posterThumbs = '<p class="u-mt-8px u-c-v_muted"><small>Nothing scheduled yet.</small></p>';
     }
 
     const titleClick = isAiringNext ? 'data-act="openSimklAiringNextDetailsPage"' : '';
@@ -2363,7 +2363,7 @@ function renderMySimklLists(lists) {
     return '<div class="list-card" data-list-type="' + type + '" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title" ' + titleClick + ' style="cursor:pointer;">' + escapeHtml(l.name) + '</div>' +
+          '<div class="list-card-title u-cur-pointer" ' + titleClick + '>' + escapeHtml(l.name) + '</div>' +
           '<div class="list-card-meta">' +
             '<span>' + typeLabel + '</span>' +
             '<span class="list-card-meta-sep">&middot;</span><span>' + totalCount + ' items</span>' +
@@ -2379,7 +2379,7 @@ function renderMySimklLists(lists) {
     '</div>';
   }).join('');
 
-  box.innerHTML = cardsHtml || '<p style="margin-top:10px; color:var(--muted);"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
+  box.innerHTML = cardsHtml || '<p class="u-mt-10px u-c-v_muted"><small>All lists here are hidden. Manage visibility under Settings &rarr; Watchlist Preferences.</small></p>';
   if (typeof renderHiddenListsSettingsSection === 'function') renderHiddenListsSettingsSection();
 }
 
