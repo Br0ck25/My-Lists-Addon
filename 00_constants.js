@@ -1840,6 +1840,7 @@ const DESIGN_TOKENS_CSS = `
     --font-display:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-body:            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-mono:            ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-size-4xs:        0.58rem;
     --font-size-3xs:        0.62rem;
     --font-size-2xs:        0.68rem;
     --font-size-xs:         0.75rem;

@@ -67,6 +67,7 @@ Base: `body { font-size: 15px; -webkit-font-smoothing: antialiased; }`.
 
 | Role | Token / value | Weight | Where |
 |---|---|---|---|
+| Finale-date overlay label | `--font-size-4xs` `0.58rem` | 700 | Finale date pill on posters |
 | Tiny overlay label | `--font-size-3xs` `0.62rem` | 700–800 | Date/premiere/finale badges on posters, poster-tile subtitle and year lines, provider badge |
 | Micro badge | `--font-size-2xs` `0.68rem` | 700–800 | Rating/source badges, tiny labels |
 | Caption / compact control | `--font-size-xs` `0.75rem` | 600 | `.lc-btn`, bottom-nav labels |
@@ -419,7 +420,7 @@ Class list: `lc-btn list-add-btn` + `secondary`/`primary` + the legacy name your
 - Singular/plural: "1 movie", "2 movies".
 
 ### 10.6b Add a badge or label on top of a poster or card
-Tiles are only about 100px wide on a phone. Use `--font-size-3xs` (tiny overlay labels) or `--font-size-2xs`, tight padding (`--space-0-5 --space-1`), and **let the text wrap** (`white-space: normal; text-align: center`) instead of `text-overflow: ellipsis`: a cut-off "SEASON PR…" loses its meaning. Snapping a size to the scale must never make an overlay bigger than it was; check it at 360–390px width.
+Tiles are only about 100px wide on a phone. Use `--font-size-3xs` (tiny overlay labels) or `--font-size-2xs`, tight padding (`--space-0-5 --space-1`), and keep the label on one line (`white-space: nowrap; text-overflow: ellipsis`); do not wrap it. Snapping a size to the scale must never make an overlay bigger than it was; check it at 360–390px width.
 
 ### 10.7 Add a colour, size or token
 Do not. Use an existing token. If none fits, add one to `DESIGN_TOKENS_CSS` (`00_constants.js`) for **both** light and dark, then document it in §2 of this file. `tests/design-system.test.mjs` rejects hex literals in component CSS.

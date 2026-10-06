@@ -1636,7 +1636,7 @@ ${UTILITY_CSS}
     position: absolute;
     top: 6px;
     left: 6px;
-    padding: var(--space-0-5) var(--space-1);
+    padding: 2px 5px;
     border-radius: var(--radius-xs);
     font-size: var(--font-size-2xs);
     font-weight: 800;
@@ -2832,7 +2832,7 @@ ${UTILITY_CSS}
     color: var(--color-on-brand);
     font-size: var(--font-size-3xs);
     font-weight: 800;
-    padding: var(--space-0-5) var(--space-1);
+    padding: 2px 5px;
     border-radius: var(--radius-sm);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
     line-height: 1.15;
@@ -2861,9 +2861,7 @@ ${UTILITY_CSS}
     left: 50%;
     transform: translateX(-50%);
     max-width: calc(100% - 8px);
-    /* Wraps to two lines (SEASON / PREMIERE) instead of being cut off */
-    white-space: normal;
-    text-align: center;
+    text-overflow: ellipsis;
     overflow: hidden;
   }
   .cw-date-badge-finale {
@@ -2873,9 +2871,7 @@ ${UTILITY_CSS}
     left: 50%;
     transform: translateX(-50%);
     max-width: calc(100% - 8px);
-    /* Wraps to two lines (SEASON / PREMIERE) instead of being cut off */
-    white-space: normal;
-    text-align: center;
+    text-overflow: ellipsis;
     overflow: hidden;
   }
   .cw-date-badge-finale-date {
@@ -2889,7 +2885,7 @@ ${UTILITY_CSS}
     max-width: calc(100% - 8px);
     text-overflow: ellipsis;
     overflow: hidden;
-    font-size: var(--font-size-3xs);
+    font-size: var(--font-size-4xs);
     font-weight: 700;
   }
   .cw-date-badge-companion {
@@ -2900,9 +2896,7 @@ ${UTILITY_CSS}
     left: 50%;
     transform: translateX(-50%);
     max-width: calc(100% - 8px);
-    /* Wraps to two lines (SEASON / PREMIERE) instead of being cut off */
-    white-space: normal;
-    text-align: center;
+    text-overflow: ellipsis;
     overflow: hidden;
   }
   .episode-num-badge {
