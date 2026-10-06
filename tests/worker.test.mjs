@@ -4071,6 +4071,11 @@ function stubTmdbSearch() {
 }
 
 describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
+  // These tests count 429s over a per-minute rate window. Start each one early
+  // in a window (10 s of margin; the slowest takes ~3 s) so a run that crosses
+  // a minute boundary cannot reset the count mid-test.
+  beforeEach(async () => { await awaitFreshRateWindow(60000, 10000); });
+
   it("rejects a bulk-resolve request larger than the server's fan-out cap", async () => {
     const env = makeEnv();
     const items = Array.from({ length: 500 }, (_, i) => ({ title: "Film " + i, year: 2000 }));
