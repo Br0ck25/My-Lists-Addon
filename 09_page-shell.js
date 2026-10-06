@@ -2419,9 +2419,9 @@ ${UTILITY_CSS}
       display: none;
     }
     .shelf-header {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-2);
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: var(--space-2) !important;
     }
     .shelf-header > div {
       width: 100%;
