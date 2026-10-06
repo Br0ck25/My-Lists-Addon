@@ -356,7 +356,7 @@ Observed conventions (enforce for new copy):
 8. **Responsive:** test ≤640px (incl. 320–360px width) and ≥641px; check nothing overflows horizontally and content clears the bottom nav and toast area.
 9. **Dark mode:** toggle the theme and verify contrast; no hard-coded colours.
 10. **Escape and CSP:** `escapeHtml/escapeAttr`; nonce on any new `<style>`/`<script>`; no unescaped `</script>`; no external fonts, CSS or icon libraries.
-11. **Preserve the build rules:** edit numbered files only; run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py` (if functions changed), `node --test tests/*.test.mjs`.
+11. **Preserve the build rules** (`tests/design-system.test.mjs` enforces tokens, breakpoints, z-index and contrast pairing automatically): edit numbered files only; run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py` (if functions changed), `node --test tests/*.test.mjs`.
 12. **Update this file** if you added a variant or token.
 
 ---
