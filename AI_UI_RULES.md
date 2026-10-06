@@ -17,7 +17,7 @@ Full detail: `DESIGN_SYSTEM.md` (read it before adding or changing any UI). Main
 10. Icons: inline SVG, 24×24 viewBox, `stroke="currentColor"`, `stroke-width="2"`, `aria-hidden="true"` if decorative.
 
 **Never**
-- `!important` (about 241 remain; don't add), `transition: all`, `outline: none` without a focus ring, new `z-index` numbers (use `--z-*`; modals sit above the bottom nav), a second set of `:root` variables in any page, new `style="…"` for anything repeated.
+- `!important` (about 241 remain; don't add), `transition: all`, `outline: none` without a focus ring, new `z-index` numbers (use `--z-*`; modals sit above the bottom nav), a second set of `:root` variables in any page, new `style="…"` for anything repeated (inline only for properties a script toggles, e.g. `display`/`width`); never put a colour `u-*` helper on an element a script colours (`*Status`/`*Hint`/`*State`).
 - Copy the legacy spots listed in `DESIGN_SYSTEM.md` §9 (inline styles, leftover `!important`).
 - External fonts, icon libraries, CSS frameworks, or a framework rewrite.
 
