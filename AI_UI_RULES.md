@@ -17,8 +17,8 @@ Full detail: `DESIGN_SYSTEM.md` (read it before adding or changing any UI). Main
 10. Icons: inline SVG, 24×24 viewBox, `stroke="currentColor"`, `stroke-width="2"`, `aria-hidden="true"` if decorative.
 
 **Never**
-- `!important` (about 265 remain; don't add), `transition: all`, `outline: none` without a focus ring, new `z-index` numbers (use `--z-*`; modals sit above the bottom nav), a second set of `:root` variables in any page, new `style="…"` for anything repeated.
-- Copy the legacy spots listed in `DESIGN_SYSTEM.md` §9 (inline styles, leftover `!important`, the add/remove button list).
+- `!important` (about 241 remain; don't add), `transition: all`, `outline: none` without a focus ring, new `z-index` numbers (use `--z-*`; modals sit above the bottom nav), a second set of `:root` variables in any page, new `style="…"` for anything repeated.
+- Copy the legacy spots listed in `DESIGN_SYSTEM.md` §9 (inline styles, leftover `!important`).
 - External fonts, icon libraries, CSS frameworks, or a framework rewrite.
 
 **Build (every change):** edit numbered files only (never `worker_entry_combined.js`), then `python build.py && python check_sync.py && node --check worker_entry_combined.js && node --test tests/*.test.mjs`.
