@@ -20,3 +20,4 @@ audit/**/*.png
 # one; use a redacted fixture if a test needs this shape.
 my-lists-full-backup*.json
 *-full-backup*.json
+__pycache__/

@@ -1,0 +1,8 @@
+# Keeps the GitHub Actions in .github/workflows current. It only opens pull
+# requests; nothing is merged without a review.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

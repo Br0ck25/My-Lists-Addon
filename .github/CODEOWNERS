@@ -1,0 +1,15 @@
+# Everything needs the owner's review. These are the files where a mistake costs
+# the most, listed so they stay explicitly owned even if the default changes.
+*                          @Br0ck25
+/.github/                  @Br0ck25
+/.githooks/                @Br0ck25
+/wrangler.toml             @Br0ck25
+/schema.sql                @Br0ck25
+/schema_activity.sql       @Br0ck25
+/migrations/               @Br0ck25
+/tests/route-access.json   @Br0ck25
+/03_admin.js               @Br0ck25
+/26_api-creator-and-admin-routes.js @Br0ck25
+/CLAUDE.md                 @Br0ck25
+/AGENTS.md                 @Br0ck25
+/DESIGN_SYSTEM.md          @Br0ck25

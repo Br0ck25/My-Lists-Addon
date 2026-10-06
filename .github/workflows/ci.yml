@@ -4,6 +4,17 @@ on:
   push:
   pull_request:
 
+# CI only reads the repository; nothing here may write to it or to releases.
+permissions:
+  contents: read
+
+# A push and the pull request for the same branch both start a run; only the
+# newest one matters. A run on main is never cancelled, so every merge keeps a
+# finished result.
+concurrency:
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -142,3 +153,25 @@ jobs:
         run: node --test tests/*.test.mjs
         env:
           MLA_TEST_V2_LISTS_READ: "1"
+
+  # What the shared buttons, tabs and inputs look like, as a real browser
+  # computes it (tests/ui-contract.mjs, recorded in tests/ui-contract.json).
+  # A change to a size, padding, radius, font or colour fails here until the
+  # contract is updated on purpose, so a different-sized button or a new colour
+  # cannot slip in unnoticed. Separate job: it needs a browser.
+  ui-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install a browser
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: UI contract
+        run: node tests/ui-contract.mjs

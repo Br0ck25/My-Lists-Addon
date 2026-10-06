@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Runs before every commit. Fast checks only (about a minute); CI runs the full
+# suite. Turn it on once per clone:  git config core.hooksPath .githooks
+#
+# It does NOT rebuild anything for you: if the combined Worker is stale it stops
+# and says so, so a commit never goes in with a Worker that does not match its
+# sources.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: Worker matches its sources"
+python3 check_sync.py || { echo "run: python3 build.py   (then git add worker_entry_combined.js)"; exit 1; }
+
+echo "pre-commit: Worker parses"
+node --check worker_entry_combined.js
+
+echo "pre-commit: route access, design system, build stamp"
+node --test tests/route-access.test.mjs tests/design-system.test.mjs tests/build-stamp.test.mjs > /dev/null \
+  || { echo "a guard test failed; run: node --test tests/route-access.test.mjs tests/design-system.test.mjs tests/build-stamp.test.mjs"; exit 1; }
+
+echo "pre-commit: ok"

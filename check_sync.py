@@ -28,15 +28,11 @@
 #
 # Exits non-zero, and says where the first difference is, if the committed
 # Worker is not byte-for-byte what the sources build to.
-import glob
 import sys
 
-expected = bytearray(open("header.js", "rb").read())
-for name in sorted(glob.glob("[0-9][0-9]_*.js")):
-    data = open(name, "rb").read()
-    expected += data
-    if not data.endswith(b"\n"):
-        expected += b"\n"
+from build import assemble
+
+expected, stamp = assemble()
 
 actual = open("worker_entry_combined.js", "rb").read()
 
@@ -46,11 +42,11 @@ actual = open("worker_entry_combined.js", "rb").read()
 def lf(b):
     return b.replace(b"\r\n", b"\n")
 
-expected = bytearray(lf(bytes(expected)))
+expected = bytearray(lf(expected))
 actual = lf(actual)
 
 if bytes(expected) == actual:
-    print(f"  ok: worker_entry_combined.js matches its sources ({len(actual):,} bytes, line endings ignored)")
+    print(f"  ok: worker_entry_combined.js matches its sources ({len(actual):,} bytes, build stamp {stamp}, line endings ignored)")
     sys.exit(0)
 
 print(f"  MISMATCH: expected {len(expected):,} bytes, found {len(actual):,}")
