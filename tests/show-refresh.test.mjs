@@ -215,4 +215,74 @@ describe("P5-3: show.refresh", () => {
       net.restore();
     }
   });
+
+  it("re-files a show filed as a movie, so it gets a schedule (Compare shelves, 2026-10-06)", async () => {
+    // TMDB, by IMDb id: two shows and a film; /tv for the shows.
+    const realFetch = globalThis.fetch;
+    const calls = [];
+    const finds = {
+      tt0000020: { tv_results: [{ id: 200, name: "Dark Matter", first_air_date: "2024-05-08", poster_path: "/dm.jpg" }] },
+      tt0000022: { tv_results: [{ id: 210, name: "Criminal Minds", first_air_date: "2005-09-22" }] },
+      tt0000023: { movie_results: [{ id: 230, title: "A Real Film" }], tv_results: [] },
+    };
+    const shows = {
+      200: { status: "Returning Series", last_episode_to_air: { season_number: 1, episode_number: 9, air_date: "2024-06-26" }, seasons: [{ season_number: 1, episode_count: 9 }] },
+      210: { status: "Returning Series", last_episode_to_air: { season_number: 18, episode_number: 10, air_date: "2025-08-01" }, seasons: [{ season_number: 18, episode_count: 10 }] },
+    };
+    globalThis.fetch = async (input) => {
+      const u = String(input && input.url ? input.url : input);
+      calls.push(u);
+      const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
+      const find = /\/3\/find\/(tt\d+)/.exec(u);
+      if (find) return json(finds[find[1]] || { movie_results: [], tv_results: [] });
+      const tv = /\/3\/tv\/(\d+)/.exec(u);
+      if (tv) return shows[tv[1]] ? json(shows[tv[1]]) : json({}, 404);
+      throw new Error("network disabled in test: " + u);
+    };
+    try {
+      const env = showEnv();
+      const db = env.DB._db;
+      const media = db.prepare("INSERT INTO media (id, kind, imdb_id, tmdb_id, title, resolved_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0)");
+      // 20: a stub a list filed as a movie, by IMDb id only (Dark Matter).
+      media.run(20, "movie", "tt0000020", null, "Dark Matter", null);
+      // 21 holds the show's TMDB id already; 22 is the same show filed as a
+      // movie (Criminal Minds: the upgrade used to be ignored for ever).
+      media.run(21, "series", null, 210, "Criminal Minds", 1);
+      media.run(22, "movie", "tt0000022", null, "Criminal Minds", null);
+      // 23: TMDB knows the IMDb id as a film; someone's progress on it is wrong.
+      media.run(23, "movie", "tt0000023", null, "A Real Film", 1);
+      const p = env.DB_ACTIVITY._db.prepare("INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, status, updated_at) VALUES (1, ?, ?, ?, ?, 'watching', 0)");
+      p.run(20, 1, 7, Date.now() - 2 * DAY);
+      p.run(22, 18, 9, Date.now() - 3 * DAY);
+      p.run(23, 1, 1, Date.now() - 4 * DAY);
+
+      let s = await shelvesAt(env, 0);
+      assert.deepEqual([...s.cw.missingSchedule].sort((a, b) => a - b), [10, 20, 22, 23], "not known yet, before");
+
+      await refreshNow(env);
+      const m = (id) => db.prepare("SELECT kind, tmdb_id, title, year, resolved_at FROM media WHERE id = ?").get(id);
+      assert.deepEqual(plain(m(20)), { ...plain(m(20)), kind: "series", tmdb_id: 200, title: "Dark Matter", year: 2024 });
+      assert.ok(m(20).resolved_at > 0);
+      assert.equal(m(22).kind, "series");
+      assert.equal(m(22).tmdb_id, null, "210 is row 21's: show.refresh finds the show by its IMDb id");
+      assert.equal(m(23).kind, "movie", "TMDB says it is a film: left alone");
+      assert.equal(sched(env, 23), undefined);
+      // The same run made their schedule rows.
+      assert.equal(sched(env, 20).watcher_count, 1);
+      assert.equal(sched(env, 22).watcher_count, 1);
+
+      // The next run refreshes them; the film is not asked about again today.
+      const findsBefore = calls.filter((u) => u.includes("/find/tt0000023")).length;
+      db.exec("UPDATE show_schedule SET next_check_at = 0");
+      await refreshNow(env);
+      assert.equal(calls.filter((u) => u.includes("/find/tt0000023")).length, findsBefore, "asked again a day later, not every hour");
+      assert.equal(sched(env, 20).status, "Returning Series");
+      assert.equal(sched(env, 22).last_aired_season, 18);
+      s = await shelvesAt(env, 0);
+      assert.deepEqual(s.cw.missingSchedule, [23], "only the film is still not known");
+      assert.deepEqual(s.cw.items.map((i) => [i.showId, i.seasonNum, i.episodeNum]).sort(), [["tt0000020", 1, 8], ["tt0000022", 18, 10]].sort());
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
 });

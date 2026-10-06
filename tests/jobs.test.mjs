@@ -352,7 +352,7 @@ describe("makeQueue", () => {
 const PERIODIC_EVERY = {
   "cron.episodes": 4 * 60000, "cron.airing-next": 4 * 60000, "nos.sweep": 4 * 60000, "cron.charts": 4 * 60000,
   "cron.better-posters": 4 * 60000, "cron.housekeeping": 4 * 60000,
-  "show.watchers": 24 * 3600000, "show.refresh": 3600000,
+  "show.watchers": 3600000, "show.refresh": 3600000,
   "shelf.shadow": 3600000, "chart.refresh": 3600000, "token.refresh": 24 * 3600000,
   "channel.presets": 24 * 3600000, "recs.build": 3600000, "rollup.daily": 24 * 3600000,
   "media.retry": 3600000, "activity.copy-new": 3600000,

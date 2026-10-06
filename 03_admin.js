@@ -4848,9 +4848,12 @@ ${UTILITY_CSS}
               'Continue Watching: ' + t.cw.both + ' the same, ' + t.cw.legacyOnly + ' only in the old, ' + t.cw.v2Only + ' only in the new, ' + t.cw.unknown + ' shows not known yet.',
               '  Why only in the old: ' + shelfCompareWhy(t.cw.whyOld),
               '  Why only in the new: ' + shelfCompareWhy(t.cw.whyNew),
+              '  Why not known yet: ' + shelfCompareWhy(t.cw.unknownWhy),
               'Airing Next: ' + t.an.both + ' the same, ' + t.an.legacyOnly + ' only in the old, ' + t.an.v2Only + ' only in the new, ' + t.an.unknown + ' not known yet.',
               '  Why only in the old: ' + shelfCompareWhy(t.an.whyOld),
               '  Why only in the new: ' + shelfCompareWhy(t.an.whyNew),
+              '  Why not known yet: ' + shelfCompareWhy(t.an.unknownWhy),
+              'Not known yet, examples: ' + ((t.unknownExamples || []).length ? (t.unknownExamples || []).map(function (e) { return String.fromCharCode(10) + '  ' + (e.shelf === 'an' ? 'Airing Next' : 'Continue Watching') + ', media ' + e.mediaId + ': ' + e.why; }).join('') : 'none'),
               'Examples: ' + JSON.stringify(t.examples || []),
             ].join(String.fromCharCode(10));
             break;

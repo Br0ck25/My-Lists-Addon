@@ -134,6 +134,11 @@ describe("P5-4: shelf.shadow", () => {
     const last = JSON.parse(env.DB._db.prepare("SELECT progress_json FROM jobs WHERE dedupe_key = 'periodic:shelf.shadow'").get().progress_json).last;
 
     assert.equal(last.cw.unknown, 2, "12 and 13 are not known yet");
+    // ...and why: 13 is a movie row; 12 was taken by show.refresh (its next
+    // check is set) and nothing was kept.
+    assert.deepEqual(last.cw.unknownWhy, { "refresh-tried": 1, "movie-row": 1 });
+    assert.deepEqual(last.unknownExamples.map((e) => [e.mediaId, e.why.split(":")[0]]).sort(), [[12, "refresh-tried"], [13, "movie-row"]]);
+    assert.match(last.unknownExamples.find((e) => e.mediaId === 13).why, /^movie-row: Wrong Kind is a movie row \(tt0000013, tmdb:130\)$/);
     assert.deepEqual([last.cw.both, last.cw.legacyOnly, last.cw.v2Only], [1, 2, 1], "13 is not a difference");
     // 14's stored S2E6 has not aired (TMDB's last is S2E5, nothing dated after).
     assert.deepEqual(last.cw.whyOld, { "not-aired-yet": 1, "already-watched": 1 });
@@ -195,6 +200,10 @@ describe("P5-4: shelf.shadow", () => {
     assert.deepEqual([last.cw.both, last.cw.legacyOnly, last.cw.v2Only], [25, 0, 0]);
     assert.deepEqual([last.an.both, last.an.legacyOnly], [1, 1]);
     assert.deepEqual(last.an.whyOld, { "no-upcoming": 1 });
+    // Why a show is not known yet survives the page carrying the round
+    // between batches (show 12, Ann's, in the first batch).
+    assert.deepEqual(last.cw.unknownWhy, { "refresh-tried": 1 });
+    assert.deepEqual(last.unknownExamples.map((e) => e.mediaId), [12]);
 
     // Check jobs shows it.
     const status = await call(env, "/admin/api/jobs/status", { cookie });
@@ -205,6 +214,48 @@ describe("P5-4: shelf.shadow", () => {
     const page = await call(env, "/admin", { cookie });
     assert.match(page.text, /data-act="runShelfCompareNow"/);
     assert.match(page.text, /async function runShelfCompareNow\(\)/);
+  });
+
+  it("names why the schedule does not know a show (2026-10-06: 26 and 9 with no reason)", async () => {
+    const env = shadowEnv();
+    const db = env.DB._db;
+    const media = db.prepare("INSERT INTO media (id, kind, imdb_id, tmdb_id, title, year, created_at, updated_at) VALUES (?, 'series', ?, ?, ?, ?, 0, 0)");
+    media.run(16, "tt0000016", 160, "Just Started", 2026);
+    media.run(17, "tt0000017", 170, "Nobody Counted", null);
+    media.run(18, "tt0000018", 180, "Due A While", null);
+    // 16: no schedule row at all. 17: a row with nobody counted. 18: due two
+    // hours ago, never refreshed.
+    db.prepare("INSERT INTO show_schedule (media_id, watcher_count, next_check_at) VALUES (17, 0, 0)").run();
+    db.prepare("INSERT INTO show_schedule (media_id, watcher_count, next_check_at) VALUES (18, 3, ?)").run(Date.now() - 2 * 3600000);
+    const p = env.DB_ACTIVITY._db.prepare("INSERT INTO show_progress (account_id, media_id, last_season, last_episode, last_watched_at, status, updated_at) VALUES (1, ?, 1, 1, ?, 'watching', 0)");
+    for (const id of [16, 17, 18]) p.run(id, Date.now() - id * DAY);
+
+    await runScheduledTick(env);
+    env.JOBS._pending.length = 0;
+    // The tick's own show.watchers recount would count 16 and 17: keep the
+    // state as it was, which is what Compare shelves would find between two
+    // recounts.
+    db.prepare("DELETE FROM show_schedule WHERE media_id = 16").run();
+    db.prepare("UPDATE show_schedule SET watcher_count = 0, next_check_at = 0 WHERE media_id = 17").run();
+    db.prepare("UPDATE show_schedule SET watcher_count = 3, next_check_at = ?, checked_at = NULL, status = NULL WHERE media_id = 18").run(Date.now() - 2 * 3600000);
+    const cookie = await adminCookie(env);
+    const r = await call(env, "/admin/api/jobs/shelf-shadow-now", { method: "POST", cookie, json: {} });
+    assert.equal(r.body.done, true, JSON.stringify(r.body));
+    const last = r.body.last;
+    // Continue Watching names 12 (refresh-tried) and the three new ones; Airing
+    // Next the same four, being series with a watched episode.
+    assert.deepEqual(last.cw.unknownWhy, { "refresh-tried": 1, "no-schedule-row": 1, "not-counted": 1, "waiting-refresh": 1 });
+    assert.deepEqual(last.an.unknownWhy, last.cw.unknownWhy);
+    const why = Object.fromEntries(last.unknownExamples.map((e) => [e.mediaId, e.why]));
+    assert.equal(Object.keys(why).length, 4, "one example per show, not one per shelf");
+    assert.equal(why[16], "no-schedule-row: Just Started (2026) has no schedule row yet (tt0000016, tmdb:160)");
+    assert.equal(why[17], "not-counted: Nobody Counted: watcher_count is 0 (tt0000017, tmdb:170)");
+    assert.equal(why[18], "waiting-refresh: Due A While: due since 2 h, not refreshed yet (tt0000018, tmdb:180)");
+
+    // The admin page prints the reasons and the examples.
+    const page = await call(env, "/admin", { cookie });
+    assert.match(page.text, /Why not known yet: /);
+    assert.match(page.text, /Not known yet, examples: /);
   });
 
   it("walks the accounts in steps and does nothing without the activity database", async () => {

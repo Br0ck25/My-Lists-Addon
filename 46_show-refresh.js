@@ -5,11 +5,16 @@
 // shelves.js) from each account's show_progress and one shared show_schedule
 // row per show (migration 0017). This file keeps those rows current.
 //
-//   show.watchers (periodic, daily): counts, over every activity database,
+//   show.watchers (periodic, hourly): counts, over every activity database,
 //   how many accounts have each show in show_progress, and writes
 //   show_schedule.watcher_count (making the row the first time, due at once).
 //   recordActivityPlay (38_) adds one as plays arrive; this recount is what
 //   fills the table after the history copy (P3c-3) and corrects any drift.
+//   Hourly, not daily, since 2026-10-06: a show that only gained progress
+//   from a copy or a sync (no play) waited up to a day for its row, and
+//   Compare shelves found 9 such shows "not known yet" (Release 25). It also
+//   re-files shows that have episode progress but a movie row (refileSeries-
+//   FiledAsMovies): 17 more, which no schedule row could ever reach.
 //
 //   show.refresh (periodic, hourly): takes the shows that are due
 //   (`next_check_at <= now AND watcher_count > 0`, at most
@@ -37,6 +42,11 @@ const SHOW_CHECK_AIR_DAY_MS = 60 * 60 * 1000;
 const SHOW_CHECK_RETURNING_MS = 6 * 60 * 60 * 1000;
 const SHOW_CHECK_RETRY_MS = 60 * 60 * 1000;
 const SHOW_WATCHERS_CHUNK = 2000;
+const SHOW_WATCHERS_EVERY_MS = 60 * 60 * 1000;
+// Shows filed as movies, asked about at TMDB per run, and how long one TMDB
+// does not call a show waits before it is asked again.
+const SHOW_REFILE_PER_RUN = 25;
+const SHOW_REFILE_RETRY_MS = 24 * 60 * 60 * 1000;
 
 function showScheduleTmdbKey(env) {
   return (env && env.TMDB_API_KEY) || (typeof TMDB_API_KEY === "string" ? TMDB_API_KEY : "");
@@ -209,17 +219,92 @@ async function runShowRefresh(env, job = {}, { now = Date.now() } = {}) {
   return total;
 }
 
+// --- Shows filed as movies -------------------------------------------------------
+//
+// A title someone watched episodes of is a show. Its media row can still be a
+// movie: a list saved it first, as a stub with the list's guess (an item with
+// no type is filed as a movie, 29_media.js), and the plays found that row by
+// its IMDb id. Only series get a schedule row, so such a show was never known
+// to the shelves (Compare shelves, 2026-10-06: Dark Matter, The Shield,
+// Criminal Minds, The Agency and 13 more). The hourly media.retry could not
+// mend them either when the show's TMDB id already belonged to another row:
+// the upgrade was ignored and tried again a week later, for ever.
+//
+// For up to SHOW_REFILE_PER_RUN such rows an hour, TMDB is asked what the IMDb
+// id is (/find): a show, and the row becomes a series, with TMDB's name, year
+// and poster, and TMDB's id unless another row already holds it (then none:
+// show.refresh finds the show by its IMDb id). The row keeps its id, so every
+// list entry, play and progress row on it stays where it is. Anything else
+// (TMDB knows it as a movie, or not at all; no IMDb id) is left as it is and
+// asked about again a day later.
+async function refileSeriesFiledAsMovies(env, mediaIds, { now = Date.now() } = {}) {
+  const out = { candidates: 0, refiled: 0, withoutTmdbId: 0, notShows: 0 };
+  const key = showScheduleTmdbKey(env);
+  const ids = [...new Set((mediaIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (!key || !ids.length) return out;
+  const { results } = await env.DB.prepare(
+    `SELECT id, imdb_id FROM media WHERE kind = 'movie' AND id IN (SELECT value FROM json_each(?)) AND updated_at <= ?
+     ORDER BY updated_at LIMIT ?`
+  ).bind(JSON.stringify(ids), now - SHOW_REFILE_RETRY_MS, SHOW_REFILE_PER_RUN).all();
+  for (const m of results || []) {
+    out.candidates++;
+    let tv = null;
+    try {
+      if (m.imdb_id) {
+        const found = await showTmdbGet(`/find/${encodeURIComponent(m.imdb_id)}?external_source=imdb_id`, key);
+        tv = found.data && Array.isArray(found.data.tv_results) ? found.data.tv_results[0] : null;
+      }
+    } catch (err) {
+      console.warn(`[Jobs] show.watchers: media ${m.id}: ${jobErrorText(err)}`);
+    }
+    if (!tv || !tv.id) {
+      out.notShows++;
+      await env.DB.prepare("UPDATE media SET updated_at = ? WHERE id = ?").bind(now, m.id).run();
+      continue;
+    }
+    const facts = mediaFactsFromTmdb(tv, "series", { imdb_id: m.imdb_id });
+    const taken = await env.DB.prepare("SELECT id FROM media WHERE kind = 'series' AND tmdb_id = ? AND id != ?").bind(facts.tmdbId, m.id).first();
+    const tmdbId = taken ? null : facts.tmdbId;
+    const res = await env.DB.prepare(
+      `UPDATE OR IGNORE media SET kind = 'series', tmdb_id = ?, title = COALESCE(?, title), year = COALESCE(?, year),
+         poster_path = COALESCE(?, poster_path), backdrop_path = COALESCE(?, backdrop_path), resolved_at = ?, updated_at = ?
+       WHERE id = ? AND kind = 'movie'`
+    ).bind(tmdbId, facts.title, facts.year, facts.posterPath, facts.backdropPath, now, now, m.id).run();
+    if (Number(res && res.meta && res.meta.changes) > 0) {
+      out.refiled++;
+      if (!tmdbId) out.withoutTmdbId++;
+    } else {
+      // Another row holds one of its other ids as a series: left as it is.
+      out.notShows++;
+      await env.DB.prepare("UPDATE media SET updated_at = ? WHERE id = ?").bind(now, m.id).run();
+    }
+  }
+  return out;
+}
+
 // Recounts show watchers over every activity database.
 async function recountShowWatchers(env, { now = Date.now() } = {}) {
   const dbs = typeof activityDbs === "function" ? activityDbs(env) : [];
   if (!env || !env.DB || !dbs.length) return { shows: 0, reason: "no activity database" };
   const counts = new Map();
+  const withEpisodes = new Set();
   for (const db of dbs) {
     if (!db) continue;
     const { results } = await db.prepare(
-      "SELECT media_id, count(*) AS n FROM show_progress WHERE last_season IS NOT NULL OR status = 'completed' GROUP BY media_id"
+      `SELECT media_id, count(*) AS n, max(last_season IS NOT NULL) AS episodes FROM show_progress
+       WHERE last_season IS NOT NULL OR status = 'completed' GROUP BY media_id`
     ).all();
-    for (const r of results || []) counts.set(r.media_id, (counts.get(r.media_id) || 0) + Number(r.n));
+    for (const r of results || []) {
+      counts.set(r.media_id, (counts.get(r.media_id) || 0) + Number(r.n));
+      if (Number(r.episodes) > 0) withEpisodes.add(r.media_id);
+    }
+  }
+  // Before the rows are made: a show re-filed here gets its row in this run.
+  let refile = null;
+  try {
+    refile = await refileSeriesFiledAsMovies(env, [...withEpisodes], { now });
+  } catch (err) {
+    console.warn(`[Jobs] show.watchers: re-filing shows filed as movies failed: ${jobErrorText(err)}`);
   }
   const entries = [...counts.entries()];
   const writes = [];
@@ -238,11 +323,11 @@ async function recountShowWatchers(env, { now = Date.now() } = {}) {
     "UPDATE show_schedule SET watcher_count = 0 WHERE watcher_count > 0 AND media_id NOT IN (SELECT value FROM json_each(?))"
   ).bind(JSON.stringify(entries.map(([id]) => id))));
   await env.DB.batch(writes);
-  return { shows: entries.length, at: now };
+  return { shows: entries.length, at: now, refile };
 }
 
 definePeriodicJob("show.watchers", {
-  everyMs: 24 * 60 * 60 * 1000,
+  everyMs: SHOW_WATCHERS_EVERY_MS,
   run: async (env) => {
     try {
       return await recountShowWatchers(env);
