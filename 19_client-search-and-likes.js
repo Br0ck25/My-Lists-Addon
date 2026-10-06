@@ -336,7 +336,7 @@ function betterPostersWebImdbId(it) {
   return '';
 }
 
-function betterPostersWebUrl(imdbId) {
+function betterPostersWebUrl(imdbId, todayRank) {
   const get = (typeof getBetterPostersSetting === 'function') ? getBetterPostersSetting : function(k, d) { return !!d; };
   const pick = (typeof getBetterPostersChoice === 'function') ? getBetterPostersChoice : function(k, d) { return d; };
   const genre = get('betterPostersGenre', true);
@@ -354,6 +354,8 @@ function betterPostersWebUrl(imdbId) {
   if (lang && lang !== 'en') params.push('lang=' + encodeURIComponent(lang));
   const rs = pick('betterPostersRatingSource', 'avg');
   if (rs && rs !== 'avg') params.push('rs=' + encodeURIComponent(rs));
+  // Order Today tags: the title's rank today, so the tag drawn matches the order.
+  if (todayRank >= 1 && todayRank <= 99) params.push('rk=' + todayRank);
   return betterPosterMirrorPrefix() + base + '/' + imdbId + '.jpg' +
     (params.length ? '?' + params.join('&') : '');
 }
@@ -424,7 +426,7 @@ function applyBetterPosterWeb(it, poster) {
   // Rebuilt from the current settings every time rather than kept, so
   // changing a style option re-renders with the new one instead of keeping
   // whatever URL happened to be produced first.
-  return betterPostersWebUrl(imdbId);
+  return betterPostersWebUrl(imdbId, it && it.todayRank);
 }
 window.applyBetterPosterWeb = applyBetterPosterWeb;
 

@@ -18201,20 +18201,28 @@ function parseBetterPosterPath(pathname, searchParams) {
   const lang = BETTER_POSTERS_LANGS.some((l) => l.value === langRaw && l.value !== "en") ? langRaw : "";
   const rsRaw = searchParams.get("rs") || "";
   const rs = BETTER_POSTERS_RATING_SOURCES.some((r) => r.value === rsRaw && r.value !== "avg") ? rsRaw : "";
+  // "rk" is the title's rank today (Order Today tags). btttr.cc is never told
+  // about it: it only gives the stored copy a new name, so a title that moved
+  // up or down the ranking is drawn again with its new "#N Today" tag instead
+  // of keeping the day-old copy.
+  const rkRaw = /^\d{1,2}$/.test(searchParams.get("rk") || "") ? Number(searchParams.get("rk")) : 0;
+  const rk = rkRaw >= 1 ? String(rkRaw) : "";
   const params = [];
   if (tag) params.push("tag=none");
   if (lang) params.push("lang=" + encodeURIComponent(lang));
   if (rs) params.push("rs=" + encodeURIComponent(rs));
   const qs = params.length ? "?" + params.join("&") : "";
+  const ownQs = rk ? (qs ? qs + "&rk=" + rk : "?rk=" + rk) : qs;
   return {
     style: m[1],
     imdbId: m[2],
     tag,
     lang,
     rs,
-    path: `/bp/${m[1]}/${m[2]}.jpg${qs}`,
+    rk,
+    path: `/bp/${m[1]}/${m[2]}.jpg${ownQs}`,
     upstream: `${BETTER_POSTERS_ORIGIN}/${m[1]}/imdb/poster-default/${m[2]}.jpg${qs}`,
-    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}`,
+    kvKey: `bpimg:v1:${m[1]}:${m[2]}:${tag}:${lang}:${rs}` + (rk ? `:${rk}` : ""),
   };
 }
 
@@ -26530,20 +26538,29 @@ async function loadBetterPostersCatalog(env, ctx, key, type) {
 // the poster tags "#N Today" is moved so #2 never sits in front of #1 -- the
 // tagged titles keep the places they already had in the list and are put in
 // rank order among those places; everything else stays exactly where it was.
+// Each tagged title also carries its rank (todayRank), and its Better Poster is
+// asked for under that rank, so the tag drawn on it matches the order.
 // A failed lookup leaves the list as it was.
 async function orderByBetterPostersToday(metas, type, env, ctx) {
-  if (!Array.isArray(metas) || metas.length < 2 || (type !== "movie" && type !== "series")) return metas;
+  if (!Array.isArray(metas) || !metas.length || (type !== "movie" && type !== "series")) return metas;
   try {
     const ranked = await loadBetterPostersCatalog(env, ctx, "today", type);
     const rankOf = new Map(ranked.filter((r) => r.rank !== undefined).map((r) => [r.id, r.rank]));
     const slots = [];
-    metas.forEach((m, i) => {
+    const tagged = metas.map((m, i) => {
       const id = betterPostersImdbId(m);
-      if (id && rankOf.has(id)) slots.push(i);
+      if (!id || !rankOf.has(id)) return m;
+      slots.push(i);
+      const rank = rankOf.get(id);
+      // The poster is asked for under today's rank, so the "#N Today" drawn on
+      // it is the one this order uses (see parseBetterPosterPath, "rk").
+      const own = typeof m.poster === "string" && m.poster.includes("/bp/") && !m.poster.includes("rk=");
+      return { ...m, todayRank: rank, ...(own && rank >= 1 && rank <= 99 ? { poster: m.poster + (m.poster.includes("?") ? "&" : "?") + "rk=" + rank } : {}) };
     });
-    if (slots.length < 2) return metas;
-    const sorted = slots.map((i) => metas[i]).sort((a, b) => rankOf.get(betterPostersImdbId(a)) - rankOf.get(betterPostersImdbId(b)));
-    const out = metas.slice();
+    tagged.totalItems = metas.totalItems;
+    if (slots.length < 2) return slots.length ? tagged : metas;
+    const sorted = slots.map((i) => tagged[i]).sort((a, b) => a.todayRank - b.todayRank);
+    const out = tagged.slice();
     slots.forEach((i, n) => { out[i] = sorted[n]; });
     out.totalItems = metas.totalItems;
     return out;
@@ -30289,13 +30306,10 @@ ${seoHeadHtml}
     flex: 1 1 160px; justify-content: center;
     padding: 10px 16px; font-size: 0.95rem;
   }
-  /* On a wide screen the two buttons keep their natural width, side by side at
-     the left, instead of stretching across the page. A phone keeps the full-width
-     pair above. */
+  /* On a wide screen the two buttons stay the size they are on a phone (about
+     180px each, side by side at the left) instead of stretching across. */
   @media (min-width: 720px) {
-    .item-actions .lc-btn {
-      flex: 0 0 auto; min-height: 40px; padding: 0 22px;
-    }
+    .item-actions .lc-btn { flex: 0 0 180px; }
   }
   .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
   .item-genre-chip {
@@ -30705,7 +30719,7 @@ ${seoHeadHtml}
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
   /* The Ko-fi support strip at the top of Catalogs (initSupportStrip): one flat
-     bar, a thin progress line along its bottom edge, and a plain X. Its two
+     bar, a small progress bar under the text, and a plain X. Its two
      buttons say what they look like here because the page's own button rules
      (blue fill on hover, focus and press; a round, bordered pill) are written
      to win over a bare class. */
@@ -30733,7 +30747,7 @@ ${seoHeadHtml}
     align-items: center;
     justify-content: flex-start;
     gap: 9px;
-    padding: 9px 0 11px;
+    padding: 10px 0;
     background: transparent;
     border: 0;
     border-radius: 0;
@@ -30753,17 +30767,18 @@ ${seoHeadHtml}
   .support-strip-row { display: flex; justify-content: space-between; gap: 8px; line-height: 1.25; }
   .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
   .support-strip-bar {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 3px;
-    background: var(--border);
+    display: block;
+    margin-top: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border-strong);
+    overflow: hidden;
   }
   .support-strip-bar i {
     display: block;
     height: 100%;
     width: 0;
+    border-radius: 3px;
     background: #ff8a00;
   }
   .support-strip.is-covered { border-color: #bfe8c9; }
@@ -34745,6 +34760,19 @@ ${appShellMobileNavHtml}
   <!-- Action Notification Toast -->
   <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
 
+  <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
+       (16_client-row-core.js) only when the admin has turned it on. -->
+  <div class="support-strip" id="supportStrip" hidden>
+    <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server Costs this month: see details">
+      <span class="support-strip-cup" aria-hidden="true">&#9749;</span>
+      <span class="support-strip-body">
+        <span class="support-strip-row"><span id="supportStripText"></span><span class="support-strip-go">Support &rsaquo;</span></span>
+        <span class="support-strip-bar" aria-hidden="true"><i id="supportStripFill"></i></span>
+      </span>
+    </button>
+    <button type="button" class="support-strip-x" data-act="dismissSupportStrip" aria-label="Hide this for 30 days">&#10005;</button>
+  </div>
+
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
     <div style="margin-bottom: 20px;">
@@ -35047,19 +35075,6 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <div class="tab-panel" data-tab-panel="catalogs" id="content-catalogs" role="tabpanel" aria-labelledby="tab-desktop-catalogs" hidden>
-  <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
-       (16_client-row-core.js) only when the admin has turned it on. -->
-  <div class="support-strip" id="supportStrip" hidden>
-    <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server costs this month: see details">
-      <span class="support-strip-cup" aria-hidden="true">&#9749;</span>
-      <span class="support-strip-body">
-        <span class="support-strip-row"><span id="supportStripText"></span><span class="support-strip-go">Support &rsaquo;</span></span>
-        <span class="support-strip-bar" aria-hidden="true"><i id="supportStripFill"></i></span>
-      </span>
-    </button>
-    <button type="button" class="support-strip-x" data-act="dismissSupportStrip" aria-label="Hide this for the rest of the month">&#10005;</button>
-  </div>
-
   <!-- Top Submenu Pills for Catalogs -->
   <div class="subnav-pills-bar" id="catalogsFilterBar">
     <button type="button" class="subnav-pill active" data-sub="all" data-act="switchCatalogsSubmenu" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Catalogs</button>
@@ -39250,7 +39265,7 @@ function closeModal() {
 // A goal for the month's hosting and how much has been given, set by the admin
 // (Management & Tools -> Support Goal) and read from /api/support-goal. The
 // strip stays hidden until the admin has turned it on. Its X hides it for the
-// rest of the month in this browser only; the next month it is back.
+// next 30 days in this browser only; after that it is back.
 let _supportGoal = null;
 
 function supportMoney(n) {
@@ -39258,19 +39273,22 @@ function supportMoney(n) {
   return '$' + (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2));
 }
 
-function supportDismissedThisMonth(month) {
-  try { return localStorage.getItem('myListAddon:supportDismissed') === month; } catch (e) { return false; }
+function supportDismissedRecently() {
+  try {
+    const at = Number(localStorage.getItem('myListAddon:supportDismissed'));
+    return at > 0 && Date.now() - at < 30 * 86400000;
+  } catch (e) { return false; }
 }
 
 function renderSupportStrip() {
   const strip = document.getElementById('supportStrip');
   const g = _supportGoal;
   if (!strip) return;
-  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedThisMonth(g.month)) { strip.hidden = true; return; }
+  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedRecently()) { strip.hidden = true; return; }
   const covered = g.raised >= g.goal;
   strip.classList.toggle('is-covered', covered);
   const text = document.getElementById('supportStripText');
-  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
+  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server Costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
   const fill = document.getElementById('supportStripFill');
   if (fill) fill.style.width = Math.max(0, Math.min(100, (g.raised / g.goal) * 100)) + '%';
   strip.hidden = false;
@@ -39289,9 +39307,7 @@ function initSupportStrip() {
 }
 
 function dismissSupportStrip() {
-  if (_supportGoal && _supportGoal.month) {
-    try { localStorage.setItem('myListAddon:supportDismissed', _supportGoal.month); } catch (e) {}
-  }
+  try { localStorage.setItem('myListAddon:supportDismissed', String(Date.now())); } catch (e) {}
   renderSupportStrip();
 }
 
@@ -45920,7 +45936,7 @@ function betterPostersWebImdbId(it) {
   return '';
 }
 
-function betterPostersWebUrl(imdbId) {
+function betterPostersWebUrl(imdbId, todayRank) {
   const get = (typeof getBetterPostersSetting === 'function') ? getBetterPostersSetting : function(k, d) { return !!d; };
   const pick = (typeof getBetterPostersChoice === 'function') ? getBetterPostersChoice : function(k, d) { return d; };
   const genre = get('betterPostersGenre', true);
@@ -45938,6 +45954,8 @@ function betterPostersWebUrl(imdbId) {
   if (lang && lang !== 'en') params.push('lang=' + encodeURIComponent(lang));
   const rs = pick('betterPostersRatingSource', 'avg');
   if (rs && rs !== 'avg') params.push('rs=' + encodeURIComponent(rs));
+  // Order Today tags: the title's rank today, so the tag drawn matches the order.
+  if (todayRank >= 1 && todayRank <= 99) params.push('rk=' + todayRank);
   return betterPosterMirrorPrefix() + base + '/' + imdbId + '.jpg' +
     (params.length ? '?' + params.join('&') : '');
 }
@@ -46008,7 +46026,7 @@ function applyBetterPosterWeb(it, poster) {
   // Rebuilt from the current settings every time rather than kept, so
   // changing a style option re-renders with the new one instead of keeping
   // whatever URL happened to be produced first.
-  return betterPostersWebUrl(imdbId);
+  return betterPostersWebUrl(imdbId, it && it.todayRank);
 }
 window.applyBetterPosterWeb = applyBetterPosterWeb;
 
@@ -86554,6 +86572,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
             type: m.type || (m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv" ? "series" : (m.mediatype === "episode" ? "episode" : (type === "series" ? "series" : "movie"))),
             name: m.name,
             poster: m.poster,
+            todayRank: m.todayRank || undefined,
             year: m.releaseInfo,
             showTitle: m.showTitle,
             posterShape: m.posterShape,
@@ -112208,7 +112227,7 @@ function betterPostersInR2(env) {
 }
 
 function betterPosterR2Key(bp) {
-  return `img/bp/${bp.style}/${bp.imdbId}/${bp.tag || "-"}.${bp.lang || "-"}.${bp.rs || "-"}.jpg`;
+  return `img/bp/${bp.style}/${bp.imdbId}/${bp.tag || "-"}.${bp.lang || "-"}.${bp.rs || "-"}${bp.rk ? "." + bp.rk : ""}.jpg`;
 }
 
 async function storeBetterPosterR2(env, bp, bytes, contentType) {

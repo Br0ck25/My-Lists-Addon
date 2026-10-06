@@ -196,7 +196,7 @@ describe("support goal: the strip on the page", () => {
   it("shows the amount and the goal, with the bar filled to match", async () => {
     const c = await strip();
     assert.equal(el(c, "supportStrip").hidden, false);
-    assert.equal(el(c, "supportStripText").textContent, "Server costs: $42 of $60");
+    assert.equal(el(c, "supportStripText").textContent, "Server Costs: $42 of $60");
     assert.equal(el(c, "supportStripFill").style.width, "70%");
   });
 
@@ -211,18 +211,19 @@ describe("support goal: the strip on the page", () => {
     assert.notEqual(el(c, "supportStrip").hidden, false);
   });
 
-  it("is hidden for the month once dismissed, and back in a new month", async () => {
-    const c = await strip({}, { "myListAddon:supportDismissed": "2026-10" });
+  it("is hidden for 30 days once dismissed, and back after that", async () => {
+    const c = await strip({}, { "myListAddon:supportDismissed": String(Date.now() - 5 * 86400000) });
     assert.notEqual(el(c, "supportStrip").hidden, false);
-    const next = await strip({ month: "2026-11" }, { "myListAddon:supportDismissed": "2026-10" });
-    assert.equal(el(next, "supportStrip").hidden, false);
+    const later = await strip({}, { "myListAddon:supportDismissed": String(Date.now() - 31 * 86400000) });
+    assert.equal(el(later, "supportStrip").hidden, false);
   });
 
-  it("the X remembers the month", async () => {
+  it("the X remembers the time", async () => {
     const c = await strip();
     c.call("dismissSupportStrip");
     assert.notEqual(el(c, "supportStrip").hidden, false);
-    assert.equal(c.get("localStorage").getItem("myListAddon:supportDismissed"), "2026-10");
+    const at = Number(c.get("localStorage").getItem("myListAddon:supportDismissed"));
+    assert.ok(Date.now() - at < 60000);
   });
 
   it("formats cents only when there are some", async () => {

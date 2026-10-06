@@ -38,7 +38,7 @@ function betterPostersInR2(env) {
 }
 
 function betterPosterR2Key(bp) {
-  return `img/bp/${bp.style}/${bp.imdbId}/${bp.tag || "-"}.${bp.lang || "-"}.${bp.rs || "-"}.jpg`;
+  return `img/bp/${bp.style}/${bp.imdbId}/${bp.tag || "-"}.${bp.lang || "-"}.${bp.rs || "-"}${bp.rk ? "." + bp.rk : ""}.jpg`;
 }
 
 async function storeBetterPosterR2(env, bp, bytes, contentType) {

@@ -6,6 +6,9 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
+- Order Today tags: a tagged title's poster is now asked for under its rank today (`rk`), so the "#N Today" drawn on it matches the order instead of a day-old copy.
+- Ko-fi strip shows on every page, has its progress bar back, reads "Server Costs", and its X hides it for 30 days. "+ Add to List" / "Mark as Watched" stay phone-sized on desktop.
+
 ### ☕ Ko-fi support strip, with the goal set in the admin page
 
 - **Donations moved from Buy Me a Coffee to [Ko-fi](https://ko-fi.com/mylistsaddon)**: the Settings card, the FAQ, the footer, the README and the new strip all point there now.

@@ -3369,20 +3369,29 @@ async function loadBetterPostersCatalog(env, ctx, key, type) {
 // the poster tags "#N Today" is moved so #2 never sits in front of #1 -- the
 // tagged titles keep the places they already had in the list and are put in
 // rank order among those places; everything else stays exactly where it was.
+// Each tagged title also carries its rank (todayRank), and its Better Poster is
+// asked for under that rank, so the tag drawn on it matches the order.
 // A failed lookup leaves the list as it was.
 async function orderByBetterPostersToday(metas, type, env, ctx) {
-  if (!Array.isArray(metas) || metas.length < 2 || (type !== "movie" && type !== "series")) return metas;
+  if (!Array.isArray(metas) || !metas.length || (type !== "movie" && type !== "series")) return metas;
   try {
     const ranked = await loadBetterPostersCatalog(env, ctx, "today", type);
     const rankOf = new Map(ranked.filter((r) => r.rank !== undefined).map((r) => [r.id, r.rank]));
     const slots = [];
-    metas.forEach((m, i) => {
+    const tagged = metas.map((m, i) => {
       const id = betterPostersImdbId(m);
-      if (id && rankOf.has(id)) slots.push(i);
+      if (!id || !rankOf.has(id)) return m;
+      slots.push(i);
+      const rank = rankOf.get(id);
+      // The poster is asked for under today's rank, so the "#N Today" drawn on
+      // it is the one this order uses (see parseBetterPosterPath, "rk").
+      const own = typeof m.poster === "string" && m.poster.includes("/bp/") && !m.poster.includes("rk=");
+      return { ...m, todayRank: rank, ...(own && rank >= 1 && rank <= 99 ? { poster: m.poster + (m.poster.includes("?") ? "&" : "?") + "rk=" + rank } : {}) };
     });
-    if (slots.length < 2) return metas;
-    const sorted = slots.map((i) => metas[i]).sort((a, b) => rankOf.get(betterPostersImdbId(a)) - rankOf.get(betterPostersImdbId(b)));
-    const out = metas.slice();
+    tagged.totalItems = metas.totalItems;
+    if (slots.length < 2) return slots.length ? tagged : metas;
+    const sorted = slots.map((i) => tagged[i]).sort((a, b) => a.todayRank - b.todayRank);
+    const out = tagged.slice();
     slots.forEach((i, n) => { out[i] = sorted[n]; });
     out.totalItems = metas.totalItems;
     return out;

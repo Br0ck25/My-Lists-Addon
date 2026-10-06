@@ -2309,7 +2309,7 @@ function closeModal() {
 // A goal for the month's hosting and how much has been given, set by the admin
 // (Management & Tools -> Support Goal) and read from /api/support-goal. The
 // strip stays hidden until the admin has turned it on. Its X hides it for the
-// rest of the month in this browser only; the next month it is back.
+// next 30 days in this browser only; after that it is back.
 let _supportGoal = null;
 
 function supportMoney(n) {
@@ -2317,19 +2317,22 @@ function supportMoney(n) {
   return '$' + (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2));
 }
 
-function supportDismissedThisMonth(month) {
-  try { return localStorage.getItem('myListAddon:supportDismissed') === month; } catch (e) { return false; }
+function supportDismissedRecently() {
+  try {
+    const at = Number(localStorage.getItem('myListAddon:supportDismissed'));
+    return at > 0 && Date.now() - at < 30 * 86400000;
+  } catch (e) { return false; }
 }
 
 function renderSupportStrip() {
   const strip = document.getElementById('supportStrip');
   const g = _supportGoal;
   if (!strip) return;
-  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedThisMonth(g.month)) { strip.hidden = true; return; }
+  if (!g || !g.enabled || !(g.goal > 0) || supportDismissedRecently()) { strip.hidden = true; return; }
   const covered = g.raised >= g.goal;
   strip.classList.toggle('is-covered', covered);
   const text = document.getElementById('supportStripText');
-  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
+  if (text) text.textContent = covered ? 'Covered this month. Thank you!' : 'Server Costs: ' + supportMoney(g.raised) + ' of ' + supportMoney(g.goal);
   const fill = document.getElementById('supportStripFill');
   if (fill) fill.style.width = Math.max(0, Math.min(100, (g.raised / g.goal) * 100)) + '%';
   strip.hidden = false;
@@ -2348,9 +2351,7 @@ function initSupportStrip() {
 }
 
 function dismissSupportStrip() {
-  if (_supportGoal && _supportGoal.month) {
-    try { localStorage.setItem('myListAddon:supportDismissed', _supportGoal.month); } catch (e) {}
-  }
+  try { localStorage.setItem('myListAddon:supportDismissed', String(Date.now())); } catch (e) {}
   renderSupportStrip();
 }
 

@@ -1655,6 +1655,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
             type: m.type || (m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv" ? "series" : (m.mediatype === "episode" ? "episode" : (type === "series" ? "series" : "movie"))),
             name: m.name,
             poster: m.poster,
+            todayRank: m.todayRank || undefined,
             year: m.releaseInfo,
             showTitle: m.showTitle,
             posterShape: m.posterShape,

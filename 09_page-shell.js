@@ -1107,13 +1107,10 @@ ${seoHeadHtml}
     flex: 1 1 160px; justify-content: center;
     padding: 10px 16px; font-size: 0.95rem;
   }
-  /* On a wide screen the two buttons keep their natural width, side by side at
-     the left, instead of stretching across the page. A phone keeps the full-width
-     pair above. */
+  /* On a wide screen the two buttons stay the size they are on a phone (about
+     180px each, side by side at the left) instead of stretching across. */
   @media (min-width: 720px) {
-    .item-actions .lc-btn {
-      flex: 0 0 auto; min-height: 40px; padding: 0 22px;
-    }
+    .item-actions .lc-btn { flex: 0 0 180px; }
   }
   .item-genres { display: flex; flex-wrap: wrap; gap: 8px; }
   .item-genre-chip {
@@ -1523,7 +1520,7 @@ ${seoHeadHtml}
      than headings on one continuous background -- at 8px they read as one
      block with lines through it. */
   /* The Ko-fi support strip at the top of Catalogs (initSupportStrip): one flat
-     bar, a thin progress line along its bottom edge, and a plain X. Its two
+     bar, a small progress bar under the text, and a plain X. Its two
      buttons say what they look like here because the page's own button rules
      (blue fill on hover, focus and press; a round, bordered pill) are written
      to win over a bare class. */
@@ -1551,7 +1548,7 @@ ${seoHeadHtml}
     align-items: center;
     justify-content: flex-start;
     gap: 9px;
-    padding: 9px 0 11px;
+    padding: 10px 0;
     background: transparent;
     border: 0;
     border-radius: 0;
@@ -1571,17 +1568,18 @@ ${seoHeadHtml}
   .support-strip-row { display: flex; justify-content: space-between; gap: 8px; line-height: 1.25; }
   .support-strip-go { color: var(--accent); font-weight: 700; white-space: nowrap; }
   .support-strip-bar {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 3px;
-    background: var(--border);
+    display: block;
+    margin-top: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border-strong);
+    overflow: hidden;
   }
   .support-strip-bar i {
     display: block;
     height: 100%;
     width: 0;
+    border-radius: 3px;
     background: #ff8a00;
   }
   .support-strip.is-covered { border-color: #bfe8c9; }
@@ -5562,6 +5560,19 @@ ${appShellMobileNavHtml}
 
   <!-- Action Notification Toast -->
   <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
+
+  <!-- The Ko-fi support strip: filled in, and shown, by initSupportStrip
+       (16_client-row-core.js) only when the admin has turned it on. -->
+  <div class="support-strip" id="supportStrip" hidden>
+    <button type="button" class="support-strip-main" data-act="openSupportGoal" aria-label="Server Costs this month: see details">
+      <span class="support-strip-cup" aria-hidden="true">&#9749;</span>
+      <span class="support-strip-body">
+        <span class="support-strip-row"><span id="supportStripText"></span><span class="support-strip-go">Support &rsaquo;</span></span>
+        <span class="support-strip-bar" aria-hidden="true"><i id="supportStripFill"></i></span>
+      </span>
+    </button>
+    <button type="button" class="support-strip-x" data-act="dismissSupportStrip" aria-label="Hide this for 30 days">&#10005;</button>
+  </div>
 
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>

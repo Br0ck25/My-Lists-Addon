@@ -36,7 +36,7 @@ const LIST = "customlist:v1:" + JSON.stringify({
 });
 const AS_GIVEN = ["Three", "One", "Untagged", "Two"];
 
-async function installedNames(extra) {
+async function installedNames(extra, field = "name") {
   const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
   const saved = await call(env, "/api/save", { method: "POST", json: {
     ...(await accountProof(env)),
@@ -47,7 +47,7 @@ async function installedNames(extra) {
   assert.equal(saved.body.ok, true, JSON.stringify(saved.body));
   const r = await call(env, `/${saved.body.id}/catalog/movie/today-order.json`);
   assert.equal(r.status, 200);
-  return r.body.metas.map((m) => m.name);
+  return r.body.metas.map((m) => m[field]);
 }
 
 async function previewNames(todayOrder) {
@@ -76,6 +76,13 @@ describe("Order Today tags in an installed catalog (Stremio, Nuvio)", () => {
   it("puts #1, #2, #3 Today in order and leaves everything else where it was", async () => {
     stubBtttr();
     assert.deepEqual(await installedNames({ betterPosters: true, betterPostersTodayOrder: true }), ["One", "Two", "Untagged", "Three"]);
+  });
+
+  it("asks for each tagged poster under today's rank, so the drawn tag matches the order", async () => {
+    stubBtttr();
+    const posters = await installedNames({ betterPosters: true, betterPostersTodayOrder: true }, "poster");
+    assert.deepEqual(posters.map((p) => (p.match(/rk=(\d+)/) || [])[1]), ["1", "2", undefined, "3"]);
+    assert.ok(posters[0].includes("/bp/") && posters[0].endsWith("?rk=1"));
   });
 
   it("does nothing with Better Posters off, or with Trend tags off", async () => {
