@@ -30357,7 +30357,7 @@ ${UTILITY_CSS}
 
   /* Discover */
   #discoverShelvesContainer {
-    display: none !important;
+    display: none;
   }
   html[data-initial-discover-sub="popular"] #discoverShelvesContainer,
   html[data-initial-discover-sub="popular"] #discoverListsFeedHeader,
@@ -31955,8 +31955,8 @@ ${UTILITY_CSS}
     }
     .webhook-input-group input,
     .webhook-input-group button {
-      width: 100% !important;
-      flex: 1 1 100% !important;
+      width: 100%;
+      flex: 1 1 100%;
     }
   }
 
@@ -31978,9 +31978,9 @@ ${UTILITY_CSS}
       display: none;
     }
     .shelf-header {
-      flex-direction: column !important;
-      align-items: stretch !important;
-      gap: var(--space-2) !important;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-2);
     }
     .shelf-header > div {
       width: 100%;
@@ -32001,10 +32001,10 @@ ${UTILITY_CSS}
       white-space: nowrap;
     }
     .list-card-header {
-      display: flex !important;
-      flex-direction: column !important;
-      align-items: stretch !important;
-      gap: var(--space-2) !important;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-2);
     }
     .list-card-body {
       width: 100%;
@@ -32020,10 +32020,10 @@ ${UTILITY_CSS}
       flex-wrap: wrap;
     }
     .list-card-actions .lc-btn {
-      padding: var(--space-1-5) var(--space-2) !important;
-      font-size: var(--font-size-xs) !important;
+      padding: var(--space-1-5) var(--space-2);
+      font-size: var(--font-size-xs);
       line-height: 1.2;
-      min-height: 28px !important;
+      min-height: 28px;
       box-sizing: border-box;
       white-space: nowrap;
     }
@@ -32037,12 +32037,12 @@ ${UTILITY_CSS}
       line-height: 1.25;
     }
     .customizeListBtn {
-      padding: var(--space-1-5) var(--space-2) !important;
-      min-width: 28px !important;
+      padding: var(--space-1-5) var(--space-2);
+      min-width: 28px;
       justify-content: center;
     }
     .customizeListBtn .customize-btn-text {
-      display: none !important;
+      display: none;
     }
     .drag-handle-list {
       margin-right: var(--space-2);
@@ -33575,40 +33575,40 @@ ${UTILITY_CSS}
   }
   @media (max-width: 640px) {
     .trakt-connect-actions {
-      display: flex !important;
-      flex-direction: row !important;
-      width: 100% !important;
-      gap: var(--space-2) !important;
-      flex-wrap: wrap !important;
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      gap: var(--space-2);
+      flex-wrap: wrap;
     }
     .trakt-connect-actions #traktConnectBtn,
     .trakt-connect-actions #traktDeviceBtn {
-      flex: 1 1 calc(50% - 4px) !important;
-      min-width: 0 !important;
-      padding: var(--space-2) var(--space-1) !important;
-      font-size: var(--font-size-sm) !important;
-      white-space: nowrap !important;
-      text-overflow: ellipsis !important;
-      overflow: hidden !important;
+      flex: 1 1 calc(50% - 4px);
+      min-width: 0;
+      padding: var(--space-2) var(--space-1);
+      font-size: var(--font-size-sm);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
     }
     .trakt-connect-actions #traktDisconnectBtn {
-      flex: 1 1 100% !important;
-      width: 100% !important;
-      padding: var(--space-2) var(--space-1) !important;
-      font-size: var(--font-size-sm) !important;
+      flex: 1 1 100%;
+      width: 100%;
+      padding: var(--space-2) var(--space-1);
+      font-size: var(--font-size-sm);
     }
   }
   @media (min-width: 641px) {
     .trakt-connect-actions {
-      display: flex !important;
-      flex-direction: row !important;
-      width: auto !important;
-      gap: var(--space-2) !important;
-      flex-wrap: wrap !important;
+      display: flex;
+      flex-direction: row;
+      width: auto;
+      gap: var(--space-2);
+      flex-wrap: wrap;
     }
     .trakt-connect-actions button {
-      flex: none !important;
-      width: auto !important;
+      flex: none;
+      width: auto;
     }
   }
 
@@ -33843,7 +33843,7 @@ ${UTILITY_CSS}
   .entry-pos-wrap .pos {
     width: 48px;
     height: 30px;
-    min-height: 30px !important;
+    min-height: 30px;
     max-height: 30px;
     box-sizing: border-box;
     padding: 0 var(--space-1-5);
@@ -33860,7 +33860,7 @@ ${UTILITY_CSS}
   .ec-btn {
     width: 30px;
     height: 30px;
-    min-height: 30px !important;
+    min-height: 30px;
     max-height: 30px;
     box-sizing: border-box;
     padding: 0;
@@ -34460,8 +34460,8 @@ ${UTILITY_CSS}
   }
 
   @media (max-width: 640px) {
-    .customListMoveBtn { display: none !important; }
-    .customListPosInput { display: none !important; }
+    .customListMoveBtn { display: none; }
+    .customListPosInput { display: none; }
   }
 
   @media (min-width: 641px) {
