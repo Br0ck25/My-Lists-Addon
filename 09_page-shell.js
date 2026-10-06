@@ -1314,9 +1314,17 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
   }
+  /* Every search box on the site: a pill with the magnifier inside it on the
+     left (and, where there is one, a clear button on the right). */
   .search-input-box input {
     width: 100%;
     box-sizing: border-box;
+    padding: 10px 38px;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
   }
   .search-input-icon {
     position: absolute;

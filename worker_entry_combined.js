@@ -30408,9 +30408,17 @@ ${seoHeadHtml}
     display: flex;
     align-items: center;
   }
+  /* Every search box on the site: a pill with the magnifier inside it on the
+     left (and, where there is one, a clear button on the right). */
   .search-input-box input {
     width: 100%;
     box-sizing: border-box;
+    padding: 10px 38px;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
   }
   .search-input-icon {
     position: absolute;
@@ -35369,10 +35377,6 @@ if ('serviceWorker' in navigator) {
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
-    <!-- Inline "Add titles" search (P6-4), shell only: type, tap Add, and the
-         title is in the draft this panel already saves. -->
-    <div id="appShellAddTitles"></div>
-
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
@@ -35420,12 +35424,9 @@ if ('serviceWorker' in navigator) {
       <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
         <label for="customListSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
         <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
-        <div style="position:relative; width:100%;">
-          <input type="text" id="customListSearchInput" placeholder="Search a title to add..." style="width:100%; padding:10px 14px 10px 38px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.9rem; box-sizing:border-box;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;" aria-hidden="true">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
+        <div class="search-input-box">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
           <button type="button" id="customListSearchClearBtn" class="search-clear-btn" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
@@ -35747,27 +35748,57 @@ if ('serviceWorker' in navigator) {
   <div class="channels-subpanel" id="channelsSubBuild" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title" id="channelEditorTitle">Build Custom Channel</h2>
+        <h2 class="shelf-title" id="channelEditorTitle">Create a Custom Channel</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search any TV show or movie to add to your channel, and reorder or remove picks:</p>
+      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage picks for this custom channel.</p>
+
+      <!-- 1. Channel Name -->
+      <div style="margin-bottom:16px; max-width:480px;">
+        <label for="channelNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Channel Name</label>
+        <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)">
+      </div>
+
+      <!-- 2. Public Channel Toggle -->
+      <div id="channelVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+        <div>
+          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public Channel</span>
+          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this channel visible on your public creator profile and discoverable in the community directory</p>
+        </div>
+        <label class="ui-toggle" aria-label="Make channel public">
+          <input type="checkbox" id="channelPublicToggle" checked>
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- 3. Search & Add Titles -->
+      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+        <label for="channelSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to Channel</label>
+        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search any TV show or movie to add to your channel.</p>
       <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
         <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
         <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
-      <div class="row">
-        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
-        <button type="button" class="secondary" data-act="runChannelTitleSearch">Search</button>
+      <div class="row" style="gap:8px;">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+        </div>
+        <button type="button" class="secondary lc-btn" data-act="runChannelTitleSearch">Search</button>
       </div>
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
 
       <div id="channelCrossoverSuggestions" style="display:none; margin-top:14px;"></div>
+      </div>
 
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
       <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;"></div>
       <div class="row" style="margin-bottom:8px; gap:8px;">
-        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        </div>
         <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
@@ -35788,13 +35819,6 @@ if ('serviceWorker' in navigator) {
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
         <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
         <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
-      </div>
-      <div id="channelVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
-        <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
-        <label class="ui-toggle">
-          <input type="checkbox" id="channelPublicToggle" checked>
-          <span class="ui-toggle-slider"></span>
-        </label>
       </div>
       <!-- Advanced Settings (Progressive Disclosure) -->
       <details class="channel-advanced-details" style="margin-top:14px; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface);">
@@ -35898,10 +35922,10 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
 
-      <div class="row" style="margin-top:12px;">
-        <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)" style="flex:1;">
-        <button type="button" class="primary" id="channelSaveBtn" data-act="saveChannel">Save</button>
-        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditChannel">Cancel</button>
+      <!-- Bottom Action Bar -->
+      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+        <button type="button" id="channelCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditChannel">Cancel</button>
+        <button type="button" class="primary lc-btn" id="channelSaveBtn" data-act="saveChannel" style="padding:8px 24px; font-weight:600;">Create Channel</button>
       </div>
     </div>
   </div>
@@ -61672,7 +61696,7 @@ function updateChannelSaveButtonLabel() {
       if (!chName.toLowerCase().endsWith('channel')) chName += ' Channel';
       titleEl.textContent = 'Edit ' + chName;
     } else {
-      titleEl.textContent = 'Build Custom Channel';
+      titleEl.textContent = 'Create a Custom Channel';
     }
   }
   if (!saveBtn) return;
@@ -61683,7 +61707,7 @@ function updateChannelSaveButtonLabel() {
       cancelBtn.style.display = '';
     }
   } else {
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = 'Create Channel';
     if (cancelBtn) cancelBtn.style.display = 'none';
   }
 }
@@ -82802,109 +82826,8 @@ function appShellSchedulePreview() {
   return true;
 }
 
-// --- the inline "Add titles" search (P6-4) -----------------------------------
-//
-// In the list editor (12_), so creating a list and editing one are the same
-// thing: type, tap Add, and the title is in the draft. Save (the panel's own
-// button) writes it, which is where "Saved" comes from. The search is
-// /api/title-search, the same endpoint the Search tab uses, and adding is
-// addToCustomListDraft (21_).
-//
-// The rest of the Lists view (the "Your lists" cards, with Share, Show on home
-// screen, Save to an account and Export) was taken off the page at the
-// owner's request and deleted in Release 21. The list dashboard underneath has
-// all of it.
-
-// The results of the last title search.
-let appShellTitleResults = [];
-let appShellTitleSearchSeq = 0;
-var appShellTitleSearchTimer = null;
-
-function appShellListsEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellAddTitlesHost() {
-  return document.getElementById('appShellAddTitles');
-}
-
-function appShellTitleResultHtml(result, index) {
-  const year = result && result.year ? ' &middot; ' + appShellListsEscape(result.year) : '';
-  return '<div class="app-shell-row"><div class="app-shell-row-main">' +
-    '<strong>' + appShellListsEscape((result && result.title) || 'Untitled') + '</strong>' +
-    '<br><span class="app-shell-muted">' + (result && result.type === 'tv' ? 'Show' : 'Movie') + year + '</span></div>' +
-    '<div class="app-shell-row-controls"><button type="button" class="primary lc-btn" data-app-shell-action="title-add" data-app-shell-id="' + index + '">Add</button></div></div>';
-}
-
-function appShellRenderAddTitles(message) {
-  const host = appShellAddTitlesHost();
-  if (!host) return false;
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
-    '<h2 class="panel-title">Add titles</h2>' +
-    '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
-    '<div class="row"><input type="text" id="appShellAddTitlesInput" placeholder="Add titles\u2026" aria-label="Search for a title to add" spellcheck="false"></div>';
-  if (message) html += '<p class="app-shell-muted">' + appShellListsEscape(message) + '</p>';
-  if (appShellTitleResults.length) {
-    html += '<div class="app-shell-review">' + appShellTitleResults.map(appShellTitleResultHtml).join('') + '</div>';
-  }
-  html += '</div>';
-  host.innerHTML = html;
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input && input.addEventListener) {
-    input.addEventListener('input', function () {
-      const value = input.value || '';
-      if (appShellTitleSearchTimer) clearTimeout(appShellTitleSearchTimer);
-      appShellTitleSearchTimer = setTimeout(function () {
-        appShellTitleSearchTimer = null;
-        appShellSearchTitles(value);
-      }, 300);
-    });
-  }
-  return true;
-}
-
-async function appShellSearchTitles(query) {
-  const q = String(query || '').trim();
-  if (!q) {
-    appShellTitleResults = [];
-    appShellRenderAddTitles('');
-    return [];
-  }
-  const seq = ++appShellTitleSearchSeq;
-  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
-  const res = await appShellApiFetch('/api/title-search?q=' + encodeURIComponent(q) + '&type=' + kind);
-  if (seq !== appShellTitleSearchSeq) return [];
-  if (!res.ok) {
-    appShellTitleResults = [];
-    appShellRenderAddTitles(res.error || 'Could not search just now.');
-    return [];
-  }
-  const results = (res.data && res.data.results) || [];
-  appShellTitleResults = results.slice(0, 8);
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input) input.value = q;
-  appShellRenderAddTitles(appShellTitleResults.length ? '' : 'Nothing found for that.');
-  return appShellTitleResults;
-}
-
-async function appShellAddTitle(index) {
-  const item = appShellTitleResults[Number(index)];
-  if (!item) return false;
-  if (typeof addToCustomListDraft !== 'function') return false;
-  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
-  await addToCustomListDraft(kind, item.tmdbId, item.title, item.year, item.poster, null);
-  showToast('Added "' + (item.title || 'that title') + '" to the list. Save it when you are done.', 'success');
-  return true;
-}
-
-// Which of the dispatchers an action belongs to (see appShellOnClick).
-const APP_SHELL_LISTS_ACTION = /^title-/;
+// Which action names belong to the Import view (see appShellOnClick).
 const APP_SHELL_IMPORTS_ACTION = /^import-/;
-
-async function appShellListsAction(action, id) {
-  if (String(action || '') === 'title-add') return appShellAddTitle(id);
-  return false;
-}
 
 // --- Imports (P6-6) ----------------------------------------------------------
 //
@@ -83657,7 +83580,6 @@ function appShellApplyRoute(route) {
   appShellState.set({ route: { tab: tab.id, sub: sub } });
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
   if (tab.id === 'lists') {
-    if (sub === 'create-list') appShellRenderAddTitles('');
     if (sub === 'import') {
       appShellRenderImports();
       appShellResumeImport();
@@ -83722,10 +83644,7 @@ function appShellOnClick(e) {
     e.preventDefault();
     const action = actionEl.getAttribute('data-app-shell-action');
     const id = actionEl.getAttribute('data-app-shell-id') || '';
-    // The Add titles search (P6-4) and the Import view share this one
-    // listener, so the action names decide which module answers.
-    if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
-    else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
+    if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
     return;
   }
   const link = target.closest('a[data-app-route]');

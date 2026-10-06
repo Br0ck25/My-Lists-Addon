@@ -165,12 +165,12 @@ describe("the new interface is the only page (the classic page retired)", () => 
     assert.equal(shell.text.includes("APP_SHELL_STARTER_PACK"), false);
   });
 
-  it("no longer has a Your lists section; the add-titles search keeps its home (P6-4)", async () => {
+  it("no longer has a Your lists section or the separate add-titles search", async () => {
     const env = makeEnv();
     const shell = await call(env, "/lists");
     assert.equal(shell.status, 200);
     assert.equal(shell.text.includes('id="appShellListsHome"'), false, "Your lists was taken out at the owner's request");
-    assert.ok(shell.text.includes('id="appShellAddTitles"'), "the inline search needs a home");
+    assert.equal(shell.text.includes('id="appShellAddTitles"'), false, "the editor has its own search");
   });
 
   it("moves Explore's source and sort chips from Discover to Search -> Lists (P6-5)", async () => {

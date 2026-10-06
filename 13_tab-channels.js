@@ -229,27 +229,57 @@
   <div class="channels-subpanel" id="channelsSubBuild" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="shelf-title" id="channelEditorTitle">Build Custom Channel</h2>
+        <h2 class="shelf-title" id="channelEditorTitle">Create a Custom Channel</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:0.85rem;">Search any TV show or movie to add to your channel, and reorder or remove picks:</p>
+      <p style="margin:0 0 16px; color:var(--muted); font-size:0.85rem;">Curate, reorder, and manage picks for this custom channel.</p>
+
+      <!-- 1. Channel Name -->
+      <div style="margin-bottom:16px; max-width:480px;">
+        <label for="channelNameInput" style="display:block; font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:6px;">Channel Name</label>
+        <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)">
+      </div>
+
+      <!-- 2. Public Channel Toggle -->
+      <div id="channelVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+        <div>
+          <span style="font-size:0.88rem; font-weight:600; color:var(--text);">Public Channel</span>
+          <p style="margin:2px 0 0; font-size:0.78rem; color:var(--muted);">Make this channel visible on your public creator profile and discoverable in the community directory</p>
+        </div>
+        <label class="ui-toggle" aria-label="Make channel public">
+          <input type="checkbox" id="channelPublicToggle" checked>
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- 3. Search & Add Titles -->
+      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+        <label for="channelSearchInput" style="display:block; font-size:0.88rem; font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to Channel</label>
+        <p style="margin:0 0 10px; font-size:0.8rem; color:var(--muted);">Search any TV show or movie to add to your channel.</p>
       <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
         <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
         <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
-      <div class="row">
-        <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
-        <button type="button" class="secondary" data-act="runChannelTitleSearch">Search</button>
+      <div class="row" style="gap:8px;">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+        </div>
+        <button type="button" class="secondary lc-btn" data-act="runChannelTitleSearch">Search</button>
       </div>
       <div id="channelSearchResult"></div>
       <div id="channelEpisodePicker"></div>
 
       <div id="channelCrossoverSuggestions" style="display:none; margin-top:14px;"></div>
+      </div>
 
       <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:0.85rem;">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
       <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:0.78rem;"></div>
       <div class="row" style="margin-bottom:8px; gap:8px;">
-        <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        <div class="search-input-box" style="flex:1;">
+          <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+        </div>
         <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
@@ -270,13 +300,6 @@
       <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
         <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
         <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
-      </div>
-      <div id="channelVisibilityRow" style="margin-top:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; max-width:280px;">
-        <span style="font-size:0.95rem; font-weight:500; color:var(--text);">Public</span>
-        <label class="ui-toggle">
-          <input type="checkbox" id="channelPublicToggle" checked>
-          <span class="ui-toggle-slider"></span>
-        </label>
       </div>
       <!-- Advanced Settings (Progressive Disclosure) -->
       <details class="channel-advanced-details" style="margin-top:14px; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface);">
@@ -380,10 +403,10 @@
         </div>
       </div>
 
-      <div class="row" style="margin-top:12px;">
-        <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)" style="flex:1;">
-        <button type="button" class="primary" id="channelSaveBtn" data-act="saveChannel">Save</button>
-        <button type="button" id="channelCancelEditBtn" class="secondary" style="display:none;" data-act="cancelEditChannel">Cancel</button>
+      <!-- Bottom Action Bar -->
+      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+        <button type="button" id="channelCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditChannel">Cancel</button>
+        <button type="button" class="primary lc-btn" id="channelSaveBtn" data-act="saveChannel" style="padding:8px 24px; font-weight:600;">Create Channel</button>
       </div>
     </div>
   </div>

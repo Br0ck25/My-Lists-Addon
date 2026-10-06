@@ -10797,7 +10797,7 @@ function updateChannelSaveButtonLabel() {
       if (!chName.toLowerCase().endsWith('channel')) chName += ' Channel';
       titleEl.textContent = 'Edit ' + chName;
     } else {
-      titleEl.textContent = 'Build Custom Channel';
+      titleEl.textContent = 'Create a Custom Channel';
     }
   }
   if (!saveBtn) return;
@@ -10808,7 +10808,7 @@ function updateChannelSaveButtonLabel() {
       cancelBtn.style.display = '';
     }
   } else {
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = 'Create Channel';
     if (cancelBtn) cancelBtn.style.display = 'none';
   }
 }

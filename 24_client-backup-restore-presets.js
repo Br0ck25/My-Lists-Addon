@@ -2945,109 +2945,8 @@ function appShellSchedulePreview() {
   return true;
 }
 
-// --- the inline "Add titles" search (P6-4) -----------------------------------
-//
-// In the list editor (12_), so creating a list and editing one are the same
-// thing: type, tap Add, and the title is in the draft. Save (the panel's own
-// button) writes it, which is where "Saved" comes from. The search is
-// /api/title-search, the same endpoint the Search tab uses, and adding is
-// addToCustomListDraft (21_).
-//
-// The rest of the Lists view (the "Your lists" cards, with Share, Show on home
-// screen, Save to an account and Export) was taken off the page at the
-// owner's request and deleted in Release 21. The list dashboard underneath has
-// all of it.
-
-// The results of the last title search.
-let appShellTitleResults = [];
-let appShellTitleSearchSeq = 0;
-var appShellTitleSearchTimer = null;
-
-function appShellListsEscape(value) {
-  return escapeHtml(String(value === null || value === undefined ? '' : value));
-}
-
-function appShellAddTitlesHost() {
-  return document.getElementById('appShellAddTitles');
-}
-
-function appShellTitleResultHtml(result, index) {
-  const year = result && result.year ? ' &middot; ' + appShellListsEscape(result.year) : '';
-  return '<div class="app-shell-row"><div class="app-shell-row-main">' +
-    '<strong>' + appShellListsEscape((result && result.title) || 'Untitled') + '</strong>' +
-    '<br><span class="app-shell-muted">' + (result && result.type === 'tv' ? 'Show' : 'Movie') + year + '</span></div>' +
-    '<div class="app-shell-row-controls"><button type="button" class="primary lc-btn" data-app-shell-action="title-add" data-app-shell-id="' + index + '">Add</button></div></div>';
-}
-
-function appShellRenderAddTitles(message) {
-  const host = appShellAddTitlesHost();
-  if (!host) return false;
-  let html = '<div class="panel" style="margin-bottom:12px;">' +
-    '<h2 class="panel-title">Add titles</h2>' +
-    '<p class="app-shell-muted">Search for a movie or a show and add it straight to this list.</p>' +
-    '<div class="row"><input type="text" id="appShellAddTitlesInput" placeholder="Add titles\u2026" aria-label="Search for a title to add" spellcheck="false"></div>';
-  if (message) html += '<p class="app-shell-muted">' + appShellListsEscape(message) + '</p>';
-  if (appShellTitleResults.length) {
-    html += '<div class="app-shell-review">' + appShellTitleResults.map(appShellTitleResultHtml).join('') + '</div>';
-  }
-  html += '</div>';
-  host.innerHTML = html;
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input && input.addEventListener) {
-    input.addEventListener('input', function () {
-      const value = input.value || '';
-      if (appShellTitleSearchTimer) clearTimeout(appShellTitleSearchTimer);
-      appShellTitleSearchTimer = setTimeout(function () {
-        appShellTitleSearchTimer = null;
-        appShellSearchTitles(value);
-      }, 300);
-    });
-  }
-  return true;
-}
-
-async function appShellSearchTitles(query) {
-  const q = String(query || '').trim();
-  if (!q) {
-    appShellTitleResults = [];
-    appShellRenderAddTitles('');
-    return [];
-  }
-  const seq = ++appShellTitleSearchSeq;
-  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
-  const res = await appShellApiFetch('/api/title-search?q=' + encodeURIComponent(q) + '&type=' + kind);
-  if (seq !== appShellTitleSearchSeq) return [];
-  if (!res.ok) {
-    appShellTitleResults = [];
-    appShellRenderAddTitles(res.error || 'Could not search just now.');
-    return [];
-  }
-  const results = (res.data && res.data.results) || [];
-  appShellTitleResults = results.slice(0, 8);
-  const input = document.getElementById('appShellAddTitlesInput');
-  if (input) input.value = q;
-  appShellRenderAddTitles(appShellTitleResults.length ? '' : 'Nothing found for that.');
-  return appShellTitleResults;
-}
-
-async function appShellAddTitle(index) {
-  const item = appShellTitleResults[Number(index)];
-  if (!item) return false;
-  if (typeof addToCustomListDraft !== 'function') return false;
-  const kind = (typeof customListDraftType !== 'undefined' && customListDraftType === 'series') ? 'tv' : 'movie';
-  await addToCustomListDraft(kind, item.tmdbId, item.title, item.year, item.poster, null);
-  showToast('Added "' + (item.title || 'that title') + '" to the list. Save it when you are done.', 'success');
-  return true;
-}
-
-// Which of the dispatchers an action belongs to (see appShellOnClick).
-const APP_SHELL_LISTS_ACTION = /^title-/;
+// Which action names belong to the Import view (see appShellOnClick).
 const APP_SHELL_IMPORTS_ACTION = /^import-/;
-
-async function appShellListsAction(action, id) {
-  if (String(action || '') === 'title-add') return appShellAddTitle(id);
-  return false;
-}
 
 // --- Imports (P6-6) ----------------------------------------------------------
 //
@@ -3800,7 +3699,6 @@ function appShellApplyRoute(route) {
   appShellState.set({ route: { tab: tab.id, sub: sub } });
   if (tab.id === 'catalogs') appShellRenderHomeEditor();
   if (tab.id === 'lists') {
-    if (sub === 'create-list') appShellRenderAddTitles('');
     if (sub === 'import') {
       appShellRenderImports();
       appShellResumeImport();
@@ -3865,10 +3763,7 @@ function appShellOnClick(e) {
     e.preventDefault();
     const action = actionEl.getAttribute('data-app-shell-action');
     const id = actionEl.getAttribute('data-app-shell-id') || '';
-    // The Add titles search (P6-4) and the Import view share this one
-    // listener, so the action names decide which module answers.
-    if (APP_SHELL_LISTS_ACTION.test(action)) appShellListsAction(action, id);
-    else if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
+    if (APP_SHELL_IMPORTS_ACTION.test(action)) appShellImportsAction(action, id);
     return;
   }
   const link = target.closest('a[data-app-route]');
