@@ -475,6 +475,44 @@ describe("P3b-2: the media resolver", () => {
     assert.ok(lost.updated_at > 1, "moved to the back of the queue");
   });
 
+  it("upgrades a stub filed as a movie to the show it is, even when another row holds the show's TMDB id", async () => {
+    // Compare shelves, 2026-10-06: Dark Matter, The Shield, Criminal Minds and
+    // 14 more were movie rows with episode progress. Their upgrade to a show
+    // was ignored (the show's TMDB id was on another row) and tried again a
+    // week later, for ever.
+    const sb = loadMedia();
+    const env = mediaEnv();
+    const db = env.DB._db;
+    // The show as a list once named it: by TMDB id only.
+    db.prepare("INSERT INTO media (id, kind, tmdb_id, title, resolved_at, created_at, updated_at) VALUES (1, 'series', 1396, 'Breaking Bad', 1, 1, 1)").run();
+    // The same show as a stub filed as a movie, by IMDb id.
+    db.prepare("INSERT INTO media (id, kind, imdb_id, title, resolved_at, created_at, updated_at) VALUES (2, 'movie', 'tt0903747', 'Breaking Bad', NULL, 1, 1)").run();
+    fakeTmdb(sb, { finds: { tt0903747: { tv_results: [BREAKING_BAD] } } });
+    // Stubs are retried as they were filed (kind movie, their ids), which is
+    // how media.retry asks.
+    const res = await sb.retryUnresolvedMedia(env, { limit: 10 });
+    assert.deepEqual(plain(res), { tried: 1, resolved: 1 });
+    const rows = Object.fromEntries(mediaRows(env).map((r) => [r.id, r]));
+    assert.equal(rows[2].kind, "series", "a show, not a movie any more");
+    assert.equal(rows[2].tmdb_id, null, "1396 stays on row 1: two rows may not share it");
+    assert.equal(rows[2].imdb_id, "tt0903747");
+    assert.ok(rows[2].resolved_at > 0);
+    assert.equal(rows[1].tmdb_id, 1396, "row 1 is untouched");
+  });
+
+  it("never keeps a TMDB id from the wrong kind when TMDB corrects a stub", async () => {
+    const sb = loadMedia();
+    const env = mediaEnv();
+    // Filed as a movie with a movie's TMDB id, on a show's IMDb id; TMDB
+    // knows id 550 as no movie (it answers 404), and the IMDb id as a show.
+    env.DB._db.prepare("INSERT INTO media (id, kind, imdb_id, tmdb_id, title, resolved_at, created_at, updated_at) VALUES (4, 'movie', 'tt0386676', 550, 'The Office', NULL, 1, 1)").run();
+    fakeTmdb(sb, { finds: { tt0386676: { tv_results: [{ id: 2316, name: "The Office", first_air_date: "2005-03-24" }] } } });
+    await sb.retryUnresolvedMedia(env, { limit: 10 });
+    const r = mediaRows(env)[0];
+    assert.equal(r.kind, "series");
+    assert.equal(r.tmdb_id, 2316, "the show's id, not the movie's 550 kept under the show's kind");
+  });
+
   it("looks titles up through 0016's indexes", () => {
     const t = freshDb();
     const plan = (sql) => t.all(`EXPLAIN QUERY PLAN ${sql}`).map((r) => r.detail).join(" | ");

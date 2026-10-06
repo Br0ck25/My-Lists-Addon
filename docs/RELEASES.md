@@ -39,7 +39,8 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 22** is live (the owner, 2026-10-06), and so is everything merged into `main` after it up to PR #21 (the UI consistency pass, Pictorium, RatingPosterDB, combined channels, the Ko-fi strip): `/admin` showed *Release 22 (build e9e1445b49)*, which is `main` at `b6c72a5`. Connect Trakt worked on 22, then the PIN / code window answered *Trakt is busy (rate limit)* every time: Release 23.
 - **Release 23** went live on 2026-10-06. The owner reports Trakt connects again. Connect Trakt with a code asks Trakt from the browser. Details under Release 23. Merged into `main` by PR #26.
 - **Compare shelves** (2026-10-06, before 23): 770 accounts, **0.00% different, 0 lost**. Continue Watching 954 the same and 26 shows not known yet; Airing Next 229 the same and 9 not known yet.
-- **Release 24** (prepared 2026-10-06, not yet live): Compare shelves says why each show is not known yet. Details under Release 24.
+- **Release 24** went live on 2026-10-06. Its Compare shelves (770 accounts): 0.00% different, 0 lost. *Why not known yet*: Continue Watching movie-row 17, no-schedule-row 9; Airing Next no-schedule-row 9. Examples: Dark Matter, The Shield, Criminal Minds, The Agency filed as movies; Werewolf, Undead Unluck, Aoashi, Black Clover, Europe from Above, Planet Earth II with no schedule row.
+- **Release 25** (prepared 2026-10-06, not yet live): shows filed as movies are re-filed, and schedule rows are made hourly. Details under Release 25.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1638,4 +1639,39 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 2. `/admin` → Management & Tools → Maintenance → **Compare shelves now**. Send the whole result, including the *Why not known yet* lines and the examples.
 
 **Rollback:** paste the 23 file.
+
+## Release 25: shows filed as movies, and schedule rows made hourly
+
+**Branch point:** this branch after Release 24, which is live.
+
+**What Release 24's Compare shelves found** (2026-10-06): of the 26 Continue Watching shows "not known yet", 17 are **movie rows** (Dark Matter, The Shield, Criminal Minds, The Agency, ...) and 9 are series with **no schedule row** (Werewolf, Black Clover, Planet Earth II, ...); the 9 on Airing Next are the same 9.
+
+- **Movie rows.** A list saved the title first, as a stub with the list's guess: an item with no type is filed as a movie (`normalizeMediaRef`, `29_`). The plays then found that row by its IMDb id. Only series get a schedule row, so these shows could never be known. `media.retry` should have mended the stubs, and could not: its upgrade sets TMDB's id, the show's TMDB id was already on another row (the same show, saved once by TMDB id), so the whole upgrade was ignored, and tried again a week later, for ever.
+- **No schedule row.** `show.watchers` makes the row for every series with progress, but it ran once a day. A show that gained progress from a copy or a sync, not a play, waited for it.
+
+### What it changes
+
+- **Shows filed as movies are re-filed, hourly** (`refileSeriesFiledAsMovies`, `46_`, run by `show.watchers`). For up to 25 movie rows with episode progress an hour, TMDB is asked what the IMDb id is:
+  - a show: the row becomes a series, with TMDB's name, year and poster, and TMDB's id unless another row already holds it (then none, and `show.refresh` finds the show by its IMDb id);
+  - anything else (TMDB knows it as a film or not at all, or the row has no IMDb id): left as it is, and asked about again a day later.
+
+  The row keeps its id, so every list entry, play and progress row on it stays where it is. The same run makes its schedule row, and the next `show.refresh` fills it.
+- **The stub upgrade no longer gives up** (`resolveMediaBatch`, `29_`). When TMDB's id is already on another row, the stub still takes TMDB's kind and facts, without that id. And a stub whose kind TMDB corrects takes TMDB's id, never the one it had: a movie's TMDB id kept on a show pointed `show.refresh` at some other show. Merging the two rows for one title stays a later task.
+- **`show.watchers` runs hourly, not daily** (`SHOW_WATCHERS_EVERY_MS`). It is one grouped read of `show_progress` (0.3 s on the live site), plus at most 25 TMDB lookups while shows filed as movies remain.
+- `/admin` shows **Release 25**.
+
+### Checked
+
+- `tests/show-refresh.test.mjs`: one run re-files a stub filed as a movie (TMDB's id and facts), and a second show whose TMDB id another row holds (no id). It leaves a real film alone, and asks about the film again a day later, not every hour. The next refresh fills both schedules, and the shelves then know both shows.
+- `tests/lists-v2.test.mjs` (fail on Release 24, pass here):
+  - a stub filed as a movie whose show's TMDB id is on another row is upgraded, without the id;
+  - a stub TMDB corrects never keeps the old kind's TMDB id.
+- `tests/jobs.test.mjs`: `show.watchers` is due again an hour after it runs.
+- `bash verify.sh` and the `MLA_TEST_V2_LISTS_READ=1` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-25-NEW-worker.js`. Check that `/admin` says **Release 25**.
+2. Wait about two hours (one `show.watchers` run, then one `show.refresh`), then `/admin` → Maintenance → **Compare shelves now**, and send the result. *Not known yet* should be down to the few TMDB cannot place.
+
+**Rollback:** paste the 24 file. Rows already re-filed stay series, which is what they are.
 

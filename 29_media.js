@@ -354,12 +354,27 @@ async function resolveMediaBatch(env, inputs, opts = {}) {
     }
     idOf.set(c.ref, row.id);
     if (row.resolved_at == null) {
+      // A TMDB id names a title only within its kind, so a stub whose kind
+      // TMDB corrects takes TMDB's id, never the one it had: a movie's id
+      // kept on a show points show.refresh at some other show.
       writes.push(env.DB.prepare(
-        `UPDATE OR IGNORE media SET kind = ?, tmdb_id = COALESCE(tmdb_id, ?), imdb_id = COALESCE(imdb_id, ?),
+        `UPDATE OR IGNORE media SET kind = ?, tmdb_id = CASE WHEN kind = ? THEN COALESCE(tmdb_id, ?) ELSE ? END, imdb_id = COALESCE(imdb_id, ?),
            tvdb_id = COALESCE(tvdb_id, ?), alt_id = COALESCE(alt_id, ?), title = COALESCE(?, title), year = COALESCE(?, year),
            poster_path = COALESCE(?, poster_path), backdrop_path = COALESCE(?, backdrop_path), resolved_at = ?, updated_at = ?
          WHERE id = ?`
-      ).bind(c.kind, c.tmdbId, c.imdbId, c.tvdbId, c.altId, c.title, c.year, c.posterPath, c.backdropPath, now, now, row.id));
+      ).bind(c.kind, c.kind, c.tmdbId, c.tmdbId, c.imdbId, c.tvdbId, c.altId, c.title, c.year, c.posterPath, c.backdropPath, now, now, row.id));
+      // When that is ignored -- TMDB's id already belongs to another row (two
+      // rows for one title, which merging is left to a later task) -- the
+      // stub still takes the kind and the facts, without that id. It used to
+      // stay a stub, upgraded never: a show filed as a movie that way was a
+      // movie for good (Compare shelves, 2026-10-06). Runs only when the
+      // statement above changed nothing (resolved_at still NULL).
+      writes.push(env.DB.prepare(
+        `UPDATE OR IGNORE media SET kind = ?, tmdb_id = CASE WHEN kind = ? THEN tmdb_id ELSE NULL END,
+           title = COALESCE(?, title), year = COALESCE(?, year), poster_path = COALESCE(?, poster_path),
+           backdrop_path = COALESCE(?, backdrop_path), resolved_at = ?, updated_at = ?
+         WHERE id = ? AND resolved_at IS NULL`
+      ).bind(c.kind, c.kind, c.title, c.year, c.posterPath, c.backdropPath, now, now, row.id));
     } else if (row.kind === c.kind && ((!row.imdb_id && c.imdbId) || (!row.tmdb_id && c.tmdbId) || (!row.tvdb_id && c.tvdbId))) {
       writes.push(env.DB.prepare(
         `UPDATE OR IGNORE media SET tmdb_id = COALESCE(tmdb_id, ?), imdb_id = COALESCE(imdb_id, ?), tvdb_id = COALESCE(tvdb_id, ?), updated_at = ?
@@ -434,8 +449,8 @@ async function resolveMedia(env, input, opts = {}) {
 // Tries the oldest stubs again. Those TMDB still cannot place move to the
 // back of the queue (updated_at), so one title TMDB will never know cannot
 // hold up the rest. A stub whose TMDB id turns out to belong to another row
-// stays a stub: merging two rows (and the list entries on them) is left to a
-// later task.
+// takes TMDB's kind and facts without that id (resolveMediaBatch): merging
+// the two rows (and the list entries on them) is left to a later task.
 //
 // `retryAfterMs`: a stub already tried again (updated_at moved past
 // created_at) waits this long before the next try, so titles TMDB will never
