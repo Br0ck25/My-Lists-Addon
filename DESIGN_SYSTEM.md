@@ -120,7 +120,11 @@ transition: background-color var(--duration-base) var(--ease), color var(--durat
 
 **Breakpoints.** The app has one real split: **mobile `max-width: 640px`** (bottom nav shown, tab bar hidden) vs **desktop `min-width: 641px`**. Use only these two (the old 480/520/600/720 breakpoints were folded into 640). 360px is the one exception, for the 6-item bottom nav.
 
-### 2.6 Adding a token
+### 2.6 Helper classes (`u-*`)
+
+`UTILITY_CSS` (`00_constants.js`) holds generated one-declaration helpers named `u-<property>-<value>` (e.g. `u-mt-10px`, `u-c-v_muted`). They replaced repeated inline `style=""` in static markup. Reuse an existing helper for a one-off spacing/colour tweak; build a real component class for anything that recurs or has states. Never put layout-toggled properties (`display`, `visibility`, `width`, `height`, `transform`) in a helper: JS toggles those inline.
+
+### 2.7 Adding a token
 
 Edit `DESIGN_TOKENS_CSS` in `00_constants.js` (both `:root` and `:root.dark-theme`), then document it here. Do not define `:root` variables in any page's own `<style>`.
 
@@ -369,7 +373,7 @@ Still open. Do not copy these; fix them opportunistically:
 
 | # | Deviation | Where | Do instead |
 |---|---|---|---|
-| 1 | About 1,800 inline `style="…"` attributes remain (admin ≈385, settings HTML ≈275, creator profile ≈180, …). Their **values** now use tokens (font sizes, radii, status colours; the admin `#8E8E93` grey is gone), but the structure is still inline | `03_`, `1x_`, `2x_` files | CSS classes in `09_page-shell.js`; never inline a colour, size or radius literal |
+| 1 | About 1,060 inline `style="…"` attributes remain (mostly the JS-built markup in `16_`–`24_`: creator profile ≈187, search ≈150, channel builder ≈147, …), plus `.lc-btn`/`#id` elements whose CSS rules outrank a helper class. About 760 static ones in the page markup (`03_`, `09_`, `10_`–`15_`) were converted to `u-*` helper classes with an element-by-element computed-style comparison showing zero differences. Remaining values already use tokens | `16_`–`24_` | CSS component classes in `09_page-shell.js`; never inline a colour, size or radius literal |
 | 2 | About 300 `!important` remain (add/remove buttons, shelf/poster overrides, initial-tab FOUC rules) | `09_page-shell.js` | Fix specificity |
 | 3 | A few hard-coded colours remain: provider brand colours (intentional), `.btn-stremio/-nuvio/-wako` gradients, date-badge hexes (`#2fa84f`, `#ffd166`), `.support-strip` colours, overlay `rgba(0,0,0,…)` | `09_page-shell.js` | tokens |
 | 4 | Add/remove list buttons share a 9–10 class `:is()` list with `!important` | `09_page-shell.js` (search "Soft Brand-Tinted") | `.btn-ghost` / `.btn-danger` |

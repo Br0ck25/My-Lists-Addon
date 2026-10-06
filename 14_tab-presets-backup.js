@@ -13,41 +13,41 @@
   <div class="settings-subpanel" id="settingsSubBackup" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-        <h2 class="shelf-title" style="margin:0;">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+        <h2 class="shelf-title u-m-0">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
         <div>
           <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:6px 14px; font-size:var(--font-size-sm);">Upload preset file</button>
           <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
         </div>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Save your current setup as a named preset to reuse or download as a file.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Save your current setup as a named preset to reuse or download as a file.</p>
       <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; max-width:540px;">
-        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1; min-width:0; padding:8px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base);">
+        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" class="u-flex-1 u-minw-0 u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base">
         <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 18px;">Save preset</button>
       </div>
-      <div id="presetsList" style="margin-top:10px;"></div>
+      <div id="presetsList" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Backup &amp; Restore</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       
       <div class="backup-quick-grid">
         <div style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Download Backup
             </div>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
           </div>
           <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
         </div>
 
         <div style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Restore from File
             </div>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Restore your previous setup from an exported backup .json file.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Restore your previous setup from an exported backup .json file.</p>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]" style="padding:8px 18px; font-weight:600;">Upload &amp; Restore File</button>
@@ -77,15 +77,15 @@
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Export Lists &amp; History</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
       
       <div style="display:flex; flex-direction:column; gap:12px;">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:var(--radius-md);">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">Watch History</div>
-            <div style="font-size:var(--font-size-sm); color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Watch History</div>
+            <div class="u-fs-v_font_size_sm u-c-v_muted">All watched movies, shows, and episodes with timestamps</div>
           </div>
           <div class="export-actions-grid">
             <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;trakt&quot;]">CSV (Trakt / Simkl)</button>
@@ -96,8 +96,8 @@
 
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:var(--radius-md);">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">All Custom Lists &amp; Watchlist</div>
-            <div style="font-size:var(--font-size-sm); color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">All Custom Lists &amp; Watchlist</div>
+            <div class="u-fs-v_font_size_sm u-c-v_muted">Export all created lists, watchlist, and continue watching items</div>
           </div>
           <div class="export-actions-grid">
             <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;all-custom-lists&quot;,&quot;standard&quot;]">Export All (CSV)</button>

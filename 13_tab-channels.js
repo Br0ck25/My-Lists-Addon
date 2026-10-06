@@ -11,15 +11,15 @@
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
   <div class="channels-subpanel" id="channelsSubStorylines" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Storylines, Sagas &amp; Universes</h2>
-        <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">
+        <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">
           Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
         </p>
       </div>
 
       <!-- Category Filter Tabs -->
-      <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px;">
+      <div class="subnav-pills-bar u-mb-16px" id="storylineCategoryFilterBar">
         <button type="button" class="subnav-pill active" data-act="filterStorylinesCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All Sagas</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;moviesagas&quot;,&quot;@self&quot;]">Movie Sagas (3+ Films)</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;tvuniverses&quot;,&quot;@self&quot;]">TV Universes &amp; Bridges</button>
@@ -35,10 +35,10 @@
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
+      <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">My Channels</h2>
-          <p style="margin:0; color:var(--muted); font-size:var(--font-size-sm);">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
@@ -47,11 +47,11 @@
           ${refreshButtonHtml('refreshMyChannelsAction', 'Refresh channels')}
         </div>
       </div>
-      <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
-      <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <div id="channelNextUpStatus" class="u-mb-8px"></div>
+      <div class="row u-mb-10px u-gap-8px" id="myChannelsToolbar">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
         </div>
         <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="recent">Recently updated</option>
@@ -62,22 +62,22 @@
         </select>
       </div>
       <div id="myChannelsUndoBar" style="display:none; margin-bottom:10px;"></div>
-      <div id="myCreatedChannelsList"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
+      <div id="myCreatedChannelsList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
-      <div class="shelf-header" style="margin-bottom:8px;">
+    <div class="panel u-mt-12px">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Merge Saved Channels into One Catalog</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
       
-      <div id="savedMergedChannelsSection" style="margin-bottom:16px;">
+      <div id="savedMergedChannelsSection" class="u-mb-16px">
         <div id="savedMergedChannelsList"></div>
       </div>
 
-      <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
-        <div class="shelf-header" style="margin-bottom:8px;">
-          <h3 style="font-size:var(--font-size-base); font-weight:700; margin:0;">Create Merged Catalog or Channel</h3>
+      <div class="u-bdt-1px_solid_v_border u-pt-12px u-mt-12px">
+        <div class="shelf-header u-mb-8px">
+          <h3 class="u-fs-v_font_size_base u-fw-700 u-m-0">Create Merged Catalog or Channel</h3>
         </div>
         <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:var(--font-size-sm); user-select:none;">
@@ -85,7 +85,7 @@
             <span>Select all</span>
           </label>
         </div>
-        <div id="channelMergeList"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No saved channels yet.</small></p></div>
+        <div id="channelMergeList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No saved channels yet.</small></p></div>
         <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
           <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
           <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
@@ -98,13 +98,13 @@
   <!-- Submenu 2: Quick Add Popular Networks -->
   <div class="channels-subpanel" id="channelsSubQuickAdd" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
       <div class="channel-quick-sections" style="display:flex; flex-direction:column; gap:16px; margin-top:14px;">
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Major Broadcast</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Major Broadcast</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="ABC" data-networkid="2">ABC</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="CBS" data-networkid="16">CBS</button>
@@ -116,7 +116,7 @@
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Cable &amp; Premium Drama</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Cable &amp; Premium Drama</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="AMC" data-networkid="174">AMC</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Comedy Central" data-networkid="47">Comedy Central</button>
@@ -130,7 +130,7 @@
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Animation &amp; Kids</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Animation &amp; Kids</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Adult Swim" data-networkid="80">Adult Swim</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Cartoon Network" data-networkid="56">Cartoon Network</button>
@@ -140,7 +140,7 @@
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Documentary &amp; Lifestyle</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Documentary &amp; Lifestyle</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Discovery" data-networkid="64">Discovery</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Food Network" data-networkid="143">Food Network</button>
@@ -151,7 +151,7 @@
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Classics &amp; Variety</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Classics &amp; Variety</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="A&amp;E" data-networkid="129">A&amp;E</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Hallmark Channel" data-networkid="384">Hallmark Channel</button>
@@ -161,23 +161,23 @@
           </div>
         </div>
       </div>
-      <div id="channelQuickAddStatus" style="margin-top:8px;"></div>
+      <div id="channelQuickAddStatus" class="u-mt-8px"></div>
     </div>
   </div>
 
   <!-- Submenu: Explore Channels (the community directory) -->
   <div class="channels-subpanel" id="channelsSubExplore" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Explore Channels</h2>
-        <p style="margin:0; color:var(--muted); font-size:var(--font-size-sm);">
+        <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">
           24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
         </p>
       </div>
-      <div class="row" style="margin-bottom:10px; gap:8px; align-items:center;">
-        <div class="search-input-box" style="flex:1;">
+      <div class="row u-mb-10px u-gap-8px u-ai-center">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="renderChannelDirectory">
+          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
         </div>
         <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="newest">Newest</option>
@@ -187,54 +187,54 @@
         </select>
         ${refreshButtonHtml('loadChannelDirectory', 'Refresh published channels', [true])}
       </div>
-      <div id="channelDirectoryFeed"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Loading published channels&hellip;</small></p></div>
+      <div id="channelDirectoryFeed"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>Loading published channels&hellip;</small></p></div>
     </div>
   </div>
 
   <!-- Submenu 3: Import & Merge Tools -->
   <div class="channels-subpanel" id="channelsSubImport" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Import channel from a link</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a TV channel catalog.</p>
-      <div class="row" style="margin-bottom:8px;">
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a TV channel catalog.</p>
+      <div class="row u-mb-8px">
         <input type="text" id="channelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL">
       </div>
       <div class="row">
         <input type="text" id="channelImportNameInput" placeholder="Channel name (e.g. Sitcom Central)">
         <button type="button" class="secondary" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import channel</button>
       </div>
-      <label class="channel-rule-row" style="margin-top:10px;">
+      <label class="channel-rule-row u-mt-10px">
         <input type="checkbox" id="channelImportLiveSyncCheck" checked>
         <span>Live Cloud Sync &mdash; keep this channel following the list instead of taking a one-time snapshot</span>
       </label>
-      <p style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">The channel remembers the list URL and rebuilds its pool in the background, so titles the list gains turn up here on their own.</p>
+      <p class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">The channel remembers the list URL and rebuilds its pool in the background, so titles the list gains turn up here on their own.</p>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
-      <div class="shelf-header" style="margin-bottom:8px;">
+    <div class="panel u-mt-12px">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Add a shared channel</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
       <div class="row">
         <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]">
         <button type="button" class="secondary" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add channel</button>
       </div>
-      <div id="channelShareImportStatus" style="margin-top:8px;"></div>
+      <div id="channelShareImportStatus" class="u-mt-8px"></div>
     </div>
   </div>
 
   <!-- Custom Channel Builder / Editor -->
   <div class="channels-subpanel" id="channelsSubBuild" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
+      <div class="shelf-header u-mb-10px">
         <h2 class="shelf-title" id="channelEditorTitle">Create a Custom Channel</h2>
       </div>
-      <p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-sm);">Curate, reorder, and manage picks for this custom channel.</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm">Curate, reorder, and manage picks for this custom channel.</p>
 
       <!-- 1. Channel Name -->
-      <div style="margin-bottom:16px; max-width:480px;">
+      <div class="u-mb-16px u-maxw-480px">
         <label for="channelNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">Channel Name</label>
         <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)">
       </div>
@@ -242,8 +242,8 @@
       <!-- 2. Public Channel Toggle -->
       <div id="channelVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
         <div>
-          <span style="font-size:var(--font-size-sm); font-weight:600; color:var(--text);">Public Channel</span>
-          <p style="margin:2px 0 0; font-size:var(--font-size-xs); color:var(--muted);">Make this channel visible on your public creator profile and discoverable in the community directory</p>
+          <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public Channel</span>
+          <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this channel visible on your public creator profile and discoverable in the community directory</p>
         </div>
         <label class="ui-toggle" aria-label="Make channel public">
           <input type="checkbox" id="channelPublicToggle" checked>
@@ -252,16 +252,16 @@
       </div>
 
       <!-- 3. Search & Add Titles -->
-      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+      <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
         <label for="channelSearchInput" style="display:block; font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to Channel</label>
-        <p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted);">Search any TV show or movie to add to your channel.</p>
-      <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
+        <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search any TV show or movie to add to your channel.</p>
+      <div class="subnav-pills-bar u-mb-10px" id="channelSearchTypeChips">
         <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
         <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
-      <div class="row" style="gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <div class="row u-gap-8px">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
         </div>
@@ -273,44 +273,44 @@
       <div id="channelCrossoverSuggestions" style="display:none; margin-top:14px;"></div>
       </div>
 
-      <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:var(--font-size-sm);">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
-      <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:var(--font-size-xs);"></div>
-      <div class="row" style="margin-bottom:8px; gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <p class="u-mt-14px u-mb-6px u-fw-600 u-fs-v_font_size_sm">Picks in this channel: <span id="channelDraftCountBadge" class="u-c-v_muted u-fw-500"></span></p>
+      <div id="channelDraftStats" class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_xs"></div>
+      <div class="row u-mb-8px u-gap-8px">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
         </div>
         <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface);">
-        <span id="channelDraftSelectionCount" style="font-size:var(--font-size-sm); font-weight:600;">0 selected</span>
+        <span id="channelDraftSelectionCount" class="u-fs-v_font_size_sm u-fw-600">0 selected</span>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[true]">Select shown</button>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[false]">Clear</button>
-        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" style="font-size:var(--font-size-sm); padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" class="u-fs-v_font_size_sm u-p-5px_8px u-bg-v_bg u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">
           <option value="">Select a whole show or season&hellip;</option>
         </select>
-        <span style="flex:1;"></span>
+        <span class="u-flex-1"></span>
         <button type="button" class="secondary lc-btn" data-act="pairChannelDraftSelection" title="Play these picks back to back, in this order">Pair</button>
         <button type="button" class="secondary lc-btn" data-act="unpairChannelDraftSelection" title="Drop any hand-made pairing on these picks">Unpair</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;top&quot;]">To top</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;bottom&quot;]">To bottom</button>
         <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeChannelDraftSelection">Remove selected</button>
       </div>
-      <div id="channelDraftList"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
-      <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
+      <div id="channelDraftList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
+      <div class="actions u-mt-8px u-jc-flex_start u-gap-8px">
         <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
         <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
       </div>
       <!-- Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:14px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; background:var(--surface);">
+      <details class="channel-advanced-details u-mt-14px u-bd-1px_solid_v_border u-br-v_radius_sm u-p-10px_14px u-bg-v_surface">
         <summary style="font-weight:600; font-size:var(--font-size-sm); cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
           <span>Advanced Settings</span>
-          <span style="font-size:var(--font-size-xs); color:var(--muted); font-weight:normal;">Play order, rotation &amp; broadcast schedule</span>
+          <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order, rotation &amp; broadcast schedule</span>
         </summary>
-        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+        <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="channelPlayOrderSelect" style="font-size:var(--font-size-sm); font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:var(--font-size-sm); padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm);">
+            <label for="channelPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap">Play order:</label>
+            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-flex-1 u-minw-210px u-fs-v_font_size_sm u-p-6px_10px u-bg-v_surface u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -320,11 +320,11 @@
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="channelPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-xs);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="channelPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <!-- Broadcast schedule & smart rules -->
-          <div style="border-top:1px solid var(--border); padding-top:12px;">
-            <p style="margin:0 0 8px; font-weight:600; font-size:var(--font-size-sm);">Broadcast schedule</p>
+          <div class="u-bdt-1px_solid_v_border u-pt-12px">
+            <p class="u-m-0_0_8px u-fw-600 u-fs-v_font_size_sm">Broadcast schedule</p>
             <label class="channel-rule-row">
               <input type="checkbox" id="channelDailyRotateCheck" data-act="updateChannelBroadcastControls">
               <span>Daily Broadcast Schedule &mdash; run a fresh lineup out of these picks every day</span>
@@ -346,21 +346,21 @@
                 </select>
               </label>
             </div>
-            <p id="channelDailyRotateHint" style="margin:6px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Off &mdash; every pick in this channel plays, in the order above.</p>
+            <p id="channelDailyRotateHint" class="u-m-6px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; every pick in this channel plays, in the order above.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelHideWatchedCheck">
               <span>Hide watched &mdash; skip episodes already in my watch history</span>
             </label>
-            <p style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
+            <p class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
-            <p id="channelPairPartsHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
+            <p id="channelPairPartsHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
               <span>Automatically add new episodes</span>
             </label>
@@ -370,41 +370,41 @@
                 <span>Put new episodes at the top</span>
               </label>
             </div>
-            <p id="channelAutoNewEpisodesHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Off &mdash; this channel plays the picks below and nothing else.</p>
+            <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; this channel plays the picks below and nothing else.</p>
 
             <div id="channelLiveSyncRow" style="display:none; margin-top:10px;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelLiveSyncCheck">
                 <span>Live Cloud Sync &mdash; refresh this channel from its source list</span>
               </label>
-              <p id="channelLiveSyncHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);"></p>
+              <p id="channelLiveSyncHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs"></p>
             </div>
 
-            <div id="channelStoryLockSection" style="margin-top:12px;"></div>
+            <div id="channelStoryLockSection" class="u-mt-12px"></div>
           </div>
         </div>
       </details>
 
       <!-- Channel Poster Selection Section -->
       <div id="channelPosterPickerSection" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px; display:none;">
-        <p style="margin:0 0 4px; font-weight:600; font-size:var(--font-size-sm);">Channel Poster:</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Choose a show poster (ranked by most episodes) or choose our custom channel poster.</p>
+        <p class="u-m-0_0_4px u-fw-600 u-fs-v_font_size_sm">Channel Poster:</p>
+        <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Choose a show poster (ranked by most episodes) or choose our custom channel poster.</p>
         <div id="channelPosterChoicesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:10px;"></div>
-        <div style="margin-top:12px;">
-          <p style="margin:0 0 6px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
-          <div class="row" style="gap:8px;">
-            <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" style="flex:1; font-size:var(--font-size-sm);">
-            <button type="button" class="secondary" style="white-space:nowrap; font-size:var(--font-size-sm);" data-act="applyChannelPosterUrl">Use This</button>
+        <div class="u-mt-12px">
+          <p class="u-m-0_0_6px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
+          <div class="row u-gap-8px">
+            <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" class="u-flex-1 u-fs-v_font_size_sm">
+            <button type="button" class="secondary u-ws-nowrap u-fs-v_font_size_sm" data-act="applyChannelPosterUrl">Use This</button>
           </div>
           <div id="channelPosterUrlPreview" style="margin-top:8px; align-items:center; gap:10px; display:none;">
             <img id="channelPosterUrlImg" src="" alt="Poster preview" style="width:54px; height:80px; object-fit:cover; border-radius:var(--radius-xs); border:2px solid var(--accent);" loading="lazy">
-            <span id="channelPosterUrlStatus" style="font-size:var(--font-size-xs); color:var(--muted);"></span>
+            <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs u-c-v_muted"></span>
           </div>
         </div>
       </div>
 
       <!-- Bottom Action Bar -->
-      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+      <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="channelCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditChannel">Cancel</button>
         <button type="button" class="primary lc-btn" id="channelSaveBtn" data-act="saveChannel" style="padding:8px 24px; font-weight:600;">Create Channel</button>
       </div>
@@ -414,7 +414,7 @@
 
 <div class="tab-panel" data-tab-panel="search" id="content-search" role="tabpanel" aria-labelledby="tab-desktop-search" hidden>
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px;">
+    <div class="shelf-header u-mb-12px">
       <h2 class="shelf-title">Search Movies, TV Shows &amp; Lists</h2>
     </div>
     
@@ -499,6 +499,6 @@
     </div>
 
 
-    <div id="catalogSearchResult" style="margin-top:14px;"></div>
+    <div id="catalogSearchResult" class="u-mt-14px"></div>
   </div>
 </div>

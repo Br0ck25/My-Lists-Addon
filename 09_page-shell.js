@@ -5183,6 +5183,7 @@ ${DESIGN_TOKENS_CSS}
     }
     .subnav-pills-bar { padding-top: var(--space-3); padding-bottom: var(--space-4); }
   }
+${UTILITY_CSS}
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
      It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
@@ -5302,10 +5303,10 @@ ${appShellMobileNavHtml}
 
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
-    <div style="margin-bottom: 20px;">
+    <div class="u-mb-20px">
       <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: var(--font-size-base);">&larr; Back</button>
     </div>
-    <div class="detail-header-info" style="margin-bottom:14px;">
+    <div class="detail-header-info u-mb-14px">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <!-- A list opened before its own "nice" name is available (e.g. a
              row whose configured name is itself a pasted URL) shows that
@@ -5329,10 +5330,10 @@ ${appShellMobileNavHtml}
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
         <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:var(--font-size-sm); color:var(--text); user-select:none;">
-          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
+          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" class="u-acc-v_accent u-cur-pointer">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="btn-danger btn-sm" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="margin-left:auto;">Clear History</button>
+        <button type="button" class="btn-danger btn-sm u-ml-auto" id="whClearHistoryBtn" data-act="clearWatchHistoryAll">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
@@ -5341,7 +5342,7 @@ ${appShellMobileNavHtml}
         <button type="button" class="btn-danger btn-sm" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; margin-left:auto;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
-        <label for="whSortSelect" style="font-size:var(--font-size-xs); color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
+        <label for="whSortSelect" class="u-fs-v_font_size_xs u-c-v_muted u-fw-700 u-tt-uppercase u-ls-0_02em">Sort</label>
         <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
           <option value="oldest">Oldest Watched</option>
@@ -5351,7 +5352,7 @@ ${appShellMobileNavHtml}
       </div>
     </div>
     <div class="poster-grid-3" id="detailGrid"></div>
-    <p id="detailStatus" style="text-align:center; color:var(--muted); margin-top:14px;"><small>Loading&hellip;</small></p>
+    <p id="detailStatus" class="u-ta-center u-c-v_muted u-mt-14px"><small>Loading&hellip;</small></p>
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
@@ -5364,11 +5365,11 @@ ${appShellMobileNavHtml}
   <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createListModalTitle">Create List</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Save To</label>
         <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act="onChangeCreateListDestination">
           <option value="custom">My Lists (Local / Profile)</option>
@@ -5379,17 +5380,17 @@ ${appShellMobileNavHtml}
         </select>
       </div>
       
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
         <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Description (Optional)</label>
         <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); resize:vertical; font-family:inherit;"></textarea>
       </div>
       
-      <div style="margin-bottom: 14px;">
+      <div class="u-mb-14px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
         <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);">
           <option value="movie">Movies</option>
@@ -5398,9 +5399,9 @@ ${appShellMobileNavHtml}
         </select>
       </div>
       
-      <div id="createListModalPublicWrap" style="margin-bottom: 18px;">
+      <div id="createListModalPublicWrap" class="u-mb-18px">
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
-          <input type="checkbox" id="createListModalPublic" style="margin-top:3px; flex-shrink:0;">
+          <input type="checkbox" id="createListModalPublic" class="u-mt-3px u-fsh-0">
           <div>
             <span style="font-size:var(--font-size-base); font-weight:600; color:var(--text); display:block;">Make list public</span>
             <span style="font-size:var(--font-size-xs); color:var(--muted); display:block; margin-top:2px; line-height:1.35;">When enabled, this list is visible on your public creator profile and community directory.</span>
@@ -5419,27 +5420,27 @@ ${appShellMobileNavHtml}
   <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">New Catalog</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">New Catalog</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
       </div>
       
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label for="addShelfModalName" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog Name</label>
         <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="validateAddShelfModal">
       </div>
       
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog URL</label>
         <div id="addShelfModalLinksContainer">
           <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
+            <input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
         <button type="button" class="lc-btn secondary" style="width: 100%; font-size: var(--font-size-sm); padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
         <small style="display:block; color:var(--muted); font-size:var(--font-size-xs); margin-top:4px;">Combine multiple list URLs into a single catalog row on your home screen.</small>
       </div>
       
-      <div style="margin-bottom: 16px;">
+      <div class="u-mb-16px">
         <label for="addShelfModalType" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
         <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
@@ -5458,21 +5459,21 @@ ${appShellMobileNavHtml}
   <div id="importListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Import List from Link</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import List from Link</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportListModal">&#x2715;</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
-      <div style="margin-bottom: 12px;">
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <div class="u-mb-12px">
         <label for="modalCustomListImportUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List URL</label>
         <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
       </div>
-      <div style="margin-bottom: 14px;">
+      <div class="u-mb-14px">
         <label for="modalCustomListImportNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name (Optional)</label>
         <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
       </div>
       <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:18px;">
         <input type="checkbox" id="modalCustomListImportSyncCheck" checked>
-        <span style="font-size:var(--font-size-sm); color:var(--text);">Keep custom list synced with external link</span>
+        <span class="u-fs-v_font_size_sm u-c-v_text">Keep custom list synced with external link</span>
       </label>
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
         <button type="button" class="lc-btn secondary" data-act="closeImportListModal">Cancel</button>
@@ -5485,30 +5486,30 @@ ${appShellMobileNavHtml}
   <div id="importChannelModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 440px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Import Channel</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Channel</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportChannelModal">&#x2715;</button>
       </div>
 
       <!-- Segmented Mode Selector: From Link vs From Share Code -->
-      <div class="subnav-pills-bar" id="importChannelModePills" style="margin-bottom: 14px; gap: 6px; padding: 0;">
+      <div class="subnav-pills-bar u-mb-14px u-gap-6px u-p-0" id="importChannelModePills">
         <button type="button" class="subnav-pill active" id="importChannelModeLinkBtn" data-act="switchImportChannelMode" data-act-args="[&quot;link&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> From List Link</button>
         <button type="button" class="subnav-pill" id="importChannelModeCodeBtn" data-act="switchImportChannelMode" data-act-args="[&quot;code&quot;,&quot;@self&quot;]">From Share Code</button>
       </div>
 
       <!-- Mode 1: From List Link -->
       <div id="importChannelPanelLink">
-        <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
-        <div style="margin-bottom: 12px;">
+        <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
+        <div class="u-mb-12px">
           <label for="modalChannelImportUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Show List URL</label>
           <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
         </div>
-        <div style="margin-bottom: 12px;">
+        <div class="u-mb-12px">
           <label for="modalChannelImportNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Name</label>
           <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
         </div>
         <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:18px;">
-          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked style="margin-top:2px;">
-          <span style="font-size:var(--font-size-sm); color:var(--text); line-height:1.35;">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
+          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked class="u-mt-2px">
+          <span class="u-fs-v_font_size_sm u-c-v_text u-lh-1_35">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
         </label>
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
@@ -5518,12 +5519,12 @@ ${appShellMobileNavHtml}
 
       <!-- Mode 2: From Share Code -->
       <div id="importChannelPanelCode" style="display:none;">
-        <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
-        <div style="margin-bottom: 14px;">
+        <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
+        <div class="u-mb-14px">
           <label for="modalChannelShareCodeInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Share Link or Code</label>
           <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
         </div>
-        <div id="modalChannelShareImportStatus" style="margin-bottom:14px; font-size:var(--font-size-sm);"></div>
+        <div id="modalChannelShareImportStatus" class="u-mb-14px u-fs-v_font_size_sm"></div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
           <button type="button" class="lc-btn primary" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Add Channel</button>
@@ -5536,8 +5537,8 @@ ${appShellMobileNavHtml}
     <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
         <div>
-          <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Add / Remove from Lists</h2>
-          <p style="margin:4px 0 0; font-size:var(--font-size-sm); color:var(--muted);">Check to add, uncheck to remove.</p>
+          <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Add / Remove from Lists</h2>
+          <p class="u-m-4px_0_0 u-fs-v_font_size_sm u-c-v_muted">Check to add, uncheck to remove.</p>
         </div>
         <button type="button" class="modal-close-x" aria-label="Close" id="selectListModalCloseBtn">&#x2715;</button>
       </div>
@@ -5555,13 +5556,13 @@ ${appShellMobileNavHtml}
   <div id="traktDeviceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index: 10002; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Connect Trakt</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Connect Trakt</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
-      <p style="margin: 0 0 16px; color: var(--muted); font-size: var(--font-size-base);">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
-      <div id="traktDeviceCodeBox" style="background: var(--panel-strong); border: 2px dashed var(--accent); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
-        <div id="traktDeviceUserCode" style="font-size: 2rem; font-weight: 800; letter-spacing: 4px; color: var(--accent); font-family: monospace;">LOADING...</div>
+      <div id="traktDeviceCodeBox" class="u-bg-v_panel_strong u-bd-2px_dashed_v_accent u-br-v_radius_md u-p-16px u-mb-16px">
+        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
@@ -5574,7 +5575,7 @@ ${appShellMobileNavHtml}
         Waiting for authorization on Trakt...
       </div>
 
-      <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-mt-18px u-bdt-1px_solid_v_border u-pt-14px">
         <button type="button" class="lc-btn secondary" style="width: 100%;" data-act="closeTraktDeviceModal">Cancel</button>
       </div>
     </div>

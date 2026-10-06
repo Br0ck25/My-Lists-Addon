@@ -1966,6 +1966,193 @@ const DESIGN_TOKENS_CSS = `
     --surface-3:            var(--color-border-strong);
   }
 `;
+
+// Generated single-declaration helpers (u-<property>-<value>) that replaced
+// repeated inline style="" attributes in the page markup. Each class is one
+// declaration; prefer a real component class (DESIGN_SYSTEM.md) for anything
+// new, and use these only where a one-off spacing/colour tweak is needed.
+const UTILITY_CSS = `
+.u-acc-v_accent{accent-color:var(--accent)}
+.u-ai-center{align-items:center}
+.u-bd-1_5px_solid_v_border_strong{border:1.5px solid var(--border-strong)}
+.u-bd-1px_solid_v_border{border:1px solid var(--border)}
+.u-bd-1px_solid_v_color_danger{border:1px solid var(--color-danger)}
+.u-bd-2px_dashed_v_accent{border:2px dashed var(--accent)}
+.u-bd-none{border:none}
+.u-bdb-1px_solid_v_border{border-bottom:1px solid var(--border)}
+.u-bdb-none{border-bottom:none}
+.u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3)}
+.u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35)}
+.u-bdt-1px_solid_v_border{border-top:1px solid var(--border)}
+.u-bg-F2F2F7{background:#F2F2F7}
+.u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12)}
+.u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15)}
+.u-bg-v_bg{background:var(--bg)}
+.u-bg-v_panel_strong{background:var(--panel-strong)}
+.u-bg-v_surface{background:var(--surface)}
+.u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04))}
+.u-br-v_radius_md{border-radius:var(--radius-md)}
+.u-br-v_radius_pill{border-radius:var(--radius-pill)}
+.u-br-v_radius_sm{border-radius:var(--radius-sm)}
+.u-bs-border_box{box-sizing:border-box}
+.u-bsh-v_shadow_sm{box-shadow:var(--shadow-sm)}
+.u-c-1C1C1E{color:#1C1C1E}
+.u-c-f5c518{color:#f5c518}
+.u-c-v_accent{color:var(--accent)}
+.u-c-v_accent_2{color:var(--accent-2)}
+.u-c-v_color_danger_text{color:var(--color-danger-text)}
+.u-c-v_color_success_text{color:var(--color-success-text)}
+.u-c-v_color_warn_text{color:var(--color-warn-text)}
+.u-c-v_muted{color:var(--muted)}
+.u-c-v_text{color:var(--text)}
+.u-c-v_text_2{color:var(--text-2)}
+.u-cur-pointer{cursor:pointer}
+.u-fd-row{flex-direction:row}
+.u-ff-monospace{font-family:monospace}
+.u-ff-sans_serif{font-family:sans-serif}
+.u-flex-0_0_auto{flex:0 0 auto}
+.u-flex-1{flex:1}
+.u-flex-1_1_320px{flex:1 1 320px}
+.u-fs-2rem{font-size:2rem}
+.u-fs-v_font_size_base{font-size:var(--font-size-base)}
+.u-fs-v_font_size_lg{font-size:var(--font-size-lg)}
+.u-fs-v_font_size_md{font-size:var(--font-size-md)}
+.u-fs-v_font_size_sm{font-size:var(--font-size-sm)}
+.u-fs-v_font_size_xl{font-size:var(--font-size-xl)}
+.u-fs-v_font_size_xs{font-size:var(--font-size-xs)}
+.u-fsh-0{flex-shrink:0}
+.u-fw-400{font-weight:400}
+.u-fw-500{font-weight:500}
+.u-fw-600{font-weight:600}
+.u-fw-700{font-weight:700}
+.u-fw-800{font-weight:800}
+.u-fw-normal{font-weight:normal}
+.u-fw2-wrap{flex-wrap:wrap}
+.u-gap-10px{gap:10px}
+.u-gap-12px{gap:12px}
+.u-gap-6px{gap:6px}
+.u-gap-8px{gap:8px}
+.u-jc-flex_end{justify-content:flex-end}
+.u-jc-flex_start{justify-content:flex-start}
+.u-jc-space_between{justify-content:space-between}
+.u-lh-1_35{line-height:1.35}
+.u-lh-1_4{line-height:1.4}
+.u-lh-1_45{line-height:1.45}
+.u-lh-1_5{line-height:1.5}
+.u-ls-0_02em{letter-spacing:0.02em}
+.u-ls-0_05em{letter-spacing:0.05em}
+.u-ls-4px{letter-spacing:4px}
+.u-m-0{margin:0}
+.u-m-0_0_10px{margin:0 0 10px}
+.u-m-0_0_12px{margin:0 0 12px}
+.u-m-0_0_12px_18px{margin:0 0 12px 18px}
+.u-m-0_0_14px{margin:0 0 14px}
+.u-m-0_0_16px{margin:0 0 16px}
+.u-m-0_0_18px{margin:0 0 18px}
+.u-m-0_0_4px{margin:0 0 4px}
+.u-m-0_0_6px{margin:0 0 6px}
+.u-m-0_0_8px{margin:0 0 8px}
+.u-m-0_6px_6px_0{margin:0 6px 6px 0}
+.u-m-10px_0{margin:10px 0}
+.u-m-10px_0_0{margin:10px 0 0}
+.u-m-12px_0{margin:12px 0}
+.u-m-12px_0_8px{margin:12px 0 8px}
+.u-m-20px_0_4px{margin:20px 0 4px}
+.u-m-2px_0_0{margin:2px 0 0}
+.u-m-2px_0_0_24px{margin:2px 0 0 24px}
+.u-m-3px_0_0{margin:3px 0 0}
+.u-m-4px_0_0{margin:4px 0 0}
+.u-m-6px_0_0{margin:6px 0 0}
+.u-m-6px_0_0_24px{margin:6px 0 0 24px}
+.u-m-8px_0_0{margin:8px 0 0}
+.u-maxh-340px{max-height:340px}
+.u-maxw-220px{max-width:220px}
+.u-maxw-320px{max-width:320px}
+.u-maxw-380px{max-width:380px}
+.u-maxw-480px{max-width:480px}
+.u-maxw-500px{max-width:500px}
+.u-maxw-520px{max-width:520px}
+.u-mb-0{margin-bottom:0}
+.u-mb-10px{margin-bottom:10px}
+.u-mb-12px{margin-bottom:12px}
+.u-mb-14px{margin-bottom:14px}
+.u-mb-16px{margin-bottom:16px}
+.u-mb-18px{margin-bottom:18px}
+.u-mb-20px{margin-bottom:20px}
+.u-mb-4px{margin-bottom:4px}
+.u-mb-6px{margin-bottom:6px}
+.u-mb-8px{margin-bottom:8px}
+.u-minw-0{min-width:0}
+.u-minw-180px{min-width:180px}
+.u-minw-200px{min-width:200px}
+.u-minw-210px{min-width:210px}
+.u-minw-220px{min-width:220px}
+.u-minw-240px{min-width:240px}
+.u-minw-280px{min-width:280px}
+.u-minw-320px{min-width:320px}
+.u-ml-6px{margin-left:6px}
+.u-ml-auto{margin-left:auto}
+.u-mr-0{margin-right:0}
+.u-mr-4px{margin-right:4px}
+.u-mr-6px{margin-right:6px}
+.u-mt-0{margin-top:0}
+.u-mt-10px{margin-top:10px}
+.u-mt-12px{margin-top:12px}
+.u-mt-14px{margin-top:14px}
+.u-mt-16px{margin-top:16px}
+.u-mt-18px{margin-top:18px}
+.u-mt-20px{margin-top:20px}
+.u-mt-24px{margin-top:24px}
+.u-mt-28px{margin-top:28px}
+.u-mt-2px{margin-top:2px}
+.u-mt-3px{margin-top:3px}
+.u-mt-4px{margin-top:4px}
+.u-mt-6px{margin-top:6px}
+.u-mt-8px{margin-top:8px}
+.u-ov-auto{overflow:auto}
+.u-ov-hidden{overflow:hidden}
+.u-ovx-auto{overflow-x:auto}
+.u-p-0{padding:0}
+.u-p-0_0_10px{padding:0 0 10px}
+.u-p-0_0_12px{padding:0 0 12px}
+.u-p-10px{padding:10px}
+.u-p-10px_12px{padding:10px 12px}
+.u-p-10px_14px{padding:10px 14px}
+.u-p-12px_14px{padding:12px 14px}
+.u-p-12px_16px{padding:12px 16px}
+.u-p-14px_0{padding:14px 0}
+.u-p-14px_16px{padding:14px 16px}
+.u-p-16px{padding:16px}
+.u-p-2px_8px{padding:2px 8px}
+.u-p-40px{padding:40px}
+.u-p-4px_0{padding:4px 0}
+.u-p-4px_10px_4px_0{padding:4px 10px 4px 0}
+.u-p-4px_8px_4px_0{padding:4px 8px 4px 0}
+.u-p-5px_8px{padding:5px 8px}
+.u-p-6px_10px{padding:6px 10px}
+.u-p-7px_12px{padding:7px 12px}
+.u-p-8px_10px{padding:8px 10px}
+.u-p-8px_12px{padding:8px 12px}
+.u-pb-12px{padding-bottom:12px}
+.u-pb-14px{padding-bottom:14px}
+.u-pl-38px{padding-left:38px}
+.u-pr-10px{padding-right:10px}
+.u-pr-12px{padding-right:12px}
+.u-pr-8px{padding-right:8px}
+.u-pt-12px{padding-top:12px}
+.u-pt-14px{padding-top:14px}
+.u-pt-4px{padding-top:4px}
+.u-ta-center{text-align:center}
+.u-ta-left{text-align:left}
+.u-ta-right{text-align:right}
+.u-to-ellipsis{text-overflow:ellipsis}
+.u-tt-uppercase{text-transform:uppercase}
+.u-us-all{user-select:all}
+.u-va-top{vertical-align:top}
+.u-wb-break_word{word-break:break-word}
+.u-ws-nowrap{white-space:nowrap}
+.u-ws-pre_wrap{white-space:pre-wrap}
+`;
 // --- icon (placeholder, replace via /mnt/project source if needed) --------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
@@ -12657,6 +12844,7 @@ ${DESIGN_TOKENS_CSS}
   }
   button:hover { opacity: 0.85; }
   .err { color: var(--danger); margin: 14px 0 0; font-size: 0.85rem; }
+${UTILITY_CSS}
 </style></head>
 <body>
   <div class="login-wrap">
@@ -12667,7 +12855,7 @@ ${DESIGN_TOKENS_CSS}
     <div class="panel">
       <h2 class="panel-title">Admin sign in</h2>
       ${accessOn
-        ? `<p style="color:var(--text-2); margin:0 0 14px; font-size:var(--font-size-sm); line-height:1.45;">Cloudflare Access is <strong>on</strong> for this dashboard. If you reached this page through Access, you are already signed in &mdash; <a href="/admin" style="color:var(--accent);">open the dashboard</a>.<br>If you are seeing this instead, Access did not let the request through (check the Access application&rsquo;s policy for <code>/admin</code>), or this hostname is not covered by it. The key below is the break-glass way in.</p>`
+        ? `<p class="u-c-v_text_2 u-m-0_0_14px u-fs-v_font_size_sm u-lh-1_45">Cloudflare Access is <strong>on</strong> for this dashboard. If you reached this page through Access, you are already signed in &mdash; <a href="/admin" class="u-c-v_accent">open the dashboard</a>.<br>If you are seeing this instead, Access did not let the request through (check the Access application&rsquo;s policy for <code>/admin</code>), or this hostname is not covered by it. The key below is the break-glass way in.</p>`
         : ""}
       <form method="POST" action="/admin/login">
         <div class="row">
@@ -12815,7 +13003,7 @@ function applySupportGoalUpdate(stored, body, now = new Date()) {
 
 async function renderAdminDashboard(env) {
   if (!env || !env.CONFIGS) {
-    return `<!DOCTYPE html><html><body style="background:#F2F2F7;color:#1C1C1E;font-family:sans-serif;padding:40px;">This Worker has no CONFIGS KV namespace bound, so there's no stats to show.</body></html>`;
+    return `<!DOCTYPE html><html><body class="u-bg-F2F2F7 u-c-1C1C1E u-ff-sans_serif u-p-40px">This Worker has no CONFIGS KV namespace bound, so there's no stats to show.</body></html>`;
   }
   // Surfaced in the Maintenance tab below so a dashboard-only self-hoster
   // (no wrangler.toml in front of them) can see at a glance whether this
@@ -13097,11 +13285,12 @@ ${DESIGN_TOKENS_CSS}
     .feedback-actions { width: 100%; }
     .feedback-actions button { flex-grow: 1; text-align: center; }
   }
+${UTILITY_CSS}
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p style="color:var(--muted); margin-top:0;">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
-  ${isD1Bound ? '' : '<div style="background:rgba(255,59,48,0.12); border:1px solid var(--color-danger); border-radius:var(--radius-sm); padding:12px 16px; margin:0 0 18px; color:var(--color-danger-text); font-size:var(--font-size-sm); line-height:1.4;"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
+  <p class="u-c-v_muted u-mt-0">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span></p>
+  ${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
        which row of sub-tabs is shown, and it is the sub-tab that selects
@@ -13167,7 +13356,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="sources">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Counted from each row's group at the moment an install link is generated -- one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Counted from each row's group at the moment an install link is generated -- one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five.</p>
     <div class="table-wrap">
       <table>
         <tr><th>Source</th><th>Count</th><th>Share</th></tr>
@@ -13177,8 +13366,8 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="trending">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
-    <div style="margin:12px 0;">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">How many times each title has been marked watched or added to a list, across everyone using this add-on. The <strong>Most Watched</strong> counts for Today, Last 7 Days and Last 30 Days are what the public <strong>Most Watched Today / 7 Days / 30 Days</strong> charts show (top 25; Quick Add &rarr; My Lists Addon Charts, and Discover); those refresh hourly for Today and daily for 7/30 days. Entries recorded without a real title id (such as "null") are left out of both this table and those charts.</p>
+    <div class="u-m-12px_0">
       <select class="admin-select" id="trendingTypeSelect" data-act="loadTrendingData">
         <option value="watched">Most Watched</option>
         <option value="list-add">Most Added to Lists</option>
@@ -13195,14 +13384,14 @@ ${DESIGN_TOKENS_CSS}
         <option value="movie">Movies Only</option>
         <option value="series">Shows Only</option>
       </select>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
-      <span id="backfillTrendingStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <button type="button" class="admin-select u-cur-pointer" id="backfillTrendingBtn" data-act="runBackfillTrending">Backfill Existing Data</button>
+      <span id="backfillTrendingStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
     </div>
-    <p style="color:var(--muted); margin:0 0 12px; font-size:var(--font-size-sm);">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
-    <div style="margin:0 0 12px;">
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
-      <span id="migrateDayCountsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <p style="color:var(--muted); margin:6px 0 0; font-size:var(--font-size-sm);">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
+    <p class="u-c-v_muted u-m-0_0_12px u-fs-v_font_size_sm">Backfill only adds to the <strong>All Time</strong> window (there's no historical date to bucket existing data into 7/30/90-day windows) -- it seeds counts from Watch History and Custom Lists that already existed before this feature shipped. Safe to run more than once; it only adds, never resets anything. Processes accounts a few at a time, so it may take a minute for larger sites.</p>
+    <div class="u-m-0_0_12px">
+      <button type="button" class="admin-select u-cur-pointer" id="migrateDayCountsBtn" data-act="runMigrateDayCounts">Migrate Historical Day Counts</button>
+      <span id="migrateDayCountsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <p class="u-c-v_muted u-m-6px_0_0 u-fs-v_font_size_sm">One-time migration for the switch from one KV key per day to one JSON blob per title -- reads every old per-day count still sitting in KV and folds it into the new format, so 7/30/90-day windows reflect activity from before that switch instead of only counting forward from it. Safe to run more than once (adds, never subtracts); old keys are deleted once folded in, so re-running just confirms there's nothing left. Also covers the Search &amp; Queries leaderboard.</p>
     </div>
     <div class="table-wrap">
       <table>
@@ -13213,8 +13402,8 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="search">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
-    <div style="margin:12px 0;">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Anonymous queries and search terms users have entered in the Discover and Search tabs.</p>
+    <div class="u-m-12px_0">
       <select class="admin-select" id="searchWindowSelect" data-act="loadSearchData">
         <option value="today">Today</option>
         <option value="7" selected>Last 7 Days</option>
@@ -13232,8 +13421,8 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="catalogs_lists">
-    <h2 style="margin-top:0;">Most Installed Curated &amp; Provider Catalogs</h2>
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Which built-in charts and provider catalogs users add to their Stremio configuration.</p>
+    <h2 class="u-mt-0">Most Installed Curated &amp; Provider Catalogs</h2>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Which built-in charts and provider catalogs users add to their Stremio configuration.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Catalog / Chart Name</th><th>Times Installed</th></tr></thead>
@@ -13241,8 +13430,8 @@ ${DESIGN_TOKENS_CSS}
       </table>
     </div>
 
-    <h2 style="margin-top:28px;">Top Community &amp; Creator Lists</h2>
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Ranked by community engagement (likes and list copies/imports).</p>
+    <h2 class="u-mt-28px">Top Community &amp; Creator Lists</h2>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Ranked by community engagement (likes and list copies/imports).</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>List Name</th><th>Creator</th><th>Type</th><th>Items</th><th>Likes</th><th>Copies</th></tr></thead>
@@ -13252,7 +13441,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="audience">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Audience viewing breakdown derived from Stremio stream playback pings.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Audience viewing breakdown derived from Stremio stream playback pings.</p>
     
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value" id="audienceTotalPlays">0</div><div class="stat-label">Total streams tracked</div></div>
@@ -13261,7 +13450,7 @@ ${DESIGN_TOKENS_CSS}
       <div class="stat-card"><div class="stat-value" id="audienceEpisodePlays">0</div><div class="stat-label">Episode plays</div></div>
     </div>
 
-    <h2 style="margin-top:20px;">Top Watched Genres</h2>
+    <h2 class="u-mt-20px">Top Watched Genres</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Genre</th><th>Stream Count</th></tr></thead>
@@ -13269,7 +13458,7 @@ ${DESIGN_TOKENS_CSS}
       </table>
     </div>
 
-    <h2 style="margin-top:28px;">Release Era / Decades</h2>
+    <h2 class="u-mt-28px">Release Era / Decades</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Release Era</th><th>Stream Count</th></tr></thead>
@@ -13279,10 +13468,10 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="feedback">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Bug reports, improvement requests, and ideas submitted from Settings &gt; Feedback, newest first.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Bug reports, improvement requests, and ideas submitted from Settings &gt; Feedback, newest first.</p>
     <div class="feedback-card">
-      <div style="font-weight:600; margin-bottom:8px;">Log something yourself</div>
-      <select class="admin-select" id="newFeedbackCategory" style="margin-bottom:8px;">
+      <div class="u-fw-600 u-mb-8px">Log something yourself</div>
+      <select class="admin-select u-mb-8px" id="newFeedbackCategory">
         <option value="bug" selected>Bug</option>
         <option value="improvement">Improvement</option>
         <option value="idea">Idea</option>
@@ -13290,8 +13479,8 @@ ${DESIGN_TOKENS_CSS}
       </select>
       <textarea id="newFeedbackMessage" placeholder="What did you find?" style="width:100%; min-height:70px; box-sizing:border-box; padding:10px 12px; border-radius:var(--radius-sm); border:1px solid rgba(0,0,0,0.15); font-family:inherit; font-size:var(--font-size-base); resize:vertical;"></textarea>
       <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
-        <span id="newFeedbackStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+        <button type="button" class="admin-select u-cur-pointer" id="newFeedbackSubmitBtn" data-act="submitAdminFeedback">Add to list</button>
+        <span id="newFeedbackStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
     </div>
     <div id="feedbackList">Loading\u2026</div>
@@ -13299,9 +13488,9 @@ ${DESIGN_TOKENS_CSS}
 
   <!-- Edit Feedback Modal -->
   <div id="editFeedbackModal" class="modal-overlay" style="display:none;">
-    <div class="modal-card" style="max-width:500px;">
+    <div class="modal-card u-maxw-500px">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="margin:0; font-size:var(--font-size-lg); font-weight:700; color:var(--text);">Edit Feedback</h3>
+        <h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-c-v_text">Edit Feedback</h3>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeEditFeedbackModal">&#x2715;</button>
       </div>
       <input type="hidden" id="editFeedbackId">
@@ -13322,7 +13511,7 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="apiusage">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">Requests made using this Worker's own shared API keys (the fallback used whenever a visitor hasn't supplied their own) -- not counting anyone's personal keys, which only they can rate-limit. Watch these against each provider's limit if catalogs start coming back empty or slow.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Requests made using this Worker's own shared API keys (the fallback used whenever a visitor hasn't supplied their own) -- not counting anyone's personal keys, which only they can rate-limit. Watch these against each provider's limit if catalogs start coming back empty or slow.</p>
     <div class="table-wrap">
       <table>
         <tr><th>Key</th><th>Last 24h</th><th>Last 7 days</th><th>Last 30 days</th><th>Provider limit</th></tr>
@@ -13333,36 +13522,36 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="netflixpreview">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Find a provider's id</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Find a provider's id</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
       <div style="display:flex; gap:8px; align-items:center;">
-        <input type="text" id="providerLookupQueryInput" class="admin-select" style="margin-right:0; flex:1; max-width:220px;" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
+        <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
         <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
-        <span id="providerLookupStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+        <span id="providerLookupStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
-      <div id="providerLookupResults" style="margin-top:10px;"></div>
+      <div id="providerLookupResults" class="u-mt-10px"></div>
     </div>
 
     <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
-      <label style="font-size:var(--font-size-sm); color:var(--muted);">Provider id
+      <label class="u-fs-v_font_size_sm u-c-v_muted">Provider id
         <input type="text" id="netflixPreviewProviderIdInput" class="admin-select" style="margin-right:0; width:60px;" value="8" placeholder="8">
       </label>
-      <label style="font-size:var(--font-size-sm); color:var(--muted);">Region
+      <label class="u-fs-v_font_size_sm u-c-v_muted">Region
         <input type="text" id="netflixPreviewRegionInput" class="admin-select" style="margin-right:0; width:70px; text-transform:uppercase;" value="US" maxlength="2" placeholder="US">
       </label>
       <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
-      <span id="netflixPreviewStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+      <span id="netflixPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
     </div>
     <div id="netflixPreviewMovies"></div>
-    <div id="netflixPreviewShows" style="margin-top:28px;"></div>
+    <div id="netflixPreviewShows" class="u-mt-28px"></div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
+    <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
       <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:var(--font-size-base); margin-bottom:14px;">
         <input type="checkbox" id="supportGoalEnabled"> Show the strip on the site
       </label>
@@ -13372,47 +13561,47 @@ ${DESIGN_TOKENS_CSS}
       <label style="display:block; font-size:var(--font-size-sm); color:var(--muted); margin-bottom:6px;">Given so far this month (US dollars)
         <input type="number" id="supportGoalRaised" class="admin-select" min="0" step="0.01" style="display:block; margin:4px 0 0; width:160px;" placeholder="0">
       </label>
-      <div style="font-size:var(--font-size-sm); color:var(--muted); margin-bottom:14px;">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
-        <span id="supportGoalStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+        <span id="supportGoalStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
     </div>
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px; max-width:520px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Automatic totals from Ko-fi</div>
-      <ol style="margin:0 0 12px 18px; padding:0; font-size:var(--font-size-sm); color:var(--muted); line-height:1.5;">
+    <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Automatic totals from Ko-fi</div>
+      <ol class="u-m-0_0_12px_18px u-p-0 u-fs-v_font_size_sm u-c-v_muted u-lh-1_5">
         <li>In Ko-fi, go to <strong>Settings &rarr; API &rarr; Webhooks</strong> and paste this as the Webhook URL, then press Update:
-          <div><code id="supportGoalWebhookUrl" style="user-select:all;"></code></div></li>
+          <div><code id="supportGoalWebhookUrl" class="u-us-all"></code></div></li>
         <li>Copy Ko-fi's <strong>verification token</strong> and add it to this Worker as a secret named <code>KOFI_VERIFICATION_TOKEN</code> (Cloudflare dashboard &rarr; Worker &rarr; Settings &rarr; Variables and Secrets).</li>
         <li>Use Ko-fi's <strong>Send a test</strong>. It shows up below.</li>
       </ol>
-      <div style="font-size:var(--font-size-sm);">Token: <span id="supportGoalTokenState" style="color:var(--muted);">checking&hellip;</span></div>
-      <div style="font-size:var(--font-size-sm); margin-top:4px;">Last payment counted: <span id="supportGoalLastPayment" style="color:var(--muted);">none yet</span></div>
-      <div style="font-size:var(--font-size-xs); color:var(--muted); margin-top:10px;">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
+      <div class="u-fs-v_font_size_sm">Token: <span id="supportGoalTokenState" class="u-c-v_muted">checking&hellip;</span></div>
+      <div class="u-fs-v_font_size_sm u-mt-4px">Last payment counted: <span id="supportGoalLastPayment" class="u-c-v_muted">none yet</span></div>
+      <div class="u-fs-v_font_size_xs u-c-v_muted u-mt-10px">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
     </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="newonstreaming">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
-    <p style="color:var(--muted); margin:0 0 16px; font-size:var(--font-size-sm);">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>New on Streaming</strong> catalog &mdash; what actually arrived on a streaming service, newest first, with a show pushed back to the top the day a new episode airs. It is a real catalog row right now and can be installed into Stremio or Nuvio from the URLs below; it is in the My Lists Addon Charts section of Quick Add and in Discover.</p>
+    <p class="u-c-v_muted u-m-0_0_16px u-fs-v_font_size_sm">Powered by RapidAPI's <strong>Streaming Availability API</strong> (/changes) to capture the exact date titles and new episodes are added to streaming services (not release dates), with new arrivals first and recent episodes bumping shows to the top within a rolling 30-day window.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Sweep status</div>
-      <div id="nosStatus" style="font-size:var(--font-size-sm); color:var(--muted);">Loading&hellip;</div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Sweep status</div>
+      <div id="nosStatus" class="u-fs-v_font_size_sm u-c-v_muted">Loading&hellip;</div>
       <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="secondary lc-btn" data-act="loadNewOnStreaming">Refresh</button>
-        <label style="font-size:var(--font-size-sm); color:var(--muted);">Pages
+        <label class="u-fs-v_font_size_sm u-c-v_muted">Pages
           <input type="number" id="nosSweepUnits" class="admin-select" style="margin-right:0; width:70px;" value="30" min="1" max="100">
         </label>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
+        <button type="button" class="admin-select u-cur-pointer" id="nosSweepBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([false])}">Run a sweep now</button>
         <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-warn-text); border-color:rgba(255,149,0,0.4);" id="nosResetBtn" data-act="runNewOnStreamingSweep" data-act-args="${adminActArgs([true])}">Clear &amp; pull fresh data</button>
-        <span id="nosSweepStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+        <span id="nosSweepStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
-      <p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
+      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Each page fetches up to 25 changes from RapidAPI. Automated sweeps run every 6 hours via cron and read each change stream (new titles, new seasons, new episodes, removals) oldest-first from where the last sweep stopped, so a busy day is finished on the next run instead of being cut off. The per-run budget is the month&#39;s remaining quota spread over the runs left; a safety cap halts sweeps at 950 calls to ensure zero overages. "Run a sweep now" continues the same streams with the page count given. Older titles (&gt;30 days) are pruned automatically each sweep.</p>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Rows in 30-day window</div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Rows in 30-day window</div>
       <div class="table-wrap">
         <table>
           <tr><th>Service</th><th>Type</th><th>Titles</th><th>Removed</th><th>Newest Arrival</th></tr>
@@ -13421,9 +13610,9 @@ ${DESIGN_TOKENS_CSS}
       </div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Add / Sync Title to Catalog</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Add / Sync Title to Catalog</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Directly add or bump any movie or series in New on Streaming by IMDb ID (e.g. <code>tt45851964</code>), TMDB ID (e.g. <code>324931</code>), or title name.</p>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input type="text" id="nosAddTitleInput" class="admin-select" placeholder="Title, IMDb ID (tt...) or TMDB ID" style="width:240px;">
         <select class="admin-select" id="nosAddServiceSelect">
@@ -13441,14 +13630,14 @@ ${DESIGN_TOKENS_CSS}
           <option value="movie">Movie</option>
         </select>
         <input type="date" id="nosAddDateInput" class="admin-select" style="width:130px;" title="Optional arrival date (defaults to episode air date or today)">
-        <button type="button" class="admin-select" style="cursor:pointer;" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
-        <span id="nosAddStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+        <button type="button" class="admin-select u-cur-pointer" id="nosAddBtn" data-act="nosAddTitle">Add / Sync Title</button>
+        <span id="nosAddStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Preview the catalog</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Preview the catalog</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Read through the same code that serves the row to Stremio, so this is the actual shelf and not a second implementation of it. Order is always most recently arrived first.</p>
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
         <select class="admin-select" id="nosPreviewType" data-act="nosResetAndPreview">
           <option value="all" selected>All (Movies &amp; Shows)</option>
@@ -13461,28 +13650,28 @@ ${DESIGN_TOKENS_CSS}
         <input type="text" id="nosPreviewSearch" class="admin-select" placeholder="Filter by title or ID…" style="width:180px;" data-act="onNosPreviewSearchInput" data-act-on="input">
         <button type="button" class="secondary lc-btn" data-act="nosResetAndPreview">Load preview</button>
         <button type="button" class="secondary lc-btn" id="nosPrevBtn" data-act="nosChangePage" data-act-args="${adminActArgs([-1])}" disabled>&larr; Prev</button>
-        <span id="nosPageLabel" style="font-size:var(--font-size-sm); color:var(--muted); font-weight:600;">Page 1</span>
+        <span id="nosPageLabel" class="u-fs-v_font_size_sm u-c-v_muted u-fw-600">Page 1</span>
         <button type="button" class="secondary lc-btn" id="nosNextBtn" data-act="nosChangePage" data-act-args="${adminActArgs([1])}" disabled>Next &rarr;</button>
-        <span id="nosPreviewStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+        <span id="nosPreviewStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
-      <div style="margin-bottom:12px; font-size:var(--font-size-sm); color:var(--muted);">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
+      <div class="u-mb-12px u-fs-v_font_size_sm u-c-v_muted">Catalog URL: <code id="nosPreviewSource">tmdb:new-on-streaming</code> &mdash; paste this into <strong>Catalogs &rarr; + New Catalog</strong> on the main site to install this exact row into Stremio or Nuvio while it is still hidden.</div>
       <div id="nosPreviewResults"></div>
     </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="channelpresets">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The shared pool behind every <strong>Quick Add Popular Networks</strong> channel (up to 5,000 episodes per network, cached 24h under <code>channel:preset:v2:&lt;networkId&gt;</code>) &mdash; every visitor who Quick Adds the same network reads this same cache. A daily cron rotation keeps it warm automatically, but a cache built under an older version of the build code keeps serving its old shape until that rotation reaches it again, which can take a few hours. Clear or rebuild a network here to skip the wait.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="secondary lc-btn" data-act="loadChannelPresets">Refresh</button>
         <button type="button" class="secondary lc-btn" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.4);" id="cpClearAllBtn" data-act="clearAllChannelPresets">Clear all caches</button>
-        <span id="cpStatus" style="color:var(--muted); font-size:var(--font-size-sm);"></span>
+        <span id="cpStatus" class="u-c-v_muted u-fs-v_font_size_sm"></span>
       </div>
-      <p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
+      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Clearing never touches anyone's already-saved channels -- each saved row carries its own small item sample as a fallback, so a cleared cache just means the next Quick Add click (or the cron rotation) rebuilds it fresh instead of serving what was cached before.</p>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
+    <div class="panel u-m-0 u-p-14px_16px">
       <div class="table-wrap">
         <table>
           <tr><th>Network</th><th>Cached</th><th>Episodes</th><th>Built</th><th></th></tr>
@@ -13493,185 +13682,185 @@ ${DESIGN_TOKENS_CSS}
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="maintenance">
-    <p style="color:var(--muted); margin-top:0; font-size:var(--font-size-base);">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">D1 database: ${isD1Bound
-        ? '<span style="color:var(--color-success-text);">bound</span>'
-        : '<span style="color:var(--color-danger-text);">not bound (required)</span>'}</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">${isD1Bound
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">D1 database: ${isD1Bound
+        ? '<span class="u-c-v_color_success_text">bound</span>'
+        : '<span class="u-c-v_color_danger_text">not bound (required)</span>'}</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">${isD1Bound
         ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
         : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
-      <span id="migrateD1Status" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
+      <span id="migrateD1Status" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Unified accounts table (v2 identity)</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
-      <span id="migrateAccountsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Unified accounts table (v2 identity)</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
+      <span id="migrateAccountsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Install links: keys moving to encrypted storage</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
-      <span id="installsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <p style="color:var(--muted); margin:12px 0 8px; font-size:var(--font-size-sm);">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
-      <span id="installsRestoreStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Install links: keys moving to encrypted storage</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
+      <span id="installsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
+      <span id="installsRestoreStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Lists v2: copy existing lists</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
-      <span id="listsBackfillStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <div id="listsBackfillResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Lists v2: copy existing lists</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
+      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
+      <span id="listsBackfillStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <div id="listsBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Activity: copy watch history</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
-      <span id="activityBackfillStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
-      <div id="activityBackfillResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Activity: copy watch history</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
+      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
+      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
+      <span id="activityBackfillStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
+      <div id="activityBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Background jobs queue: ${isJobsBound
-        ? '<span style="color:var(--color-success-text);">bound</span>'
-        : '<span style="color:var(--muted);">not bound yet</span>'}</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
-      <span id="jobsPingStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
-      <p style="color:var(--muted); margin:12px 0 8px; font-size:var(--font-size-sm);">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
-      <span id="jobsStatusStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <div id="jobsStatusResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
-      <p style="color:var(--muted); margin:12px 0 8px; font-size:var(--font-size-sm);"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
-      <span id="shelfCompareStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <div id="shelfCompareResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted); white-space:pre-wrap; word-break:break-word;"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Background jobs queue: ${isJobsBound
+        ? '<span class="u-c-v_color_success_text">bound</span>'
+        : '<span class="u-c-v_muted">not bound yet</span>'}</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Background work moves onto the Cloudflare Queue <code>mylists-jobs</code>, which this Worker also reads (Phase 5). Setting it up: create the queues <code>mylists-jobs</code> and <code>mylists-jobs-dlq</code>, add this Worker as the consumer of <code>mylists-jobs</code> (batch size 25, 5 retries, dead-letter queue <code>mylists-jobs-dlq</code>), and bind <code>mylists-jobs</code> to this Worker as <code>JOBS</code>. See docs/OPERATIONS.md section 18. <strong>Send a test job</strong> puts one job on the queue and waits for this Worker to pick it up, which proves all three steps worked.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="jobsPingBtn" data-act="runJobsPing" ${isJobsBound ? '' : 'disabled'}>Send a test job</button>
+      <span id="jobsPingStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px">${isJobsBound ? '' : 'JOBS is not bound.'}</span>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Once the queue is bound, every cron tick only hands out the work that is due (the Continue Watching and Airing Next sweeps, New on Streaming, chart and poster warming, channel presets, housekeeping), and the queue does it. Without it, the tick does the work itself, as before. <strong>Check jobs</strong> shows when each one last ran. Needs migration 0016.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="jobsStatusBtn" data-act="runJobsStatus" ${isD1Bound ? '' : 'disabled'}>Check jobs</button>
+      <span id="jobsStatusStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <div id="jobsStatusResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Compare shelves now</strong> runs the whole Continue Watching and Airing Next comparison (<code>shelf.shadow</code>) from this page, a few minutes instead of the hourly job's 15 hours, and shows why each difference is there. Keep the page open until it says Done. It only reads.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
+      <span id="shelfCompareStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <div id="shelfCompareResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Database schema</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
-      <span id="schemaCheckStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <div id="schemaCheckResult" style="margin-top:10px;"></div>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Database schema</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Migrations are applied by hand and nothing records that it happened, so this Worker can end up running ahead of its own database. It degrades quietly when that happens rather than refusing to start &mdash; which is why this check exists. Run it after any deploy that shipped a new file under <code>migrations/</code>.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
+      <span id="schemaCheckStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <div id="schemaCheckResult" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Counts missing since 2 October</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
-      <span id="statsRecoveryStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <div id="statsRecoveryResult" style="margin-top:10px; font-size:var(--font-size-sm); color:var(--muted);"></div>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Counts missing since 2 October</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
+      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
+      <span id="statsRecoveryStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <div id="statsRecoveryResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Export old data to R2 (a copy)</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
-      <input type="text" id="kvExportPrefix" class="admin-select" placeholder="creator:" style="min-width:180px;">
-      <button type="button" class="admin-select" style="cursor:pointer;" id="kvExportBtn" data-act="runKvExport">Export</button>
-      <span id="kvExportStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Export old data to R2 (a copy)</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every KV key that starts with the text below into the <code>BLOBS</code> bucket, under <code>kv-archive/</code>, a batch at a time, then writes a <code>manifest.json</code> when the copy is complete. It deletes nothing. Type the prefix exactly, with no <code>*</code> (for example <code>stats:</code>). Deleting old data is not safe yet: see docs/CUTOVER.md.</p>
+      <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
+      <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
+      <span id="kvExportStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Public list directory &amp; search index</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
-      <span id="rebuildIndexStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Public list directory &amp; search index</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The public list directory and in-app search query D1 tables and the full-text search index (lists_fts). This button rebuilds the search index directly from creator_lists &mdash; useful after importing data or to recreate the index after a D1 database export.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="rebuildIndexBtn" data-act="runRebuildPublicIndex">Rebuild Search Index</button>
+      <span id="rebuildIndexStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Delete a creator&rsquo;s lists</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Removes specific lists belonging to one Creator Profile: the list itself, its likes, its place in that creator&rsquo;s order, and its directory entry. Use it for content a creator cannot or will not remove themselves. A slug whose list is already gone is still cleared from the directory, which is how you get rid of an entry that shows an item count but opens empty.</p>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Browse first: this reads the creator&rsquo;s actual stored records, including any the creator&rsquo;s own dashboard cannot see because they are missing from their display order &mdash; which is how an account ends up with dozens of copies of one list under slugs nobody could guess. Filter by name, select them all, then delete. Deleting also records the deletion on the account, so the creator&rsquo;s other signed-in browsers drop their copies instead of uploading them straight back.</p>
-      <p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="deleteListUserInput" class="admin-select" placeholder="Creator username" style="margin-right:6px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="creatorListsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Delete a creator&rsquo;s lists</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Removes specific lists belonging to one Creator Profile: the list itself, its likes, its place in that creator&rsquo;s order, and its directory entry. Use it for content a creator cannot or will not remove themselves. A slug whose list is already gone is still cleared from the directory, which is how you get rid of an entry that shows an item count but opens empty.</p>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Browse first: this reads the creator&rsquo;s actual stored records, including any the creator&rsquo;s own dashboard cannot see because they are missing from their display order &mdash; which is how an account ends up with dozens of copies of one list under slugs nobody could guess. Filter by name, select them all, then delete. Deleting also records the deletion on the account, so the creator&rsquo;s other signed-in browsers drop their copies instead of uploading them straight back.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> There is no backup of a deleted list. Prefer &ldquo;Rebuild Public List Index&rdquo; above first &mdash; if the lists are only phantom directory entries, that fixes them without deleting anything.</p>
+      <div class="row u-mb-8px">
+        <input type="text" id="deleteListUserInput" class="admin-select u-mr-6px" placeholder="Creator username">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseCreatorListsBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([true])}">Browse this creator&rsquo;s lists</button>
+        <button type="button" class="admin-select u-cur-pointer" id="browseCreatorListsMoreBtn" data-act="loadCreatorLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
+        <span id="creatorListsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
       </div>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="creatorListsFilterInput" class="admin-select" placeholder="Filter by name or slug (e.g. coming of age)" style="min-width:280px; margin-right:6px;" data-act="renderCreatorListsTable" data-act-on="input">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="selectShownListsBtn" data-act="selectShownCreatorLists">Select all shown</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="clearSelectedListsBtn" data-act="clearSelectedCreatorLists">Clear selection</button>
+      <div class="row u-mb-8px">
+        <input type="text" id="creatorListsFilterInput" class="admin-select u-minw-280px u-mr-6px" placeholder="Filter by name or slug (e.g. coming of age)" data-act="renderCreatorListsTable" data-act-on="input">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="selectShownListsBtn" data-act="selectShownCreatorLists">Select all shown</button>
+        <button type="button" class="admin-select u-cur-pointer" id="clearSelectedListsBtn" data-act="clearSelectedCreatorLists">Clear selection</button>
       </div>
-      <div id="creatorListsResults" style="margin-bottom:8px; max-height:340px; overflow:auto;"></div>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="deleteListSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
+      <div id="creatorListsResults" class="u-mb-8px u-maxh-340px u-ov-auto"></div>
+      <div class="row u-mb-8px">
+        <input type="text" id="deleteListSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
-      <span id="deleteListStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
+      <span id="deleteListStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Anonymously published lists</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
-      <p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
-      <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="anonListStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Anonymously published lists</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
+      <div class="row u-mb-8px">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
+        <button type="button" class="admin-select u-cur-pointer" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
+        <span id="anonListStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
       </div>
-      <div id="anonListResults" style="margin-bottom:8px;"></div>
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="deleteAnonSlugsInput" class="admin-select" placeholder="Slugs, comma or newline separated" style="min-width:320px;">
+      <div id="anonListResults" class="u-mb-8px"></div>
+      <div class="row u-mb-8px">
+        <input type="text" id="deleteAnonSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
       </div>
-      <button type="button" class="admin-select" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
-      <span id="deleteAnonStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
+      <span id="deleteAnonStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
     </div>
 
-    <div class="admin-card" style="margin-top:12px;">
-      <h3 style="margin:0 0 6px; font-size:var(--font-size-base);">Published channels</h3>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">
+    <div class="admin-card u-mt-12px">
+      <h3 class="u-m-0_0_6px u-fs-v_font_size_base">Published channels</h3>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">
         The Explore Channels directory. Publishing a channel is owner-only, so without this panel
         a channel could only be withdrawn by whoever put it there.
         <strong>Unlist</strong> removes it from the directory and leaves existing share links working &mdash;
         the same thing its owner&rsquo;s own Unpublish does. <strong>Delete</strong> removes the stored channel,
         so every link to it stops working.
       </p>
-      <div class="row" style="margin-bottom:8px;">
-        <button type="button" class="admin-select" style="cursor:pointer; margin-right:6px;" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
-        <button type="button" class="admin-select" style="cursor:pointer;" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
-        <span id="publishedChannelStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
+      <div class="row u-mb-8px">
+        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseChannelsBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['listed'])}">Browse the directory</button>
+        <button type="button" class="admin-select u-cur-pointer" id="browseChannelsAllBtn" data-act="loadPublishedChannels" data-act-args="${adminActArgs(['all'])}">Browse every stored channel</button>
+        <span id="publishedChannelStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
       </div>
       <div id="publishedChannelResults"></div>
     </div>
 
-    <div class="panel" style="margin:0 0 18px; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Signed-in admin browsers</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
-      <button type="button" class="admin-select" style="cursor:pointer; margin-left:6px; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
-      <span id="adminSessionsStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <div id="adminSessionsResult" style="margin-top:10px;"></div>
+    <div class="panel u-m-0_0_18px u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Signed-in admin browsers</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Every browser signed in to this dashboard, newest activity first, with the address it signed in from. Before P7-2 there was no such list: the cookie was self-contained, so signing anyone out meant changing <code>ADMIN_KEY</code> and signing everyone out. <strong>Sign out</strong> ends one browser's session on its own &mdash; it stops working on the next request, not in seven days. Needs migration 0018. If you are signed in with Cloudflare Access, your browser may appear here too; closing its row does not stop Access from letting you back in.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="adminSessionsBtn" data-act="loadAdminSessions">Load</button>
+      <button type="button" class="admin-select u-cur-pointer u-ml-6px u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="adminSessionsRevokeAllBtn" data-act="revokeAllAdminSessions">Sign out every browser</button>
+      <span id="adminSessionsStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <div id="adminSessionsResult" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin:0; padding:14px 16px;">
-      <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:8px;">Audit log</div>
-      <p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
-      <button type="button" class="admin-select" style="cursor:pointer;" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
-      <span id="adminAuditStatus" style="color:var(--muted); font-size:var(--font-size-sm); margin-left:6px;"></span>
-      <div id="adminAuditResult" style="margin-top:10px;"></div>
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Audit log</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">What this dashboard has been used for: sign-ins, sign-outs, and every action that changes something &mdash; resetting a creator&rsquo;s key, deleting a list or a channel, running a migration, replying to feedback. Each row is written as the request is authorized, with the address it came from and the identifying details it named (never a key or a token). Newest first, and read-only: nothing in this dashboard can edit it. Needs migration 0018.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="adminAuditBtn" data-act="loadAdminAudit">Load recent activity</button>
+      <span id="adminAuditStatus" class="u-c-v_muted u-fs-v_font_size_sm u-ml-6px"></span>
+      <div id="adminAuditResult" class="u-mt-10px"></div>
     </div>
   </div>
 
   <!-- A form, not a link: logging out is a state change, and /admin/logout
        answers POST only now. See that route for why. -->
-  <form method="POST" action="/admin/logout" style="margin-top:24px;">
+  <form method="POST" action="/admin/logout" class="u-mt-24px">
     <button type="submit" class="linklike">Log out</button>
   </form>
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
@@ -13859,9 +14048,9 @@ ${DESIGN_TOKENS_CSS}
       overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999;';
       overlay.innerHTML =
         '<div style="background:var(--color-on-brand); border-radius:var(--radius-md); padding:24px; max-width:380px; width:90%;">' +
-          '<h3 style="margin-top:0;">New key for ' + escapeHtmlAdmin(displayName) + '</h3>' +
-          '<p style="color:var(--muted); font-size:var(--font-size-base);">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
-          '<div id="resetKeyDisplay" style="font-family:monospace; font-size:var(--font-size-lg); background:#F2F2F7; border-radius:var(--radius-sm); padding:10px; text-align:center; margin:12px 0; user-select:all;">' + escapeHtmlAdmin(creatorKey) + '</div>' +
+          '<h3 class="u-mt-0">New key for ' + escapeHtmlAdmin(displayName) + '</h3>' +
+          '<p class="u-c-v_muted u-fs-v_font_size_base">This is shown once. Copy it now and send it to the creator yourself -- their old key no longer works.</p>' +
+          '<div id="resetKeyDisplay" class="u-ff-monospace u-fs-v_font_size_lg u-bg-F2F2F7 u-br-v_radius_sm u-p-10px u-ta-center u-m-12px_0 u-us-all">' + escapeHtmlAdmin(creatorKey) + '</div>' +
           '<div style="display:flex; gap:8px;">' +
             '<button type="button" class="lc-btn secondary" style="flex:1;" data-act="copyResetKey" data-act-args="' + adminActAttr(['@self', creatorKey]) + '">Copy Key</button>' +
             '<button type="button" class="lc-btn" style="flex:1;" data-act="closeResetKeyOverlay">Done</button>' +
@@ -13919,24 +14108,24 @@ ${DESIGN_TOKENS_CSS}
           return;
         }
         if (data.unavailable) {
-          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">No session list yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, this dashboard signs in with the older cookie, which cannot be listed or revoked on its own.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">No session list yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, this dashboard signs in with the older cookie, which cannot be listed or revoked on its own.</p>';
           return;
         }
         if (!data.sessions.length) {
-          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">No signed-in browsers.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">No signed-in browsers.</p>';
           return;
         }
         const rows = data.sessions.map((s) => {
-          const current = s.id === data.current ? ' <span style="color:var(--color-success-text);">(this browser)</span>' : '';
-          const state = s.revokedAt ? '<span style="color:var(--color-danger-text);">signed out</span>' : (s.expired ? '<span style="color:var(--color-warn-text);">expired</span>' : '<span style="color:var(--color-success-text);">live</span>');
+          const current = s.id === data.current ? ' <span class="u-c-v_color_success_text">(this browser)</span>' : '';
+          const state = s.revokedAt ? '<span class="u-c-v_color_danger_text">signed out</span>' : (s.expired ? '<span class="u-c-v_color_warn_text">expired</span>' : '<span class="u-c-v_color_success_text">live</span>');
           return '<tr>' +
             '<td>' + escapeHtmlAdmin(s.actor) + current + '</td>' +
             '<td>' + state + '</td>' +
             '<td>' + escapeHtmlAdmin(adminWhen(s.lastSeenAt)) + '</td>' +
             '<td>' + escapeHtmlAdmin(adminWhen(s.expiresAt)) + '</td>' +
             '<td>' + escapeHtmlAdmin(s.ip || '\u2014') + '</td>' +
-            '<td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtmlAdmin(s.userAgent || '\u2014') + '</td>' +
-            '<td>' + (s.revokedAt || s.expired ? '' : '<button type="button" class="admin-select" style="cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);" data-act="revokeAdminSession" data-act-args="' + adminActAttr([s.id]) + '">Sign out</button>') + '</td>' +
+            '<td class="u-maxw-220px u-ov-hidden u-to-ellipsis u-ws-nowrap">' + escapeHtmlAdmin(s.userAgent || '\u2014') + '</td>' +
+            '<td>' + (s.revokedAt || s.expired ? '' : '<button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" data-act="revokeAdminSession" data-act-args="' + adminActAttr([s.id]) + '">Sign out</button>') + '</td>' +
             '</tr>';
         }).join('');
         box.innerHTML = '<table><tr><th>Signed in as</th><th>State</th><th>Last seen</th><th>Expires</th><th>IP</th><th>Browser</th><th></th></tr>' + rows + '</table>';
@@ -14004,11 +14193,11 @@ ${DESIGN_TOKENS_CSS}
           return;
         }
         if (data.unavailable) {
-          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">No log yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, admin actions are not recorded.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">No log yet &mdash; apply migration 0018 (<code>migrations/0018_admin_sessions_audit.sql</code>). Until then, admin actions are not recorded.</p>';
           return;
         }
         if (!data.entries.length) {
-          box.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm); margin:0;">Nothing recorded yet. Signing out and back in writes the first two rows.</p>';
+          box.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm u-m-0">Nothing recorded yet. Signing out and back in writes the first two rows.</p>';
           return;
         }
         const rows = data.entries.map((e) =>
@@ -14017,7 +14206,7 @@ ${DESIGN_TOKENS_CSS}
           '<td>' + escapeHtmlAdmin(e.actor) + '</td>' +
           '<td><strong>' + escapeHtmlAdmin(e.action) + '</strong></td>' +
           '<td>' + escapeHtmlAdmin(e.target || '\u2014') + '</td>' +
-          '<td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtmlAdmin(e.detail || '') + '">' + escapeHtmlAdmin(e.detail || '\u2014') + '</td>' +
+          '<td class="u-maxw-320px u-ov-hidden u-to-ellipsis u-ws-nowrap" title="' + escapeHtmlAdmin(e.detail || '') + '">' + escapeHtmlAdmin(e.detail || '\u2014') + '</td>' +
           '<td>' + escapeHtmlAdmin(e.ip || '\u2014') + '</td>' +
           '</tr>'
         ).join('');
@@ -14787,7 +14976,7 @@ ${DESIGN_TOKENS_CSS}
       }
       const shown = shownCreatorLists();
       if (!shown.length) {
-        results.innerHTML = '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">No list matches that filter.</p>';
+        results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">No list matches that filter.</p>';
       } else {
         const rows = shown.map(function (L) {
           const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
@@ -14795,22 +14984,22 @@ ${DESIGN_TOKENS_CSS}
           // order entry was lost. These are the ones that get re-uploaded and
           // re-duplicated, so they are worth calling out rather than hiding.
           const orphan = L.inOrder ? '' :
-            '<span title="not in this creator\\'s display order" style="color:var(--color-warn-text);"> orphan</span>';
+            '<span title="not in this creator\\'s display order" class="u-c-v_color_warn_text"> orphan</span>';
           return '<tr>' +
-            '<td style="padding:4px 8px 4px 0;"><button type="button" class="admin-select" data-creator-slug="' +
-              escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs);">Select</button></td>' +
-            '<td style="padding:4px 8px 4px 0;"><code>' + escapeHtmlAdmin(L.slug) + '</code>' + orphan + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(L.name) + '</td>' +
-            '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.itemCount) || 0) + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + vis + '</td>' +
-            '<td style="padding:4px 0;"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
+            '<td class="u-p-4px_8px_4px_0"><button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs" data-creator-slug="' +
+              escapeHtmlAdmin(L.slug) + '">Select</button></td>' +
+            '<td class="u-p-4px_8px_4px_0"><code>' + escapeHtmlAdmin(L.slug) + '</code>' + orphan + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(L.name) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.itemCount) || 0) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + vis + '</td>' +
+            '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
             '</tr>';
         }).join('');
         results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
-          '<thead><tr style="color:var(--muted); text-align:left;">' +
-          '<th></th><th style="padding-right:8px;">Slug</th><th style="padding-right:8px;">Name</th>' +
-          '<th style="padding-right:8px; text-align:right;">Items</th>' +
-          '<th style="padding-right:8px;">Visibility</th><th></th>' +
+          '<thead><tr class="u-c-v_muted u-ta-left">' +
+          '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
+          '<th class="u-pr-8px u-ta-right">Items</th>' +
+          '<th class="u-pr-8px">Visibility</th><th></th>' +
           '</tr></thead><tbody>' + rows + '</tbody></table>';
       }
       const q = creatorListsFilterText();
@@ -14860,7 +15049,7 @@ ${DESIGN_TOKENS_CSS}
         renderCreatorListsTable();
         if (!creatorListsLoaded.length) {
           document.getElementById('creatorListsResults').innerHTML =
-            '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">This creator has no stored lists.</p>';
+            '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">This creator has no stored lists.</p>';
         }
       } catch (e) {
         status.textContent = 'Failed: network error.';
@@ -15017,28 +15206,28 @@ ${DESIGN_TOKENS_CSS}
         const lists = data.lists || [];
         anonListCount += lists.length;
         if (!anonListCount) {
-          results.innerHTML = '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">No anonymously published lists.</p>';
+          results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">No anonymously published lists.</p>';
         } else {
           const rows = lists.map(function (L) {
             const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
             return '<tr>' +
-              '<td style="padding:4px 8px 4px 0;"><button type="button" class="admin-select" data-anon-slug="' +
-                escapeHtmlAdmin(L.slug) + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs);">Select</button></td>' +
-              '<td style="padding:4px 8px 4px 0;"><code>' + escapeHtmlAdmin(L.slug) + '</code></td>' +
-              '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(L.name) + '</td>' +
-              '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.itemCount) || 0) + '</td>' +
-              '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(L.likes) || 0) + '</td>' +
-              '<td style="padding:4px 8px 4px 0;">' + vis + '</td>' +
-              '<td style="padding:4px 0;"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
+              '<td class="u-p-4px_8px_4px_0"><button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs" data-anon-slug="' +
+                escapeHtmlAdmin(L.slug) + '">Select</button></td>' +
+              '<td class="u-p-4px_8px_4px_0"><code>' + escapeHtmlAdmin(L.slug) + '</code></td>' +
+              '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(L.name) + '</td>' +
+              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.itemCount) || 0) + '</td>' +
+              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.likes) || 0) + '</td>' +
+              '<td class="u-p-4px_8px_4px_0">' + vis + '</td>' +
+              '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
               '</tr>';
           }).join('');
           if (reset || !results.querySelector('tbody')) {
             results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
-              '<thead><tr style="color:var(--muted); text-align:left;">' +
-              '<th></th><th style="padding-right:8px;">Slug</th><th style="padding-right:8px;">Name</th>' +
-              '<th style="padding-right:8px; text-align:right;">Items</th>' +
-              '<th style="padding-right:8px; text-align:right;">Likes</th>' +
-              '<th style="padding-right:8px;">Visibility</th><th></th>' +
+              '<thead><tr class="u-c-v_muted u-ta-left">' +
+              '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
+              '<th class="u-pr-8px u-ta-right">Items</th>' +
+              '<th class="u-pr-8px u-ta-right">Likes</th>' +
+              '<th class="u-pr-8px">Visibility</th><th></th>' +
               '</tr></thead><tbody>' + rows + '</tbody></table>';
           } else {
             results.querySelector('tbody').insertAdjacentHTML('beforeend', rows);
@@ -15078,7 +15267,7 @@ ${DESIGN_TOKENS_CSS}
         }
         const channels = data.channels || [];
         if (!channels.length) {
-          results.innerHTML = '<p style="color:var(--muted); margin:0; font-size:var(--font-size-sm);">Nothing to show.</p>';
+          results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">Nothing to show.</p>';
           status.textContent = '';
           if (btn) btn.disabled = false;
           return;
@@ -15086,26 +15275,26 @@ ${DESIGN_TOKENS_CSS}
         const rows = channels.map(function (C) {
           const code = escapeHtmlAdmin(C.code);
           return '<tr data-channel-row="' + code + '">' +
-            '<td style="padding:4px 8px 4px 0;"><code>' + code + '</code></td>' +
-            '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(C.name || '') + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + escapeHtmlAdmin(C.owner || '\u2014') + '</td>' +
-            '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(C.itemCount) || 0) + '</td>' +
-            '<td style="padding:4px 8px 4px 0; text-align:right;">' + (Number(C.likes) || 0) + '</td>' +
-            '<td style="padding:4px 8px 4px 0;">' + (C.listed ? 'listed' : 'unlisted') + '</td>' +
-            '<td style="padding:4px 8px 4px 0;"><a href="' + escapeHtmlAdmin(C.url || '') + '" target="_blank" rel="noopener">open</a></td>' +
-            '<td style="padding:4px 0; white-space:nowrap;">' +
-              '<button type="button" class="admin-select" data-channel-action="unlist" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs); margin-right:4px;">Unlist</button>' +
-              '<button type="button" class="admin-select" data-channel-action="delete" data-code="' + code + '" style="cursor:pointer; padding:2px 8px; font-size:var(--font-size-xs); color:var(--color-danger-text); border-color:rgba(255,59,48,0.35);">Delete</button>' +
+            '<td class="u-p-4px_8px_4px_0"><code>' + code + '</code></td>' +
+            '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(C.name || '') + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(C.owner || '\u2014') + '</td>' +
+            '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(C.itemCount) || 0) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(C.likes) || 0) + '</td>' +
+            '<td class="u-p-4px_8px_4px_0">' + (C.listed ? 'listed' : 'unlisted') + '</td>' +
+            '<td class="u-p-4px_8px_4px_0"><a href="' + escapeHtmlAdmin(C.url || '') + '" target="_blank" rel="noopener">open</a></td>' +
+            '<td class="u-p-4px_0 u-ws-nowrap">' +
+              '<button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs u-mr-4px" data-channel-action="unlist" data-code="' + code + '">Unlist</button>' +
+              '<button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" data-channel-action="delete" data-code="' + code + '">Delete</button>' +
             '</td>' +
             '</tr>';
         }).join('');
         results.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
-          '<thead><tr style="color:var(--muted); text-align:left;">' +
-          '<th style="padding-right:8px;">Code</th><th style="padding-right:8px;">Name</th>' +
-          '<th style="padding-right:8px;">Owner</th>' +
-          '<th style="padding-right:8px; text-align:right;">Items</th>' +
-          '<th style="padding-right:8px; text-align:right;">Likes</th>' +
-          '<th style="padding-right:8px;">State</th><th></th><th></th>' +
+          '<thead><tr class="u-c-v_muted u-ta-left">' +
+          '<th class="u-pr-8px">Code</th><th class="u-pr-8px">Name</th>' +
+          '<th class="u-pr-8px">Owner</th>' +
+          '<th class="u-pr-8px u-ta-right">Items</th>' +
+          '<th class="u-pr-8px u-ta-right">Likes</th>' +
+          '<th class="u-pr-8px">State</th><th></th><th></th>' +
           '</tr></thead><tbody>' + rows + '</tbody></table>';
         status.textContent = channels.length + ' channel' + (channels.length === 1 ? '' : 's') + ' shown' +
           (data.done ? '. That is all of them.' : ', more available.');
@@ -15350,22 +15539,22 @@ ${DESIGN_TOKENS_CSS}
         if (idx) {
           var pct = idx.max ? Math.round((idx.entries / idx.max) * 100) : 0;
           indexNote = idx.truncated
-            ? '<p style="color:var(--color-warn-text); margin:10px 0 0; font-size:var(--font-size-sm);"><strong>The public list directory is full.</strong> ' +
+            ? '<p class="u-c-v_color_warn_text u-m-10px_0_0 u-fs-v_font_size_sm"><strong>The public list directory is full.</strong> ' +
               'It holds ' + idx.entries.toLocaleString() + ' of a maximum ' + idx.max.toLocaleString() +
               ' entries, so the least-liked lists past that point are no longer being advertised. ' +
               'They are still reachable by their own URL.</p>'
-            : '<p style="color:var(--muted); margin:10px 0 0; font-size:var(--font-size-sm);">Public list directory: ' +
+            : '<p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Public list directory: ' +
               idx.entries.toLocaleString() + ' of ' + idx.max.toLocaleString() + ' entries (' + pct + '%).</p>';
         }
         if (!data.bound) {
           status.textContent = '';
-          out.innerHTML = '<p style="color:var(--color-danger-text); margin:0; font-size:var(--font-size-sm);"><strong>Warning: No D1 database is bound.</strong> D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> in Cloudflare Settings &rarr; Bindings.</p>' + indexNote;
+          out.innerHTML = '<p class="u-c-v_color_danger_text u-m-0 u-fs-v_font_size_sm"><strong>Warning: No D1 database is bound.</strong> D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> in Cloudflare Settings &rarr; Bindings.</p>' + indexNote;
           btn.disabled = false;
           return;
         }
         if (!data.checked) {
           status.textContent = '';
-          out.innerHTML = '<p style="color:var(--color-warn-text); margin:0; font-size:var(--font-size-sm);">Could not read the database to check' +
+          out.innerHTML = '<p class="u-c-v_color_warn_text u-m-0 u-fs-v_font_size_sm">Could not read the database to check' +
             (data.error ? (': ' + escapeHtmlAdmin(data.error)) : '.') +
             ' This is not the same as a missing migration \u2014 try again.</p>' + indexNote;
           btn.disabled = false;
@@ -15376,15 +15565,15 @@ ${DESIGN_TOKENS_CSS}
         var ledger = data.ledger;
         var ledgerNote = '';
         if (ledger && ledger.behind) {
-          ledgerNote = '<p style="color:var(--color-danger-text); margin:0 0 10px; font-size:var(--font-size-sm);"><strong>Writes are paused.</strong> ' +
+          ledgerNote = '<p class="u-c-v_color_danger_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>Writes are paused.</strong> ' +
             'The database is at migration ' + escapeHtmlAdmin(ledger.version) + ' and this Worker needs ' +
             escapeHtmlAdmin(ledger.required) + '. Visitors see &ldquo;My Lists is being updated&rdquo; on every save until the missing migrations are applied.</p>';
         } else if (ledger && ledger.readable && !ledger.version) {
-          ledgerNote = '<p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);">The migration ledger is empty.</p>';
+          ledgerNote = '<p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm">The migration ledger is empty.</p>';
         } else if (ledger && !ledger.readable) {
-          ledgerNote = '<p style="color:var(--color-warn-text); margin:0 0 10px; font-size:var(--font-size-sm);">No migration ledger yet. Apply <code>migrations/0014_add_schema_migrations.sql</code> so the Worker can tell which migrations have run.</p>';
+          ledgerNote = '<p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm">No migration ledger yet. Apply <code>migrations/0014_add_schema_migrations.sql</code> so the Worker can tell which migrations have run.</p>';
         } else if (ledger) {
-          ledgerNote = '<p style="color:var(--muted); margin:0 0 10px; font-size:var(--font-size-sm);">Database at migration ' +
+          ledgerNote = '<p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Database at migration ' +
             escapeHtmlAdmin(ledger.version) + ' (this Worker needs ' + escapeHtmlAdmin(ledger.required) + ').</p>';
         }
         var dbStats = data.databaseStats;
@@ -15394,32 +15583,32 @@ ${DESIGN_TOKENS_CSS}
           var rowsStr = dbStats.rowCounts
             ? Object.entries(dbStats.rowCounts).map(function (e) { return e[0] + ': ' + e[1].toLocaleString(); }).join(', ')
             : '';
-          dbStatsNote = '<p style="color:var(--muted); margin:8px 0 0; font-size:var(--font-size-sm);">Database size: ~' +
+          dbStatsNote = '<p class="u-c-v_muted u-m-8px_0_0 u-fs-v_font_size_sm">Database size: ~' +
             mb + ' MB (' + (dbStats.pageCount || 0).toLocaleString() + ' pages &times; ' +
             (dbStats.pageSize || 0).toLocaleString() + ' B).' +
-            (rowsStr ? ('<br><span style="font-size:var(--font-size-xs);">Rows: ' + escapeHtmlAdmin(rowsStr) + '</span>') : '') +
+            (rowsStr ? ('<br><span class="u-fs-v_font_size_xs">Rows: ' + escapeHtmlAdmin(rowsStr) + '</span>') : '') +
             '</p>';
         }
         if (data.upToDate) {
           status.textContent = '';
-          out.innerHTML = ledgerNote + '<p style="color:var(--color-success-text); margin:0; font-size:var(--font-size-sm);">Up to date \u2014 every migration has been applied.</p>' + dbStatsNote + indexNote;
+          out.innerHTML = ledgerNote + '<p class="u-c-v_color_success_text u-m-0 u-fs-v_font_size_sm">Up to date \u2014 every migration has been applied.</p>' + dbStatsNote + indexNote;
           btn.disabled = false;
           return;
         }
         const rows = (data.missing || []).map(function (m) {
           return '<tr>' +
-            '<td style="padding:4px 10px 4px 0; vertical-align:top; white-space:nowrap;"><code>' + escapeHtmlAdmin(m.migration) + '</code></td>' +
-            '<td style="padding:4px 10px 4px 0; vertical-align:top; white-space:nowrap;"><code>' + escapeHtmlAdmin(m.name) + '</code></td>' +
-            '<td style="padding:4px 0; vertical-align:top;">' + escapeHtmlAdmin(m.consequence) + '</td>' +
+            '<td class="u-p-4px_10px_4px_0 u-va-top u-ws-nowrap"><code>' + escapeHtmlAdmin(m.migration) + '</code></td>' +
+            '<td class="u-p-4px_10px_4px_0 u-va-top u-ws-nowrap"><code>' + escapeHtmlAdmin(m.name) + '</code></td>' +
+            '<td class="u-p-4px_0 u-va-top">' + escapeHtmlAdmin(m.consequence) + '</td>' +
             '</tr>';
         }).join('');
         status.textContent = '';
-        out.innerHTML = ledgerNote + '<p style="color:var(--color-warn-text); margin:0 0 8px; font-size:var(--font-size-sm);"><strong>This Worker is running ahead of its database.</strong> ' +
+        out.innerHTML = ledgerNote + '<p class="u-c-v_color_warn_text u-m-0_0_8px u-fs-v_font_size_sm"><strong>This Worker is running ahead of its database.</strong> ' +
           'Unapplied migration' + ((data.pendingMigrations || []).length === 1 ? '' : 's') + ': ' +
           escapeHtmlAdmin((data.pendingMigrations || []).join(', ')) +
           '. Apply the matching file(s) under <code>migrations/</code> in the D1 Console, in filename order.</p>' +
-          '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
-          '<thead><tr style="color:var(--muted); text-align:left;"><th style="padding-right:10px;">Migration</th><th style="padding-right:10px;">Missing</th><th>What does not work without it</th></tr></thead>' +
+          '<div class="u-ovx-auto"><table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">' +
+          '<thead><tr class="u-c-v_muted u-ta-left"><th class="u-pr-10px">Migration</th><th class="u-pr-10px">Missing</th><th>What does not work without it</th></tr></thead>' +
           '<tbody>' + rows + '</tbody></table></div>' + dbStatsNote + indexNote;
       } catch (e) {
         status.textContent = 'Failed: network error.';
@@ -15474,11 +15663,11 @@ ${DESIGN_TOKENS_CSS}
         }
         body.innerHTML = data.keys.map((k) =>
           '<tr>' +
-            '<td>' + escapeHtmlAdmin(k.label) + (k.configured ? '' : ' <span style="color:var(--color-warn-text);">(not set)</span>') + '</td>' +
+            '<td>' + escapeHtmlAdmin(k.label) + (k.configured ? '' : ' <span class="u-c-v_color_warn_text">(not set)</span>') + '</td>' +
             '<td>' + k.last24h + '</td>' +
             '<td>' + k.last7d + '</td>' +
             '<td>' + k.last30d + '</td>' +
-            '<td style="color:var(--muted);">' + escapeHtmlAdmin(k.limit) + '</td>' +
+            '<td class="u-c-v_muted">' + escapeHtmlAdmin(k.limit) + '</td>' +
           '</tr>'
         ).join('');
       } catch (e) {
@@ -15497,7 +15686,7 @@ ${DESIGN_TOKENS_CSS}
           (it.date ? '<div class="netflix-preview-year">' + escapeHtmlAdmin(it.date) + '</div>' : '') +
         '</div>'
       ).join('');
-      return '<h3 style="margin:0 0 4px; font-size:var(--font-size-md);">' + label + ' <span style="color:var(--muted); font-weight:400; font-size:var(--font-size-sm);">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
+      return '<h3 class="u-m-0_0_4px u-fs-v_font_size_md">' + label + ' <span class="u-c-v_muted u-fw-400 u-fs-v_font_size_sm">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
         '<div class="netflix-preview-grid">' + posters + '</div>';
     }
 
@@ -15553,12 +15742,12 @@ ${DESIGN_TOKENS_CSS}
         }
         statusEl.textContent = '';
         if (!data.results.length) {
-          resultsEl.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);">No matches.</p>';
+          resultsEl.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">No matches.</p>';
           return;
         }
         resultsEl.innerHTML = data.results.map((p) =>
-          '<button type="button" class="admin-select" style="cursor:pointer; margin:0 6px 6px 0;" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
-            escapeHtmlAdmin(p.name) + ' <span style="color:var(--muted);">(' + p.id + ')</span>' +
+          '<button type="button" class="admin-select u-cur-pointer u-m-0_6px_6px_0" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
+            escapeHtmlAdmin(p.name) + ' <span class="u-c-v_muted">(' + p.id + ')</span>' +
           '</button>'
         ).join('');
       } catch (e) {
@@ -15609,20 +15798,20 @@ ${DESIGN_TOKENS_CSS}
         const bits = [];
         bits.push('<div>D1: ' + (st.d1Bound
           ? (st.tableReady
-            ? '<span style="color:var(--color-success-text);">bound, streaming_events ready</span>'
-            : '<span style="color:var(--color-danger-text);">bound, but the table is missing</span>')
-          : '<span style="color:var(--color-danger-text);">not bound -- this catalog is D1-only</span>') + '</div>');
+            ? '<span class="u-c-v_color_success_text">bound, streaming_events ready</span>'
+            : '<span class="u-c-v_color_danger_text">bound, but the table is missing</span>')
+          : '<span class="u-c-v_color_danger_text">not bound -- this catalog is D1-only</span>') + '</div>');
         if (st.error) {
-          bits.push('<div style="color:var(--color-danger-text);">' + escapeHtmlAdmin(st.error) + '</div>');
+          bits.push('<div class="u-c-v_color_danger_text">' + escapeHtmlAdmin(st.error) + '</div>');
         }
         if (st.engine === 'justwatch') {
-          bits.push('<div>Engine: <span style="color:var(--color-success-text); font-weight:600;">JustWatch &ldquo;new&rdquo; feed</span> &mdash; the same source mdblist.com/new-on-streaming uses. Last 3 days re-read every 2 hours; ' + (st.jwDaysDone || 0) + ' older days of the 30-day window fully read. (Set the Worker var NEW_ON_STREAMING_ENGINE=rapidapi to switch back.)</div>');
+          bits.push('<div>Engine: <span class="u-c-v_color_success_text u-fw-600">JustWatch &ldquo;new&rdquo; feed</span> &mdash; the same source mdblist.com/new-on-streaming uses. Last 3 days re-read every 2 hours; ' + (st.jwDaysDone || 0) + ' older days of the 30-day window fully read. (Set the Worker var NEW_ON_STREAMING_ENGINE=rapidapi to switch back.)</div>');
         }
         if (st.engine === 'rapidapi') {
-          bits.push('<div>Engine: <span style="color:var(--color-success-text); font-weight:600;">RapidAPI Streaming Availability</span> &mdash; pulling direct streaming arrivals &amp; episode updates (previous 30 days)</div>');
+          bits.push('<div>Engine: <span class="u-c-v_color_success_text u-fw-600">RapidAPI Streaming Availability</span> &mdash; pulling direct streaming arrivals &amp; episode updates (previous 30 days)</div>');
         }
         if (st.engine === 'rapidapi' && !st.rapidKeyConfigured) {
-          bits.push('<div style="color:var(--color-danger-text);"><strong>RAPIDAPI_KEY is not set.</strong> Run <code>npx wrangler secret put RAPIDAPI_KEY</code> to enable sweeps.</div>');
+          bits.push('<div class="u-c-v_color_danger_text"><strong>RAPIDAPI_KEY is not set.</strong> Run <code>npx wrangler secret put RAPIDAPI_KEY</code> to enable sweeps.</div>');
         }
         const usage = st.monthlyUsage || { count: 0, limit: 1000, remaining: 1000, safetyCap: 950 };
         const quotaColor = usage.count >= usage.safetyCap ? '#FF3B30' : (usage.count >= 750 ? '#FF9500' : '#30d158');
@@ -15634,17 +15823,17 @@ ${DESIGN_TOKENS_CSS}
             const label = s.changeType === 'removed' ? 'removals' : (s.itemType === 'show' ? 'new titles' : 'new ' + s.itemType + 's');
             const upTo = s.readUpTo ? nosEpochToDay(s.readUpTo) + ' ' + new Date(s.readUpTo * 1000).toISOString().slice(11, 16) + ' UTC' : 'not started';
             return '<strong>' + escapeHtmlAdmin(label) + '</strong> read to ' + escapeHtmlAdmin(upTo) +
-              (s.catchingUp ? ' <span style="color:var(--color-warn-text);">(catching up)</span>' : '');
+              (s.catchingUp ? ' <span class="u-c-v_color_warn_text">(catching up)</span>' : '');
           }).join(' &middot; ') + '</div>');
         }
         bits.push('<div>Region: <strong>' + escapeHtmlAdmin(st.region || '') + '</strong> &mdash; 30-day rolling window</div>');
-        bits.push('<div>Visible to users: <span style="color:var(--color-success-text);">yes -- My Lists Addon Charts in Quick Add, and Discover</span></div>');
+        bits.push('<div>Visible to users: <span class="u-c-v_color_success_text">yes -- My Lists Addon Charts in Quick Add, and Discover</span></div>');
         const totals = st.totals || {};
         bits.push('<div>Active titles in 30d window: <strong>' + (totals.movie || 0) + '</strong> movies, <strong>' + (totals.series || 0) + '</strong> shows (' + (totals.removed || 0) + ' marked removed)</div>');
         if (st.lastSweep) {
           bits.push('<div>Last sweep: ' + nosEpochToDay(st.lastSweep.at) + ' &mdash; ' + (st.lastSweep.units || 0) + ' API calls, ' + (st.lastSweep.seen || 0) + ' changes seen, ' + (st.lastSweep.added || 0) + ' new arrivals, ' + (st.lastSweep.bumped || 0) + ' episodes bumped' + (st.lastSweep.pruned ? ', ' + st.lastSweep.pruned + ' pruned (>30d)' : '') + (st.lastSweep.errors ? ', ' + st.lastSweep.errors + ' errors' + (st.lastSweep.lastError ? ': ' + escapeHtmlAdmin(st.lastSweep.lastError) : '') : '') + (st.lastSweep.reason ? ' (' + escapeHtmlAdmin(st.lastSweep.reason) + ')' : '') + '</div>');
         } else {
-          bits.push('<div style="color:var(--color-warn-text);">No sweep has completed yet.</div>');
+          bits.push('<div class="u-c-v_color_warn_text">No sweep has completed yet.</div>');
         }
         statusEl.innerHTML = bits.join('');
 
@@ -15770,7 +15959,7 @@ ${DESIGN_TOKENS_CSS}
           statusEl.textContent = data.error || 'Failed to add title.';
         } else {
           const r = data.result || {};
-          statusEl.innerHTML = '<span style="color:var(--color-success-text); font-weight:600;">Added: ' + escapeHtmlAdmin(r.name) + ' (' + escapeHtmlAdmin(nosProviderLabel(r.service)) + ', ' + (r.eventKind === 'episode' ? 'Episode ' + r.season + 'x' + r.episode + ', ' : '') + nosEpochToDay(r.eventAt) + ')</span>';
+          statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">Added: ' + escapeHtmlAdmin(r.name) + ' (' + escapeHtmlAdmin(nosProviderLabel(r.service)) + ', ' + (r.eventKind === 'episode' ? 'Episode ' + r.season + 'x' + r.episode + ', ' : '') + nosEpochToDay(r.eventAt) + ')</span>';
           inputEl.value = '';
           await loadNewOnStreaming();
           nosResetAndPreview();
@@ -15817,7 +16006,7 @@ ${DESIGN_TOKENS_CSS}
         if (nextBtn) nextBtn.disabled = (nosCurrentPage + 1) * nosPageLimit >= total;
 
         if (!data.items || !data.items.length) {
-          resultsEl.innerHTML = '<p style="color:var(--muted); font-size:var(--font-size-sm);">Empty -- no matching titles found.</p>';
+          resultsEl.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">Empty -- no matching titles found.</p>';
           return;
         }
         // Grouped by day like mdblist.com/new-on-streaming, so the two can be
@@ -15835,12 +16024,12 @@ ${DESIGN_TOKENS_CSS}
               ? svcs.map(function (s) {
                   return '<span class="admin-badge service">' + escapeHtmlAdmin(nosProviderLabel(s)) + '</span>';
                 }).join('')
-              : '<span style="color:var(--muted);">--</span>';
+              : '<span class="u-c-v_muted">--</span>';
             const dateStr = it.addedAt ? nosEpochToDay(it.addedAt) : '--';
             let dayHeader = '';
             if (dateStr !== lastDay) {
               lastDay = dateStr;
-              dayHeader = '<tr><td colspan="8" style="font-weight:600; padding-top:14px;">' + escapeHtmlAdmin(dateStr) + '</td></tr>';
+              dayHeader = '<tr><td colspan="8" class="u-fw-600 u-pt-14px">' + escapeHtmlAdmin(dateStr) + '</td></tr>';
             }
 
             return dayHeader + '<tr><td>' + (skip + i + 1) + '</td>' +
@@ -15848,9 +16037,9 @@ ${DESIGN_TOKENS_CSS}
               '<td><strong>' + escapeHtmlAdmin(it.name || '') + '</strong></td>' +
               '<td>' + typeBadge + '</td>' +
               '<td>' + svcBadges + '</td>' +
-              '<td style="white-space:nowrap;">' + escapeHtmlAdmin(dateStr) + '</td>' +
+              '<td class="u-ws-nowrap">' + escapeHtmlAdmin(dateStr) + '</td>' +
               '<td>' + escapeHtmlAdmin(it.releaseInfo || '') + '</td>' +
-              '<td style="color:var(--muted); font-family:monospace; font-size:var(--font-size-sm);">' + escapeHtmlAdmin(it.id || '') + '</td></tr>';
+              '<td class="u-c-v_muted u-ff-monospace u-fs-v_font_size_sm">' + escapeHtmlAdmin(it.id || '') + '</td></tr>';
           }).join('') +
           '</table></div>';
       } catch (e) {
@@ -15889,14 +16078,14 @@ ${DESIGN_TOKENS_CSS}
         statusEl.textContent = data.networks.length + ' networks';
         body.innerHTML = data.networks.map((net) => {
           const cachedBadge = net.cached
-            ? '<span class="admin-badge" style="background:rgba(52,199,89,0.15); color:var(--color-success-text);">cached</span>'
-            : '<span style="color:var(--muted);">not cached</span>';
+            ? '<span class="admin-badge u-bg-rgba_52_199_89_0_15 u-c-v_color_success_text">cached</span>'
+            : '<span class="u-c-v_muted">not cached</span>';
           return '<tr>' +
-            '<td><strong>' + escapeHtmlAdmin(net.name) + '</strong> <span style="color:var(--muted); font-family:monospace; font-size:var(--font-size-xs);">(' + escapeHtmlAdmin(net.id) + ')</span></td>' +
+            '<td><strong>' + escapeHtmlAdmin(net.name) + '</strong> <span class="u-c-v_muted u-ff-monospace u-fs-v_font_size_xs">(' + escapeHtmlAdmin(net.id) + ')</span></td>' +
             '<td>' + cachedBadge + '</td>' +
             '<td>' + (net.cached ? net.itemCount : '--') + '</td>' +
-            '<td style="white-space:nowrap;">' + cpAgoText(net.builtAt) + '</td>' +
-            '<td style="white-space:nowrap;">' +
+            '<td class="u-ws-nowrap">' + cpAgoText(net.builtAt) + '</td>' +
+            '<td class="u-ws-nowrap">' +
               '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm);" data-act="rebuildOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '">Rebuild</button> ' +
               '<button type="button" class="secondary lc-btn" style="padding:4px 10px; font-size:var(--font-size-sm); color:var(--color-danger-text);" data-act="clearOneChannelPreset" data-act-args="' + adminActAttr([net.id, '@self']) + '"' + (net.cached ? '' : ' disabled') + '>Clear</button>' +
             '</td>' +
@@ -15982,14 +16171,14 @@ ${DESIGN_TOKENS_CSS}
         const res = await fetch('/admin/api/feedback');
         const data = await res.json();
         if (!data.ok) {
-          box.innerHTML = '<p style="color:var(--color-danger-text);">Could not load feedback -- try again.</p>';
+          box.innerHTML = '<p class="u-c-v_color_danger_text">Could not load feedback -- try again.</p>';
           return;
         }
         feedbackEntries = data.entries || [];
         feedbackTruncated = !!data.truncated;
         renderFeedbackList();
       } catch (e) {
-        box.innerHTML = '<p style="color:var(--color-danger-text);">Could not load feedback -- try again.</p>';
+        box.innerHTML = '<p class="u-c-v_color_danger_text">Could not load feedback -- try again.</p>';
       }
     }
 
@@ -16002,14 +16191,14 @@ ${DESIGN_TOKENS_CSS}
       const box = document.getElementById('feedbackList');
       if (!box) return;
       if (!feedbackEntries.length) {
-        box.innerHTML = '<p style="color:var(--muted);">No feedback yet.</p>';
+        box.innerHTML = '<p class="u-c-v_muted">No feedback yet.</p>';
         return;
       }
       const open = feedbackEntries.filter((f) => !f.completed);
       const done = feedbackEntries.filter((f) => f.completed);
       box.innerHTML = open.map(feedbackCardHtml).join('') +
-        (done.length ? '<h3 style="margin:20px 0 4px; font-size:var(--font-size-base); color:var(--muted);">Completed</h3>' + done.map(feedbackCardHtml).join('') : '') +
-        (feedbackTruncated ? '<p style="color:var(--muted); font-size:var(--font-size-sm);">Showing the most recent 300.</p>' : '');
+        (done.length ? '<h3 class="u-m-20px_0_4px u-fs-v_font_size_base u-c-v_muted">Completed</h3>' + done.map(feedbackCardHtml).join('') : '') +
+        (feedbackTruncated ? '<p class="u-c-v_muted u-fs-v_font_size_sm">Showing the most recent 300.</p>' : '');
       initFeedbackListEvents();
     }
 
@@ -16025,8 +16214,8 @@ ${DESIGN_TOKENS_CSS}
       const contact = f.contact ? ' \u2014 ' + escapeHtmlAdmin(f.contact) : '';
       const completed = !!f.completed;
       const statusLabel = (!isSelfLogged && f.status === 'replied')
-        ? '<span class="admin-badge improvement" style="margin-left:6px;">Replied</span>'
-        : (completed ? '<span class="admin-badge other" style="margin-left:6px;">Resolved</span>' : '<span class="admin-badge bug" style="margin-left:6px;">Open</span>');
+        ? '<span class="admin-badge improvement u-ml-6px">Replied</span>'
+        : (completed ? '<span class="admin-badge other u-ml-6px">Resolved</span>' : '<span class="admin-badge bug u-ml-6px">Open</span>');
 
       const messages = Array.isArray(f.messages) && f.messages.length
         ? f.messages
@@ -16047,9 +16236,9 @@ ${DESIGN_TOKENS_CSS}
         return '<div style="margin-top:6px; padding:8px 12px; border-radius:var(--radius-sm); background:' + bg + '; border:1px solid ' + border + ';">' +
           '<div style="display:flex; justify-content:space-between; font-size:var(--font-size-xs); font-weight:700; color:' + (isAdmin ? 'var(--accent)' : 'var(--text)') + ';">' +
             '<span>' + escapeHtmlAdmin(sender) + '</span>' +
-            '<span style="color:var(--muted); font-weight:normal;">' + escapeHtmlAdmin(mTime) + '</span>' +
+            '<span class="u-c-v_muted u-fw-normal">' + escapeHtmlAdmin(mTime) + '</span>' +
           '</div>' +
-          '<div style="margin-top:4px; font-size:var(--font-size-sm); white-space:pre-wrap; word-break:break-word; color:var(--text);">' + escapeHtmlAdmin(m.text || '') + '</div>' +
+          '<div class="u-mt-4px u-fs-v_font_size_sm u-ws-pre_wrap u-wb-break_word u-c-v_text">' + escapeHtmlAdmin(m.text || '') + '</div>' +
         '</div>';
       }).join('');
 
@@ -16060,19 +16249,19 @@ ${DESIGN_TOKENS_CSS}
             statusLabel +
           '</div>' +
           '<div class="feedback-actions">' +
-            '<button type="button" class="admin-select fb-copy-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer;">&#x2398; Copy</button>' +
-            '<button type="button" class="admin-select fb-edit-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer;">&#x270E; Edit</button>' +
-            '<button type="button" class="admin-select fb-status-btn" data-id="' + escapeHtmlAdmin(f.id) + '" data-completed="' + (!completed) + '" style="margin:0; cursor:pointer;">' +
+            '<button type="button" class="admin-select fb-copy-btn u-m-0 u-cur-pointer" data-id="' + escapeHtmlAdmin(f.id) + '">&#x2398; Copy</button>' +
+            '<button type="button" class="admin-select fb-edit-btn u-m-0 u-cur-pointer" data-id="' + escapeHtmlAdmin(f.id) + '">&#x270E; Edit</button>' +
+            '<button type="button" class="admin-select fb-status-btn u-m-0 u-cur-pointer" data-id="' + escapeHtmlAdmin(f.id) + '" data-completed="' + (!completed) + '">' +
               (completed ? '\u21a9 Reopen' : '\u2713 Mark done') +
             '</button>' +
-            '<button type="button" class="admin-select fb-delete-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="margin:0; cursor:pointer; color:var(--color-danger-text); border-color:rgba(255,59,48,0.3);">&#x2715; Delete</button>' +
+            '<button type="button" class="admin-select fb-delete-btn u-m-0 u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_3" data-id="' + escapeHtmlAdmin(f.id) + '">&#x2715; Delete</button>' +
           '</div>' +
         '</div>' +
-        '<div style="margin-top:10px;">' + messagesHtml + '</div>' +
-        '<div class="feedback-meta" style="margin-top:8px;">' + when + ' \u2014 ' + who + contact + '</div>' +
+        '<div class="u-mt-10px">' + messagesHtml + '</div>' +
+        '<div class="feedback-meta u-mt-8px">' + when + ' \u2014 ' + who + contact + '</div>' +
         (!isSelfLogged ?
           '<div style="margin-top:10px; display:flex; gap:8px; align-items:center;">' +
-            '<input type="text" id="adminReplyInput_' + escapeHtmlAdmin(f.id) + '" class="admin-select fb-reply-input" data-id="' + escapeHtmlAdmin(f.id) + '" style="flex:1; margin-right:0; padding:8px 10px;" placeholder="Type reply to ' + who + '...">' +
+            '<input type="text" id="adminReplyInput_' + escapeHtmlAdmin(f.id) + '" class="admin-select fb-reply-input u-flex-1 u-mr-0 u-p-8px_10px" data-id="' + escapeHtmlAdmin(f.id) + '" placeholder="Type reply to ' + who + '...">' +
             '<button type="button" class="secondary lc-btn fb-reply-btn" data-id="' + escapeHtmlAdmin(f.id) + '" style="padding:6px 14px; font-size:var(--font-size-sm);">Reply</button>' +
           '</div>' : ''
         ) +
@@ -16259,7 +16448,7 @@ ${DESIGN_TOKENS_CSS}
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
-        '<p style="margin:0 0 18px; color:var(--muted); font-size:var(--font-size-base); line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
+        '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:8px;">' +
           '<button type="button" class="lc-btn primary" data-act="closeAdminModal" style="min-width:80px;">OK</button>' +
         '</div>';
@@ -16278,7 +16467,7 @@ ${DESIGN_TOKENS_CSS}
           '</h3>' +
           '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeAdminModal">\u2715</button>' +
         '</div>' +
-        '<p style="margin:0 0 18px; color:var(--muted); font-size:var(--font-size-base); line-height:1.45; white-space:pre-wrap;">' + escapeHtmlAdmin(message) + '</p>' +
+        '<p class="u-m-0_0_18px u-c-v_muted u-fs-v_font_size_base u-lh-1_45 u-ws-pre_wrap">' + escapeHtmlAdmin(message) + '</p>' +
         '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
           '<button type="button" class="lc-btn secondary" data-act="closeAdminModal">Cancel</button>' +
           '<button type="button" class="' + btnClass + '" id="adminConfirmOkBtn">' + escapeHtmlAdmin(confirmBtnText || 'Confirm') + '</button>' +
@@ -34465,6 +34654,7 @@ ${DESIGN_TOKENS_CSS}
     }
     .subnav-pills-bar { padding-top: var(--space-3); padding-bottom: var(--space-4); }
   }
+${UTILITY_CSS}
 /*MYLISTS_APP_CSS_END*/</style>
 <!-- fflate, for reading Trakt/Letterboxd export .zips entirely client-side.
      It used to be a cdn.jsdelivr.net script with an SRI hash: a third-party
@@ -34584,10 +34774,10 @@ ${appShellMobileNavHtml}
 
   <!-- List Details page ("See All" full list view) -->
   <div class="tab-panel list-details-page" data-tab-panel="list-details" id="content-list-details" hidden>
-    <div style="margin-bottom: 20px;">
+    <div class="u-mb-20px">
       <button type="button" class="lc-btn secondary" data-act="navigateBackFromDetail" style="padding: 6px 12px; font-size: var(--font-size-base);">&larr; Back</button>
     </div>
-    <div class="detail-header-info" style="margin-bottom:14px;">
+    <div class="detail-header-info u-mb-14px">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <!-- A list opened before its own "nice" name is available (e.g. a
              row whose configured name is itself a pasted URL) shows that
@@ -34611,10 +34801,10 @@ ${appShellMobileNavHtml}
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
         <label class="wh-group-shows-toggle" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px; cursor:pointer; font-size:var(--font-size-sm); color:var(--text); user-select:none;">
-          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" style="accent-color:var(--accent); cursor:pointer;">
+          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" class="u-acc-v_accent u-cur-pointer">
           <span>Shows instead of episodes</span>
         </label>
-        <button type="button" class="btn-danger btn-sm" id="whClearHistoryBtn" data-act="clearWatchHistoryAll" style="margin-left:auto;">Clear History</button>
+        <button type="button" class="btn-danger btn-sm u-ml-auto" id="whClearHistoryBtn" data-act="clearWatchHistoryAll">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
@@ -34623,7 +34813,7 @@ ${appShellMobileNavHtml}
         <button type="button" class="btn-danger btn-sm" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none; margin-left:auto;">Clear All</button>
       </div>
       <div id="whSortControls" style="display:flex; align-items:center; gap:8px;">
-        <label for="whSortSelect" style="font-size:var(--font-size-xs); color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em;">Sort</label>
+        <label for="whSortSelect" class="u-fs-v_font_size_xs u-c-v_muted u-fw-700 u-tt-uppercase u-ls-0_02em">Sort</label>
         <select id="whSortSelect" class="detail-sort-select" data-act="setWatchHistorySort" data-act-args="[&quot;@value&quot;]">
           <option value="recent">Recently Watched</option>
           <option value="oldest">Oldest Watched</option>
@@ -34633,7 +34823,7 @@ ${appShellMobileNavHtml}
       </div>
     </div>
     <div class="poster-grid-3" id="detailGrid"></div>
-    <p id="detailStatus" style="text-align:center; color:var(--muted); margin-top:14px;"><small>Loading&hellip;</small></p>
+    <p id="detailStatus" class="u-ta-center u-c-v_muted u-mt-14px"><small>Loading&hellip;</small></p>
   </div>
 
   <div class="tab-panel" data-tab-panel="item-details" id="content-item-details" hidden>
@@ -34646,11 +34836,11 @@ ${appShellMobileNavHtml}
   <div id="createListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);" id="createListModalTitle">Create List</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createListModalTitle">Create List</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateListModal">&#x2715;</button>
       </div>
 
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Save To</label>
         <select id="createListModalDestination" aria-label="Destination" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act="onChangeCreateListDestination">
           <option value="custom">My Lists (Local / Profile)</option>
@@ -34661,17 +34851,17 @@ ${appShellMobileNavHtml}
         </select>
       </div>
       
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name *</label>
         <input type="text" id="createListModalName" placeholder="e.g. My Favorite Sci-Fi" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="appActValidateCreateListName" data-act-args="[&quot;@value&quot;]">
       </div>
 
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Description (Optional)</label>
         <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); resize:vertical; font-family:inherit;"></textarea>
       </div>
       
-      <div style="margin-bottom: 14px;">
+      <div class="u-mb-14px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
         <select id="createListModalType" aria-label="Content type" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);">
           <option value="movie">Movies</option>
@@ -34680,9 +34870,9 @@ ${appShellMobileNavHtml}
         </select>
       </div>
       
-      <div id="createListModalPublicWrap" style="margin-bottom: 18px;">
+      <div id="createListModalPublicWrap" class="u-mb-18px">
         <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
-          <input type="checkbox" id="createListModalPublic" style="margin-top:3px; flex-shrink:0;">
+          <input type="checkbox" id="createListModalPublic" class="u-mt-3px u-fsh-0">
           <div>
             <span style="font-size:var(--font-size-base); font-weight:600; color:var(--text); display:block;">Make list public</span>
             <span style="font-size:var(--font-size-xs); color:var(--muted); display:block; margin-top:2px; line-height:1.35;">When enabled, this list is visible on your public creator profile and community directory.</span>
@@ -34701,27 +34891,27 @@ ${appShellMobileNavHtml}
   <div id="addShelfModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">New Catalog</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">New Catalog</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="appActHideAddShelfModal">&#x2715;</button>
       </div>
       
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label for="addShelfModalName" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog Name</label>
         <input type="text" id="addShelfModalName" placeholder="e.g. Trending Movies" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="validateAddShelfModal">
       </div>
       
-      <div style="margin-bottom: 12px;">
+      <div class="u-mb-12px">
         <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Catalog URL</label>
         <div id="addShelfModalLinksContainer">
           <div class="add-shelf-link-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-            <input type="url" class="addShelfModalLinkInput" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" style="flex:1; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
+            <input type="url" class="addShelfModalLinkInput u-flex-1 u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" placeholder="URL (e.g. Trakt, Letterboxd, MDBList)" data-act-on="input" data-act="onAddShelfModalLinkInput" data-act-then="validateAddShelfModal" data-act-args="[&quot;@self&quot;]">
           </div>
         </div>
         <button type="button" class="lc-btn secondary" style="width: 100%; font-size: var(--font-size-sm); padding: 6px 12px; margin-top: 4px;" data-act="addShelfModalAddLink">+ Add another link (Combined List)</button>
         <small style="display:block; color:var(--muted); font-size:var(--font-size-xs); margin-top:4px;">Combine multiple list URLs into a single catalog row on your home screen.</small>
       </div>
       
-      <div style="margin-bottom: 16px;">
+      <div class="u-mb-16px">
         <label for="addShelfModalType" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Content Type</label>
         <select id="addShelfModalType" aria-label="Catalog type" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base);" data-act="validateAddShelfModal">
           <option value="movie">Movies</option>
@@ -34740,21 +34930,21 @@ ${appShellMobileNavHtml}
   <div id="importListModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Import List from Link</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import List from Link</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportListModal">&#x2715;</button>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
-      <div style="margin-bottom: 12px;">
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <div class="u-mb-12px">
         <label for="modalCustomListImportUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List URL</label>
         <input type="text" id="modalCustomListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org URL" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
       </div>
-      <div style="margin-bottom: 14px;">
+      <div class="u-mb-14px">
         <label for="modalCustomListImportNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">List Name (Optional)</label>
         <input type="text" id="modalCustomListImportNameInput" placeholder="e.g. My Favorites (leave blank to auto-detect)" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
       </div>
       <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:18px;">
         <input type="checkbox" id="modalCustomListImportSyncCheck" checked>
-        <span style="font-size:var(--font-size-sm); color:var(--text);">Keep custom list synced with external link</span>
+        <span class="u-fs-v_font_size_sm u-c-v_text">Keep custom list synced with external link</span>
       </label>
       <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
         <button type="button" class="lc-btn secondary" data-act="closeImportListModal">Cancel</button>
@@ -34767,30 +34957,30 @@ ${appShellMobileNavHtml}
   <div id="importChannelModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index: 10001; background: var(--color-bg-overlay); justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px;">
     <div class="modal-card" style="width: 100%; max-width: 440px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Import Channel</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Channel</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportChannelModal">&#x2715;</button>
       </div>
 
       <!-- Segmented Mode Selector: From Link vs From Share Code -->
-      <div class="subnav-pills-bar" id="importChannelModePills" style="margin-bottom: 14px; gap: 6px; padding: 0;">
+      <div class="subnav-pills-bar u-mb-14px u-gap-6px u-p-0" id="importChannelModePills">
         <button type="button" class="subnav-pill active" id="importChannelModeLinkBtn" data-act="switchImportChannelMode" data-act-args="[&quot;link&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> From List Link</button>
         <button type="button" class="subnav-pill" id="importChannelModeCodeBtn" data-act="switchImportChannelMode" data-act-args="[&quot;code&quot;,&quot;@self&quot;]">From Share Code</button>
       </div>
 
       <!-- Mode 1: From List Link -->
       <div id="importChannelPanelLink">
-        <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
-        <div style="margin-bottom: 12px;">
+        <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a 24/7 TV channel.</p>
+        <div class="u-mb-12px">
           <label for="modalChannelImportUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Show List URL</label>
           <input type="text" id="modalChannelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
         </div>
-        <div style="margin-bottom: 12px;">
+        <div class="u-mb-12px">
           <label for="modalChannelImportNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Name</label>
           <input type="text" id="modalChannelImportNameInput" placeholder="e.g. Sitcom Central" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
         </div>
         <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:18px;">
-          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked style="margin-top:2px;">
-          <span style="font-size:var(--font-size-sm); color:var(--text); line-height:1.35;">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
+          <input type="checkbox" id="modalChannelImportLiveSyncCheck" checked class="u-mt-2px">
+          <span class="u-fs-v_font_size_sm u-c-v_text u-lh-1_35">Live Cloud Sync &mdash; keep this channel following the list in the background</span>
         </label>
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
@@ -34800,12 +34990,12 @@ ${appShellMobileNavHtml}
 
       <!-- Mode 2: From Share Code -->
       <div id="importChannelPanelCode" style="display:none;">
-        <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
-        <div style="margin-bottom: 14px;">
+        <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">Paste a channel share link or code to rebuild that exact community channel lineup here.</p>
+        <div class="u-mb-14px">
           <label for="modalChannelShareCodeInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Channel Share Link or Code</label>
           <input type="text" id="modalChannelShareCodeInput" placeholder="https://... /channel/AbC123 or code" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
         </div>
-        <div id="modalChannelShareImportStatus" style="margin-bottom:14px; font-size:var(--font-size-sm);"></div>
+        <div id="modalChannelShareImportStatus" class="u-mb-14px u-fs-v_font_size_sm"></div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
           <button type="button" class="lc-btn secondary" data-act="closeImportChannelModal">Cancel</button>
           <button type="button" class="lc-btn primary" id="modalChannelShareAddBtn" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]" style="min-width: 90px;">Add Channel</button>
@@ -34818,8 +35008,8 @@ ${appShellMobileNavHtml}
     <div class="modal-card" style="width: 100%; max-width: 480px; padding: 22px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
         <div>
-          <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Add / Remove from Lists</h2>
-          <p style="margin:4px 0 0; font-size:var(--font-size-sm); color:var(--muted);">Check to add, uncheck to remove.</p>
+          <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Add / Remove from Lists</h2>
+          <p class="u-m-4px_0_0 u-fs-v_font_size_sm u-c-v_muted">Check to add, uncheck to remove.</p>
         </div>
         <button type="button" class="modal-close-x" aria-label="Close" id="selectListModalCloseBtn">&#x2715;</button>
       </div>
@@ -34837,13 +35027,13 @@ ${appShellMobileNavHtml}
   <div id="traktDeviceModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index: 10002; justify-content: center; align-items: center; position: fixed; inset: 0; padding: 16px; background: var(--color-bg-overlay);">
     <div class="modal-card" style="width: 100%; max-width: 420px; padding: 24px; background: var(--color-bg-elevated); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; text-align: center;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h2 style="margin:0; font-size:var(--font-size-xl); font-weight:700; color:var(--text);">Connect Trakt</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Connect Trakt</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeTraktDeviceModal">&#x2715;</button>
       </div>
-      <p style="margin: 0 0 16px; color: var(--muted); font-size: var(--font-size-base);">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
-      <div id="traktDeviceCodeBox" style="background: var(--panel-strong); border: 2px dashed var(--accent); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
-        <div id="traktDeviceUserCode" style="font-size: 2rem; font-weight: 800; letter-spacing: 4px; color: var(--accent); font-family: monospace;">LOADING...</div>
+      <div id="traktDeviceCodeBox" class="u-bg-v_panel_strong u-bd-2px_dashed_v_accent u-br-v_radius_md u-p-16px u-mb-16px">
+        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
@@ -34856,7 +35046,7 @@ ${appShellMobileNavHtml}
         Waiting for authorization on Trakt...
       </div>
 
-      <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
+      <div class="u-mt-18px u-bdt-1px_solid_v_border u-pt-14px">
         <button type="button" class="lc-btn secondary" style="width: 100%;" data-act="closeTraktDeviceModal">Cancel</button>
       </div>
     </div>
@@ -34894,19 +35084,19 @@ if ('serviceWorker' in navigator) {
   <div class="lists-subpanel" id="catalogsSubShelves">
   <!-- Catalogs Management Card -->
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+    <div class="shelf-header u-mb-12px u-ai-center u-jc-space_between u-gap-12px">
       <div>
         <h2 class="shelf-title sr-only">Live Preview &amp; Editor</h2>
-        <p style="margin:0; color:var(--muted); font-size:var(--font-size-sm);">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
+        <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Catalogs and lists you've added to your add-on. Reorder, edit, and preview your active shelves.</p>
       </div>
-      <div class="actions" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px; flex-shrink:0;">
+      <div class="actions u-fd-row u-fw2-wrap u-ai-center u-gap-6px u-fsh-0">
         <button type="button" class="primary lc-btn" data-act="openAddShelfModal">+ New Catalog</button>
         <button type="button" class="secondary lc-btn" id="livePreviewEditBtn" data-act="toggleLivePreviewEdit">Edit</button>
         ${refreshButtonHtml('renderLivePreview', 'Refresh catalogs preview')}
       </div>
     </div>
 
-    <div class="row" style="margin-bottom:12px; gap:8px;">
+    <div class="row u-mb-12px u-gap-8px">
       <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
       <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" style="flex:none; width:auto;">
         <option value="">All groups</option>
@@ -34921,15 +35111,15 @@ if ('serviceWorker' in navigator) {
     <div id="appShellHomeEditor"></div>
 
     <!-- 24-Hour Randomizer Controls -->
-    <div style="margin-top:16px; padding:12px 16px; background:var(--surface); border-radius:var(--radius-md); border:1px solid var(--border);">
+    <div class="u-mt-16px u-p-12px_16px u-bg-v_surface u-br-v_radius_md u-bd-1px_solid_v_border">
       <div style="font-weight:600; font-size:var(--font-size-base); margin-bottom:4px; display:flex; align-items:center; gap:6px;">
         <span>Daily Randomizer</span>
       </div>
       <div>
         <div class="settings-toggle-row">
-          <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Shuffle Catalogs daily (every 24h)</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Rotates the order of your catalog rows once every 24 hours.</p>
+          <div class="u-flex-1 u-minw-0 u-pr-12px">
+            <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Shuffle Catalogs daily (every 24h)</span>
+            <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Rotates the order of your catalog rows once every 24 hours.</p>
           </div>
           <label class="ui-toggle" aria-label="Shuffle Catalogs daily (every 24h)">
             <input type="checkbox" id="shuffleShelvesCheckbox" data-act="saveState">
@@ -34938,9 +35128,9 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div class="settings-toggle-row">
-          <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Shuffle items in Catalogs daily (every 24h)</span>
-            <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Randomizes the order of titles inside each catalog row every 24 hours.</p>
+          <div class="u-flex-1 u-minw-0 u-pr-12px">
+            <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Shuffle items in Catalogs daily (every 24h)</span>
+            <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Randomizes the order of titles inside each catalog row every 24 hours.</p>
           </div>
           <label class="ui-toggle" aria-label="Shuffle items in Catalogs daily (every 24h)">
             <input type="checkbox" id="shuffleItemsCheckbox" data-act="saveState">
@@ -34964,7 +35154,7 @@ if ('serviceWorker' in navigator) {
   <div class="lists-subpanel" id="catalogsSubBulk" style="display:none;">
   <div class="panel bulk-panel">
     <h2 class="panel-title">Bulk Import Lists</h2>
-    <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.45;">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
+    <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm u-lh-1_45">Paste multiple list URLs at once, one per line. Each list is automatically detected and added to your catalogs.</p>
     <div class="bulk-provider-badges">
       <span class="bulk-provider-label">Supported:</span>
       <span class="list-source-badge badge-mdblist">MDBList</span>
@@ -34989,7 +35179,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- My Lists Addon Charts Shelf -- this add-on's own charts (MY_LISTS_ADDON_CHARTS, 08). -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">My Lists Addon Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mylists-charts">+ Add all</button>
       </div>
@@ -34999,7 +35189,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Combined Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Combined Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="combined-charts">+ Add all</button>
       </div>
@@ -35009,7 +35199,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- TMDB Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">TMDB Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="tmdb-charts">+ Add all</button>
       </div>
@@ -35019,7 +35209,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Trakt Official Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Trakt Charts</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="trakt-charts">+ Add all</button>
       </div>
@@ -35029,7 +35219,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- MDBList Official Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">MDBList Official</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="mdblist-charts">+ Add all</button>
       </div>
@@ -35039,7 +35229,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Simkl Charts Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Simkl Anime &amp; Trending</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="simkl-charts">+ Add all</button>
       </div>
@@ -35049,7 +35239,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Streaming Top 10 Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Streaming Top 10</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-top10">+ Add all</button>
       </div>
@@ -35059,7 +35249,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Streaming Catalogs Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Streaming Catalogs</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="streaming-catalogs">+ Add all</button>
       </div>
@@ -35069,7 +35259,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Kids Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Kids</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="kids">+ Add all</button>
       </div>
@@ -35079,7 +35269,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Holidays Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Holidays</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="holidays">+ Add all</button>
       </div>
@@ -35089,7 +35279,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- Genres Shelf -->
     <div class="shelf-section discover-shelf panel qa-shelf-card" data-shelf-type="all">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Genres</h2>
         <button type="button" class="qa-add-all-btn lc-btn secondary" data-add-all-action="genres">+ Add all</button>
       </div>
@@ -35200,10 +35390,10 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 1: User's Connected Account & Custom Lists -->
   <div class="lists-subpanel" id="listsSubMyLists">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px;">
+      <div class="shelf-header u-mb-12px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">Your Custom Lists</h2>
-          <p style="margin:0; color:var(--muted); font-size:var(--font-size-sm);">Custom lists you've created locally or on your profile.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Custom lists you've created locally or on your profile.</p>
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
           <button type="button" class="primary lc-btn" data-act="openCreateListModal" data-act-args="[&quot;custom&quot;]">+ Create List</button>
@@ -35214,48 +35404,48 @@ if ('serviceWorker' in navigator) {
       <div id="creatorDashboard"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-mdblist">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your MDBList Lists</h2>
+    <div class="panel u-mt-12px" id="myListsSectionPanel-mdblist">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your MDBList Lists</h2>
         <div style="display:flex; gap:8px;">
           <button type="button" class="secondary lc-btn" id="listsMdblistConnectBtn" data-act="toggleListsMdblistConnection">Connect MDBList</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Lists, Watchlist, and Watch History from your connected MDBList account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Watch History from your connected MDBList account.</p>
       <div id="myMdblistListsResult"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-trakt">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your Trakt Lists</h2>
+    <div class="panel u-mt-12px" id="myListsSectionPanel-trakt">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your Trakt Lists</h2>
         <div style="display:flex; gap:8px;">
           <button type="button" class="secondary lc-btn" id="listsTraktConnectBtn" data-act="toggleListsTraktConnection">Connect Trakt</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Lists, Watchlist, and Watch History from your connected Trakt account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Watch History from your connected Trakt account.</p>
       <div id="myTraktListsResult"></div>
-      <div id="myPrivateTraktListsResult" style="margin-top:10px;"></div>
+      <div id="myPrivateTraktListsResult" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-tmdb">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your TMDB Lists</h2>
+    <div class="panel u-mt-12px" id="myListsSectionPanel-tmdb">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your TMDB Lists</h2>
         <div style="display:flex; gap:8px;">
           <button type="button" class="secondary lc-btn" id="listsTmdbConnectBtn" data-act="toggleListsTmdbConnection">Connect TMDB</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Lists, Watchlist, and Favorites from your connected TMDB account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Favorites from your connected TMDB account.</p>
       <div id="myTmdbListsResult"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;" id="myListsSectionPanel-simkl">
-      <div class="shelf-header" style="margin-bottom:10px;">
-        <h2 class="panel-title" style="margin-bottom:0;">Your Simkl Lists</h2>
+    <div class="panel u-mt-12px" id="myListsSectionPanel-simkl">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your Simkl Lists</h2>
         <div style="display:flex; gap:8px;">
           <button type="button" class="secondary lc-btn" id="listsSimklConnectBtn" data-act="toggleListsSimklConnection">Connect Simkl</button>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
       <div id="mySimklListsResult"></div>
     </div>
   </div>
@@ -35272,25 +35462,25 @@ if ('serviceWorker' in navigator) {
            overwrites it on every switch to this tab and is authoritative for
            the empty case -- nothing may read this element's children to decide
            whether the feed has loaded. See switchListsSubmenu. -->
-      <div id="likedListsFeed"><p style="color:var(--muted); font-size:var(--font-size-sm);">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p></div>
+      <div id="likedListsFeed"><p class="u-c-v_muted u-fs-v_font_size_sm">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p></div>
     </div>
   </div>
 
   <!-- Submenu 5: Create Custom List Builder -->
   <div class="lists-subpanel" id="listsSubCreateList" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
+      <div class="shelf-header u-mb-10px">
         <h2 class="shelf-title" id="customListEditorTitle">Create a Custom List</h2>
       </div>
-      <p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-sm);">Curate, reorder, and manage titles for this custom list.</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm">Curate, reorder, and manage titles for this custom list.</p>
 
       <!-- 1. List Name & Content Type Header Group -->
       <div style="display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
-        <div style="flex:1 1 320px; max-width:480px; min-width:0;">
+        <div class="u-flex-1_1_320px u-maxw-480px u-minw-0">
           <label for="customListNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">List Name</label>
           <input type="text" id="customListNameInput" placeholder="List name (e.g. My Favorites)" style="width:100%; padding:9px 14px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
         </div>
-        <div style="flex:0 0 auto;">
+        <div class="u-flex-0_0_auto">
           <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">Content Type</label>
           <div id="customListTypeToggles" style="display:flex; gap:8px; align-items:center;">
             <label class="custom-list-type-pill active">
@@ -35312,8 +35502,8 @@ if ('serviceWorker' in navigator) {
       <!-- 2. Public List Toggle -->
       <div id="customListVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
         <div>
-          <span style="font-size:var(--font-size-sm); font-weight:600; color:var(--text);">Public List</span>
-          <p style="margin:2px 0 0; font-size:var(--font-size-xs); color:var(--muted);">Make this list visible on your public creator profile and discoverable in the community directory</p>
+          <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public List</span>
+          <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this list visible on your public creator profile and discoverable in the community directory</p>
         </div>
         <label class="ui-toggle" aria-label="Make list public">
           <input type="checkbox" id="customListPublicToggle" checked>
@@ -35322,9 +35512,9 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- 3. Inline Search & Quick Add Bar -->
-      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+      <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
         <label for="customListSearchInput" style="display:block; font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to List</label>
-        <p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted);">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
+        <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
         <div class="search-input-box">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
@@ -35332,13 +35522,13 @@ if ('serviceWorker' in navigator) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
         </div>
-        <div id="customListSearchResult" style="margin-top:10px;"></div>
+        <div id="customListSearchResult" class="u-mt-10px"></div>
       </div>
 
       <!-- 4. Picks in This List -->
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; margin-bottom:8px;">
-        <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">
-          Picks in this list <span id="customListDraftCount" style="font-weight:normal; font-size:var(--font-size-sm); color:var(--muted);">(0 items)</span>
+        <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
+          Picks in this list <span id="customListDraftCount" class="u-fw-normal u-fs-v_font_size_sm u-c-v_muted">(0 items)</span>
         </div>
         <div class="actions" id="customListDraftActions" style="margin:0; gap:8px; display:none;">
           <button type="button" class="secondary lc-btn" data-act="shuffleCustomListDraft" style="font-size:var(--font-size-sm);">Shuffle Picks Now</button>
@@ -35346,19 +35536,19 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
       <div id="customListDraftList">
-        <p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No items in this list yet &mdash; search above or tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>
+        <p class="u-c-v_muted u-fs-v_font_size_sm"><small>No items in this list yet &mdash; search above or tap + on any movie or show across Discover, Search, or Charts to add it.</small></p>
       </div>
 
       <!-- 5. Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:16px; border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 16px; background:var(--surface); box-shadow:var(--shadow-sm);">
+      <details class="channel-advanced-details u-mt-16px u-bd-1px_solid_v_border u-br-v_radius_md u-p-12px_16px u-bg-v_surface u-bsh-v_shadow_sm">
         <summary style="font-weight:600; font-size:var(--font-size-sm); cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
           <span>Advanced Settings</span>
-          <span style="font-size:var(--font-size-xs); color:var(--muted); font-weight:normal;">Play order &amp; watch history rules</span>
+          <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order &amp; watch history rules</span>
         </summary>
-        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+        <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="customListPlayOrderSelect" style="font-size:var(--font-size-sm); font-weight:600; white-space:nowrap; color:var(--text);">Play order:</label>
-            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" style="max-width:320px; font-size:var(--font-size-sm); padding:7px 12px; background:var(--surface); color:var(--text); border:1.5px solid var(--border-strong); border-radius:var(--radius-pill);">
+            <label for="customListPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap u-c-v_text">Play order:</label>
+            <select id="customListPlayOrderSelect" data-act="applyCustomListPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-maxw-320px u-fs-v_font_size_sm u-p-7px_12px u-bg-v_surface u-c-v_text u-bd-1_5px_solid_v_border_strong u-br-v_radius_pill">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -35366,12 +35556,12 @@ if ('serviceWorker' in navigator) {
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="customListPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-xs);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="customListPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
             <div>
-              <span style="font-size:var(--font-size-sm); font-weight:600; color:var(--text);">Hide watched</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Skip items already in your watch history (requires Auto-track playback signed in)</p>
+              <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Hide watched</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Skip items already in your watch history (requires Auto-track playback signed in)</p>
             </div>
             <label class="ui-toggle" aria-label="Hide watched items">
               <input type="checkbox" id="customListHideWatchedCheck">
@@ -35382,7 +35572,7 @@ if ('serviceWorker' in navigator) {
       </details>
 
       <!-- 6. Bottom Action Bar -->
-      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+      <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="customListCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditCustomList">Cancel</button>
         <button type="button" class="primary lc-btn" id="customListSaveBtn" data-act="saveCustomList" style="padding:8px 24px; font-weight:600;">Create List</button>
       </div>
@@ -35392,20 +35582,20 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 7: Import list from a Link -->
   <div class="lists-subpanel" id="listsSubImport" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
+      <div class="shelf-header u-mb-10px">
         <h2 class="shelf-title">Import list from a link</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste any MDBList, Trakt, or TMDB list URL to import directly as a Custom List.</p>
       <div class="row">
         <input type="text" id="customListImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org list URL">
       </div>
-      <div class="row" style="margin-top:8px;">
+      <div class="row u-mt-8px">
         <input type="text" id="customListImportNameInput" placeholder="Name (e.g. My Favorites)">
         <button type="button" class="secondary" id="customListImportBtn" data-act="importCustomListFromLink" data-act-args="[&quot;@self&quot;]">Import list</button>
       </div>
       <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
         <input type="checkbox" id="customListImportSyncCheck" checked>
-        <span style="font-size:var(--font-size-sm);">Keep custom list synced with external link</span>
+        <span class="u-fs-v_font_size_sm">Keep custom list synced with external link</span>
       </label>
     </div>
 
@@ -35431,15 +35621,15 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu: Storylines & Universes (Canon Timelines, Sagas & Bridges) -->
   <div class="channels-subpanel" id="channelsSubStorylines" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Storylines, Sagas &amp; Universes</h2>
-        <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.4;">
+        <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">
           Complete franchise timelines, movie trilogies &amp; sagas (3+ films), and TV-to-movie universes in canon chronological watch order. Add any saga directly to your Catalogs or launch it as a continuous 24/7 channel with 1-click.
         </p>
       </div>
 
       <!-- Category Filter Tabs -->
-      <div class="subnav-pills-bar" id="storylineCategoryFilterBar" style="margin-bottom:16px;">
+      <div class="subnav-pills-bar u-mb-16px" id="storylineCategoryFilterBar">
         <button type="button" class="subnav-pill active" data-act="filterStorylinesCategory" data-act-args="[&quot;all&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> All Sagas</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;moviesagas&quot;,&quot;@self&quot;]">Movie Sagas (3+ Films)</button>
         <button type="button" class="subnav-pill" data-act="filterStorylinesCategory" data-act-args="[&quot;tvuniverses&quot;,&quot;@self&quot;]">TV Universes &amp; Bridges</button>
@@ -35455,10 +35645,10 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 1: My Channels -->
   <div class="channels-subpanel" id="channelsSubMyChannels">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px; align-items:center; justify-content:space-between; gap:12px;">
+      <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">My Channels</h2>
-          <p style="margin:0; color:var(--muted); font-size:var(--font-size-sm);">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Your custom built and saved 24/7 TV channels. Play episodes continuously in broadcast order or daily shuffle.</p>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <button type="button" class="secondary lc-btn" data-act="createNextUpChannel" data-act-args="[&quot;@self&quot;]" title="A channel that always plays the next episode of everything you have on the go">+ Next Up Channel</button>
@@ -35467,11 +35657,11 @@ if ('serviceWorker' in navigator) {
           ${refreshButtonHtml('refreshMyChannelsAction', 'Refresh channels')}
         </div>
       </div>
-      <div id="channelNextUpStatus" style="margin-bottom:8px;"></div>
-      <div class="row" id="myChannelsToolbar" style="margin-bottom:10px; gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <div id="channelNextUpStatus" class="u-mb-8px"></div>
+      <div class="row u-mb-10px u-gap-8px" id="myChannelsToolbar">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
         </div>
         <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="recent">Recently updated</option>
@@ -35482,22 +35672,22 @@ if ('serviceWorker' in navigator) {
         </select>
       </div>
       <div id="myChannelsUndoBar" style="display:none; margin-bottom:10px;"></div>
-      <div id="myCreatedChannelsList"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
+      <div id="myCreatedChannelsList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No channels created yet. Tap <strong>+ Create Channel</strong> above or add a popular network in <strong>Quick Add</strong>.</small></p></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
-      <div class="shelf-header" style="margin-bottom:8px;">
+    <div class="panel u-mt-12px">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Merge Saved Channels into One Catalog</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Combine multiple saved TV channels. <strong>Merge into catalog</strong> puts them in one catalog row and keeps each channel separate. <strong>Combine into one channel</strong> makes a new channel with all of their episodes, counting an episode that is in more than one of them once.</p>
       
-      <div id="savedMergedChannelsSection" style="margin-bottom:16px;">
+      <div id="savedMergedChannelsSection" class="u-mb-16px">
         <div id="savedMergedChannelsList"></div>
       </div>
 
-      <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
-        <div class="shelf-header" style="margin-bottom:8px;">
-          <h3 style="font-size:var(--font-size-base); font-weight:700; margin:0;">Create Merged Catalog or Channel</h3>
+      <div class="u-bdt-1px_solid_v_border u-pt-12px u-mt-12px">
+        <div class="shelf-header u-mb-8px">
+          <h3 class="u-fs-v_font_size_base u-fw-700 u-m-0">Create Merged Catalog or Channel</h3>
         </div>
         <div id="channelMergeSelectAllWrap" class="actions" style="margin-bottom:8px; justify-content:flex-end; display:none;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:var(--font-size-sm); user-select:none;">
@@ -35505,7 +35695,7 @@ if ('serviceWorker' in navigator) {
             <span>Select all</span>
           </label>
         </div>
-        <div id="channelMergeList"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>No saved channels yet.</small></p></div>
+        <div id="channelMergeList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>No saved channels yet.</small></p></div>
         <div class="row" id="channelMergeControls" style="margin-top:10px; gap:8px; display:none;">
           <input type="text" id="channelMergeNameInput" aria-label="Combined catalog or channel name" placeholder="Combined name (e.g. Live TV)" style="max-width:380px; width:100%; border-radius:var(--radius-pill);">
           <button type="button" class="secondary lc-btn" data-act="mergeChannelsIntoRow" style="border-radius:var(--radius-pill);">Merge into catalog</button>
@@ -35518,13 +35708,13 @@ if ('serviceWorker' in navigator) {
   <!-- Submenu 2: Quick Add Popular Networks -->
   <div class="channels-subpanel" id="channelsSubQuickAdd" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Quick Add Popular Networks</h2>
       </div>
       <p class="qa-shelf-sub">Instant 1-click TV channels with up to 5,000 episodes, rotating 24 shows with 3 episodes every 24 hours:</p>
       <div class="channel-quick-sections" style="display:flex; flex-direction:column; gap:16px; margin-top:14px;">
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Major Broadcast</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Major Broadcast</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="ABC" data-networkid="2">ABC</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="CBS" data-networkid="16">CBS</button>
@@ -35536,7 +35726,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Cable &amp; Premium Drama</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Cable &amp; Premium Drama</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="AMC" data-networkid="174">AMC</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Comedy Central" data-networkid="47">Comedy Central</button>
@@ -35550,7 +35740,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Animation &amp; Kids</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Animation &amp; Kids</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Adult Swim" data-networkid="80">Adult Swim</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Cartoon Network" data-networkid="56">Cartoon Network</button>
@@ -35560,7 +35750,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Documentary &amp; Lifestyle</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Documentary &amp; Lifestyle</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Discovery" data-networkid="64">Discovery</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Food Network" data-networkid="143">Food Network</button>
@@ -35571,7 +35761,7 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div>
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Classics &amp; Variety</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_muted u-tt-uppercase u-ls-0_05em u-mb-8px">Classics &amp; Variety</div>
           <div class="channel-quick-grid">
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="A&amp;E" data-networkid="129">A&amp;E</button>
             <button type="button" class="secondary lc-btn channelQuickAddBtn" data-name="Hallmark Channel" data-networkid="384">Hallmark Channel</button>
@@ -35581,23 +35771,23 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
       </div>
-      <div id="channelQuickAddStatus" style="margin-top:8px;"></div>
+      <div id="channelQuickAddStatus" class="u-mt-8px"></div>
     </div>
   </div>
 
   <!-- Submenu: Explore Channels (the community directory) -->
   <div class="channels-subpanel" id="channelsSubExplore" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title sr-only">Explore Channels</h2>
-        <p style="margin:0; color:var(--muted); font-size:var(--font-size-sm);">
+        <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">
           24/7 channels built and published by other people &mdash; &ldquo;Saturday Morning 90s&rdquo;, &ldquo;80s VHS Sci-Fi Vault&rdquo;, whatever anyone has put together. Add one to your own setup in a single click, then edit it however you like.
         </p>
       </div>
-      <div class="row" style="margin-bottom:10px; gap:8px; align-items:center;">
-        <div class="search-input-box" style="flex:1;">
+      <div class="row u-mb-10px u-gap-8px u-ai-center">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." style="padding-left:38px; border-radius:var(--radius-pill);" data-act-on="input" data-act="renderChannelDirectory">
+          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
         </div>
         <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" style="flex:none; width:auto; border-radius:var(--radius-pill);">
           <option value="newest">Newest</option>
@@ -35607,54 +35797,54 @@ if ('serviceWorker' in navigator) {
         </select>
         ${refreshButtonHtml('loadChannelDirectory', 'Refresh published channels', [true])}
       </div>
-      <div id="channelDirectoryFeed"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Loading published channels&hellip;</small></p></div>
+      <div id="channelDirectoryFeed"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>Loading published channels&hellip;</small></p></div>
     </div>
   </div>
 
   <!-- Submenu 3: Import & Merge Tools -->
   <div class="channels-subpanel" id="channelsSubImport" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Import channel from a link</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a TV channel catalog.</p>
-      <div class="row" style="margin-bottom:8px;">
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste any MDBList, Trakt, or TMDB show list URL to import directly as a TV channel catalog.</p>
+      <div class="row u-mb-8px">
         <input type="text" id="channelImportUrlInput" placeholder="mdblist.com, trakt.tv, or themoviedb.org show list URL">
       </div>
       <div class="row">
         <input type="text" id="channelImportNameInput" placeholder="Channel name (e.g. Sitcom Central)">
         <button type="button" class="secondary" data-act="importChannelFromLink" data-act-args="[&quot;@self&quot;]">Import channel</button>
       </div>
-      <label class="channel-rule-row" style="margin-top:10px;">
+      <label class="channel-rule-row u-mt-10px">
         <input type="checkbox" id="channelImportLiveSyncCheck" checked>
         <span>Live Cloud Sync &mdash; keep this channel following the list instead of taking a one-time snapshot</span>
       </label>
-      <p style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">The channel remembers the list URL and rebuilds its pool in the background, so titles the list gains turn up here on their own.</p>
+      <p class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">The channel remembers the list URL and rebuilds its pool in the background, so titles the list gains turn up here on their own.</p>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
-      <div class="shelf-header" style="margin-bottom:8px;">
+    <div class="panel u-mt-12px">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Add a shared channel</h2>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Paste a channel share link (or just its code) to rebuild that exact channel here &mdash; every pick, its play order and its broadcast schedule.</p>
       <div class="row">
         <input type="text" id="channelShareCodeInput" placeholder="https://... /channel/AbC123 &mdash; or the code on its own" data-act-on="keydown" data-act="importSharedChannel" data-act-keys="Enter" data-act-prevent data-act-args="[&quot;@self&quot;]">
         <button type="button" class="secondary" data-act="importSharedChannel" data-act-args="[&quot;@self&quot;]">Add channel</button>
       </div>
-      <div id="channelShareImportStatus" style="margin-top:8px;"></div>
+      <div id="channelShareImportStatus" class="u-mt-8px"></div>
     </div>
   </div>
 
   <!-- Custom Channel Builder / Editor -->
   <div class="channels-subpanel" id="channelsSubBuild" style="display:none;">
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:10px;">
+      <div class="shelf-header u-mb-10px">
         <h2 class="shelf-title" id="channelEditorTitle">Create a Custom Channel</h2>
       </div>
-      <p style="margin:0 0 16px; color:var(--muted); font-size:var(--font-size-sm);">Curate, reorder, and manage picks for this custom channel.</p>
+      <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_sm">Curate, reorder, and manage picks for this custom channel.</p>
 
       <!-- 1. Channel Name -->
-      <div style="margin-bottom:16px; max-width:480px;">
+      <div class="u-mb-16px u-maxw-480px">
         <label for="channelNameInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:6px;">Channel Name</label>
         <input type="text" id="channelNameInput" placeholder="Channel name (e.g. Comedy Night)">
       </div>
@@ -35662,8 +35852,8 @@ if ('serviceWorker' in navigator) {
       <!-- 2. Public Channel Toggle -->
       <div id="channelVisibilityRow" style="padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
         <div>
-          <span style="font-size:var(--font-size-sm); font-weight:600; color:var(--text);">Public Channel</span>
-          <p style="margin:2px 0 0; font-size:var(--font-size-xs); color:var(--muted);">Make this channel visible on your public creator profile and discoverable in the community directory</p>
+          <span class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Public Channel</span>
+          <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Make this channel visible on your public creator profile and discoverable in the community directory</p>
         </div>
         <label class="ui-toggle" aria-label="Make channel public">
           <input type="checkbox" id="channelPublicToggle" checked>
@@ -35672,16 +35862,16 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- 3. Search & Add Titles -->
-      <div class="custom-list-search-section" style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; background:var(--surface); margin-bottom:16px; box-shadow:var(--shadow-sm);">
+      <div class="custom-list-search-section u-bd-1px_solid_v_border u-br-v_radius_md u-p-16px u-bg-v_surface u-mb-16px u-bsh-v_shadow_sm">
         <label for="channelSearchInput" style="display:block; font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Add Titles to Channel</label>
-        <p style="margin:0 0 10px; font-size:var(--font-size-sm); color:var(--muted);">Search any TV show or movie to add to your channel.</p>
-      <div class="subnav-pills-bar" id="channelSearchTypeChips" style="margin-bottom:10px;">
+        <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search any TV show or movie to add to your channel.</p>
+      <div class="subnav-pills-bar u-mb-10px" id="channelSearchTypeChips">
         <button type="button" class="subnav-pill active" id="channelSearchTypeShowsBtn" data-act="setChannelSearchType" data-act-args="[&quot;tv&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> Shows</button>
         <button type="button" class="subnav-pill" id="channelSearchTypeMoviesBtn" data-act="setChannelSearchType" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill" id="channelSearchTypePeopleBtn" data-act="setChannelSearchType" data-act-args="[&quot;person&quot;,&quot;@self&quot;]">Actors &amp; Directors</button>
       </div>
-      <div class="row" style="gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <div class="row u-gap-8px">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
         </div>
@@ -35693,44 +35883,44 @@ if ('serviceWorker' in navigator) {
       <div id="channelCrossoverSuggestions" style="display:none; margin-top:14px;"></div>
       </div>
 
-      <p style="margin-top:14px; margin-bottom:6px; font-weight:600; font-size:var(--font-size-sm);">Picks in this channel: <span id="channelDraftCountBadge" style="color:var(--muted); font-weight:500;"></span></p>
-      <div id="channelDraftStats" style="margin:0 0 8px; color:var(--muted); font-size:var(--font-size-xs);"></div>
-      <div class="row" style="margin-bottom:8px; gap:8px;">
-        <div class="search-input-box" style="flex:1;">
+      <p class="u-mt-14px u-mb-6px u-fw-600 u-fs-v_font_size_sm">Picks in this channel: <span id="channelDraftCountBadge" class="u-c-v_muted u-fw-500"></span></p>
+      <div id="channelDraftStats" class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_xs"></div>
+      <div class="row u-mb-8px u-gap-8px">
+        <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
         </div>
         <button type="button" class="secondary lc-btn" id="channelDraftSelectModeBtn" style="flex:none; width:auto; white-space:nowrap;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
       <div id="channelDraftBulkBar" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; padding:8px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface);">
-        <span id="channelDraftSelectionCount" style="font-size:var(--font-size-sm); font-weight:600;">0 selected</span>
+        <span id="channelDraftSelectionCount" class="u-fs-v_font_size_sm u-fw-600">0 selected</span>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[true]">Select shown</button>
         <button type="button" class="secondary lc-btn" data-act="selectAllChannelDraftShown" data-act-args="[false]">Clear</button>
-        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" style="font-size:var(--font-size-sm); padding:5px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <select id="channelDraftSelectShowSelect" data-act="appActSelectChannelDraftGroup" data-act-args="[&quot;@self&quot;,&quot;@value&quot;]" class="u-fs-v_font_size_sm u-p-5px_8px u-bg-v_bg u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">
           <option value="">Select a whole show or season&hellip;</option>
         </select>
-        <span style="flex:1;"></span>
+        <span class="u-flex-1"></span>
         <button type="button" class="secondary lc-btn" data-act="pairChannelDraftSelection" title="Play these picks back to back, in this order">Pair</button>
         <button type="button" class="secondary lc-btn" data-act="unpairChannelDraftSelection" title="Drop any hand-made pairing on these picks">Unpair</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;top&quot;]">To top</button>
         <button type="button" class="secondary lc-btn" data-act="moveChannelDraftSelection" data-act-args="[&quot;bottom&quot;]">To bottom</button>
         <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeChannelDraftSelection">Remove selected</button>
       </div>
-      <div id="channelDraftList"><p style="color:var(--muted); font-size:var(--font-size-sm);"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
-      <div class="actions" style="margin-top:8px; justify-content:flex-start; gap:8px;">
+      <div id="channelDraftList"><p class="u-c-v_muted u-fs-v_font_size_sm"><small>Nothing added yet &mdash; search above to get started.</small></p></div>
+      <div class="actions u-mt-8px u-jc-flex_start u-gap-8px">
         <button type="button" class="secondary lc-btn" data-act="appActShuffleChannelPicks">Shuffle Picks Now</button>
         <button type="button" class="secondary lc-btn" style="color:var(--danger); border-color:rgba(255,59,48,0.25);" data-act="removeAllChannelDraftPicks">Remove All</button>
       </div>
       <!-- Advanced Settings (Progressive Disclosure) -->
-      <details class="channel-advanced-details" style="margin-top:14px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; background:var(--surface);">
+      <details class="channel-advanced-details u-mt-14px u-bd-1px_solid_v_border u-br-v_radius_sm u-p-10px_14px u-bg-v_surface">
         <summary style="font-weight:600; font-size:var(--font-size-sm); cursor:pointer; user-select:none; color:var(--text); display:flex; align-items:center; justify-content:space-between;">
           <span>Advanced Settings</span>
-          <span style="font-size:var(--font-size-xs); color:var(--muted); font-weight:normal;">Play order, rotation &amp; broadcast schedule</span>
+          <span class="u-fs-v_font_size_xs u-c-v_muted u-fw-normal">Play order, rotation &amp; broadcast schedule</span>
         </summary>
-        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+        <div class="u-mt-14px u-bdt-1px_solid_v_border u-pt-12px">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-            <label for="channelPlayOrderSelect" style="font-size:var(--font-size-sm); font-weight:600; white-space:nowrap;">Play order:</label>
-            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" style="flex:1; min-width:210px; font-size:var(--font-size-sm); padding:6px 10px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm);">
+            <label for="channelPlayOrderSelect" class="u-fs-v_font_size_sm u-fw-600 u-ws-nowrap">Play order:</label>
+            <select id="channelPlayOrderSelect" data-act="applyChannelPlayOrder" data-act-args="[&quot;@value&quot;]" class="u-flex-1 u-minw-210px u-fs-v_font_size_sm u-p-6px_10px u-bg-v_surface u-c-v_text u-bd-1px_solid_v_border u-br-v_radius_sm">
               <option value="as-listed">Creation order (as listed)</option>
               <option value="aired-asc">Air date &mdash; oldest first</option>
               <option value="aired-desc">Air date &mdash; newest first</option>
@@ -35740,11 +35930,11 @@ if ('serviceWorker' in navigator) {
               <option value="shuffle-daily">Shuffle daily (reshuffles every 24h)</option>
             </select>
           </div>
-          <p id="channelPlayOrderHint" style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-xs);">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
+          <p id="channelPlayOrderHint" class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_xs">Picks play in the order you created above &mdash; drag one, or type a new position, to change it.</p>
 
           <!-- Broadcast schedule & smart rules -->
-          <div style="border-top:1px solid var(--border); padding-top:12px;">
-            <p style="margin:0 0 8px; font-weight:600; font-size:var(--font-size-sm);">Broadcast schedule</p>
+          <div class="u-bdt-1px_solid_v_border u-pt-12px">
+            <p class="u-m-0_0_8px u-fw-600 u-fs-v_font_size_sm">Broadcast schedule</p>
             <label class="channel-rule-row">
               <input type="checkbox" id="channelDailyRotateCheck" data-act="updateChannelBroadcastControls">
               <span>Daily Broadcast Schedule &mdash; run a fresh lineup out of these picks every day</span>
@@ -35766,21 +35956,21 @@ if ('serviceWorker' in navigator) {
                 </select>
               </label>
             </div>
-            <p id="channelDailyRotateHint" style="margin:6px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Off &mdash; every pick in this channel plays, in the order above.</p>
+            <p id="channelDailyRotateHint" class="u-m-6px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; every pick in this channel plays, in the order above.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelHideWatchedCheck">
               <span>Hide watched &mdash; skip episodes already in my watch history</span>
             </label>
-            <p style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
+            <p class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Needs Auto-track playback signed in. Once every pick has been seen, the whole channel comes back rather than going dark. Leave it off to keep watched episodes in the rotation.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelPairPartsCheck" data-act="updateChannelBroadcastControls">
               <span>Keep multi-part episodes together</span>
             </label>
-            <p id="channelPairPartsHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
+            <p id="channelPairPartsHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Finds &ldquo;Part 1&rdquo; / &ldquo;Pt. II&rdquo; / &ldquo;(2)&rdquo; in episode titles. Whenever one part is on today, the rest play straight after it instead of turning up tomorrow.</p>
 
-            <label class="channel-rule-row" style="margin-top:10px;">
+            <label class="channel-rule-row u-mt-10px">
               <input type="checkbox" id="channelAutoNewEpisodesCheck" data-act="updateChannelBroadcastControls">
               <span>Automatically add new episodes</span>
             </label>
@@ -35790,41 +35980,41 @@ if ('serviceWorker' in navigator) {
                 <span>Put new episodes at the top</span>
               </label>
             </div>
-            <p id="channelAutoNewEpisodesHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);">Off &mdash; this channel plays the picks below and nothing else.</p>
+            <p id="channelAutoNewEpisodesHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs">Off &mdash; this channel plays the picks below and nothing else.</p>
 
             <div id="channelLiveSyncRow" style="display:none; margin-top:10px;">
               <label class="channel-rule-row">
                 <input type="checkbox" id="channelLiveSyncCheck">
                 <span>Live Cloud Sync &mdash; refresh this channel from its source list</span>
               </label>
-              <p id="channelLiveSyncHint" style="margin:2px 0 0 24px; color:var(--muted); font-size:var(--font-size-xs);"></p>
+              <p id="channelLiveSyncHint" class="u-m-2px_0_0_24px u-c-v_muted u-fs-v_font_size_xs"></p>
             </div>
 
-            <div id="channelStoryLockSection" style="margin-top:12px;"></div>
+            <div id="channelStoryLockSection" class="u-mt-12px"></div>
           </div>
         </div>
       </details>
 
       <!-- Channel Poster Selection Section -->
       <div id="channelPosterPickerSection" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px; display:none;">
-        <p style="margin:0 0 4px; font-weight:600; font-size:var(--font-size-sm);">Channel Poster:</p>
-        <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Choose a show poster (ranked by most episodes) or choose our custom channel poster.</p>
+        <p class="u-m-0_0_4px u-fw-600 u-fs-v_font_size_sm">Channel Poster:</p>
+        <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Choose a show poster (ranked by most episodes) or choose our custom channel poster.</p>
         <div id="channelPosterChoicesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:10px;"></div>
-        <div style="margin-top:12px;">
-          <p style="margin:0 0 6px; font-size:var(--font-size-sm); font-weight:600; color:var(--muted);">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
-          <div class="row" style="gap:8px;">
-            <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" style="flex:1; font-size:var(--font-size-sm);">
-            <button type="button" class="secondary" style="white-space:nowrap; font-size:var(--font-size-sm);" data-act="applyChannelPosterUrl">Use This</button>
+        <div class="u-mt-12px">
+          <p class="u-m-0_0_6px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Or use a custom image URL (JPEG, PNG, WebP, GIF):</p>
+          <div class="row u-gap-8px">
+            <input type="url" id="channelPosterUrlInput" placeholder="https://example.com/poster.jpg" class="u-flex-1 u-fs-v_font_size_sm">
+            <button type="button" class="secondary u-ws-nowrap u-fs-v_font_size_sm" data-act="applyChannelPosterUrl">Use This</button>
           </div>
           <div id="channelPosterUrlPreview" style="margin-top:8px; align-items:center; gap:10px; display:none;">
             <img id="channelPosterUrlImg" src="" alt="Poster preview" style="width:54px; height:80px; object-fit:cover; border-radius:var(--radius-xs); border:2px solid var(--accent);" loading="lazy">
-            <span id="channelPosterUrlStatus" style="font-size:var(--font-size-xs); color:var(--muted);"></span>
+            <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs u-c-v_muted"></span>
           </div>
         </div>
       </div>
 
       <!-- Bottom Action Bar -->
-      <div class="actions" style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px; justify-content:flex-end; gap:10px;">
+      <div class="actions u-mt-18px u-bdt-1px_solid_v_border u-pt-14px u-jc-flex_end u-gap-10px">
         <button type="button" id="channelCancelEditBtn" class="secondary lc-btn" style="display:none;" data-act="cancelEditChannel">Cancel</button>
         <button type="button" class="primary lc-btn" id="channelSaveBtn" data-act="saveChannel" style="padding:8px 24px; font-weight:600;">Create Channel</button>
       </div>
@@ -35834,7 +36024,7 @@ if ('serviceWorker' in navigator) {
 
 <div class="tab-panel" data-tab-panel="search" id="content-search" role="tabpanel" aria-labelledby="tab-desktop-search" hidden>
   <div class="panel">
-    <div class="shelf-header" style="margin-bottom:12px;">
+    <div class="shelf-header u-mb-12px">
       <h2 class="shelf-title">Search Movies, TV Shows &amp; Lists</h2>
     </div>
     
@@ -35919,7 +36109,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
 
-    <div id="catalogSearchResult" style="margin-top:14px;"></div>
+    <div id="catalogSearchResult" class="u-mt-14px"></div>
   </div>
 </div>
 <div class="tab-panel" data-tab-panel="settings" id="content-settings" role="tabpanel" aria-labelledby="tab-desktop-settings" hidden>
@@ -35937,41 +36127,41 @@ if ('serviceWorker' in navigator) {
   <div class="settings-subpanel" id="settingsSubBackup" style="display:none;">
     <div class="panel">
       <div class="shelf-header" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-        <h2 class="shelf-title" style="margin:0;">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
+        <h2 class="shelf-title u-m-0">My Presets <span class="badge" id="presetsCountBadge"></span></h2>
         <div>
           <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;presetFileInput&quot;]" style="white-space:nowrap; padding:6px 14px; font-size:var(--font-size-sm);">Upload preset file</button>
           <input type="file" id="presetFileInput" aria-label="Choose a preset file to upload" accept="application/json,.json" style="display:none;" data-act="uploadPresetFile" data-act-args="[&quot;@self&quot;]">
         </div>
       </div>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Save your current setup as a named preset to reuse or download as a file.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Save your current setup as a named preset to reuse or download as a file.</p>
       <div class="preset-create-group" style="display:flex; gap:8px; align-items:stretch; margin-bottom:10px; max-width:540px;">
-        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" style="flex:1; min-width:0; padding:8px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base);">
+        <input type="text" id="presetNameInput" placeholder="Preset name (e.g. Home Cinema)" class="u-flex-1 u-minw-0 u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base">
         <button type="button" class="primary lc-btn" data-act="saveCurrentAsPreset" style="white-space:nowrap; padding:0 18px;">Save preset</button>
       </div>
-      <div id="presetsList" style="margin-top:10px;"></div>
+      <div id="presetsList" class="u-mt-10px"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Backup &amp; Restore</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export a complete backup snapshot of your catalogs, custom lists, watchlist, watch history, continue watching, channels, presets, and settings &mdash; or restore from a previous JSON backup.</p>
       
       <div class="backup-quick-grid">
         <div style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Download Backup
             </div>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Save a complete snapshot file (.json) with all your catalogs, lists, channels, history, and settings.</p>
           </div>
           <button type="button" class="secondary lc-btn" data-act="downloadConfigJson" style="align-self:flex-start; padding:8px 18px; font-weight:600;">Download Backup File</button>
         </div>
 
         <div style="border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 18px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">
               Restore from File
             </div>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Restore your previous setup from an exported backup .json file.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Restore your previous setup from an exported backup .json file.</p>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;configFileInput&quot;]" style="padding:8px 18px; font-weight:600;">Upload &amp; Restore File</button>
@@ -36001,15 +36191,15 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Export Lists & History (Universal CSV / Trakt / Letterboxd / MDBList / Simkl) -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Export Lists &amp; History</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Export your Watch History, Continue Watching, and Custom Lists in standard CSV or JSON format for easy import into Trakt, Letterboxd, MDBList, Simkl, or IMDb.</p>
       
       <div style="display:flex; flex-direction:column; gap:12px;">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:var(--radius-md);">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">Watch History</div>
-            <div style="font-size:var(--font-size-sm); color:var(--muted);">All watched movies, shows, and episodes with timestamps</div>
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">Watch History</div>
+            <div class="u-fs-v_font_size_sm u-c-v_muted">All watched movies, shows, and episodes with timestamps</div>
           </div>
           <div class="export-actions-grid">
             <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;watch-history&quot;,&quot;trakt&quot;]">CSV (Trakt / Simkl)</button>
@@ -36020,8 +36210,8 @@ if ('serviceWorker' in navigator) {
 
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:14px 18px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); border-radius:var(--radius-md);">
           <div>
-            <div style="font-weight:700; font-size:var(--font-size-base); color:var(--text);">All Custom Lists &amp; Watchlist</div>
-            <div style="font-size:var(--font-size-sm); color:var(--muted);">Export all created lists, watchlist, and continue watching items</div>
+            <div class="u-fw-700 u-fs-v_font_size_base u-c-v_text">All Custom Lists &amp; Watchlist</div>
+            <div class="u-fs-v_font_size_sm u-c-v_muted">Export all created lists, watchlist, and continue watching items</div>
           </div>
           <div class="export-actions-grid">
             <button type="button" class="secondary lc-btn" data-act="exportDataToCsv" data-act-args="[&quot;all-custom-lists&quot;,&quot;standard&quot;]">Export All (CSV)</button>
@@ -36043,18 +36233,18 @@ if ('serviceWorker' in navigator) {
   <div class="settings-subpanel" id="settingsSubDisplay" style="display:none;">
     <!-- Consolidated Catalog & Content Rules (P1 & P2) -->
     <div class="panel">
-      <div class="shelf-header" style="margin-bottom:8px;">
+      <div class="shelf-header u-mb-8px">
         <h2 class="shelf-title">Catalog &amp; Content Rules</h2>
       </div>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Configure streaming availability, digital release filters, cross-list deduplication, and adult content safety.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Configure streaming availability, digital release filters, cross-list deduplication, and adult content safety.</p>
 
       <div class="settings-row-group">
         <!-- Region -->
-        <div class="settings-row-item" style="padding-bottom:14px; border-bottom:1px solid var(--border);">
+        <div class="settings-row-item u-pb-14px u-bdb-1px_solid_v_border">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:240px;">
-              <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Content Region</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
+            <div class="u-flex-1 u-minw-240px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Content Region</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Used for streaming-availability catalogs (Netflix, Disney+, etc.), Stream Releases, and content ratings.</p>
             </div>
             <div style="flex:none; width:100%; max-width:320px;">
               <select id="regionSelect" aria-label="Streaming region" data-act="appActStoreSettingValue" data-act-args="[&quot;myListAddon:region&quot;,&quot;@value&quot;]" style="width:100%; max-width:320px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
@@ -36065,14 +36255,14 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <!-- Digital Release Filter -->
-        <div class="settings-row-item" style="padding:14px 0; border-bottom:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0; border:none;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Hide items with no digital release</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
-              <details style="margin-top:6px; font-size:var(--font-size-sm); color:var(--muted);">
-                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">More details</summary>
-                <p style="margin:4px 0 0;">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
+        <div class="settings-row-item u-p-14px_0 u-bdb-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0 u-bd-none">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Hide items with no digital release</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Removes still-in-theaters movies with no known digital or physical release from TMDB Trending and Popular catalogs.</p>
+              <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+                <summary class="u-cur-pointer u-c-v_accent u-fw-600">More details</summary>
+                <p class="u-m-4px_0_0">Useful for skipping in-theaters titles you cannot stream or buy yet. TV Shows are not affected. Requires Save/Update to take effect on an existing install link.</p>
               </details>
             </div>
             <label class="ui-toggle" aria-label="Hide items with no digital release">
@@ -36083,14 +36273,14 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <!-- Deduplication -->
-        <div class="settings-row-item" id="legacyDedupePanel" style="padding:14px 0; border-bottom:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0; border:none;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Remove duplicate items across lists</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
-              <details style="margin-top:6px; font-size:var(--font-size-sm); color:var(--muted);">
-                <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How row deduplication works</summary>
-                <p style="margin:4px 0 0;">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
+        <div class="settings-row-item u-p-14px_0 u-bdb-1px_solid_v_border" id="legacyDedupePanel">
+          <div class="settings-toggle-row u-p-0 u-bd-none">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Remove duplicate items across lists</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically removes titles from lower catalog rows if already shown in a row above.</p>
+              <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+                <summary class="u-cur-pointer u-c-v_accent u-fw-600">How row deduplication works</summary>
+                <p class="u-m-4px_0_0">Keeps your top catalog row intact; every list below it has items shown in earlier lists filtered out. Drag lists in Catalogs to change priority. Requires Save/Update to take effect on an existing install link.</p>
               </details>
             </div>
             <label class="ui-toggle" aria-label="Remove duplicate items across lists">
@@ -36101,11 +36291,11 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <!-- Adult Content -->
-        <div class="settings-row-item" style="padding-top:14px;">
-          <div class="settings-toggle-row" style="padding:0; border:none;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Adult Content Filter</span>
-              <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
+        <div class="settings-row-item u-pt-14px">
+          <div class="settings-toggle-row u-p-0 u-bd-none">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Adult Content Filter</span>
+              <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Filter NSFW posters and replace default unfiltered posters with safe, age-appropriate ones across your catalogs, search, continue watching, and Stremio/Nuvio.</p>
             </div>
             <label class="ui-toggle" aria-label="Adult Content Filter">
               <input type="checkbox" id="adultContentFilterCheckbox" ${initialAdultContentFilter ? 'checked' : ''} data-act="appActToggleAdultFilter" data-act-args="[&quot;@checked&quot;]">
@@ -36117,16 +36307,16 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Better Posters Panel (P2 & P3) -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Better Posters</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
-      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Use Better Posters artwork</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
-          <details style="margin-top:6px; font-size:var(--font-size-sm); color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
-            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Swap plain poster artwork for <a href="https://btttr.cc/" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">BetterPosters</a> &mdash; posters with the genre, rating and tags drawn directly into the artwork. No API key or account needed.</p>
+      <div class="settings-toggle-row u-p-0_0_12px u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use Better Posters artwork</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Enriches artwork across Live Preview, Search, Discover, and your streaming catalog rows.</p>
+          <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+            <summary class="u-cur-pointer u-c-v_accent u-fw-600">Artwork compatibility details</summary>
+            <p class="u-m-4px_0_0">Only titles with an IMDb ID are affected. Poster badges are drawn over this artwork rather than replacing it. Adult Content Filter still overrides it. TV Channel artwork and episode stills are preserved.</p>
           </details>
         </div>
         <label class="ui-toggle" aria-label="Use Better Posters artwork">
@@ -36135,74 +36325,74 @@ if ('serviceWorker' in navigator) {
         </label>
       </div>
       <div id="betterPostersOptions" style="display:${initialBetterPosters ? 'flex' : 'none'}; flex-direction:column; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
-        <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--text);">What to draw on the poster</div>
+        <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text">What to draw on the poster</div>
         <div class="settings-check-group two-col-grid">
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersGenreCheckbox" ${initialBetterPostersGenre ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersGenre&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Genre</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Genre label along the bottom of the poster.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Genre</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Genre label along the bottom of the poster.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersRatingCheckbox" ${initialBetterPostersRating ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRating&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Rating</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Star rating along the bottom of the poster.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Rating</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Star rating along the bottom of the poster.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersTrendTagsCheckbox" ${initialBetterPostersTrendTags ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersTrendTags&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Trend tags</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">A corner tag on titles that are currently trending or newly released.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Trend tags</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">A corner tag on titles that are currently trending or newly released.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersQualityCheckbox" ${initialBetterPostersQuality ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersQuality&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Quality tags</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Quality tags</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">4K, Dolby Vision and Atmos badges, where BetterPosters knows them.</p>
             </div>
           </label>
           <label class="settings-check-item">
             <input type="checkbox" id="betterPostersAgeCheckbox" ${initialBetterPostersAge ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersAge&quot;,&quot;@checked&quot;]">
-            <div style="flex:1; min-width:0;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Age rating</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Certification chip (PG-13, TV-MA, and so on).</p>
+            <div class="u-flex-1 u-minw-0">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Age rating</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Certification chip (PG-13, TV-MA, and so on).</p>
             </div>
           </label>
         </div>
         <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
-          <div style="flex:1; min-width:220px; max-width:320px;">
+          <div class="u-flex-1 u-minw-220px u-maxw-320px">
             <label for="betterPostersRatingSourceSelect" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Rating source</label>
             <select id="betterPostersRatingSourceSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersRatingSource&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
               ${betterPostersRatingSourceOptionsHtml}
             </select>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Which score the rating is taken from.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Which score the rating is taken from.</p>
           </div>
-          <div style="flex:1; min-width:220px; max-width:320px;">
+          <div class="u-flex-1 u-minw-220px u-maxw-320px">
             <label for="betterPostersLangSelect" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Poster language</label>
             <select id="betterPostersLangSelect" data-act="toggleBetterPostersSetting" data-act-args="[&quot;betterPostersLang&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
               ${betterPostersLangOptionsHtml}
             </select>
-            <p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Language BetterPosters draws text in.</p>
+            <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Language BetterPosters draws text in.</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- RatingPosterDB Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">RatingPosterDB</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Swap plain poster artwork for <a href="https://ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">RatingPosterDB</a> posters with ratings drawn on, styled the way you set them up at <a href="https://manager.ratingposterdb.com/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">manager.ratingposterdb.com</a>. Needs your own paid RPDB API key.</p>
-      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Use RatingPosterDB artwork</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Replaces poster artwork in Stremio and Nuvio. Turns Better Posters and Pictorium off, because only one can draw a poster.</p>
-          <details style="margin-top:6px; font-size:var(--font-size-sm); color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">How your request limit is protected</summary>
-            <p style="margin:4px 0 0;">Every poster RatingPosterDB sends counts against your key's monthly limit, so posters are not loaded from it directly. This add-on fetches each poster once, keeps it for three days, and shows it to every device from that copy. It asks RatingPosterDB for at most 20 new posters a minute, so a page of new titles fills in over a few minutes (the ordinary poster shows meanwhile), and it stops asking once 95% of your monthly limit is used. Only titles with an IMDb ID are affected. Airing Next and date badges are not drawn over these posters. The website keeps its normal posters.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Swap plain poster artwork for <a href="https://ratingposterdb.com/" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">RatingPosterDB</a> posters with ratings drawn on, styled the way you set them up at <a href="https://manager.ratingposterdb.com/" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">manager.ratingposterdb.com</a>. Needs your own paid RPDB API key.</p>
+      <div class="settings-toggle-row u-p-0_0_12px u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use RatingPosterDB artwork</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Replaces poster artwork in Stremio and Nuvio. Turns Better Posters and Pictorium off, because only one can draw a poster.</p>
+          <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+            <summary class="u-cur-pointer u-c-v_accent u-fw-600">How your request limit is protected</summary>
+            <p class="u-m-4px_0_0">Every poster RatingPosterDB sends counts against your key's monthly limit, so posters are not loaded from it directly. This add-on fetches each poster once, keeps it for three days, and shows it to every device from that copy. It asks RatingPosterDB for at most 20 new posters a minute, so a page of new titles fills in over a few minutes (the ordinary poster shows meanwhile), and it stops asking once 95% of your monthly limit is used. Only titles with an IMDb ID are affected. Airing Next and date badges are not drawn over these posters. The website keeps its normal posters.</p>
           </details>
         </div>
         <label class="ui-toggle" aria-label="Use RatingPosterDB artwork">
@@ -36214,25 +36404,25 @@ if ('serviceWorker' in navigator) {
         <div>
           <label for="rpdbKeyInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">API key</label>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" style="flex:1; min-width:200px; max-width:380px; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
+            <input type="password" id="rpdbKeyInput" value="${escapeHtmlServer(initialRpdbKey)}" placeholder="t1-..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;rpdbKey&quot;,&quot;@value&quot;]" class="u-flex-1 u-minw-200px u-maxw-380px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box">
             <button type="button" class="secondary lc-btn" data-act="testRpdbKey" data-act-args="[&quot;@self&quot;]" style="border-radius:var(--radius-pill);">Test key</button>
           </div>
-          <p id="rpdbKeyStatus" style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
+          <p id="rpdbKeyStatus" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">Your key starts with t1- to t4- and is in the email RatingPosterDB sent you, or at ratingposterdb.com after you log in with Patreon. Test key shows whether it works and how much of this month's limit is used.</p>
         </div>
       </div>
     </div>
 
     <!-- Pictorium Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Pictorium</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Swap plain poster artwork for posters drawn by your own <a href="https://github.com/Eful97/Pictorium" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">Pictorium</a> space &mdash; ratings, streaming quality, Netflix Top 10 ribbons, awards and more, styled the way you set them up there. Needs a Pictorium space with your own TMDB key.</p>
-      <div class="settings-toggle-row" style="padding:0 0 12px; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Use Pictorium artwork</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters and RatingPosterDB off, because only one can draw a poster.</p>
-          <details style="margin-top:6px; font-size:var(--font-size-sm); color:var(--muted);">
-            <summary style="cursor:pointer; color:var(--accent); font-weight:600;">Artwork compatibility details</summary>
-            <p style="margin:4px 0 0;">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Swap plain poster artwork for posters drawn by your own <a href="https://github.com/Eful97/Pictorium" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">Pictorium</a> space &mdash; ratings, streaming quality, Netflix Top 10 ribbons, awards and more, styled the way you set them up there. Needs a Pictorium space with your own TMDB key.</p>
+      <div class="settings-toggle-row u-p-0_0_12px u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use Pictorium artwork</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Replaces poster artwork in Stremio and Nuvio and across the website. Turns Better Posters and RatingPosterDB off, because only one can draw a poster.</p>
+          <details class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">
+            <summary class="u-cur-pointer u-c-v_accent u-fw-600">Artwork compatibility details</summary>
+            <p class="u-m-4px_0_0">Only titles with an IMDb ID are affected. Pictorium draws its own badges, so the Airing Next and date badges are not drawn over its posters. Adult Content Filter still overrides it on the website. TV Channel artwork and episode stills are preserved.</p>
           </details>
         </div>
         <label class="ui-toggle" aria-label="Use Pictorium artwork">
@@ -36244,18 +36434,18 @@ if ('serviceWorker' in navigator) {
         <div>
           <label for="pictoriumUrlInput" style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Poster link</label>
           <input type="url" id="pictoriumUrlInput" value="${escapeHtmlServer(initialPictoriumUrl)}" placeholder="https://your-pictorium-host/api/poster/{type}/{tmdb_id|imdb_id}?u=..." autocomplete="off" spellcheck="false" data-act="toggleBetterPostersSetting" data-act-args="[&quot;pictoriumUrl&quot;,&quot;@value&quot;]" style="width:100%; padding:7px 12px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-sm); box-sizing:border-box;">
-          <p id="pictoriumUrlHint" style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-xs);">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
+          <p id="pictoriumUrlHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_xs">In your Pictorium space, copy the <strong>AIOMetadata</strong> poster link and paste it here as it is. It has to start with https:// and contain <code>/api/poster/</code>, <code>{type}</code> and <code>{tmdb_id|imdb_id}</code>.</p>
         </div>
       </div>
     </div>
 
     <!-- Metadata Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Metadata</h2>
-      <div class="settings-toggle-row" style="padding:0; border-bottom:none;">
-        <div style="flex:1; min-width:0; padding-right:12px;">
-          <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Use My Lists Addon metadata</span>
-          <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
+      <div class="settings-toggle-row u-p-0 u-bdb-none">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use My Lists Addon metadata</span>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
         </div>
         <label class="ui-toggle" aria-label="Use My Lists Addon metadata">
           <input type="checkbox" id="provideMetadataCheckbox" ${initialProvideMetadata ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;provideMetadata&quot;,&quot;@checked&quot;]">
@@ -36265,135 +36455,135 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Poster Badges & Labels Panel (P3) -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Poster Badges &amp; Labels</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Customize which badges and indicators are displayed on posters across your website dashboard, catalogs, and Stremio/Nuvio.</p>
       <div style="display:flex; flex-direction:column; gap:16px;">
         <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Website &amp; Dashboard</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Website &amp; Dashboard</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesAiringNext&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Airing Next (Dashboard)</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Airing Next shelf and provider lists on your dashboard</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Airing Next (Dashboard)</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Airing Next shelf and provider lists on your dashboard</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesContinueWatching&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Continue Watching</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">In-progress series on your website dashboard</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Continue Watching</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">In-progress series on your website dashboard</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesWatchlist&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Watchlist</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Shows in your Watchlist with upcoming episodes</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Watchlist</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Shows in your Watchlist with upcoming episodes</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeTraktContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesTraktContinueWatching&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Trakt Continue Watching</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Connected Trakt Continue Watching series</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Trakt Continue Watching</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Connected Trakt Continue Watching series</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeMdblistUpNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesMdblistUpNext&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">MDBList Up Next</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Connected MDBList Up Next series</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">MDBList Up Next</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Connected MDBList Up Next series</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesCatalogs&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Catalogs &amp; Live Preview</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Catalog rows, Catalogs Live Preview &amp; Editor, and See All views</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Catalogs &amp; Live Preview</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Catalog rows, Catalogs Live Preview &amp; Editor, and See All views</p>
               </div>
             </label>
           </div>
         </div>
 
         <div style="border-bottom:1px solid var(--border); padding-bottom:14px; display:flex; flex-direction:column; gap:6px;">
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Stremio &amp; Nuvio (Artwork Overlays)</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Stremio &amp; Nuvio (Artwork Overlays)</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioAiringNextCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioAiringNext&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Airing Next Catalogs in Stremio &amp; Nuvio</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Airing Next Catalogs in Stremio &amp; Nuvio</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay premiere, finale, and air date chips in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioContinueWatchingCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioContinueWatching&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Continue Watching Catalogs in Stremio &amp; Nuvio</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay chips on Continue Watching artwork in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioWatchlistCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioWatchlist&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Watchlist Catalogs in Stremio &amp; Nuvio</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Watchlist Catalogs in Stremio &amp; Nuvio</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay chips on Watchlist artwork in Stremio and Nuvio</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeStremioCatalogsCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgesStremioCatalogs&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Other Custom &amp; Provider Catalogs</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Overlay badges on MDBList, Trakt, Simkl, and Custom list rows</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Other Custom &amp; Provider Catalogs</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Overlay badges on MDBList, Trakt, Simkl, and Custom list rows</p>
               </div>
             </label>
           </div>
         </div>
 
         <div style="display:flex; flex-direction:column; gap:6px;">
-          <div style="font-size:var(--font-size-sm); font-weight:700; color:var(--text); margin-bottom:4px;">Badge Types</div>
+          <div class="u-fs-v_font_size_sm u-fw-700 u-c-v_text u-mb-4px">Badge Types</div>
           <div class="settings-check-group two-col-grid">
             <label class="settings-check-item">
               <input type="checkbox" id="badgeAirDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeAirDate&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Upcoming Air Date</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>)</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Upcoming Air Date</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Air date countdown (e.g. <code>TODAY</code>, <code>TOMORROW</code>)</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeSeasonPremiereCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonPremiere&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Season Premiere</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Green <code>Season Premiere</code> badge on un-aired Episode 1s</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Season Premiere</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Green <code>Season Premiere</code> badge on un-aired Episode 1s</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeSeasonFinaleCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinale&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Season Finale</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Orange <code>Season Finale</code> badge on season finales</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Season Finale</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Orange <code>Season Finale</code> badge on season finales</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeSeasonFinaleDateCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeSeasonFinaleDate&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Season Finale Date</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Date when the season finale will air on mid-season episodes</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Season Finale Date</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Date when the season finale will air on mid-season episodes</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeTmdbRatingCheckbox" checked data-act="toggleTmdbRatingSetting" data-act-args="[&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">TMDb Ratings</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Star rating (e.g. <span style="color:#f5c518; font-weight:700;">★ 7.9</span>) beside the year/subtitle</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">TMDb Ratings</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Star rating (e.g. <span class="u-c-f5c518 u-fw-700">★ 7.9</span>) beside the year/subtitle</p>
               </div>
             </label>
             <label class="settings-check-item">
               <input type="checkbox" id="badgeWatchedCheckbox" checked data-act="toggleBadgeSetting" data-act-args="[&quot;showBadgeWatched&quot;,&quot;@checked&quot;]">
-              <div style="flex:1; min-width:0;">
-                <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Watched Status Badges</span>
-                <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Checkmark badge on movies and shows you've already watched</p>
+              <div class="u-flex-1 u-minw-0">
+                <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Watched Status Badges</span>
+                <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Checkmark badge on movies and shows you've already watched</p>
               </div>
             </label>
           </div>
@@ -36402,9 +36592,9 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Hidden Lists Panel -->
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Hidden Lists</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
       <div id="hiddenListsSettingsSection"></div>
     </div>
   </div>
@@ -36413,17 +36603,17 @@ if ('serviceWorker' in navigator) {
   <div class="settings-subpanel" id="settingsSubScrobble" style="display:none;">
     <div class="panel">
       <h2 class="panel-title">Watchlist Preferences</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Customize how watched movies and TV shows are managed in your personal Watchlist.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Customize how watched movies and TV shows are managed in your personal Watchlist.</p>
       <div id="watchlistPreferencesSection"></div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Watch History &amp; Continue Watching</h2>
-      <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
-        <div class="settings-toggle-row" style="padding-top:4px;">
-          <div style="flex:1; min-width:0; padding-right:12px;">
-            <span style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Storyline &amp; Companion Recommendations</span>
-            <p style="margin:3px 0 0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.35;">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
+      <div class="u-bdb-1px_solid_v_border u-pb-12px u-mb-12px">
+        <div class="settings-toggle-row u-pt-4px">
+          <div class="u-flex-1 u-minw-0 u-pr-12px">
+            <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Storyline &amp; Companion Recommendations</span>
+            <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically recommend canon bridge movies between seasons (e.g. <em>Demon Slayer: Mugen Train</em>) and sequel films or spin-off series when a show concludes (e.g. <em>Breaking Bad &rarr; El Camino &rarr; Better Call Saul</em>).</p>
           </div>
           <label class="ui-toggle" aria-label="Toggle Storyline and Companion Recommendations">
             <input type="checkbox" id="autoRecommendCompanionsCheckbox" checked data-act="toggleCompanionRecommendationSetting" data-act-args="[&quot;@checked&quot;]">
@@ -36431,16 +36621,16 @@ if ('serviceWorker' in navigator) {
           </label>
         </div>
       </div>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Reset or clear all recorded movies and episodes from your personal Watch History or in-progress Continue Watching.</p>
       <div id="watchHistorySettingsSection" style="display:flex; gap:10px; flex-wrap:wrap;">
         <button type="button" class="btn-danger btn-sm" data-act="clearWatchHistoryAll">Clear Watch History</button>
         <button type="button" class="btn-danger btn-sm" data-act="clearContinueWatchingAll">Clear Continue Watching</button>
       </div>
     </div>
 
-    <div class="panel" style="margin-top:12px;">
+    <div class="panel u-mt-12px">
       <h2 class="panel-title">Auto-Track &amp; Media Server Scrobbling</h2>
-      <p style="margin:0 0 10px; color:var(--muted); font-size:var(--font-size-sm);">Automatically scrobble and track watched movies and TV episodes across your streaming apps (Stremio, Nuvio, Wako, etc.) and home media servers (Plex, Jellyfin, Emby) into your personal Watch History and Continue Watching.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble and track watched movies and TV episodes across your streaming apps (Stremio, Nuvio, Wako, etc.) and home media servers (Plex, Jellyfin, Emby) into your personal Watch History and Continue Watching.</p>
       <div id="trackPlaybackSection"></div>
     </div>
   </div>
@@ -36449,7 +36639,7 @@ if ('serviceWorker' in navigator) {
   <div class="settings-subpanel" id="settingsSubExternal" style="display:none;">
     <div class="panel">
       <h2 class="panel-title">External Accounts &amp; API Keys</h2>
-      <p style="margin:0 0 12px; color:var(--muted); font-size:var(--font-size-sm);">Connect your external service accounts and API keys. When signed in to your Profile, your connected accounts stay synchronized across devices and logouts.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Connect your external service accounts and API keys. When signed in to your Profile, your connected accounts stay synchronized across devices and logouts.</p>
 
       <!-- TMDB Section -->
       <div class="provider-card" id="tmdbSection">
@@ -36457,7 +36647,7 @@ if ('serviceWorker' in navigator) {
           <div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span class="provider-card-title">The Movie Database (TMDB)</span>
-              <span id="tmdbConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="tmdbConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your TMDB account to import personal lists, watchlist, and favorites, or use a custom API key / Token.</p>
           </div>
@@ -36471,9 +36661,9 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom TMDB API Key / Token</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px;">
+          <div class="u-mt-10px">
             <input type="text" id="tmdbKeyInput" placeholder="Optional: TMDB API Key (v3) or Read Access Token (v4)" value="${escapeHtmlServer(initialTmdbKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;tmdb&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:6px 0 0; font-size:var(--font-size-xs); color:var(--muted);">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent-2);">themoviedb.org/settings/api</a>.</p>
+            <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free TMDB API key at <a href="https://www.themoviedb.org/settings/api" target="_blank" class="u-c-v_accent_2">themoviedb.org/settings/api</a>.</p>
           </div>
         </details>
       </div>
@@ -36484,7 +36674,7 @@ if ('serviceWorker' in navigator) {
           <div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span class="provider-card-title">Trakt</span>
-              <span id="traktConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="traktConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your Trakt account to import personal lists, watchlist, and collection, or use a custom Client ID.</p>
           </div>
@@ -36494,18 +36684,18 @@ if ('serviceWorker' in navigator) {
           <button type="button" class="secondary lc-btn" id="traktDeviceBtn" data-act="startTraktDeviceLogin" title="Connect from a TV or secondary device via trakt.tv/activate">Connect with PIN / Code</button>
           <button type="button" class="secondary lc-btn btn-danger" id="traktDisconnectBtn" style="display:none;" data-act="disconnectTrakt">Disconnect</button>
         </div>
-        <div id="traktSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:var(--radius-sm); border:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0 0 10px;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Sync Watch History to Trakt</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Automatically sync items marked as watched or played to your Trakt account history.</p>
+        <div id="traktSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sync Watch History to Trakt</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Automatically sync items marked as watched or played to your Trakt account history.</p>
             </div>
             <label class="ui-toggle" aria-label="Sync Watch History to Trakt">
               <input type="checkbox" id="syncTraktHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;trakt&quot;,&quot;@checked&quot;]">
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
-          <div style="margin-top:8px;">
+          <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn" id="syncTraktHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;trakt&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
           </div>
         </div>
@@ -36517,7 +36707,7 @@ if ('serviceWorker' in navigator) {
           <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
             <input type="text" id="traktKeyInput" placeholder="Optional: Trakt Client ID" value="${escapeHtmlServer(initialTraktKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
             <input type="text" id="traktUsernameInput" placeholder="Optional: Trakt username" value="${escapeHtmlServer(initialTraktUsername)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;trakt&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:2px 0 0; font-size:var(--font-size-xs); color:var(--muted);">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" style="color:var(--accent-2);">trakt.tv/oauth/applications</a>.</p>
+            <p class="u-m-2px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Trakt Client ID at <a href="https://trakt.tv/oauth/applications" target="_blank" class="u-c-v_accent_2">trakt.tv/oauth/applications</a>.</p>
           </div>
         </details>
       </div>
@@ -36528,7 +36718,7 @@ if ('serviceWorker' in navigator) {
           <div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span class="provider-card-title">MDBList</span>
-              <span id="mdblistConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="mdblistConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your MDBList account to import personal lists, watchlist, and watch history, or use a custom API key.</p>
           </div>
@@ -36537,18 +36727,18 @@ if ('serviceWorker' in navigator) {
           <button type="button" class="secondary lc-btn" id="mdblistConnectBtn" data-act="startMdblistConnect" style="font-weight:600;">Connect MDBList Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="mdblistDisconnectBtn" style="display:none;" data-act="disconnectMdblist">Disconnect</button>
         </div>
-        <div id="mdblistSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:var(--radius-sm); border:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0 0 10px;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Sync Watch History to MDBList</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Automatically sync items marked as watched or played to your MDBList account history.</p>
+        <div id="mdblistSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sync Watch History to MDBList</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Automatically sync items marked as watched or played to your MDBList account history.</p>
             </div>
             <label class="ui-toggle" aria-label="Sync Watch History to MDBList">
               <input type="checkbox" id="syncMdblistHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;mdblist&quot;,&quot;@checked&quot;]">
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
-          <div style="margin-top:8px;">
+          <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn" id="syncMdblistHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;mdblist&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
           </div>
         </div>
@@ -36557,9 +36747,9 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom MDBList API Key</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px;">
+          <div class="u-mt-10px">
             <input type="text" id="mdblistKeyInput" placeholder="Optional: MDBList API key" value="${escapeHtmlServer(initialMdblistKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;mdblist&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:6px 0 0; font-size:var(--font-size-xs); color:var(--muted);">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" style="color:var(--accent-2);">mdblist.com/preferences</a>.</p>
+            <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Get a free MDBList key at <a href="https://mdblist.com/preferences" target="_blank" class="u-c-v_accent_2">mdblist.com/preferences</a>.</p>
           </div>
         </details>
       </div>
@@ -36570,7 +36760,7 @@ if ('serviceWorker' in navigator) {
           <div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span class="provider-card-title">Simkl</span>
-              <span id="simklConnectStatus" class="provider-status-badge"><span style="color:var(--muted);">Not connected</span></span>
+              <span id="simklConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
             </div>
             <p class="provider-card-desc">Connect your Simkl account to import personal lists, watchlist, and history, or use a custom Client ID.</p>
           </div>
@@ -36579,18 +36769,18 @@ if ('serviceWorker' in navigator) {
           <button type="button" class="secondary lc-btn" id="simklConnectBtn" data-act="startSimklConnect" style="font-weight:600;">Connect Simkl Account</button>
           <button type="button" class="secondary lc-btn btn-danger" id="simklDisconnectBtn" style="display:none;" data-act="disconnectSimkl">Disconnect</button>
         </div>
-        <div id="simklSyncHistoryWrap" style="margin:10px 0; padding:12px 14px; background:var(--surface-2, rgba(255,255,255,0.04)); border-radius:var(--radius-sm); border:1px solid var(--border);">
-          <div class="settings-toggle-row" style="padding:0 0 10px;">
-            <div style="flex:1; min-width:0; padding-right:12px;">
-              <span style="font-weight:600; font-size:var(--font-size-sm); color:var(--text);">Sync Watch History to Simkl</span>
-              <p style="margin:2px 0 0; color:var(--muted); font-size:var(--font-size-xs);">Automatically sync items marked as watched or played to your Simkl account history.</p>
+        <div id="simklSyncHistoryWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sync Watch History to Simkl</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Automatically sync items marked as watched or played to your Simkl account history.</p>
             </div>
             <label class="ui-toggle" aria-label="Sync Watch History to Simkl">
               <input type="checkbox" id="syncSimklHistoryCheckbox" data-act="toggleProviderHistorySync" data-act-args="[&quot;simkl&quot;,&quot;@checked&quot;]">
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
-          <div style="margin-top:8px;">
+          <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn" id="syncSimklHistoryNowBtn" data-act="syncWatchHistoryToProviderNow" data-act-args="[&quot;simkl&quot;,&quot;@self&quot;]" style="padding:4px 10px; font-size:var(--font-size-sm);">Sync Current Watch History Now</button>
           </div>
         </div>
@@ -36599,18 +36789,18 @@ if ('serviceWorker' in navigator) {
             <span>Advanced: Custom Simkl Client ID</span>
             <span class="provider-advanced-arrow">&#x25BE;</span>
           </summary>
-          <div style="margin-top:10px;">
+          <div class="u-mt-10px">
             <input type="text" id="simklKeyInput" placeholder="Optional: Simkl Client ID" value="${escapeHtmlServer(initialSimklKey)}" data-act-on="input" data-act="appActProviderKeyTyped" data-act-args="[&quot;simkl&quot;,&quot;@value&quot;]" style="width:100%; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); box-sizing:border-box;">
-            <p style="margin:6px 0 0; font-size:var(--font-size-xs); color:var(--muted);">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" style="color:var(--accent-2);">simkl.com/settings/developer/</a>.</p>
+            <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" class="u-c-v_accent_2">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
       </div>
     </div>
 
     <!-- Unified Import List Panel -->
-    <div class="panel" style="margin-top:14px;">
+    <div class="panel u-mt-14px">
       <h2 class="panel-title">Import List</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Import files to automatically populate or create custom lists in your account. Supports CSV and JSON exports from IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB.</p>
 
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:12px;">
         <div>
@@ -36639,38 +36829,38 @@ if ('serviceWorker' in navigator) {
         <input type="text" id="importNewListNameInput" placeholder="e.g. My Favorite Movies" style="width:100%; max-width:400px; padding:9px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:var(--font-size-base); box-sizing:border-box;">
       </div>
 
-      <div style="margin-bottom:14px;">
+      <div class="u-mb-14px">
         <div class="import-dropzone" id="importDropzone" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]">
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted); opacity:0.8; margin-bottom:2px;" aria-hidden="true">
             <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
             <path d="M12 12v9"></path>
             <path d="m16 16-4-4-4 4"></path>
           </svg>
-          <div style="text-align:center;">
-            <div style="font-weight:600; font-size:var(--font-size-base); color:var(--text);">Choose files or drag &amp; drop here</div>
-            <div style="margin-top:3px; color:var(--muted); font-size:var(--font-size-xs);">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
+          <div class="u-ta-center">
+            <div class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Choose files or drag &amp; drop here</div>
+            <div class="u-mt-3px u-c-v_muted u-fs-v_font_size_xs">CSV, JSON, ZIP, or TXT exports (multi-file supported)</div>
           </div>
           <button type="button" class="secondary lc-btn" data-act="appActOpenFilePicker" data-act-args="[&quot;unifiedImportFileInput&quot;]" style="padding:6px 16px; font-size:var(--font-size-sm); margin-top:2px;">Select files&hellip;</button>
           <input type="file" id="unifiedImportFileInput" aria-label="Choose a file to import" multiple accept=".csv,.json,.zip,.txt" style="display:none;" data-act="onUnifiedImportFilesSelected" data-act-args="[&quot;@self&quot;]">
         </div>
-        <div id="unifiedImportSelectedCount" style="margin-top:6px; font-size:var(--font-size-sm); color:var(--muted);">No files selected</div>
+        <div id="unifiedImportSelectedCount" class="u-mt-6px u-fs-v_font_size_sm u-c-v_muted">No files selected</div>
       </div>
 
-      <div style="margin-bottom:14px;">
-        <label class="settings-check-item" style="padding:10px 12px; margin:0;">
+      <div class="u-mb-14px">
+        <label class="settings-check-item u-p-10px_12px u-m-0">
           <input type="checkbox" id="importAlsoMarkWatchedCheck">
           <div class="settings-check-label">
-            <strong style="font-size:var(--font-size-sm); color:var(--text);">Also add watched items to Watch History</strong>
+            <strong class="u-fs-v_font_size_sm u-c-v_text">Also add watched items to Watch History</strong>
             <span class="settings-check-desc">Automatically marks imported watched items in your Watch History</span>
           </div>
         </label>
       </div>
 
-      <div class="actions" style="margin-top:8px;">
+      <div class="actions u-mt-8px">
         <button type="button" class="primary lc-btn" id="btnUnifiedImport" style="padding:10px 24px; font-size:var(--font-size-base); font-weight:600;" data-act="runUnifiedListImport">Start Import</button>
       </div>
 
-      <div id="unifiedImportResult" style="margin-top:12px;"></div>
+      <div id="unifiedImportResult" class="u-mt-12px"></div>
     </div>
   </div>
 
@@ -36679,8 +36869,8 @@ if ('serviceWorker' in navigator) {
     <div class="panel">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
         <div>
-          <h2 class="panel-title" style="margin:0;">Support &amp; Developer Chat</h2>
-          <p style="margin:4px 0 0; color:var(--muted); font-size:var(--font-size-sm);">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
+          <h2 class="panel-title u-m-0">Support &amp; Developer Chat</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Have a question, found a bug, or have a suggestion? Chat directly with the developer.</p>
         </div>
         <button type="button" class="secondary lc-btn" id="btnNewFeedbackTicket" data-act="toggleNewFeedbackForm" data-act-args="[true]" style="padding:6px 14px; font-size:var(--font-size-sm);">+ New Message</button>
       </div>
@@ -36692,12 +36882,12 @@ if ('serviceWorker' in navigator) {
         <!-- Chat View -->
         <div id="supportChatView" style="display:none;">
           <div id="supportMessagesStream" class="support-messages-stream"></div>
-          <div class="support-reply-composer" style="margin-top:10px;">
+          <div class="support-reply-composer u-mt-10px">
             <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
             <button type="button" class="primary lc-btn" id="supportReplySendBtn" data-act="sendUserFeedbackReply" style="min-height:44px; padding:0 20px;">Send</button>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-            <span id="supportChatStatus" style="font-size:var(--font-size-sm); color:var(--muted);"></span>
+            <span id="supportChatStatus" class="u-fs-v_font_size_sm u-c-v_muted"></span>
             <button type="button" class="secondary lc-btn" data-act="refreshUserFeedbackThreads" style="padding:2px 8px; font-size:var(--font-size-xs); border:none; background:none; color:var(--muted); cursor:pointer;">&#x21BB; Refresh</button>
           </div>
         </div>
@@ -36706,34 +36896,34 @@ if ('serviceWorker' in navigator) {
         <div id="newFeedbackFormWrap">
           <div class="row">
             <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Category</label>
-            <select id="feedbackCategorySelect" aria-label="Feedback category" style="max-width:320px; border-radius:var(--radius-pill); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:7px 12px; font-size:var(--font-size-sm);">
+            <select id="feedbackCategorySelect" aria-label="Feedback category" class="u-maxw-320px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-p-7px_12px u-fs-v_font_size_sm">
               <option value="bug">Bug Report</option>
               <option value="improvement">Improvement / Feature Request</option>
               <option value="idea">Idea / Suggestion</option>
               <option value="other">General Question / Other</option>
             </select>
           </div>
-          <div class="row" style="margin-top:10px;">
+          <div class="row u-mt-10px">
             <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Message</label>
             <textarea id="feedbackMessageInput" rows="4" style="width:100%; max-width:680px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:10px 12px; font-size:var(--font-size-sm); box-sizing:border-box;" placeholder="What would you like help with or what did you find?"></textarea>
           </div>
-          <div class="row" style="margin-top:10px;">
+          <div class="row u-mt-10px">
             <label style="display:block; font-size:var(--font-size-sm); font-weight:600; color:var(--text); margin-bottom:4px;">Contact Info (optional)</label>
             <input type="text" id="feedbackContactInput" placeholder="Email, Discord username, etc. (optional)" style="width:100%; max-width:440px; border-radius:var(--radius-sm); border:1.5px solid var(--border-strong); background:var(--surface); color:var(--text); padding:8px 12px; font-size:var(--font-size-sm); box-sizing:border-box;">
           </div>
-          <div class="actions" style="margin-top:12px; gap:8px; justify-content:flex-start;">
+          <div class="actions u-mt-12px u-gap-8px u-jc-flex_start">
             <button type="button" class="primary lc-btn" id="feedbackSubmitBtn" data-act="submitFeedback" style="padding:8px 20px; font-size:var(--font-size-sm); font-weight:600;">Send Message</button>
             <button type="button" class="secondary lc-btn" id="feedbackCancelNewBtn" style="display:none;" data-act="toggleNewFeedbackForm" data-act-args="[false]">Cancel</button>
           </div>
-          <p id="feedbackStatus" style="margin-top:8px; font-size:var(--font-size-sm);"></p>
+          <p id="feedbackStatus" class="u-mt-8px u-fs-v_font_size_sm"></p>
         </div>
       </div>
     </div>
 
     <!-- Resources & Documentation Section -->
-    <div class="panel" style="margin-top:14px;">
+    <div class="panel u-mt-14px">
       <h2 class="panel-title">Resources &amp; Support</h2>
-      <p style="margin:0 0 14px; color:var(--muted); font-size:var(--font-size-sm);">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
+      <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
       
       <div class="resource-cards-grid">
         <a href="/guide" class="resource-card">

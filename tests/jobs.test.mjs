@@ -158,7 +158,7 @@ describe("P5-1: the job queue", () => {
   it("the admin page offers the test job once JOBS is bound", async () => {
     const env = jobsEnv();
     const page = await call(env, "/admin", { cookie: await adminCookie(env) });
-    assert.match(page.text, /Background jobs queue: <span style="color:var\(--color-success-text\);">bound<\/span>/);
+    assert.match(page.text, /Background jobs queue: <span class="u-c-v_color_success_text">bound<\/span>/);
     assert.match(page.text, /id="jobsPingBtn" data-act="runJobsPing" >/);
   });
 
