@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1033ad747f";
+const WORKER_BUILD = "f101917e1a";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -97315,6 +97315,8 @@ function generateSearchVariations(query) {
       try {
         await env.CONFIGS.put(`creatorsynctracking:${auth.username}`, serialized);
       } catch (e) {
+        // The activity database is not bound: the outer boundary answers 503.
+        if (e && e.code === EVENT_TRACKING_UNAVAILABLE) throw e;
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
       }
       if (env.DB) {
@@ -97400,6 +97402,8 @@ function generateSearchVariations(query) {
           }
         }
       } catch (e) {
+        // The activity database is not bound: the outer boundary answers 503.
+        if (e && e.code === EVENT_TRACKING_UNAVAILABLE) throw e;
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
       }
       // clientVersion goes back so the browser can advance its baseline from
@@ -101461,7 +101465,11 @@ export default {
       //
       // safeErrorMessage logs the original and strips URLs, labelled secrets
       // and long opaque tokens from what goes back.
-      response = json({ ok: false, error: safeErrorMessage(err) }, 500);
+      // FF_EVENT_TRACKING with DB_ACTIVITY unbound (40_event-tracking.js):
+      // the service is unavailable, which is a 503, not a bug.
+      response = err && err.code === EVENT_TRACKING_UNAVAILABLE
+        ? json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" })
+        : json({ ok: false, error: safeErrorMessage(err) }, 500);
     }
     // Parsed here rather than threaded down from handleFetch, so the answer
     // is the same whether the response came from a route or from the catch
@@ -109004,12 +109012,39 @@ function isEventTrackingEnabled(env) {
   return (v === "1" || v === "true" || v === true) && !!(env && env.DB && env.DB_ACTIVITY);
 }
 
+// The flag is on and the main database is bound, but DB_ACTIVITY is not: the
+// binding was lost (a dashboard edit, a deploy that did not carry it, a
+// rename). isEventTrackingEnabled is then false, which used to send every
+// tracking read and write to the legacy stores that stopped moving at the
+// switch: an empty Watch History, and plays saved into a frozen copy that is
+// invisible once the binding returns (audit CFG-001).
+function isEventTrackingBindingMissing(env) {
+  const v = env ? env.FF_EVENT_TRACKING : undefined;
+  return (v === "1" || v === "true" || v === true) && !!(env && env.DB) && !env.DB_ACTIVITY;
+}
+
+const EVENT_TRACKING_UNAVAILABLE = "EVENT_TRACKING_UNAVAILABLE";
+let eventTrackingBindingWarned = false;
+
+function eventTrackingUnavailableError() {
+  const err = new Error("Watch history is temporarily unavailable. Please try again shortly.");
+  err.code = EVENT_TRACKING_UNAVAILABLE;
+  return err;
+}
+
 // Whether this account's record is served from the activity database: the
 // flag, the database, and a finished history copy. Remembered a minute per
 // isolate, per database (each test has its own).
 let eventTrackingOwnerCache = null;
 async function eventTrackingOwns(env, username) {
   if (!isEventTrackingEnabled(env) || !username) return null;
+  return eventTrackingOwnsAccount(env, username);
+}
+
+// The ownership question on its own, for the one caller that must ask it
+// without DB_ACTIVITY (eventTrackingUnboundEnv).
+async function eventTrackingOwnsAccount(env, username) {
+  if (!username) return null;
   const now = Date.now();
   const db = env.DB;
   if (!eventTrackingOwnerCache || eventTrackingOwnerCache.db !== db) eventTrackingOwnerCache = { db, map: new Map() };
@@ -109164,6 +109199,7 @@ async function saveTrackingRecord(env, username, accountId, record) {
 // The env every handler runs with: CONFIGS wrapped for the tracking keys of
 // accounts served from the activity database. Unchanged without the flag.
 function eventTrackingEnv(env) {
+  if (isEventTrackingBindingMissing(env) && env.CONFIGS) return eventTrackingUnboundEnv(env);
   if (!isEventTrackingEnabled(env) || !env.CONFIGS) return env;
   const kv = env.CONFIGS;
   const owner = (key, prefix) => (String(key).startsWith(prefix) ? String(key).slice(prefix.length) : null);
@@ -109224,6 +109260,42 @@ function eventTrackingEnv(env) {
       }
       return kv.delete(key, ...rest);
     },
+  };
+  for (const name of ["list", "getWithMetadata"]) {
+    if (typeof kv[name] === "function") wrapped[name] = (...a) => kv[name](...a);
+  }
+  return new Proxy(env, {
+    get(target, prop, receiver) {
+      if (prop === "CONFIGS") return wrapped;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+// With the flag on and DB_ACTIVITY missing, an account whose history was
+// copied cannot be served from anywhere: its legacy stores are frozen. Its
+// tracking reads and writes fail with a 503 (see the fetch handler) rather
+// than answering from, or writing into, the stale copy. Accounts that have not
+// been copied yet are still on the legacy stores by design and carry on. The
+// first time per isolate it is logged, so the cause is in the Worker's logs.
+function eventTrackingUnboundEnv(env) {
+  if (!eventTrackingBindingWarned) {
+    eventTrackingBindingWarned = true;
+    console.error("[EventTracking] FF_EVENT_TRACKING is on but DB_ACTIVITY is not bound: tracking for copied accounts is refused until the binding is restored.");
+  }
+  const kv = env.CONFIGS;
+  const guard = async (key) => {
+    const k = String(key);
+    for (const prefix of [EVENT_TRACKING_KEY, "creatorscrobblequeue:", "trackingd1behind:"]) {
+      if (k.startsWith(prefix) && (await eventTrackingOwnsAccount(env, k.slice(prefix.length))) != null) {
+        throw eventTrackingUnavailableError();
+      }
+    }
+  };
+  const wrapped = {
+    get: async (key, ...rest) => { await guard(key); return kv.get(key, ...rest); },
+    put: async (key, value, ...rest) => { await guard(key); return kv.put(key, value, ...rest); },
+    delete: async (key, ...rest) => { await guard(key); return kv.delete(key, ...rest); },
   };
   for (const name of ["list", "getWithMetadata"]) {
     if (typeof kv[name] === "function") wrapped[name] = (...a) => kv[name](...a);

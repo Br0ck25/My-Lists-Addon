@@ -4222,6 +4222,8 @@
       try {
         await env.CONFIGS.put(`creatorsynctracking:${auth.username}`, serialized);
       } catch (e) {
+        // The activity database is not bound: the outer boundary answers 503.
+        if (e && e.code === EVENT_TRACKING_UNAVAILABLE) throw e;
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
       }
       if (env.DB) {
@@ -4307,6 +4309,8 @@
           }
         }
       } catch (e) {
+        // The activity database is not bound: the outer boundary answers 503.
+        if (e && e.code === EVENT_TRACKING_UNAVAILABLE) throw e;
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
       }
       // clientVersion goes back so the browser can advance its baseline from
@@ -8368,7 +8372,11 @@ export default {
       //
       // safeErrorMessage logs the original and strips URLs, labelled secrets
       // and long opaque tokens from what goes back.
-      response = json({ ok: false, error: safeErrorMessage(err) }, 500);
+      // FF_EVENT_TRACKING with DB_ACTIVITY unbound (40_event-tracking.js):
+      // the service is unavailable, which is a 503, not a bug.
+      response = err && err.code === EVENT_TRACKING_UNAVAILABLE
+        ? json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" })
+        : json({ ok: false, error: safeErrorMessage(err) }, 500);
     }
     // Parsed here rather than threaded down from handleFetch, so the answer
     // is the same whether the response came from a route or from the catch
