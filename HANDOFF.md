@@ -3,7 +3,7 @@
 Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo existing work. Keep this file short: replace stale items, don't append history (old versions: `docs/history/`).
 
 ## Where things stand (2026-10-07)
-- **Release 25 is live and worked:** Compare shelves 2026-10-07, 0.00% different, 0 lost, 0 shows not known yet. **Release 26** (prepared, on `claude/elegant-ride-o7m8fh`): PR #29's audit fixes plus `pullInShortenedPeriods` (45_). Merge into `main` once the owner confirms it is live.
+- **Release 25 is live and worked:** Compare shelves 2026-10-07, 0.00% different, 0 lost, 0 shows not known yet. **Release 26 is live** (owner: fine, 2026-10-07) and merged into `main`: PR #29's audit fixes plus `pullInShortenedPeriods` (45_).
 - **Unchecked after the UI consistency pass (PR #19):** a modal over the phone bottom nav, drag-and-drop, storyline and deep creator-profile screens. Rules: `AI_UI_RULES.md`, `DESIGN_SYSTEM.md`.
 
 ## Next steps
