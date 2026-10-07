@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "6a5ddd4080";
+const WORKER_BUILD = "885d169117";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -4678,6 +4678,17 @@ function safeErrorMessage(err, fallback = "Something went wrong. Please try agai
     .trim();
   if (!msg) return fallback;
   return msg.length > 200 ? msg.slice(0, 200) + "…" : msg;
+}
+
+// decodeURIComponent throws on a stray "%" ("%E0", "100%"), which anyone can
+// put in a URL, and an uncaught throw in a route answered 500. A piece that
+// cannot be decoded is used as written, which then simply matches nothing.
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value);
+  }
 }
 
 // Detect whether a request is a top-level browser page load (someone tapping
@@ -85488,7 +85499,7 @@ async function handleFetch(request, env, ctx) {
     // own copy, see serveRpdbPoster (05_catalog-core.js).
     const rpdbMatch = path.match(/^\/rpdb\/([^/]+)\/(tt\d+)\.jpg$/);
     if (rpdbMatch && (request.method === "GET" || request.method === "HEAD")) {
-      return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
+      return await serveRpdbPoster(env, ctx, safeDecodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
     }
 
     // /api/support-goal -> what the Ko-fi support strip shows, or enabled:false
@@ -86021,8 +86032,8 @@ async function handleFetch(request, env, ctx) {
       const cleanPath = path.endsWith(".json") ? path.slice(0, -5) : path;
       const parts = cleanPath.split("/").filter(Boolean);
       if (parts.length >= 3) {
-        const u = decodeURIComponent(parts[1]).toLowerCase();
-        const s = decodeURIComponent(parts[2]).toLowerCase();
+        const u = safeDecodeURIComponent(parts[1]).toLowerCase();
+        const s = safeDecodeURIComponent(parts[2]).toLowerCase();
         // From v2 when reads are there (P3b-8), else the legacy map and index.
         let code = (await channelsV2CodeBySlug(env, u, s)) || "";
         if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
@@ -86142,7 +86153,7 @@ async function handleFetch(request, env, ctx) {
       // and the actual tracking write (a TMDB lookup plus a KV read/write)
       // shouldn't hold up how fast this responds. ctx.waitUntil lets it
       // keep running after the response is already on its way.
-      ctx.waitUntil(handleSubtitlesTrack(configParam, stremioType, decodeURIComponent(rawId), env, request));
+      ctx.waitUntil(handleSubtitlesTrack(configParam, stremioType, safeDecodeURIComponent(rawId), env, request));
       return jsonPublic({ subtitles: [] });
     }
 
@@ -86376,7 +86387,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const [id, extraStr] = idWithExtra.split("/");
       const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
       const skip = parseInt(extra.skip, 10) || 0;
-      const searchQuery = extra.search ? decodeURIComponent(extra.search).trim() : "";
+      const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
 
       // Dedicated search catalogs for Stremio and Nuvio
       const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
@@ -86825,7 +86836,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
     m = path.match(/^(?:\/([^/]+))?\/meta\/([^/]+)\/(.+)\.json$/);
     if (m) {
       const [, config, metaType, idRaw] = m;
-      const id = decodeURIComponent(idRaw);
+      const id = safeDecodeURIComponent(idRaw);
 
       // 1. Synthetic meta for Channels
       if (id.startsWith("channel_")) {
@@ -101472,9 +101483,15 @@ export default {
       // and long opaque tokens from what goes back.
       // FF_EVENT_TRACKING with DB_ACTIVITY unbound (40_event-tracking.js):
       // the service is unavailable, which is a 503, not a bug.
-      response = err && err.code === EVENT_TRACKING_UNAVAILABLE
-        ? json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" })
-        : json({ ok: false, error: safeErrorMessage(err) }, 500);
+      if (err && err.code === EVENT_TRACKING_UNAVAILABLE) {
+        response = json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" });
+      } else {
+        const message = safeErrorMessage(err);
+        // The engine's own text names tables and columns ("D1_ERROR: no such
+        // column ..."): it is logged above, not handed to whoever called.
+        const fromDatabase = /\bD1_[A-Z]+|SQLITE_|no such (?:table|column)|constraint failed/i.test(message);
+        response = json({ ok: false, error: fromDatabase ? "Something went wrong. Please try again." : message }, 500);
+      }
     }
     // Parsed here rather than threaded down from handleFetch, so the answer
     // is the same whether the response came from a route or from the catch

@@ -835,6 +835,17 @@ function safeErrorMessage(err, fallback = "Something went wrong. Please try agai
   return msg.length > 200 ? msg.slice(0, 200) + "…" : msg;
 }
 
+// decodeURIComponent throws on a stray "%" ("%E0", "100%"), which anyone can
+// put in a URL, and an uncaught throw in a route answered 500. A piece that
+// cannot be decoded is used as written, which then simply matches nothing.
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value);
+  }
+}
+
 // Detect whether a request is a top-level browser page load (someone tapping
 // "Configure" and being sent to the manifest URL) vs. a JSON fetch by wako/
 // Stremio itself. We check two independent signals and trust either one:

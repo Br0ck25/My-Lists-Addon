@@ -412,7 +412,7 @@ async function handleFetch(request, env, ctx) {
     // own copy, see serveRpdbPoster (05_catalog-core.js).
     const rpdbMatch = path.match(/^\/rpdb\/([^/]+)\/(tt\d+)\.jpg$/);
     if (rpdbMatch && (request.method === "GET" || request.method === "HEAD")) {
-      return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
+      return await serveRpdbPoster(env, ctx, safeDecodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
     }
 
     // /api/support-goal -> what the Ko-fi support strip shows, or enabled:false
@@ -945,8 +945,8 @@ async function handleFetch(request, env, ctx) {
       const cleanPath = path.endsWith(".json") ? path.slice(0, -5) : path;
       const parts = cleanPath.split("/").filter(Boolean);
       if (parts.length >= 3) {
-        const u = decodeURIComponent(parts[1]).toLowerCase();
-        const s = decodeURIComponent(parts[2]).toLowerCase();
+        const u = safeDecodeURIComponent(parts[1]).toLowerCase();
+        const s = safeDecodeURIComponent(parts[2]).toLowerCase();
         // From v2 when reads are there (P3b-8), else the legacy map and index.
         let code = (await channelsV2CodeBySlug(env, u, s)) || "";
         if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
@@ -1066,7 +1066,7 @@ async function handleFetch(request, env, ctx) {
       // and the actual tracking write (a TMDB lookup plus a KV read/write)
       // shouldn't hold up how fast this responds. ctx.waitUntil lets it
       // keep running after the response is already on its way.
-      ctx.waitUntil(handleSubtitlesTrack(configParam, stremioType, decodeURIComponent(rawId), env, request));
+      ctx.waitUntil(handleSubtitlesTrack(configParam, stremioType, safeDecodeURIComponent(rawId), env, request));
       return jsonPublic({ subtitles: [] });
     }
 
@@ -1300,7 +1300,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const [id, extraStr] = idWithExtra.split("/");
       const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
       const skip = parseInt(extra.skip, 10) || 0;
-      const searchQuery = extra.search ? decodeURIComponent(extra.search).trim() : "";
+      const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
 
       // Dedicated search catalogs for Stremio and Nuvio
       const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
@@ -1749,7 +1749,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
     m = path.match(/^(?:\/([^/]+))?\/meta\/([^/]+)\/(.+)\.json$/);
     if (m) {
       const [, config, metaType, idRaw] = m;
-      const id = decodeURIComponent(idRaw);
+      const id = safeDecodeURIComponent(idRaw);
 
       // 1. Synthetic meta for Channels
       if (id.startsWith("channel_")) {

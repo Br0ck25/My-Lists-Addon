@@ -151,6 +151,42 @@ describe("P9-4: Security Regression Suite", () => {
     });
   });
 
+  // Audit minor items: the outer error boundary handed the database engine's
+  // own text to any caller, and a stray "%" in a URL made several routes throw.
+  describe("2c. Error boundary and malformed URLs", () => {
+    it("does not return the database engine's error text to the caller", async () => {
+      const kv = makeKv();
+      const get = kv.get.bind(kv);
+      let broken = false;
+      kv.get = async (k, ...r) => {
+        if (broken) throw new Error("D1_ERROR: no such column secret_col: SQLITE_ERROR");
+        return get(k, ...r);
+      };
+      const env = makeEnv({ DB: makeD1(), CONFIGS: kv });
+      broken = true;
+      const res = await call(env, "/abcdefgh/manifest.json");
+      assert.equal(res.status, 500);
+      const text = JSON.stringify(res.body);
+      assert.doesNotMatch(text, /D1_ERROR|SQLITE|secret_col|no such column/i);
+      assert.equal(res.body.ok, false);
+    });
+
+    it("answers a malformed percent-escape with something other than a server error", async () => {
+      const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+      for (const path of [
+        "/catalog/movie/search_movies/search=%E0%A4%A.json",
+        "/channels/%E0%A4%A/%E0%A4%A.json",
+        "/channels/%E0%A4%A/%E0%A4%A",
+        "/abcdefgh/subtitles/movie/%E0%A4%A.json",
+        "/rpdb/%E0%A4%A/tt1234567.jpg",
+        "/abcdefgh/meta/movie/%E0%A4%A.json",
+      ]) {
+        const res = await call(env, path);
+        assert.ok(res.status < 500, `${path} answered ${res.status}`);
+      }
+    });
+  });
+
   describe("3. Cookie Security Flags & Response Headers", () => {
     it("sets HttpOnly, Secure, and SameSite=Lax on session cookies", async () => {
       const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), FF_SESSIONS: "1" });

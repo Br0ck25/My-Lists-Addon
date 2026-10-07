@@ -8378,9 +8378,15 @@ export default {
       // and long opaque tokens from what goes back.
       // FF_EVENT_TRACKING with DB_ACTIVITY unbound (40_event-tracking.js):
       // the service is unavailable, which is a 503, not a bug.
-      response = err && err.code === EVENT_TRACKING_UNAVAILABLE
-        ? json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" })
-        : json({ ok: false, error: safeErrorMessage(err) }, 500);
+      if (err && err.code === EVENT_TRACKING_UNAVAILABLE) {
+        response = json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" });
+      } else {
+        const message = safeErrorMessage(err);
+        // The engine's own text names tables and columns ("D1_ERROR: no such
+        // column ..."): it is logged above, not handed to whoever called.
+        const fromDatabase = /\bD1_[A-Z]+|SQLITE_|no such (?:table|column)|constraint failed/i.test(message);
+        response = json({ ok: false, error: fromDatabase ? "Something went wrong. Please try again." : message }, 500);
+      }
     }
     // Parsed here rather than threaded down from handleFetch, so the answer
     // is the same whether the response came from a route or from the catch
