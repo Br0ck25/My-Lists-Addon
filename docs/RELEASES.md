@@ -41,6 +41,9 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Compare shelves** (2026-10-06, before 23): 770 accounts, **0.00% different, 0 lost**. Continue Watching 954 the same and 26 shows not known yet; Airing Next 229 the same and 9 not known yet.
 - **Release 24** went live on 2026-10-06. Its Compare shelves (770 accounts): 0.00% different, 0 lost. *Why not known yet*: Continue Watching movie-row 17, no-schedule-row 9; Airing Next no-schedule-row 9. Examples: Dark Matter, The Shield, Criminal Minds, The Agency filed as movies; Werewolf, Undead Unluck, Aoashi, Black Clover, Europe from Above, Planet Earth II with no schedule row.
 - **Release 25** (2026-10-06): shows filed as movies are re-filed, and schedule rows are made hourly. Details under Release 25. Merged into `main` with Release 24 on the owner's go-ahead (2026-10-06); its Compare shelves check, about two hours after deploying, is still to come.
+- **Release 25 worked** (2026-10-07). Its fix waited for `show.watchers`, whose next run had been booked on the old daily period (22 h). Once it ran, Compare shelves (770 accounts): **0.00% different, 0 lost, 0 shows not known yet** on both shelves.
+- **`main` gained PR #29** (2026-10-07, another session): 14 audit fixes, merged without a release number. They ship as Release 26.
+- **Release 26** (prepared 2026-10-07, not yet live): PR #29's fixes, and a shortened job period applies at once. Details under Release 26.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1675,3 +1678,33 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 
 **Rollback:** paste the 24 file. Rows already re-filed stay series, which is what they are.
 
+
+
+## Release 26: the audit fixes (PR #29), and a shortened job period applies at once
+
+**Branch point:** `main` at `46c89ea` (PR #29). Live before it: Release 25 (build 433aaf4953).
+
+### What it changes
+
+- **PR #29, 14 audit fixes from another session** (each with a test that fails without it; the commit messages have the detail):
+  - sign-in: the credential-guess budget is spent before the key is checked, and given back when it was right (AUTH-002); forgot-username no longer runs the key hash against 50 accounts per request (DOS-001); a v2 install link carries tracking only when it asks for it (AUTH-001);
+  - a scrobble token stops working the moment its account is deleted (AUTH-003); sessions revoked on one Worker instance stop working on the others within 10 s, not 60 (SESS-001);
+  - **behaviour change:** an unpublished or unlisted channel's `/channels/owner/name` address stops opening; its share code still works (CHAN-001);
+  - anonymous search is limited to 60 a minute per address, and search-query records to 20,000 a day (DATA-001);
+  - chart snapshots are not made for made-up regions or empty charts (SNAP-001); installs with a live Creator list skip the materializer (MAT-001);
+  - with `FF_EVENT_TRACKING` on and `DB_ACTIVITY` missing, tracking answers 503 instead of writing into the frozen old copy (CFG-001);
+  - error responses never carry database error text, and a stray `%` in an address is no longer a 500;
+  - tests: the route guard sees regular-expression routes (HOLLOW-001); CI runs the suite a third time with `FF_MATERIALIZER` on (HOLLOW-002).
+- **A shortened job period applies at once** (`pullInShortenedPeriods`, `45_`). A periodic job books its next run with the period it had when it ran, so Release 25's `show.watchers` (daily to hourly) first waited out 22 hours. The first cron tick of each new Worker instance now pulls a waiting job in to its last start plus its current period. Jobs sent and not yet run, jobs that never ran, and retries are left alone. Once per instance: a period only changes with a deploy.
+- `/admin` shows **Release 26**.
+
+### Checked
+
+- `tests/jobs.test.mjs`: a job booked a day ahead on its old period runs on its new hourly one at the next tick of a new instance; jobs booked for their own period keep their time. Fails on Release 25. The dispatcher's statement budget per tick allows the one extra statement (once per instance).
+- `bash verify.sh`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (counts in the commit).
+
+**Steps:**
+1. Deploy `release-26-NEW-worker.js`. Check that `/admin` says **Release 26**.
+2. Use the site as normal: sign in on a second device or browser, search, open a list.
+
+**Rollback:** paste the 25 file.

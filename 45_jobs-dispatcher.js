@@ -361,6 +361,35 @@ function runTakenJobsInline(env, ctx, plans) {
   ));
 }
 
+// A periodic row books its next run with the period it had when it ran
+// (runRowJob). A release that shortens a period therefore waited out the old
+// one first: Release 25 made show.watchers hourly, and its first hourly run
+// came 22 hours later. Each tick pulls a waiting row in to its last start plus
+// the period it has now. Rows sent and not yet run (dispatched after their
+// last start), rows that never ran, and a retry after a failure (never later
+// than the period) are left alone. Never stops a tick: a failure is logged.
+// Once per isolate: a period only changes with a deploy, and a deploy starts
+// new isolates, so later ticks would only repeat a statement that finds
+// nothing.
+let jobsPeriodsCheckedInIsolate = false;
+async function pullInShortenedPeriods(env, types, now) {
+  if (jobsPeriodsCheckedInIsolate) return;
+  jobsPeriodsCheckedInIsolate = true;
+  const periods = types.map((t) => [t, ROW_JOB_TYPES.get(t).everyMs - JOBS_PERIODIC_SLACK_MS]);
+  try {
+    await env.DB.prepare(
+      `UPDATE jobs SET run_after = max(?, CAST(json_extract(jobs.progress_json, '$._q.lastStartedAt') AS INTEGER) + p.every)
+       FROM (SELECT json_extract(value, '$[0]') AS type, json_extract(value, '$[1]') AS every FROM json_each(?)) AS p
+       WHERE jobs.dedupe_key = ? || p.type AND jobs.status = 'queued'
+         AND json_extract(jobs.progress_json, '$._q.lastStartedAt') IS NOT NULL
+         AND COALESCE(json_extract(jobs.progress_json, '$._q.dispatchedAt'), 0) <= json_extract(jobs.progress_json, '$._q.lastStartedAt')
+         AND jobs.run_after > CAST(json_extract(jobs.progress_json, '$._q.lastStartedAt') AS INTEGER) + p.every`
+    ).bind(now, JSON.stringify(periods), PERIODIC_JOB_KEY_PREFIX).run();
+  } catch (err) {
+    console.warn(`[Jobs] could not apply shortened periods: ${jobErrorText(err)}`);
+  }
+}
+
 // One tick with the queue: dispatch only. Resolves to a summary; throws when
 // the jobs table cannot be used (the caller then does the work itself).
 async function dispatchJobs(env, ctx, { now = Date.now() } = {}) {
@@ -373,6 +402,7 @@ async function dispatchJobs(env, ctx, { now = Date.now() } = {}) {
        SELECT value, ? || value, 'queued', 0, 0, '{}', ?, ? FROM json_each(?) WHERE true
        ON CONFLICT(dedupe_key) DO NOTHING`
     ).bind(PERIODIC_JOB_KEY_PREFIX, now, now, JSON.stringify(periodic)).run();
+    await pullInShortenedPeriods(env, periodic, now);
   }
   const taken = await takeDueJobs(env, rowJobTypes(), now);
   const toSend = taken.filter((p) => p.action === "send");

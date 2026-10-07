@@ -419,8 +419,10 @@ describe("P5-2: the cron tick only dispatches", () => {
       }
       assert.deepEqual(net.calls, [], "a dispatching tick calls no provider");
       assert.equal(kvWrites, 0, "and writes nothing to KV");
-      // Make sure the rows exist, read the due ones, mark each one sent.
-      assert.ok(d1.n <= 2 + CRON_JOBS.length, `${d1.n} D1 statements`);
+      // Make sure the rows exist, read the due ones, mark each one sent. Plus,
+      // once per isolate (this may be this file's first tick), pulling in a
+      // period shortened by a deploy (pullInShortenedPeriods, Release 26).
+      assert.ok(d1.n <= 3 + CRON_JOBS.length, `${d1.n} D1 statements`);
       assert.ok(tookMs < 1000, `the tick took ${tookMs} ms`);
       for (const type of CRON_JOBS) {
         const row = jobRow(env, type);
@@ -617,6 +619,38 @@ describe("P5-2: the cron tick only dispatches", () => {
       env.DB._db.exec("DROP TABLE jobs");
       const none = await call(env, "/admin/api/jobs/status", { cookie });
       assert.equal(none.body.jobs, null);
+    } finally {
+      net.restore();
+    }
+  });
+
+  it("runs a job on its new, shorter period at once, not after the old one (Release 26)", async () => {
+    // show.watchers went from daily to hourly in Release 25; its row had been
+    // booked a day ahead, so the first hourly run came 22 hours later.
+    const net = blockNetwork();
+    try {
+      const w = await freshIsolate();
+      const env = jobsEnv();
+      await runScheduledTick(env, {}, w);
+      await drainQueue(env, { w });
+      const now = Date.now();
+      const book = env.DB._db.prepare("UPDATE jobs SET run_after = ?, progress_json = json_set(progress_json, '$._q.lastStartedAt', ?, '$._q.dispatchedAt', ?) WHERE dedupe_key = ?");
+      // Booked as runRowJob books: last start + period - 90 s of slack.
+      const SLACK = 90000;
+      // Ran 2 h ago on a daily period, booked 22 h ahead: due now, hourly.
+      book.run(now - 2 * 3600000 + 24 * 3600000 - SLACK, now - 2 * 3600000, now - 2 * 3600000 - 1000, "periodic:show.watchers");
+      // Ran 10 min ago, booked for its hour: stays as it is.
+      const refreshAt = now - 10 * 60000 + 3600000 - SLACK;
+      book.run(refreshAt, now - 10 * 60000, now - 10 * 60000 - 1000, "periodic:show.refresh");
+      // A daily job booked a day ahead keeps its day.
+      const rollupAt = now - 2 * 3600000 + 24 * 3600000 - SLACK;
+      book.run(rollupAt, now - 2 * 3600000, now - 2 * 3600000 - 1000, "periodic:rollup.daily");
+      env.JOBS._pending.length = 0;
+      const w2 = await freshIsolate(); // a deploy: a new isolate
+      await runScheduledTick(env, {}, w2);
+      assert.deepEqual(sentTypes(env), ["show.watchers"]);
+      assert.equal(jobRow(env, "show.refresh").run_after, refreshAt, "not touched");
+      assert.equal(jobRow(env, "rollup.daily").run_after, rollupAt, "not touched");
     } finally {
       net.restore();
     }
