@@ -154,6 +154,15 @@ jobs:
         env:
           MLA_TEST_V2_LISTS_READ: "1"
 
+      # The same suite with the materializer on, as production runs it
+      # (FF_MATERIALIZER, Phase 5). The other production flags are covered by
+      # their own suites; see MLA_TEST_FLAGS in tests/harness.mjs for what is
+      # and is not run across the whole suite.
+      - name: Test suite, with the materializer on
+        run: node --test tests/*.test.mjs
+        env:
+          MLA_TEST_FLAGS: "FF_MATERIALIZER"
+
   # What the shared buttons, tabs and inputs look like, as a real browser
   # computes it (tests/ui-contract.mjs, recorded in tests/ui-contract.json).
   # A change to a size, padding, radius, font or colour fails here until the

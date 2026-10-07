@@ -287,12 +287,28 @@ export function nextIp() {
 // tables (FF_V2_LISTS_READ, P3b-7): the whole suite has to pass both ways.
 // A test that sets the flag itself still decides.
 const V2_LISTS_READ_DEFAULT = process.env.MLA_TEST_V2_LISTS_READ ? { FF_V2_LISTS_READ: "1" } : {};
+// MLA_TEST_FLAGS="FF_A,FF_B" runs every test with those flags on, the way the
+// V2 read flag above does. CI had no run with any production flag but
+// FF_V2_LISTS_READ, which is how a materializer that froze live rows went
+// unnoticed (audit HOLLOW-002). A test that sets the flag itself (or passes it
+// as undefined) still decides.
+//
+// Green across the whole suite today: FF_MATERIALIZER (CI runs it). Not yet:
+// FF_CHART_SNAPSHOTS, FF_PROVIDER_BREAKER and FF_CANONICAL_IDS fail 3-4 tests
+// each, all of them tests that assert the flag-off default or use made-up ids
+// that canonical ids refuse; they have their own suites. FF_V2_LISTS_ONLY and
+// FF_EVENT_TRACKING change where data is stored, so tests written for the
+// legacy stores cannot pass with them; lists-v2 and activity cover those.
+const TEST_FLAGS_DEFAULT = Object.fromEntries(
+  String(process.env.MLA_TEST_FLAGS || "").split(",").map((f) => f.trim()).filter(Boolean).map((f) => [f, "1"])
+);
 
 // BLOBS (the R2 bucket, channel pools since P3b-8) is bound by default, as the
 // deploy notes ask; pass BLOBS: null for a deployment without it.
 export function makeEnv(opts = {}) {
   return {
     ...V2_LISTS_READ_DEFAULT,
+    ...TEST_FLAGS_DEFAULT,
     ...opts,
     CONFIGS: opts.CONFIGS || makeKv(),
     ADMIN_KEY: opts.ADMIN_KEY === undefined ? "test-admin-secret" : opts.ADMIN_KEY,
