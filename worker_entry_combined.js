@@ -26,14 +26,14 @@
 // Shown at the top of /admin and in the answer of the "Counts missing" tool,
 // so the owner can see which pasted file is live (docs/RELEASES.md). Change it
 // with every release.
-const WORKER_RELEASE = "26";
+const WORKER_RELEASE = "27";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "19b52bc22d";
+const WORKER_BUILD = "a7953c77f6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -28537,6 +28537,8 @@ async function refreshAiringNextSweep(env, ctx) {
     const username = pageKeys[i].name.slice('creator:'.length);
     // One account must not be able to stop the sweep -- see checkForNewEpisodes.
     try {
+      // Shelves worked out from the schedule: nothing to do (40_).
+      if (await legacyShelfSweepSkips(env, username)) continue;
       const checkedKey = airingNextCheckedKey(username);
       if (await env.CONFIGS.get(checkedKey)) continue;
       const trackingKey = `creatorsynctracking:${username}`;
@@ -28681,6 +28683,8 @@ async function checkForNewEpisodes(env, maxShowChecks) {
     // It is skipped rather than retried because the next full cycle will come
     // back to it anyway.
     try {
+    // Shelves worked out from the schedule: nothing to do (40_).
+    if (await legacyShelfSweepSkips(env, username)) continue;
     await ensureTrackingMigrated(env, username);
     let blob = null;
     if (env.DB) {
@@ -109175,6 +109179,18 @@ function isShowScheduleEnabled(env) {
   return v === "1" || v === "true" || v === true;
 }
 
+// The legacy Continue Watching and Airing Next sweeps (checkForNewEpisodes,
+// refreshAiringNextSweep, 07_) pass over an account whose shelves are worked
+// out from show_schedule (Release 27, P5-4): what they would write is the
+// stored copy, which the record above reads only for a show the schedule does
+// not know yet, and each write cost a full record save (saveTrackingRecord).
+// They keep sweeping accounts on the legacy stores, and every account again
+// if FF_SHOW_SCHEDULE is turned off.
+async function legacyShelfSweepSkips(env, username) {
+  if (!isShowScheduleEnabled(env)) return false;
+  return (await eventTrackingOwns(env, username)) != null;
+}
+
 // Everything in a record but its Watch History.
 function trackingRecordRest(record) {
   const { watchHistory, _intentionalRemoval, ...rest } = record && typeof record === "object" ? record : {};
@@ -111494,9 +111510,11 @@ function shelfShadowEmpty() {
 //
 // A show is "not known yet" when it has no refreshed show_schedule row
 // (shelfTitles, 39_). Those shows keep their stored entry while
-// FF_SHOW_SCHEDULE is on (shelfStoredForUnknown), and the legacy writers keep
-// those entries current, so the writers cannot be removed (P5-4) while there
-// are many. The comparison of 2026-10-06 had 26 on Continue Watching and 9 on
+// FF_SHOW_SCHEDULE is on (shelfStoredForUnknown), and the legacy writers kept
+// those entries current, so the writers could not be removed (P5-4) while there
+// were many. Since Release 27 the cron sweeps pass over these accounts
+// (legacyShelfSweepSkips, 40_) and the website's own shelf builders are what
+// keep them. The comparison of 2026-10-06 had 26 on Continue Watching and 9 on
 // Airing Next, with nothing to say why; each now gets one of:
 //   movie-row        the title's media row is a movie, and only series get a
 //                    schedule row (recountShowWatchers, 46_)
