@@ -60,7 +60,7 @@ Cross-reference of findings from `PERFORMANCE_AUDIT.md`:
 | **PF-F1** | 2.0 MB client bundle on all visits | 459 KB gzip parsed on cold load | **Resolved (P8-3):** Two-tier bundle split: `/app.js` is 93 KB gzip (< 150 KB budget); `/app-features.js` is deferred. |
 | **PF-F2** | All 6 tabs rendered in initial DOM | 4,000 DOM elements / 754 buttons | **Resolved (P6-1 to P6-8):** Shell architecture renders only active view containers; deferred feature sections. |
 | **PF-F3** | `localStorage` used as database | ~650 read/write sites; large JSON serialization | **Resolved (P3a/P3b):** Server-authoritative D1 storage for accounts, lists, channels; `localStorage` for UI prefs. |
-| **PF-F4** | 60s background polling + focus triggers | Full auth path on every poll | **Resolved (P3a-4):** Session cookies with 60 s isolate memo; lightweight change checks. |
+| **PF-F4** | 60s background polling + focus triggers | Full auth path on every poll | **Resolved (P3a-4):** Session cookies with a 10 s isolate memo (was 60 s; shortened so a revoked session ends quickly, audit SESS-001); lightweight change checks. |
 | **PF-F5** | Airing Next computed in browser | 60 `/api/details` lookups per refresh | **Resolved (P5-4, 39_):** Server-computed schedule shelves via `show_schedule`. |
 | **PF-F6** | Live preview refetches `/api/preview` | "Click Refresh Preview" placeholders | **Resolved (P6-3):** Live debounced preview reading materialized server rows. |
 | **PF-F7** | 326 `innerHTML` assignments | Entire sections rebuilt on state changes | **Resolved (P6-8, P7-1):** DOM sanitization via Trusted Types policy; targeted element updates. |

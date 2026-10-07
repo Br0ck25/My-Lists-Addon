@@ -103,6 +103,41 @@ describe("a private Creator list stays live in the apps", () => {
   });
 });
 
+// Audit MAT-001: with FF_MATERIALIZER and "remove duplicates across lists" the
+// first page of every row was built once and stored for an hour, keyed by the
+// row DEFINITIONS. A live Creator list's definition does not change when its
+// items do, so an edit never reached the apps.
+describe("a live Creator list stays live with the materializer on", () => {
+  it("serves a later edit on an install that removes duplicates", async () => {
+    const { env, user } = await setupPrivateList("liverowmat");
+    env.FF_MATERIALIZER = "1";
+    const row = customRow(user.creatorName, "faves", [{ id: "tt0000001", imdbId: "tt0000001", type: "movie", title: "One" }]);
+    await env.CONFIGS.put("cfg:cfgmat1", JSON.stringify({
+      trackCreatorName: user.creatorName,
+      trackCreatorKey: user.creatorKey,
+      dedupeAcrossLists: true,
+      entries: [{ id: "faves", type: "movie", name: "Faves", url: row, enabled: true }],
+    }));
+    assert.deepEqual(await catalogIds(env, "cfgmat1"), ["tt0000001"]);
+
+    const edit = await call(env, "/api/creator/lists/save", {
+      method: "POST",
+      json: {
+        creatorName: user.creatorName, creatorKey: user.creatorKey, slug: "faves",
+        name: "Faves", type: "movie",
+        items: [
+          { id: "tt0000001", imdbId: "tt0000001", type: "movie", title: "One" },
+          { id: "tt0000002", imdbId: "tt0000002", type: "movie", title: "Two" },
+        ],
+        visibility: "private",
+      },
+    });
+    assert.equal(edit.body.ok, true, edit.body.error);
+    assert.deepEqual((await catalogIds(env, "cfgmat1")).sort(), ["tt0000001", "tt0000002"],
+      "a frozen materialized copy would still answer with one title");
+  });
+});
+
 describe("catalog cache lifetimes", () => {
   async function setup() {
     const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });

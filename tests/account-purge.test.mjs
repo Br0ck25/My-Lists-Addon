@@ -59,6 +59,27 @@ function assertNothingLeft(env, db, id) {
 }
 
 describe("P5-8: account.purge", () => {
+  // Audit AUTH-003: the key and config forms of the scrobble webhook refused an
+  // account in the middle of deletion; the ?st= token form did not, so a ping
+  // in the window before the purge wrote tracking the purge then had to chase.
+  it("a scrobble ping with the token of an account being deleted is refused and writes nothing", async () => {
+    const { env, ann, cookie } = await populated();
+    const tok = await call(env, "/api/creator/scrobble-token", { method: "POST", json: { creatorName: "annpurge", creatorKey: ann.creatorKey } });
+    assert.equal(tok.body.ok, true, JSON.stringify(tok.body));
+    const ping = () => call(env, "/api/scrobble?st=" + encodeURIComponent(tok.body.token), {
+      method: "POST", json: { event: "media.scrobble", Metadata: { type: "movie", title: "Ghost Movie", Guid: [{ id: "imdb://tt0000042" }] } },
+    });
+    assert.notEqual((await ping()).status, 401, "a live account's token works");
+
+    const del = await call(env, "/api/me", { method: "DELETE", cookie, json: { confirm: "DELETE" } });
+    assert.equal(del.status, 202, JSON.stringify(del.body));
+    for (const k of [...env.CONFIGS._store.keys()]) if (/^(creatorsynctracking|creatorscrobblequeue|creatortrack):annpurge/.test(k)) env.CONFIGS._store.delete(k);
+    const after = await ping();
+    assert.equal(after.status, 401, JSON.stringify(after.body));
+    const written = [...env.CONFIGS._store.keys()].filter((k) => /^(creatorsynctracking|creatorscrobblequeue|creatortrack):annpurge/.test(k));
+    assert.deepEqual(written, [], "nothing is written for an account being deleted");
+  });
+
   it("DELETE /api/me takes effect at once, and the job removes everything", async () => {
     const { env, db, id, ann, cookie, installToken } = await populated();
     const r = await call(env, "/api/me", { method: "DELETE", cookie, json: { confirm: "DELETE" } });

@@ -170,6 +170,13 @@ function rememberMaterialized(key, value) {
 async function materializedRowPage(env, ctx, { config, entries, entryIndex, keys }) {
   const entry = entries[entryIndex];
   if (!entry || isPersonalShelfUrl(entry.url)) return null;
+  // The key below is a hash of the row DEFINITIONS, and a live Creator list's
+  // definition does not change when its items do. Materializing one would
+  // freeze it for up to MATERIALIZER_TTL_SEC while the route still answers as
+  // if it were live (audit MAT-001). An install with a live list takes the
+  // usual path, which reads every row as it is now.
+  const namesAccount = !!(keys && keys.trackCreatorName);
+  if (entries.some((e) => e && e.enabled !== false && customListRowIsLive(e.url, namesAccount))) return null;
   const key = await materializerKey(config, entries);
   let value = await readMaterializedInstall(env, key);
   if (!value) {

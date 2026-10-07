@@ -56,10 +56,48 @@ const PREFIXES = {
   "/api/poster/": "public images",
   "/api/safe-poster": "public images",
   "/api/scrobble": "token in the URL or body, tests/scrobble-queue.test.mjs",
+  "/bp/": "public images (Better Posters mirror), tests/better-posters-mirror.test.mjs",
+  "/channels/": "public: a published channel by owner and slug, tests/worker.test.mjs",
+  "/lists/": "public pages and JSON; a private list is refused by the handler itself, tests/lists-v2.test.mjs",
+  "/lists/curated/": "public, curated lists",
+  "/lists/custom/": "public, a shared Creator list",
+  "/lists/mdblist/": "public, a provider list page",
+  "/lists/simkl/": "public, a provider list page",
+  "/lists/tmdb/": "public, a provider list page",
+  "/lists/trakt/": "public, a provider list page",
+};
+
+// Routes matched with a regular expression (path.match(/^\/.../)), which the
+// exact-path scan above cannot see. A new one needs a line here saying who
+// may call it, so it is decided on purpose rather than slipping in because it
+// was written in the form this file did not look for (audit HOLLOW-001).
+// Several of them read account data (a Creator list, a channel, an install
+// manifest), so "public" below means the handler decides what to show.
+const REGEX_ROUTES = {
+  "/^(?:\\/([^/]+))?\\/catalog\\/([^/]+)\\/(.+)\\.json$/": "public: Stremio catalog, the config in the URL is the credential",
+  "/^(?:\\/([^/]+))?\\/meta\\/([^/]+)\\/(.+)\\.json$/": "public: Stremio meta",
+  "/^\\/([^/]+)\\/configure$/": "public: the configure redirect",
+  "/^\\/([^/]+)\\/manifest\\.json$/": "public: Stremio manifest",
+  "/^\\/([^/]+)\\/subtitles\\/(movie|series)\\/([^/]+?)(?:\\/[^/]+)?\\.json$/": "public: Stremio subtitles",
+  "/^\\/channel\\/([A-Za-z0-9_-]{1,64})$/": "public: a channel by its code",
+  "/^\\/lists\\/([A-Za-z0-9-]+)$/": "public: a creator page",
+  "/^\\/lists\\/([^/]+)\\/([^/]+?)(?:\\.json)?$/i": "public: a list page; a private list is refused by the handler",
+  "/^\\/lists\\/[^/]+\\/([^/]+?)(?:\\.json)?\\/?$/": "admin helper: parses a list path, serves nothing",
+  "/^\\/lists\\/curated\\/([A-Za-z0-9-]+)$/": "public: curated list",
+  "/^\\/lists\\/mdblist\\/([^/]+)\\/([^/]+)(?:\\.json)?$/i": "public: provider list page",
+  "/^\\/lists\\/tmdb\\/([0-9]+)(?:-([a-z0-9_-]+))?(?:\\.json)?$/i": "public: provider list page",
+  "/^\\/lists\\/tmdb\\/collection\\/([0-9]+)(?:-([a-z0-9_-]+))?(?:\\.json)?$/i": "public: provider list page",
+  "/^\\/lists\\/trakt\\/([^/]+)\\/([^/]+)(?:\\.json)?$/i": "public: provider list page",
+  "/^\\/rpdb\\/([^/]+)\\/(tt\\d+)\\.jpg$/": "public: poster image",
 };
 
 const sourceRoutes = [...new Set([...SOURCES.matchAll(/(?:path|pathname|p)\s*===\s*"(\/[^"]*)"/g)].map((m) => m[1]))].sort();
-const sourcePrefixes = [...new Set([...SOURCES.matchAll(/startsWith\("(\/(?:admin|api)[^"]*)"\)/g)].map((m) => m[1]))].sort();
+// Any prefix test on the request path, not only /admin and /api: /lists/,
+// /channels/ and /bp/ serve account data and were invisible to this scan.
+const sourcePrefixes = [...new Set([...SOURCES.matchAll(/\bpath(?:name)?\.startsWith\("(\/[^"]*)"\)/g)].map((m) => m[1]))].sort();
+// A regular-expression literal matched against the path. Handles a "/" inside
+// a [...] class, which is how most of them are written.
+const sourceRegexRoutes = [...new Set([...SOURCES.matchAll(/\b(?:path|pathname)\.match\((\/\^(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^\/\\\n\[])*\/[a-z]*)\)/g)].map((m) => m[1]))].sort();
 
 describe("route access inventory", () => {
   it("every route in the source is listed in tests/route-access.json", () => {
@@ -83,6 +121,18 @@ describe("route access inventory", () => {
   it("every route matched by prefix is known", () => {
     const unknown = sourcePrefixes.filter((p) => !(p in PREFIXES));
     assert.deepEqual(unknown, [], "a new prefix route needs a line in PREFIXES above and its own access tests");
+  });
+
+  it("every route matched by a regular expression is known, and none is stale", () => {
+    const unknown = sourceRegexRoutes.filter((r) => !(r in REGEX_ROUTES));
+    assert.deepEqual(unknown, [], "a new regex route needs a line in REGEX_ROUTES above saying who may call it");
+    const stale = Object.keys(REGEX_ROUTES).filter((r) => !sourceRegexRoutes.includes(r));
+    assert.deepEqual(stale, [], "remove these from REGEX_ROUTES: no source matches them any more");
+  });
+
+  it("the scan itself still finds the routes it is meant to (a guard that finds nothing passes everything)", () => {
+    assert.ok(sourceRegexRoutes.length >= 10, `found only ${sourceRegexRoutes.length} regex routes`);
+    assert.ok(sourcePrefixes.includes("/lists/") && sourcePrefixes.includes("/channels/"));
   });
 });
 

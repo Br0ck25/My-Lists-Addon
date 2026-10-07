@@ -91,6 +91,39 @@ describe("P5-5: chart.refresh", () => {
     }
   });
 
+  // Audit SNAP-001: region and chart argument went into KV keys unchecked, and
+  // the use was noted before anything was built, so each made-up value left a
+  // key for the hourly refresh to chase.
+  it("a region that is not a real option is served but never snapshotted or recorded", async () => {
+    const tmdb = fakeTmdb();
+    try {
+      const env = makeEnv({ DB: makeD1(), JOBS: makeQueue(), FF_CHART_SNAPSHOTS: "1", TMDB_API_KEY: "k" });
+      const w = await freshIsolate();
+      const out = await preview(w, env, "/api/preview?url=tmdb:chart:popular&type=movie&region=ZZ9");
+      assert.ok(out.ok && out.count > 0, "the rows are still served the usual way");
+      const keys = [...env.CONFIGS._store.keys()].filter((k) => k.startsWith("snap:chart"));
+      assert.deepEqual(keys, [], "no snapshot or in-use key for a made-up region");
+      await preview(w, env, "/api/preview?url=tmdb:chart:popular&type=movie&region=GB");
+      assert.ok(env.CONFIGS._store.has(KEY_GB), "a real region still snapshots");
+    } finally {
+      tmdb.restore();
+    }
+  });
+
+  it("a chart that builds nothing leaves no in-use key behind", async () => {
+    const tmdb = fakeTmdb();
+    try {
+      tmdb.state.empty = true;
+      const env = makeEnv({ DB: makeD1(), JOBS: makeQueue(), FF_CHART_SNAPSHOTS: "1", TMDB_API_KEY: "k" });
+      const w = await freshIsolate();
+      await preview(w, env, "/api/preview?url=tmdb:chart:made-up-chart&type=movie&region=GB");
+      const keys = [...env.CONFIGS._store.keys()].filter((k) => k.startsWith("snap:chart"));
+      assert.deepEqual(keys, []);
+    } finally {
+      tmdb.restore();
+    }
+  });
+
   it("an empty or failed answer keeps the last copy", async () => {
     const tmdb = fakeTmdb();
     try {

@@ -860,6 +860,38 @@ function legacyTrackingStores(env) {
   return JSON.stringify({ kv, tables });
 }
 
+// Audit CFG-001: with the flag on and DB_ACTIVITY lost, a copied account used
+// to read an empty legacy store and write into a frozen one.
+describe("FF_EVENT_TRACKING with DB_ACTIVITY unbound", () => {
+  it("refuses a copied account's tracking with a 503 and writes nothing, then recovers when the binding returns", async () => {
+    const { env, user } = await eventTrackingSetup();
+    const before = legacyTrackingStores(env);
+    const binding = env.DB_ACTIVITY;
+    const data = await loadTracking(env, user);
+    assert.ok(data.watchHistory.length > 0);
+
+    env.DB_ACTIVITY = undefined;
+    const load = await call(env, "/api/creator/sync/load", { method: "POST", json: creds(user) });
+    assert.equal(load.status, 503, JSON.stringify(load.body));
+    assert.equal(load.body.ok, false);
+    const save = await saveTrackingV2(env, user, { ...data, trackPlayback: true, expectedClientVersion: data.trackingClientVersion });
+    assert.equal(save.status, 503, JSON.stringify(save.body));
+    assert.equal(legacyTrackingStores(env), before, "nothing landed in the frozen legacy stores");
+
+    env.DB_ACTIVITY = binding;
+    const back = await loadTracking(env, user);
+    assert.deepEqual(back.watchHistory.map((it) => it.id), data.watchHistory.map((it) => it.id), "the history is all still there");
+  });
+
+  it("an account that has not been copied yet still works on the legacy stores", async () => {
+    const { env } = await eventTrackingSetup();
+    const other = await createUser(env, "notcopied");
+    env.DB_ACTIVITY = undefined;
+    const r = await call(env, "/api/creator/sync/load", { method: "POST", json: creds(other) });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+  });
+});
+
 describe("P3c-6: with FF_EVENT_TRACKING, a copied account is served from the activity database", () => {
   it("/sync/load hands back the same history ids and settings, from v2", async () => {
     const { env, user } = await eventTrackingSetup();

@@ -56,14 +56,16 @@ describe("the server: a session signs a save in place of the key", () => {
       const miss = await call(env, "/api/creator/restore", { method: "POST", ip, json: { creatorName: user.creatorName } });
       assert.equal(miss.status, 401);
     }
-    // Failed attempts are stats rows "authfail:restore:<ip>" (noteAuthFailure),
+    // Failed attempts are stats rows "authfail:restore:<ip>" (reserveAuthAttempt),
     // and the per-minute bucket is a rate_counters row.
-    const failRows = db._db.prepare("SELECT count(*) AS n FROM stats WHERE kind LIKE 'authfail:restore:%'").get();
-    const bucketRows = db._db.prepare("SELECT count(*) AS n FROM rate_counters WHERE scope LIKE 'creatorrestore%'").get();
+    // The spend is taken before the key is checked and given back when nothing
+    // was guessed, so the rows may exist; what must be zero is what they hold.
+    const failRows = db._db.prepare("SELECT coalesce(sum(n), 0) AS n FROM stats WHERE kind LIKE 'authfail:restore:%'").get();
+    const bucketRows = db._db.prepare("SELECT coalesce(sum(count), 0) AS n FROM rate_counters WHERE scope LIKE 'creatorrestore%'").get();
     assert.equal(Number(failRows.n) + Number(bucketRows.n), 0, "a keyless miss spends nothing");
     // A wrong key still does.
     await call(env, "/api/creator/restore", { method: "POST", ip, json: { creatorName: user.creatorName, creatorKey: "MYL-WRONG-KEY1-KEY2" } });
-    assert.equal(Number(db._db.prepare("SELECT count(*) AS n FROM stats WHERE kind LIKE 'authfail:restore:%'").get().n), 1, "a wrong key is noted");
+    assert.equal(Number(db._db.prepare("SELECT coalesce(sum(n), 0) AS n FROM stats WHERE kind LIKE 'authfail:restore:%'").get().n), 1, "a wrong key is noted");
   });
 
   it("a preview of a personal row is signed by the session", async () => {

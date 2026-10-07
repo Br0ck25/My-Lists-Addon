@@ -34,6 +34,8 @@ import { awaitFreshRateWindow, call, createUser, freshIsolate, makeD1, makeEnv, 
 //      serves: the fallback is the isolate's memory, which is looser across
 //      isolates but never unlimited.
 
+const RESET_BUDGET = 5; // RESET_KEY_ACCOUNT_MAX_FAILURES (00_constants.js)
+
 describe("P7-3: rate limits are D1 counters, not KV slots", () => {
   const rateKeys = (kv) => [...kv._store.keys()].filter((k) => k.startsWith("ratelimit:"));
   const counter = (env, scope) =>
@@ -122,7 +124,7 @@ describe("P7-3: rate limits are D1 counters, not KV slots", () => {
       assert.equal(stranger.status, 401, "another address still has its own budget");
       if (env.DB) {
         // Ten, not eleven: this endpoint reads the count, refuses, and only
-        // spends when a guess was actually attempted (see readRateLimitCount).
+        // spends when a guess was actually attempted (see reserveRateLimit).
         // The count staying at the ceiling is what keeps it refused for the
         // rest of the window.
         assert.equal(Number((await counter(env, `adminlogin:${ip}`)).count), 10);
@@ -212,5 +214,149 @@ describe("P7-3: rate limits are D1 counters, not KV slots", () => {
       json: { creatorName: "nobody", creatorKey: "MYL-BAD0-BAD0-BAD0" },
     });
     assert.equal(restore.status, 400);
+  });
+
+  // Audit AUTH-002: the per-account budget used to be read, then the answer
+  // verified, then the failure noted, so every request already past the read
+  // verified a guess. 300 parallel guesses all got a 401. The budget is now
+  // spent before the answer is checked, so a burst gets the budget and no more.
+  it("a parallel burst of wrong recovery answers gets at most the account budget, even from many addresses", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const user = await createUser(env, "burstvictim", { recoveryAnswer: "purple elephant" });
+    await awaitFreshRateWindow();
+    const results = await Promise.all(Array.from({ length: 30 }, (_, i) =>
+      call(env, "/api/creator/reset-key", {
+        method: "POST", ip: nextIp(),
+        json: { username: user.creatorName, recoveryAnswer: "wrong guess " + i },
+      })));
+    const verified = results.filter((r) => r.status === 401).length;
+    assert.ok(verified <= RESET_BUDGET, `${verified} guesses were verified, the budget is ${RESET_BUDGET}`);
+    assert.equal(results.filter((r) => r.status === 429).length, 30 - verified);
+  });
+
+  it("one address cannot get past the reset-key IP limit by bursting either", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    await awaitFreshRateWindow();
+    const ip = nextIp();
+    const results = await Promise.all(Array.from({ length: 30 }, () =>
+      call(env, "/api/creator/reset-key", { method: "POST", ip, json: { username: "nobodyhere", recoveryAnswer: "whatever it is" } })));
+    assert.equal(results.filter((r) => r.status === 429).length, 20, "10 a day, the other 20 refused");
+  });
+
+  it("a correct recovery answer gives its spend back", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const user = await createUser(env, "refundme", { recoveryAnswer: "purple elephant" });
+    for (let i = 0; i < 4; i++) {
+      const wrong = await call(env, "/api/creator/reset-key", { method: "POST", ip: nextIp(), json: { username: user.creatorName, recoveryAnswer: "nope " + i } });
+      assert.equal(wrong.status, 401);
+    }
+    const right = await call(env, "/api/creator/reset-key", { method: "POST", ip: nextIp(), json: { username: user.creatorName, recoveryAnswer: "purple elephant" } });
+    assert.equal(right.status, 200, JSON.stringify(right.body));
+    // Four failures stayed, the success did not count: one more wrong guess
+    // is the fifth, and it is still verified rather than refused.
+    const fifth = await call(env, "/api/creator/reset-key", { method: "POST", ip: nextIp(), json: { username: user.creatorName, recoveryAnswer: "nope again" } });
+    assert.equal(fifth.status, 401);
+  });
+
+  it("a parallel burst of wrong admin keys is capped at the per-minute budget", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    await awaitFreshRateWindow();
+    const ip = nextIp();
+    const results = await Promise.all(Array.from({ length: 30 }, () =>
+      call(env, "/admin/login", { method: "POST", ip, form: { key: "wrong-key" } })));
+    assert.equal(results.filter((r) => r.status === 401).length, 10);
+    assert.equal(results.filter((r) => r.status === 429).length, 20);
+  });
+
+  // Audit DATA-001: the anonymous search endpoints spend the owner's TMDB key,
+  // had no limit, and every distinct query minted stats rows that nothing
+  // deletes.
+  describe("anonymous search endpoints (DATA-001)", () => {
+    const realFetch = globalThis.fetch;
+    const stub = () => {
+      globalThis.fetch = async () => new Response(JSON.stringify({ results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const restore = () => { globalThis.fetch = realFetch; };
+
+    for (const [label, path] of [
+      ["/api/title-search", (i) => `/api/title-search?q=unique${i}&type=movie`],
+      ["/api/person-search", (i) => `/api/person-search?q=unique${i}`],
+      ["/api/tmdb-search-lists", (i) => `/api/tmdb-search-lists?q=unique${i}`],
+      ["the Stremio search catalog", (i) => `/catalog/movie/search_movies/search=unique${i}.json`],
+    ]) {
+      it(`${label} refuses an address past 60 a minute, and another address still searches`, async () => {
+        stub();
+        try {
+          const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "k" });
+          await awaitFreshRateWindow();
+          const ip = nextIp();
+          const statuses = [];
+          for (let i = 0; i < 64; i++) statuses.push((await call(env, path(i), { ip })).status);
+          assert.equal(statuses.filter((c) => c === 429).length, 4, `the 61st to 64th are refused: ${statuses.join(",")}`);
+          const other = await call(env, path(999), { ip: nextIp() });
+          assert.notEqual(other.status, 429, "a limit one address spends must not stop another");
+        } finally {
+          restore();
+        }
+      });
+    }
+
+    it("stops writing search-query rows once the day's ceiling is spent", async () => {
+      stub();
+      try {
+        const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "k" });
+        const count = () => Number(env.DB._db.prepare("SELECT count(*) AS n FROM stats WHERE kind LIKE 'searchq:%'").get().n);
+        await call(env, "/api/title-search?q=firstquery&type=movie");
+        assert.ok(count() > 0, "an ordinary search is still recorded");
+        const before = count();
+        const windowStart = Math.floor(Date.now() / 86400000) * 86400000;
+        env.DB._db.prepare("INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?) ON CONFLICT(scope, window_start) DO UPDATE SET count = excluded.count")
+          .run("searchrecord:all", windowStart, 20000);
+        await call(env, "/api/title-search?q=secondquery&type=movie");
+        await call(env, "/api/title-search?q=thirdquery&type=movie");
+        assert.equal(count(), before, "over the ceiling nothing new is written");
+      } finally {
+        restore();
+      }
+    });
+  });
+
+  // Audit DOS-001: a wrong, well-formed Account Key in forgot-username walked
+  // the first 50 accounts and ran PBKDF2 on each.
+  describe("forgot-username with an unknown key (DOS-001)", () => {
+    const WRONG = "MYL-AAAA-BBBB-CCCC";
+    async function countDerivations(fn) {
+      const real = globalThis.crypto.subtle.deriveBits.bind(globalThis.crypto.subtle);
+      let n = 0;
+      globalThis.crypto.subtle.deriveBits = (...a) => { n++; return real(...a); };
+      try { await fn(); } finally { globalThis.crypto.subtle.deriveBits = real; }
+      return n;
+    }
+
+    it("does not hash against accounts that are already indexed", async () => {
+      const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+      for (let i = 0; i < 8; i++) await createUser(env, "indexed" + i);
+      let status;
+      const n = await countDerivations(async () => {
+        status = (await call(env, "/api/creator/forgot-username", { method: "POST", ip: nextIp(), json: { creatorKey: WRONG } })).status;
+      });
+      assert.equal(status, 401);
+      assert.equal(n, 0, `${n} key derivations for one wrong key`);
+    });
+
+    it("still finds an old account that has no lookup entry, and indexes it", async () => {
+      const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+      const old = await createUser(env, "oldaccount");
+      env.DB._db.prepare("DELETE FROM creator_key_lookups").run();
+      env.DB._db.prepare("UPDATE accounts SET key_lookup_hmac = NULL").run();
+      for (const k of [...env.CONFIGS._store.keys()]) if (k.startsWith("keylookup:") || k.startsWith("creatorlookuphash:")) env.CONFIGS._store.delete(k);
+      const first = await call(env, "/api/creator/forgot-username", { method: "POST", ip: nextIp(), json: { creatorKey: old.creatorKey } });
+      assert.equal(first.status, 200, JSON.stringify(first.body));
+      assert.equal(first.body.username, "oldaccount");
+      const n = await countDerivations(async () => {
+        await call(env, "/api/creator/forgot-username", { method: "POST", ip: nextIp(), json: { creatorKey: WRONG } });
+      });
+      assert.equal(n, 0, "once indexed the account is no longer scanned");
+    });
   });
 });

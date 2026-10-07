@@ -14111,6 +14111,25 @@ describe("worker: public channel URLs and redirects", () => {
     assert.equal(res.body.channel.name, "Comedy Night");
   });
 
+  // Audit CHAN-001: unpublishing took a channel out of Explore but its
+  // /channels/{owner}/{slug} address, which anyone can guess, kept serving it.
+  it("stops answering /channels/:username/:slug once the channel is unpublished", async () => {
+    const env = makeEnv();
+    const code = "CHGONE01";
+    const record = { code, owner: "alice", published: true, channel: { name: "Comedy Night", items: [{ kind: "movie", imdbId: "tt1234567", season: 1, episode: 1 }] } };
+    await env.CONFIGS.put("channelshare:" + code, JSON.stringify(record));
+    await env.CONFIGS.put("creatorchannel:alice:comedy-night", code);
+    assert.equal((await call(env, "/channels/alice/comedy-night")).status, 302, "published: the address works");
+
+    await env.CONFIGS.put("channelshare:" + code, JSON.stringify({ ...record, published: false }));
+    const html = await call(env, "/channels/alice/comedy-night");
+    assert.notEqual(html.status, 302, "unpublished: no redirect to the channel");
+    assert.ok(!(html.headers.get("location") || "").includes(code));
+    const json = await call(env, "/channels/alice/comedy-night.json");
+    assert.ok(!(json.body && json.body.code), "unpublished: the code is not handed out");
+    assert.ok(!(json.body && json.body.channel), "unpublished: the channel is not handed out");
+  });
+
   it("redirects /channel/:code for backward compatibility", async () => {
     const env = makeEnv();
     const res = await call(env, "/channel/LEGACY123");
@@ -16694,6 +16713,40 @@ describe("P3a-8: installs", () => {
       const r = await call(env, "/api/installs");
       assert.equal(r.status, 401);
       assert.equal(r.body.signInRequired, true);
+    });
+
+    // Audit AUTH-001: an install link is a bearer credential that gets shared
+    // for its public lists. /api/resolve used to hand back the owner's whole
+    // tracking record to anyone holding a link with only public rows.
+    it("/api/resolve gives the owner's tracking record only to a link that asks for it", async () => {
+      const { env, u, cookie } = await setup("v2leak");
+      const record = {
+        watchHistory: [{ id: "tt7654321:1:1", showId: "tt7654321", showTitle: "SECRET SHOW" }],
+        continueWatching: [{ id: "tt7654321:1:2", showTitle: "SECRET SHOW" }],
+        watchlist: [{ id: "tt0000009", name: "SECRET WATCHLIST ITEM", type: "movie" }],
+        airingNext: [],
+      };
+      await env.CONFIGS.put(`creatorsynctracking:${u.creatorName}`, JSON.stringify(record));
+
+      const pub = await call(env, "/api/installs", { method: "POST", cookie, json: { entries: [row("a", "https://mdblist.com/lists/someone/v2-list")] } });
+      assert.equal(pub.status, 201, JSON.stringify(pub.body));
+      const anon = await call(env, `/api/resolve?config=i~${pub.body.token}`);
+      assert.equal(anon.status, 200, JSON.stringify(anon.body));
+      assert.equal(anon.body.entries.length, 1);
+      assert.deepEqual(anon.body.watchHistory || [], [], "public rows only: no watch history");
+      assert.deepEqual(anon.body.continueWatching || [], []);
+      assert.deepEqual(anon.body.watchlist || [], []);
+      assert.doesNotMatch(JSON.stringify(anon.body), /SECRET/);
+
+      // A link that carries one of the account's own shelves still gets it.
+      const personal = await call(env, "/api/installs", {
+        method: "POST", cookie,
+        json: { entries: [row("w", `autotrack:watchlist:movie:${u.creatorName}`)] },
+      });
+      assert.equal(personal.status, 201, JSON.stringify(personal.body));
+      const own = await call(env, `/api/resolve?config=i~${personal.body.token}`);
+      assert.equal(own.status, 200, JSON.stringify(own.body));
+      assert.match(JSON.stringify(own.body), /SECRET SHOW/, "a personal row keeps its tracking record");
     });
 
     it("creates a v2 link that serves its rows, shows the token once, and lists it without one", async () => {

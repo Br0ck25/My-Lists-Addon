@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "433aaf4953";
+const WORKER_BUILD = "885d169117";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -656,6 +656,17 @@ const RECOVERY_ANSWER_MIN_LENGTH = 8;
 const FORGOT_USERNAME_IP_MAX_FAILURES = 5;
 const FORGOT_USERNAME_IP_TTL_SEC = 900;
 
+// Anonymous search endpoints (audit DATA-001). /api/title-search,
+// /api/person-search, /api/tmdb-search-lists and the Stremio search catalogs
+// spend the owner's TMDB key and need no account, so each address gets this
+// many a minute. Typing in a search box with a debounce stays well under it.
+const SEARCH_MAX_PER_MINUTE = 60;
+// How many search queries are written to the stats table in one day, across
+// everyone. Each distinct query mints rows (kind is `searchq:{query}`) and
+// nothing deletes them, so without a ceiling the keyspace is whatever strings
+// a caller chooses. The leaderboard only needs the popular ones.
+const SEARCH_QUERY_RECORDS_PER_DAY = 20000;
+
 // --- Bound on /api/channel-logo's inlined image ------------------------------
 //
 // That endpoint fetches a TMDB image and base64-encodes it into an SVG,
@@ -701,7 +712,7 @@ function applyEnvApiKeys(env) {
 // thing standing in front of a credential.
 //
 // So both also carry a per-IP DAILY budget, spent only on failures and
-// backed by D1's atomic upsert wherever D1 is bound (see noteAuthFailure,
+// backed by D1's atomic upsert wherever D1 is bound (see reserveAuthAttempt,
 // 02_http-and-creator-utils.js). Successes never consume it, so a legitimate
 // admin or someone restoring on a run of new devices is unaffected; the
 // ceilings are set far above any plausible honest failure count and reset
@@ -4669,6 +4680,17 @@ function safeErrorMessage(err, fallback = "Something went wrong. Please try agai
   return msg.length > 200 ? msg.slice(0, 200) + "…" : msg;
 }
 
+// decodeURIComponent throws on a stray "%" ("%E0", "100%"), which anyone can
+// put in a URL, and an uncaught throw in a route answered 500. A piece that
+// cannot be decoded is used as written, which then simply matches nothing.
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value);
+  }
+}
+
 // Detect whether a request is a top-level browser page load (someone tapping
 // "Configure" and being sent to the manifest URL) vs. a JSON fetch by wako/
 // Stremio itself. We check two independent signals and trust either one:
@@ -5106,7 +5128,10 @@ const SESSION_COOKIE_NAME = "mla_session";
 const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
 const SESSION_TTL_MS = SESSION_TTL_SEC * 1000;
 const SESSION_CACHE = new Map();
-const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 s isolate cache
+// Short on purpose: a session revoked on another isolate (logout, key reset,
+// account delete) keeps working here until its entry expires, so this is the
+// longest a revoked cookie can outlive its revocation (audit SESS-001).
+const SESSION_CACHE_TTL_MS = 10 * 1000;
 const SESSION_CACHE_MAX = 1000;
 
 function extractSessionToken(request) {
@@ -6973,7 +6998,7 @@ function clientIpKey(request) {
 // counter one row per (bucket, key, window) rather than one row per key with a
 // TTL, and it is what Cloudflare's own rules do. The cost is the usual one: a
 // burst straddling a boundary can spend up to two windows' worth in a rolling
-// minute. The per-account daily budgets (readAuthFailureCount / noteAuthFailure
+// minute. The per-account daily budgets (reserveAuthAttempt
 // below) and the WAF rules (docs/OPERATIONS.md section 26) are the answer to
 // that, not a tighter short window.
 //
@@ -7072,9 +7097,9 @@ function memoryRateLimitCount(scope, windowStart, spend) {
 // Read the current count, optionally spending first. Never throws: a limiter
 // that breaks must not break the request it is protecting, and a counter that
 // cannot be read is treated as "spend into memory" rather than "no limit".
-async function rateLimitCount(env, ctx, bucket, key, windowSec, spend) {
+async function rateLimitCount(env, ctx, bucket, key, windowSec, spend, nowMs) {
   const amount = Number.isFinite(spend) && spend > 0 ? Math.floor(spend) : 0;
-  const now = Date.now();
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const windowStart = rateLimitWindowStart(now, windowSec);
   const scope = rateLimitScope(bucket, key);
   if (env && env.DB) {
@@ -7115,28 +7140,69 @@ async function consumeRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec =
   return used > maxPerWindow;
 }
 
-// The read half, for the endpoints where a SUCCESS must not spend the budget
-// that protects them: a correct password is not a guess, and an admin who
-// signs in on a run of devices must not lock themselves out (the daily failure
-// budgets below are built on exactly that rule).
-//
-// A request refused at this gate spends nothing -- nothing was attempted, and
-// the count stays where it is for the rest of the window, so it is still
-// refused. That is the difference from consumeRateLimit above, which spends
-// first and so counts every arrival including the refused ones.
-//
-// Read-then-note is not atomic, so several guesses arriving in the same
-// instant can each see the pre-increment count. That is bounded, not open: the
-// daily budget is one atomic upsert per failure, so what concurrency can win
-// is a handful of extra attempts inside a minute, never extra attempts overall.
-async function readRateLimitCount(env, ctx, bucket, key, windowSec = 60) {
-  return rateLimitCount(env, ctx, bucket, key, windowSec, 0);
+// The per-address limit on the anonymous search endpoints, which spend the
+// owner's TMDB key (audit DATA-001). Returns a ready 429 Response, or null to
+// carry on. Fails closed with no client IP, like every other limiter here.
+async function searchRateLimitResponse(request, env, ctx) {
+  const ip = clientIpKey(request);
+  if (!ip) return json({ ok: false, error: "Could not process this request." }, 400, { "Cache-Control": "no-store" });
+  if (await consumeRateLimit(env, ctx, "search", ip, SEARCH_MAX_PER_MINUTE, 60)) {
+    return json({ ok: false, error: "Too many searches. Please wait a moment and try again." }, 429, { "Cache-Control": "no-store", "Retry-After": "30" });
+  }
+  return null;
 }
 
-// The spend half, for a failure that has already happened.
-async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
-  if (!key) return;
-  await rateLimitCount(env, ctx, bucket, key, windowSec, cost);
+// Spend first, give it back on success -- for the endpoints where a SUCCESS
+// must not consume the budget that protects them: a correct password is not a
+// guess, and an admin who signs in on a run of devices must not lock
+// themselves out (the daily failure budgets below are built on that rule).
+//
+// This used to be read the count, do the work, note the failure afterwards.
+// That is not atomic, and the work is a PBKDF2 verification of about 90 ms, so
+// every request that arrived inside that gap read the pre-failure count and
+// went on to verify a guess: a burst of 300 got 300 guesses (audit AUTH-002).
+// The spend is one atomic upsert and happens BEFORE the guess is checked, so
+// the guesses that can be in flight are capped by the budget, not by how fast
+// the attacker can send. A correct answer calls release() and the budget is
+// back where it was. A request refused here releases its own spend, so the
+// count stays at the ceiling and the rest of the window stays refused, the
+// same as before.
+//
+// Returns { over, release }. `over` is true when the caller should stop.
+async function reserveRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec = 60) {
+  const noop = async () => {};
+  if (!key) return { over: true, release: noop };
+  const now = Date.now();
+  const used = await rateLimitCount(env, ctx, bucket, key, windowSec, 1, now);
+  let released = false;
+  const release = async () => {
+    if (released) return;
+    released = true;
+    await refundRateLimitCount(env, rateLimitScope(bucket, key), rateLimitWindowStart(now, windowSec));
+  };
+  if (used > maxPerWindow) {
+    await release();
+    return { over: true, release };
+  }
+  return { over: false, release };
+}
+
+// Give one spend back. Never below zero, and aimed at the window the spend
+// landed in rather than whichever one is current.
+async function refundRateLimitCount(env, scope, windowStart) {
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare(
+        "UPDATE rate_counters SET count = MAX(0, count - 1) WHERE scope = ? AND window_start = ?"
+      ).bind(scope, windowStart).run();
+      return;
+    } catch {
+      // Table missing: the spend went to memory, so the refund does too.
+    }
+  }
+  const key = scope + ":" + windowStart;
+  const used = RATE_LIMIT_MEMO.get(key) || 0;
+  if (used > 0) RATE_LIMIT_MEMO.set(key, used - 1);
 }
 
 // --- Per-account authentication failure budget -------------------------------
@@ -7165,46 +7231,63 @@ async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
 // migration today.
 const AUTH_FAIL_TTL_SEC = 86400;
 
-async function readAuthFailureCount(env, scope, day) {
+// Spend one attempt before the secret is checked, and read the count back in
+// the same transaction. A wrong guess simply keeps its spend; a correct one
+// calls release(). Returns { over, release }, `over` meaning this attempt is
+// past `maxFailures` (its own spend is already given back, so refused requests
+// do not push the count further).
+//
+// Reading first and noting the failure afterwards (what this did until audit
+// AUTH-002) let every request already past the read verify a guess for free.
+async function reserveAuthAttempt(env, scope, day, maxFailures) {
+  const kind = `authfail:${scope}`;
+  let released = false;
+  let n = null;
+  let viaD1 = false;
   if (env && env.DB) {
     try {
-      const { results } = await env.DB.prepare(
-        "SELECT n FROM stats WHERE kind = ? AND day = ?"
-      ).bind(`authfail:${scope}`, day).all();
-      // The query SUCCEEDED, so no row means no failures yet. Deliberately
-      // not readStatCount's "no row -> fall through to KV" rule: that exists
-      // because a missing counter row can mean "not migrated yet", and
-      // applying it here would reset the failure count on every attempt.
-      return results && results.length ? (Number(results[0].n) || 0) : 0;
+      // Same statement shape as d1BumpStat: bound amount, DO UPDATE SET
+      // n = n + excluded.n. A near-miss variant of it silently counted nothing
+      // the first time this throttle was written.
+      const out = await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n"
+        ).bind(kind, day, 1),
+        env.DB.prepare("SELECT n FROM stats WHERE kind = ? AND day = ?").bind(kind, day),
+      ]);
+      const rows = (out && out[out.length - 1] && out[out.length - 1].results) || [];
+      n = rows.length ? Number(rows[0].n) || 0 : 1;
+      viaD1 = true;
     } catch {
-      // Table missing (migration 0002 not applied) or D1 unavailable --
-      // fall through to KV, which is also where the writes will land.
+      // Table missing (migration 0002 not applied) or D1 unavailable -- fall
+      // through to KV, which is also where the release will go.
     }
   }
-  if (!env || !env.CONFIGS) return 0;
-  return parseInt(await env.CONFIGS.get(`authfail:${scope}:${day}`), 10) || 0;
-}
-
-async function noteAuthFailure(env, scope, day) {
-  if (env && env.DB) {
-    try {
-      // d1BumpStat, not a hand-written INSERT. Its statement shape --
-      // VALUES (?, ?, ?) with DO UPDATE SET n = n + excluded.n -- is the one
-      // every other counter here uses, and it is the atomic part. Writing a
-      // near-miss variant of it by hand (DO UPDATE SET n = n + 1, with the
-      // amount inlined rather than bound) is exactly how this throttle
-      // silently counted nothing at all on D1-bound deployments the first
-      // time it was written.
-      await d1BumpStat(env, `authfail:${scope}`, [day], 1);
-      return;
-    } catch {
-      // Same fallback as the read above, so both halves stay on one store.
-    }
+  if (!viaD1) {
+    if (!env || !env.CONFIGS) return { over: false, release: async () => {} };
+    const key = `${kind}:${day}`;
+    n = (parseInt(await env.CONFIGS.get(key), 10) || 0) + 1;
+    await env.CONFIGS.put(key, String(n), { expirationTtl: AUTH_FAIL_TTL_SEC });
   }
-  if (!env || !env.CONFIGS) return;
-  const key = `authfail:${scope}:${day}`;
-  const n = parseInt(await env.CONFIGS.get(key), 10) || 0;
-  await env.CONFIGS.put(key, String(n + 1), { expirationTtl: AUTH_FAIL_TTL_SEC });
+  const release = async () => {
+    if (released) return;
+    released = true;
+    if (viaD1) {
+      try {
+        await env.DB.prepare("UPDATE stats SET n = MAX(0, n - 1) WHERE kind = ? AND day = ?").bind(kind, day).run();
+        return;
+      } catch {}
+    }
+    if (!env || !env.CONFIGS) return;
+    const key = `${kind}:${day}`;
+    const cur = parseInt(await env.CONFIGS.get(key), 10) || 0;
+    if (cur > 0) await env.CONFIGS.put(key, String(cur - 1), { expirationTtl: AUTH_FAIL_TTL_SEC });
+  };
+  if (n > maxFailures) {
+    await release();
+    return { over: true, release };
+  }
+  return { over: false, release };
 }
 
 async function likeVoterId(request, env, creatorUsername, scopeId) {
@@ -11611,15 +11694,16 @@ async function recordSearchQuery(env, query) {
   if (q.length < 2) return;
   try {
     const day = statsToday();
+    // A day's writes are capped across everyone (SEARCH_QUERY_RECORDS_PER_DAY):
+    // the query text is part of `kind`, so distinct queries are not bounded by
+    // (kind, day) at all -- they are bounded by what callers send (DATA-001).
+    if (await consumeRateLimit(env, null, "searchrecord", "all", SEARCH_QUERY_RECORDS_PER_DAY, 86400)) return;
     // Same move as recordTrackedEvent above, and the same reason: three KV
     // writes per search, none of which the free plan's write budget can
     // afford. Nothing but counts here, so there is no meta to keep.
     //
-    // The per-day unique-query cap that the KV path enforces through
-    // SEARCH_DAY_INDEX_CAP is not needed on this path: `stats` rows are
-    // bounded by (kind, day) and a query string mints one row per day rather
-    // than an unbounded keyspace of KV keys, and D1 writes do not come out of
-    // the KV write budget that cap exists to protect.
+    // The KV path caps unique queries per day through SEARCH_DAY_INDEX_CAP.
+    // This path is capped by the daily write ceiling above instead.
     if (env.DB) {
       await d1BumpStat(env, `searchq:${q}`, ["total", day], 1);
       return;
@@ -85415,7 +85499,7 @@ async function handleFetch(request, env, ctx) {
     // own copy, see serveRpdbPoster (05_catalog-core.js).
     const rpdbMatch = path.match(/^\/rpdb\/([^/]+)\/(tt\d+)\.jpg$/);
     if (rpdbMatch && (request.method === "GET" || request.method === "HEAD")) {
-      return await serveRpdbPoster(env, ctx, decodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
+      return await serveRpdbPoster(env, ctx, safeDecodeURIComponent(rpdbMatch[1]), rpdbMatch[2]);
     }
 
     // /api/support-goal -> what the Ko-fi support strip shows, or enabled:false
@@ -85948,14 +86032,12 @@ async function handleFetch(request, env, ctx) {
       const cleanPath = path.endsWith(".json") ? path.slice(0, -5) : path;
       const parts = cleanPath.split("/").filter(Boolean);
       if (parts.length >= 3) {
-        const u = decodeURIComponent(parts[1]).toLowerCase();
-        const s = decodeURIComponent(parts[2]).toLowerCase();
+        const u = safeDecodeURIComponent(parts[1]).toLowerCase();
+        const s = safeDecodeURIComponent(parts[2]).toLowerCase();
         // From v2 when reads are there (P3b-8), else the legacy map and index.
         let code = (await channelsV2CodeBySlug(env, u, s)) || "";
         if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
-          try {
-            code = (await env.CONFIGS.get(`creatorchannel:${u}:${s}`)) || "";
-          } catch {}
+          code = await legacyPublishedChannelCode(env, u, s);
           if (!code) {
             try {
               const indexEntries = await readPublicChannelIndex(env);
@@ -86071,7 +86153,7 @@ async function handleFetch(request, env, ctx) {
       // and the actual tracking write (a TMDB lookup plus a KV read/write)
       // shouldn't hold up how fast this responds. ctx.waitUntil lets it
       // keep running after the response is already on its way.
-      ctx.waitUntil(handleSubtitlesTrack(configParam, stremioType, decodeURIComponent(rawId), env, request));
+      ctx.waitUntil(handleSubtitlesTrack(configParam, stremioType, safeDecodeURIComponent(rawId), env, request));
       return jsonPublic({ subtitles: [] });
     }
 
@@ -86305,12 +86387,14 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const [id, extraStr] = idWithExtra.split("/");
       const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
       const skip = parseInt(extra.skip, 10) || 0;
-      const searchQuery = extra.search ? decodeURIComponent(extra.search).trim() : "";
+      const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
 
       // Dedicated search catalogs for Stremio and Nuvio
       const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
       if (isSearchCatalog) {
         if (!searchQuery) return jsonPublic({ metas: [] });
+        const searchLimited = await searchRateLimitResponse(request, env, ctx);
+        if (searchLimited) return searchLimited;
         const searchConfig = config ? await resolveConfig(config, env) : {};
         const effectiveTmdbKey = searchConfig.tmdbKey || TMDB_API_KEY;
         let metas = await searchCatalogMetas(searchQuery, type, skip, effectiveTmdbKey, env, ctx, url.origin);
@@ -86752,7 +86836,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
     m = path.match(/^(?:\/([^/]+))?\/meta\/([^/]+)\/(.+)\.json$/);
     if (m) {
       const [, config, metaType, idRaw] = m;
-      const id = decodeURIComponent(idRaw);
+      const id = safeDecodeURIComponent(idRaw);
 
       // 1. Synthetic meta for Channels
       if (id.startsWith("channel_")) {
@@ -87038,6 +87122,8 @@ function generateSearchVariations(query) {
     // When no query is provided, returns the top 20 trending/popular titles for that category.
     // When a query is provided, fetches all relevant matching results across pages.
     if (path === "/api/title-search") {
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
       const q = (url.searchParams.get("q") || "").trim();
       const kind = url.searchParams.get("type") === "movie" ? "movie" : "tv";
       const adultFilterParam = url.searchParams.get("adultContentFilter");
@@ -87632,6 +87718,8 @@ function generateSearchVariations(query) {
     if (path === "/api/person-search") {
       const q = (url.searchParams.get("q") || "").trim();
       if (!q) return jsonCacheable({ ok: true, results: [] });
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
       try {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const res = await fetch(
@@ -88314,6 +88402,8 @@ function generateSearchVariations(query) {
       if (!q || !tmdbKey) {
         return jsonCacheable({ ok: true, lists: [] });
       }
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
 
       try {
         if (!tmdbKeyParam) ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
@@ -93708,7 +93798,11 @@ function generateSearchVariations(query) {
 
       if (scrobbleToken) {
         const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
-        if (tokenUser) {
+        // An account in the middle of deletion has a tombstone before its token
+        // is purged. The key and config forms below already check it; without
+        // this a ping in that window wrote tracking the purge then had to
+        // chase (audit AUTH-003).
+        if (tokenUser && !(await isCreatorTombstoned(env, tokenUser))) {
           authUser = tokenUser;
           authForm = "st";
         }
@@ -94837,16 +94931,15 @@ function generateSearchVariations(query) {
       }
       const ip = clientIpKey(request);
       if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
-      const rateLimitKey = `resetkeyrate:${ip}:${statsToday()}`;
-      const rateCountRaw = await env.CONFIGS.get(rateLimitKey);
-      const rateCount = parseInt(rateCountRaw, 10) || 0;
-      if (rateCount >= 10) {
+      // Spend-first and atomic (D1), not a KV get-then-put: KV has no atomic
+      // increment and edge-caches reads, so a burst from one address slipped
+      // past it (audit AUTH-002).
+      if (await consumeRateLimit(env, ctx, "resetkey", ip, 10, 86400)) {
         // 429, not 200. Round 1 moved fourteen endpoints off "HTTP 200 with
         // ok:false" on an auth failure; this one kept it, so a client that
         // branches on the status code read a refused reset as a success.
         return json({ ok: false, error: "Too many attempts today -- please try again tomorrow, or reach out via Feedback & Support." }, 429);
       }
-      await env.CONFIGS.put(rateLimitKey, String(rateCount + 1), { expirationTtl: 86400 });
 
       const v = validateCreatorUsername(body.username);
       const answer = String(body.recoveryAnswer || "").trim();
@@ -94876,13 +94969,16 @@ function generateSearchVariations(query) {
       // handful of tries, in exchange for a working Creator Key. See
       // RESET_KEY_ACCOUNT_MAX_FAILURES (00_constants.js).
       //
-      // Checked here, after the profile is known to exist and to have a
+      // Reserved here, after the profile is known to exist and to have a
       // recovery answer set, so a wrong or unknown username can never spend
-      // (or create a counter for) an account budget. Still before the
-      // PBKDF2 verification below, so a throttled attempt costs nothing.
+      // (or create a counter for) an account budget. The attempt is SPENT
+      // before the PBKDF2 verification below and given back only if the answer
+      // is right: reading the count first and noting the failure afterwards
+      // let every request already past the read verify a guess (AUTH-002).
       const resetDay = statsToday();
       const resetScope = `reset:${v.normalized}`;
-      if (await readAuthFailureCount(env, resetScope, resetDay) >= RESET_KEY_ACCOUNT_MAX_FAILURES) {
+      const resetBudget = await reserveAuthAttempt(env, resetScope, resetDay, RESET_KEY_ACCOUNT_MAX_FAILURES);
+      if (resetBudget.over) {
         // Same generic message as every other failure path here, so this
         // does not become a way to ask whether an account exists. 429 rather
         // than 401 because it IS a throttle -- but the message is the same
@@ -94892,11 +94988,11 @@ function generateSearchVariations(query) {
 
       const matches = await verifyRecoveryAnswer(answer.toLowerCase(), profile.recoveryAnswerHash);
       if (!matches) {
-        // Failures only: answering correctly must never consume the budget
-        // that protects you.
-        await noteAuthFailure(env, resetScope, resetDay);
+        // The spend stays. Answering correctly must never consume the budget
+        // that protects you, so only that path gives it back.
         return json({ ok: false, error: genericError }, 401);
       }
+      await resetBudget.release();
       // An answer stored the old way is rehashed while it is at hand (P7-4).
       // Before the key is rotated: the profile written below then carries it.
       await upgradeRecoveryAnswerHash(env, v.normalized, answer.toLowerCase(), profile);
@@ -95056,14 +95152,13 @@ function generateSearchVariations(query) {
       // same rule the daily budgets follow (a correct secret must not consume
       // the budget that protects it). P7-3: counted in D1, so the number is
       // the real one rather than a per-edge-cache approximation of it.
-      if ((await readRateLimitCount(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_TTL_SEC)) >= FORGOT_USERNAME_IP_MAX_FAILURES) {
+      // Spent up front and given back on success (reserveRateLimit), so a burst
+      // cannot get more attempts than the budget by arriving together.
+      const forgotBudget = await reserveRateLimit(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_MAX_FAILURES, FORGOT_USERNAME_IP_TTL_SEC);
+      if (forgotBudget.over) {
         return json({ ok: false, error: "Too many attempts. Please wait 15 minutes and try again." }, 429);
       }
-      const noteForgotFailure = async () => noteRateLimit(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_TTL_SEC);
-      const failForgot = async (error, status) => {
-        await noteForgotFailure();
-        return json({ ok: false, error }, status);
-      };
+      const failForgot = async (error, status) => json({ ok: false, error }, status);
 
       const presentedKey = String(body.creatorKey || "").trim().toUpperCase();
       const presentedAnswer = String(body.recoveryAnswer || "").trim();
@@ -95077,11 +95172,21 @@ function generateSearchVariations(query) {
       let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey, lookupMeta);
       let isLegacyHit = Boolean(lookupMeta.source && lookupMeta.source.startsWith("legacy"));
 
-      // Fallback for pre-migration accounts in D1: scan up to 50 accounts
+      // Fallback for pre-migration accounts that never got a lookup entry. It
+      // used to walk the first 50 `creators` rows and run PBKDF2 against each,
+      // so every wrong, well-formed key cost about 50 verifications (audit
+      // DOS-001) and could never reach an account past row 50 anyway. Now it
+      // only looks at accounts with NO lookup entry of either kind. A hit
+      // stores one (below), so the set shrinks to nothing as these accounts
+      // are used, and a wrong key costs as many verifications as there are
+      // accounts still waiting for one.
       if (!resolvedUsername && env.DB) {
         try {
           const rows = await env.DB.prepare(
-            "SELECT username, key_hash, recovery_answer_hash FROM creators LIMIT 50"
+            "SELECT c.username, c.key_hash, c.recovery_answer_hash FROM creators c " +
+            "WHERE NOT EXISTS (SELECT 1 FROM creator_key_lookups l WHERE l.username = c.username) " +
+            "AND NOT EXISTS (SELECT 1 FROM accounts a WHERE lower(a.username) = lower(c.username) AND a.key_lookup_hmac IS NOT NULL) " +
+            "LIMIT 50"
           ).all();
           if (rows && rows.results) {
             for (const r of rows.results) {
@@ -95154,6 +95259,7 @@ function generateSearchVariations(query) {
         await upgradeRecoveryAnswerHash(env, v.normalized, presentedAnswer.toLowerCase(), profile);
       }
 
+      await forgotBudget.release();
       await storeCreatorKeyLookup(env, presentedKey, v.normalized);
 
       return jsonPrivate({
@@ -95201,7 +95307,8 @@ function generateSearchVariations(query) {
       // capped well below what's useful for guessing a ~60-bit key. Like the
       // daily budget below it, spent on FAILURES only (P7-3): restoring on a
       // run of new devices must not be what locks someone out.
-      if ((await readRateLimitCount(env, ctx, "creatorrestore", ip, 60)) >= 20) {
+      const restoreBurst = await reserveRateLimit(env, ctx, "creatorrestore", ip, 20, 60);
+      if (restoreBurst.over) {
         return json({ ok: false, error: "Too many attempts. Please wait a minute and try again." }, 429);
       }
 
@@ -95211,9 +95318,13 @@ function generateSearchVariations(query) {
       // costs nothing.
       const restoreFailScope = `restore:${ip}`;
       const restoreFailDay = statsToday();
-      if (await readAuthFailureCount(env, restoreFailScope, restoreFailDay) >= CREATOR_RESTORE_MAX_FAILURES_PER_DAY) {
+      const restoreDaily = await reserveAuthAttempt(env, restoreFailScope, restoreFailDay, CREATOR_RESTORE_MAX_FAILURES_PER_DAY);
+      if (restoreDaily.over) {
+        await restoreBurst.release();
         return json({ ok: false, error: "Too many failed attempts today. Please try again tomorrow." }, 429);
       }
+      // Anything that is not a wrong guess gives both spends back.
+      const releaseRestore = async () => { await restoreBurst.release(); await restoreDaily.release(); };
 
       let body;
       try {
@@ -95222,18 +95333,18 @@ function generateSearchVariations(query) {
         if (request.account && isSessionsEnabled(env)) {
           body = {};
         } else {
+          await releaseRestore();
           return json({ ok: false, error: "Invalid JSON body." }, 400);
         }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
-        // A request without a key guessed nothing (see noKey above).
-        if (auth.error !== "no-kv" && !auth.noKey) {
-          await noteAuthFailure(env, restoreFailScope, restoreFailDay);
-          await noteRateLimit(env, ctx, "creatorrestore", ip, 60);
-        }
+        // A request without a key guessed nothing (see noKey above); the
+        // spends of every other failure stay.
+        if (auth.error === "no-kv" || auth.noKey) await releaseRestore();
         return authFailureResponse(auth);
       }
+      await releaseRestore();
       if (body.creatorKey) {
         if (ctx && typeof ctx.waitUntil === "function") {
           ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
@@ -96154,13 +96265,13 @@ function generateSearchVariations(query) {
         const u = parts[1] || "";
         const s = parts[2] || "";
         const resolved = (await channelsV2CodeBySlug(env, u, s))
-          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
+          || (isV2ListsOnly(env) ? null : (await legacyPublishedChannelCode(env, u, s)) || null);
         if (resolved) code = resolved;
       } else if (!code && url.searchParams.get("username") && url.searchParams.get("slug")) {
         const u = url.searchParams.get("username").trim();
         const s = url.searchParams.get("slug").trim();
         const resolved = (await channelsV2CodeBySlug(env, u, s))
-          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
+          || (isV2ListsOnly(env) ? null : (await legacyPublishedChannelCode(env, u, s)) || null);
         if (resolved) code = resolved;
       }
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) {
@@ -97220,6 +97331,8 @@ function generateSearchVariations(query) {
       try {
         await env.CONFIGS.put(`creatorsynctracking:${auth.username}`, serialized);
       } catch (e) {
+        // The activity database is not bound: the outer boundary answers 503.
+        if (e && e.code === EVENT_TRACKING_UNAVAILABLE) throw e;
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
       }
       if (env.DB) {
@@ -97305,6 +97418,8 @@ function generateSearchVariations(query) {
           }
         }
       } catch (e) {
+        // The activity database is not bound: the outer boundary answers 503.
+        if (e && e.code === EVENT_TRACKING_UNAVAILABLE) throw e;
         return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
       }
       // clientVersion goes back so the browser can advance its baseline from
@@ -101042,14 +101157,9 @@ function generateSearchVariations(query) {
       // straight through it). Failed closed when CF-Connecting-IP is
       // missing, same as restore, because there is no other safe
       // per-client identity to key a shared bucket on.
-      // Set inside the branch below and read again after the compare, so
-      // only a genuine wrong key spends the daily budget.
-      let adminLoginFailScope = "";
-      let adminLoginFailDay = "";
-      // Set inside the branch below and read after the compare, so a failed
-      // login can spend the burst bucket too -- both budgets are spent on
-      // failures only.
-      let adminLoginRateIp = "";
+      // Both budgets are spent BEFORE the key is compared and given back by
+      // this when it is right, so only a wrong key keeps its spend (AUTH-002).
+      let releaseAdminLogin = async () => {};
       if (env.CONFIGS) {
         const ip = clientIpKey(request);
         if (!ip) {
@@ -101058,10 +101168,10 @@ function generateSearchVariations(query) {
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
           });
         }
-        adminLoginRateIp = ip;
-        // 10 guesses a minute from one address, counted in D1 (P7-3) and spent
-        // on failures only, exactly like the daily budget below it.
-        if ((await readRateLimitCount(env, ctx, "adminlogin", ip, 60)) >= 10) {
+        // 10 guesses a minute from one address, counted in D1 (P7-3), spent up
+        // front and kept only on failure, like the daily budget below it.
+        const adminBurst = await reserveRateLimit(env, ctx, "adminlogin", ip, 10, 60);
+        if (adminBurst.over) {
           return new Response(renderAdminLoginPage("Too many attempts. Please wait a minute and try again.", adminAccessConfigured(env)), {
             status: 429,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
@@ -101072,9 +101182,10 @@ function generateSearchVariations(query) {
         // an attacker rotating source IPs is back to a full 10 guesses on each
         // one. This daily budget is what bounds a slow, distributed guess at
         // ADMIN_KEY, and it is spent on failures only.
-        adminLoginFailScope = `adminlogin:${ip}`;
-        adminLoginFailDay = statsToday();
-        if (await readAuthFailureCount(env, adminLoginFailScope, adminLoginFailDay) >= ADMIN_LOGIN_MAX_FAILURES_PER_DAY) {
+        const adminDaily = await reserveAuthAttempt(env, `adminlogin:${ip}`, statsToday(), ADMIN_LOGIN_MAX_FAILURES_PER_DAY);
+        releaseAdminLogin = async () => { await adminBurst.release(); await adminDaily.release(); };
+        if (adminDaily.over) {
+          await adminBurst.release();
           return new Response(renderAdminLoginPage("Too many failed attempts today. Please try again tomorrow.", adminAccessConfigured(env)), {
             status: 429,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
@@ -101092,18 +101203,14 @@ function generateSearchVariations(query) {
       // so its LENGTH is a secret too, and timingSafeEqualHex answers from
       // the length alone before its constant-time loop ever runs.
       if (!(await timingSafeEqualSecret(submittedKey, env.ADMIN_KEY))) {
-        // Failures only -- a correct key must never spend the budget that
-        // protects it, or an admin who logs in often would lock themselves
-        // out.
-        if (adminLoginFailScope) {
-          await noteAuthFailure(env, adminLoginFailScope, adminLoginFailDay);
-          if (adminLoginRateIp) await noteRateLimit(env, ctx, "adminlogin", adminLoginRateIp, 60);
-        }
+        // The spends stay: failures only. A correct key gives them back
+        // below, or an admin who logs in often would lock themselves out.
         return new Response(renderAdminLoginPage("Incorrect key.", adminAccessConfigured(env)), {
           status: 401,
           headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
         });
       }
+      await releaseAdminLogin();
       // The key is the break-glass path: a session row when D1 has migration
       // 0018 (so this browser can be signed out on its own), and the old signed
       // expiry it has always been when it does not. Either way the sign-in
@@ -101374,7 +101481,17 @@ export default {
       //
       // safeErrorMessage logs the original and strips URLs, labelled secrets
       // and long opaque tokens from what goes back.
-      response = json({ ok: false, error: safeErrorMessage(err) }, 500);
+      // FF_EVENT_TRACKING with DB_ACTIVITY unbound (40_event-tracking.js):
+      // the service is unavailable, which is a 503, not a bug.
+      if (err && err.code === EVENT_TRACKING_UNAVAILABLE) {
+        response = json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" });
+      } else {
+        const message = safeErrorMessage(err);
+        // The engine's own text names tables and columns ("D1_ERROR: no such
+        // column ..."): it is logged above, not handed to whoever called.
+        const fromDatabase = /\bD1_[A-Z]+|SQLITE_|no such (?:table|column)|constraint failed/i.test(message);
+        response = json({ ok: false, error: fromDatabase ? "Something went wrong. Please try again." : message }, 500);
+      }
     }
     // Parsed here rather than threaded down from handleFetch, so the answer
     // is the same whether the response came from a route or from the catch
@@ -101828,7 +101945,14 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   let continueWatching = [];
   let watchlist = [];
   let airingNext = [];
-  if (withTracking && owner && env && env.CONFIGS) {
+  // The owner's tracking record is private. An install link is a bearer
+  // credential that gets shared for its public lists, so it carries the
+  // record only when the install itself asks for it: the track scope, or a
+  // row that is one of the account's own shelves (the legacy rule, D-8). A
+  // link with only public rows must not hand it to whoever holds the link.
+  const entryList = Array.isArray(cfg.entries) ? cfg.entries : [];
+  const carriesPersonalRow = entryList.some((e) => e && isPersonalShelfUrl(e.url));
+  if (withTracking && owner && (canTrack || carriesPersonalRow) && env && env.CONFIGS) {
     try {
       const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${owner}`);
       const tracking = trackingRaw ? JSON.parse(trackingRaw) : null;
@@ -106881,12 +107005,19 @@ async function channelsV2Record(env, code, opts = {}) {
 // The code a creator's /channels/{user}/{slug} address names: the channel of
 // theirs with that slug that was listed most recently. null: ask the legacy
 // store (which also still knows the slugs a renamed channel had before).
+//
+// Only a channel that is still PUBLIC has an address. That address is built
+// from the owner's name (on the public directory) and the channel's name, so
+// anyone can guess it; unlisting or unpublishing takes the channel out of
+// Explore and must take this address down too. The channel's own code link
+// keeps working, which is what "leaves existing share links working" means
+// (audit CHAN-001).
 async function channelsV2CodeBySlug(env, username, slug) {
   if (!isV2ListsReadEnabled(env) || !listsV2Usable(env)) return null;
   try {
     const row = await env.DB.prepare(
       `SELECT c.public_code FROM channels c JOIN accounts a ON a.id = c.owner_account_id
-       WHERE a.username = ? COLLATE NOCASE AND c.slug = ? AND c.published_at IS NOT NULL AND c.deleted_at IS NULL AND c.legacy_hash IS NOT NULL
+       WHERE a.username = ? COLLATE NOCASE AND c.slug = ? AND c.published_at IS NOT NULL AND c.visibility = 'public' AND c.deleted_at IS NULL AND c.legacy_hash IS NOT NULL
        ORDER BY c.published_at DESC, c.id DESC LIMIT 1`
     ).bind(String(username || ""), String(slug || "").toLowerCase()).first();
     return row ? row.public_code : null;
@@ -107304,6 +107435,23 @@ async function channelsV2AllRows(env, limit, offset) {
      WHERE c.deleted_at IS NULL ORDER BY c.id LIMIT ? OFFSET ?`
   ).bind(limit + 1, offset).all();
   return results || [];
+}
+
+// The legacy twin of channelsV2CodeBySlug: the code the `creatorchannel:` map
+// holds for an address, but only while that channel is still published. The
+// map entry is written at publish time and was never removed on unpublish, so
+// the address kept handing out the code (audit CHAN-001).
+async function legacyPublishedChannelCode(env, username, slug) {
+  if (!env || !env.CONFIGS) return "";
+  try {
+    const code = (await env.CONFIGS.get(`creatorchannel:${String(username || "").toLowerCase()}:${String(slug || "").toLowerCase()}`)) || "";
+    if (!code) return "";
+    const raw = await env.CONFIGS.get(`channelshare:${code}`);
+    const record = raw ? JSON.parse(raw) : null;
+    return record && record.published ? code : "";
+  } catch {
+    return "";
+  }
 }
 
 // --- The activity database: watch history and progress (Phase 3c, P3c-1) -----
@@ -108910,12 +109058,39 @@ function isEventTrackingEnabled(env) {
   return (v === "1" || v === "true" || v === true) && !!(env && env.DB && env.DB_ACTIVITY);
 }
 
+// The flag is on and the main database is bound, but DB_ACTIVITY is not: the
+// binding was lost (a dashboard edit, a deploy that did not carry it, a
+// rename). isEventTrackingEnabled is then false, which used to send every
+// tracking read and write to the legacy stores that stopped moving at the
+// switch: an empty Watch History, and plays saved into a frozen copy that is
+// invisible once the binding returns (audit CFG-001).
+function isEventTrackingBindingMissing(env) {
+  const v = env ? env.FF_EVENT_TRACKING : undefined;
+  return (v === "1" || v === "true" || v === true) && !!(env && env.DB) && !env.DB_ACTIVITY;
+}
+
+const EVENT_TRACKING_UNAVAILABLE = "EVENT_TRACKING_UNAVAILABLE";
+let eventTrackingBindingWarned = false;
+
+function eventTrackingUnavailableError() {
+  const err = new Error("Watch history is temporarily unavailable. Please try again shortly.");
+  err.code = EVENT_TRACKING_UNAVAILABLE;
+  return err;
+}
+
 // Whether this account's record is served from the activity database: the
 // flag, the database, and a finished history copy. Remembered a minute per
 // isolate, per database (each test has its own).
 let eventTrackingOwnerCache = null;
 async function eventTrackingOwns(env, username) {
   if (!isEventTrackingEnabled(env) || !username) return null;
+  return eventTrackingOwnsAccount(env, username);
+}
+
+// The ownership question on its own, for the one caller that must ask it
+// without DB_ACTIVITY (eventTrackingUnboundEnv).
+async function eventTrackingOwnsAccount(env, username) {
+  if (!username) return null;
   const now = Date.now();
   const db = env.DB;
   if (!eventTrackingOwnerCache || eventTrackingOwnerCache.db !== db) eventTrackingOwnerCache = { db, map: new Map() };
@@ -109070,6 +109245,7 @@ async function saveTrackingRecord(env, username, accountId, record) {
 // The env every handler runs with: CONFIGS wrapped for the tracking keys of
 // accounts served from the activity database. Unchanged without the flag.
 function eventTrackingEnv(env) {
+  if (isEventTrackingBindingMissing(env) && env.CONFIGS) return eventTrackingUnboundEnv(env);
   if (!isEventTrackingEnabled(env) || !env.CONFIGS) return env;
   const kv = env.CONFIGS;
   const owner = (key, prefix) => (String(key).startsWith(prefix) ? String(key).slice(prefix.length) : null);
@@ -109130,6 +109306,42 @@ function eventTrackingEnv(env) {
       }
       return kv.delete(key, ...rest);
     },
+  };
+  for (const name of ["list", "getWithMetadata"]) {
+    if (typeof kv[name] === "function") wrapped[name] = (...a) => kv[name](...a);
+  }
+  return new Proxy(env, {
+    get(target, prop, receiver) {
+      if (prop === "CONFIGS") return wrapped;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+// With the flag on and DB_ACTIVITY missing, an account whose history was
+// copied cannot be served from anywhere: its legacy stores are frozen. Its
+// tracking reads and writes fail with a 503 (see the fetch handler) rather
+// than answering from, or writing into, the stale copy. Accounts that have not
+// been copied yet are still on the legacy stores by design and carry on. The
+// first time per isolate it is logged, so the cause is in the Worker's logs.
+function eventTrackingUnboundEnv(env) {
+  if (!eventTrackingBindingWarned) {
+    eventTrackingBindingWarned = true;
+    console.error("[EventTracking] FF_EVENT_TRACKING is on but DB_ACTIVITY is not bound: tracking for copied accounts is refused until the binding is restored.");
+  }
+  const kv = env.CONFIGS;
+  const guard = async (key) => {
+    const k = String(key);
+    for (const prefix of [EVENT_TRACKING_KEY, "creatorscrobblequeue:", "trackingd1behind:"]) {
+      if (k.startsWith(prefix) && (await eventTrackingOwnsAccount(env, k.slice(prefix.length))) != null) {
+        throw eventTrackingUnavailableError();
+      }
+    }
+  };
+  const wrapped = {
+    get: async (key, ...rest) => { await guard(key); return kv.get(key, ...rest); },
+    put: async (key, value, ...rest) => { await guard(key); return kv.put(key, value, ...rest); },
+    delete: async (key, ...rest) => { await guard(key); return kv.delete(key, ...rest); },
   };
   for (const name of ["list", "getWithMetadata"]) {
     if (typeof kv[name] === "function") wrapped[name] = (...a) => kv[name](...a);
@@ -109445,6 +109657,11 @@ function isChartSnapshotsEnabled(env) {
   return v === "1" || v === "true" || v === true;
 }
 
+function isKnownChartRegion(region) {
+  const code = String(region).toUpperCase();
+  return REGION_OPTIONS.some(([c]) => c === code);
+}
+
 function chartSnapshotKeyPart(v) {
   const s = String(v == null || v === "" ? "-" : v);
   return encodeURIComponent(s).slice(0, 120);
@@ -109455,6 +109672,11 @@ function chartSnapshotKeyPart(v) {
 function chartSnapshotKey(source, ref, { entry, skip, keys }) {
   const rule = source && source.kind === "chart" ? source.snapshot : null;
   if (!rule) return null;
+  // The region becomes part of a KV key, and /api/preview and a hand-made
+  // base64 config take it from the caller unchecked (only /api/save validates
+  // it as a choice). One that is not a real option is served the usual way,
+  // not snapshotted, so a caller cannot mint keys (audit SNAP-001).
+  if (rule.region && keys && keys.region && !isKnownChartRegion(keys.region)) return null;
   const parts = [
     source.name,
     ref.arg,
@@ -109573,7 +109795,6 @@ async function fetchSourcePageWithSnapshot(source, ref, page) {
   const env = keys.env;
   const key = env && env.CONFIGS && isChartSnapshotsEnabled(env) ? chartSnapshotKey(source, ref, page) : null;
   if (!key) return source.fetchPage(ref, page);
-  noteChartSnapshotUse(env, key, source, ref, page);
 
   const now = Date.now();
   const snap = await readChartSnapshot(env, key, now);
@@ -109587,11 +109808,16 @@ async function fetchSourcePageWithSnapshot(source, ref, page) {
       });
       if (keys.ctx && typeof keys.ctx.waitUntil === "function") keys.ctx.waitUntil(rebuild);
     }
+    noteChartSnapshotUse(env, key, source, ref, page);
     return chartSnapshotItems(snap);
   }
   // Nothing stored yet: built now. An empty answer is passed on as the
   // fetcher gave it (with any total it carries), and not stored.
   const built = await buildChartSnapshot(source, ref, page, key, null);
+  // The use is recorded only for a snapshot that exists. It used to be noted
+  // before anything was built, so every made-up chart argument left a
+  // `snap:chartuse:` key for the hourly refresh to chase (SNAP-001).
+  if (built.snap) noteChartSnapshotUse(env, key, source, ref, page);
   return built.snap ? chartSnapshotItems(built.snap) : built.raw;
 }
 
@@ -113051,6 +113277,13 @@ function rememberMaterialized(key, value) {
 async function materializedRowPage(env, ctx, { config, entries, entryIndex, keys }) {
   const entry = entries[entryIndex];
   if (!entry || isPersonalShelfUrl(entry.url)) return null;
+  // The key below is a hash of the row DEFINITIONS, and a live Creator list's
+  // definition does not change when its items do. Materializing one would
+  // freeze it for up to MATERIALIZER_TTL_SEC while the route still answers as
+  // if it were live (audit MAT-001). An install with a live list takes the
+  // usual path, which reads every row as it is now.
+  const namesAccount = !!(keys && keys.trackCreatorName);
+  if (entries.some((e) => e && e.enabled !== false && customListRowIsLive(e.url, namesAccount))) return null;
   const key = await materializerKey(config, entries);
   let value = await readMaterializedInstall(env, key);
   if (!value) {

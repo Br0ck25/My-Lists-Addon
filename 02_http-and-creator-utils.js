@@ -835,6 +835,17 @@ function safeErrorMessage(err, fallback = "Something went wrong. Please try agai
   return msg.length > 200 ? msg.slice(0, 200) + "…" : msg;
 }
 
+// decodeURIComponent throws on a stray "%" ("%E0", "100%"), which anyone can
+// put in a URL, and an uncaught throw in a route answered 500. A piece that
+// cannot be decoded is used as written, which then simply matches nothing.
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value);
+  }
+}
+
 // Detect whether a request is a top-level browser page load (someone tapping
 // "Configure" and being sent to the manifest URL) vs. a JSON fetch by wako/
 // Stremio itself. We check two independent signals and trust either one:
@@ -1272,7 +1283,10 @@ const SESSION_COOKIE_NAME = "mla_session";
 const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
 const SESSION_TTL_MS = SESSION_TTL_SEC * 1000;
 const SESSION_CACHE = new Map();
-const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 s isolate cache
+// Short on purpose: a session revoked on another isolate (logout, key reset,
+// account delete) keeps working here until its entry expires, so this is the
+// longest a revoked cookie can outlive its revocation (audit SESS-001).
+const SESSION_CACHE_TTL_MS = 10 * 1000;
 const SESSION_CACHE_MAX = 1000;
 
 function extractSessionToken(request) {
@@ -3139,7 +3153,7 @@ function clientIpKey(request) {
 // counter one row per (bucket, key, window) rather than one row per key with a
 // TTL, and it is what Cloudflare's own rules do. The cost is the usual one: a
 // burst straddling a boundary can spend up to two windows' worth in a rolling
-// minute. The per-account daily budgets (readAuthFailureCount / noteAuthFailure
+// minute. The per-account daily budgets (reserveAuthAttempt
 // below) and the WAF rules (docs/OPERATIONS.md section 26) are the answer to
 // that, not a tighter short window.
 //
@@ -3238,9 +3252,9 @@ function memoryRateLimitCount(scope, windowStart, spend) {
 // Read the current count, optionally spending first. Never throws: a limiter
 // that breaks must not break the request it is protecting, and a counter that
 // cannot be read is treated as "spend into memory" rather than "no limit".
-async function rateLimitCount(env, ctx, bucket, key, windowSec, spend) {
+async function rateLimitCount(env, ctx, bucket, key, windowSec, spend, nowMs) {
   const amount = Number.isFinite(spend) && spend > 0 ? Math.floor(spend) : 0;
-  const now = Date.now();
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const windowStart = rateLimitWindowStart(now, windowSec);
   const scope = rateLimitScope(bucket, key);
   if (env && env.DB) {
@@ -3281,28 +3295,69 @@ async function consumeRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec =
   return used > maxPerWindow;
 }
 
-// The read half, for the endpoints where a SUCCESS must not spend the budget
-// that protects them: a correct password is not a guess, and an admin who
-// signs in on a run of devices must not lock themselves out (the daily failure
-// budgets below are built on exactly that rule).
-//
-// A request refused at this gate spends nothing -- nothing was attempted, and
-// the count stays where it is for the rest of the window, so it is still
-// refused. That is the difference from consumeRateLimit above, which spends
-// first and so counts every arrival including the refused ones.
-//
-// Read-then-note is not atomic, so several guesses arriving in the same
-// instant can each see the pre-increment count. That is bounded, not open: the
-// daily budget is one atomic upsert per failure, so what concurrency can win
-// is a handful of extra attempts inside a minute, never extra attempts overall.
-async function readRateLimitCount(env, ctx, bucket, key, windowSec = 60) {
-  return rateLimitCount(env, ctx, bucket, key, windowSec, 0);
+// The per-address limit on the anonymous search endpoints, which spend the
+// owner's TMDB key (audit DATA-001). Returns a ready 429 Response, or null to
+// carry on. Fails closed with no client IP, like every other limiter here.
+async function searchRateLimitResponse(request, env, ctx) {
+  const ip = clientIpKey(request);
+  if (!ip) return json({ ok: false, error: "Could not process this request." }, 400, { "Cache-Control": "no-store" });
+  if (await consumeRateLimit(env, ctx, "search", ip, SEARCH_MAX_PER_MINUTE, 60)) {
+    return json({ ok: false, error: "Too many searches. Please wait a moment and try again." }, 429, { "Cache-Control": "no-store", "Retry-After": "30" });
+  }
+  return null;
 }
 
-// The spend half, for a failure that has already happened.
-async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
-  if (!key) return;
-  await rateLimitCount(env, ctx, bucket, key, windowSec, cost);
+// Spend first, give it back on success -- for the endpoints where a SUCCESS
+// must not consume the budget that protects them: a correct password is not a
+// guess, and an admin who signs in on a run of devices must not lock
+// themselves out (the daily failure budgets below are built on that rule).
+//
+// This used to be read the count, do the work, note the failure afterwards.
+// That is not atomic, and the work is a PBKDF2 verification of about 90 ms, so
+// every request that arrived inside that gap read the pre-failure count and
+// went on to verify a guess: a burst of 300 got 300 guesses (audit AUTH-002).
+// The spend is one atomic upsert and happens BEFORE the guess is checked, so
+// the guesses that can be in flight are capped by the budget, not by how fast
+// the attacker can send. A correct answer calls release() and the budget is
+// back where it was. A request refused here releases its own spend, so the
+// count stays at the ceiling and the rest of the window stays refused, the
+// same as before.
+//
+// Returns { over, release }. `over` is true when the caller should stop.
+async function reserveRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec = 60) {
+  const noop = async () => {};
+  if (!key) return { over: true, release: noop };
+  const now = Date.now();
+  const used = await rateLimitCount(env, ctx, bucket, key, windowSec, 1, now);
+  let released = false;
+  const release = async () => {
+    if (released) return;
+    released = true;
+    await refundRateLimitCount(env, rateLimitScope(bucket, key), rateLimitWindowStart(now, windowSec));
+  };
+  if (used > maxPerWindow) {
+    await release();
+    return { over: true, release };
+  }
+  return { over: false, release };
+}
+
+// Give one spend back. Never below zero, and aimed at the window the spend
+// landed in rather than whichever one is current.
+async function refundRateLimitCount(env, scope, windowStart) {
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare(
+        "UPDATE rate_counters SET count = MAX(0, count - 1) WHERE scope = ? AND window_start = ?"
+      ).bind(scope, windowStart).run();
+      return;
+    } catch {
+      // Table missing: the spend went to memory, so the refund does too.
+    }
+  }
+  const key = scope + ":" + windowStart;
+  const used = RATE_LIMIT_MEMO.get(key) || 0;
+  if (used > 0) RATE_LIMIT_MEMO.set(key, used - 1);
 }
 
 // --- Per-account authentication failure budget -------------------------------
@@ -3331,46 +3386,63 @@ async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
 // migration today.
 const AUTH_FAIL_TTL_SEC = 86400;
 
-async function readAuthFailureCount(env, scope, day) {
+// Spend one attempt before the secret is checked, and read the count back in
+// the same transaction. A wrong guess simply keeps its spend; a correct one
+// calls release(). Returns { over, release }, `over` meaning this attempt is
+// past `maxFailures` (its own spend is already given back, so refused requests
+// do not push the count further).
+//
+// Reading first and noting the failure afterwards (what this did until audit
+// AUTH-002) let every request already past the read verify a guess for free.
+async function reserveAuthAttempt(env, scope, day, maxFailures) {
+  const kind = `authfail:${scope}`;
+  let released = false;
+  let n = null;
+  let viaD1 = false;
   if (env && env.DB) {
     try {
-      const { results } = await env.DB.prepare(
-        "SELECT n FROM stats WHERE kind = ? AND day = ?"
-      ).bind(`authfail:${scope}`, day).all();
-      // The query SUCCEEDED, so no row means no failures yet. Deliberately
-      // not readStatCount's "no row -> fall through to KV" rule: that exists
-      // because a missing counter row can mean "not migrated yet", and
-      // applying it here would reset the failure count on every attempt.
-      return results && results.length ? (Number(results[0].n) || 0) : 0;
+      // Same statement shape as d1BumpStat: bound amount, DO UPDATE SET
+      // n = n + excluded.n. A near-miss variant of it silently counted nothing
+      // the first time this throttle was written.
+      const out = await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n"
+        ).bind(kind, day, 1),
+        env.DB.prepare("SELECT n FROM stats WHERE kind = ? AND day = ?").bind(kind, day),
+      ]);
+      const rows = (out && out[out.length - 1] && out[out.length - 1].results) || [];
+      n = rows.length ? Number(rows[0].n) || 0 : 1;
+      viaD1 = true;
     } catch {
-      // Table missing (migration 0002 not applied) or D1 unavailable --
-      // fall through to KV, which is also where the writes will land.
+      // Table missing (migration 0002 not applied) or D1 unavailable -- fall
+      // through to KV, which is also where the release will go.
     }
   }
-  if (!env || !env.CONFIGS) return 0;
-  return parseInt(await env.CONFIGS.get(`authfail:${scope}:${day}`), 10) || 0;
-}
-
-async function noteAuthFailure(env, scope, day) {
-  if (env && env.DB) {
-    try {
-      // d1BumpStat, not a hand-written INSERT. Its statement shape --
-      // VALUES (?, ?, ?) with DO UPDATE SET n = n + excluded.n -- is the one
-      // every other counter here uses, and it is the atomic part. Writing a
-      // near-miss variant of it by hand (DO UPDATE SET n = n + 1, with the
-      // amount inlined rather than bound) is exactly how this throttle
-      // silently counted nothing at all on D1-bound deployments the first
-      // time it was written.
-      await d1BumpStat(env, `authfail:${scope}`, [day], 1);
-      return;
-    } catch {
-      // Same fallback as the read above, so both halves stay on one store.
-    }
+  if (!viaD1) {
+    if (!env || !env.CONFIGS) return { over: false, release: async () => {} };
+    const key = `${kind}:${day}`;
+    n = (parseInt(await env.CONFIGS.get(key), 10) || 0) + 1;
+    await env.CONFIGS.put(key, String(n), { expirationTtl: AUTH_FAIL_TTL_SEC });
   }
-  if (!env || !env.CONFIGS) return;
-  const key = `authfail:${scope}:${day}`;
-  const n = parseInt(await env.CONFIGS.get(key), 10) || 0;
-  await env.CONFIGS.put(key, String(n + 1), { expirationTtl: AUTH_FAIL_TTL_SEC });
+  const release = async () => {
+    if (released) return;
+    released = true;
+    if (viaD1) {
+      try {
+        await env.DB.prepare("UPDATE stats SET n = MAX(0, n - 1) WHERE kind = ? AND day = ?").bind(kind, day).run();
+        return;
+      } catch {}
+    }
+    if (!env || !env.CONFIGS) return;
+    const key = `${kind}:${day}`;
+    const cur = parseInt(await env.CONFIGS.get(key), 10) || 0;
+    if (cur > 0) await env.CONFIGS.put(key, String(cur - 1), { expirationTtl: AUTH_FAIL_TTL_SEC });
+  };
+  if (n > maxFailures) {
+    await release();
+    return { over: true, release };
+  }
+  return { over: false, release };
 }
 
 async function likeVoterId(request, env, creatorUsername, scopeId) {

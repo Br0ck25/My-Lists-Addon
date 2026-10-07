@@ -373,7 +373,14 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   let continueWatching = [];
   let watchlist = [];
   let airingNext = [];
-  if (withTracking && owner && env && env.CONFIGS) {
+  // The owner's tracking record is private. An install link is a bearer
+  // credential that gets shared for its public lists, so it carries the
+  // record only when the install itself asks for it: the track scope, or a
+  // row that is one of the account's own shelves (the legacy rule, D-8). A
+  // link with only public rows must not hand it to whoever holds the link.
+  const entryList = Array.isArray(cfg.entries) ? cfg.entries : [];
+  const carriesPersonalRow = entryList.some((e) => e && isPersonalShelfUrl(e.url));
+  if (withTracking && owner && (canTrack || carriesPersonalRow) && env && env.CONFIGS) {
     try {
       const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${owner}`);
       const tracking = trackingRaw ? JSON.parse(trackingRaw) : null;
