@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 # Run from the repo root: bash verify.sh
+# Usage: bash verify.sh [-q] [--fast]
+#   -q      quiet: print only the result, or the full log if a step fails
+#   --fast  build + syntax + scope checks only (use while iterating; run the
+#           full check before committing)
 set -euo pipefail
 cd "$(dirname "$0")"
+
+if [ "${1:-}" = "-q" ]; then
+  shift
+  log=$(mktemp)
+  if bash "$0" "$@" >"$log" 2>&1; then
+    tail -1 "$log"; rm -f "$log"
+  else
+    cat "$log"; rm -f "$log"; exit 1
+  fi
+  exit 0
+fi
 
 echo "=== 1. rebuild combined Worker ==="
 python3 build.py
@@ -38,6 +53,11 @@ node scope_check.mjs worker worker_entry_combined.js
 node render_check.js rendered-scope.html > /dev/null
 node scope_check.mjs page rendered-scope.html
 rm -f rendered-scope.html
+
+if [ "${1:-}" = "--fast" ]; then
+  echo "FAST CHECKS PASSED (build, syntax, scope; run without --fast before committing)"
+  exit 0
+fi
 
 echo
 echo "=== 4. render + validate the builder page ==="
@@ -95,11 +115,11 @@ echo "=== 5. FUNCTION-MAP.md drift ==="
 # cheap and deterministic, so the map is now checked the same way the
 # combined Worker is.
 python3 gen_map.py > /dev/null
-if git diff --ignore-cr-at-eol --quiet -- FUNCTION-MAP.md; then
+if git diff --ignore-cr-at-eol --quiet -- FUNCTION-MAP.md FILE-INDEX.md && [ -z "$(git ls-files --others --exclude-standard -- FILE-INDEX.md)" ]; then
   echo "  OK"
 else
-  echo "  FAILED — FUNCTION-MAP.md is stale; run: python3 gen_map.py"
-  git diff --ignore-cr-at-eol --stat -- FUNCTION-MAP.md
+  echo "  FAILED — FUNCTION-MAP.md / FILE-INDEX.md is stale; run: python3 gen_map.py"
+  git diff --ignore-cr-at-eol --stat -- FUNCTION-MAP.md FILE-INDEX.md
   exit 1
 fi
 

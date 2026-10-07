@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./worker_entry_combined.js)",
+      "Read(./docs/history/**)",
+      "Read(./node_modules/**)"
+    ]
+  }
+}
