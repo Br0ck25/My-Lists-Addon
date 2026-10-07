@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "d5d298ddfa";
+const WORKER_BUILD = "28b36897e8";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -113103,6 +113103,13 @@ function rememberMaterialized(key, value) {
 async function materializedRowPage(env, ctx, { config, entries, entryIndex, keys }) {
   const entry = entries[entryIndex];
   if (!entry || isPersonalShelfUrl(entry.url)) return null;
+  // The key below is a hash of the row DEFINITIONS, and a live Creator list's
+  // definition does not change when its items do. Materializing one would
+  // freeze it for up to MATERIALIZER_TTL_SEC while the route still answers as
+  // if it were live (audit MAT-001). An install with a live list takes the
+  // usual path, which reads every row as it is now.
+  const namesAccount = !!(keys && keys.trackCreatorName);
+  if (entries.some((e) => e && e.enabled !== false && customListRowIsLive(e.url, namesAccount))) return null;
   const key = await materializerKey(config, entries);
   let value = await readMaterializedInstall(env, key);
   if (!value) {
