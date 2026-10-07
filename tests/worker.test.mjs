@@ -14111,6 +14111,25 @@ describe("worker: public channel URLs and redirects", () => {
     assert.equal(res.body.channel.name, "Comedy Night");
   });
 
+  // Audit CHAN-001: unpublishing took a channel out of Explore but its
+  // /channels/{owner}/{slug} address, which anyone can guess, kept serving it.
+  it("stops answering /channels/:username/:slug once the channel is unpublished", async () => {
+    const env = makeEnv();
+    const code = "CHGONE01";
+    const record = { code, owner: "alice", published: true, channel: { name: "Comedy Night", items: [{ kind: "movie", imdbId: "tt1234567", season: 1, episode: 1 }] } };
+    await env.CONFIGS.put("channelshare:" + code, JSON.stringify(record));
+    await env.CONFIGS.put("creatorchannel:alice:comedy-night", code);
+    assert.equal((await call(env, "/channels/alice/comedy-night")).status, 302, "published: the address works");
+
+    await env.CONFIGS.put("channelshare:" + code, JSON.stringify({ ...record, published: false }));
+    const html = await call(env, "/channels/alice/comedy-night");
+    assert.notEqual(html.status, 302, "unpublished: no redirect to the channel");
+    assert.ok(!(html.headers.get("location") || "").includes(code));
+    const json = await call(env, "/channels/alice/comedy-night.json");
+    assert.ok(!(json.body && json.body.code), "unpublished: the code is not handed out");
+    assert.ok(!(json.body && json.body.channel), "unpublished: the channel is not handed out");
+  });
+
   it("redirects /channel/:code for backward compatibility", async () => {
     const env = makeEnv();
     const res = await call(env, "/channel/LEGACY123");

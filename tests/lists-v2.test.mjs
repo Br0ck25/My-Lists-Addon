@@ -2450,6 +2450,25 @@ describe("P3b-9: v2 as the only store (FF_V2_LISTS_ONLY)", () => {
     assert.ok(onlyEnv.db.prepare("SELECT count(*) AS n FROM lists").get().n >= 4);
   });
 
+  // Audit CHAN-001, in v2: an unpublished or unlisted channel has no address.
+  it("an unpublished channel's /channels/owner/slug address stops handing out its code", async () => {
+    const { env, ann } = await onlyModeSetup({ FF_V2_LISTS_ONLY: "1" });
+    const post = (p, json) => call(env, p, { method: "POST", json });
+    const shared = await post("/api/channel/share", { ...creds(ann), channel: CH_FIXTURES.rotating, publish: true });
+    assert.equal(shared.body.ok, true, JSON.stringify(shared.body));
+    const code = shared.body.code;
+    const open = await call(env, "/channels/annonly/night-shift.json");
+    assert.equal(open.body.code, code, "published: the address works");
+
+    const off = await post("/api/channel/unpublish", { ...creds(ann), code });
+    assert.equal(off.body.ok, true, JSON.stringify(off.body));
+    const after = await call(env, "/channels/annonly/night-shift.json");
+    assert.ok(!(after.body && after.body.code), "unpublished: no code");
+    const redirect = await call(env, "/channels/annonly/night-shift");
+    assert.notEqual(redirect.status, 302);
+    assert.equal((await call(env, `/api/channel/share?code=${code}`)).body.ok, true, "the code link itself still works");
+  });
+
   it("an account reset leaves the other browsers a tombstone, and deleting the account removes everything", async () => {
     const { env, db, ann } = await onlyModeSetup({});
     const annId = db.prepare("SELECT id FROM accounts WHERE username = 'annonly'").get().id;

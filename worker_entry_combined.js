@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f101917e1a";
+const WORKER_BUILD = "cd3c435ee6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -86023,9 +86023,7 @@ async function handleFetch(request, env, ctx) {
         // From v2 when reads are there (P3b-8), else the legacy map and index.
         let code = (await channelsV2CodeBySlug(env, u, s)) || "";
         if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
-          try {
-            code = (await env.CONFIGS.get(`creatorchannel:${u}:${s}`)) || "";
-          } catch {}
+          code = await legacyPublishedChannelCode(env, u, s);
           if (!code) {
             try {
               const indexEntries = await readPublicChannelIndex(env);
@@ -96249,13 +96247,13 @@ function generateSearchVariations(query) {
         const u = parts[1] || "";
         const s = parts[2] || "";
         const resolved = (await channelsV2CodeBySlug(env, u, s))
-          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
+          || (isV2ListsOnly(env) ? null : (await legacyPublishedChannelCode(env, u, s)) || null);
         if (resolved) code = resolved;
       } else if (!code && url.searchParams.get("username") && url.searchParams.get("slug")) {
         const u = url.searchParams.get("username").trim();
         const s = url.searchParams.get("slug").trim();
         const resolved = (await channelsV2CodeBySlug(env, u, s))
-          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
+          || (isV2ListsOnly(env) ? null : (await legacyPublishedChannelCode(env, u, s)) || null);
         if (resolved) code = resolved;
       }
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) {
@@ -106983,12 +106981,19 @@ async function channelsV2Record(env, code, opts = {}) {
 // The code a creator's /channels/{user}/{slug} address names: the channel of
 // theirs with that slug that was listed most recently. null: ask the legacy
 // store (which also still knows the slugs a renamed channel had before).
+//
+// Only a channel that is still PUBLIC has an address. That address is built
+// from the owner's name (on the public directory) and the channel's name, so
+// anyone can guess it; unlisting or unpublishing takes the channel out of
+// Explore and must take this address down too. The channel's own code link
+// keeps working, which is what "leaves existing share links working" means
+// (audit CHAN-001).
 async function channelsV2CodeBySlug(env, username, slug) {
   if (!isV2ListsReadEnabled(env) || !listsV2Usable(env)) return null;
   try {
     const row = await env.DB.prepare(
       `SELECT c.public_code FROM channels c JOIN accounts a ON a.id = c.owner_account_id
-       WHERE a.username = ? COLLATE NOCASE AND c.slug = ? AND c.published_at IS NOT NULL AND c.deleted_at IS NULL AND c.legacy_hash IS NOT NULL
+       WHERE a.username = ? COLLATE NOCASE AND c.slug = ? AND c.published_at IS NOT NULL AND c.visibility = 'public' AND c.deleted_at IS NULL AND c.legacy_hash IS NOT NULL
        ORDER BY c.published_at DESC, c.id DESC LIMIT 1`
     ).bind(String(username || ""), String(slug || "").toLowerCase()).first();
     return row ? row.public_code : null;
@@ -107406,6 +107411,23 @@ async function channelsV2AllRows(env, limit, offset) {
      WHERE c.deleted_at IS NULL ORDER BY c.id LIMIT ? OFFSET ?`
   ).bind(limit + 1, offset).all();
   return results || [];
+}
+
+// The legacy twin of channelsV2CodeBySlug: the code the `creatorchannel:` map
+// holds for an address, but only while that channel is still published. The
+// map entry is written at publish time and was never removed on unpublish, so
+// the address kept handing out the code (audit CHAN-001).
+async function legacyPublishedChannelCode(env, username, slug) {
+  if (!env || !env.CONFIGS) return "";
+  try {
+    const code = (await env.CONFIGS.get(`creatorchannel:${String(username || "").toLowerCase()}:${String(slug || "").toLowerCase()}`)) || "";
+    if (!code) return "";
+    const raw = await env.CONFIGS.get(`channelshare:${code}`);
+    const record = raw ? JSON.parse(raw) : null;
+    return record && record.published ? code : "";
+  } catch {
+    return "";
+  }
 }
 
 // --- The activity database: watch history and progress (Phase 3c, P3c-1) -----

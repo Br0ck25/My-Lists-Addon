@@ -950,9 +950,7 @@ async function handleFetch(request, env, ctx) {
         // From v2 when reads are there (P3b-8), else the legacy map and index.
         let code = (await channelsV2CodeBySlug(env, u, s)) || "";
         if (!code && env && env.CONFIGS && !isV2ListsOnly(env)) {
-          try {
-            code = (await env.CONFIGS.get(`creatorchannel:${u}:${s}`)) || "";
-          } catch {}
+          code = await legacyPublishedChannelCode(env, u, s);
           if (!code) {
             try {
               const indexEntries = await readPublicChannelIndex(env);

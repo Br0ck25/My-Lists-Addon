@@ -3156,13 +3156,13 @@
         const u = parts[1] || "";
         const s = parts[2] || "";
         const resolved = (await channelsV2CodeBySlug(env, u, s))
-          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
+          || (isV2ListsOnly(env) ? null : (await legacyPublishedChannelCode(env, u, s)) || null);
         if (resolved) code = resolved;
       } else if (!code && url.searchParams.get("username") && url.searchParams.get("slug")) {
         const u = url.searchParams.get("username").trim();
         const s = url.searchParams.get("slug").trim();
         const resolved = (await channelsV2CodeBySlug(env, u, s))
-          || (isV2ListsOnly(env) ? null : await env.CONFIGS.get(`creatorchannel:${u.toLowerCase()}:${s.toLowerCase()}`));
+          || (isV2ListsOnly(env) ? null : (await legacyPublishedChannelCode(env, u, s)) || null);
         if (resolved) code = resolved;
       }
       if (!code || !/^[A-Za-z0-9_-]{1,64}$/.test(code)) {
