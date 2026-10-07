@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "d754cdeabf";
+const WORKER_BUILD = "0ab1b2c835";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -95156,11 +95156,21 @@ function generateSearchVariations(query) {
       let resolvedUsername = await usernameForCreatorKeyLookup(env, presentedKey, lookupMeta);
       let isLegacyHit = Boolean(lookupMeta.source && lookupMeta.source.startsWith("legacy"));
 
-      // Fallback for pre-migration accounts in D1: scan up to 50 accounts
+      // Fallback for pre-migration accounts that never got a lookup entry. It
+      // used to walk the first 50 `creators` rows and run PBKDF2 against each,
+      // so every wrong, well-formed key cost about 50 verifications (audit
+      // DOS-001) and could never reach an account past row 50 anyway. Now it
+      // only looks at accounts with NO lookup entry of either kind. A hit
+      // stores one (below), so the set shrinks to nothing as these accounts
+      // are used, and a wrong key costs as many verifications as there are
+      // accounts still waiting for one.
       if (!resolvedUsername && env.DB) {
         try {
           const rows = await env.DB.prepare(
-            "SELECT username, key_hash, recovery_answer_hash FROM creators LIMIT 50"
+            "SELECT c.username, c.key_hash, c.recovery_answer_hash FROM creators c " +
+            "WHERE NOT EXISTS (SELECT 1 FROM creator_key_lookups l WHERE l.username = c.username) " +
+            "AND NOT EXISTS (SELECT 1 FROM accounts a WHERE lower(a.username) = lower(c.username) AND a.key_lookup_hmac IS NOT NULL) " +
+            "LIMIT 50"
           ).all();
           if (rows && rows.results) {
             for (const r of rows.results) {

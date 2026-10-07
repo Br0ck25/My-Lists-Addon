@@ -320,4 +320,43 @@ describe("P7-3: rate limits are D1 counters, not KV slots", () => {
       }
     });
   });
+
+  // Audit DOS-001: a wrong, well-formed Account Key in forgot-username walked
+  // the first 50 accounts and ran PBKDF2 on each.
+  describe("forgot-username with an unknown key (DOS-001)", () => {
+    const WRONG = "MYL-AAAA-BBBB-CCCC";
+    async function countDerivations(fn) {
+      const real = globalThis.crypto.subtle.deriveBits.bind(globalThis.crypto.subtle);
+      let n = 0;
+      globalThis.crypto.subtle.deriveBits = (...a) => { n++; return real(...a); };
+      try { await fn(); } finally { globalThis.crypto.subtle.deriveBits = real; }
+      return n;
+    }
+
+    it("does not hash against accounts that are already indexed", async () => {
+      const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+      for (let i = 0; i < 8; i++) await createUser(env, "indexed" + i);
+      let status;
+      const n = await countDerivations(async () => {
+        status = (await call(env, "/api/creator/forgot-username", { method: "POST", ip: nextIp(), json: { creatorKey: WRONG } })).status;
+      });
+      assert.equal(status, 401);
+      assert.equal(n, 0, `${n} key derivations for one wrong key`);
+    });
+
+    it("still finds an old account that has no lookup entry, and indexes it", async () => {
+      const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+      const old = await createUser(env, "oldaccount");
+      env.DB._db.prepare("DELETE FROM creator_key_lookups").run();
+      env.DB._db.prepare("UPDATE accounts SET key_lookup_hmac = NULL").run();
+      for (const k of [...env.CONFIGS._store.keys()]) if (k.startsWith("keylookup:") || k.startsWith("creatorlookuphash:")) env.CONFIGS._store.delete(k);
+      const first = await call(env, "/api/creator/forgot-username", { method: "POST", ip: nextIp(), json: { creatorKey: old.creatorKey } });
+      assert.equal(first.status, 200, JSON.stringify(first.body));
+      assert.equal(first.body.username, "oldaccount");
+      const n = await countDerivations(async () => {
+        await call(env, "/api/creator/forgot-username", { method: "POST", ip: nextIp(), json: { creatorKey: WRONG } });
+      });
+      assert.equal(n, 0, "once indexed the account is no longer scanned");
+    });
+  });
 });
