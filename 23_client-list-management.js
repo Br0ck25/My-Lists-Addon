@@ -1037,11 +1037,13 @@ function _liveMergeShowKey(item) {
 // Airing Next data) into the same meta shape the live /api/preview sample
 // uses, for the shelves below that fall back to it.
 function _liveFallbackMeta(it, defaultType) {
+  const isSeries = it.type === 'series' || defaultType === 'series' || !!it.showTitle || !!it.episodeTitle;
+  const showName = it.showTitle || (isSeries ? (it.name || it.title) : (it.title || it.name));
   return {
     id: it.id,
     showId: it.showId || it.id,
     type: it.type || defaultType || (it.episodeTitle ? 'series' : 'series'),
-    name: it.name || it.title,
+    name: (isSeries && it.showTitle) ? it.showTitle : (it.name || it.title),
     // Resolved the same way the Lists tab resolves it. Reading it.poster
     // alone left every Airing Next tile as "No poster": those items carry no
     // poster of their own, and My Lists only ever showed one because
@@ -1054,7 +1056,8 @@ function _liveFallbackMeta(it, defaultType) {
       ? resolveListCardItemPoster(it)
       : (it.poster || it.showPoster || ''),
     year: it.year || it.releaseInfo,
-    showTitle: it.showTitle || it.name || it.title,
+    showTitle: showName,
+    episodeTitle: it.episodeTitle || it.name || '',
     seasonNum: it.seasonNum != null ? it.seasonNum : it.season,
     episodeNum: it.episodeNum != null ? it.episodeNum : it.episode,
     airDate: it.airDate,
@@ -2028,9 +2031,14 @@ function livePreviewPosterHtml(m) {
       }
     }
   }
+  const displayName = (m.isLivePreviewShelf && (isCwItem || isAiringItem) && m.showTitle)
+    ? m.showTitle
+    : (m.name || '');
   const ratingSpan = (!m.isLivePreviewShelf && typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(m) : '';
   let subtitleHtml = '';
-  const subText = m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : ''));
+  const subText = (m.isLivePreviewShelf && (isCwItem || isAiringItem))
+    ? ''
+    : (m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : '')));
   if (subText && ratingSpan) {
     subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
   } else if (subText) {
@@ -2044,14 +2052,14 @@ function livePreviewPosterHtml(m) {
   // safe-poster stand-in for a filtered adult item, and the Better Posters
   // URL when that is on. It used to match only because the poster was
   // assigned onto m above.
-  return '<div class="live-preview-poster-card clickable-poster' + extraCardClass + '" data-id="' + escapeAttr(m.id || '') + '" data-type="' + escapeAttr(m.type || '') + '" data-title="' + escapeAttr(m.name || '') + '" data-poster="' + escapeAttr(resolvedPoster || '') + '">' +
+  return '<div class="live-preview-poster-card clickable-poster' + extraCardClass + '" data-id="' + escapeAttr(m.id || '') + '" data-type="' + escapeAttr(m.type || '') + '" data-title="' + escapeAttr(displayName) + '" data-poster="' + escapeAttr(resolvedPoster || '') + '">' +
     '<div style="position:relative; width:100%;">' +
       posterEl +
       dateBadge +
       bottomBadge +
       removeBtn +
     '</div>' +
-    '<div class="live-preview-poster-name">' + escapeHtml(m.name || '') + '</div>' +
+    '<div class="live-preview-poster-name">' + escapeHtml(displayName) + '</div>' +
     subtitleHtml +
   '</div>';
 }

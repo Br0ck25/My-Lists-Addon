@@ -5048,7 +5048,27 @@ window.checkAndAutoSyncExternalLists = checkAndAutoSyncExternalLists;
 
 function formatWatchItemLabel(it) {
   if (!it) return { title: '', subtitle: '' };
-  const epTitle = it.name || it.episodeTitle || (it.title !== it.showTitle ? it.title : '') || ((it.isSeasonPremiere && it.seasonNum != null && it.seasonNum > 1) ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : '')) || '';
+  const epKey = (it.showId || it.id) && it.seasonNum != null && it.episodeNum != null
+    ? (String(it.showId || it.id).split(':')[0] + ':S' + it.seasonNum + ':E' + it.episodeNum)
+    : null;
+  const cachedTitle = epKey && window._knownEpisodeTitles && window._knownEpisodeTitles.get(epKey);
+
+  let rawTitle = cachedTitle || it.episodeTitle || (it.title !== it.showTitle ? it.title : '') || it.name || '';
+  if (typeof isGenericEpisodeTitle === 'function' && isGenericEpisodeTitle(rawTitle, it.episodeNum)) {
+    rawTitle = '';
+  }
+
+  let epTitle = rawTitle;
+  if (!epTitle) {
+    if (it.isSeasonPremiere && it.seasonNum != null && it.seasonNum > 1) {
+      epTitle = 'Season Premiere';
+    } else if (it.episodeNum != null) {
+      epTitle = 'Episode ' + it.episodeNum;
+    } else {
+      epTitle = '';
+    }
+  }
+
   if (it.showTitle && it.seasonNum != null && it.episodeNum != null) {
     const s = String(it.seasonNum).padStart(2, '0');
     const e = String(it.episodeNum).padStart(2, '0');

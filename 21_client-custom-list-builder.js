@@ -3045,6 +3045,7 @@ async function updateContinueWatching(showId) {
         id: String(nextInSeason.id),
         type: 'episode',
         name: nextInSeason.name,
+        episodeTitle: nextInSeason.name,
         poster: latest.showPoster || '',
         showId: showId,
         showTitle: latest.showTitle || '',
@@ -3057,6 +3058,9 @@ async function updateContinueWatching(showId) {
         isSeasonFinale: isFinale,
         seasonFinaleAirDate: (!isPremiere && !isFinale) ? finaleAir : null,
       };
+      if (window._knownEpisodeTitles && nextInSeason.name && !isGenericEpisodeTitle(nextInSeason.name, nextInSeason.episode_number)) {
+        window._knownEpisodeTitles.set(String(showId).split(':')[0] + ':S' + latest.seasonNum + ':E' + nextInSeason.episode_number, nextInSeason.name);
+      }
       // If the next episode has not aired yet, all currently aired episodes have been watched
       showFullyWatched = !aired;
     } else {
@@ -3082,6 +3086,7 @@ async function updateContinueWatching(showId) {
               id: String(firstNext.id),
               type: 'episode',
               name: firstNext.name,
+              episodeTitle: firstNext.name,
               poster: latest.showPoster || '',
               showId: showId,
               showTitle: latest.showTitle || '',
@@ -3094,6 +3099,9 @@ async function updateContinueWatching(showId) {
               isSeasonFinale: isFinale,
               seasonFinaleAirDate: (!isPremiere && !isFinale) ? finaleAir : null,
             };
+            if (window._knownEpisodeTitles && firstNext.name && !isGenericEpisodeTitle(firstNext.name, firstNext.episode_number)) {
+              window._knownEpisodeTitles.set(String(showId).split(':')[0] + ':S' + nextSeasonNum + ':E' + firstNext.episode_number, firstNext.name);
+            }
             showFullyWatched = !aired;
           } else {
             showFullyWatched = true;
@@ -3676,7 +3684,11 @@ async function refreshAiringNext(force) {
     // never see a details payload of their own (Continue Watching).
     if (typeof rememberShowAirTime === 'function') rememberShowAirTime(d);
     const known = knownByShow.get(showId);
-    const epName = d.nextEpisodeName || (d.nextEpisodeNumber === 1 ? 'Season Premiere' : (d.nextEpisodeNumber != null ? ('Episode ' + d.nextEpisodeNumber) : ''));
+    const rawEpName = d.nextEpisodeName || '';
+    const hasRealEpName = !isGenericEpisodeTitle(rawEpName, d.nextEpisodeNumber);
+    const epName = hasRealEpName
+      ? rawEpName
+      : (d.nextEpisodeNumber === 1 ? 'Season Premiere' : (d.nextEpisodeNumber != null ? ('Episode ' + d.nextEpisodeNumber) : ''));
     const isFinale = !!(d.isSeasonFinale || (d.totalEpisodesInSeason != null && d.nextEpisodeNumber === d.totalEpisodesInSeason && d.nextEpisodeNumber > 1));
     return {
       id: showId,
@@ -3691,7 +3703,7 @@ async function refreshAiringNext(force) {
       showTitle: (known && known.title) || d.title || '',
       showPoster: (known && known.poster) || d.poster || '',
       name: epName,
-      episodeTitle: epName,
+      episodeTitle: hasRealEpName ? rawEpName : epName,
       airDate: d.nextEpisodeAirDate,
       seasonNum: d.nextEpisodeSeasonNumber,
       episodeNum: d.nextEpisodeNumber,
@@ -4239,6 +4251,88 @@ window.backfillWatchHistoryEpisodeStills = backfillWatchHistoryEpisodeStills;
 // is invisible; an Airing Next row that has not populated is not).
 setTimeout(() => { backfillWatchHistoryEpisodeStills().catch(() => {}); }, 1400);
 
+window._knownEpisodeTitles = window._knownEpisodeTitles || new Map();
+
+async function enrichTrackedEpisodeTitles() {
+  if (typeof loadLocalCustomLists !== 'function' || typeof saveLocalCustomListsMap !== 'function') return;
+  const map = loadLocalCustomLists();
+  if (!map) return;
+  const cwList = map['continue-watching'];
+  const anList = map['airing-next'];
+  const cwItems = (cwList && Array.isArray(cwList.items)) ? cwList.items : [];
+  const anItems = (anList && Array.isArray(anList.items)) ? anList.items : [];
+  const allItems = [...cwItems, ...anItems];
+  if (!allItems.length) return;
+
+  const showsToEnrich = new Map();
+  for (const it of allItems) {
+    if (!it) continue;
+    const epName = it.episodeTitle || it.name;
+    const isGeneric = isGenericEpisodeTitle(epName, it.episodeNum);
+    if (isGeneric && it.seasonNum != null && it.episodeNum != null) {
+      const rawShowId = String(it.showId || it.id || '');
+      const imdbId = rawShowId.startsWith('tt') ? rawShowId.split(':')[0] : (it.imdbId || '');
+      if (imdbId && imdbId.startsWith('tt')) {
+        if (!showsToEnrich.has(imdbId)) showsToEnrich.set(imdbId, []);
+        showsToEnrich.get(imdbId).push(it);
+      }
+    }
+  }
+
+  if (showsToEnrich.size === 0) return;
+
+  let anyUpdated = false;
+  const entries = [...showsToEnrich.entries()];
+  let cursor = 0;
+  async function worker() {
+    while (cursor < entries.length) {
+      const [imdbId, items] = entries[cursor++];
+      try {
+        const res = await fetch('https://v3-cinemeta.strem.io/meta/series/' + encodeURIComponent(imdbId) + '.json', {
+          headers: { 'User-Agent': 'my-list-addon/1.14' },
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const videos = (data && data.meta && Array.isArray(data.meta.videos)) ? data.meta.videos : [];
+        if (!videos.length) continue;
+
+        for (const it of items) {
+          const sNum = it.seasonNum;
+          const eNum = it.episodeNum;
+          const vid = videos.find(v => v.season === sNum && v.episode === eNum);
+          if (vid) {
+            const realTitle = vid.name || vid.title;
+            if (realTitle && !isGenericEpisodeTitle(realTitle, eNum)) {
+              it.name = realTitle;
+              it.episodeTitle = realTitle;
+              const epKey = imdbId + ':S' + sNum + ':E' + eNum;
+              window._knownEpisodeTitles.set(epKey, realTitle);
+              anyUpdated = true;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(3, entries.length) }, worker));
+
+  if (anyUpdated) {
+    if (cwList) cwList.updatedAt = Date.now();
+    if (anList) anList.updatedAt = Date.now();
+    saveLocalCustomListsMap(map);
+    if (typeof renderCreatorDashboard === 'function') {
+      try { renderCreatorDashboard({ silent: true }); } catch (e) {}
+    }
+    if (typeof renderLivePreview === 'function') {
+      try { renderLivePreview(); } catch (e) {}
+    }
+  }
+}
+window.enrichTrackedEpisodeTitles = enrichTrackedEpisodeTitles;
+
+setTimeout(() => { enrichTrackedEpisodeTitles().catch(() => {}); }, 1600);
+
 // Builds the "Airing Next" dashboard card -- deliberately not part of
 // buildLocalListCardHtml/renderAutoTrackedListsHtml (22_client-creator-
 // profile.js): unlike Continue Watching/Watch History it has no local
@@ -4293,7 +4387,11 @@ function buildAiringNextCardHtml() {
       ? formatWatchItemLabel(it)
       : {
           title: (it.showTitle || '') + (it.seasonNum != null && it.episodeNum != null ? ' S' + String(it.seasonNum).padStart(2, '0') + 'E' + String(it.episodeNum).padStart(2, '0') : ''),
-          subtitle: it.name || it.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : ''))
+          subtitle: (it.episodeTitle && typeof isGenericEpisodeTitle === 'function' && !isGenericEpisodeTitle(it.episodeTitle, it.episodeNum))
+            ? it.episodeTitle
+            : ((it.name && typeof isGenericEpisodeTitle === 'function' && !isGenericEpisodeTitle(it.name, it.episodeNum))
+                ? it.name
+                : (it.isSeasonPremiere ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : '')))
         };
     const removeBtn = it.showId
       ? '<button type="button" class="cw-remove-btn" data-act="removeAiringNextShow" data-act-stop data-act-args="' + appActArgs([it.showId, "@self"]) + '" title="Remove from Airing Next" aria-label="Remove from Airing Next">\u2715</button>'
@@ -4348,7 +4446,11 @@ function openAiringNextDetailsPage() {
       ? formatWatchItemLabel(it)
       : {
           title: (it.showTitle || '') + (it.seasonNum != null && it.episodeNum != null ? ' S' + String(it.seasonNum).padStart(2, '0') + 'E' + String(it.episodeNum).padStart(2, '0') : ''),
-          subtitle: it.name || it.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : ''))
+          subtitle: (it.episodeTitle && typeof isGenericEpisodeTitle === 'function' && !isGenericEpisodeTitle(it.episodeTitle, it.episodeNum))
+            ? it.episodeTitle
+            : ((it.name && typeof isGenericEpisodeTitle === 'function' && !isGenericEpisodeTitle(it.name, it.episodeNum))
+                ? it.name
+                : (it.isSeasonPremiere ? 'Season Premiere' : (it.episodeNum != null ? ('Episode ' + it.episodeNum) : '')))
         };
     return {
       id: it.showId,

@@ -76,6 +76,34 @@ async function titleDetailsWithoutTmdb(env, rawId, type, region) {
   const released = meta && typeof meta.released === "string" ? meta.released.slice(0, 10) : "";
   const year = String((meta && (meta.year || meta.releaseInfo)) || (row && row.year) || "").slice(0, 4);
 
+  let nextEpisodeAirDate = null;
+  let nextEpisodeNumber = null;
+  let nextEpisodeSeasonNumber = null;
+  let nextEpisodeName = null;
+
+  if (wantSeries && meta && Array.isArray(meta.videos)) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const futureVids = meta.videos.filter((v) => {
+      const d = (v && (v.released || v.firstAired) ? String(v.released || v.firstAired).slice(0, 10) : "");
+      return d && d >= todayStr;
+    });
+    futureVids.sort((a, b) => {
+      const da = (a.released || a.firstAired || "").slice(0, 10);
+      const db = (b.released || b.firstAired || "").slice(0, 10);
+      return da.localeCompare(db);
+    });
+    const nextV = futureVids[0];
+    if (nextV) {
+      nextEpisodeAirDate = (nextV.released || nextV.firstAired || "").slice(0, 10) || null;
+      nextEpisodeNumber = nextV.episode != null ? nextV.episode : null;
+      nextEpisodeSeasonNumber = nextV.season != null ? nextV.season : null;
+      const vName = nextV.name || nextV.title;
+      if (vName && !isGenericEpisodeTitle(vName, nextV.episode)) {
+        nextEpisodeName = vName;
+      }
+    }
+  }
+
   return {
     id: imdbId,
     imdbId: imdbId,
@@ -97,10 +125,10 @@ async function titleDetailsWithoutTmdb(env, rawId, type, region) {
     trailerKey: trailer ? String(trailer.source) : null,
     cast: listOf(meta && meta.cast),
     director: listOf(meta && meta.director),
-    nextEpisodeAirDate: null,
-    nextEpisodeNumber: null,
-    nextEpisodeSeasonNumber: null,
-    nextEpisodeName: null,
+    nextEpisodeAirDate,
+    nextEpisodeNumber,
+    nextEpisodeSeasonNumber,
+    nextEpisodeName,
     notOnTmdb: true,
   };
 }

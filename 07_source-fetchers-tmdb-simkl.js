@@ -4011,59 +4011,104 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
 
   const nextEpInfo = await (async () => {
     if (type !== "tv") return { nextEpisodeAirDate: null, nextEpisodeNumber: null, nextEpisodeSeasonNumber: null, nextEpisodeName: null };
+    let epAirDate = null;
+    let epNum = null;
+    let epSeason = null;
+    let epName = null;
+
     if (match.next_episode_to_air) {
       const nextAir = match.next_episode_to_air.air_date || null;
       if (nextAir && nextAir >= yesterday) {
-        return {
-          nextEpisodeAirDate: nextAir,
-          nextEpisodeNumber: typeof match.next_episode_to_air.episode_number === "number" ? match.next_episode_to_air.episode_number : null,
-          nextEpisodeSeasonNumber: typeof match.next_episode_to_air.season_number === "number" ? match.next_episode_to_air.season_number : null,
-          nextEpisodeName: match.next_episode_to_air.name || null,
-        };
+        epAirDate = nextAir;
+        epNum = typeof match.next_episode_to_air.episode_number === "number" ? match.next_episode_to_air.episode_number : null;
+        epSeason = typeof match.next_episode_to_air.season_number === "number" ? match.next_episode_to_air.season_number : null;
+        epName = match.next_episode_to_air.name || null;
       }
     }
 
     // If next_episode_to_air is missing or points to an already-aired episode,
     // inspect the season's episode list to find the actual next future episode
-    const seasonToSearch = (match.next_episode_to_air && match.next_episode_to_air.season_number) || (match.last_episode_to_air && match.last_episode_to_air.season_number);
-    if (seasonToSearch && tmdbId) {
+    if (!epAirDate) {
+      const seasonToSearch = (match.next_episode_to_air && match.next_episode_to_air.season_number) || (match.last_episode_to_air && match.last_episode_to_air.season_number);
+      if (seasonToSearch && tmdbId) {
+        try {
+          const sRes = await fetch("https://api.themoviedb.org/3/tv/" + tmdbId + "/season/" + seasonToSearch + "?api_key=" + encodeURIComponent(apiKey), {
+            headers: { "User-Agent": "my-list-addon/1.14" },
+            cf: { cacheTtl: 3600, cacheEverything: true },
+          });
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            if (Array.isArray(sData.episodes)) {
+              const futureEp = sData.episodes.find((ep) => ep && ep.air_date && ep.air_date >= yesterday);
+              if (futureEp) {
+                epAirDate = futureEp.air_date;
+                epNum = typeof futureEp.episode_number === "number" ? futureEp.episode_number : null;
+                epSeason = typeof futureEp.season_number === "number" ? futureEp.season_number : seasonToSearch;
+                epName = futureEp.name || null;
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // Fallback: check upcoming future seasons in match.seasons
+    if (!epAirDate) {
+      const upcomingSeasons = Array.isArray(match.seasons)
+        ? match.seasons.filter((s) => s && s.season_number > 0 && s.air_date && s.air_date >= yesterday)
+        : [];
+      upcomingSeasons.sort((a, b) => a.air_date.localeCompare(b.air_date));
+      const nextSeason = upcomingSeasons[0];
+      if (nextSeason) {
+        epAirDate = nextSeason.air_date;
+        epNum = 1;
+        epSeason = nextSeason.season_number;
+        epName = nextSeason.name || null;
+      }
+    }
+
+    // If epName is generic or missing, try enriching from Cinemeta series metadata
+    if (realImdbId && realImdbId.startsWith("tt") && (isGenericEpisodeTitle(epName, epNum) || !epAirDate)) {
       try {
-        const sRes = await fetch("https://api.themoviedb.org/3/tv/" + tmdbId + "/season/" + seasonToSearch + "?api_key=" + encodeURIComponent(apiKey), {
-          headers: { "User-Agent": "my-list-addon/1.14" },
-          cf: { cacheTtl: 3600, cacheEverything: true },
-        });
-        if (sRes.ok) {
-          const sData = await sRes.json();
-          if (Array.isArray(sData.episodes)) {
-            const futureEp = sData.episodes.find((ep) => ep && ep.air_date && ep.air_date >= yesterday);
-            if (futureEp) {
-              return {
-                nextEpisodeAirDate: futureEp.air_date,
-                nextEpisodeNumber: typeof futureEp.episode_number === "number" ? futureEp.episode_number : null,
-                nextEpisodeSeasonNumber: typeof futureEp.season_number === "number" ? futureEp.season_number : seasonToSearch,
-                nextEpisodeName: futureEp.name || null,
-              };
+        const cinMeta = await cinemetaTitleMeta(realImdbId, ["series"]);
+        if (cinMeta && Array.isArray(cinMeta.videos) && cinMeta.videos.length > 0) {
+          let matchedVid = null;
+          if (epSeason != null && epNum != null) {
+            matchedVid = cinMeta.videos.find((v) => v.season === epSeason && v.episode === epNum);
+          }
+          if (!matchedVid && !epAirDate) {
+            const futureVideos = cinMeta.videos.filter((v) => {
+              const d = (v.released || v.firstAired || '').slice(0, 10);
+              return d && d >= yesterday;
+            });
+            futureVideos.sort((a, b) => ((a.released || a.firstAired || '').localeCompare(b.released || b.firstAired || '')));
+            if (futureVideos.length > 0) {
+              matchedVid = futureVideos[0];
+              if (!epAirDate) epAirDate = (matchedVid.released || matchedVid.firstAired || '').slice(0, 10);
+              if (epSeason == null) epSeason = matchedVid.season;
+              if (epNum == null) epNum = matchedVid.episode;
+            }
+          }
+          if (matchedVid) {
+            const cinName = matchedVid.name || matchedVid.title;
+            if (cinName && !isGenericEpisodeTitle(cinName, matchedVid.episode)) {
+              epName = cinName;
             }
           }
         }
       } catch {}
     }
 
-    // Fallback: check upcoming future seasons in match.seasons
-    const upcomingSeasons = Array.isArray(match.seasons)
-      ? match.seasons.filter((s) => s && s.season_number > 0 && s.air_date && s.air_date >= yesterday)
-      : [];
-    upcomingSeasons.sort((a, b) => a.air_date.localeCompare(b.air_date));
-    const nextSeason = upcomingSeasons[0];
-    if (nextSeason) {
-      return {
-        nextEpisodeAirDate: nextSeason.air_date,
-        nextEpisodeNumber: 1,
-        nextEpisodeSeasonNumber: nextSeason.season_number,
-        nextEpisodeName: nextSeason.name || null,
-      };
+    if (isGenericEpisodeTitle(epName, epNum)) {
+      epName = null;
     }
-    return { nextEpisodeAirDate: null, nextEpisodeNumber: null, nextEpisodeSeasonNumber: null, nextEpisodeName: null };
+
+    return {
+      nextEpisodeAirDate: epAirDate || null,
+      nextEpisodeNumber: epNum != null ? epNum : null,
+      nextEpisodeSeasonNumber: epSeason != null ? epSeason : null,
+      nextEpisodeName: epName || null,
+    };
   })();
 
   let isSeasonPremiere = false;
@@ -4254,19 +4299,40 @@ async function fetchTmdbSeasonDetailsUncached(imdbId, seasonNum, apiKey, knownTm
     return null;
   }
   const data = await res.json();
-  
-  return {
-    episodes: (data.episodes || []).map(ep => ({
-      id: ep.id,
-      episode_number: ep.episode_number,
-      name: ep.name,
-      overview: ep.overview,
-      runtime: ep.runtime,
-      air_date: ep.air_date,
-      vote_average: ep.vote_average,
-      still_path: ep.still_path ? "https://image.tmdb.org/t/p/w500" + ep.still_path : null
-    }))
-  };
+  const rawEpisodes = (data.episodes || []).map(ep => ({
+    id: ep.id,
+    episode_number: ep.episode_number,
+    name: ep.name,
+    overview: ep.overview,
+    runtime: ep.runtime,
+    air_date: ep.air_date,
+    vote_average: ep.vote_average,
+    still_path: ep.still_path ? "https://image.tmdb.org/t/p/w500" + ep.still_path : null
+  }));
+
+  if (imdbId && String(imdbId).startsWith("tt") && rawEpisodes.some(ep => isGenericEpisodeTitle(ep.name, ep.episode_number))) {
+    try {
+      const cinMeta = await cinemetaTitleMeta(imdbId, ["series"]);
+      if (cinMeta && Array.isArray(cinMeta.videos)) {
+        const epMap = new Map();
+        for (const v of cinMeta.videos) {
+          if (v.season === numericSeason && v.episode != null) {
+            const vName = v.name || v.title;
+            if (vName && !isGenericEpisodeTitle(vName, v.episode)) {
+              epMap.set(v.episode, vName);
+            }
+          }
+        }
+        for (const ep of rawEpisodes) {
+          if (isGenericEpisodeTitle(ep.name, ep.episode_number) && epMap.has(ep.episode_number)) {
+            ep.name = epMap.get(ep.episode_number);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return { episodes: rawEpisodes };
 }
 
 // Builds standard Stremio/Nuvio metadata for any movie or series keyed by IMDb id.
@@ -4570,7 +4636,11 @@ function airingNextCandidatesFromRecord(record) {
 function airingNextEntryFromDetails(showId, d, known) {
   if (!d || !d.nextEpisodeAirDate) return null;
   if (isEpisodeAired(d.nextEpisodeAirDate)) return null;
-  const epName = d.nextEpisodeName || (d.nextEpisodeNumber === 1 ? 'Season Premiere' : (d.nextEpisodeNumber != null ? ('Episode ' + d.nextEpisodeNumber) : ''));
+  const rawEpName = d.nextEpisodeName || '';
+  const hasRealName = !isGenericEpisodeTitle(rawEpName, d.nextEpisodeNumber);
+  const epName = hasRealName
+    ? rawEpName
+    : (d.nextEpisodeNumber === 1 ? 'Season Premiere' : (d.nextEpisodeNumber != null ? ('Episode ' + d.nextEpisodeNumber) : ''));
   const isFinale = !!(d.isSeasonFinale || (d.totalEpisodesInSeason != null && d.nextEpisodeNumber === d.totalEpisodesInSeason && d.nextEpisodeNumber > 1));
   return {
     id: showId,

@@ -2618,6 +2618,30 @@ function isEpisodeAired(ep) {
   return airDate.getTime() < today.getTime();
 }
 
+function isGenericEpisodeTitle(title, episodeNum) {
+  if (!title || typeof title !== 'string') return true;
+  const t = title.trim();
+  if (!t) return true;
+  const lower = t.toLowerCase();
+  if (lower === 'tba' || lower === 'tbd' || lower === 'untitled' || lower === 'unknown' || lower === 'n/a' || lower === 'none' || lower === '-') return true;
+  if (lower.startsWith('tba ') || lower.startsWith('tbd ')) return true;
+  if (/^episode\\s+\\d+$/i.test(t)) return true;
+  if (/^season\\s+\\d+$/i.test(t)) return true;
+  if (/^series\\s+\\d+$/i.test(t)) return true;
+  if (/^season\\s+\\d+\\s*,?\\s*episode\\s+\\d+$/i.test(t)) return true;
+  if (/^s\\d+\\s*e\\d+$/i.test(t)) return true;
+  if (/^season\\s+(?:premiere|finale)$/i.test(t)) return true;
+  if (/^episode\\s+(?:premiere|finale)$/i.test(t)) return true;
+  if (/^series\\s+(?:premiere|finale)$/i.test(t)) return true;
+  if (episodeNum != null) {
+    const num = Number(episodeNum);
+    if (!Number.isNaN(num)) {
+      if (lower === 'episode ' + num || lower === 'ep ' + num || lower === 'ep. ' + num) return true;
+    }
+  }
+  return false;
+}
+
 // --- Not-yet-aired seasons and episodes -------------------------------------
 //
 // isEpisodeAired above is the rule for ONE episode. These three answer the
