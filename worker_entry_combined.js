@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0ab1b2c835";
+const WORKER_BUILD = "1033ad747f";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -109539,6 +109539,11 @@ function isChartSnapshotsEnabled(env) {
   return v === "1" || v === "true" || v === true;
 }
 
+function isKnownChartRegion(region) {
+  const code = String(region).toUpperCase();
+  return REGION_OPTIONS.some(([c]) => c === code);
+}
+
 function chartSnapshotKeyPart(v) {
   const s = String(v == null || v === "" ? "-" : v);
   return encodeURIComponent(s).slice(0, 120);
@@ -109549,6 +109554,11 @@ function chartSnapshotKeyPart(v) {
 function chartSnapshotKey(source, ref, { entry, skip, keys }) {
   const rule = source && source.kind === "chart" ? source.snapshot : null;
   if (!rule) return null;
+  // The region becomes part of a KV key, and /api/preview and a hand-made
+  // base64 config take it from the caller unchecked (only /api/save validates
+  // it as a choice). One that is not a real option is served the usual way,
+  // not snapshotted, so a caller cannot mint keys (audit SNAP-001).
+  if (rule.region && keys && keys.region && !isKnownChartRegion(keys.region)) return null;
   const parts = [
     source.name,
     ref.arg,
@@ -109667,7 +109677,6 @@ async function fetchSourcePageWithSnapshot(source, ref, page) {
   const env = keys.env;
   const key = env && env.CONFIGS && isChartSnapshotsEnabled(env) ? chartSnapshotKey(source, ref, page) : null;
   if (!key) return source.fetchPage(ref, page);
-  noteChartSnapshotUse(env, key, source, ref, page);
 
   const now = Date.now();
   const snap = await readChartSnapshot(env, key, now);
@@ -109681,11 +109690,16 @@ async function fetchSourcePageWithSnapshot(source, ref, page) {
       });
       if (keys.ctx && typeof keys.ctx.waitUntil === "function") keys.ctx.waitUntil(rebuild);
     }
+    noteChartSnapshotUse(env, key, source, ref, page);
     return chartSnapshotItems(snap);
   }
   // Nothing stored yet: built now. An empty answer is passed on as the
   // fetcher gave it (with any total it carries), and not stored.
   const built = await buildChartSnapshot(source, ref, page, key, null);
+  // The use is recorded only for a snapshot that exists. It used to be noted
+  // before anything was built, so every made-up chart argument left a
+  // `snap:chartuse:` key for the hourly refresh to chase (SNAP-001).
+  if (built.snap) noteChartSnapshotUse(env, key, source, ref, page);
   return built.snap ? chartSnapshotItems(built.snap) : built.raw;
 }
 

@@ -606,7 +606,8 @@ describe("P4-3: chart snapshots", () => {
   // 42_ on its own is a whole isolate's worth of snapshot state; each test
   // loads its own. Its clock is the sandbox's Date, moved by the test.
   function loadSnapshots() {
-    const sb = loadSourceFunctions("42_chart-snapshots.js");
+    // 00_constants.js too: the snapshot key checks a region against REGION_OPTIONS.
+    const sb = loadSourceFunctions("00_constants.js", "42_chart-snapshots.js");
     sb.__clock = 1_800_000_000_000;
     vm.runInContext("Date.now = () => globalThis.__clock;", sb);
     return sb;
