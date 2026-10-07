@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "433aaf4953";
+const WORKER_BUILD = "50dda50cb0";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -701,7 +701,7 @@ function applyEnvApiKeys(env) {
 // thing standing in front of a credential.
 //
 // So both also carry a per-IP DAILY budget, spent only on failures and
-// backed by D1's atomic upsert wherever D1 is bound (see noteAuthFailure,
+// backed by D1's atomic upsert wherever D1 is bound (see reserveAuthAttempt,
 // 02_http-and-creator-utils.js). Successes never consume it, so a legitimate
 // admin or someone restoring on a run of new devices is unaffected; the
 // ceilings are set far above any plausible honest failure count and reset
@@ -6973,7 +6973,7 @@ function clientIpKey(request) {
 // counter one row per (bucket, key, window) rather than one row per key with a
 // TTL, and it is what Cloudflare's own rules do. The cost is the usual one: a
 // burst straddling a boundary can spend up to two windows' worth in a rolling
-// minute. The per-account daily budgets (readAuthFailureCount / noteAuthFailure
+// minute. The per-account daily budgets (reserveAuthAttempt
 // below) and the WAF rules (docs/OPERATIONS.md section 26) are the answer to
 // that, not a tighter short window.
 //
@@ -7072,9 +7072,9 @@ function memoryRateLimitCount(scope, windowStart, spend) {
 // Read the current count, optionally spending first. Never throws: a limiter
 // that breaks must not break the request it is protecting, and a counter that
 // cannot be read is treated as "spend into memory" rather than "no limit".
-async function rateLimitCount(env, ctx, bucket, key, windowSec, spend) {
+async function rateLimitCount(env, ctx, bucket, key, windowSec, spend, nowMs) {
   const amount = Number.isFinite(spend) && spend > 0 ? Math.floor(spend) : 0;
-  const now = Date.now();
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const windowStart = rateLimitWindowStart(now, windowSec);
   const scope = rateLimitScope(bucket, key);
   if (env && env.DB) {
@@ -7115,28 +7115,57 @@ async function consumeRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec =
   return used > maxPerWindow;
 }
 
-// The read half, for the endpoints where a SUCCESS must not spend the budget
-// that protects them: a correct password is not a guess, and an admin who
-// signs in on a run of devices must not lock themselves out (the daily failure
-// budgets below are built on exactly that rule).
+// Spend first, give it back on success -- for the endpoints where a SUCCESS
+// must not consume the budget that protects them: a correct password is not a
+// guess, and an admin who signs in on a run of devices must not lock
+// themselves out (the daily failure budgets below are built on that rule).
 //
-// A request refused at this gate spends nothing -- nothing was attempted, and
-// the count stays where it is for the rest of the window, so it is still
-// refused. That is the difference from consumeRateLimit above, which spends
-// first and so counts every arrival including the refused ones.
+// This used to be read the count, do the work, note the failure afterwards.
+// That is not atomic, and the work is a PBKDF2 verification of about 90 ms, so
+// every request that arrived inside that gap read the pre-failure count and
+// went on to verify a guess: a burst of 300 got 300 guesses (audit AUTH-002).
+// The spend is one atomic upsert and happens BEFORE the guess is checked, so
+// the guesses that can be in flight are capped by the budget, not by how fast
+// the attacker can send. A correct answer calls release() and the budget is
+// back where it was. A request refused here releases its own spend, so the
+// count stays at the ceiling and the rest of the window stays refused, the
+// same as before.
 //
-// Read-then-note is not atomic, so several guesses arriving in the same
-// instant can each see the pre-increment count. That is bounded, not open: the
-// daily budget is one atomic upsert per failure, so what concurrency can win
-// is a handful of extra attempts inside a minute, never extra attempts overall.
-async function readRateLimitCount(env, ctx, bucket, key, windowSec = 60) {
-  return rateLimitCount(env, ctx, bucket, key, windowSec, 0);
+// Returns { over, release }. `over` is true when the caller should stop.
+async function reserveRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec = 60) {
+  const noop = async () => {};
+  if (!key) return { over: true, release: noop };
+  const now = Date.now();
+  const used = await rateLimitCount(env, ctx, bucket, key, windowSec, 1, now);
+  let released = false;
+  const release = async () => {
+    if (released) return;
+    released = true;
+    await refundRateLimitCount(env, rateLimitScope(bucket, key), rateLimitWindowStart(now, windowSec));
+  };
+  if (used > maxPerWindow) {
+    await release();
+    return { over: true, release };
+  }
+  return { over: false, release };
 }
 
-// The spend half, for a failure that has already happened.
-async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
-  if (!key) return;
-  await rateLimitCount(env, ctx, bucket, key, windowSec, cost);
+// Give one spend back. Never below zero, and aimed at the window the spend
+// landed in rather than whichever one is current.
+async function refundRateLimitCount(env, scope, windowStart) {
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare(
+        "UPDATE rate_counters SET count = MAX(0, count - 1) WHERE scope = ? AND window_start = ?"
+      ).bind(scope, windowStart).run();
+      return;
+    } catch {
+      // Table missing: the spend went to memory, so the refund does too.
+    }
+  }
+  const key = scope + ":" + windowStart;
+  const used = RATE_LIMIT_MEMO.get(key) || 0;
+  if (used > 0) RATE_LIMIT_MEMO.set(key, used - 1);
 }
 
 // --- Per-account authentication failure budget -------------------------------
@@ -7165,46 +7194,63 @@ async function noteRateLimit(env, ctx, bucket, key, windowSec = 60, cost = 1) {
 // migration today.
 const AUTH_FAIL_TTL_SEC = 86400;
 
-async function readAuthFailureCount(env, scope, day) {
+// Spend one attempt before the secret is checked, and read the count back in
+// the same transaction. A wrong guess simply keeps its spend; a correct one
+// calls release(). Returns { over, release }, `over` meaning this attempt is
+// past `maxFailures` (its own spend is already given back, so refused requests
+// do not push the count further).
+//
+// Reading first and noting the failure afterwards (what this did until audit
+// AUTH-002) let every request already past the read verify a guess for free.
+async function reserveAuthAttempt(env, scope, day, maxFailures) {
+  const kind = `authfail:${scope}`;
+  let released = false;
+  let n = null;
+  let viaD1 = false;
   if (env && env.DB) {
     try {
-      const { results } = await env.DB.prepare(
-        "SELECT n FROM stats WHERE kind = ? AND day = ?"
-      ).bind(`authfail:${scope}`, day).all();
-      // The query SUCCEEDED, so no row means no failures yet. Deliberately
-      // not readStatCount's "no row -> fall through to KV" rule: that exists
-      // because a missing counter row can mean "not migrated yet", and
-      // applying it here would reset the failure count on every attempt.
-      return results && results.length ? (Number(results[0].n) || 0) : 0;
+      // Same statement shape as d1BumpStat: bound amount, DO UPDATE SET
+      // n = n + excluded.n. A near-miss variant of it silently counted nothing
+      // the first time this throttle was written.
+      const out = await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n"
+        ).bind(kind, day, 1),
+        env.DB.prepare("SELECT n FROM stats WHERE kind = ? AND day = ?").bind(kind, day),
+      ]);
+      const rows = (out && out[out.length - 1] && out[out.length - 1].results) || [];
+      n = rows.length ? Number(rows[0].n) || 0 : 1;
+      viaD1 = true;
     } catch {
-      // Table missing (migration 0002 not applied) or D1 unavailable --
-      // fall through to KV, which is also where the writes will land.
+      // Table missing (migration 0002 not applied) or D1 unavailable -- fall
+      // through to KV, which is also where the release will go.
     }
   }
-  if (!env || !env.CONFIGS) return 0;
-  return parseInt(await env.CONFIGS.get(`authfail:${scope}:${day}`), 10) || 0;
-}
-
-async function noteAuthFailure(env, scope, day) {
-  if (env && env.DB) {
-    try {
-      // d1BumpStat, not a hand-written INSERT. Its statement shape --
-      // VALUES (?, ?, ?) with DO UPDATE SET n = n + excluded.n -- is the one
-      // every other counter here uses, and it is the atomic part. Writing a
-      // near-miss variant of it by hand (DO UPDATE SET n = n + 1, with the
-      // amount inlined rather than bound) is exactly how this throttle
-      // silently counted nothing at all on D1-bound deployments the first
-      // time it was written.
-      await d1BumpStat(env, `authfail:${scope}`, [day], 1);
-      return;
-    } catch {
-      // Same fallback as the read above, so both halves stay on one store.
-    }
+  if (!viaD1) {
+    if (!env || !env.CONFIGS) return { over: false, release: async () => {} };
+    const key = `${kind}:${day}`;
+    n = (parseInt(await env.CONFIGS.get(key), 10) || 0) + 1;
+    await env.CONFIGS.put(key, String(n), { expirationTtl: AUTH_FAIL_TTL_SEC });
   }
-  if (!env || !env.CONFIGS) return;
-  const key = `authfail:${scope}:${day}`;
-  const n = parseInt(await env.CONFIGS.get(key), 10) || 0;
-  await env.CONFIGS.put(key, String(n + 1), { expirationTtl: AUTH_FAIL_TTL_SEC });
+  const release = async () => {
+    if (released) return;
+    released = true;
+    if (viaD1) {
+      try {
+        await env.DB.prepare("UPDATE stats SET n = MAX(0, n - 1) WHERE kind = ? AND day = ?").bind(kind, day).run();
+        return;
+      } catch {}
+    }
+    if (!env || !env.CONFIGS) return;
+    const key = `${kind}:${day}`;
+    const cur = parseInt(await env.CONFIGS.get(key), 10) || 0;
+    if (cur > 0) await env.CONFIGS.put(key, String(cur - 1), { expirationTtl: AUTH_FAIL_TTL_SEC });
+  };
+  if (n > maxFailures) {
+    await release();
+    return { over: true, release };
+  }
+  return { over: false, release };
 }
 
 async function likeVoterId(request, env, creatorUsername, scopeId) {
@@ -94837,16 +94883,15 @@ function generateSearchVariations(query) {
       }
       const ip = clientIpKey(request);
       if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
-      const rateLimitKey = `resetkeyrate:${ip}:${statsToday()}`;
-      const rateCountRaw = await env.CONFIGS.get(rateLimitKey);
-      const rateCount = parseInt(rateCountRaw, 10) || 0;
-      if (rateCount >= 10) {
+      // Spend-first and atomic (D1), not a KV get-then-put: KV has no atomic
+      // increment and edge-caches reads, so a burst from one address slipped
+      // past it (audit AUTH-002).
+      if (await consumeRateLimit(env, ctx, "resetkey", ip, 10, 86400)) {
         // 429, not 200. Round 1 moved fourteen endpoints off "HTTP 200 with
         // ok:false" on an auth failure; this one kept it, so a client that
         // branches on the status code read a refused reset as a success.
         return json({ ok: false, error: "Too many attempts today -- please try again tomorrow, or reach out via Feedback & Support." }, 429);
       }
-      await env.CONFIGS.put(rateLimitKey, String(rateCount + 1), { expirationTtl: 86400 });
 
       const v = validateCreatorUsername(body.username);
       const answer = String(body.recoveryAnswer || "").trim();
@@ -94876,13 +94921,16 @@ function generateSearchVariations(query) {
       // handful of tries, in exchange for a working Creator Key. See
       // RESET_KEY_ACCOUNT_MAX_FAILURES (00_constants.js).
       //
-      // Checked here, after the profile is known to exist and to have a
+      // Reserved here, after the profile is known to exist and to have a
       // recovery answer set, so a wrong or unknown username can never spend
-      // (or create a counter for) an account budget. Still before the
-      // PBKDF2 verification below, so a throttled attempt costs nothing.
+      // (or create a counter for) an account budget. The attempt is SPENT
+      // before the PBKDF2 verification below and given back only if the answer
+      // is right: reading the count first and noting the failure afterwards
+      // let every request already past the read verify a guess (AUTH-002).
       const resetDay = statsToday();
       const resetScope = `reset:${v.normalized}`;
-      if (await readAuthFailureCount(env, resetScope, resetDay) >= RESET_KEY_ACCOUNT_MAX_FAILURES) {
+      const resetBudget = await reserveAuthAttempt(env, resetScope, resetDay, RESET_KEY_ACCOUNT_MAX_FAILURES);
+      if (resetBudget.over) {
         // Same generic message as every other failure path here, so this
         // does not become a way to ask whether an account exists. 429 rather
         // than 401 because it IS a throttle -- but the message is the same
@@ -94892,11 +94940,11 @@ function generateSearchVariations(query) {
 
       const matches = await verifyRecoveryAnswer(answer.toLowerCase(), profile.recoveryAnswerHash);
       if (!matches) {
-        // Failures only: answering correctly must never consume the budget
-        // that protects you.
-        await noteAuthFailure(env, resetScope, resetDay);
+        // The spend stays. Answering correctly must never consume the budget
+        // that protects you, so only that path gives it back.
         return json({ ok: false, error: genericError }, 401);
       }
+      await resetBudget.release();
       // An answer stored the old way is rehashed while it is at hand (P7-4).
       // Before the key is rotated: the profile written below then carries it.
       await upgradeRecoveryAnswerHash(env, v.normalized, answer.toLowerCase(), profile);
@@ -95056,14 +95104,13 @@ function generateSearchVariations(query) {
       // same rule the daily budgets follow (a correct secret must not consume
       // the budget that protects it). P7-3: counted in D1, so the number is
       // the real one rather than a per-edge-cache approximation of it.
-      if ((await readRateLimitCount(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_TTL_SEC)) >= FORGOT_USERNAME_IP_MAX_FAILURES) {
+      // Spent up front and given back on success (reserveRateLimit), so a burst
+      // cannot get more attempts than the budget by arriving together.
+      const forgotBudget = await reserveRateLimit(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_MAX_FAILURES, FORGOT_USERNAME_IP_TTL_SEC);
+      if (forgotBudget.over) {
         return json({ ok: false, error: "Too many attempts. Please wait 15 minutes and try again." }, 429);
       }
-      const noteForgotFailure = async () => noteRateLimit(env, ctx, "forgotusername", ip, FORGOT_USERNAME_IP_TTL_SEC);
-      const failForgot = async (error, status) => {
-        await noteForgotFailure();
-        return json({ ok: false, error }, status);
-      };
+      const failForgot = async (error, status) => json({ ok: false, error }, status);
 
       const presentedKey = String(body.creatorKey || "").trim().toUpperCase();
       const presentedAnswer = String(body.recoveryAnswer || "").trim();
@@ -95154,6 +95201,7 @@ function generateSearchVariations(query) {
         await upgradeRecoveryAnswerHash(env, v.normalized, presentedAnswer.toLowerCase(), profile);
       }
 
+      await forgotBudget.release();
       await storeCreatorKeyLookup(env, presentedKey, v.normalized);
 
       return jsonPrivate({
@@ -95201,7 +95249,8 @@ function generateSearchVariations(query) {
       // capped well below what's useful for guessing a ~60-bit key. Like the
       // daily budget below it, spent on FAILURES only (P7-3): restoring on a
       // run of new devices must not be what locks someone out.
-      if ((await readRateLimitCount(env, ctx, "creatorrestore", ip, 60)) >= 20) {
+      const restoreBurst = await reserveRateLimit(env, ctx, "creatorrestore", ip, 20, 60);
+      if (restoreBurst.over) {
         return json({ ok: false, error: "Too many attempts. Please wait a minute and try again." }, 429);
       }
 
@@ -95211,9 +95260,13 @@ function generateSearchVariations(query) {
       // costs nothing.
       const restoreFailScope = `restore:${ip}`;
       const restoreFailDay = statsToday();
-      if (await readAuthFailureCount(env, restoreFailScope, restoreFailDay) >= CREATOR_RESTORE_MAX_FAILURES_PER_DAY) {
+      const restoreDaily = await reserveAuthAttempt(env, restoreFailScope, restoreFailDay, CREATOR_RESTORE_MAX_FAILURES_PER_DAY);
+      if (restoreDaily.over) {
+        await restoreBurst.release();
         return json({ ok: false, error: "Too many failed attempts today. Please try again tomorrow." }, 429);
       }
+      // Anything that is not a wrong guess gives both spends back.
+      const releaseRestore = async () => { await restoreBurst.release(); await restoreDaily.release(); };
 
       let body;
       try {
@@ -95222,18 +95275,18 @@ function generateSearchVariations(query) {
         if (request.account && isSessionsEnabled(env)) {
           body = {};
         } else {
+          await releaseRestore();
           return json({ ok: false, error: "Invalid JSON body." }, 400);
         }
       }
       const auth = await authenticateCreator(body.creatorName, body.creatorKey);
       if (!auth.ok) {
-        // A request without a key guessed nothing (see noKey above).
-        if (auth.error !== "no-kv" && !auth.noKey) {
-          await noteAuthFailure(env, restoreFailScope, restoreFailDay);
-          await noteRateLimit(env, ctx, "creatorrestore", ip, 60);
-        }
+        // A request without a key guessed nothing (see noKey above); the
+        // spends of every other failure stay.
+        if (auth.error === "no-kv" || auth.noKey) await releaseRestore();
         return authFailureResponse(auth);
       }
+      await releaseRestore();
       if (body.creatorKey) {
         if (ctx && typeof ctx.waitUntil === "function") {
           ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
@@ -101042,14 +101095,9 @@ function generateSearchVariations(query) {
       // straight through it). Failed closed when CF-Connecting-IP is
       // missing, same as restore, because there is no other safe
       // per-client identity to key a shared bucket on.
-      // Set inside the branch below and read again after the compare, so
-      // only a genuine wrong key spends the daily budget.
-      let adminLoginFailScope = "";
-      let adminLoginFailDay = "";
-      // Set inside the branch below and read after the compare, so a failed
-      // login can spend the burst bucket too -- both budgets are spent on
-      // failures only.
-      let adminLoginRateIp = "";
+      // Both budgets are spent BEFORE the key is compared and given back by
+      // this when it is right, so only a wrong key keeps its spend (AUTH-002).
+      let releaseAdminLogin = async () => {};
       if (env.CONFIGS) {
         const ip = clientIpKey(request);
         if (!ip) {
@@ -101058,10 +101106,10 @@ function generateSearchVariations(query) {
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
           });
         }
-        adminLoginRateIp = ip;
-        // 10 guesses a minute from one address, counted in D1 (P7-3) and spent
-        // on failures only, exactly like the daily budget below it.
-        if ((await readRateLimitCount(env, ctx, "adminlogin", ip, 60)) >= 10) {
+        // 10 guesses a minute from one address, counted in D1 (P7-3), spent up
+        // front and kept only on failure, like the daily budget below it.
+        const adminBurst = await reserveRateLimit(env, ctx, "adminlogin", ip, 10, 60);
+        if (adminBurst.over) {
           return new Response(renderAdminLoginPage("Too many attempts. Please wait a minute and try again.", adminAccessConfigured(env)), {
             status: 429,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
@@ -101072,9 +101120,10 @@ function generateSearchVariations(query) {
         // an attacker rotating source IPs is back to a full 10 guesses on each
         // one. This daily budget is what bounds a slow, distributed guess at
         // ADMIN_KEY, and it is spent on failures only.
-        adminLoginFailScope = `adminlogin:${ip}`;
-        adminLoginFailDay = statsToday();
-        if (await readAuthFailureCount(env, adminLoginFailScope, adminLoginFailDay) >= ADMIN_LOGIN_MAX_FAILURES_PER_DAY) {
+        const adminDaily = await reserveAuthAttempt(env, `adminlogin:${ip}`, statsToday(), ADMIN_LOGIN_MAX_FAILURES_PER_DAY);
+        releaseAdminLogin = async () => { await adminBurst.release(); await adminDaily.release(); };
+        if (adminDaily.over) {
+          await adminBurst.release();
           return new Response(renderAdminLoginPage("Too many failed attempts today. Please try again tomorrow.", adminAccessConfigured(env)), {
             status: 429,
             headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
@@ -101092,18 +101141,14 @@ function generateSearchVariations(query) {
       // so its LENGTH is a secret too, and timingSafeEqualHex answers from
       // the length alone before its constant-time loop ever runs.
       if (!(await timingSafeEqualSecret(submittedKey, env.ADMIN_KEY))) {
-        // Failures only -- a correct key must never spend the budget that
-        // protects it, or an admin who logs in often would lock themselves
-        // out.
-        if (adminLoginFailScope) {
-          await noteAuthFailure(env, adminLoginFailScope, adminLoginFailDay);
-          if (adminLoginRateIp) await noteRateLimit(env, ctx, "adminlogin", adminLoginRateIp, 60);
-        }
+        // The spends stay: failures only. A correct key gives them back
+        // below, or an admin who logs in often would lock themselves out.
         return new Response(renderAdminLoginPage("Incorrect key.", adminAccessConfigured(env)), {
           status: 401,
           headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
         });
       }
+      await releaseAdminLogin();
       // The key is the break-glass path: a session row when D1 has migration
       // 0018 (so this browser can be signed out on its own), and the old signed
       // expiry it has always been when it does not. Either way the sign-in

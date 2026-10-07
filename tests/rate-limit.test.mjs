@@ -34,6 +34,8 @@ import { awaitFreshRateWindow, call, createUser, freshIsolate, makeD1, makeEnv, 
 //      serves: the fallback is the isolate's memory, which is looser across
 //      isolates but never unlimited.
 
+const RESET_BUDGET = 5; // RESET_KEY_ACCOUNT_MAX_FAILURES (00_constants.js)
+
 describe("P7-3: rate limits are D1 counters, not KV slots", () => {
   const rateKeys = (kv) => [...kv._store.keys()].filter((k) => k.startsWith("ratelimit:"));
   const counter = (env, scope) =>
@@ -122,7 +124,7 @@ describe("P7-3: rate limits are D1 counters, not KV slots", () => {
       assert.equal(stranger.status, 401, "another address still has its own budget");
       if (env.DB) {
         // Ten, not eleven: this endpoint reads the count, refuses, and only
-        // spends when a guess was actually attempted (see readRateLimitCount).
+        // spends when a guess was actually attempted (see reserveRateLimit).
         // The count staying at the ceiling is what keeps it refused for the
         // rest of the window.
         assert.equal(Number((await counter(env, `adminlogin:${ip}`)).count), 10);
@@ -212,5 +214,57 @@ describe("P7-3: rate limits are D1 counters, not KV slots", () => {
       json: { creatorName: "nobody", creatorKey: "MYL-BAD0-BAD0-BAD0" },
     });
     assert.equal(restore.status, 400);
+  });
+
+  // Audit AUTH-002: the per-account budget used to be read, then the answer
+  // verified, then the failure noted, so every request already past the read
+  // verified a guess. 300 parallel guesses all got a 401. The budget is now
+  // spent before the answer is checked, so a burst gets the budget and no more.
+  it("a parallel burst of wrong recovery answers gets at most the account budget, even from many addresses", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const user = await createUser(env, "burstvictim", { recoveryAnswer: "purple elephant" });
+    await awaitFreshRateWindow();
+    const results = await Promise.all(Array.from({ length: 30 }, (_, i) =>
+      call(env, "/api/creator/reset-key", {
+        method: "POST", ip: nextIp(),
+        json: { username: user.creatorName, recoveryAnswer: "wrong guess " + i },
+      })));
+    const verified = results.filter((r) => r.status === 401).length;
+    assert.ok(verified <= RESET_BUDGET, `${verified} guesses were verified, the budget is ${RESET_BUDGET}`);
+    assert.equal(results.filter((r) => r.status === 429).length, 30 - verified);
+  });
+
+  it("one address cannot get past the reset-key IP limit by bursting either", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    await awaitFreshRateWindow();
+    const ip = nextIp();
+    const results = await Promise.all(Array.from({ length: 30 }, () =>
+      call(env, "/api/creator/reset-key", { method: "POST", ip, json: { username: "nobodyhere", recoveryAnswer: "whatever it is" } })));
+    assert.equal(results.filter((r) => r.status === 429).length, 20, "10 a day, the other 20 refused");
+  });
+
+  it("a correct recovery answer gives its spend back", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    const user = await createUser(env, "refundme", { recoveryAnswer: "purple elephant" });
+    for (let i = 0; i < 4; i++) {
+      const wrong = await call(env, "/api/creator/reset-key", { method: "POST", ip: nextIp(), json: { username: user.creatorName, recoveryAnswer: "nope " + i } });
+      assert.equal(wrong.status, 401);
+    }
+    const right = await call(env, "/api/creator/reset-key", { method: "POST", ip: nextIp(), json: { username: user.creatorName, recoveryAnswer: "purple elephant" } });
+    assert.equal(right.status, 200, JSON.stringify(right.body));
+    // Four failures stayed, the success did not count: one more wrong guess
+    // is the fifth, and it is still verified rather than refused.
+    const fifth = await call(env, "/api/creator/reset-key", { method: "POST", ip: nextIp(), json: { username: user.creatorName, recoveryAnswer: "nope again" } });
+    assert.equal(fifth.status, 401);
+  });
+
+  it("a parallel burst of wrong admin keys is capped at the per-minute budget", async () => {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
+    await awaitFreshRateWindow();
+    const ip = nextIp();
+    const results = await Promise.all(Array.from({ length: 30 }, () =>
+      call(env, "/admin/login", { method: "POST", ip, form: { key: "wrong-key" } })));
+    assert.equal(results.filter((r) => r.status === 401).length, 10);
+    assert.equal(results.filter((r) => r.status === 429).length, 20);
   });
 });

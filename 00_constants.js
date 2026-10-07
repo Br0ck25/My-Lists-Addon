@@ -678,7 +678,7 @@ function applyEnvApiKeys(env) {
 // thing standing in front of a credential.
 //
 // So both also carry a per-IP DAILY budget, spent only on failures and
-// backed by D1's atomic upsert wherever D1 is bound (see noteAuthFailure,
+// backed by D1's atomic upsert wherever D1 is bound (see reserveAuthAttempt,
 // 02_http-and-creator-utils.js). Successes never consume it, so a legitimate
 // admin or someone restoring on a run of new devices is unaffected; the
 // ceilings are set far above any plausible honest failure count and reset
