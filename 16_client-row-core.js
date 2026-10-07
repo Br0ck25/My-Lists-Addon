@@ -1187,23 +1187,25 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    switchTab(cleanTab);
+    const scrollPos = (window._tabScrollY && typeof window._tabScrollY[cleanTab] === 'number')
+      ? window._tabScrollY[cleanTab]
+      : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null);
+    switchTab(cleanTab, { keepScroll: true });
     if (cleanTab === 'catalogs') {
       const targetSubmenu = window._previousCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       if (typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(targetSubmenu);
     } else if (cleanTab === 'channels') {
       const targetSubmenu = window._previousChannelsSubmenu || localStorage.getItem('myListAddon:channelsSubmenu') || 'storylines';
       if (typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'lists') {
+      const targetSubmenu = window._previousListsSubmenu || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      if (typeof switchListsSubmenu === 'function') switchListsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'discover') {
+      const targetFilter = window._previousDiscoverFilter || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      if (typeof filterDiscoverShelves === 'function') filterDiscoverShelves(targetFilter);
     }
-    if (typeof window._previousScrollY === 'number') {
-      const scrollPos = window._previousScrollY;
-      window.scrollTo({ top: scrollPos, behavior: 'instant' });
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: scrollPos, behavior: 'instant' });
-        setTimeout(() => {
-          window.scrollTo({ top: scrollPos, behavior: 'instant' });
-        }, 50);
-      });
+    if (typeof scrollPos === 'number' && scrollPos > 0) {
+      restoreListScroll(scrollPos);
     }
   }
 }
@@ -1298,12 +1300,12 @@ if (typeof document !== 'undefined') {
   document.addEventListener('keydown', handleTabBarKeydown);
 }
 
-function switchTab(name) {
+function switchTab(name, opts) {
   // On a shell page the router owns navigation, including the aliases below
   // (see appShellRouteForName, 24_client-backup-restore-presets.js). A name it
   // does not know -- list-details, item-details -- comes back false and takes
   // the legacy path untouched.
-  if (appShellHandleNav('tab', name)) return;
+  if (appShellHandleNav('tab', name, opts)) return;
   if (name === 'backup') {
     switchTab('settings');
     switchSettingsSubmenu('backup', document.querySelector('#settingsSubnavBar button:nth-child(4)'));

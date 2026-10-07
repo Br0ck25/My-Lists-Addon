@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c083080a31";
+const WORKER_BUILD = "e56f5e0474";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -38565,23 +38565,25 @@ function navigateBackFromDetail() {
   } else {
     const targetTab = window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
     const cleanTab = (targetTab === 'list-details' || targetTab === 'item-details') ? 'discover' : targetTab;
-    switchTab(cleanTab);
+    const scrollPos = (window._tabScrollY && typeof window._tabScrollY[cleanTab] === 'number')
+      ? window._tabScrollY[cleanTab]
+      : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null);
+    switchTab(cleanTab, { keepScroll: true });
     if (cleanTab === 'catalogs') {
       const targetSubmenu = window._previousCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       if (typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(targetSubmenu);
     } else if (cleanTab === 'channels') {
       const targetSubmenu = window._previousChannelsSubmenu || localStorage.getItem('myListAddon:channelsSubmenu') || 'storylines';
       if (typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'lists') {
+      const targetSubmenu = window._previousListsSubmenu || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      if (typeof switchListsSubmenu === 'function') switchListsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'discover') {
+      const targetFilter = window._previousDiscoverFilter || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      if (typeof filterDiscoverShelves === 'function') filterDiscoverShelves(targetFilter);
     }
-    if (typeof window._previousScrollY === 'number') {
-      const scrollPos = window._previousScrollY;
-      window.scrollTo({ top: scrollPos, behavior: 'instant' });
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: scrollPos, behavior: 'instant' });
-        setTimeout(() => {
-          window.scrollTo({ top: scrollPos, behavior: 'instant' });
-        }, 50);
-      });
+    if (typeof scrollPos === 'number' && scrollPos > 0) {
+      restoreListScroll(scrollPos);
     }
   }
 }
@@ -38676,12 +38678,12 @@ if (typeof document !== 'undefined') {
   document.addEventListener('keydown', handleTabBarKeydown);
 }
 
-function switchTab(name) {
+function switchTab(name, opts) {
   // On a shell page the router owns navigation, including the aliases below
   // (see appShellRouteForName, 24_client-backup-restore-presets.js). A name it
   // does not know -- list-details, item-details -- comes back false and takes
   // the legacy path untouched.
-  if (appShellHandleNav('tab', name)) return;
+  if (appShellHandleNav('tab', name, opts)) return;
   if (name === 'backup') {
     switchTab('settings');
     switchSettingsSubmenu('backup', document.querySelector('#settingsSubnavBar button:nth-child(4)'));
@@ -79471,15 +79473,44 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const urlStr = (listUrl || '').trim();
   const urlLower = urlStr.toLowerCase();
   const storylineEventId = (listUrl && listUrl.startsWith('custom:storyline:')) ? listUrl.slice('custom:storyline:'.length) : null;
-  const currentActiveTab = window._originTab || localStorage.getItem('myListAddon:activeTab') || document.querySelector('.tab-btn.active, .bottom-nav-item.active')?.dataset.tab || 'discover';
+  const visiblePanel = document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
+  const currentActiveTab = (window._currentTab && window._currentTab !== 'list-details' && window._currentTab !== 'item-details')
+    ? window._currentTab
+    : ((visiblePanel && visiblePanel !== 'list-details' && visiblePanel !== 'item-details')
+      ? visiblePanel
+      : ((window._originTab && window._originTab !== 'list-details' && window._originTab !== 'item-details')
+        ? window._originTab
+        : (localStorage.getItem('myListAddon:activeTab') || 'discover')));
   const currentSubmenu = window._currentCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+  const currentListsSubmenu = window._currentListsSubmenu || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
   const currentChannelsSubmenu = window._currentChannelsSubmenu || localStorage.getItem('myListAddon:channelsSubmenu') || 'storylines';
+  const currentDiscoverFilter = window._currentDiscoverFilter || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
   
   if (!opts.preserveScroll) {
     if (currentActiveTab !== 'list-details' && currentActiveTab !== 'item-details') {
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
       window._previousTab = currentActiveTab;
-      window._previousScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      window._previousScrollY = scrollY;
+      window._previousCatalogsSubmenu = currentSubmenu;
+      window._previousListsSubmenu = currentListsSubmenu;
       window._previousChannelsSubmenu = currentChannelsSubmenu;
+      window._previousDiscoverFilter = currentDiscoverFilter;
+      window._tabScrollY = window._tabScrollY || {};
+      window._tabScrollY[currentActiveTab] = scrollY;
+
+      try {
+        const curState = history.state || {};
+        history.replaceState(Object.assign({}, curState, {
+          scrollY: scrollY,
+          previousScrollY: scrollY,
+          tab: currentActiveTab,
+          fromTab: currentActiveTab,
+          fromCatalogsSubmenu: currentSubmenu,
+          fromListsSubmenu: currentListsSubmenu,
+          fromChannelsSubmenu: currentChannelsSubmenu,
+          fromDiscoverFilter: currentDiscoverFilter
+        }), '');
+      } catch (e) {}
     }
     switchTab('list-details');
     if (typeof opts.restoreScrollY === 'number' && opts.restoreScrollY > 0) {
@@ -79497,7 +79528,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       const cleanPath = (typeof getListCleanPath === 'function') ? getListCleanPath(listUrl, name) : null;
       const safeUrlParam = (listUrl && listUrl.length < 1500) ? listUrl : '';
       const targetUrl = cleanPath || ('/#/list?' + new URLSearchParams({ name: name || '', type: type || 'movie', url: safeUrlParam }).toString());
-      history.replaceState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, previousScrollY: window._previousScrollY }, '', targetUrl);
+      history.replaceState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromListsSubmenu: currentListsSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, fromDiscoverFilter: currentDiscoverFilter, previousScrollY: window._previousScrollY }, '', targetUrl);
     } catch (e) {}
   } else if (!opts.skipPushState) {
     try {
@@ -79507,10 +79538,10 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       const currentLoc = window.location.pathname + window.location.search + window.location.hash;
       if (window.location.hash !== targetUrl && currentLoc !== targetUrl) {
         if (cleanPath) {
-          history.pushState({ view: 'list', name: name, type: type, listUrl: listUrl, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, previousScrollY: window._previousScrollY }, '', cleanPath);
+          history.pushState({ view: 'list', name: name, type: type, listUrl: listUrl, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromListsSubmenu: currentListsSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, fromDiscoverFilter: currentDiscoverFilter, previousScrollY: window._previousScrollY }, '', cleanPath);
         } else {
           const params = new URLSearchParams({ name: name || '', type: type || 'movie', url: safeUrlParam });
-          history.pushState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, previousScrollY: window._previousScrollY }, '', '/#/list?' + params.toString());
+          history.pushState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromListsSubmenu: currentListsSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, fromDiscoverFilter: currentDiscoverFilter, previousScrollY: window._previousScrollY }, '', '/#/list?' + params.toString());
         }
       }
     } catch (e) {}
@@ -80557,11 +80588,15 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     window._listDetailsScrollBound = true;
     window.addEventListener('scroll', () => {
       const panel = document.getElementById('content-list-details');
-      if (!panel || panel.hidden) return;
       const y = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-      if (y > 0) window._listScrollY = y;
-      if (window._listDetailsLoadNextPage && (window.innerHeight + y >= document.body.scrollHeight - 400)) {
-        window._listDetailsLoadNextPage();
+      if (panel && !panel.hidden && window._currentTab === 'list-details') {
+        if (y > 0) window._listScrollY = y;
+        if (window._listDetailsLoadNextPage && (window.innerHeight + y >= document.body.scrollHeight - 400)) {
+          window._listDetailsLoadNextPage();
+        }
+      } else if (window._currentTab && window._currentTab !== 'list-details' && window._currentTab !== 'item-details') {
+        window._tabScrollY = window._tabScrollY || {};
+        window._tabScrollY[window._currentTab] = y;
       }
     }, { passive: true });
   }
@@ -83178,10 +83213,25 @@ window.addEventListener('popstate', (e) => {
     openItemDetailsModal(itemId, itemType, { skipPushState: true });
   } else {
     // On a shell page the address bar is a real path and the shell's own
-    // popstate listener (appShellOnPopState) opens the view it names. This
-    // branch's own rewrite of the URL to "/" would undo that.
+    // popstate listener (appShellOnPopState) opens the view it names.
     if (typeof appShellActive !== 'undefined' && appShellActive) {
       if (typeof appShellRenderFromLocation === 'function') appShellRenderFromLocation();
+      const currentRoute = (typeof appShellRouteFromPath === 'function') ? (appShellRouteFromPath(location.pathname) || { tab: (window._originTab || 'discover'), sub: '' }) : null;
+      const targetTab = (currentRoute && currentRoute.tab) || (state && (state.fromTab || (state.view === 'tab' && state.tab))) || window._originTab || window._previousTab || 'discover';
+      const scrollPos = (state && typeof state.scrollY === 'number')
+        ? state.scrollY
+        : ((state && typeof state.previousScrollY === 'number')
+          ? state.previousScrollY
+          : (window._tabScrollY && typeof window._tabScrollY[targetTab] === 'number'
+            ? window._tabScrollY[targetTab]
+            : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null)));
+      if (typeof scrollPos === 'number' && scrollPos > 0) {
+        if (typeof restoreListScroll === 'function') {
+          restoreListScroll(scrollPos);
+        } else {
+          window.scrollTo({ top: scrollPos, behavior: 'instant' });
+        }
+      }
       return;
     }
     const targetTab = (state && (state.fromTab || (state.view === 'tab' && state.tab))) || window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
@@ -83191,21 +83241,32 @@ window.addEventListener('popstate', (e) => {
     }
     switchTab(cleanTab);
     if (cleanTab === 'catalogs') {
-      const targetSubmenu = (state && state.fromCatalogsSubmenu) || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      const targetSubmenu = (state && state.fromCatalogsSubmenu) || window._previousCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       if (typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(targetSubmenu);
     } else if (cleanTab === 'channels') {
       const targetSubmenu = (state && state.fromChannelsSubmenu) || window._previousChannelsSubmenu || localStorage.getItem('myListAddon:channelsSubmenu') || 'storylines';
       if (typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'lists') {
+      const targetSubmenu = (state && state.fromListsSubmenu) || window._previousListsSubmenu || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      if (typeof switchListsSubmenu === 'function') switchListsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'discover') {
+      const targetFilter = (state && state.fromDiscoverFilter) || window._previousDiscoverFilter || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      if (typeof filterDiscoverShelves === 'function') filterDiscoverShelves(targetFilter);
     }
 
-    const scrollPos = (state && typeof state.previousScrollY === 'number') ? state.previousScrollY : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null);
+    const scrollPos = (state && typeof state.scrollY === 'number')
+      ? state.scrollY
+      : ((state && typeof state.previousScrollY === 'number')
+        ? state.previousScrollY
+        : (window._tabScrollY && typeof window._tabScrollY[cleanTab] === 'number'
+          ? window._tabScrollY[cleanTab]
+          : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null)));
     if (typeof scrollPos === 'number' && scrollPos > 0) {
-      const restoreFn = () => window.scrollTo({ top: scrollPos, behavior: 'instant' });
-      restoreFn();
-      requestAnimationFrame(restoreFn);
-      setTimeout(restoreFn, 50);
-      setTimeout(restoreFn, 150);
-      setTimeout(restoreFn, 300);
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(scrollPos);
+      } else {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+      }
     }
   }
 });
@@ -84375,19 +84436,20 @@ function appShellGo(path, options) {
 // Called by the legacy tab and sub-tab switchers (16_ and 20_). Returns true
 // when the shell has taken the navigation, false to leave both the switcher and
 // the address bar exactly as they were.
-function appShellHandleNav(kind, a, b) {
+function appShellHandleNav(kind, a, b, opts) {
   if (!appShellActive || appShellApplyingRoute) return false;
   if (kind === 'tab') {
     const route = appShellRouteForName(a);
     if (!route) return false;   // list-details, item-details: not shell views
-    return appShellGo(appShellPathFor(route.tab, route.sub));
+    const options = (typeof b === 'object' && b !== null) ? b : (opts || {});
+    return appShellGo(appShellPathFor(route.tab, route.sub), options);
   }
   if (kind === 'sub') {
     const tabId = String(a || '');
     const sub = String(b || '');
     if (!appShellTab(tabId)) return false;
     if (!sub) return false;
-    return appShellGo(appShellPathFor(tabId, sub));
+    return appShellGo(appShellPathFor(tabId, sub), opts);
   }
   return false;
 }
@@ -84421,8 +84483,27 @@ function appShellOnClick(e) {
 // shell paths (see the guard at the top of its final branch).
 function appShellOnPopState() {
   if (!appShellActive) return;
+  const hash = (typeof location !== 'undefined' && location.hash) || '';
+  if (hash.startsWith('#/list?') || hash.startsWith('#/item?')) return;
+  const state = (typeof history !== 'undefined' && history.state) || null;
+  if (state && (state.view === 'list' || state.view === 'item')) return;
   const route = appShellRouteFromPath(location.pathname);
   if (route) appShellApplyRoute(route);
+  const targetTab = (route && route.tab) || window._originTab || 'discover';
+  const scrollPos = (state && typeof state.scrollY === 'number')
+    ? state.scrollY
+    : ((state && typeof state.previousScrollY === 'number')
+      ? state.previousScrollY
+      : (window._tabScrollY && typeof window._tabScrollY[targetTab] === 'number'
+        ? window._tabScrollY[targetTab]
+        : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null)));
+  if (typeof scrollPos === 'number' && scrollPos > 0) {
+    if (typeof restoreListScroll === 'function') {
+      restoreListScroll(scrollPos);
+    } else {
+      window.scrollTo({ top: scrollPos, behavior: 'instant' });
+    }
+  }
 }
 
 function appShellRenderFromLocation() {

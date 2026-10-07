@@ -2688,15 +2688,44 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const urlStr = (listUrl || '').trim();
   const urlLower = urlStr.toLowerCase();
   const storylineEventId = (listUrl && listUrl.startsWith('custom:storyline:')) ? listUrl.slice('custom:storyline:'.length) : null;
-  const currentActiveTab = window._originTab || localStorage.getItem('myListAddon:activeTab') || document.querySelector('.tab-btn.active, .bottom-nav-item.active')?.dataset.tab || 'discover';
+  const visiblePanel = document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
+  const currentActiveTab = (window._currentTab && window._currentTab !== 'list-details' && window._currentTab !== 'item-details')
+    ? window._currentTab
+    : ((visiblePanel && visiblePanel !== 'list-details' && visiblePanel !== 'item-details')
+      ? visiblePanel
+      : ((window._originTab && window._originTab !== 'list-details' && window._originTab !== 'item-details')
+        ? window._originTab
+        : (localStorage.getItem('myListAddon:activeTab') || 'discover')));
   const currentSubmenu = window._currentCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+  const currentListsSubmenu = window._currentListsSubmenu || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
   const currentChannelsSubmenu = window._currentChannelsSubmenu || localStorage.getItem('myListAddon:channelsSubmenu') || 'storylines';
+  const currentDiscoverFilter = window._currentDiscoverFilter || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
   
   if (!opts.preserveScroll) {
     if (currentActiveTab !== 'list-details' && currentActiveTab !== 'item-details') {
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
       window._previousTab = currentActiveTab;
-      window._previousScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      window._previousScrollY = scrollY;
+      window._previousCatalogsSubmenu = currentSubmenu;
+      window._previousListsSubmenu = currentListsSubmenu;
       window._previousChannelsSubmenu = currentChannelsSubmenu;
+      window._previousDiscoverFilter = currentDiscoverFilter;
+      window._tabScrollY = window._tabScrollY || {};
+      window._tabScrollY[currentActiveTab] = scrollY;
+
+      try {
+        const curState = history.state || {};
+        history.replaceState(Object.assign({}, curState, {
+          scrollY: scrollY,
+          previousScrollY: scrollY,
+          tab: currentActiveTab,
+          fromTab: currentActiveTab,
+          fromCatalogsSubmenu: currentSubmenu,
+          fromListsSubmenu: currentListsSubmenu,
+          fromChannelsSubmenu: currentChannelsSubmenu,
+          fromDiscoverFilter: currentDiscoverFilter
+        }), '');
+      } catch (e) {}
     }
     switchTab('list-details');
     if (typeof opts.restoreScrollY === 'number' && opts.restoreScrollY > 0) {
@@ -2714,7 +2743,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       const cleanPath = (typeof getListCleanPath === 'function') ? getListCleanPath(listUrl, name) : null;
       const safeUrlParam = (listUrl && listUrl.length < 1500) ? listUrl : '';
       const targetUrl = cleanPath || ('/#/list?' + new URLSearchParams({ name: name || '', type: type || 'movie', url: safeUrlParam }).toString());
-      history.replaceState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, previousScrollY: window._previousScrollY }, '', targetUrl);
+      history.replaceState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromListsSubmenu: currentListsSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, fromDiscoverFilter: currentDiscoverFilter, previousScrollY: window._previousScrollY }, '', targetUrl);
     } catch (e) {}
   } else if (!opts.skipPushState) {
     try {
@@ -2724,10 +2753,10 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       const currentLoc = window.location.pathname + window.location.search + window.location.hash;
       if (window.location.hash !== targetUrl && currentLoc !== targetUrl) {
         if (cleanPath) {
-          history.pushState({ view: 'list', name: name, type: type, listUrl: listUrl, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, previousScrollY: window._previousScrollY }, '', cleanPath);
+          history.pushState({ view: 'list', name: name, type: type, listUrl: listUrl, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromListsSubmenu: currentListsSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, fromDiscoverFilter: currentDiscoverFilter, previousScrollY: window._previousScrollY }, '', cleanPath);
         } else {
           const params = new URLSearchParams({ name: name || '', type: type || 'movie', url: safeUrlParam });
-          history.pushState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, previousScrollY: window._previousScrollY }, '', '/#/list?' + params.toString());
+          history.pushState({ view: 'list', name: name, type: type, listUrl: safeUrlParam, fromTab: currentActiveTab, fromCatalogsSubmenu: currentSubmenu, fromListsSubmenu: currentListsSubmenu, fromChannelsSubmenu: currentChannelsSubmenu, fromDiscoverFilter: currentDiscoverFilter, previousScrollY: window._previousScrollY }, '', '/#/list?' + params.toString());
         }
       }
     } catch (e) {}
@@ -3774,11 +3803,15 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     window._listDetailsScrollBound = true;
     window.addEventListener('scroll', () => {
       const panel = document.getElementById('content-list-details');
-      if (!panel || panel.hidden) return;
       const y = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-      if (y > 0) window._listScrollY = y;
-      if (window._listDetailsLoadNextPage && (window.innerHeight + y >= document.body.scrollHeight - 400)) {
-        window._listDetailsLoadNextPage();
+      if (panel && !panel.hidden && window._currentTab === 'list-details') {
+        if (y > 0) window._listScrollY = y;
+        if (window._listDetailsLoadNextPage && (window.innerHeight + y >= document.body.scrollHeight - 400)) {
+          window._listDetailsLoadNextPage();
+        }
+      } else if (window._currentTab && window._currentTab !== 'list-details' && window._currentTab !== 'item-details') {
+        window._tabScrollY = window._tabScrollY || {};
+        window._tabScrollY[window._currentTab] = y;
       }
     }, { passive: true });
   }

@@ -238,5 +238,81 @@ describe("Episode titles and shelf display names", () => {
     assert.equal(restoredScroll.behavior, "instant");
     assert.equal(gridEl.children.length, 1, "did not wipe detailGrid");
   });
+
+  it("preserves scroll and restores position when navigating back from See All to discover, catalogs, search, and lists", async () => {
+    const pagesToTest = [
+      { tab: "discover", scrollY: 1850, submenuProp: "_previousDiscoverFilter", submenuVal: "movie" },
+      { tab: "catalogs", scrollY: 2200, submenuProp: "_previousCatalogsSubmenu", submenuVal: "all" },
+      { tab: "search", scrollY: 1400 },
+      { tab: "lists", scrollY: 950, submenuProp: "_previousListsSubmenu", submenuVal: "my-lists" },
+    ];
+
+    for (const testCase of pagesToTest) {
+      const client = loadClient();
+      const switchTab = client.get("switchTab");
+      const openListDetailsPage = client.get("openListDetailsPage");
+      const navigateBackFromDetail = client.get("navigateBackFromDetail");
+
+      // Switch to the target page
+      switchTab(testCase.tab);
+      assert.equal(client.window._currentTab, testCase.tab);
+
+      // Simulate user scrolling down the page
+      client.window.scrollY = testCase.scrollY;
+
+      // Click "See All" on a list
+      await openListDetailsPage("Trending Movies", "movie", "tmdb:chart:trending");
+      assert.equal(client.window._currentTab, "list-details", "opened list-details page");
+      assert.equal(client.window._previousScrollY, testCase.scrollY, "recorded previousScrollY");
+      assert.equal(client.window._tabScrollY[testCase.tab], testCase.scrollY, "recorded tabScrollY");
+
+      let restoredScroll = null;
+      client.window.scrollTo = (opts) => {
+        restoredScroll = opts;
+      };
+
+      // Navigate back via UI Back button
+      navigateBackFromDetail();
+
+      assert.equal(client.window._currentTab, testCase.tab, `navigated back to ${testCase.tab}`);
+      assert.ok(restoredScroll, `called scrollTo on returning to ${testCase.tab}`);
+      assert.equal(restoredScroll.top, testCase.scrollY, `restored exact scroll position ${testCase.scrollY} on ${testCase.tab}`);
+      assert.equal(restoredScroll.behavior, "instant");
+    }
+  });
+
+  it("popstate restores previous page scroll position on browser back from See All", async () => {
+    const client = loadClient();
+    const switchTab = client.get("switchTab");
+    const openListDetailsPage = client.get("openListDetailsPage");
+
+    // Start on Discover at scroll 1600
+    switchTab("discover");
+    client.window.scrollY = 1600;
+
+    await openListDetailsPage("Popular Shows", "series", "trakt:chart:popular");
+    assert.equal(client.window._currentTab, "list-details");
+
+    let restoredScroll = null;
+    client.window.scrollTo = (opts) => {
+      restoredScroll = opts;
+    };
+
+    // Simulate browser back popping to discover with saved scroll state
+    client.window.location.hash = "";
+    client.window.location.pathname = "/discover";
+    fireListeners(client, {
+      type: "popstate",
+      bubbles: true,
+      state: {
+        scrollY: 1600,
+        tab: "discover",
+      },
+    });
+
+    assert.equal(client.window._currentTab, "discover", "switched back to discover on popstate");
+    assert.ok(restoredScroll, "called scrollTo on popstate");
+    assert.equal(restoredScroll.top, 1600, "restored scroll to 1600");
+  });
 });
 

@@ -2562,10 +2562,25 @@ window.addEventListener('popstate', (e) => {
     openItemDetailsModal(itemId, itemType, { skipPushState: true });
   } else {
     // On a shell page the address bar is a real path and the shell's own
-    // popstate listener (appShellOnPopState) opens the view it names. This
-    // branch's own rewrite of the URL to "/" would undo that.
+    // popstate listener (appShellOnPopState) opens the view it names.
     if (typeof appShellActive !== 'undefined' && appShellActive) {
       if (typeof appShellRenderFromLocation === 'function') appShellRenderFromLocation();
+      const currentRoute = (typeof appShellRouteFromPath === 'function') ? (appShellRouteFromPath(location.pathname) || { tab: (window._originTab || 'discover'), sub: '' }) : null;
+      const targetTab = (currentRoute && currentRoute.tab) || (state && (state.fromTab || (state.view === 'tab' && state.tab))) || window._originTab || window._previousTab || 'discover';
+      const scrollPos = (state && typeof state.scrollY === 'number')
+        ? state.scrollY
+        : ((state && typeof state.previousScrollY === 'number')
+          ? state.previousScrollY
+          : (window._tabScrollY && typeof window._tabScrollY[targetTab] === 'number'
+            ? window._tabScrollY[targetTab]
+            : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null)));
+      if (typeof scrollPos === 'number' && scrollPos > 0) {
+        if (typeof restoreListScroll === 'function') {
+          restoreListScroll(scrollPos);
+        } else {
+          window.scrollTo({ top: scrollPos, behavior: 'instant' });
+        }
+      }
       return;
     }
     const targetTab = (state && (state.fromTab || (state.view === 'tab' && state.tab))) || window._originTab || window._previousTab || localStorage.getItem('myListAddon:activeTab') || 'discover';
@@ -2575,21 +2590,32 @@ window.addEventListener('popstate', (e) => {
     }
     switchTab(cleanTab);
     if (cleanTab === 'catalogs') {
-      const targetSubmenu = (state && state.fromCatalogsSubmenu) || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      const targetSubmenu = (state && state.fromCatalogsSubmenu) || window._previousCatalogsSubmenu || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       if (typeof switchCatalogsSubmenu === 'function') switchCatalogsSubmenu(targetSubmenu);
     } else if (cleanTab === 'channels') {
       const targetSubmenu = (state && state.fromChannelsSubmenu) || window._previousChannelsSubmenu || localStorage.getItem('myListAddon:channelsSubmenu') || 'storylines';
       if (typeof switchChannelsSubmenu === 'function') switchChannelsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'lists') {
+      const targetSubmenu = (state && state.fromListsSubmenu) || window._previousListsSubmenu || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
+      if (typeof switchListsSubmenu === 'function') switchListsSubmenu(targetSubmenu);
+    } else if (cleanTab === 'discover') {
+      const targetFilter = (state && state.fromDiscoverFilter) || window._previousDiscoverFilter || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      if (typeof filterDiscoverShelves === 'function') filterDiscoverShelves(targetFilter);
     }
 
-    const scrollPos = (state && typeof state.previousScrollY === 'number') ? state.previousScrollY : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null);
+    const scrollPos = (state && typeof state.scrollY === 'number')
+      ? state.scrollY
+      : ((state && typeof state.previousScrollY === 'number')
+        ? state.previousScrollY
+        : (window._tabScrollY && typeof window._tabScrollY[cleanTab] === 'number'
+          ? window._tabScrollY[cleanTab]
+          : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null)));
     if (typeof scrollPos === 'number' && scrollPos > 0) {
-      const restoreFn = () => window.scrollTo({ top: scrollPos, behavior: 'instant' });
-      restoreFn();
-      requestAnimationFrame(restoreFn);
-      setTimeout(restoreFn, 50);
-      setTimeout(restoreFn, 150);
-      setTimeout(restoreFn, 300);
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(scrollPos);
+      } else {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+      }
     }
   }
 });
@@ -3759,19 +3785,20 @@ function appShellGo(path, options) {
 // Called by the legacy tab and sub-tab switchers (16_ and 20_). Returns true
 // when the shell has taken the navigation, false to leave both the switcher and
 // the address bar exactly as they were.
-function appShellHandleNav(kind, a, b) {
+function appShellHandleNav(kind, a, b, opts) {
   if (!appShellActive || appShellApplyingRoute) return false;
   if (kind === 'tab') {
     const route = appShellRouteForName(a);
     if (!route) return false;   // list-details, item-details: not shell views
-    return appShellGo(appShellPathFor(route.tab, route.sub));
+    const options = (typeof b === 'object' && b !== null) ? b : (opts || {});
+    return appShellGo(appShellPathFor(route.tab, route.sub), options);
   }
   if (kind === 'sub') {
     const tabId = String(a || '');
     const sub = String(b || '');
     if (!appShellTab(tabId)) return false;
     if (!sub) return false;
-    return appShellGo(appShellPathFor(tabId, sub));
+    return appShellGo(appShellPathFor(tabId, sub), opts);
   }
   return false;
 }
@@ -3805,8 +3832,27 @@ function appShellOnClick(e) {
 // shell paths (see the guard at the top of its final branch).
 function appShellOnPopState() {
   if (!appShellActive) return;
+  const hash = (typeof location !== 'undefined' && location.hash) || '';
+  if (hash.startsWith('#/list?') || hash.startsWith('#/item?')) return;
+  const state = (typeof history !== 'undefined' && history.state) || null;
+  if (state && (state.view === 'list' || state.view === 'item')) return;
   const route = appShellRouteFromPath(location.pathname);
   if (route) appShellApplyRoute(route);
+  const targetTab = (route && route.tab) || window._originTab || 'discover';
+  const scrollPos = (state && typeof state.scrollY === 'number')
+    ? state.scrollY
+    : ((state && typeof state.previousScrollY === 'number')
+      ? state.previousScrollY
+      : (window._tabScrollY && typeof window._tabScrollY[targetTab] === 'number'
+        ? window._tabScrollY[targetTab]
+        : (typeof window._previousScrollY === 'number' ? window._previousScrollY : null)));
+  if (typeof scrollPos === 'number' && scrollPos > 0) {
+    if (typeof restoreListScroll === 'function') {
+      restoreListScroll(scrollPos);
+    } else {
+      window.scrollTo({ top: scrollPos, behavior: 'instant' });
+    }
+  }
 }
 
 function appShellRenderFromLocation() {
