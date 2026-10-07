@@ -25,4 +25,4 @@
 - Release: bump `WORKER_RELEASE` and add an entry to `docs/RELEASES.md`.
 
 ## Handoff (only when the user says credits are low or to wrap up)
-Run verify, commit, then fill in `HANDOFF.md`: task in progress, files changed and why, build/test status, next steps.
+Run verify, commit, then update `HANDOFF.md` (keep it under ~120 lines, replace stale items, never append history; move finished detail to `docs/RELEASES.md`). It holds only what the next AI needs: current state, next steps, what must not be undone.

@@ -13,7 +13,7 @@ This file defines the mandatory rules and protocols for all AI agents working in
 ---
 
 ## 2. The Golden Rule: Build System Workflow
-- **NEVER directly edit `worker_entry_combined.js`**. It is generated automatically.
+- **NEVER directly edit, and avoid opening, `worker_entry_combined.js`** (5MB, generated). To find code, read `FILE-INDEX.md`, then grep `FUNCTION-MAP.md` and read only that source file's range.
 - **ALWAYS edit the split source files**:
   - `header.js`
   - `00_constants.js` through the highest-numbered file (currently `58_`; `build.py` picks up every `NN_*.js`)
@@ -122,4 +122,4 @@ When finishing your turn or when the user warns that credits/session limits are 
    git add -A
    git commit -m "feat/fix: <clear description of changes>"
    ```
-3. Update `HANDOFF.md` at the project root with the current state, modified files, and exact next steps.
+3. Update `HANDOFF.md` at the project root: current state, next steps, what must not be undone. Keep it short; replace stale items instead of appending.
