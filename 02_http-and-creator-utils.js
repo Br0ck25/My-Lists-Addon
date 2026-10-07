@@ -1272,7 +1272,10 @@ const SESSION_COOKIE_NAME = "mla_session";
 const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
 const SESSION_TTL_MS = SESSION_TTL_SEC * 1000;
 const SESSION_CACHE = new Map();
-const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 s isolate cache
+// Short on purpose: a session revoked on another isolate (logout, key reset,
+// account delete) keeps working here until its entry expires, so this is the
+// longest a revoked cookie can outlive its revocation (audit SESS-001).
+const SESSION_CACHE_TTL_MS = 10 * 1000;
 const SESSION_CACHE_MAX = 1000;
 
 function extractSessionToken(request) {

@@ -126,6 +126,31 @@ describe("P9-4: Security Regression Suite", () => {
   // ---------------------------------------------------------------------------
   // 3. Cookie Flags & Security Headers
   // ---------------------------------------------------------------------------
+  // Audit SESS-001: a session revoked on another isolate (logout, key reset,
+  // account delete) keeps resolving from this isolate's memo until it expires.
+  // The memo is short so that window is: it must never be longer than 10 s.
+  describe("2b. A revoked session stops working within seconds on another isolate", () => {
+    it("is refused once the isolate's memo of it has expired", async () => {
+      const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), FF_SESSIONS: "1" });
+      const user = await createUser(env, "sessmemouser");
+      const login = await call(env, "/api/session", { method: "POST", json: { username: user.creatorName, key: user.creatorKey } });
+      assert.equal(login.status, 200);
+      const cookie = (login.headers.get("set-cookie") || "").split(";")[0];
+      assert.equal((await call(env, "/api/me", { cookie })).status, 200, "a live session works (and is memoised)");
+
+      // Revoked behind this isolate's back, as another isolate's logout would.
+      env.DB._db.prepare("UPDATE sessions SET revoked_at = ? WHERE revoked_at IS NULL").run(Date.now());
+
+      const realNow = Date.now;
+      try {
+        Date.now = () => realNow() + 11 * 1000;
+        assert.equal((await call(env, "/api/me", { cookie })).status, 401, "11 seconds later the revocation has taken effect");
+      } finally {
+        Date.now = realNow;
+      }
+    });
+  });
+
   describe("3. Cookie Security Flags & Response Headers", () => {
     it("sets HttpOnly, Secure, and SameSite=Lax on session cookies", async () => {
       const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), FF_SESSIONS: "1" });

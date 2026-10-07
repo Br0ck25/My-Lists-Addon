@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c3997b0f5e";
+const WORKER_BUILD = "6a5ddd4080";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -5117,7 +5117,10 @@ const SESSION_COOKIE_NAME = "mla_session";
 const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
 const SESSION_TTL_MS = SESSION_TTL_SEC * 1000;
 const SESSION_CACHE = new Map();
-const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 s isolate cache
+// Short on purpose: a session revoked on another isolate (logout, key reset,
+// account delete) keeps working here until its entry expires, so this is the
+// longest a revoked cookie can outlive its revocation (audit SESS-001).
+const SESSION_CACHE_TTL_MS = 10 * 1000;
 const SESSION_CACHE_MAX = 1000;
 
 function extractSessionToken(request) {
