@@ -16696,6 +16696,40 @@ describe("P3a-8: installs", () => {
       assert.equal(r.body.signInRequired, true);
     });
 
+    // Audit AUTH-001: an install link is a bearer credential that gets shared
+    // for its public lists. /api/resolve used to hand back the owner's whole
+    // tracking record to anyone holding a link with only public rows.
+    it("/api/resolve gives the owner's tracking record only to a link that asks for it", async () => {
+      const { env, u, cookie } = await setup("v2leak");
+      const record = {
+        watchHistory: [{ id: "tt7654321:1:1", showId: "tt7654321", showTitle: "SECRET SHOW" }],
+        continueWatching: [{ id: "tt7654321:1:2", showTitle: "SECRET SHOW" }],
+        watchlist: [{ id: "tt0000009", name: "SECRET WATCHLIST ITEM", type: "movie" }],
+        airingNext: [],
+      };
+      await env.CONFIGS.put(`creatorsynctracking:${u.creatorName}`, JSON.stringify(record));
+
+      const pub = await call(env, "/api/installs", { method: "POST", cookie, json: { entries: [row("a", "https://mdblist.com/lists/someone/v2-list")] } });
+      assert.equal(pub.status, 201, JSON.stringify(pub.body));
+      const anon = await call(env, `/api/resolve?config=i~${pub.body.token}`);
+      assert.equal(anon.status, 200, JSON.stringify(anon.body));
+      assert.equal(anon.body.entries.length, 1);
+      assert.deepEqual(anon.body.watchHistory || [], [], "public rows only: no watch history");
+      assert.deepEqual(anon.body.continueWatching || [], []);
+      assert.deepEqual(anon.body.watchlist || [], []);
+      assert.doesNotMatch(JSON.stringify(anon.body), /SECRET/);
+
+      // A link that carries one of the account's own shelves still gets it.
+      const personal = await call(env, "/api/installs", {
+        method: "POST", cookie,
+        json: { entries: [row("w", `autotrack:watchlist:movie:${u.creatorName}`)] },
+      });
+      assert.equal(personal.status, 201, JSON.stringify(personal.body));
+      const own = await call(env, `/api/resolve?config=i~${personal.body.token}`);
+      assert.equal(own.status, 200, JSON.stringify(own.body));
+      assert.match(JSON.stringify(own.body), /SECRET SHOW/, "a personal row keeps its tracking record");
+    });
+
     it("creates a v2 link that serves its rows, shows the token once, and lists it without one", async () => {
       const realFetch = globalThis.fetch;
       try {
