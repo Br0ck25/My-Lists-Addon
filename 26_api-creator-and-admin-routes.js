@@ -693,7 +693,11 @@
 
       if (scrobbleToken) {
         const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
-        if (tokenUser) {
+        // An account in the middle of deletion has a tombstone before its token
+        // is purged. The key and config forms below already check it; without
+        // this a ping in that window wrote tracking the purge then had to
+        // chase (audit AUTH-003).
+        if (tokenUser && !(await isCreatorTombstoned(env, tokenUser))) {
           authUser = tokenUser;
           authForm = "st";
         }

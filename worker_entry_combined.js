@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cd3c435ee6";
+const WORKER_BUILD = "c3997b0f5e";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -93784,7 +93784,11 @@ function generateSearchVariations(query) {
 
       if (scrobbleToken) {
         const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
-        if (tokenUser) {
+        // An account in the middle of deletion has a tombstone before its token
+        // is purged. The key and config forms below already check it; without
+        // this a ping in that window wrote tracking the purge then had to
+        // chase (audit AUTH-003).
+        if (tokenUser && !(await isCreatorTombstoned(env, tokenUser))) {
           authUser = tokenUser;
           authForm = "st";
         }
