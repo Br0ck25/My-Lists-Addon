@@ -12,13 +12,14 @@
 7. **Small, root-cause fixes.** Search callers first, reuse existing helpers, fix the shared cause, and change nothing unrelated.
 
 ## Finding code cheaply
+- "Which file?": read `FILE-INDEX.md` (5KB, one line per source file).
 - `grep` `FUNCTION-MAP.md` for the symbol (~170KB: never read it whole), then read only that file with `offset`/`limit`.
-- "Which file?" table: `docs/ARCHITECTURE.md` → Source File Map.
+- `DESIGN_SYSTEM.md` is 40KB: `grep -n '^## ' DESIGN_SYSTEM.md` for the section list, then read only that range.
 - Read `HANDOFF.md`, `docs/RELEASES.md` and `docs/history/` only when the task needs them.
 
 ## Verify before committing
-- While iterating: `python build.py` plus one test file, e.g. `node --test tests/design-system.test.mjs`.
-- Before commit: `bash verify.sh` (build, drift, syntax, scope, render, map, budget, full tests). Run `python gen_map.py` if functions were added, removed or moved.
+- While iterating: `bash verify.sh -q --fast` (build, syntax, scope) plus one test file, e.g. `node --test tests/design-system.test.mjs`.
+- Before commit: `bash verify.sh -q` (everything, prints one line unless a step fails). Run `python gen_map.py` if functions were added, removed or moved (it rewrites `FUNCTION-MAP.md` and `FILE-INDEX.md`).
 - UI look changed on purpose: `node tests/ui-contract.mjs --update` and keep the `tests/ui-contract.json` diff.
 - Once per clone: `git config core.hooksPath .githooks`.
 - Release: bump `WORKER_RELEASE` and add an entry to `docs/RELEASES.md`.
