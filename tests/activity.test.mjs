@@ -5,7 +5,7 @@ import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { call, createUser, drainQueue, makeD1, makeEnv, makeQueue, runScheduledTick } from "./harness.mjs";
+import { call, createUser, drainQueue, freshIsolate, makeD1, makeEnv, makeQueue, runScheduledTick } from "./harness.mjs";
 
 // Phase 3c: watch history and progress in their own database, DB_ACTIVITY
 // (migrations/activity/, schema_activity.sql, 36_activity-db.js).
@@ -1030,6 +1030,59 @@ describe("FF_SHOW_SCHEDULE: the shelves worked out from the schedule", () => {
     ).run(office);
     data = await loadTracking(env, user);
     assert.deepEqual(data.continueWatching.map((it) => it.id).sort(), ["e3", "tt0120737", "tt0386676:2:1"]);
+  });
+});
+
+// Release 27 (P5-4): with the shelves worked out from the schedule, the legacy
+// Continue Watching and Airing Next sweeps (07_) wrote a stored copy the record
+// reads only for a show the schedule does not know yet, and each write was a
+// full record save. They now pass over those accounts.
+describe("FF_SHOW_SCHEDULE: the legacy shelf sweeps pass over accounts served from the schedule", () => {
+  const ANN_SHOWS = ["tt0903747", "tt0944947", "tt0386676"];
+  const LEGACY_SHOW = "tt7777777";
+
+  async function sweepOnce(extra) {
+    const { env } = await eventTrackingSetup({ TMDB_API_KEY: "k", ...extra });
+    // An account made after the copy finished: still on the legacy stores.
+    await createUser(env, "notcopied");
+    await env.CONFIGS.put("creatorsynctracking:notcopied", JSON.stringify({
+      updatedAt: T0,
+      watchHistory: [{ id: "n1", type: "episode", showId: LEGACY_SHOW, showTitle: "Legacy Show", seasonNum: 1, episodeNum: 1, watchedAt: T0 }],
+      continueWatching: [],
+      fullyWatchedShowIds: [LEGACY_SHOW],
+    }));
+    const settingsBefore = JSON.stringify(env.DB._db.prepare("SELECT * FROM account_settings ORDER BY account_id").all());
+    const finds = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      const url = String(input && input.url ? input.url : input);
+      const m = url.match(/api\.themoviedb\.org\/3\/find\/(tt\d+)/);
+      if (m) finds.push(m[1]);
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    };
+    try {
+      await runScheduledTick(env, { cron: "x" }, await freshIsolate());
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const settingsAfter = JSON.stringify(env.DB._db.prepare("SELECT * FROM account_settings ORDER BY account_id").all());
+    return { env, finds, settingsChanged: settingsBefore !== settingsAfter };
+  }
+
+  it("does not look up, or write, a copied account's shows; an account on the legacy stores is still swept", async () => {
+    const { env, finds, settingsChanged } = await sweepOnce({ FF_SHOW_SCHEDULE: "1" });
+    assert.deepEqual(finds.filter((id) => ANN_SHOWS.includes(id)), [], "no TMDB lookups for the copied account");
+    assert.equal(env.CONFIGS._store.has("airingnextchecked:annwatch"), false);
+    assert.equal(settingsChanged, false, "the copied account's record was not saved");
+    assert.ok(finds.includes(LEGACY_SHOW), `the legacy account is still swept; looked up: ${finds.join(", ")}`);
+    assert.equal(env.CONFIGS._store.has("airingnextchecked:notcopied"), true);
+  });
+
+  it("with FF_SHOW_SCHEDULE off, sweeps every account as before", async () => {
+    const { env, finds } = await sweepOnce({});
+    assert.ok(finds.some((id) => ANN_SHOWS.includes(id)), `the copied account is swept; looked up: ${finds.join(", ")}`);
+    assert.equal(env.CONFIGS._store.has("airingnextchecked:annwatch"), true);
+    assert.ok(finds.includes(LEGACY_SHOW));
   });
 });
 

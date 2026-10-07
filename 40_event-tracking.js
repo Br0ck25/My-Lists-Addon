@@ -164,6 +164,18 @@ function isShowScheduleEnabled(env) {
   return v === "1" || v === "true" || v === true;
 }
 
+// The legacy Continue Watching and Airing Next sweeps (checkForNewEpisodes,
+// refreshAiringNextSweep, 07_) pass over an account whose shelves are worked
+// out from show_schedule (Release 27, P5-4): what they would write is the
+// stored copy, which the record above reads only for a show the schedule does
+// not know yet, and each write cost a full record save (saveTrackingRecord).
+// They keep sweeping accounts on the legacy stores, and every account again
+// if FF_SHOW_SCHEDULE is turned off.
+async function legacyShelfSweepSkips(env, username) {
+  if (!isShowScheduleEnabled(env)) return false;
+  return (await eventTrackingOwns(env, username)) != null;
+}
+
 // Everything in a record but its Watch History.
 function trackingRecordRest(record) {
   const { watchHistory, _intentionalRemoval, ...rest } = record && typeof record === "object" ? record : {};

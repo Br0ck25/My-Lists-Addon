@@ -4693,6 +4693,8 @@ async function refreshAiringNextSweep(env, ctx) {
     const username = pageKeys[i].name.slice('creator:'.length);
     // One account must not be able to stop the sweep -- see checkForNewEpisodes.
     try {
+      // Shelves worked out from the schedule: nothing to do (40_).
+      if (await legacyShelfSweepSkips(env, username)) continue;
       const checkedKey = airingNextCheckedKey(username);
       if (await env.CONFIGS.get(checkedKey)) continue;
       const trackingKey = `creatorsynctracking:${username}`;
@@ -4837,6 +4839,8 @@ async function checkForNewEpisodes(env, maxShowChecks) {
     // It is skipped rather than retried because the next full cycle will come
     // back to it anyway.
     try {
+    // Shelves worked out from the schedule: nothing to do (40_).
+    if (await legacyShelfSweepSkips(env, username)) continue;
     await ensureTrackingMigrated(env, username);
     let blob = null;
     if (env.DB) {

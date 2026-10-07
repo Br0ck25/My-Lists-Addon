@@ -52,9 +52,11 @@ function shelfShadowEmpty() {
 //
 // A show is "not known yet" when it has no refreshed show_schedule row
 // (shelfTitles, 39_). Those shows keep their stored entry while
-// FF_SHOW_SCHEDULE is on (shelfStoredForUnknown), and the legacy writers keep
-// those entries current, so the writers cannot be removed (P5-4) while there
-// are many. The comparison of 2026-10-06 had 26 on Continue Watching and 9 on
+// FF_SHOW_SCHEDULE is on (shelfStoredForUnknown), and the legacy writers kept
+// those entries current, so the writers could not be removed (P5-4) while there
+// were many. Since Release 27 the cron sweeps pass over these accounts
+// (legacyShelfSweepSkips, 40_) and the website's own shelf builders are what
+// keep them. The comparison of 2026-10-06 had 26 on Continue Watching and 9 on
 // Airing Next, with nothing to say why; each now gets one of:
 //   movie-row        the title's media row is a movie, and only series get a
 //                    schedule row (recountShowWatchers, 46_)

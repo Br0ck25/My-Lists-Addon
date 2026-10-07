@@ -44,6 +44,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 25 worked** (2026-10-07). Its fix waited for `show.watchers`, whose next run had been booked on the old daily period (22 h). Once it ran, Compare shelves (770 accounts): **0.00% different, 0 lost, 0 shows not known yet** on both shelves.
 - **`main` gained PR #29** (2026-10-07, another session): 14 audit fixes, merged without a release number. They ship as Release 26.
 - **Release 26** went live on 2026-10-07. The owner reports it fine. PR #29's fixes, and a shortened job period applies at once. Details under Release 26. Merged into `main`.
+- **Release 27** (prepared 2026-10-07, waiting for the owner's go-ahead): the old Continue Watching and Airing Next background jobs pass over the accounts whose shelves come from the schedule. Details under Release 27.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
 
@@ -1708,3 +1709,30 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 2. Use the site as normal: sign in on a second device or browser, search, open a list.
 
 **Rollback:** paste the 25 file.
+
+## Release 27: the old shelf jobs pass over accounts served from the schedule
+
+**Branch point:** `main` at `11c1a49` (Release 26, merged by PR #30). Live before it: Release 26 (build 19b52bc22d).
+
+### What it changes
+
+- **P5-4, second half.** Since `FF_SHOW_SCHEDULE` went on (2026-10-04), every account's Continue Watching and Airing Next are worked out from `show_schedule` when they are read. The two old background jobs, `cron.episodes` (`checkForNewEpisodes`) and `cron.airing-next` (`refreshAiringNextSweep`), still read each account's whole record every 4 minutes, looked its shows up on TMDB, and saved the whole record back. They wrote a stored copy that is read only for a show the schedule does not know yet, and the last Compare shelves had none of those.
+- Both jobs now pass over an account whose record is served from the activity database while `FF_SHOW_SCHEDULE` is on (`legacyShelfSweepSkips`, `40_`). They still sweep any account on the old storage (one whose history copy has not finished).
+- **Reversible with no data change:** with `FF_SHOW_SCHEDULE` off, both jobs sweep every account again, as before.
+- **Kept on purpose:**
+  - the two jobs themselves, for accounts on the old storage;
+  - the website's own shelf builders (`updateContinueWatching`, `refreshAiringNext`, `21_`). They update the shelves as soon as something is watched, and they keep the stored entry of a show the schedule does not know yet;
+  - the stored lists, while `shelfStoredForUnknown` reads them.
+- `/admin` shows **Release 27**.
+
+### Checked
+
+- `tests/activity.test.mjs`: with `FF_SHOW_SCHEDULE` on, a cron tick looks up none of a copied account's shows on TMDB and saves nothing for it, while an account on the old storage is still swept. With the flag off, both are swept. The first test fails when the skip is taken out.
+- `bash verify.sh`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,327 tests each).
+
+**Steps:**
+1. Deploy `release-27-NEW-worker.js`. Check that `/admin` says **Release 27** (build a7953c77f6).
+2. Over the next day, check that Continue Watching and Airing Next still look right: watch an episode, then check that the next one shows up. Watch for a show whose new episode has aired.
+3. Optional: `/admin` → Maintenance → **Check jobs**. `cron.episodes` and `cron.airing-next` should keep running, with none failing.
+
+**Rollback:** paste the 26 file.
