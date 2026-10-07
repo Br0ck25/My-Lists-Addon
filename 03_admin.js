@@ -785,15 +785,16 @@ async function recordSearchQuery(env, query) {
   if (q.length < 2) return;
   try {
     const day = statsToday();
+    // A day's writes are capped across everyone (SEARCH_QUERY_RECORDS_PER_DAY):
+    // the query text is part of `kind`, so distinct queries are not bounded by
+    // (kind, day) at all -- they are bounded by what callers send (DATA-001).
+    if (await consumeRateLimit(env, null, "searchrecord", "all", SEARCH_QUERY_RECORDS_PER_DAY, 86400)) return;
     // Same move as recordTrackedEvent above, and the same reason: three KV
     // writes per search, none of which the free plan's write budget can
     // afford. Nothing but counts here, so there is no meta to keep.
     //
-    // The per-day unique-query cap that the KV path enforces through
-    // SEARCH_DAY_INDEX_CAP is not needed on this path: `stats` rows are
-    // bounded by (kind, day) and a query string mints one row per day rather
-    // than an unbounded keyspace of KV keys, and D1 writes do not come out of
-    // the KV write budget that cap exists to protect.
+    // The KV path caps unique queries per day through SEARCH_DAY_INDEX_CAP.
+    // This path is capped by the daily write ceiling above instead.
     if (env.DB) {
       await d1BumpStat(env, `searchq:${q}`, ["total", day], 1);
       return;

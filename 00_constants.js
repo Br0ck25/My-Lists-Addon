@@ -633,6 +633,17 @@ const RECOVERY_ANSWER_MIN_LENGTH = 8;
 const FORGOT_USERNAME_IP_MAX_FAILURES = 5;
 const FORGOT_USERNAME_IP_TTL_SEC = 900;
 
+// Anonymous search endpoints (audit DATA-001). /api/title-search,
+// /api/person-search, /api/tmdb-search-lists and the Stremio search catalogs
+// spend the owner's TMDB key and need no account, so each address gets this
+// many a minute. Typing in a search box with a debounce stays well under it.
+const SEARCH_MAX_PER_MINUTE = 60;
+// How many search queries are written to the stats table in one day, across
+// everyone. Each distinct query mints rows (kind is `searchq:{query}`) and
+// nothing deletes them, so without a ceiling the keyspace is whatever strings
+// a caller chooses. The leaderboard only needs the popular ones.
+const SEARCH_QUERY_RECORDS_PER_DAY = 20000;
+
 // --- Bound on /api/channel-logo's inlined image ------------------------------
 //
 // That endpoint fetches a TMDB image and base64-encodes it into an SVG,

@@ -1308,6 +1308,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
       if (isSearchCatalog) {
         if (!searchQuery) return jsonPublic({ metas: [] });
+        const searchLimited = await searchRateLimitResponse(request, env, ctx);
+        if (searchLimited) return searchLimited;
         const searchConfig = config ? await resolveConfig(config, env) : {};
         const effectiveTmdbKey = searchConfig.tmdbKey || TMDB_API_KEY;
         let metas = await searchCatalogMetas(searchQuery, type, skip, effectiveTmdbKey, env, ctx, url.origin);
@@ -2035,6 +2037,8 @@ function generateSearchVariations(query) {
     // When no query is provided, returns the top 20 trending/popular titles for that category.
     // When a query is provided, fetches all relevant matching results across pages.
     if (path === "/api/title-search") {
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
       const q = (url.searchParams.get("q") || "").trim();
       const kind = url.searchParams.get("type") === "movie" ? "movie" : "tv";
       const adultFilterParam = url.searchParams.get("adultContentFilter");
@@ -2629,6 +2633,8 @@ function generateSearchVariations(query) {
     if (path === "/api/person-search") {
       const q = (url.searchParams.get("q") || "").trim();
       if (!q) return jsonCacheable({ ok: true, results: [] });
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
       try {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const res = await fetch(
@@ -3311,6 +3317,8 @@ function generateSearchVariations(query) {
       if (!q || !tmdbKey) {
         return jsonCacheable({ ok: true, lists: [] });
       }
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
 
       try {
         if (!tmdbKeyParam) ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));

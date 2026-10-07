@@ -267,4 +267,57 @@ describe("P7-3: rate limits are D1 counters, not KV slots", () => {
     assert.equal(results.filter((r) => r.status === 401).length, 10);
     assert.equal(results.filter((r) => r.status === 429).length, 20);
   });
+
+  // Audit DATA-001: the anonymous search endpoints spend the owner's TMDB key,
+  // had no limit, and every distinct query minted stats rows that nothing
+  // deletes.
+  describe("anonymous search endpoints (DATA-001)", () => {
+    const realFetch = globalThis.fetch;
+    const stub = () => {
+      globalThis.fetch = async () => new Response(JSON.stringify({ results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const restore = () => { globalThis.fetch = realFetch; };
+
+    for (const [label, path] of [
+      ["/api/title-search", (i) => `/api/title-search?q=unique${i}&type=movie`],
+      ["/api/person-search", (i) => `/api/person-search?q=unique${i}`],
+      ["/api/tmdb-search-lists", (i) => `/api/tmdb-search-lists?q=unique${i}`],
+      ["the Stremio search catalog", (i) => `/catalog/movie/search_movies/search=unique${i}.json`],
+    ]) {
+      it(`${label} refuses an address past 60 a minute, and another address still searches`, async () => {
+        stub();
+        try {
+          const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "k" });
+          await awaitFreshRateWindow();
+          const ip = nextIp();
+          const statuses = [];
+          for (let i = 0; i < 64; i++) statuses.push((await call(env, path(i), { ip })).status);
+          assert.equal(statuses.filter((c) => c === 429).length, 4, `the 61st to 64th are refused: ${statuses.join(",")}`);
+          const other = await call(env, path(999), { ip: nextIp() });
+          assert.notEqual(other.status, 429, "a limit one address spends must not stop another");
+        } finally {
+          restore();
+        }
+      });
+    }
+
+    it("stops writing search-query rows once the day's ceiling is spent", async () => {
+      stub();
+      try {
+        const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "k" });
+        const count = () => Number(env.DB._db.prepare("SELECT count(*) AS n FROM stats WHERE kind LIKE 'searchq:%'").get().n);
+        await call(env, "/api/title-search?q=firstquery&type=movie");
+        assert.ok(count() > 0, "an ordinary search is still recorded");
+        const before = count();
+        const windowStart = Math.floor(Date.now() / 86400000) * 86400000;
+        env.DB._db.prepare("INSERT INTO rate_counters (scope, window_start, count) VALUES (?, ?, ?) ON CONFLICT(scope, window_start) DO UPDATE SET count = excluded.count")
+          .run("searchrecord:all", windowStart, 20000);
+        await call(env, "/api/title-search?q=secondquery&type=movie");
+        await call(env, "/api/title-search?q=thirdquery&type=movie");
+        assert.equal(count(), before, "over the ceiling nothing new is written");
+      } finally {
+        restore();
+      }
+    });
+  });
 });

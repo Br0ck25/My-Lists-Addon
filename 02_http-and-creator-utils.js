@@ -3281,6 +3281,18 @@ async function consumeRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec =
   return used > maxPerWindow;
 }
 
+// The per-address limit on the anonymous search endpoints, which spend the
+// owner's TMDB key (audit DATA-001). Returns a ready 429 Response, or null to
+// carry on. Fails closed with no client IP, like every other limiter here.
+async function searchRateLimitResponse(request, env, ctx) {
+  const ip = clientIpKey(request);
+  if (!ip) return json({ ok: false, error: "Could not process this request." }, 400, { "Cache-Control": "no-store" });
+  if (await consumeRateLimit(env, ctx, "search", ip, SEARCH_MAX_PER_MINUTE, 60)) {
+    return json({ ok: false, error: "Too many searches. Please wait a moment and try again." }, 429, { "Cache-Control": "no-store", "Retry-After": "30" });
+  }
+  return null;
+}
+
 // Spend first, give it back on success -- for the endpoints where a SUCCESS
 // must not consume the budget that protects them: a correct password is not a
 // guess, and an admin who signs in on a run of devices must not lock

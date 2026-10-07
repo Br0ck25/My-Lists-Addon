@@ -33,7 +33,7 @@ const WORKER_RELEASE = "25";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "28b36897e8";
+const WORKER_BUILD = "d754cdeabf";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -655,6 +655,17 @@ const RESET_KEY_ACCOUNT_MAX_FAILURES = 5;
 const RECOVERY_ANSWER_MIN_LENGTH = 8;
 const FORGOT_USERNAME_IP_MAX_FAILURES = 5;
 const FORGOT_USERNAME_IP_TTL_SEC = 900;
+
+// Anonymous search endpoints (audit DATA-001). /api/title-search,
+// /api/person-search, /api/tmdb-search-lists and the Stremio search catalogs
+// spend the owner's TMDB key and need no account, so each address gets this
+// many a minute. Typing in a search box with a debounce stays well under it.
+const SEARCH_MAX_PER_MINUTE = 60;
+// How many search queries are written to the stats table in one day, across
+// everyone. Each distinct query mints rows (kind is `searchq:{query}`) and
+// nothing deletes them, so without a ceiling the keyspace is whatever strings
+// a caller chooses. The leaderboard only needs the popular ones.
+const SEARCH_QUERY_RECORDS_PER_DAY = 20000;
 
 // --- Bound on /api/channel-logo's inlined image ------------------------------
 //
@@ -7115,6 +7126,18 @@ async function consumeRateLimit(env, ctx, bucket, key, maxPerWindow, windowSec =
   return used > maxPerWindow;
 }
 
+// The per-address limit on the anonymous search endpoints, which spend the
+// owner's TMDB key (audit DATA-001). Returns a ready 429 Response, or null to
+// carry on. Fails closed with no client IP, like every other limiter here.
+async function searchRateLimitResponse(request, env, ctx) {
+  const ip = clientIpKey(request);
+  if (!ip) return json({ ok: false, error: "Could not process this request." }, 400, { "Cache-Control": "no-store" });
+  if (await consumeRateLimit(env, ctx, "search", ip, SEARCH_MAX_PER_MINUTE, 60)) {
+    return json({ ok: false, error: "Too many searches. Please wait a moment and try again." }, 429, { "Cache-Control": "no-store", "Retry-After": "30" });
+  }
+  return null;
+}
+
 // Spend first, give it back on success -- for the endpoints where a SUCCESS
 // must not consume the budget that protects them: a correct password is not a
 // guess, and an admin who signs in on a run of devices must not lock
@@ -11657,15 +11680,16 @@ async function recordSearchQuery(env, query) {
   if (q.length < 2) return;
   try {
     const day = statsToday();
+    // A day's writes are capped across everyone (SEARCH_QUERY_RECORDS_PER_DAY):
+    // the query text is part of `kind`, so distinct queries are not bounded by
+    // (kind, day) at all -- they are bounded by what callers send (DATA-001).
+    if (await consumeRateLimit(env, null, "searchrecord", "all", SEARCH_QUERY_RECORDS_PER_DAY, 86400)) return;
     // Same move as recordTrackedEvent above, and the same reason: three KV
     // writes per search, none of which the free plan's write budget can
     // afford. Nothing but counts here, so there is no meta to keep.
     //
-    // The per-day unique-query cap that the KV path enforces through
-    // SEARCH_DAY_INDEX_CAP is not needed on this path: `stats` rows are
-    // bounded by (kind, day) and a query string mints one row per day rather
-    // than an unbounded keyspace of KV keys, and D1 writes do not come out of
-    // the KV write budget that cap exists to protect.
+    // The KV path caps unique queries per day through SEARCH_DAY_INDEX_CAP.
+    // This path is capped by the daily write ceiling above instead.
     if (env.DB) {
       await d1BumpStat(env, `searchq:${q}`, ["total", day], 1);
       return;
@@ -86357,6 +86381,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
       if (isSearchCatalog) {
         if (!searchQuery) return jsonPublic({ metas: [] });
+        const searchLimited = await searchRateLimitResponse(request, env, ctx);
+        if (searchLimited) return searchLimited;
         const searchConfig = config ? await resolveConfig(config, env) : {};
         const effectiveTmdbKey = searchConfig.tmdbKey || TMDB_API_KEY;
         let metas = await searchCatalogMetas(searchQuery, type, skip, effectiveTmdbKey, env, ctx, url.origin);
@@ -87084,6 +87110,8 @@ function generateSearchVariations(query) {
     // When no query is provided, returns the top 20 trending/popular titles for that category.
     // When a query is provided, fetches all relevant matching results across pages.
     if (path === "/api/title-search") {
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
       const q = (url.searchParams.get("q") || "").trim();
       const kind = url.searchParams.get("type") === "movie" ? "movie" : "tv";
       const adultFilterParam = url.searchParams.get("adultContentFilter");
@@ -87678,6 +87706,8 @@ function generateSearchVariations(query) {
     if (path === "/api/person-search") {
       const q = (url.searchParams.get("q") || "").trim();
       if (!q) return jsonCacheable({ ok: true, results: [] });
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
       try {
         ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
         const res = await fetch(
@@ -88360,6 +88390,8 @@ function generateSearchVariations(query) {
       if (!q || !tmdbKey) {
         return jsonCacheable({ ok: true, lists: [] });
       }
+      const searchLimited = await searchRateLimitResponse(request, env, ctx);
+      if (searchLimited) return searchLimited;
 
       try {
         if (!tmdbKeyParam) ctx.waitUntil(bumpStat(env, "apiuse:tmdb"));
