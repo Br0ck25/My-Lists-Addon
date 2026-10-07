@@ -2699,8 +2699,12 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       window._previousChannelsSubmenu = currentChannelsSubmenu;
     }
     switchTab('list-details');
-    if (typeof opts.restoreScrollY === 'number') {
-      window.scrollTo({ top: opts.restoreScrollY, behavior: 'instant' });
+    if (typeof opts.restoreScrollY === 'number' && opts.restoreScrollY > 0) {
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(opts.restoreScrollY);
+      } else {
+        window.scrollTo({ top: opts.restoreScrollY, behavior: 'instant' });
+      }
     } else {
       window.scrollTo({ top: 0, behavior: 'instant' });
     }
@@ -3770,11 +3774,13 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     window._listDetailsScrollBound = true;
     window.addEventListener('scroll', () => {
       const panel = document.getElementById('content-list-details');
-      if (!panel || panel.hidden || !window._listDetailsLoadNextPage) return;
-      if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 400) {
+      if (!panel || panel.hidden) return;
+      const y = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      if (y > 0) window._listScrollY = y;
+      if (window._listDetailsLoadNextPage && (window.innerHeight + y >= document.body.scrollHeight - 400)) {
         window._listDetailsLoadNextPage();
       }
-    });
+    }, { passive: true });
   }
   window._listDetailsLoadNextPage = loadNextPage;
 
@@ -3787,11 +3793,14 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     await loadNextPage();
   }
 
-  if (opts && typeof opts.restoreScrollY === 'number') {
-    const scrollTarget = opts.restoreScrollY;
-    setTimeout(() => {
-      window.scrollTo({ top: scrollTarget, behavior: 'instant' });
-    }, 10);
+  if (opts && typeof opts.restoreScrollY === 'number' && opts.restoreScrollY > 0) {
+    if (typeof restoreListScroll === 'function') {
+      restoreListScroll(opts.restoreScrollY);
+    } else {
+      setTimeout(() => {
+        window.scrollTo({ top: opts.restoreScrollY, behavior: 'instant' });
+      }, 10);
+    }
   }
 }
 

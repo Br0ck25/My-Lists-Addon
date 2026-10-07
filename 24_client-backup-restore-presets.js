@@ -2516,22 +2516,46 @@ window.addEventListener('popstate', (e) => {
     const listKey = (state.name || '') + '::' + (state.type || '') + '::' + (state.listUrl || '');
     const currentListKey = window._currentListDetailsKey || '';
     const gridEl = document.getElementById('detailGrid');
-    if (gridEl && gridEl.children.length > 0 && currentListKey === listKey) {
+    const scrollPos = (state && typeof state.listScrollY === 'number')
+      ? state.listScrollY
+      : (typeof window._listScrollY === 'number' ? window._listScrollY : 0);
+    const matchesCurrentList = Boolean(
+      gridEl && gridEl.children.length > 0 && (
+        currentListKey === listKey ||
+        (!state.listUrl && currentListKey.startsWith((state.name || '') + '::')) ||
+        (currentListKey && listKey && (currentListKey.startsWith((state.name || '') + '::' + (state.type || '')) || currentListKey.split('::')[0] === (state.name || ''))) ||
+        (!state.name && currentListKey)
+      )
+    );
+    if (matchesCurrentList) {
       switchTab('list-details');
-      if (typeof window._listScrollY === 'number') {
-        const targetScroll = window._listScrollY;
-        window.scrollTo({ top: targetScroll, behavior: 'instant' });
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(scrollPos);
+      } else if (scrollPos > 0) {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
       }
       return;
     }
-    openListDetailsPage(state.name, state.type, state.listUrl, null, { skipPushState: true, restoreScrollY: window._listScrollY });
+    openListDetailsPage(state.name, state.type, state.listUrl, null, { skipPushState: true, restoreScrollY: scrollPos });
   } else if (isListPath && (!state || state.view !== 'tab')) {
     // If landed or popped into a list path without explicit state
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     const listName = params.get('name') || '';
     const listType = params.get('type') || 'movie';
     const listUrl = params.get('url') || '';
-    openListDetailsPage(listName, listType, listUrl, null, { skipPushState: true });
+    const currentListKey = window._currentListDetailsKey || '';
+    const gridEl = document.getElementById('detailGrid');
+    const scrollPos = typeof window._listScrollY === 'number' ? window._listScrollY : 0;
+    if (gridEl && gridEl.children.length > 0 && (!listName || currentListKey.split('::')[0] === listName)) {
+      switchTab('list-details');
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(scrollPos);
+      } else if (scrollPos > 0) {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+      }
+      return;
+    }
+    openListDetailsPage(listName, listType, listUrl, null, { skipPushState: true, restoreScrollY: scrollPos });
   } else if ((state && state.view === 'item') || isItemPath) {
     const itemId = (state && state.id) || (new URLSearchParams(hash.slice('#/item?'.length)).get('id')) || '';
     const itemType = (state && state.type) || (new URLSearchParams(hash.slice('#/item?'.length)).get('type')) || 'movie';

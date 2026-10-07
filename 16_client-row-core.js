@@ -1141,17 +1141,46 @@ function updateAllListAddButtons() {
 }
 
 
+function restoreListScroll(targetScroll) {
+  if (typeof targetScroll !== 'number' || targetScroll <= 0) return;
+  const restore = function() {
+    window.scrollTo({ top: targetScroll, behavior: 'instant' });
+    if (document.documentElement && document.documentElement.scrollTop !== targetScroll) {
+      document.documentElement.scrollTop = targetScroll;
+    }
+    if (document.body && document.body.scrollTop !== targetScroll) {
+      document.body.scrollTop = targetScroll;
+    }
+  };
+  restore();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function() {
+      restore();
+      requestAnimationFrame(restore);
+    });
+  }
+  setTimeout(restore, 20);
+  setTimeout(restore, 60);
+  setTimeout(restore, 150);
+  setTimeout(restore, 300);
+  setTimeout(restore, 500);
+}
+window.restoreListScroll = restoreListScroll;
+try {
+  if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+} catch (e) {}
+
 function navigateBackFromDetail() {
-  const currentTab = document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
-  if (currentTab === 'item-details' && window._previousTab === 'list-details') {
+  const currentTab = window._currentTab || document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
+  if ((currentTab === 'item-details' || (!currentTab && window._previousTab === 'list-details')) && window._previousTab === 'list-details') {
     if (history.length > 1) {
       history.back();
     } else {
       switchTab('list-details');
-      if (typeof window._listScrollY === 'number') {
-        const scrollPos = window._listScrollY;
-        window.scrollTo({ top: scrollPos, behavior: 'instant' });
-      }
+      const scrollPos = typeof window._listScrollY === 'number' ? window._listScrollY : 0;
+      restoreListScroll(scrollPos);
     }
   } else if (history.length > 1 && window._previousTab && window._previousTab !== 'list-details' && window._previousTab !== 'item-details') {
     history.back();
@@ -1308,6 +1337,8 @@ function switchTab(name) {
   try {
     document.documentElement.removeAttribute('data-initial-tab');
   } catch (e) {}
+
+  window._currentTab = name;
 
   // Instant DOM tab switching
   const panels = document.querySelectorAll('.tab-panel');

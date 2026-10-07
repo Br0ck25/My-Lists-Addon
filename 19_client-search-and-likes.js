@@ -3598,10 +3598,18 @@ async function openItemDetailsModal(id, type, opts) {
   if (!id || id.startsWith('channel_')) return;
   
   const visiblePanel = document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
-  const currentActiveTab = visiblePanel || document.querySelector('.tab-btn.active, .bottom-nav-item.active')?.dataset.tab || window._originTab || 'discover';
+  const currentActiveTab = window._currentTab || visiblePanel || document.querySelector('.tab-btn.active, .bottom-nav-item.active')?.dataset.tab || window._originTab || 'discover';
   if (currentActiveTab === 'list-details') {
-    window._listScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const curY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    if (curY > 0 || typeof window._listScrollY !== 'number') {
+      window._listScrollY = curY;
+    }
     window._previousTab = 'list-details';
+    try {
+      if (history.state && history.state.view === 'list') {
+        history.replaceState(Object.assign({}, history.state, { listScrollY: window._listScrollY }), '', location.href);
+      }
+    } catch (e) {}
   } else if (currentActiveTab !== 'item-details') {
     window._previousTab = currentActiveTab;
     window._previousScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;

@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a77f7a3d58";
+const WORKER_BUILD = "c083080a31";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -38519,17 +38519,46 @@ function updateAllListAddButtons() {
 }
 
 
+function restoreListScroll(targetScroll) {
+  if (typeof targetScroll !== 'number' || targetScroll <= 0) return;
+  const restore = function() {
+    window.scrollTo({ top: targetScroll, behavior: 'instant' });
+    if (document.documentElement && document.documentElement.scrollTop !== targetScroll) {
+      document.documentElement.scrollTop = targetScroll;
+    }
+    if (document.body && document.body.scrollTop !== targetScroll) {
+      document.body.scrollTop = targetScroll;
+    }
+  };
+  restore();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function() {
+      restore();
+      requestAnimationFrame(restore);
+    });
+  }
+  setTimeout(restore, 20);
+  setTimeout(restore, 60);
+  setTimeout(restore, 150);
+  setTimeout(restore, 300);
+  setTimeout(restore, 500);
+}
+window.restoreListScroll = restoreListScroll;
+try {
+  if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+} catch (e) {}
+
 function navigateBackFromDetail() {
-  const currentTab = document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
-  if (currentTab === 'item-details' && window._previousTab === 'list-details') {
+  const currentTab = window._currentTab || document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
+  if ((currentTab === 'item-details' || (!currentTab && window._previousTab === 'list-details')) && window._previousTab === 'list-details') {
     if (history.length > 1) {
       history.back();
     } else {
       switchTab('list-details');
-      if (typeof window._listScrollY === 'number') {
-        const scrollPos = window._listScrollY;
-        window.scrollTo({ top: scrollPos, behavior: 'instant' });
-      }
+      const scrollPos = typeof window._listScrollY === 'number' ? window._listScrollY : 0;
+      restoreListScroll(scrollPos);
     }
   } else if (history.length > 1 && window._previousTab && window._previousTab !== 'list-details' && window._previousTab !== 'item-details') {
     history.back();
@@ -38686,6 +38715,8 @@ function switchTab(name) {
   try {
     document.documentElement.removeAttribute('data-initial-tab');
   } catch (e) {}
+
+  window._currentTab = name;
 
   // Instant DOM tab switching
   const panels = document.querySelectorAll('.tab-panel');
@@ -49654,10 +49685,18 @@ async function openItemDetailsModal(id, type, opts) {
   if (!id || id.startsWith('channel_')) return;
   
   const visiblePanel = document.querySelector('.tab-panel:not([hidden])')?.dataset?.tabPanel;
-  const currentActiveTab = visiblePanel || document.querySelector('.tab-btn.active, .bottom-nav-item.active')?.dataset.tab || window._originTab || 'discover';
+  const currentActiveTab = window._currentTab || visiblePanel || document.querySelector('.tab-btn.active, .bottom-nav-item.active')?.dataset.tab || window._originTab || 'discover';
   if (currentActiveTab === 'list-details') {
-    window._listScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const curY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    if (curY > 0 || typeof window._listScrollY !== 'number') {
+      window._listScrollY = curY;
+    }
     window._previousTab = 'list-details';
+    try {
+      if (history.state && history.state.view === 'list') {
+        history.replaceState(Object.assign({}, history.state, { listScrollY: window._listScrollY }), '', location.href);
+      }
+    } catch (e) {}
   } else if (currentActiveTab !== 'item-details') {
     window._previousTab = currentActiveTab;
     window._previousScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
@@ -79443,8 +79482,12 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       window._previousChannelsSubmenu = currentChannelsSubmenu;
     }
     switchTab('list-details');
-    if (typeof opts.restoreScrollY === 'number') {
-      window.scrollTo({ top: opts.restoreScrollY, behavior: 'instant' });
+    if (typeof opts.restoreScrollY === 'number' && opts.restoreScrollY > 0) {
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(opts.restoreScrollY);
+      } else {
+        window.scrollTo({ top: opts.restoreScrollY, behavior: 'instant' });
+      }
     } else {
       window.scrollTo({ top: 0, behavior: 'instant' });
     }
@@ -80514,11 +80557,13 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     window._listDetailsScrollBound = true;
     window.addEventListener('scroll', () => {
       const panel = document.getElementById('content-list-details');
-      if (!panel || panel.hidden || !window._listDetailsLoadNextPage) return;
-      if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 400) {
+      if (!panel || panel.hidden) return;
+      const y = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      if (y > 0) window._listScrollY = y;
+      if (window._listDetailsLoadNextPage && (window.innerHeight + y >= document.body.scrollHeight - 400)) {
         window._listDetailsLoadNextPage();
       }
-    });
+    }, { passive: true });
   }
   window._listDetailsLoadNextPage = loadNextPage;
 
@@ -80531,11 +80576,14 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     await loadNextPage();
   }
 
-  if (opts && typeof opts.restoreScrollY === 'number') {
-    const scrollTarget = opts.restoreScrollY;
-    setTimeout(() => {
-      window.scrollTo({ top: scrollTarget, behavior: 'instant' });
-    }, 10);
+  if (opts && typeof opts.restoreScrollY === 'number' && opts.restoreScrollY > 0) {
+    if (typeof restoreListScroll === 'function') {
+      restoreListScroll(opts.restoreScrollY);
+    } else {
+      setTimeout(() => {
+        window.scrollTo({ top: opts.restoreScrollY, behavior: 'instant' });
+      }, 10);
+    }
   }
 }
 
@@ -83084,22 +83132,46 @@ window.addEventListener('popstate', (e) => {
     const listKey = (state.name || '') + '::' + (state.type || '') + '::' + (state.listUrl || '');
     const currentListKey = window._currentListDetailsKey || '';
     const gridEl = document.getElementById('detailGrid');
-    if (gridEl && gridEl.children.length > 0 && currentListKey === listKey) {
+    const scrollPos = (state && typeof state.listScrollY === 'number')
+      ? state.listScrollY
+      : (typeof window._listScrollY === 'number' ? window._listScrollY : 0);
+    const matchesCurrentList = Boolean(
+      gridEl && gridEl.children.length > 0 && (
+        currentListKey === listKey ||
+        (!state.listUrl && currentListKey.startsWith((state.name || '') + '::')) ||
+        (currentListKey && listKey && (currentListKey.startsWith((state.name || '') + '::' + (state.type || '')) || currentListKey.split('::')[0] === (state.name || ''))) ||
+        (!state.name && currentListKey)
+      )
+    );
+    if (matchesCurrentList) {
       switchTab('list-details');
-      if (typeof window._listScrollY === 'number') {
-        const targetScroll = window._listScrollY;
-        window.scrollTo({ top: targetScroll, behavior: 'instant' });
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(scrollPos);
+      } else if (scrollPos > 0) {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
       }
       return;
     }
-    openListDetailsPage(state.name, state.type, state.listUrl, null, { skipPushState: true, restoreScrollY: window._listScrollY });
+    openListDetailsPage(state.name, state.type, state.listUrl, null, { skipPushState: true, restoreScrollY: scrollPos });
   } else if (isListPath && (!state || state.view !== 'tab')) {
     // If landed or popped into a list path without explicit state
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     const listName = params.get('name') || '';
     const listType = params.get('type') || 'movie';
     const listUrl = params.get('url') || '';
-    openListDetailsPage(listName, listType, listUrl, null, { skipPushState: true });
+    const currentListKey = window._currentListDetailsKey || '';
+    const gridEl = document.getElementById('detailGrid');
+    const scrollPos = typeof window._listScrollY === 'number' ? window._listScrollY : 0;
+    if (gridEl && gridEl.children.length > 0 && (!listName || currentListKey.split('::')[0] === listName)) {
+      switchTab('list-details');
+      if (typeof restoreListScroll === 'function') {
+        restoreListScroll(scrollPos);
+      } else if (scrollPos > 0) {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+      }
+      return;
+    }
+    openListDetailsPage(listName, listType, listUrl, null, { skipPushState: true, restoreScrollY: scrollPos });
   } else if ((state && state.view === 'item') || isItemPath) {
     const itemId = (state && state.id) || (new URLSearchParams(hash.slice('#/item?'.length)).get('id')) || '';
     const itemType = (state && state.type) || (new URLSearchParams(hash.slice('#/item?'.length)).get('type')) || 'movie';

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { loadClient } from "./client-harness.mjs";
+import { loadClient, fireListeners } from "./client-harness.mjs";
 
 describe("Episode titles and shelf display names", () => {
   it("isGenericEpisodeTitle identifies generic placeholders correctly", () => {
@@ -136,4 +136,107 @@ describe("Episode titles and shelf display names", () => {
     assert.ok(detailsHtml.includes('<div class="live-preview-poster-name">Lioness S03E06</div>'), "renders episode title on details page");
     assert.ok(detailsHtml.includes('<span>Sugar Land</span>') || detailsHtml.includes('Sugar Land'), "renders Sugar Land subtitle on details page");
   });
+
+  it("restoreListScroll calls scrollTo with target scroll position", () => {
+    const client = loadClient();
+    const restoreListScroll = client.get("restoreListScroll");
+    assert.equal(typeof restoreListScroll, "function", "restoreListScroll is defined");
+
+    let scrolledTo = null;
+    client.window.scrollTo = (opts) => {
+      scrolledTo = opts;
+    };
+
+    restoreListScroll(1250);
+    assert.equal(scrolledTo.top, 1250);
+    assert.equal(scrolledTo.behavior, "instant");
+  });
+
+  it("openItemDetailsModal preserves _listScrollY when opened from list-details", async () => {
+    const client = loadClient();
+    const switchTab = client.get("switchTab");
+    const openItemDetailsModal = client.get("openItemDetailsModal");
+
+    switchTab("list-details");
+    client.window.scrollY = 850;
+
+    // Mock fetch for item details so it doesn't fail
+    client.window.fetch = async () => ({
+      ok: true,
+      headers: { get: () => "application/json" },
+      json: async () => ({ ok: true, details: { id: "tt12345", title: "Test Title" } }),
+    });
+
+    await openItemDetailsModal("tt12345", "movie");
+
+    assert.equal(client.window._listScrollY, 850, "records list scroll position");
+    assert.equal(client.window._previousTab, "list-details", "records previous tab as list-details");
+  });
+
+  it("popstate and navigateBackFromDetail restore list scroll position on returning from item-details", async () => {
+    const client = loadClient();
+    const switchTab = client.get("switchTab");
+    const openItemDetailsModal = client.get("openItemDetailsModal");
+    const navigateBackFromDetail = client.get("navigateBackFromDetail");
+
+    switchTab("list-details");
+    client.window.scrollY = 1420;
+
+    client.window.fetch = async () => ({
+      ok: true,
+      headers: { get: () => "application/json" },
+      json: async () => ({ ok: true, details: { id: "tt99999", title: "Detail Title" } }),
+    });
+
+    await openItemDetailsModal("tt99999", "movie");
+
+    let restoredScroll = null;
+    client.window.scrollTo = (opts) => {
+      restoredScroll = opts;
+    };
+
+    navigateBackFromDetail();
+
+    assert.equal(client.window._currentTab, "list-details", "switched back to list-details tab");
+    assert.equal(restoredScroll.top, 1420, "restored exact scroll top position");
+    assert.equal(restoredScroll.behavior, "instant");
+  });
+
+  it("popstate restores list scroll position and switches to list-details when detailGrid has items", () => {
+    const client = loadClient();
+    const switchTab = client.get("switchTab");
+
+    // Put a card into detailGrid to simulate loaded list
+    const gridEl = client.document.getElementById("detailGrid");
+    gridEl.children = [{ className: "live-preview-poster-card" }];
+    client.window._currentListDetailsKey = "Popular::movie::trakt:chart:popular";
+
+    // Switch away to item-details
+    switchTab("item-details");
+    assert.equal(client.window._currentTab, "item-details");
+
+    let restoredScroll = null;
+    client.window.scrollTo = (opts) => {
+      restoredScroll = opts;
+    };
+
+    // Dispatch popstate back to list
+    fireListeners(client, {
+      type: "popstate",
+      bubbles: true,
+      state: {
+        view: "list",
+        name: "Popular",
+        type: "movie",
+        listUrl: "trakt:chart:popular",
+        listScrollY: 1750,
+      },
+    });
+
+    assert.equal(client.window._currentTab, "list-details", "restored list-details tab");
+    assert.equal(restoredScroll.top, 1750, "restored scroll to 1750");
+    assert.equal(restoredScroll.behavior, "instant");
+    assert.equal(gridEl.children.length, 1, "did not wipe detailGrid");
+  });
 });
+
