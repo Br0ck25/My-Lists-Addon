@@ -3,12 +3,12 @@
 Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo existing work. Keep this file short: replace stale items, don't append history (old versions: `docs/history/`).
 
 ## Where things stand (2026-10-07)
-- **Release 25 is merged into `main`** (not yet confirmed deployed). Release 24's Compare shelves named the "not known yet" shows. Release 25 re-files shows filed as movies hourly (`refileSeriesFiledAsMovies`, 46_), lets the stub upgrade take the kind without a TMDB id another row holds (29_), and runs `show.watchers` hourly. Details: `docs/RELEASES.md`.
+- **Release 25 is live and worked:** Compare shelves 2026-10-07, 0.00% different, 0 lost, 0 shows not known yet. **Release 26 is live** (owner: fine, 2026-10-07) and merged into `main`: PR #29's audit fixes plus `pullInShortenedPeriods` (45_).
 - **Unchecked after the UI consistency pass (PR #19):** a modal over the phone bottom nav, drag-and-drop, storyline and deep creator-profile screens. Rules: `AI_UI_RULES.md`, `DESIGN_SYSTEM.md`.
 
 ## Next steps
 Dates are from the previous handoff; check them against `docs/RELEASES.md` before acting.
-1. **Owner:** deploys Release 25, waits about 2 h, presses *Compare shelves now*. If "not known yet" is near zero, remove the legacy Continue Watching / Airing Next writers (P5-4 second half: `checkForNewEpisodes`, `refreshAiringNextSweep`, `cron.episodes`, `cron.airing-next`, the client shelf builders). Keep the stored lists while `shelfStoredForUnknown` reads them. A media row of kind `movie` never gets a schedule row. Later: merge duplicate media rows for one title.
+1. **Next code task (Release 27):** remove the legacy Continue Watching / Airing Next writers (P5-4 second half: `checkForNewEpisodes`, `refreshAiringNextSweep`, `cron.episodes`, `cron.airing-next`, the client shelf builders). The gate is met: Compare shelves 0 lost and 0 not known yet. Keep the stored lists while `shelfStoredForUnknown` reads them. Later: merge duplicate media rows for one title.
 2. **Owner (dashboard):** `INSTALL_MIGRATION_PERCENT` to `50` about 2026-10-07, then `100` about 2026-10-10 if `/admin` → Maintenance → Install links shows nothing failed. Turn on D1 read replication for `my-lists-db` (P8-1); Claude gives the steps.
 3. **About 2026-10-12:** if `/admin` → Creators *Saves that sent the Account Key* stays near zero, rewrite the sunset notices (`getLegacySunsetNotices`, 02_), then the owner sets `SUNSET_60DAY_START_DATE`.
 4. **Day 60 after that:** remove key-in-body auth on the session routes, the legacy scrobble forms and the other sunset items. After that, the old storage one prefix or table at a time: copy to R2, remove its readers, delete (`docs/CUTOVER.md` P10-3).
