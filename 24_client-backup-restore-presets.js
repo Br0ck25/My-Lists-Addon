@@ -1877,7 +1877,6 @@ function openNuvioInstallModal(url) {
   if (!url) return;
   copyLink(url);
   showToast('Manifest link copied to clipboard.', 'success');
-  const nuvioAppUrl = 'nuvio://addon?url=' + encodeURIComponent(url);
   const html =
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">&#x2715;</button>' +
     '<h2>Install in Nuvio</h2>' +
@@ -1900,9 +1899,6 @@ function openNuvioInstallModal(url) {
     '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-14px u-bg-v_surface">' +
       '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Nuvio Desktop &amp; Mobile App</div>' +
       '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">In the Nuvio app, go to: <strong>Settings &rarr; Content &amp; Discovery &rarr; Addons</strong> and paste your copied manifest link.</p>' +
-      '<div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">' +
-        '<a href="' + escapeAttr(nuvioAppUrl) + '" class="btn btn-secondary u-p-8px_16px u-fs-v_font_size_sm u-fw-600 u-br-v_radius_pill u-td-none" style="display:inline-flex;">Open Nuvio App</a>' +
-      '</div>' +
     '</div>' +
     '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px">Manifest Link:</div>' +
     '<div class="install-url-input-group u-ai-stretch u-gap-8px u-mb-16px" style="display:flex; width:100%;">' +
@@ -2029,7 +2025,6 @@ async function generate() {
   const installUrl = ORIGIN + '/' + config + '/manifest.json';
   const stremioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'stremio://');
   const stremioWebUrl = 'https://web.stremio.com/#/addons?addon=' + encodeURIComponent(installUrl);
-  const nuvioInstallUrl = 'nuvio://addon?url=' + encodeURIComponent(installUrl);
   // A group breakdown alongside the plain install-count beacon -- each
   // row's own .group ("MDBList Charts", "Custom Lists", "Channels", etc.)
   // is already a meaningful "what kind of source is this" label, no need
@@ -2065,9 +2060,9 @@ async function generate() {
         <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
+        <button type="button" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base u-cur-pointer" data-act="openNuvioInstallModal" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
           Install in Nuvio
-        </a>
+        </button>
         <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>
