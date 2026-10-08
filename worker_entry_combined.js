@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "965c3de044";
+const WORKER_BUILD = "0a7e88e379";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -86370,6 +86370,24 @@ async function handleFetch(request, env, ctx) {
         bottomBorderOpacity,
         bottomColor,
       });
+
+      // Stremio and Nuvio's native image loaders cannot be relied on to draw
+      // an SVG (Stremio shows its placeholder, Nuvio drops some tiles), so
+      // when the Cloudflare Images binding (env.IMAGES) is present the SVG is
+      // rasterised to a PNG. If the binding is missing or the conversion does
+      // not come back as a PNG, the SVG below is sent exactly as before.
+      if (env && env.IMAGES && typeof env.IMAGES.input === "function") {
+        try {
+          const pngRes = (await env.IMAGES.input(new Blob([svg], { type: "image/svg+xml" }).stream())
+            .output({ format: "image/png" })).response({
+              headers: {
+                "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
+                ...corsHeaders(),
+              },
+            });
+          if (String(pngRes.headers.get("Content-Type") || "").startsWith("image/png")) return pngRes;
+        } catch (e) {}
+      }
 
       rememberBadgedPoster(cacheKey, svg);
 
