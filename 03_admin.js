@@ -2308,7 +2308,7 @@ function adminActArgs(values) {
 // been given so far this month, both typed in under Management & Tools ->
 // Support Goal. It stays hidden until it is turned on there. The amount given
 // belongs to the month it was entered in and counts as 0 in the next one, so
-// the bar starts over on the 1st by itself.
+// the bar starts over on the 9th by itself.
 const SUPPORT_GOAL_KEY = "support:goal:v1";
 const SUPPORT_GOAL_URL = "https://ko-fi.com/mylistsaddon";
 // Ko-fi's webhook (POST /api/kofi-webhook, below) adds each USD donation to the
@@ -2320,7 +2320,18 @@ const KOFI_MESSAGE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const SUPPORT_GOAL_MAX = 100000;
 
 function supportGoalMonth(now = new Date()) {
-  return easternDateKey(now).slice(0, 7);
+  const parts = easternDateKey(now).split("-");
+  let year = Number(parts[0]);
+  let month = Number(parts[1]);
+  const day = Number(parts[2]);
+  if (day < 9) {
+    month -= 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+  }
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 // What is stored, as it is read: always complete, whatever was written.
@@ -2971,7 +2982,7 @@ ${UTILITY_CSS}
       <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Given so far this month (US dollars)
         <input type="number" id="supportGoalRaised" class="admin-select u-m-4px_0_0" min="0" step="0.01" style="display:block; width:160px;" placeholder="0">
       </label>
-      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 9th.</div>
       <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
         <span id="supportGoalStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>

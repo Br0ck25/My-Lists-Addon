@@ -2415,7 +2415,7 @@ function openSupportGoal() {
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
     '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
-    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 1st of each month.</p>';
+    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 9th of each month.</p>';
   showModal(html);
 }
 

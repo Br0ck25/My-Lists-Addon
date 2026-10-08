@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "133adeb329";
+const WORKER_BUILD = "5bc11732a1";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -13241,7 +13241,7 @@ function adminActArgs(values) {
 // been given so far this month, both typed in under Management & Tools ->
 // Support Goal. It stays hidden until it is turned on there. The amount given
 // belongs to the month it was entered in and counts as 0 in the next one, so
-// the bar starts over on the 1st by itself.
+// the bar starts over on the 9th by itself.
 const SUPPORT_GOAL_KEY = "support:goal:v1";
 const SUPPORT_GOAL_URL = "https://ko-fi.com/mylistsaddon";
 // Ko-fi's webhook (POST /api/kofi-webhook, below) adds each USD donation to the
@@ -13253,7 +13253,18 @@ const KOFI_MESSAGE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const SUPPORT_GOAL_MAX = 100000;
 
 function supportGoalMonth(now = new Date()) {
-  return easternDateKey(now).slice(0, 7);
+  const parts = easternDateKey(now).split("-");
+  let year = Number(parts[0]);
+  let month = Number(parts[1]);
+  const day = Number(parts[2]);
+  if (day < 9) {
+    month -= 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+  }
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 // What is stored, as it is read: always complete, whatever was written.
@@ -13904,7 +13915,7 @@ ${UTILITY_CSS}
       <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Given so far this month (US dollars)
         <input type="number" id="supportGoalRaised" class="admin-select u-m-4px_0_0" min="0" step="0.01" style="display:block; width:160px;" placeholder="0">
       </label>
-      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 9th.</div>
       <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
         <span id="supportGoalStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
@@ -39793,7 +39804,7 @@ function openSupportGoal() {
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
     '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
-    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 1st of each month.</p>';
+    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 9th of each month.</p>';
   showModal(html);
 }
 
