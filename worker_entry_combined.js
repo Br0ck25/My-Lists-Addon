@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5bc11732a1";
+const WORKER_BUILD = "24561b929f";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -18604,44 +18604,62 @@ function getPremadeChannelLogo(payload, origin, isLandscape = false) {
   return `/api/channel-logo?${params.toString()}`;
 }
 
-function generateBadgedPosterSvg({ posterUrl, airDateText, bottomText, bottomBg, bottomBorder, bottomColor }) {
+function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomText, bottomBg, bottomBorder, bottomColor }) {
   const safePoster = escapeXml(posterUrl || '');
-  const safeAirDate = escapeXml(airDateText || '');
+  const safeAirDate = escapeXml(airDateText ? String(airDateText).toUpperCase() : '');
+  const safeAirTime = escapeXml(airTimeText ? String(airTimeText).toUpperCase() : '');
   const safeBottom = escapeXml(bottomText || '');
 
-  // Top Air Date pill: Extra-large 36px font, 72px height, generous padding
-  const topPillWidth = Math.max(160, (safeAirDate.length * 26) + 56);
+  let topBadgeSvg = '';
+  if (safeAirDate) {
+    if (safeAirTime) {
+      // Two-line stacked pill (Date on top, Time below) matching website's .cw-date-badge-timed
+      const dateWidth = safeAirDate.length * 16.5;
+      const timeWidth = safeAirTime.length * 14;
+      const topPillWidth = Math.max(120, Math.round(Math.max(dateWidth, timeWidth) + 32));
+      topBadgeSvg = `
+    <g transform="translate(16, 16)">
+      <rect x="0" y="0" width="${topPillWidth}" height="76" rx="10" ry="10" fill="#0a64d8" fill-opacity="0.96" filter="drop-shadow(0px 3px 6px rgba(0,0,0,0.5))"/>
+      <text x="${topPillWidth / 2}" y="34" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="-0.2">${safeAirDate}</text>
+      <text x="${topPillWidth / 2}" y="62" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#ffffff" fill-opacity="0.92" text-anchor="middle">${safeAirTime}</text>
+    </g>`;
+    } else {
+      // Single line pill (Date only)
+      const topPillWidth = Math.max(110, Math.round((safeAirDate.length * 16.5) + 30));
+      topBadgeSvg = `
+    <g transform="translate(16, 16)">
+      <rect x="0" y="0" width="${topPillWidth}" height="46" rx="10" ry="10" fill="#0a64d8" fill-opacity="0.96" filter="drop-shadow(0px 3px 6px rgba(0,0,0,0.5))"/>
+      <text x="${topPillWidth / 2}" y="32" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="-0.2">${safeAirDate}</text>
+    </g>`;
+    }
+  }
 
-  // Bottom Badge pill: Extra-large 38px font, 84px height, centered
-  const bottomPillWidth = Math.max(380, (safeBottom.length * 24) + 64);
-
-  const topBadgeSvg = safeAirDate ? `
-    <g transform="translate(24, 24)">
-      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.95" stroke="#66b8ff" stroke-width="3.5" filter="drop-shadow(0px 6px 12px rgba(0,0,0,0.8))"/>
-      <text x="${topPillWidth / 2}" y="49" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="1.2">${safeAirDate}</text>
-    </g>` : '';
-
-  const bottomBadgeSvg = safeBottom ? `
-    <g transform="translate(250, 715)">
-      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="20" ry="20" fill="${bottomBg || '#ff9f0a'}" fill-opacity="0.95" stroke="${bottomBorder || 'rgba(255,159,10,0.7)'}" stroke-width="4.5" filter="drop-shadow(0px 8px 16px rgba(0,0,0,0.85))"/>
-      <text x="0" y="-30" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="1.5">${safeBottom}</text>
-    </g>` : '';
+  let bottomBadgeSvg = '';
+  if (safeBottom) {
+    const bottomPillWidth = Math.min(460, Math.max(180, Math.round((safeBottom.length * 16.5) + 40)));
+    const strokeAttr = (bottomBorder && bottomBorder !== 'transparent') ? ` stroke="${bottomBorder}" stroke-width="2"` : '';
+    bottomBadgeSvg = `
+    <g transform="translate(250, 730)">
+      <rect x="${-bottomPillWidth / 2}" y="-48" width="${bottomPillWidth}" height="48" rx="12" ry="12" fill="${bottomBg || '#1f7a35'}" fill-opacity="0.96"${strokeAttr} filter="drop-shadow(0px 4px 10px rgba(0,0,0,0.7))"/>
+      <text x="0" y="-16" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="0.5">${safeBottom}</text>
+    </g>`;
+  }
 
   const topGradient = safeAirDate ? `
-    <rect x="0" y="0" width="500" height="220" fill="url(#topScrim)" opacity="0.85"/>` : '';
+    <rect x="0" y="0" width="500" height="180" fill="url(#topScrim)" opacity="0.8"/>` : '';
 
   const bottomGradient = safeBottom ? `
-    <rect x="0" y="420" width="500" height="330" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
+    <rect x="0" y="540" width="500" height="210" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="500" height="750" viewBox="0 0 500 750">
   <defs>
     <linearGradient id="topScrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0.9"/>
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.85"/>
       <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="bottomScrim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.98"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.95"/>
     </linearGradient>
   </defs>
   <rect width="500" height="750" fill="#151722"/>
@@ -19554,6 +19572,9 @@ function applyBadgedPostersToMetas(metas, origin) {
     params.set("v", "5");
     if (m.id) params.set("id", m.id);
     if (hasAirDate) params.set("airDate", m.airDate);
+    const airTimeVal = hasAirDate ? (m.airTime || m.airTimeLabel || m.nextEpisodeAirTimeLabel || "") : "";
+    const airTimeStr = typeof airTimeVal === "object" ? (airTimeVal.label || "") : String(airTimeVal || "");
+    if (airTimeStr) params.set("airTime", airTimeStr);
     if (hasPremiere) params.set("premiere", "1");
     if (hasFinale) params.set("finale", "1");
     if (hasFinaleDate) params.set("finaleDate", m.seasonFinaleAirDate);
@@ -76476,17 +76497,16 @@ function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
-    if (isGrouped) {
+    const isShowRemoval = isGrouped || !map['watch-history'].items.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isShowRemoval) {
       map['watch-history'].items = map['watch-history'].items.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
     } else {
       let removeIdx = -1;
       if (targetWatchedAt != null) {
         removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
-      } else {
+      }
+      if (removeIdx < 0) {
         removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId);
-        if (removeIdx < 0) {
-          removeIdx = map['watch-history'].items.findIndex(it => it && String(it.showId || '') === targetId);
-        }
       }
       if (removeIdx >= 0) {
         map['watch-history'].items.splice(removeIdx, 1);
@@ -76512,17 +76532,16 @@ function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
     }
   }
   if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems) && window._rawWatchHistoryItems !== (map['watch-history'] && map['watch-history'].items)) {
-    if (isGrouped) {
+    const isRawShowRemoval = isGrouped || !window._rawWatchHistoryItems.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isRawShowRemoval) {
       window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
     } else {
       let rawIdx = -1;
       if (targetWatchedAt != null) {
         rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
-      } else {
+      }
+      if (rawIdx < 0) {
         rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId);
-        if (rawIdx < 0) {
-          rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.showId || '') === targetId);
-        }
       }
       if (rawIdx >= 0) {
         window._rawWatchHistoryItems.splice(rawIdx, 1);
@@ -86109,6 +86128,7 @@ async function handleFetch(request, env, ctx) {
       const rawAirDate = url.searchParams.get("airDate") || "";
       const isAired = rawAirDate && typeof isEpisodeAired === "function" && isEpisodeAired(rawAirDate);
       const airDate = !isAired ? rawAirDate : "";
+      const airTime = !isAired ? (url.searchParams.get("airTime") || "") : "";
       const isPremiere = !isAired && url.searchParams.get("premiere") === "1";
       const isFinale = !isAired && url.searchParams.get("finale") === "1";
       const rawFinaleDate = url.searchParams.get("finaleDate") || "";
@@ -86204,11 +86224,13 @@ async function handleFetch(request, env, ctx) {
           airDateText = airDate;
         }
       }
+      if (airDateText) airDateText = String(airDateText).toUpperCase();
+      const airTimeText = airDateText && airTime ? String(airTime).toUpperCase() : "";
 
-      // Format bottom badge text
+      // Format bottom badge text (matches website's .cw-date-badge-* styling)
       let bottomText = "";
-      let bottomBg = "#30d158"; // Green for premiere
-      let bottomBorder = "rgba(48, 209, 88, 0.4)";
+      let bottomBg = "#1f7a35"; // Green for premiere (--color-rating-high)
+      let bottomBorder = "transparent";
       let bottomColor = "#ffffff";
 
       if (companion) {
@@ -86217,14 +86239,14 @@ async function handleFetch(request, env, ctx) {
         bottomBorder = "rgba(37, 99, 235, 0.8)";
         bottomColor = "#ffffff";
       } else if (isPremiere) {
-        bottomText = "Season Premiere";
-        bottomBg = "#28a745";
-        bottomBorder = "rgba(40, 167, 69, 0.6)";
+        bottomText = "SEASON PREMIERE";
+        bottomBg = "#1f7a35";
+        bottomBorder = "transparent";
         bottomColor = "#ffffff";
       } else if (isFinale) {
-        bottomText = "Season Finale";
-        bottomBg = "#ff9500";
-        bottomBorder = "rgba(255, 149, 0, 0.7)";
+        bottomText = "SEASON FINALE";
+        bottomBg = "#b25000";
+        bottomBorder = "transparent";
         bottomColor = "#ffffff";
       } else if (finaleDate) {
         let fText = "";
@@ -86240,15 +86262,16 @@ async function handleFetch(request, env, ctx) {
             fText = finaleDate;
           }
         }
-        bottomText = fText ? `Finale: ${fText}` : "Season Finale";
-        bottomBg = "rgba(18, 18, 24, 0.94)";
-        bottomBorder = "rgba(255, 159, 10, 0.75)";
+        bottomText = fText ? `FINALE: ${fText.toUpperCase()}` : "SEASON FINALE";
+        bottomBg = "rgba(20, 20, 24, 0.92)";
+        bottomBorder = "rgba(255, 149, 0, 0.35)";
         bottomColor = "#ffd166";
       }
 
       const svg = generateBadgedPosterSvg({
         posterUrl: embeddedPoster,
         airDateText,
+        airTimeText,
         bottomText,
         bottomBg,
         bottomBorder,

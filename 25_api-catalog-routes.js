@@ -550,6 +550,7 @@ async function handleFetch(request, env, ctx) {
       const rawAirDate = url.searchParams.get("airDate") || "";
       const isAired = rawAirDate && typeof isEpisodeAired === "function" && isEpisodeAired(rawAirDate);
       const airDate = !isAired ? rawAirDate : "";
+      const airTime = !isAired ? (url.searchParams.get("airTime") || "") : "";
       const isPremiere = !isAired && url.searchParams.get("premiere") === "1";
       const isFinale = !isAired && url.searchParams.get("finale") === "1";
       const rawFinaleDate = url.searchParams.get("finaleDate") || "";
@@ -645,11 +646,13 @@ async function handleFetch(request, env, ctx) {
           airDateText = airDate;
         }
       }
+      if (airDateText) airDateText = String(airDateText).toUpperCase();
+      const airTimeText = airDateText && airTime ? String(airTime).toUpperCase() : "";
 
-      // Format bottom badge text
+      // Format bottom badge text (matches website's .cw-date-badge-* styling)
       let bottomText = "";
-      let bottomBg = "#30d158"; // Green for premiere
-      let bottomBorder = "rgba(48, 209, 88, 0.4)";
+      let bottomBg = "#1f7a35"; // Green for premiere (--color-rating-high)
+      let bottomBorder = "transparent";
       let bottomColor = "#ffffff";
 
       if (companion) {
@@ -658,14 +661,14 @@ async function handleFetch(request, env, ctx) {
         bottomBorder = "rgba(37, 99, 235, 0.8)";
         bottomColor = "#ffffff";
       } else if (isPremiere) {
-        bottomText = "Season Premiere";
-        bottomBg = "#28a745";
-        bottomBorder = "rgba(40, 167, 69, 0.6)";
+        bottomText = "SEASON PREMIERE";
+        bottomBg = "#1f7a35";
+        bottomBorder = "transparent";
         bottomColor = "#ffffff";
       } else if (isFinale) {
-        bottomText = "Season Finale";
-        bottomBg = "#ff9500";
-        bottomBorder = "rgba(255, 149, 0, 0.7)";
+        bottomText = "SEASON FINALE";
+        bottomBg = "#b25000";
+        bottomBorder = "transparent";
         bottomColor = "#ffffff";
       } else if (finaleDate) {
         let fText = "";
@@ -681,15 +684,16 @@ async function handleFetch(request, env, ctx) {
             fText = finaleDate;
           }
         }
-        bottomText = fText ? `Finale: ${fText}` : "Season Finale";
-        bottomBg = "rgba(18, 18, 24, 0.94)";
-        bottomBorder = "rgba(255, 159, 10, 0.75)";
+        bottomText = fText ? `FINALE: ${fText.toUpperCase()}` : "SEASON FINALE";
+        bottomBg = "rgba(20, 20, 24, 0.92)";
+        bottomBorder = "rgba(255, 149, 0, 0.35)";
         bottomColor = "#ffd166";
       }
 
       const svg = generateBadgedPosterSvg({
         posterUrl: embeddedPoster,
         airDateText,
+        airTimeText,
         bottomText,
         bottomBg,
         bottomBorder,

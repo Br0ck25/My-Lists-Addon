@@ -88,26 +88,33 @@ describe("P8-4: Badged Posters & Icon Precomputation Optimization", () => {
         const svg = res.text;
         assert.ok(svg.includes("data:image/png;base64," + PNG.toString("base64")), "the poster's own bytes");
         assert.ok(!svg.includes(`href="${poster}"`), "no link out to the poster host");
-        assert.ok(svg.includes("Season Premiere"));
+        assert.ok(svg.includes("SEASON PREMIERE"));
         assert.equal(host.asked.length, 1);
       } finally {
         host.restore();
       }
     });
 
-    it("renders finale, air date and companion badges", async () => {
+    it("renders finale, air date, air time, finale date, and companion badges", async () => {
       const host = fakePosterHost(png);
       try {
         const env = makeEnv();
         const finale = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/finale_show.jpg") + "&finale=1&airDate=2028-04-10");
         assert.equal(finale.status, 200);
-        assert.ok(finale.text.includes("Season Finale"));
-        assert.ok(finale.text.includes("#ff9500"));
+        assert.ok(finale.text.includes("SEASON FINALE"));
+        assert.ok(finale.text.includes("#b25000"));
         const companion = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/companion.jpg") + "&companion=" + encodeURIComponent("Sequel Film"));
         assert.equal(companion.status, 200);
         assert.ok(companion.text.includes("Sequel Film"));
         assert.ok(companion.text.includes("rgba(37, 99, 235, 0.95)"));
         assert.ok(companion.text.includes("data:image/png;base64,"));
+        const timed = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/timed.jpg") + "&airDate=2028-04-10&airTime=" + encodeURIComponent("8 PM ET"));
+        assert.equal(timed.status, 200);
+        assert.ok(timed.text.includes("8 PM ET"));
+        const finaleWithDate = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/finaledate.jpg") + "&finaleDate=2028-04-10");
+        assert.equal(finaleWithDate.status, 200);
+        assert.ok(finaleWithDate.text.includes("FINALE:"));
+        assert.ok(finaleWithDate.text.includes("#ffd166"));
       } finally {
         host.restore();
       }

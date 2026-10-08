@@ -6631,17 +6631,16 @@ function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
-    if (isGrouped) {
+    const isShowRemoval = isGrouped || !map['watch-history'].items.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isShowRemoval) {
       map['watch-history'].items = map['watch-history'].items.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
     } else {
       let removeIdx = -1;
       if (targetWatchedAt != null) {
         removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
-      } else {
+      }
+      if (removeIdx < 0) {
         removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId);
-        if (removeIdx < 0) {
-          removeIdx = map['watch-history'].items.findIndex(it => it && String(it.showId || '') === targetId);
-        }
       }
       if (removeIdx >= 0) {
         map['watch-history'].items.splice(removeIdx, 1);
@@ -6667,17 +6666,16 @@ function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
     }
   }
   if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems) && window._rawWatchHistoryItems !== (map['watch-history'] && map['watch-history'].items)) {
-    if (isGrouped) {
+    const isRawShowRemoval = isGrouped || !window._rawWatchHistoryItems.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isRawShowRemoval) {
       window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
     } else {
       let rawIdx = -1;
       if (targetWatchedAt != null) {
         rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
-      } else {
+      }
+      if (rawIdx < 0) {
         rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId);
-        if (rawIdx < 0) {
-          rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.showId || '') === targetId);
-        }
       }
       if (rawIdx >= 0) {
         window._rawWatchHistoryItems.splice(rawIdx, 1);
