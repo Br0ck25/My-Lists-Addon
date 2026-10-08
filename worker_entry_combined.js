@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0a7e88e379";
+const WORKER_BUILD = "ba3c0eb92d";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -85734,6 +85734,151 @@ function bytesToBase64(buffer) {
   return btoa(binary);
 }
 
+// --- badged poster as a real image (Stremio) --------------------------------
+// Stremio cannot draw an SVG poster, so with the Cloudflare Images binding
+// (env.IMAGES) the badges are laid over the poster as a JPEG instead. The
+// pills and fades are small PNGs made right here; the words are drawn by
+// Images itself from a bold font. All in the 500x750 space the SVG uses.
+const BADGE_FONT_URL = "https://cdn.jsdelivr.net/fontsource/fonts/roboto@5.0.8/latin-700-normal.woff";
+let badgePngCrcTable = null;
+
+function badgePngCrc(bytes) {
+  if (!badgePngCrcTable) {
+    badgePngCrcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      badgePngCrcTable[n] = c >>> 0;
+    }
+  }
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = badgePngCrcTable[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// RGBA pixels (w*h*4) -> PNG bytes.
+async function encodeBadgePng(w, h, rgba) {
+  const raw = new Uint8Array((w * 4 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    raw[y * (w * 4 + 1)] = 0;
+    raw.set(rgba.subarray(y * w * 4, (y + 1) * w * 4), y * (w * 4 + 1) + 1);
+  }
+  const zipped = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer());
+  const chunk = (type, data) => {
+    const out = new Uint8Array(12 + data.length);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, data.length);
+    for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+    out.set(data, 8);
+    dv.setUint32(8 + data.length, badgePngCrc(out.subarray(4, 8 + data.length)));
+    return out;
+  };
+  const ihdr = new Uint8Array(13);
+  const idv = new DataView(ihdr.buffer);
+  idv.setUint32(0, w);
+  idv.setUint32(4, h);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zipped), chunk("IEND", new Uint8Array(0))];
+  const png = new Uint8Array(parts.reduce((n, a) => n + a.length, 0));
+  let off = 0;
+  for (const a of parts) { png.set(a, off); off += a.length; }
+  return png;
+}
+
+function badgeHexRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+  const n = m ? parseInt(m[1], 16) : 0xffffff;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// A rounded pill, optionally outlined, with soft (anti-aliased) edges.
+function badgePillPng(w, h, radius, fillHex, fillOpacity, borderHex, borderOpacity, borderWidth) {
+  const rgba = new Uint8Array(w * h * 4);
+  const fill = badgeHexRgb(fillHex);
+  const border = borderHex ? badgeHexRgb(borderHex) : null;
+  const cover = (d) => Math.max(0, Math.min(1, 0.5 - d));
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const qx = Math.abs(x + 0.5 - w / 2) - (w / 2 - radius);
+      const qy = Math.abs(y + 0.5 - h / 2) - (h / 2 - radius);
+      const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+      const inside = cover(d);
+      if (!inside) continue;
+      let col = fill;
+      let alpha = Number(fillOpacity);
+      if (border && -d < borderWidth) {
+        col = border;
+        alpha = Number(borderOpacity);
+      }
+      const i = (y * w + x) * 4;
+      rgba[i] = col[0]; rgba[i + 1] = col[1]; rgba[i + 2] = col[2];
+      rgba[i + 3] = Math.round(255 * alpha * inside);
+    }
+  }
+  return encodeBadgePng(w, h, rgba);
+}
+
+// Black fade, top-to-bottom: from topAlpha to bottomAlpha.
+function badgeFadePng(w, h, topAlpha, bottomAlpha) {
+  const rgba = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const a = Math.round(255 * (topAlpha + (bottomAlpha - topAlpha) * (y / (h - 1))));
+    for (let x = 0; x < w; x++) rgba[(y * w + x) * 4 + 3] = a;
+  }
+  return encodeBadgePng(w, h, rgba);
+}
+
+// A w x h clear strip with the words centred on it.
+async function badgeTextPng(env, w, h, text, size, color) {
+  const clear = await encodeBadgePng(w, h, new Uint8Array(w * h * 4));
+  const res = (await env.IMAGES.input(new Blob([clear]).stream())
+    .draw(env.IMAGES.text(String(text), { font: { url: BADGE_FONT_URL }, size, color }))
+    .output({ format: "image/png" })).response();
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+// Same inputs as generateBadgedPosterSvg (plus the poster's bytes); returns a
+// JPEG Response, or throws so the caller can fall back to the SVG.
+async function renderBadgedPosterJpeg(env, posterBytes, o) {
+  const draws = [];
+  const top = String(o.airDateText || "").toUpperCase();
+  const time = top ? String(o.airTimeText || "").toUpperCase() : "";
+  const bottom = String(o.bottomText || "");
+  if (top) {
+    draws.push([await badgeFadePng(500, 220, 0.85 * 0.85, 0), { top: 0, left: 0 }]);
+    if (time) {
+      const w = Math.max(170, Math.round(Math.max(top.length * 25, time.length * 22) + 60));
+      draws.push([await badgePillPng(w, 96, 16, "#007aff", 0.96, "#ffffff", 0.25, 2), { top: 20, left: 20 }]);
+      draws.push([await badgeTextPng(env, w, 44, top, 32, "#ffffff"), { top: 24, left: 20 }]);
+      draws.push([await badgeTextPng(env, w, 40, time, 28, "#ffffff"), { top: 68, left: 20 }]);
+    } else {
+      const w = Math.max(160, Math.round(top.length * 26 + 56));
+      draws.push([await badgePillPng(w, 72, 16, "#007aff", 0.96, "#ffffff", 0.25, 2), { top: 20, left: 20 }]);
+      draws.push([await badgeTextPng(env, w, 72, top, 34, "#ffffff"), { top: 20, left: 20 }]);
+    }
+  }
+  if (bottom) {
+    draws.push([await badgeFadePng(500, 310, 0, 0.95 * 0.95), { top: 440, left: 0 }]);
+    const w = Math.min(460, Math.max(340, Math.round(bottom.length * 24 + 64)));
+    const bg = parseSvgColor(o.bottomBg || "#28a745", o.bottomBgOpacity || "0.95");
+    const border = parseSvgColor(o.bottomBorder, o.bottomBorderOpacity || "0.7");
+    const left = Math.round((500 - w) / 2);
+    draws.push([await badgePillPng(w, 84, 18, bg.color, bg.opacity, border.isNone ? null : border.color, border.opacity, 3.5), { top: 631, left }]);
+    draws.push([await badgeTextPng(env, w, 84, bottom, 36, o.bottomColor || "#ffffff"), { top: 631, left }]);
+  }
+  let img = env.IMAGES.input(new Blob([posterBytes]).stream()).transform({ width: 500, height: 750, fit: "cover" });
+  for (const [bytes, pos] of draws) img = img.draw(env.IMAGES.input(new Blob([bytes]).stream()), pos);
+  const res = (await img.output({ format: "image/jpeg", quality: 88 })).response({
+    headers: {
+      "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
+      ...corsHeaders(),
+    },
+  });
+  if (!String(res.headers.get("Content-Type") || "").startsWith("image/jpeg")) throw new Error("not a jpeg");
+  return res;
+}
+
 
 // The service worker, hoisted to module scope for one reason: a string inside
 // a route handler is unreachable, and `node --check` on the combined Worker
@@ -86265,6 +86410,7 @@ async function handleFetch(request, env, ctx) {
       // this Worker's own is read from storage, because a Worker fetching its
       // own hostname does not reliably reach itself.
       let embeddedPoster = "";
+      let posterBytes = null;
       try {
         let contentType = "";
         let buffer = null;
@@ -86285,6 +86431,7 @@ async function handleFetch(request, env, ctx) {
           }
         }
         if (buffer && String(contentType || "image/jpeg").startsWith("image/")) {
+          posterBytes = buffer;
           embeddedPoster = `data:${contentType || "image/jpeg"};base64,${bytesToBase64(buffer)}`;
         }
       } catch (e) {}
@@ -86371,21 +86518,15 @@ async function handleFetch(request, env, ctx) {
         bottomColor,
       });
 
-      // Stremio and Nuvio's native image loaders cannot be relied on to draw
-      // an SVG (Stremio shows its placeholder, Nuvio drops some tiles), so
-      // when the Cloudflare Images binding (env.IMAGES) is present the SVG is
-      // rasterised to a PNG. If the binding is missing or the conversion does
-      // not come back as a PNG, the SVG below is sent exactly as before.
-      if (env && env.IMAGES && typeof env.IMAGES.input === "function") {
+      // Stremio cannot draw an SVG, so with the Images binding the same badges
+      // go over the poster as a JPEG. Any failure falls through to the SVG,
+      // which Nuvio shows as before.
+      if (env && env.IMAGES && posterBytes) {
         try {
-          const pngRes = (await env.IMAGES.input(new Blob([svg], { type: "image/svg+xml" }).stream())
-            .output({ format: "image/png" })).response({
-              headers: {
-                "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
-                ...corsHeaders(),
-              },
-            });
-          if (String(pngRes.headers.get("Content-Type") || "").startsWith("image/png")) return pngRes;
+          return await renderBadgedPosterJpeg(env, posterBytes, {
+            airDateText, airTimeText, bottomText, bottomBg, bottomBgOpacity,
+            bottomBorder, bottomBorderOpacity, bottomColor,
+          });
         } catch (e) {}
       }
 
