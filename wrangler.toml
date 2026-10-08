@@ -85,6 +85,14 @@ dataset = "mylists_events"
 binding = "BLOBS"
 bucket_name = "mylists-blobs"
 
+# --- Images (recommended: badged posters in Stremio / Nuvio) -------------------
+# /api/poster-badge draws "Season Premiere" / air-date badges as an SVG, which
+# Stremio and Nuvio cannot reliably show. With this binding the SVG is turned
+# into a PNG. Without it the SVG is sent as before.
+# Dashboard: Worker -> Settings -> Bindings -> Add -> Images, name IMAGES.
+[images]
+binding = "IMAGES"
+
 # --- Queues (recommended from Phase 5) -----------------------------------------
 # Background jobs (44_jobs-queue.js). JOBS is the producer: the Worker puts
 # jobs on mylists-jobs. The same Worker is the queue's consumer (the `queue`

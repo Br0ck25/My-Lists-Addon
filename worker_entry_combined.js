@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e56f5e0474";
+const WORKER_BUILD = "77dcab906b";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -13241,7 +13241,7 @@ function adminActArgs(values) {
 // been given so far this month, both typed in under Management & Tools ->
 // Support Goal. It stays hidden until it is turned on there. The amount given
 // belongs to the month it was entered in and counts as 0 in the next one, so
-// the bar starts over on the 1st by itself.
+// the bar starts over on the 9th by itself.
 const SUPPORT_GOAL_KEY = "support:goal:v1";
 const SUPPORT_GOAL_URL = "https://ko-fi.com/mylistsaddon";
 // Ko-fi's webhook (POST /api/kofi-webhook, below) adds each USD donation to the
@@ -13253,7 +13253,18 @@ const KOFI_MESSAGE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const SUPPORT_GOAL_MAX = 100000;
 
 function supportGoalMonth(now = new Date()) {
-  return easternDateKey(now).slice(0, 7);
+  const parts = easternDateKey(now).split("-");
+  let year = Number(parts[0]);
+  let month = Number(parts[1]);
+  const day = Number(parts[2]);
+  if (day < 9) {
+    month -= 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+  }
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 // What is stored, as it is read: always complete, whatever was written.
@@ -13904,7 +13915,7 @@ ${UTILITY_CSS}
       <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Given so far this month (US dollars)
         <input type="number" id="supportGoalRaised" class="admin-select u-m-4px_0_0" min="0" step="0.01" style="display:block; width:160px;" placeholder="0">
       </label>
-      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 1st.</div>
+      <div class="u-fs-v_font_size_sm u-c-v_muted u-mb-14px">Ko-fi adds each US-dollar donation and membership payment to this by itself (set up below); type a number here to correct it. It counts toward <span id="supportGoalMonth">this month</span> only and starts again at 0 on the 9th.</div>
       <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
         <button type="button" class="primary lc-btn" data-act="saveSupportGoal">Save</button>
         <span id="supportGoalStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
@@ -18593,44 +18604,87 @@ function getPremadeChannelLogo(payload, origin, isLandscape = false) {
   return `/api/channel-logo?${params.toString()}`;
 }
 
-function generateBadgedPosterSvg({ posterUrl, airDateText, bottomText, bottomBg, bottomBorder, bottomColor }) {
+function parseSvgColor(colorStr, defaultOpacity = '1') {
+  if (!colorStr || colorStr === 'transparent' || colorStr === 'none') {
+    return { color: 'none', opacity: defaultOpacity, isNone: true };
+  }
+  const str = String(colorStr).trim();
+  const m = str.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/i);
+  if (m) {
+    const r = Number(m[1]).toString(16).padStart(2, '0');
+    const g = Number(m[2]).toString(16).padStart(2, '0');
+    const b = Number(m[3]).toString(16).padStart(2, '0');
+    return { color: `#${r}${g}${b}`, opacity: m[4], isNone: false };
+  }
+  return { color: str, opacity: defaultOpacity, isNone: false };
+}
+
+function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomText, bottomBg, bottomBgOpacity, bottomBorder, bottomBorderOpacity, bottomColor }) {
   const safePoster = escapeXml(posterUrl || '');
-  const safeAirDate = escapeXml(airDateText || '');
+  const safeAirDate = escapeXml(airDateText ? String(airDateText).toUpperCase() : '');
+  const safeAirTime = escapeXml(airTimeText ? String(airTimeText).toUpperCase() : '');
   const safeBottom = escapeXml(bottomText || '');
 
-  // Top Air Date pill: Extra-large 36px font, 72px height, generous padding
-  const topPillWidth = Math.max(160, (safeAirDate.length * 26) + 56);
+  let topBadgeSvg = '';
+  if (safeAirDate) {
+    if (safeAirTime) {
+      // Two-line stacked pill (Date on top, Time below)
+      // Generous character width multiplier and padding so TOMORROW / 10 PM ET never extends beyond the pill
+      const dateWidth = safeAirDate.length * 25;
+      const timeWidth = safeAirTime.length * 22;
+      const topPillWidth = Math.max(170, Math.round(Math.max(dateWidth, timeWidth) + 60));
+      topBadgeSvg = `
+    <g transform="translate(20, 20)">
+      <rect x="0" y="4" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#000000" fill-opacity="0.35"/>
+      <rect x="0" y="0" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2"/>
+      <text x="${topPillWidth / 2}" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
+      <text x="${topPillWidth / 2}" y="80" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" fill-opacity="0.95" text-anchor="middle" letter-spacing="0.3">${safeAirTime}</text>
+    </g>`;
+    } else {
+      // Single line pill (Date only)
+      const topPillWidth = Math.max(160, Math.round((safeAirDate.length * 26) + 56));
+      topBadgeSvg = `
+    <g transform="translate(20, 20)">
+      <rect x="0" y="4" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#000000" fill-opacity="0.35"/>
+      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2"/>
+      <text x="${topPillWidth / 2}" y="49" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
+    </g>`;
+    }
+  }
 
-  // Bottom Badge pill: Extra-large 38px font, 84px height, centered
-  const bottomPillWidth = Math.max(380, (safeBottom.length * 24) + 64);
-
-  const topBadgeSvg = safeAirDate ? `
-    <g transform="translate(24, 24)">
-      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.95" stroke="#66b8ff" stroke-width="3.5" filter="drop-shadow(0px 6px 12px rgba(0,0,0,0.8))"/>
-      <text x="${topPillWidth / 2}" y="49" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="1.2">${safeAirDate}</text>
-    </g>` : '';
-
-  const bottomBadgeSvg = safeBottom ? `
+  let bottomBadgeSvg = '';
+  if (safeBottom) {
+    // Bottom Badge pill: Extra-large 38px font, 84px height, centered
+    const bottomPillWidth = Math.min(460, Math.max(340, Math.round((safeBottom.length * 24) + 64)));
+    const bg = parseSvgColor(bottomBg || '#28a745', bottomBgOpacity || '0.95');
+    const border = parseSvgColor(bottomBorder, bottomBorderOpacity || '0.7');
+    const strokeAttr = (!border.isNone && border.color !== 'none')
+      ? ` stroke="${border.color}" stroke-opacity="${border.opacity}" stroke-width="3.5"`
+      : '';
+    bottomBadgeSvg = `
+    <!-- badge: ${escapeXml(bottomBg || '')} -->
     <g transform="translate(250, 715)">
-      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="20" ry="20" fill="${bottomBg || '#ff9f0a'}" fill-opacity="0.95" stroke="${bottomBorder || 'rgba(255,159,10,0.7)'}" stroke-width="4.5" filter="drop-shadow(0px 8px 16px rgba(0,0,0,0.85))"/>
-      <text x="0" y="-30" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="1.5">${safeBottom}</text>
-    </g>` : '';
+      <rect x="${-bottomPillWidth / 2}" y="-80" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="#000000" fill-opacity="0.4"/>
+      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="${bg.color}" fill-opacity="${bg.opacity}"${strokeAttr}/>
+      <text x="0" y="-30" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="1.2">${safeBottom}</text>
+    </g>`;
+  }
 
   const topGradient = safeAirDate ? `
     <rect x="0" y="0" width="500" height="220" fill="url(#topScrim)" opacity="0.85"/>` : '';
 
   const bottomGradient = safeBottom ? `
-    <rect x="0" y="420" width="500" height="330" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
+    <rect x="0" y="440" width="500" height="310" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="500" height="750" viewBox="0 0 500 750">
   <defs>
     <linearGradient id="topScrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0.9"/>
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.85"/>
       <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="bottomScrim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.98"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.95"/>
     </linearGradient>
   </defs>
   <rect width="500" height="750" fill="#151722"/>
@@ -19543,6 +19597,9 @@ function applyBadgedPostersToMetas(metas, origin) {
     params.set("v", "5");
     if (m.id) params.set("id", m.id);
     if (hasAirDate) params.set("airDate", m.airDate);
+    const airTimeVal = hasAirDate ? (m.airTime || m.airTimeLabel || m.nextEpisodeAirTimeLabel || "") : "";
+    const airTimeStr = typeof airTimeVal === "object" ? (airTimeVal.label || "") : String(airTimeVal || "");
+    if (airTimeStr) params.set("airTime", airTimeStr);
     if (hasPremiere) params.set("premiere", "1");
     if (hasFinale) params.set("finale", "1");
     if (hasFinaleDate) params.set("finaleDate", m.seasonFinaleAirDate);
@@ -39793,7 +39850,7 @@ function openSupportGoal() {
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
     '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
-    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 1st of each month.</p>';
+    '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 9th of each month.</p>';
   showModal(html);
 }
 
@@ -74975,7 +75032,7 @@ function buildLocalListCardHtml(l) {
     } else if (isWatchlist) {
       removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
     } else if (l.slug === 'watch-history') {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self"]) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self", it.watchedAt != null ? it.watchedAt : '']) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
     }
     const itemPoster = resolveItemPoster(it);
     const isAiringList = l.slug === 'airing-next' || l.statusKey === 'airing-next';
@@ -76447,7 +76504,7 @@ function removeWatchlistItemDirect(id, btn) {
   }
 }
 
-function removeWatchHistoryItemDirect(id, btn) {
+function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
   if (!id) return;
   if (btn) {
     const tile = btn.closest('.list-card-mini-poster-tile, .live-preview-poster-card');
@@ -76461,12 +76518,33 @@ function removeWatchHistoryItemDirect(id, btn) {
     }
   }
   const targetId = String(id);
+  const targetWatchedAt = (watchedAt !== undefined && watchedAt !== null && watchedAt !== '' && !isNaN(Number(watchedAt))) ? Number(watchedAt) : null;
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
-    map['watch-history'].items = map['watch-history'].items.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
+    const isShowRemoval = isGrouped || !map['watch-history'].items.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isShowRemoval) {
+      map['watch-history'].items = map['watch-history'].items.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let removeIdx = -1;
+      if (targetWatchedAt != null) {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      }
+      if (removeIdx < 0) {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+      }
+      if (removeIdx >= 0) {
+        map['watch-history'].items.splice(removeIdx, 1);
+      }
+    }
     if (map['watch-history'].items.length !== initialLen) {
-      if (window._watchedItemIds) window._watchedItemIds.delete(targetId);
+      const stillInHistory = map['watch-history'].items.some(it => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId));
+      if (!stillInHistory && window._watchedItemIds) {
+        window._watchedItemIds.delete(targetId);
+      }
+      if (typeof rebuildWatchedIndex === 'function') {
+        rebuildWatchedIndex(map['watch-history'].items);
+      }
       map['watch-history'].updatedAt = Date.now();
       if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(map);
       if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave({ intentionalRemoval: true });
@@ -76478,17 +76556,31 @@ function removeWatchHistoryItemDirect(id, btn) {
       if (typeof syncAiringNextWatchState === 'function') syncAiringNextWatchState();
     }
   }
-  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems)) {
-    window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
-    if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
-      // Update the open See All page in place. Rebuilding it -- which is what
-      // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
-      // the grid, re-requested every poster and scrolled back to the top on
-      // every single removal. The full render stays as the fallback for the
-      // one case that really does need re-laying out (grouped by show).
-      const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
-      if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
+  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems) && window._rawWatchHistoryItems !== (map['watch-history'] && map['watch-history'].items)) {
+    const isRawShowRemoval = isGrouped || !window._rawWatchHistoryItems.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isRawShowRemoval) {
+      window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let rawIdx = -1;
+      if (targetWatchedAt != null) {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      }
+      if (rawIdx < 0) {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+      }
+      if (rawIdx >= 0) {
+        window._rawWatchHistoryItems.splice(rawIdx, 1);
+      }
     }
+  }
+  if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
+    // Update the open See All page in place. Rebuilding it -- which is what
+    // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
+    // the grid, re-requested every poster and scrolled back to the top on
+    // every single removal. The full render stays as the fallback for the
+    // one case that really does need re-laying out (grouped by show).
+    const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
+    if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
   }
 }
 
@@ -78726,7 +78818,9 @@ function livePreviewPosterHtml(m) {
       } else if (m.removeWatchlistId) {
         removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="watchlist" data-remove-id="' + escapeAttr(m.removeWatchlistId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
       } else if (m.removeHistoryId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+        const groupedAttr = m.isGroupedShow ? ' data-grouped-show="1"' : '';
+        const watchedAtAttr = (m.watchedAt != null && !m.isGroupedShow) ? ' data-watched-at="' + escapeAttr(m.watchedAt) + '"' : '';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '"' + groupedAttr + watchedAtAttr + ' data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
       } else if (m.removeCustomListSlug) {
         removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="custom" data-remove-id="' + escapeAttr(m.id) + '" data-remove-slug="' + escapeAttr(m.removeCustomListSlug) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from List" aria-label="Remove from List">\u2715</button>';
       }
@@ -78854,6 +78948,9 @@ function removeListItemFromDetails(btn) {
   const type = btn.dataset.removeType || '';
   const id = btn.dataset.removeId || '';
   const extra = btn.dataset.removeSlug || '';
+  const isGrouped = btn.dataset.groupedShow === '1';
+  const watchedAtRaw = btn.dataset.watchedAt;
+  const watchedAt = (watchedAtRaw !== undefined && watchedAtRaw !== null && watchedAtRaw !== '') ? Number(watchedAtRaw) : null;
   if (!id) return;
   const targetId = String(id);
   const card = btn.closest('.live-preview-poster-card, .list-card-mini-poster-tile');
@@ -78882,7 +78979,20 @@ function removeListItemFromDetails(btn) {
     Object.keys(window._listPreloadedCache).forEach((k) => {
       const cache = window._listPreloadedCache[k];
       if (cache && Array.isArray(cache.sample)) {
-        cache.sample = cache.sample.filter((it) => it && String(it.id || it.removeShowId || it.removeAiringShowId || it.removeWatchlistId || it.removeHistoryId) !== targetId);
+        if (type === 'history' && !isGrouped) {
+          let sIdx = -1;
+          if (watchedAt != null) {
+            sIdx = cache.sample.findIndex((it) => it && String(it.id || it.removeHistoryId) === targetId && Number(it.watchedAt) === watchedAt);
+          }
+          if (sIdx < 0) {
+            sIdx = cache.sample.findIndex((it) => it && String(it.id || it.removeHistoryId) === targetId);
+          }
+          if (sIdx >= 0) {
+            cache.sample.splice(sIdx, 1);
+          }
+        } else {
+          cache.sample = cache.sample.filter((it) => it && String(it.id || it.removeShowId || it.removeAiringShowId || it.removeWatchlistId || it.removeHistoryId) !== targetId);
+        }
       }
     });
   }
@@ -78894,7 +79004,7 @@ function removeListItemFromDetails(btn) {
   } else if (type === 'watchlist') {
     if (typeof removeWatchlistItemDirect === 'function') removeWatchlistItemDirect(targetId, btn);
   } else if (type === 'history') {
-    if (typeof removeWatchHistoryItemDirect === 'function') removeWatchHistoryItemDirect(targetId, btn);
+    if (typeof removeWatchHistoryItemDirect === 'function') removeWatchHistoryItemDirect(targetId, btn, watchedAt, isGrouped);
   } else if (type === 'custom' && extra) {
     if (typeof removeCustomListItemDirect === 'function') removeCustomListItemDirect(targetId, extra, btn);
   } else if (type === 'external') {
@@ -79181,6 +79291,7 @@ function renderWatchHistoryGrid() {
             // show id removes exactly what this tile stands for: every watched
             // episode of that show.
             removeHistoryId: sId || it.id,
+            isGroupedShow: true,
           });
         }
         const entry = showMap.get(showKey);
@@ -82518,6 +82629,65 @@ function copyLink(url) {
   });
 }
 
+function openNuvioWeb(url) {
+  if (url) copyLink(url);
+  showToast('Manifest link copied to clipboard.', 'success');
+  window.open('https://nuvio.tv/account?tab=addons', '_blank', 'noopener,noreferrer');
+}
+
+// Nuvio documents no install deep link, so this copies the manifest and just
+// launches the app (the bare scheme); the person pastes it under Settings ->
+// Content & Discovery -> Addons.
+function openNuvioApp(url) {
+  if (url) copyLink(url);
+  showToast('Manifest link copied. In Nuvio: Settings \u2192 Content & Discovery \u2192 Addons \u2192 paste it.', 'success');
+  window.location.href = 'nuvio://';
+}
+window.openNuvioApp = openNuvioApp;
+
+function openNuvioInstallModal(url) {
+  if (!url) return;
+  copyLink(url);
+  showToast('Manifest link copied to clipboard.', 'success');
+  const html =
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">&#x2715;</button>' +
+    '<h2>Install in Nuvio</h2>' +
+    '<p class="modal-sub">Nuvio syncs addons across all your devices via your Nuvio account, or via app settings.</p>' +
+    '<div class="u-p-10px_14px u-br-v_radius_sm u-mb-16px u-ai-center u-gap-10px" style="display:flex; background:var(--color-success-subtle); border:1px solid var(--color-success);">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="u-fsh-0"><polyline points="20 6 9 17 4 12"></polyline></svg>' +
+      '<div class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Manifest link copied to clipboard!</div>' +
+    '</div>' +
+    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-12px u-bg-v_surface">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Web Browser / Account Sync (Recommended)</div>' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">Install on nuvio.tv to automatically sync this addon across your Desktop app, Mobile app, and TV.</p>' +
+      '<div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">' +
+        '<a href="https://nuvio.tv/account?tab=addons" target="_blank" rel="noopener noreferrer" class="btn btn-primary u-p-8px_16px u-fs-v_font_size_sm u-fw-600 u-br-v_radius_pill u-td-none u-ai-center u-gap-6px" style="display:inline-flex;">' +
+          '<span>Open nuvio.tv Addons</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>' +
+        '</a>' +
+        '<span class="u-c-v_muted u-fs-v_font_size_xs">Paste the copied link into Addon URL and confirm</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-14px u-bg-v_surface">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Nuvio Desktop &amp; Mobile App</div>' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">In the Nuvio app, go to: <strong>Settings &rarr; Content &amp; Discovery &rarr; Addons</strong> and paste your copied manifest link.</p>' +
+    '</div>' +
+    '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px">Manifest Link:</div>' +
+    '<div class="install-url-input-group u-ai-stretch u-gap-8px u-mb-16px" style="display:flex; width:100%;">' +
+      '<div class="install-url-box u-flex-1 u-minw-0 u-m-0 u-ai-center u-fs-v_font_size_xs u-overflowwrap-anywhere" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Click to copy" style="display:flex;">' + escapeHtml(url) + '</div>' +
+      '<button type="button" class="lc-btn secondary u-flex-none u-p-0_14px u-minh-36px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_xs u-br-v_radius_pill" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Copy link" style="display:inline-flex;">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
+        '<span>Copy</span>' +
+      '</button>' +
+    '</div>' +
+    '<div class="actions u-mt-14px">' +
+      '<button type="button" class="primary" data-act="closeModal">Done</button>' +
+    '</div>';
+  showModal(html);
+}
+window.openNuvioWeb = openNuvioWeb;
+window.openNuvioInstallModal = openNuvioInstallModal;
+
 // docs/DECISIONS.md D-8. Signed in, the save proves the account (/api/save
 // verifies it and never stores it in the link). Signed out, the save carries
 // no provider keys, tokens or playback tracking: a signed-out install is the
@@ -82627,7 +82797,6 @@ async function generate() {
   const installUrl = ORIGIN + '/' + config + '/manifest.json';
   const stremioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'stremio://');
   const stremioWebUrl = 'https://web.stremio.com/#/addons?addon=' + encodeURIComponent(installUrl);
-  const nuvioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'nuvio://');
   // A group breakdown alongside the plain install-count beacon -- each
   // row's own .group ("MDBList Charts", "Custom Lists", "Channels", etc.)
   // is already a meaningful "what kind of source is this" label, no need
@@ -82663,12 +82832,15 @@ async function generate() {
         <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
+        <button type="button" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base u-cur-pointer" data-act="openNuvioApp" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
           Install in Nuvio
-        </a>
+        </button>
         <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>
+        <button type="button" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none u-cur-pointer" data-act="openNuvioWeb" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
+          Nuvio Web
+        </button>
       </div>
 
       <div class="install-url-container">
@@ -82691,7 +82863,7 @@ async function generate() {
           <span class="u-fw-600 u-c-v_text">To install manually, copy the manifest link above and paste it into:</span>
           <div class="install-hint-steps">
             <span>&bull; <strong>Stremio</strong> &rarr; Addons &rarr; Community &rarr; Paste URL</span>
-            <span>&bull; <strong>Nuvio</strong> &rarr; Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
+            <span>&bull; <strong>Nuvio</strong> &rarr; <a href="https://nuvio.tv/account?tab=addons" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">nuvio.tv/account?tab=addons</a> or Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
             <span>&bull; <strong>Wako</strong> &rarr; Settings &rarr; Add-ons &rarr; Install from URL</span>
           </div>
         </div>
@@ -85567,6 +85739,151 @@ function bytesToBase64(buffer) {
   return btoa(binary);
 }
 
+// --- badged poster as a real image (Stremio) --------------------------------
+// Stremio cannot draw an SVG poster, so with the Cloudflare Images binding
+// (env.IMAGES) the badges are laid over the poster as a JPEG instead. The
+// pills and fades are small PNGs made right here; the words are drawn by
+// Images itself from a bold font. All in the 500x750 space the SVG uses.
+const BADGE_FONT_URL = "https://cdn.jsdelivr.net/fontsource/fonts/roboto@5.0.8/latin-700-normal.woff";
+let badgePngCrcTable = null;
+
+function badgePngCrc(bytes) {
+  if (!badgePngCrcTable) {
+    badgePngCrcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      badgePngCrcTable[n] = c >>> 0;
+    }
+  }
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = badgePngCrcTable[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// RGBA pixels (w*h*4) -> PNG bytes.
+async function encodeBadgePng(w, h, rgba) {
+  const raw = new Uint8Array((w * 4 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    raw[y * (w * 4 + 1)] = 0;
+    raw.set(rgba.subarray(y * w * 4, (y + 1) * w * 4), y * (w * 4 + 1) + 1);
+  }
+  const zipped = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer());
+  const chunk = (type, data) => {
+    const out = new Uint8Array(12 + data.length);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, data.length);
+    for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+    out.set(data, 8);
+    dv.setUint32(8 + data.length, badgePngCrc(out.subarray(4, 8 + data.length)));
+    return out;
+  };
+  const ihdr = new Uint8Array(13);
+  const idv = new DataView(ihdr.buffer);
+  idv.setUint32(0, w);
+  idv.setUint32(4, h);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zipped), chunk("IEND", new Uint8Array(0))];
+  const png = new Uint8Array(parts.reduce((n, a) => n + a.length, 0));
+  let off = 0;
+  for (const a of parts) { png.set(a, off); off += a.length; }
+  return png;
+}
+
+function badgeHexRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+  const n = m ? parseInt(m[1], 16) : 0xffffff;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// A rounded pill, optionally outlined, with soft (anti-aliased) edges.
+function badgePillPng(w, h, radius, fillHex, fillOpacity, borderHex, borderOpacity, borderWidth) {
+  const rgba = new Uint8Array(w * h * 4);
+  const fill = badgeHexRgb(fillHex);
+  const border = borderHex ? badgeHexRgb(borderHex) : null;
+  const cover = (d) => Math.max(0, Math.min(1, 0.5 - d));
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const qx = Math.abs(x + 0.5 - w / 2) - (w / 2 - radius);
+      const qy = Math.abs(y + 0.5 - h / 2) - (h / 2 - radius);
+      const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+      const inside = cover(d);
+      if (!inside) continue;
+      let col = fill;
+      let alpha = Number(fillOpacity);
+      if (border && -d < borderWidth) {
+        col = border;
+        alpha = Number(borderOpacity);
+      }
+      const i = (y * w + x) * 4;
+      rgba[i] = col[0]; rgba[i + 1] = col[1]; rgba[i + 2] = col[2];
+      rgba[i + 3] = Math.round(255 * alpha * inside);
+    }
+  }
+  return encodeBadgePng(w, h, rgba);
+}
+
+// Black fade, top-to-bottom: from topAlpha to bottomAlpha.
+function badgeFadePng(w, h, topAlpha, bottomAlpha) {
+  const rgba = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const a = Math.round(255 * (topAlpha + (bottomAlpha - topAlpha) * (y / (h - 1))));
+    for (let x = 0; x < w; x++) rgba[(y * w + x) * 4 + 3] = a;
+  }
+  return encodeBadgePng(w, h, rgba);
+}
+
+// A w x h clear strip with the words centred on it.
+async function badgeTextPng(env, w, h, text, size, color) {
+  const clear = await encodeBadgePng(w, h, new Uint8Array(w * h * 4));
+  const res = (await env.IMAGES.input(new Blob([clear]).stream())
+    .draw(env.IMAGES.text(String(text), { font: { url: BADGE_FONT_URL }, size, color }))
+    .output({ format: "image/png" })).response();
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+// Same inputs as generateBadgedPosterSvg (plus the poster's bytes); returns a
+// JPEG Response, or throws so the caller can fall back to the SVG.
+async function renderBadgedPosterJpeg(env, posterBytes, o) {
+  const draws = [];
+  const top = String(o.airDateText || "").toUpperCase();
+  const time = top ? String(o.airTimeText || "").toUpperCase() : "";
+  const bottom = String(o.bottomText || "");
+  if (top) {
+    draws.push([await badgeFadePng(500, 220, 0.85 * 0.85, 0), { top: 0, left: 0 }]);
+    if (time) {
+      const w = Math.max(170, Math.round(Math.max(top.length * 25, time.length * 22) + 60));
+      draws.push([await badgePillPng(w, 96, 16, "#007aff", 0.96, "#ffffff", 0.25, 2), { top: 20, left: 20 }]);
+      draws.push([await badgeTextPng(env, w, 44, top, 32, "#ffffff"), { top: 24, left: 20 }]);
+      draws.push([await badgeTextPng(env, w, 40, time, 28, "#ffffff"), { top: 68, left: 20 }]);
+    } else {
+      const w = Math.max(160, Math.round(top.length * 26 + 56));
+      draws.push([await badgePillPng(w, 72, 16, "#007aff", 0.96, "#ffffff", 0.25, 2), { top: 20, left: 20 }]);
+      draws.push([await badgeTextPng(env, w, 72, top, 34, "#ffffff"), { top: 20, left: 20 }]);
+    }
+  }
+  if (bottom) {
+    draws.push([await badgeFadePng(500, 310, 0, 0.95 * 0.95), { top: 440, left: 0 }]);
+    const w = Math.min(460, Math.max(340, Math.round(bottom.length * 24 + 64)));
+    const bg = parseSvgColor(o.bottomBg || "#28a745", o.bottomBgOpacity || "0.95");
+    const border = parseSvgColor(o.bottomBorder, o.bottomBorderOpacity || "0.7");
+    const left = Math.round((500 - w) / 2);
+    draws.push([await badgePillPng(w, 84, 18, bg.color, bg.opacity, border.isNone ? null : border.color, border.opacity, 3.5), { top: 631, left }]);
+    draws.push([await badgeTextPng(env, w, 84, bottom, 36, o.bottomColor || "#ffffff"), { top: 631, left }]);
+  }
+  let img = env.IMAGES.input(new Blob([posterBytes]).stream()).transform({ width: 500, height: 750, fit: "cover" });
+  for (const [bytes, pos] of draws) img = img.draw(env.IMAGES.input(new Blob([bytes]).stream()), pos);
+  const res = (await img.output({ format: "image/jpeg", quality: 88 })).response({
+    headers: {
+      "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
+      ...corsHeaders(),
+    },
+  });
+  if (!String(res.headers.get("Content-Type") || "").startsWith("image/jpeg")) throw new Error("not a jpeg");
+  return res;
+}
+
 
 // The service worker, hoisted to module scope for one reason: a string inside
 // a route handler is unreachable, and `node --check` on the combined Worker
@@ -86042,6 +86359,7 @@ async function handleFetch(request, env, ctx) {
       const rawAirDate = url.searchParams.get("airDate") || "";
       const isAired = rawAirDate && typeof isEpisodeAired === "function" && isEpisodeAired(rawAirDate);
       const airDate = !isAired ? rawAirDate : "";
+      const airTime = !isAired ? (url.searchParams.get("airTime") || "") : "";
       const isPremiere = !isAired && url.searchParams.get("premiere") === "1";
       const isFinale = !isAired && url.searchParams.get("finale") === "1";
       const rawFinaleDate = url.searchParams.get("finaleDate") || "";
@@ -86097,6 +86415,7 @@ async function handleFetch(request, env, ctx) {
       // this Worker's own is read from storage, because a Worker fetching its
       // own hostname does not reliably reach itself.
       let embeddedPoster = "";
+      let posterBytes = null;
       try {
         let contentType = "";
         let buffer = null;
@@ -86117,6 +86436,7 @@ async function handleFetch(request, env, ctx) {
           }
         }
         if (buffer && String(contentType || "image/jpeg").startsWith("image/")) {
+          posterBytes = buffer;
           embeddedPoster = `data:${contentType || "image/jpeg"};base64,${bytesToBase64(buffer)}`;
         }
       } catch (e) {}
@@ -86137,27 +86457,37 @@ async function handleFetch(request, env, ctx) {
           airDateText = airDate;
         }
       }
+      if (airDateText) airDateText = String(airDateText).toUpperCase();
+      const airTimeText = airDateText && airTime ? String(airTime).toUpperCase() : "";
 
-      // Format bottom badge text
+      // Format bottom badge text (matches website's .cw-date-badge-* styling)
       let bottomText = "";
-      let bottomBg = "#30d158"; // Green for premiere
-      let bottomBorder = "rgba(48, 209, 88, 0.4)";
+      let bottomBg = "#28a745"; // Green for premiere
+      let bottomBgOpacity = "0.95";
+      let bottomBorder = "#28a745";
+      let bottomBorderOpacity = "0.6";
       let bottomColor = "#ffffff";
 
       if (companion) {
         bottomText = companion;
         bottomBg = "rgba(37, 99, 235, 0.95)";
-        bottomBorder = "rgba(37, 99, 235, 0.8)";
+        bottomBgOpacity = "0.95";
+        bottomBorder = "#2563eb";
+        bottomBorderOpacity = "0.8";
         bottomColor = "#ffffff";
       } else if (isPremiere) {
-        bottomText = "Season Premiere";
+        bottomText = "SEASON PREMIERE";
         bottomBg = "#28a745";
-        bottomBorder = "rgba(40, 167, 69, 0.6)";
+        bottomBgOpacity = "0.95";
+        bottomBorder = "#28a745";
+        bottomBorderOpacity = "0.6";
         bottomColor = "#ffffff";
       } else if (isFinale) {
-        bottomText = "Season Finale";
+        bottomText = "SEASON FINALE";
         bottomBg = "#ff9500";
-        bottomBorder = "rgba(255, 149, 0, 0.7)";
+        bottomBgOpacity = "0.95";
+        bottomBorder = "#ff9500";
+        bottomBorderOpacity = "0.7";
         bottomColor = "#ffffff";
       } else if (finaleDate) {
         let fText = "";
@@ -86173,20 +86503,37 @@ async function handleFetch(request, env, ctx) {
             fText = finaleDate;
           }
         }
-        bottomText = fText ? `Finale: ${fText}` : "Season Finale";
-        bottomBg = "rgba(18, 18, 24, 0.94)";
-        bottomBorder = "rgba(255, 159, 10, 0.75)";
+        bottomText = fText ? `FINALE: ${fText.toUpperCase()}` : "SEASON FINALE";
+        bottomBg = "#121218";
+        bottomBgOpacity = "0.94";
+        bottomBorder = "#ff9f0a";
+        bottomBorderOpacity = "0.75";
         bottomColor = "#ffd166";
       }
 
       const svg = generateBadgedPosterSvg({
         posterUrl: embeddedPoster,
         airDateText,
+        airTimeText,
         bottomText,
         bottomBg,
+        bottomBgOpacity,
         bottomBorder,
+        bottomBorderOpacity,
         bottomColor,
       });
+
+      // Stremio cannot draw an SVG, so with the Images binding the same badges
+      // go over the poster as a JPEG. Any failure falls through to the SVG,
+      // which Nuvio shows as before.
+      if (env && env.IMAGES && posterBytes) {
+        try {
+          return await renderBadgedPosterJpeg(env, posterBytes, {
+            airDateText, airTimeText, bottomText, bottomBg, bottomBgOpacity,
+            bottomBorder, bottomBorderOpacity, bottomColor,
+          });
+        } catch (e) {}
+      }
 
       rememberBadgedPoster(cacheKey, svg);
 
@@ -109610,17 +109957,26 @@ async function saveTrackingRecord(env, username, accountId, record) {
   const actDb = activityDb(env, accountId);
   const incoming = Array.isArray(record.watchHistory) ? record.watchHistory : [];
   const { results: storedRows } = await actDb.prepare(
-    "SELECT id, legacy_id FROM watch_events WHERE account_id = ?"
+    "SELECT id, legacy_id, watched_at FROM watch_events WHERE account_id = ?"
   ).bind(accountId).all();
   const known = new Set((storedRows || []).map((r) => r.legacy_id).filter(Boolean));
   const listed = new Set();
   const fresh = [];
+  const unmatchedStored = [...(storedRows || [])];
   for (const item of incoming) {
     if (!item || typeof item !== "object") continue;
     const id = legacyHistoryId(item);
     if (!id) continue;
     listed.add(id);
     if (!known.has(id)) fresh.push({ ...legacyHistoryPlay(item, Number(record.updatedAt) || Date.now()), id });
+    const t = Number(item.watchedAt) || 0;
+    let sIdx = t ? unmatchedStored.findIndex(r => r.legacy_id === id && r.watched_at === t) : -1;
+    if (sIdx < 0) {
+      sIdx = unmatchedStored.findIndex(r => r.legacy_id === id);
+    }
+    if (sIdx >= 0) {
+      unmatchedStored.splice(sIdx, 1);
+    }
   }
   if (fresh.length) {
     for (let i = 0; i < fresh.length; i += ACTIVITY_BACKFILL_CHUNK) {
@@ -109638,7 +109994,7 @@ async function saveTrackingRecord(env, username, accountId, record) {
   if (intentional) {
     // Only plays the website knows by id can be removed by leaving them out:
     // a play with no legacy id came from somewhere the website never listed.
-    const gone = (storedRows || []).filter((r) => r.legacy_id && !listed.has(r.legacy_id)).map((r) => r.id);
+    const gone = unmatchedStored.filter((r) => r.legacy_id).map((r) => r.id);
     for (let i = 0; i < gone.length; i += 90) {
       const part = gone.slice(i, i + 90);
       await actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND id IN (${part.map(() => "?").join(", ")})`).bind(accountId, ...part).run();
