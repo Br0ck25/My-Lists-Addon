@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1325675322";
+const WORKER_BUILD = "d11df52403";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -82606,6 +82606,59 @@ function copyLink(url) {
   });
 }
 
+function openNuvioWeb(url) {
+  if (url) copyLink(url);
+  showToast('Manifest link copied to clipboard.', 'success');
+  window.open('https://nuvio.tv/account?tab=addons', '_blank', 'noopener,noreferrer');
+}
+
+function openNuvioInstallModal(url) {
+  if (!url) return;
+  copyLink(url);
+  showToast('Manifest link copied to clipboard.', 'success');
+  const nuvioAppUrl = String(url).replace(/^https?:\\/\\//i, 'nuvio://');
+  const html =
+    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">&#x2715;</button>' +
+    '<h2>Install in Nuvio</h2>' +
+    '<p class="modal-sub">Nuvio syncs addons across all your devices via your Nuvio account, or via app settings.</p>' +
+    '<div class="u-p-10px_14px u-br-v_radius_sm u-mb-16px u-ai-center u-gap-10px" style="display:flex; background:var(--color-success-subtle); border:1px solid var(--color-success);">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="u-fsh-0"><polyline points="20 6 9 17 4 12"></polyline></svg>' +
+      '<div class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Manifest link copied to clipboard!</div>' +
+    '</div>' +
+    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-12px u-bg-v_surface">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Web Browser / Account Sync (Recommended)</div>' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">Install on nuvio.tv to automatically sync this addon across your Desktop app, Mobile app, and TV.</p>' +
+      '<div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">' +
+        '<a href="https://nuvio.tv/account?tab=addons" target="_blank" rel="noopener noreferrer" class="btn btn-primary u-p-8px_16px u-fs-v_font_size_sm u-fw-600 u-br-v_radius_pill u-td-none u-ai-center u-gap-6px" style="display:inline-flex;">' +
+          '<span>Open nuvio.tv Addons</span>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>' +
+        '</a>' +
+        '<span class="u-c-v_muted u-fs-v_font_size_xs">Paste the copied link into Addon URL and confirm</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-14px u-bg-v_surface">' +
+      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Nuvio Desktop &amp; Mobile App</div>' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">In the Nuvio app, go to: <strong>Settings &rarr; Content &amp; Discovery &rarr; Addons</strong> and paste your copied manifest link.</p>' +
+      '<div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">' +
+        '<a href="' + escapeAttr(nuvioAppUrl) + '" class="btn btn-secondary u-p-8px_16px u-fs-v_font_size_sm u-fw-600 u-br-v_radius_pill u-td-none" style="display:inline-flex;">Open Nuvio App</a>' +
+      '</div>' +
+    '</div>' +
+    '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px">Manifest Link:</div>' +
+    '<div class="install-url-input-group u-ai-stretch u-gap-8px u-mb-16px" style="display:flex; width:100%;">' +
+      '<div class="install-url-box u-flex-1 u-minw-0 u-m-0 u-ai-center u-fs-v_font_size_xs u-overflowwrap-anywhere" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Click to copy" style="display:flex;">' + escapeHtml(url) + '</div>' +
+      '<button type="button" class="lc-btn secondary u-flex-none u-p-0_14px u-minh-36px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_xs u-br-v_radius_pill" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Copy link" style="display:inline-flex;">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
+        '<span>Copy</span>' +
+      '</button>' +
+    '</div>' +
+    '<div class="actions u-mt-14px">' +
+      '<button type="button" class="primary" data-act="closeModal">Done</button>' +
+    '</div>';
+  showModal(html);
+}
+window.openNuvioWeb = openNuvioWeb;
+window.openNuvioInstallModal = openNuvioInstallModal;
+
 // docs/DECISIONS.md D-8. Signed in, the save proves the account (/api/save
 // verifies it and never stores it in the link). Signed out, the save carries
 // no provider keys, tokens or playback tracking: a signed-out install is the
@@ -82751,12 +82804,15 @@ async function generate() {
         <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
+        <button type="button" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base u-cur-pointer" data-act="openNuvioInstallModal" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
           Install in Nuvio
-        </a>
+        </button>
         <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>
+        <button type="button" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none u-cur-pointer" data-act="openNuvioWeb" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
+          Nuvio Web
+        </button>
       </div>
 
       <div class="install-url-container">
@@ -82779,7 +82835,7 @@ async function generate() {
           <span class="u-fw-600 u-c-v_text">To install manually, copy the manifest link above and paste it into:</span>
           <div class="install-hint-steps">
             <span>&bull; <strong>Stremio</strong> &rarr; Addons &rarr; Community &rarr; Paste URL</span>
-            <span>&bull; <strong>Nuvio</strong> &rarr; Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
+            <span>&bull; <strong>Nuvio</strong> &rarr; <a href="https://nuvio.tv/account?tab=addons" target="_blank" rel="noopener noreferrer" class="u-c-v_accent">nuvio.tv/account?tab=addons</a> or Settings &rarr; Content &amp; Discovery &rarr; Addons</span>
             <span>&bull; <strong>Wako</strong> &rarr; Settings &rarr; Add-ons &rarr; Install from URL</span>
           </div>
         </div>

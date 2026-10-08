@@ -5988,6 +5988,18 @@ describe("client: signed out, only the site's public lists", () => {
     assert.match(html, /Sign in to add channels to an install link\./);
     assert.match(html, /data-act="openRestoreModal"/);
   });
+
+  it("renders Stremio and Nuvio install actions with Nuvio modal and Web buttons", async () => {
+    const client = withRows(loadClient({ routes: { "/api/save": () => ({ json: { ok: true, id: "cfg123" } }) } }), [
+      { name: "Popular", url: "tmdb:chart:popular", type: "movie" },
+    ]);
+    await client.call("generate");
+    const html = client.get("document").getElementById("result").innerHTML;
+    assert.match(html, /data-act="openNuvioInstallModal"/);
+    assert.match(html, /data-act="openNuvioWeb"/);
+    assert.match(html, /stremio:\/\//);
+    assert.match(html, /https:\/\/nuvio\.tv\/account\?tab=addons/);
+  });
 });
 
 // Storylines and Explore Channels are the site's own channels: "+ Add" puts

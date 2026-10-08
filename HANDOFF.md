@@ -13,6 +13,10 @@ Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo e
     - `SEASON PREMIERE`: uppercase text in vibrant green (`#28a745`, border `rgba(40, 167, 69, 0.6)`).
     - `SEASON FINALE`: uppercase text in vibrant amber (`#ff9500`, border `rgba(255, 149, 0, 0.7)`).
     - `FINALE: <DATE>`: dark pill (`rgba(18, 18, 24, 0.94)`) with amber border (`rgba(255, 159, 10, 0.75)`) and gold text (`#ffd166`).
+- **Nuvio Install Flow & Web Dashboard Link (PR #33, 2026-10-08):** Improved the "Install in Nuvio" flow (24_client-backup-restore-presets.js):
+  - Clicking "Install in Nuvio" opens an accessible guidance modal (`openNuvioInstallModal`), copies the manifest URL to the clipboard immediately with feedback toast and status badge, and offers direct options for both the Nuvio Web Dashboard (`https://nuvio.tv/account?tab=addons` to sync across desktop, mobile and TV) and the Nuvio app (Settings → Content & Discovery → Addons).
+  - Added dedicated "Nuvio Web" button alongside "Stremio Web" in the install actions bar (`openNuvioWeb`) that auto-copies the manifest link and opens `https://nuvio.tv/account?tab=addons`.
+  - Updated manual installation instructions with a direct link to `nuvio.tv/account?tab=addons`. Covered by tests in `tests/client.test.mjs`.
 - **Unchecked after the UI consistency pass (PR #19):** a modal over the phone bottom nav, drag-and-drop, storyline and deep creator-profile screens. Rules: `AI_UI_RULES.md`, `DESIGN_SYSTEM.md`.
 
 ## Next steps
