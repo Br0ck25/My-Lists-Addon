@@ -5996,9 +5996,9 @@ describe("client: signed out, only the site's public lists", () => {
     await client.call("generate");
     const html = client.get("document").getElementById("result").innerHTML;
     // Nuvio documents no install deep link (nuvio.wiki: manual paste only), so
-    // the button opens the copy-and-paste guide instead of a dead nuvio:// link.
+    // the button copies the link and opens the app instead of a dead nuvio://addon link.
     assert.doesNotMatch(html, /nuvio:\/\//);
-    assert.match(html, /data-act="openNuvioInstallModal"/);
+    assert.match(html, /data-act="openNuvioApp"/);
     assert.match(html, /data-act="openNuvioWeb"/);
     assert.match(html, /stremio:\/\//);
     assert.match(html, /https:\/\/nuvio\.tv\/account\?tab=addons/);

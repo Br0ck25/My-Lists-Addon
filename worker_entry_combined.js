@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f68e1d6269";
+const WORKER_BUILD = "77dcab906b";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -82635,6 +82635,16 @@ function openNuvioWeb(url) {
   window.open('https://nuvio.tv/account?tab=addons', '_blank', 'noopener,noreferrer');
 }
 
+// Nuvio documents no install deep link, so this copies the manifest and just
+// launches the app (the bare scheme); the person pastes it under Settings ->
+// Content & Discovery -> Addons.
+function openNuvioApp(url) {
+  if (url) copyLink(url);
+  showToast('Manifest link copied. In Nuvio: Settings \u2192 Content & Discovery \u2192 Addons \u2192 paste it.', 'success');
+  window.location.href = 'nuvio://';
+}
+window.openNuvioApp = openNuvioApp;
+
 function openNuvioInstallModal(url) {
   if (!url) return;
   copyLink(url);
@@ -82822,7 +82832,7 @@ async function generate() {
         <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <button type="button" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base u-cur-pointer" data-act="openNuvioInstallModal" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
+        <button type="button" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base u-cur-pointer" data-act="openNuvioApp" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
           Install in Nuvio
         </button>
         <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
