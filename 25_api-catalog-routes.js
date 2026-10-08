@@ -651,8 +651,8 @@ async function handleFetch(request, env, ctx) {
 
       // Format bottom badge text (matches website's .cw-date-badge-* styling)
       let bottomText = "";
-      let bottomBg = "#1f7a35"; // Green for premiere (--color-rating-high)
-      let bottomBorder = "transparent";
+      let bottomBg = "#28a745"; // Green for premiere
+      let bottomBorder = "rgba(40, 167, 69, 0.6)";
       let bottomColor = "#ffffff";
 
       if (companion) {
@@ -662,13 +662,13 @@ async function handleFetch(request, env, ctx) {
         bottomColor = "#ffffff";
       } else if (isPremiere) {
         bottomText = "SEASON PREMIERE";
-        bottomBg = "#1f7a35";
-        bottomBorder = "transparent";
+        bottomBg = "#28a745";
+        bottomBorder = "rgba(40, 167, 69, 0.6)";
         bottomColor = "#ffffff";
       } else if (isFinale) {
         bottomText = "SEASON FINALE";
-        bottomBg = "#b25000";
-        bottomBorder = "transparent";
+        bottomBg = "#ff9500";
+        bottomBorder = "rgba(255, 149, 0, 0.7)";
         bottomColor = "#ffffff";
       } else if (finaleDate) {
         let fText = "";
@@ -685,8 +685,8 @@ async function handleFetch(request, env, ctx) {
           }
         }
         bottomText = fText ? `FINALE: ${fText.toUpperCase()}` : "SEASON FINALE";
-        bottomBg = "rgba(20, 20, 24, 0.92)";
-        bottomBorder = "rgba(255, 149, 0, 0.35)";
+        bottomBg = "rgba(18, 18, 24, 0.94)";
+        bottomBorder = "rgba(255, 159, 10, 0.75)";
         bottomColor = "#ffd166";
       }
 

@@ -697,43 +697,45 @@ function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomTe
   let topBadgeSvg = '';
   if (safeAirDate) {
     if (safeAirTime) {
-      // Two-line stacked pill (Date on top, Time below) matching website's .cw-date-badge-timed
-      const dateWidth = safeAirDate.length * 16.5;
-      const timeWidth = safeAirTime.length * 14;
-      const topPillWidth = Math.max(120, Math.round(Math.max(dateWidth, timeWidth) + 32));
+      // Two-line stacked pill (Date on top, Time below)
+      // Generous character width multiplier and padding so TOMORROW / 10 PM ET never extends beyond the pill
+      const dateWidth = safeAirDate.length * 25;
+      const timeWidth = safeAirTime.length * 22;
+      const topPillWidth = Math.max(170, Math.round(Math.max(dateWidth, timeWidth) + 60));
       topBadgeSvg = `
-    <g transform="translate(16, 16)">
-      <rect x="0" y="0" width="${topPillWidth}" height="76" rx="10" ry="10" fill="#0a64d8" fill-opacity="0.96" filter="drop-shadow(0px 3px 6px rgba(0,0,0,0.5))"/>
-      <text x="${topPillWidth / 2}" y="34" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="-0.2">${safeAirDate}</text>
-      <text x="${topPillWidth / 2}" y="62" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#ffffff" fill-opacity="0.92" text-anchor="middle">${safeAirTime}</text>
+    <g transform="translate(20, 20)">
+      <rect x="0" y="0" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="rgba(255, 255, 255, 0.25)" stroke-width="2" filter="drop-shadow(0px 6px 12px rgba(0,0,0,0.75))"/>
+      <text x="${topPillWidth / 2}" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
+      <text x="${topPillWidth / 2}" y="80" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" fill-opacity="0.95" text-anchor="middle" letter-spacing="0.3">${safeAirTime}</text>
     </g>`;
     } else {
       // Single line pill (Date only)
-      const topPillWidth = Math.max(110, Math.round((safeAirDate.length * 16.5) + 30));
+      const topPillWidth = Math.max(160, Math.round((safeAirDate.length * 26) + 56));
       topBadgeSvg = `
-    <g transform="translate(16, 16)">
-      <rect x="0" y="0" width="${topPillWidth}" height="46" rx="10" ry="10" fill="#0a64d8" fill-opacity="0.96" filter="drop-shadow(0px 3px 6px rgba(0,0,0,0.5))"/>
-      <text x="${topPillWidth / 2}" y="32" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="-0.2">${safeAirDate}</text>
+    <g transform="translate(20, 20)">
+      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="rgba(255, 255, 255, 0.25)" stroke-width="2" filter="drop-shadow(0px 6px 12px rgba(0,0,0,0.75))"/>
+      <text x="${topPillWidth / 2}" y="49" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
     </g>`;
     }
   }
 
   let bottomBadgeSvg = '';
   if (safeBottom) {
-    const bottomPillWidth = Math.min(460, Math.max(180, Math.round((safeBottom.length * 16.5) + 40)));
-    const strokeAttr = (bottomBorder && bottomBorder !== 'transparent') ? ` stroke="${bottomBorder}" stroke-width="2"` : '';
+    // Bottom Badge pill: Extra-large 38px font, 84px height, centered
+    const bottomPillWidth = Math.min(460, Math.max(340, Math.round((safeBottom.length * 24) + 64)));
+    const strokeAttr = (bottomBorder && bottomBorder !== 'transparent') ? ` stroke="${bottomBorder}" stroke-width="3.5"` : '';
     bottomBadgeSvg = `
-    <g transform="translate(250, 730)">
-      <rect x="${-bottomPillWidth / 2}" y="-48" width="${bottomPillWidth}" height="48" rx="12" ry="12" fill="${bottomBg || '#1f7a35'}" fill-opacity="0.96"${strokeAttr} filter="drop-shadow(0px 4px 10px rgba(0,0,0,0.7))"/>
-      <text x="0" y="-16" font-family="-apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="0.5">${safeBottom}</text>
+    <g transform="translate(250, 715)">
+      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="${bottomBg || '#28a745'}" fill-opacity="0.95"${strokeAttr} filter="drop-shadow(0px 8px 16px rgba(0,0,0,0.85))"/>
+      <text x="0" y="-30" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="1.2">${safeBottom}</text>
     </g>`;
   }
 
   const topGradient = safeAirDate ? `
-    <rect x="0" y="0" width="500" height="180" fill="url(#topScrim)" opacity="0.8"/>` : '';
+    <rect x="0" y="0" width="500" height="220" fill="url(#topScrim)" opacity="0.85"/>` : '';
 
   const bottomGradient = safeBottom ? `
-    <rect x="0" y="540" width="500" height="210" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
+    <rect x="0" y="440" width="500" height="310" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="500" height="750" viewBox="0 0 500 750">
   <defs>

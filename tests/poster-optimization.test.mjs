@@ -102,7 +102,7 @@ describe("P8-4: Badged Posters & Icon Precomputation Optimization", () => {
         const finale = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/finale_show.jpg") + "&finale=1&airDate=2028-04-10");
         assert.equal(finale.status, 200);
         assert.ok(finale.text.includes("SEASON FINALE"));
-        assert.ok(finale.text.includes("#b25000"));
+        assert.ok(finale.text.includes("#ff9500"));
         const companion = await call(env, "/api/poster-badge?poster=" + encodeURIComponent("https://image.tmdb.org/t/p/w500/companion.jpg") + "&companion=" + encodeURIComponent("Sequel Film"));
         assert.equal(companion.status, 200);
         assert.ok(companion.text.includes("Sequel Film"));
