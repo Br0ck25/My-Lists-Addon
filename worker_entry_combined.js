@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ac5bccd691";
+const WORKER_BUILD = "965c3de044";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -82639,7 +82639,7 @@ function openNuvioInstallModal(url) {
   if (!url) return;
   copyLink(url);
   showToast('Manifest link copied to clipboard.', 'success');
-  const nuvioAppUrl = String(url).replace(/^https?:\\/\\//i, 'nuvio://');
+  const nuvioAppUrl = 'nuvio://addon?url=' + encodeURIComponent(url);
   const html =
     '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">&#x2715;</button>' +
     '<h2>Install in Nuvio</h2>' +
@@ -82791,7 +82791,7 @@ async function generate() {
   const installUrl = ORIGIN + '/' + config + '/manifest.json';
   const stremioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'stremio://');
   const stremioWebUrl = 'https://web.stremio.com/#/addons?addon=' + encodeURIComponent(installUrl);
-  const nuvioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'nuvio://');
+  const nuvioInstallUrl = 'nuvio://addon?url=' + encodeURIComponent(installUrl);
   // A group breakdown alongside the plain install-count beacon -- each
   // row's own .group ("MDBList Charts", "Custom Lists", "Channels", etc.)
   // is already a meaningful "what kind of source is this" label, no need
@@ -82827,9 +82827,9 @@ async function generate() {
         <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <button type="button" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base u-cur-pointer" data-act="openNuvioInstallModal" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
+        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Nuvio
-        </button>
+        </a>
         <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
           Stremio Web
         </a>

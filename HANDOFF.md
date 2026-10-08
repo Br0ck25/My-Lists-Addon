@@ -14,10 +14,10 @@ Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo e
     - `SEASON FINALE`: uppercase text in vibrant amber (`#ff9500`, `stroke="#ff9500" stroke-opacity="0.7"`).
     - `FINALE: <DATE>`: dark pill (`#121218`, `fill-opacity="0.94"`) with amber border (`#ff9f0a`, `stroke-opacity="0.75"`) and gold text (`#ffd166`).
   - **Universal SVG 1.1 Compatibility (Fix for Stremio image drop):** Eliminated non-standard CSS `filter="drop-shadow(...)"` and `rgba(...)` within presentation attributes which caused strict SVG decoders (QtSvg, iOS native image loaders) in Stremio to drop badged posters. Replaced with pure SVG 1.1 hex colors, standard `stroke-opacity`/`fill-opacity` attributes, and dedicated offset SVG shadow `<rect>` elements (`fill="#000000"` with opacity 0.35–0.40) ensuring zero-failure rendering across Stremio and Nuvio on all devices.
-- **Nuvio Install Flow & Web Dashboard Link (PR #33, 2026-10-08):** Improved the "Install in Nuvio" flow (24_client-backup-restore-presets.js):
-  - Clicking "Install in Nuvio" opens an accessible guidance modal (`openNuvioInstallModal`), copies the manifest URL to the clipboard immediately with feedback toast and status badge, and offers direct options for both the Nuvio Web Dashboard (`https://nuvio.tv/account?tab=addons` to sync across desktop, mobile and TV) and the Nuvio app (Settings → Content & Discovery → Addons).
-  - Added dedicated "Nuvio Web" button alongside "Stremio Web" in the install actions bar (`openNuvioWeb`) that auto-copies the manifest link and opens `https://nuvio.tv/account?tab=addons`.
-  - Updated manual installation instructions with a direct link to `nuvio.tv/account?tab=addons`. Covered by tests in `tests/client.test.mjs`.
+- **1-Click Nuvio Install & Nuvio Web Flow (PR #33, 2026-10-08):** Fixed the "Install in Nuvio" button in `24_client-backup-restore-presets.js`:
+  - **Single-Click Install:** The "Install in Nuvio" button is rendered as a direct link anchor (`<a href="${nuvioInstallUrl}" class="btn-nuvio ...">`) targeting `nuvio://addon?url=` + `encodeURIComponent(installUrl)`. Clicking the button immediately hands the manifest URL directly to the Nuvio app in one click without any modal, clipboard requirements, or extra steps.
+  - **Nuvio Web Button:** Remains a separate fallback button in the actions bar (`openNuvioWeb`) that copies the manifest link to the clipboard and opens `https://nuvio.tv/account?tab=addons` in a new tab.
+  - **Test Coverage:** Updated `tests/client.test.mjs` to assert on `nuvio://addon?url=` direct deep-linking.
 - **Unchecked after the UI consistency pass (PR #19):** a modal over the phone bottom nav, drag-and-drop, storyline and deep creator-profile screens. Rules: `AI_UI_RULES.md`, `DESIGN_SYSTEM.md`.
 
 ## Next steps
