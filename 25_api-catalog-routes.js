@@ -652,23 +652,31 @@ async function handleFetch(request, env, ctx) {
       // Format bottom badge text (matches website's .cw-date-badge-* styling)
       let bottomText = "";
       let bottomBg = "#28a745"; // Green for premiere
-      let bottomBorder = "rgba(40, 167, 69, 0.6)";
+      let bottomBgOpacity = "0.95";
+      let bottomBorder = "#28a745";
+      let bottomBorderOpacity = "0.6";
       let bottomColor = "#ffffff";
 
       if (companion) {
         bottomText = companion;
         bottomBg = "rgba(37, 99, 235, 0.95)";
-        bottomBorder = "rgba(37, 99, 235, 0.8)";
+        bottomBgOpacity = "0.95";
+        bottomBorder = "#2563eb";
+        bottomBorderOpacity = "0.8";
         bottomColor = "#ffffff";
       } else if (isPremiere) {
         bottomText = "SEASON PREMIERE";
         bottomBg = "#28a745";
-        bottomBorder = "rgba(40, 167, 69, 0.6)";
+        bottomBgOpacity = "0.95";
+        bottomBorder = "#28a745";
+        bottomBorderOpacity = "0.6";
         bottomColor = "#ffffff";
       } else if (isFinale) {
         bottomText = "SEASON FINALE";
         bottomBg = "#ff9500";
-        bottomBorder = "rgba(255, 149, 0, 0.7)";
+        bottomBgOpacity = "0.95";
+        bottomBorder = "#ff9500";
+        bottomBorderOpacity = "0.7";
         bottomColor = "#ffffff";
       } else if (finaleDate) {
         let fText = "";
@@ -685,8 +693,10 @@ async function handleFetch(request, env, ctx) {
           }
         }
         bottomText = fText ? `FINALE: ${fText.toUpperCase()}` : "SEASON FINALE";
-        bottomBg = "rgba(18, 18, 24, 0.94)";
-        bottomBorder = "rgba(255, 159, 10, 0.75)";
+        bottomBg = "#121218";
+        bottomBgOpacity = "0.94";
+        bottomBorder = "#ff9f0a";
+        bottomBorderOpacity = "0.75";
         bottomColor = "#ffd166";
       }
 
@@ -696,7 +706,9 @@ async function handleFetch(request, env, ctx) {
         airTimeText,
         bottomText,
         bottomBg,
+        bottomBgOpacity,
         bottomBorder,
+        bottomBorderOpacity,
         bottomColor,
       });
 

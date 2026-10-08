@@ -688,7 +688,22 @@ function getPremadeChannelLogo(payload, origin, isLandscape = false) {
   return `/api/channel-logo?${params.toString()}`;
 }
 
-function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomText, bottomBg, bottomBorder, bottomColor }) {
+function parseSvgColor(colorStr, defaultOpacity = '1') {
+  if (!colorStr || colorStr === 'transparent' || colorStr === 'none') {
+    return { color: 'none', opacity: defaultOpacity, isNone: true };
+  }
+  const str = String(colorStr).trim();
+  const m = str.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/i);
+  if (m) {
+    const r = Number(m[1]).toString(16).padStart(2, '0');
+    const g = Number(m[2]).toString(16).padStart(2, '0');
+    const b = Number(m[3]).toString(16).padStart(2, '0');
+    return { color: `#${r}${g}${b}`, opacity: m[4], isNone: false };
+  }
+  return { color: str, opacity: defaultOpacity, isNone: false };
+}
+
+function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomText, bottomBg, bottomBgOpacity, bottomBorder, bottomBorderOpacity, bottomColor }) {
   const safePoster = escapeXml(posterUrl || '');
   const safeAirDate = escapeXml(airDateText ? String(airDateText).toUpperCase() : '');
   const safeAirTime = escapeXml(airTimeText ? String(airTimeText).toUpperCase() : '');
@@ -704,7 +719,8 @@ function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomTe
       const topPillWidth = Math.max(170, Math.round(Math.max(dateWidth, timeWidth) + 60));
       topBadgeSvg = `
     <g transform="translate(20, 20)">
-      <rect x="0" y="0" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="rgba(255, 255, 255, 0.25)" stroke-width="2" filter="drop-shadow(0px 6px 12px rgba(0,0,0,0.75))"/>
+      <rect x="0" y="4" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#000000" fill-opacity="0.35"/>
+      <rect x="0" y="0" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2"/>
       <text x="${topPillWidth / 2}" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
       <text x="${topPillWidth / 2}" y="80" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" fill-opacity="0.95" text-anchor="middle" letter-spacing="0.3">${safeAirTime}</text>
     </g>`;
@@ -713,7 +729,8 @@ function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomTe
       const topPillWidth = Math.max(160, Math.round((safeAirDate.length * 26) + 56));
       topBadgeSvg = `
     <g transform="translate(20, 20)">
-      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="rgba(255, 255, 255, 0.25)" stroke-width="2" filter="drop-shadow(0px 6px 12px rgba(0,0,0,0.75))"/>
+      <rect x="0" y="4" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#000000" fill-opacity="0.35"/>
+      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2"/>
       <text x="${topPillWidth / 2}" y="49" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
     </g>`;
     }
@@ -723,10 +740,16 @@ function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomTe
   if (safeBottom) {
     // Bottom Badge pill: Extra-large 38px font, 84px height, centered
     const bottomPillWidth = Math.min(460, Math.max(340, Math.round((safeBottom.length * 24) + 64)));
-    const strokeAttr = (bottomBorder && bottomBorder !== 'transparent') ? ` stroke="${bottomBorder}" stroke-width="3.5"` : '';
+    const bg = parseSvgColor(bottomBg || '#28a745', bottomBgOpacity || '0.95');
+    const border = parseSvgColor(bottomBorder, bottomBorderOpacity || '0.7');
+    const strokeAttr = (!border.isNone && border.color !== 'none')
+      ? ` stroke="${border.color}" stroke-opacity="${border.opacity}" stroke-width="3.5"`
+      : '';
     bottomBadgeSvg = `
+    <!-- badge: ${escapeXml(bottomBg || '')} -->
     <g transform="translate(250, 715)">
-      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="${bottomBg || '#28a745'}" fill-opacity="0.95"${strokeAttr} filter="drop-shadow(0px 8px 16px rgba(0,0,0,0.85))"/>
+      <rect x="${-bottomPillWidth / 2}" y="-80" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="#000000" fill-opacity="0.4"/>
+      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="${bg.color}" fill-opacity="${bg.opacity}"${strokeAttr}/>
       <text x="0" y="-30" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="1.2">${safeBottom}</text>
     </g>`;
   }
