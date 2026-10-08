@@ -1941,7 +1941,9 @@ function livePreviewPosterHtml(m) {
       } else if (m.removeWatchlistId) {
         removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="watchlist" data-remove-id="' + escapeAttr(m.removeWatchlistId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
       } else if (m.removeHistoryId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+        const groupedAttr = m.isGroupedShow ? ' data-grouped-show="1"' : '';
+        const watchedAtAttr = (m.watchedAt != null && !m.isGroupedShow) ? ' data-watched-at="' + escapeAttr(m.watchedAt) + '"' : '';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '"' + groupedAttr + watchedAtAttr + ' data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
       } else if (m.removeCustomListSlug) {
         removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="custom" data-remove-id="' + escapeAttr(m.id) + '" data-remove-slug="' + escapeAttr(m.removeCustomListSlug) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from List" aria-label="Remove from List">\u2715</button>';
       }
@@ -2069,6 +2071,9 @@ function removeListItemFromDetails(btn) {
   const type = btn.dataset.removeType || '';
   const id = btn.dataset.removeId || '';
   const extra = btn.dataset.removeSlug || '';
+  const isGrouped = btn.dataset.groupedShow === '1';
+  const watchedAtRaw = btn.dataset.watchedAt;
+  const watchedAt = (watchedAtRaw !== undefined && watchedAtRaw !== null && watchedAtRaw !== '') ? Number(watchedAtRaw) : null;
   if (!id) return;
   const targetId = String(id);
   const card = btn.closest('.live-preview-poster-card, .list-card-mini-poster-tile');
@@ -2097,7 +2102,20 @@ function removeListItemFromDetails(btn) {
     Object.keys(window._listPreloadedCache).forEach((k) => {
       const cache = window._listPreloadedCache[k];
       if (cache && Array.isArray(cache.sample)) {
-        cache.sample = cache.sample.filter((it) => it && String(it.id || it.removeShowId || it.removeAiringShowId || it.removeWatchlistId || it.removeHistoryId) !== targetId);
+        if (type === 'history' && !isGrouped) {
+          let sIdx = -1;
+          if (watchedAt != null) {
+            sIdx = cache.sample.findIndex((it) => it && String(it.id || it.removeHistoryId) === targetId && Number(it.watchedAt) === watchedAt);
+          }
+          if (sIdx < 0) {
+            sIdx = cache.sample.findIndex((it) => it && String(it.id || it.removeHistoryId) === targetId);
+          }
+          if (sIdx >= 0) {
+            cache.sample.splice(sIdx, 1);
+          }
+        } else {
+          cache.sample = cache.sample.filter((it) => it && String(it.id || it.removeShowId || it.removeAiringShowId || it.removeWatchlistId || it.removeHistoryId) !== targetId);
+        }
       }
     });
   }
@@ -2109,7 +2127,7 @@ function removeListItemFromDetails(btn) {
   } else if (type === 'watchlist') {
     if (typeof removeWatchlistItemDirect === 'function') removeWatchlistItemDirect(targetId, btn);
   } else if (type === 'history') {
-    if (typeof removeWatchHistoryItemDirect === 'function') removeWatchHistoryItemDirect(targetId, btn);
+    if (typeof removeWatchHistoryItemDirect === 'function') removeWatchHistoryItemDirect(targetId, btn, watchedAt, isGrouped);
   } else if (type === 'custom' && extra) {
     if (typeof removeCustomListItemDirect === 'function') removeCustomListItemDirect(targetId, extra, btn);
   } else if (type === 'external') {
@@ -2396,6 +2414,7 @@ function renderWatchHistoryGrid() {
             // show id removes exactly what this tile stands for: every watched
             // episode of that show.
             removeHistoryId: sId || it.id,
+            isGroupedShow: true,
           });
         }
         const entry = showMap.get(showKey);

@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e56f5e0474";
+const WORKER_BUILD = "133adeb329";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -74975,7 +74975,7 @@ function buildLocalListCardHtml(l) {
     } else if (isWatchlist) {
       removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
     } else if (l.slug === 'watch-history') {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self"]) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self", it.watchedAt != null ? it.watchedAt : '']) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
     }
     const itemPoster = resolveItemPoster(it);
     const isAiringList = l.slug === 'airing-next' || l.statusKey === 'airing-next';
@@ -76447,7 +76447,7 @@ function removeWatchlistItemDirect(id, btn) {
   }
 }
 
-function removeWatchHistoryItemDirect(id, btn) {
+function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
   if (!id) return;
   if (btn) {
     const tile = btn.closest('.list-card-mini-poster-tile, .live-preview-poster-card');
@@ -76461,12 +76461,34 @@ function removeWatchHistoryItemDirect(id, btn) {
     }
   }
   const targetId = String(id);
+  const targetWatchedAt = (watchedAt !== undefined && watchedAt !== null && watchedAt !== '' && !isNaN(Number(watchedAt))) ? Number(watchedAt) : null;
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
-    map['watch-history'].items = map['watch-history'].items.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
+    if (isGrouped) {
+      map['watch-history'].items = map['watch-history'].items.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let removeIdx = -1;
+      if (targetWatchedAt != null) {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      } else {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+        if (removeIdx < 0) {
+          removeIdx = map['watch-history'].items.findIndex(it => it && String(it.showId || '') === targetId);
+        }
+      }
+      if (removeIdx >= 0) {
+        map['watch-history'].items.splice(removeIdx, 1);
+      }
+    }
     if (map['watch-history'].items.length !== initialLen) {
-      if (window._watchedItemIds) window._watchedItemIds.delete(targetId);
+      const stillInHistory = map['watch-history'].items.some(it => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId));
+      if (!stillInHistory && window._watchedItemIds) {
+        window._watchedItemIds.delete(targetId);
+      }
+      if (typeof rebuildWatchedIndex === 'function') {
+        rebuildWatchedIndex(map['watch-history'].items);
+      }
       map['watch-history'].updatedAt = Date.now();
       if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(map);
       if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave({ intentionalRemoval: true });
@@ -76478,17 +76500,32 @@ function removeWatchHistoryItemDirect(id, btn) {
       if (typeof syncAiringNextWatchState === 'function') syncAiringNextWatchState();
     }
   }
-  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems)) {
-    window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
-    if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
-      // Update the open See All page in place. Rebuilding it -- which is what
-      // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
-      // the grid, re-requested every poster and scrolled back to the top on
-      // every single removal. The full render stays as the fallback for the
-      // one case that really does need re-laying out (grouped by show).
-      const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
-      if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
+  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems) && window._rawWatchHistoryItems !== (map['watch-history'] && map['watch-history'].items)) {
+    if (isGrouped) {
+      window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let rawIdx = -1;
+      if (targetWatchedAt != null) {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      } else {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+        if (rawIdx < 0) {
+          rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.showId || '') === targetId);
+        }
+      }
+      if (rawIdx >= 0) {
+        window._rawWatchHistoryItems.splice(rawIdx, 1);
+      }
     }
+  }
+  if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
+    // Update the open See All page in place. Rebuilding it -- which is what
+    // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
+    // the grid, re-requested every poster and scrolled back to the top on
+    // every single removal. The full render stays as the fallback for the
+    // one case that really does need re-laying out (grouped by show).
+    const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
+    if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
   }
 }
 
@@ -78726,7 +78763,9 @@ function livePreviewPosterHtml(m) {
       } else if (m.removeWatchlistId) {
         removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="watchlist" data-remove-id="' + escapeAttr(m.removeWatchlistId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
       } else if (m.removeHistoryId) {
-        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+        const groupedAttr = m.isGroupedShow ? ' data-grouped-show="1"' : '';
+        const watchedAtAttr = (m.watchedAt != null && !m.isGroupedShow) ? ' data-watched-at="' + escapeAttr(m.watchedAt) + '"' : '';
+        removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="history" data-remove-id="' + escapeAttr(m.removeHistoryId) + '"' + groupedAttr + watchedAtAttr + ' data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
       } else if (m.removeCustomListSlug) {
         removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="custom" data-remove-id="' + escapeAttr(m.id) + '" data-remove-slug="' + escapeAttr(m.removeCustomListSlug) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from List" aria-label="Remove from List">\u2715</button>';
       }
@@ -78854,6 +78893,9 @@ function removeListItemFromDetails(btn) {
   const type = btn.dataset.removeType || '';
   const id = btn.dataset.removeId || '';
   const extra = btn.dataset.removeSlug || '';
+  const isGrouped = btn.dataset.groupedShow === '1';
+  const watchedAtRaw = btn.dataset.watchedAt;
+  const watchedAt = (watchedAtRaw !== undefined && watchedAtRaw !== null && watchedAtRaw !== '') ? Number(watchedAtRaw) : null;
   if (!id) return;
   const targetId = String(id);
   const card = btn.closest('.live-preview-poster-card, .list-card-mini-poster-tile');
@@ -78882,7 +78924,20 @@ function removeListItemFromDetails(btn) {
     Object.keys(window._listPreloadedCache).forEach((k) => {
       const cache = window._listPreloadedCache[k];
       if (cache && Array.isArray(cache.sample)) {
-        cache.sample = cache.sample.filter((it) => it && String(it.id || it.removeShowId || it.removeAiringShowId || it.removeWatchlistId || it.removeHistoryId) !== targetId);
+        if (type === 'history' && !isGrouped) {
+          let sIdx = -1;
+          if (watchedAt != null) {
+            sIdx = cache.sample.findIndex((it) => it && String(it.id || it.removeHistoryId) === targetId && Number(it.watchedAt) === watchedAt);
+          }
+          if (sIdx < 0) {
+            sIdx = cache.sample.findIndex((it) => it && String(it.id || it.removeHistoryId) === targetId);
+          }
+          if (sIdx >= 0) {
+            cache.sample.splice(sIdx, 1);
+          }
+        } else {
+          cache.sample = cache.sample.filter((it) => it && String(it.id || it.removeShowId || it.removeAiringShowId || it.removeWatchlistId || it.removeHistoryId) !== targetId);
+        }
       }
     });
   }
@@ -78894,7 +78949,7 @@ function removeListItemFromDetails(btn) {
   } else if (type === 'watchlist') {
     if (typeof removeWatchlistItemDirect === 'function') removeWatchlistItemDirect(targetId, btn);
   } else if (type === 'history') {
-    if (typeof removeWatchHistoryItemDirect === 'function') removeWatchHistoryItemDirect(targetId, btn);
+    if (typeof removeWatchHistoryItemDirect === 'function') removeWatchHistoryItemDirect(targetId, btn, watchedAt, isGrouped);
   } else if (type === 'custom' && extra) {
     if (typeof removeCustomListItemDirect === 'function') removeCustomListItemDirect(targetId, extra, btn);
   } else if (type === 'external') {
@@ -79181,6 +79236,7 @@ function renderWatchHistoryGrid() {
             // show id removes exactly what this tile stands for: every watched
             // episode of that show.
             removeHistoryId: sId || it.id,
+            isGroupedShow: true,
           });
         }
         const entry = showMap.get(showKey);
@@ -109610,17 +109666,26 @@ async function saveTrackingRecord(env, username, accountId, record) {
   const actDb = activityDb(env, accountId);
   const incoming = Array.isArray(record.watchHistory) ? record.watchHistory : [];
   const { results: storedRows } = await actDb.prepare(
-    "SELECT id, legacy_id FROM watch_events WHERE account_id = ?"
+    "SELECT id, legacy_id, watched_at FROM watch_events WHERE account_id = ?"
   ).bind(accountId).all();
   const known = new Set((storedRows || []).map((r) => r.legacy_id).filter(Boolean));
   const listed = new Set();
   const fresh = [];
+  const unmatchedStored = [...(storedRows || [])];
   for (const item of incoming) {
     if (!item || typeof item !== "object") continue;
     const id = legacyHistoryId(item);
     if (!id) continue;
     listed.add(id);
     if (!known.has(id)) fresh.push({ ...legacyHistoryPlay(item, Number(record.updatedAt) || Date.now()), id });
+    const t = Number(item.watchedAt) || 0;
+    let sIdx = t ? unmatchedStored.findIndex(r => r.legacy_id === id && r.watched_at === t) : -1;
+    if (sIdx < 0) {
+      sIdx = unmatchedStored.findIndex(r => r.legacy_id === id);
+    }
+    if (sIdx >= 0) {
+      unmatchedStored.splice(sIdx, 1);
+    }
   }
   if (fresh.length) {
     for (let i = 0; i < fresh.length; i += ACTIVITY_BACKFILL_CHUNK) {
@@ -109638,7 +109703,7 @@ async function saveTrackingRecord(env, username, accountId, record) {
   if (intentional) {
     // Only plays the website knows by id can be removed by leaving them out:
     // a play with no legacy id came from somewhere the website never listed.
-    const gone = (storedRows || []).filter((r) => r.legacy_id && !listed.has(r.legacy_id)).map((r) => r.id);
+    const gone = unmatchedStored.filter((r) => r.legacy_id).map((r) => r.id);
     for (let i = 0; i < gone.length; i += 90) {
       const part = gone.slice(i, i + 90);
       await actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND id IN (${part.map(() => "?").join(", ")})`).bind(accountId, ...part).run();

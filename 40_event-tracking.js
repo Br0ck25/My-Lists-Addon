@@ -194,17 +194,26 @@ async function saveTrackingRecord(env, username, accountId, record) {
   const actDb = activityDb(env, accountId);
   const incoming = Array.isArray(record.watchHistory) ? record.watchHistory : [];
   const { results: storedRows } = await actDb.prepare(
-    "SELECT id, legacy_id FROM watch_events WHERE account_id = ?"
+    "SELECT id, legacy_id, watched_at FROM watch_events WHERE account_id = ?"
   ).bind(accountId).all();
   const known = new Set((storedRows || []).map((r) => r.legacy_id).filter(Boolean));
   const listed = new Set();
   const fresh = [];
+  const unmatchedStored = [...(storedRows || [])];
   for (const item of incoming) {
     if (!item || typeof item !== "object") continue;
     const id = legacyHistoryId(item);
     if (!id) continue;
     listed.add(id);
     if (!known.has(id)) fresh.push({ ...legacyHistoryPlay(item, Number(record.updatedAt) || Date.now()), id });
+    const t = Number(item.watchedAt) || 0;
+    let sIdx = t ? unmatchedStored.findIndex(r => r.legacy_id === id && r.watched_at === t) : -1;
+    if (sIdx < 0) {
+      sIdx = unmatchedStored.findIndex(r => r.legacy_id === id);
+    }
+    if (sIdx >= 0) {
+      unmatchedStored.splice(sIdx, 1);
+    }
   }
   if (fresh.length) {
     for (let i = 0; i < fresh.length; i += ACTIVITY_BACKFILL_CHUNK) {
@@ -222,7 +231,7 @@ async function saveTrackingRecord(env, username, accountId, record) {
   if (intentional) {
     // Only plays the website knows by id can be removed by leaving them out:
     // a play with no legacy id came from somewhere the website never listed.
-    const gone = (storedRows || []).filter((r) => r.legacy_id && !listed.has(r.legacy_id)).map((r) => r.id);
+    const gone = unmatchedStored.filter((r) => r.legacy_id).map((r) => r.id);
     for (let i = 0; i < gone.length; i += 90) {
       const part = gone.slice(i, i + 90);
       await actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND id IN (${part.map(() => "?").join(", ")})`).bind(accountId, ...part).run();

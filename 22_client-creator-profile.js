@@ -5141,7 +5141,7 @@ function buildLocalListCardHtml(l) {
     } else if (isWatchlist) {
       removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
     } else if (l.slug === 'watch-history') {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self"]) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self", it.watchedAt != null ? it.watchedAt : '']) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
     }
     const itemPoster = resolveItemPoster(it);
     const isAiringList = l.slug === 'airing-next' || l.statusKey === 'airing-next';
@@ -6613,7 +6613,7 @@ function removeWatchlistItemDirect(id, btn) {
   }
 }
 
-function removeWatchHistoryItemDirect(id, btn) {
+function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
   if (!id) return;
   if (btn) {
     const tile = btn.closest('.list-card-mini-poster-tile, .live-preview-poster-card');
@@ -6627,12 +6627,34 @@ function removeWatchHistoryItemDirect(id, btn) {
     }
   }
   const targetId = String(id);
+  const targetWatchedAt = (watchedAt !== undefined && watchedAt !== null && watchedAt !== '' && !isNaN(Number(watchedAt))) ? Number(watchedAt) : null;
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
-    map['watch-history'].items = map['watch-history'].items.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
+    if (isGrouped) {
+      map['watch-history'].items = map['watch-history'].items.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let removeIdx = -1;
+      if (targetWatchedAt != null) {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      } else {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+        if (removeIdx < 0) {
+          removeIdx = map['watch-history'].items.findIndex(it => it && String(it.showId || '') === targetId);
+        }
+      }
+      if (removeIdx >= 0) {
+        map['watch-history'].items.splice(removeIdx, 1);
+      }
+    }
     if (map['watch-history'].items.length !== initialLen) {
-      if (window._watchedItemIds) window._watchedItemIds.delete(targetId);
+      const stillInHistory = map['watch-history'].items.some(it => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId));
+      if (!stillInHistory && window._watchedItemIds) {
+        window._watchedItemIds.delete(targetId);
+      }
+      if (typeof rebuildWatchedIndex === 'function') {
+        rebuildWatchedIndex(map['watch-history'].items);
+      }
       map['watch-history'].updatedAt = Date.now();
       if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(map);
       if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave({ intentionalRemoval: true });
@@ -6644,17 +6666,32 @@ function removeWatchHistoryItemDirect(id, btn) {
       if (typeof syncAiringNextWatchState === 'function') syncAiringNextWatchState();
     }
   }
-  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems)) {
-    window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
-    if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
-      // Update the open See All page in place. Rebuilding it -- which is what
-      // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
-      // the grid, re-requested every poster and scrolled back to the top on
-      // every single removal. The full render stays as the fallback for the
-      // one case that really does need re-laying out (grouped by show).
-      const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
-      if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
+  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems) && window._rawWatchHistoryItems !== (map['watch-history'] && map['watch-history'].items)) {
+    if (isGrouped) {
+      window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let rawIdx = -1;
+      if (targetWatchedAt != null) {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      } else {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+        if (rawIdx < 0) {
+          rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.showId || '') === targetId);
+        }
+      }
+      if (rawIdx >= 0) {
+        window._rawWatchHistoryItems.splice(rawIdx, 1);
+      }
     }
+  }
+  if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
+    // Update the open See All page in place. Rebuilding it -- which is what
+    // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
+    // the grid, re-requested every poster and scrolled back to the top on
+    // every single removal. The full render stays as the fallback for the
+    // one case that really does need re-laying out (grouped by show).
+    const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
+    if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
   }
 }
 
