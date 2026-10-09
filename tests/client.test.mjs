@@ -5995,12 +5995,11 @@ describe("client: signed out, only the site's public lists", () => {
     ]);
     await client.call("generate");
     const html = client.get("document").getElementById("result").innerHTML;
-    // Nuvio documents no install deep link (nuvio.wiki: manual paste only), so
-    // the button copies the link and opens the app instead of a dead nuvio://addon link.
-    assert.doesNotMatch(html, /nuvio:\/\//);
-    assert.match(html, /data-act="openNuvioApp"/);
-    assert.match(html, /data-act="openNuvioWeb"/);
+    // Nuvio parses addon deep links as nuvio://<host>/<path> (replacing https:// with nuvio://),
+    // opening Addons Settings in Nuvio and auto-installing the addon (same as TopX).
+    assert.match(html, /href="nuvio:\/\/[^"]+\/cfg123\/manifest\.json"/);
     assert.match(html, /stremio:\/\//);
+    assert.match(html, /data-act="openNuvioWeb"/);
     assert.match(html, /https:\/\/nuvio\.tv\/account\?tab=addons/);
   });
 });
