@@ -2653,6 +2653,21 @@ ${UTILITY_CSS}
   .netflix-preview-title { font-size:0.8rem; margin-top:4px; line-height:1.25; color:var(--text); }
   .netflix-preview-year { color:var(--muted); font-size:0.75rem; }
 
+  /* Support Desk */
+  .admin-badge.open { background:rgba(0,122,255,0.12); color:var(--accent); }
+  .admin-badge.replied { background:rgba(52,199,89,0.12); color:#34c759; }
+  .admin-badge.closed { background:rgba(142,142,147,0.15); color:var(--muted); }
+  .admin-badge.spam { background:rgba(255,59,48,0.12); color:var(--danger); }
+  .support-desk-layout { display:grid; grid-template-columns:360px 1fr; gap:16px; min-height:550px; align-items:start; margin-top:14px; }
+  @media (max-width:860px) { .support-desk-layout { grid-template-columns:1fr; } }
+  .support-thread-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:border-color 0.12s; }
+  .support-thread-card:hover { border-color:var(--border-strong); }
+  .support-thread-card.active { border-color:var(--accent); background:var(--panel-strong); }
+  .support-thread-card.unread { border-left:4px solid var(--accent); }
+  .support-bubble { border-radius:14px; padding:12px 16px; margin-bottom:12px; }
+  .support-bubble.inbound { background:var(--surface); border:1px solid var(--border); margin-right:40px; }
+  .support-bubble.outbound { background:var(--panel-strong); border:1.5px solid var(--accent); margin-left:40px; }
+
   /* Standard Modals & Buttons */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -2738,6 +2753,7 @@ ${UTILITY_CSS}
   <div class="admin-subnav-bar" id="adminSubnavManagement" style="display:none;">
     <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
     <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
+    <button type="button" class="subnav-pill" data-sub-tab="support_emails" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['support_emails'])}">Support Emails <span id="supportEmailsBadge" class="u-fs-v_font_size_xs u-fw-700 u-p-2px_6px u-br-v_radius_pill u-ml-4px" style="display:none;background:var(--accent);color:#fff;">0</span></button>
     <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
@@ -2927,6 +2943,137 @@ ${UTILITY_CSS}
       <div class="u-jc-flex_end u-gap-10px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-tab-panel" data-admin-panel="support_emails">
+    <div class="u-jc-space_between u-ai-center u-mb-12px u-fw2-wrap u-gap-10px" style="display:flex;">
+      <div>
+        <p class="u-c-v_muted u-m-0 u-fs-v_font_size_base">Direct customer inquiries received at <code>support@mylistsaddon.com</code> via Cloudflare Email Routing. Reply directly using Cloudflare Email Sending.</p>
+      </div>
+      <button type="button" class="lc-btn primary" data-act="openComposeEmailModal">+ Compose Email</button>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="panel u-p-10px_14px u-mb-14px u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px" style="display:flex;">
+      <div class="u-ai-center u-gap-6px u-fw2-wrap" style="display:flex;" id="supportEmailFilterGroup">
+        <button type="button" class="subnav-pill active" data-status="all" data-act="filterSupportEmails" data-act-args="${adminActArgs(['all'])}">All</button>
+        <button type="button" class="subnav-pill" data-status="open" data-act="filterSupportEmails" data-act-args="${adminActArgs(['open'])}">Open</button>
+        <button type="button" class="subnav-pill" data-status="replied" data-act="filterSupportEmails" data-act-args="${adminActArgs(['replied'])}">Replied</button>
+        <button type="button" class="subnav-pill" data-status="closed" data-act="filterSupportEmails" data-act-args="${adminActArgs(['closed'])}">Closed</button>
+      </div>
+      <div class="u-ai-center u-gap-8px u-flex-1 u-maxw-340px" style="display:flex;">
+        <input type="text" id="supportEmailSearchInput" class="admin-select u-flex-1 u-m-0" placeholder="Search by email, name or subject..." data-act="onSupportEmailSearchInput" data-act-on="input">
+      </div>
+    </div>
+
+    <div class="support-desk-layout">
+      <!-- Left Column: Thread List -->
+      <div class="panel u-p-12px u-m-0" style="max-height:750px; overflow-y:auto;">
+        <div id="supportEmailThreadList" class="u-fs-v_font_size_sm u-c-v_muted">Loading conversations&hellip;</div>
+      </div>
+
+      <!-- Right Column: Conversation & Reply -->
+      <div class="panel u-p-16px u-m-0" id="supportEmailDetailContainer" style="display:flex; flex-direction:column; min-height:550px;">
+        <div id="supportEmailEmptyDetail" class="u-ta-center u-p-40px_20px u-c-v_muted">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="u-mb-10px u-o-0_4" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <div class="u-fs-v_font_size_base u-fw-600">No conversation selected</div>
+          <div class="u-fs-v_font_size_sm u-mt-4px">Select a thread from the list on the left to read and reply.</div>
+        </div>
+
+        <div id="supportEmailActiveDetail" style="display:none; flex-direction:column; flex:1;">
+          <!-- Thread Header -->
+          <div class="u-jc-space_between u-ai-flex_start u-bb-1px_solid_v_border u-pb-12px u-mb-14px" style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div class="u-flex-1">
+              <h3 id="supportActiveSubject" class="u-m-0_0_4px u-fs-v_font_size_lg u-fw-700 u-c-v_text"></h3>
+              <div class="u-fs-v_font_size_xs u-c-v_muted">
+                From: <strong id="supportActiveFrom" class="u-c-v_text"></strong> &bull; <span id="supportActiveDate"></span>
+              </div>
+            </div>
+            <div class="u-ai-center u-gap-8px" style="display:flex;">
+              <span id="supportActiveStatusBadge" class="admin-badge"></span>
+              <button type="button" class="admin-select u-cur-pointer" id="supportActiveStatusBtn" data-act="changeSupportThreadStatus">Toggle Status</button>
+              <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text" data-act="deleteSupportEmailThread">Delete</button>
+            </div>
+          </div>
+
+          <!-- Message History Timeline -->
+          <div id="supportActiveMessageList" class="u-flex-1 u-ov-auto u-mb-16px u-p-4px" style="max-height:480px; display:flex; flex-direction:column;"></div>
+
+          <!-- Reply Composer -->
+          <div class="u-bt-1px_solid_v_border u-pt-14px u-mt-auto">
+            <div class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text">Reply from support@mylistsaddon.com</div>
+            <textarea id="supportEmailReplyText" class="u-minh-100px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-8px u-ol-none" placeholder="Type your reply to customer... (Paste image Ctrl+V supported)" style="width:100%;"></textarea>
+            <div id="supportReplyAttachmentsPreview" class="u-mb-10px" style="display:none; flex-wrap:wrap; gap:8px;"></div>
+            <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-10px" style="display:flex;">
+              <div class="u-ai-center u-gap-10px" style="display:flex;">
+                <label class="lc-btn secondary u-fs-v_font_size_xs u-cur-pointer" style="padding:6px 12px; display:inline-flex; align-items:center; gap:6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <span>Attach Image</span>
+                  <input type="file" id="supportReplyFileInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" multiple data-act="onSupportReplyFileSelected" data-act-args="${adminActArgs(['@event'])}">
+                </label>
+                <label class="u-ai-center u-gap-6px u-fs-v_font_size_xs u-c-v_muted u-cur-pointer" style="display:flex;">
+                  <input type="checkbox" id="supportEmailCloseOnReply" checked> Close thread after sending reply
+                </label>
+              </div>
+              <div class="u-ai-center u-gap-10px" style="display:flex;">
+                <span id="supportEmailReplyStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+                <button type="button" class="lc-btn primary" id="supportEmailSendReplyBtn" data-act="sendSupportEmailReplyBtn">Send Reply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compose Email Modal -->
+  <div id="composeEmailModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card u-maxw-500px">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
+        <h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-c-v_text">New Support Email</h3>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeComposeEmailModal">&#x2715;</button>
+      </div>
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Recipient Email</label>
+      <input type="email" id="composeEmailTo" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="user@example.com" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Customer Name (optional)</label>
+      <input type="text" id="composeEmailName" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="John Doe" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Subject</label>
+      <input type="text" id="composeEmailSubject" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="Regarding your inquiry" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Message</label>
+      <textarea id="composeEmailBody" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-8px u-ol-none" placeholder="Write your message... (Paste image Ctrl+V supported)" style="width:100%;"></textarea>
+      <div id="composeAttachmentsPreview" class="u-mb-10px" style="display:none; flex-wrap:wrap; gap:8px;"></div>
+      <div class="u-jc-space_between u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
+        <label class="lc-btn secondary u-fs-v_font_size_xs u-cur-pointer" style="padding:6px 12px; display:inline-flex; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <span>Attach Image</span>
+          <input type="file" id="composeFileInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" multiple data-act="onComposeFileSelected" data-act-args="${adminActArgs(['@event'])}">
+        </label>
+        <div class="u-ai-center u-gap-10px" style="display:flex;">
+          <span id="composeEmailStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+          <button type="button" class="lc-btn secondary" data-act="closeComposeEmailModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="composeEmailSendBtn" data-act="sendComposedEmailBtn">Send Email</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Support Image Lightbox Modal -->
+  <div id="supportImageLightboxModal" class="modal-overlay" style="display:none;" data-act="closeSupportImageLightboxOnBackdrop">
+    <div class="modal-card" style="max-width:92vw; width:auto; max-height:92vh; padding:12px; display:flex; flex-direction:column; align-items:center; background:var(--surface); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.45); border:1px solid var(--border);">
+      <div class="u-jc-space_between u-ai-center u-mb-8px" style="display:flex; width:100%; gap:12px;">
+        <span id="supportLightboxFilename" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap" style="max-width:calc(92vw - 150px);"></span>
+        <div class="u-ai-center u-gap-8px" style="display:flex;">
+          <a id="supportLightboxDownloadLink" href="#" download class="lc-btn secondary" style="padding:4px 10px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;" title="Download image">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Download</span>
+          </a>
+          <button type="button" class="modal-close-x" aria-label="Close image preview" data-act="closeSupportImageLightbox">&#x2715;</button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:center; overflow:hidden; max-height:calc(85vh - 60px); border-radius:8px; background:var(--panel-strong);">
+        <img id="supportLightboxImage" src="" alt="Full view" style="max-width:100%; max-height:calc(85vh - 60px); object-fit:contain; display:block;">
       </div>
     </div>
   </div>
@@ -3300,6 +3447,7 @@ ${UTILITY_CSS}
       audience: 'discovery',
       creators: 'management',
       feedback: 'management',
+      support_emails: 'management',
       netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
@@ -3342,7 +3490,7 @@ ${UTILITY_CSS}
       document.querySelectorAll('.admin-subnav-bar').forEach((bar) => {
         bar.style.display = bar.id === ('adminSubnav' + cat.charAt(0).toUpperCase() + cat.slice(1)) ? 'flex' : 'none';
       });
-      document.querySelectorAll('.subnav-pill').forEach((p) => p.classList.toggle('active', p.dataset.subTab === tabId));
+      document.querySelectorAll('.admin-subnav-bar .subnav-pill').forEach((p) => p.classList.toggle('active', p.dataset.subTab === tabId));
       document.querySelectorAll('.admin-tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.adminPanel === tabId));
 
       if (tabId === 'trending' && !window._trendingLoadedOnce) { window._trendingLoadedOnce = true; loadTrendingData(); }
@@ -3350,6 +3498,7 @@ ${UTILITY_CSS}
       if (tabId === 'catalogs_lists' && !window._catalogsListsLoadedOnce) { window._catalogsListsLoadedOnce = true; loadCatalogsAndListsData(); }
       if (tabId === 'audience' && !window._audienceLoadedOnce) { window._audienceLoadedOnce = true; loadAudienceData(); }
       if (tabId === 'feedback' && !window._feedbackLoadedOnce) { window._feedbackLoadedOnce = true; loadFeedback(); }
+      if (tabId === 'support_emails' && !window._supportEmailsLoadedOnce) { window._supportEmailsLoadedOnce = true; loadSupportEmailThreads(); }
       if (tabId === 'apiusage' && !window._apiUsageLoadedOnce) { window._apiUsageLoadedOnce = true; loadApiUsage(); }
       if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
@@ -6046,6 +6195,590 @@ ${UTILITY_CSS}
         }
       }, true);
     }
+
+    // --- Support Emails Desk ---
+    let supportEmailThreads = [];
+    let currentSupportThreadId = null;
+    let currentSupportMessages = [];
+    let supportEmailFilter = 'all';
+    let supportEmailSearchTimeout = null;
+    let pendingReplyAttachments = [];
+    let pendingComposeAttachments = [];
+
+    try {
+      const savedFilter = localStorage.getItem('myListAddon:supportEmailFilter');
+      if (savedFilter && ['all', 'open', 'replied', 'closed'].includes(savedFilter)) {
+        supportEmailFilter = savedFilter;
+      }
+      const savedThread = localStorage.getItem('myListAddon:supportActiveThreadId');
+      if (savedThread) {
+        currentSupportThreadId = savedThread;
+      }
+    } catch (e) {}
+    // restoreAdminActiveTab() runs above this block on a refresh, so when the page
+    // reloads on Support Emails its first load hit these not-yet-declared lets
+    // and silently fell back to All. Redo it now that the saved filter is read.
+    if (window._supportEmailsLoadedOnce) loadSupportEmailThreads();
+
+    function syncSupportEmailFilterUI() {
+      const group = document.getElementById('supportEmailFilterGroup');
+      if (group) {
+        group.querySelectorAll('.subnav-pill').forEach((btn) => {
+          const btnStatus = btn.getAttribute('data-status') || btn.textContent.trim().toLowerCase();
+          btn.classList.toggle('active', btnStatus === supportEmailFilter);
+        });
+      }
+    }
+
+    async function loadSupportEmailThreads() {
+      const listEl = document.getElementById('supportEmailThreadList');
+      if (!listEl) return;
+      try {
+        const savedFilter = localStorage.getItem('myListAddon:supportEmailFilter');
+        if (savedFilter && ['all', 'open', 'replied', 'closed'].includes(savedFilter)) {
+          supportEmailFilter = savedFilter;
+        }
+      } catch (e) {}
+      syncSupportEmailFilterUI();
+
+      const q = (document.getElementById('supportEmailSearchInput') && document.getElementById('supportEmailSearchInput').value || '').trim();
+      const url = '/admin/api/support-emails/threads?status=' + encodeURIComponent(supportEmailFilter) + (q ? '&q=' + encodeURIComponent(q) : '');
+
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        if (data && data.notConfigured) {
+          listEl.innerHTML = '<div class="u-p-12px u-c-v_muted u-fs-v_font_size_sm">' + escapeHtmlAdmin(data.error) + '</div>';
+          return;
+        }
+        if (!data || !data.ok) {
+          listEl.innerHTML = '<div class="u-p-12px u-c-v_color_danger_text u-fs-v_font_size_sm">Could not load email threads.</div>';
+          return;
+        }
+
+        supportEmailThreads = data.threads || [];
+        const badge = document.getElementById('supportEmailsBadge');
+        if (badge && data.counts) {
+          badge.textContent = String(data.counts.open || 0);
+          badge.style.display = data.counts.open > 0 ? 'inline-block' : 'none';
+        }
+
+        renderSupportEmailThreadList();
+
+        // Restore active thread if it exists in current thread list
+        if (currentSupportThreadId && supportEmailThreads.some((t) => t.id === currentSupportThreadId)) {
+          selectSupportEmailThread(currentSupportThreadId);
+        }
+      } catch (err) {
+        listEl.innerHTML = '<div class="u-p-12px u-c-v_color_danger_text u-fs-v_font_size_sm">Network error loading emails.</div>';
+      }
+    }
+    window.loadSupportEmailThreads = loadSupportEmailThreads;
+
+    function renderSupportEmailThreadList() {
+      const listEl = document.getElementById('supportEmailThreadList');
+      if (!listEl) return;
+      if (!supportEmailThreads.length) {
+        listEl.innerHTML = '<div class="u-p-20px_10px u-ta-center u-c-v_muted u-fs-v_font_size_sm">No support conversations found.</div>';
+        return;
+      }
+
+      listEl.innerHTML = supportEmailThreads.map((t) => {
+        const activeClass = (t.id === currentSupportThreadId) ? ' active' : '';
+        const unreadClass = (t.unread > 0) ? ' unread' : '';
+        const statusClass = t.status || 'open';
+        const dateStr = new Date(t.last_message_at || t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const sender = t.customer_name ? (t.customer_name + ' &lt;' + t.customer_email + '&gt;') : t.customer_email;
+
+        return '<div class="support-thread-card' + activeClass + unreadClass + '" data-act="selectSupportEmailThread" data-act-args="' + adminActAttr([t.id]) + '">' +
+          '<div class="u-jc-space_between u-ai-center u-mb-4px" style="display:flex;">' +
+            '<strong class="u-fs-v_font_size_sm u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap" style="max-width:190px;">' + sender + '</strong>' +
+            '<span class="admin-badge ' + statusClass + '">' + escapeHtmlAdmin(statusClass) + '</span>' +
+          '</div>' +
+          '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap u-mb-4px">' + escapeHtmlAdmin(t.subject || '(No subject)') + '</div>' +
+          '<div class="u-fs-v_font_size_xs u-c-v_muted">' + dateStr + (t.unread > 0 ? ' &bull; <strong style="color:var(--accent);">New</strong>' : '') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function filterSupportEmails(status) {
+      supportEmailFilter = status;
+      try {
+        localStorage.setItem('myListAddon:supportEmailFilter', status);
+      } catch (e) {}
+      syncSupportEmailFilterUI();
+      loadSupportEmailThreads();
+    }
+    window.filterSupportEmails = filterSupportEmails;
+
+    function onSupportEmailSearchInput() {
+      if (supportEmailSearchTimeout) clearTimeout(supportEmailSearchTimeout);
+      supportEmailSearchTimeout = setTimeout(() => {
+        loadSupportEmailThreads();
+      }, 300);
+    }
+    window.onSupportEmailSearchInput = onSupportEmailSearchInput;
+
+    function renderPendingAttachments(type) {
+      const isReply = (type === 'reply');
+      const container = document.getElementById(isReply ? 'supportReplyAttachmentsPreview' : 'composeAttachmentsPreview');
+      const list = isReply ? pendingReplyAttachments : pendingComposeAttachments;
+      if (!container) return;
+      if (!list.length) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+      }
+      container.style.display = 'flex';
+      container.innerHTML = list.map((item, idx) => {
+        return '<div style="position:relative; width:72px; height:72px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:var(--panel-strong); cursor:zoom-in;" title="Click to view larger" data-act="openPendingAttachmentLightbox" data-act-args="' + adminActAttr([type, idx]) + '">' +
+          '<img src="' + item.dataUrl + '" style="width:100%; height:100%; object-fit:cover; display:block;">' +
+          '<button type="button" class="lc-btn danger" style="position:absolute; top:2px; right:2px; width:20px; height:20px; min-height:20px; padding:0; font-size:12px; border-radius:50%; line-height:1;" data-act="removePendingAttachment" data-act-args="' + adminActAttr([type, idx]) + '" title="Remove image" data-act-stop>&times;</button>' +
+        '</div>';
+      }).join('');
+    }
+    window.renderPendingAttachments = renderPendingAttachments;
+
+    function removePendingAttachment(type, idx) {
+      if (type === 'reply') {
+        pendingReplyAttachments.splice(idx, 1);
+      } else {
+        pendingComposeAttachments.splice(idx, 1);
+      }
+      renderPendingAttachments(type);
+    }
+    window.removePendingAttachment = removePendingAttachment;
+
+    function ensureImageFilenameAdmin(filename, mimeType) {
+      const extMap = {
+        'image/png': '.png',
+        'image/jpeg': '.jpg',
+        'image/jpg': '.jpg',
+        'image/gif': '.gif',
+        'image/webp': '.webp',
+        'image/svg+xml': '.svg',
+        'image/bmp': '.bmp',
+      };
+      let fn = String(filename || '').trim();
+      const defExt = extMap[String(mimeType || '').toLowerCase()] || '.png';
+      if (!fn || fn === 'image' || fn === 'blob') {
+        fn = 'image_' + Date.now() + defExt;
+      }
+      if (!new RegExp('\\.(png|jpe?g|gif|webp|svg|bmp)$', 'i').test(fn)) {
+        fn = fn + defExt;
+      }
+      return fn;
+    }
+
+    function addFilesToPending(files, type) {
+      if (!files || !files.length) return;
+      const targetList = (type === 'reply') ? pendingReplyAttachments : pendingComposeAttachments;
+      Array.from(files).forEach((file) => {
+        if (!file.type || !file.type.startsWith('image/')) return;
+        if (file.size > 5 * 1024 * 1024) {
+          showAdminAlert('Image Too Large', 'Images must be under 5MB.', false);
+          return;
+        }
+        const cleanName = ensureImageFilenameAdmin(file.name, file.type);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          targetList.push({
+            filename: cleanName,
+            type: file.type,
+            dataUrl: e.target.result,
+            size: file.size,
+          });
+          renderPendingAttachments(type);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function onSupportReplyFileSelected(ev) {
+      const files = ev && ev.target && ev.target.files;
+      if (files) addFilesToPending(files, 'reply');
+      if (ev && ev.target) ev.target.value = '';
+    }
+    window.onSupportReplyFileSelected = onSupportReplyFileSelected;
+
+    function onComposeFileSelected(ev) {
+      const files = ev && ev.target && ev.target.files;
+      if (files) addFilesToPending(files, 'compose');
+      if (ev && ev.target) ev.target.value = '';
+    }
+    window.onComposeFileSelected = onComposeFileSelected;
+
+    // Clipboard paste listener for images in reply and compose textareas
+    window.addEventListener('paste', (e) => {
+      const active = document.activeElement;
+      if (active && (active.id === 'supportEmailReplyText' || active.id === 'composeEmailBody')) {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        const type = (active.id === 'supportEmailReplyText') ? 'reply' : 'compose';
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.startsWith('image/')) {
+            const file = items[i].getAsFile();
+            if (file) {
+              e.preventDefault();
+              addFilesToPending([file], type);
+            }
+          }
+        }
+      }
+    });
+
+    async function selectSupportEmailThread(threadId) {
+      currentSupportThreadId = threadId;
+      try {
+        localStorage.setItem('myListAddon:supportActiveThreadId', threadId);
+      } catch (e) {}
+      renderSupportEmailThreadList();
+
+      const emptyBox = document.getElementById('supportEmailEmptyDetail');
+      const activeBox = document.getElementById('supportEmailActiveDetail');
+      if (emptyBox) emptyBox.style.display = 'none';
+      if (activeBox) activeBox.style.display = 'flex';
+
+      const msgContainer = document.getElementById('supportActiveMessageList');
+      if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_muted">Loading message history...</div>';
+
+      try {
+        const res = await fetch('/admin/api/support-emails/thread?id=' + encodeURIComponent(threadId), { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok || !data.thread) {
+          if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_color_danger_text">Could not load conversation.</div>';
+          return;
+        }
+
+        const t = data.thread;
+        const messages = data.messages || [];
+        currentSupportMessages = messages;
+
+        // Update active header
+        const subjEl = document.getElementById('supportActiveSubject');
+        const fromEl = document.getElementById('supportActiveFrom');
+        const dateEl = document.getElementById('supportActiveDate');
+        const badgeEl = document.getElementById('supportActiveStatusBadge');
+        const statusBtn = document.getElementById('supportActiveStatusBtn');
+
+        if (subjEl) subjEl.textContent = t.subject || '(No subject)';
+        if (fromEl) fromEl.textContent = (t.customer_name ? (t.customer_name + ' <' + t.customer_email + '>') : t.customer_email);
+        if (dateEl) dateEl.textContent = new Date(t.created_at).toLocaleString();
+        if (badgeEl) {
+          badgeEl.className = 'admin-badge ' + (t.status || 'open');
+          badgeEl.textContent = t.status || 'open';
+        }
+        if (statusBtn) statusBtn.textContent = (t.status === 'closed') ? 'Reopen Thread' : 'Close Thread';
+
+        // Update list unread status locally
+        const localIdx = supportEmailThreads.findIndex((it) => it.id === threadId);
+        if (localIdx !== -1 && supportEmailThreads[localIdx].unread > 0) {
+          supportEmailThreads[localIdx].unread = 0;
+          renderSupportEmailThreadList();
+        }
+
+        // Render messages
+        if (msgContainer) {
+          msgContainer.innerHTML = messages.map((m) => {
+            const isInbound = (m.direction === 'inbound');
+            const senderLabel = isInbound ? (m.from_email || 'Customer') : 'Support Team (support@mylistsaddon.com)';
+            const timeStr = new Date(m.created_at).toLocaleString();
+            const textContent = m.body_text || (m.body_html ? m.body_html.replace(/<[^>]+>/g, '') : '(Empty message)');
+
+            let attHtml = '';
+            if (Array.isArray(m.attachments) && m.attachments.length > 0) {
+              attHtml = '<div class="u-mt-10px u-pt-8px u-bt-1px_solid_v_border">' +
+                '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px">Attachments (' + m.attachments.length + '):</div>' +
+                '<div style="display:flex; flex-wrap:wrap; gap:8px;">' +
+                  m.attachments.map((att, attIdx) => {
+                    const fn = att.filename || ('image_' + (attIdx + 1) + '.png');
+                    const szStr = att.size ? (' (' + Math.round(att.size / 1024) + ' KB)') : '';
+                    return '<div style="width:130px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column;">' +
+                      '<div style="width:100%; height:80px; overflow:hidden; cursor:zoom-in; background:var(--panel-strong); position:relative;" title="Click to view larger" data-act="openSupportMessageAttachmentLightbox" data-act-args="' + adminActAttr([m.id, attIdx]) + '">' +
+                        '<img src="' + (att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:100%; object-fit:cover; display:block;" loading="lazy">' +
+                      '</div>' +
+                      '<div class="u-jc-space_between u-ai-center u-p-4px_6px" style="display:flex; gap:4px; border-top:1px solid var(--border); background:var(--surface);">' +
+                        '<span class="u-fs-v_font_size_xs u-to-ellipsis u-ov-hidden u-ws-nowrap u-c-v_text u-flex-1" title="' + escapeHtmlAdmin(fn + szStr) + '">' + escapeHtmlAdmin(fn) + '</span>' +
+                        '<a href="' + (att.dataUrl || '#') + '" download="' + escapeHtmlAdmin(fn) + '" target="_blank" rel="noopener noreferrer" style="color:var(--muted); display:inline-flex; align-items:center; text-decoration:none; padding:2px;" title="Download ' + escapeHtmlAdmin(fn) + '">' +
+                          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+                        '</a>' +
+                      '</div>' +
+                    '</div>';
+                  }).join('') +
+                '</div>' +
+              '</div>';
+            }
+
+            return '<div class="support-bubble ' + (isInbound ? 'inbound' : 'outbound') + '">' +
+              '<div class="u-jc-space_between u-ai-center u-mb-6px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; gap:8px;">' +
+                '<strong>' + escapeHtmlAdmin(senderLabel) + '</strong>' +
+                '<span>' + timeStr + '</span>' +
+              '</div>' +
+              '<div class="u-fs-v_font_size_sm u-lh-1_5 u-c-v_text" style="white-space:pre-wrap; word-break:break-word;">' + escapeHtmlAdmin(textContent) + '</div>' +
+              attHtml +
+            '</div>';
+          }).join('');
+          msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+      } catch (err) {
+        if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_color_danger_text">Error loading conversation messages.</div>';
+      }
+    }
+    window.selectSupportEmailThread = selectSupportEmailThread;
+
+    async function sendSupportEmailReplyBtn() {
+      if (!currentSupportThreadId) return;
+      const textInput = document.getElementById('supportEmailReplyText');
+      const statusEl = document.getElementById('supportEmailReplyStatus');
+      const closeCheckbox = document.getElementById('supportEmailCloseOnReply');
+      const sendBtn = document.getElementById('supportEmailSendReplyBtn');
+
+      const text = textInput ? textInput.value.trim() : '';
+      if (!text && !pendingReplyAttachments.length) {
+        if (statusEl) { statusEl.textContent = 'Please enter a reply or attach an image.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+
+      if (sendBtn) sendBtn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Sending...'; statusEl.style.color = 'var(--muted)'; }
+
+      try {
+        const res = await fetch('/admin/api/support-emails/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadId: currentSupportThreadId,
+            text: text || '(Image attachment)',
+            attachments: pendingReplyAttachments,
+            closeOnSend: closeCheckbox ? closeCheckbox.checked : false,
+          }),
+        });
+
+        const data = await res.json();
+        if (sendBtn) sendBtn.disabled = false;
+
+        if (!data || !data.ok) {
+          if (statusEl) { statusEl.textContent = (data && data.error) || 'Failed to send reply.'; statusEl.style.color = 'var(--danger)'; }
+          return;
+        }
+
+        if (statusEl) { statusEl.textContent = 'Reply sent.'; statusEl.style.color = '#34c759'; }
+        if (textInput) textInput.value = '';
+        pendingReplyAttachments = [];
+        renderPendingAttachments('reply');
+
+        // Reload the thread conversation to display the new message
+        await selectSupportEmailThread(currentSupportThreadId);
+        await loadSupportEmailThreads();
+      } catch (err) {
+        if (sendBtn) sendBtn.disabled = false;
+        if (statusEl) { statusEl.textContent = 'Network error while sending.'; statusEl.style.color = 'var(--danger)'; }
+      }
+    }
+    window.sendSupportEmailReplyBtn = sendSupportEmailReplyBtn;
+
+    async function changeSupportThreadStatus() {
+      if (!currentSupportThreadId) return;
+      const thread = supportEmailThreads.find((t) => t.id === currentSupportThreadId);
+      const nextStatus = (thread && thread.status === 'closed') ? 'open' : 'closed';
+
+      try {
+        const res = await fetch('/admin/api/support-emails/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ threadId: currentSupportThreadId, status: nextStatus }),
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          if (thread) thread.status = nextStatus;
+          const badgeEl = document.getElementById('supportActiveStatusBadge');
+          const statusBtn = document.getElementById('supportActiveStatusBtn');
+          if (badgeEl) {
+            badgeEl.className = 'admin-badge ' + nextStatus;
+            badgeEl.textContent = nextStatus;
+          }
+          if (statusBtn) statusBtn.textContent = (nextStatus === 'closed') ? 'Reopen Thread' : 'Close Thread';
+          renderSupportEmailThreadList();
+        }
+      } catch (err) {
+        showAdminAlert('Status Error', 'Could not update thread status.', false);
+      }
+    }
+    window.changeSupportThreadStatus = changeSupportThreadStatus;
+
+    function deleteSupportEmailThread() {
+      if (!currentSupportThreadId) return;
+      showAdminConfirm('Delete Conversation', 'Permanently delete this email thread and all messages in it?', 'Delete', async () => {
+        try {
+          const res = await fetch('/admin/api/support-emails/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threadId: currentSupportThreadId }),
+          });
+          const data = await res.json();
+          if (data && data.ok) {
+            supportEmailThreads = supportEmailThreads.filter((t) => t.id !== currentSupportThreadId);
+            currentSupportThreadId = null;
+            try {
+              localStorage.removeItem('myListAddon:supportActiveThreadId');
+            } catch (e) {}
+            const emptyBox = document.getElementById('supportEmailEmptyDetail');
+            const activeBox = document.getElementById('supportEmailActiveDetail');
+            if (emptyBox) emptyBox.style.display = 'block';
+            if (activeBox) activeBox.style.display = 'none';
+            renderSupportEmailThreadList();
+          } else {
+            showAdminAlert('Delete Failed', (data && data.error) || 'Could not delete conversation.', false);
+          }
+        } catch (err) {
+          showAdminAlert('Network Error', 'Error deleting conversation.', false);
+        }
+      }, true);
+    }
+    window.deleteSupportEmailThread = deleteSupportEmailThread;
+
+    function openComposeEmailModal() {
+      const modal = document.getElementById('composeEmailModal');
+      const statusEl = document.getElementById('composeEmailStatus');
+      if (statusEl) statusEl.textContent = '';
+      pendingComposeAttachments = [];
+      renderPendingAttachments('compose');
+      if (modal) modal.style.display = 'flex';
+    }
+    window.openComposeEmailModal = openComposeEmailModal;
+
+    function closeComposeEmailModal() {
+      const modal = document.getElementById('composeEmailModal');
+      if (modal) modal.style.display = 'none';
+      pendingComposeAttachments = [];
+      renderPendingAttachments('compose');
+    }
+    window.closeComposeEmailModal = closeComposeEmailModal;
+
+    async function sendComposedEmailBtn() {
+      const toInput = document.getElementById('composeEmailTo');
+      const nameInput = document.getElementById('composeEmailName');
+      const subjInput = document.getElementById('composeEmailSubject');
+      const bodyInput = document.getElementById('composeEmailBody');
+      const statusEl = document.getElementById('composeEmailStatus');
+      const sendBtn = document.getElementById('composeEmailSendBtn');
+
+      const to = toInput ? toInput.value.trim() : '';
+      const name = nameInput ? nameInput.value.trim() : '';
+      const subject = subjInput ? subjInput.value.trim() : '';
+      const body = bodyInput ? bodyInput.value.trim() : '';
+
+      if (!to || !to.includes('@')) {
+        if (statusEl) { statusEl.textContent = 'Valid email is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+      if (!subject) {
+        if (statusEl) { statusEl.textContent = 'Subject is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+      if (!body && !pendingComposeAttachments.length) {
+        if (statusEl) { statusEl.textContent = 'Message body or image attachment is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+
+      if (sendBtn) sendBtn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Sending...'; statusEl.style.color = 'var(--muted)'; }
+
+      try {
+        const res = await fetch('/admin/api/support-emails/compose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: to,
+            customerName: name,
+            subject: subject,
+            text: body || '(Image attachment)',
+            attachments: pendingComposeAttachments,
+          }),
+        });
+        const data = await res.json();
+        if (sendBtn) sendBtn.disabled = false;
+
+        if (!data || !data.ok) {
+          if (statusEl) { statusEl.textContent = (data && data.error) || 'Failed to send.'; statusEl.style.color = 'var(--danger)'; }
+          return;
+        }
+
+        closeComposeEmailModal();
+        if (toInput) toInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (subjInput) subjInput.value = '';
+        if (bodyInput) bodyInput.value = '';
+        pendingComposeAttachments = [];
+        renderPendingAttachments('compose');
+
+        await loadSupportEmailThreads();
+        if (data.thread && data.thread.id) {
+          await selectSupportEmailThread(data.thread.id);
+        }
+      } catch (err) {
+        if (sendBtn) sendBtn.disabled = false;
+        if (statusEl) { statusEl.textContent = 'Network error while sending.'; statusEl.style.color = 'var(--danger)'; }
+      }
+    }
+    window.sendComposedEmailBtn = sendComposedEmailBtn;
+
+    function openSupportMessageAttachmentLightbox(messageId, attIdx) {
+      const msg = currentSupportMessages.find((m) => m.id === messageId);
+      if (!msg || !msg.attachments || !msg.attachments[attIdx]) return;
+      const att = msg.attachments[attIdx];
+      openSupportImageLightbox(att.dataUrl, att.filename || 'image.png');
+    }
+    window.openSupportMessageAttachmentLightbox = openSupportMessageAttachmentLightbox;
+
+    function openPendingAttachmentLightbox(type, idx) {
+      const list = (type === 'reply') ? pendingReplyAttachments : pendingComposeAttachments;
+      if (!list || !list[idx]) return;
+      const att = list[idx];
+      openSupportImageLightbox(att.dataUrl, att.filename || 'image.png');
+    }
+    window.openPendingAttachmentLightbox = openPendingAttachmentLightbox;
+
+    function openSupportImageLightbox(dataUrl, filename) {
+      const modal = document.getElementById('supportImageLightboxModal');
+      const img = document.getElementById('supportLightboxImage');
+      const fnEl = document.getElementById('supportLightboxFilename');
+      const dlLink = document.getElementById('supportLightboxDownloadLink');
+      if (!modal || !img) return;
+      img.src = dataUrl || '';
+      if (fnEl) fnEl.textContent = filename || 'Image preview';
+      if (dlLink) {
+        dlLink.href = dataUrl || '#';
+        dlLink.download = filename || 'image.png';
+      }
+      modal.style.display = 'flex';
+    }
+    window.openSupportImageLightbox = openSupportImageLightbox;
+
+    function closeSupportImageLightbox() {
+      const modal = document.getElementById('supportImageLightboxModal');
+      const img = document.getElementById('supportLightboxImage');
+      if (modal) modal.style.display = 'none';
+      if (img) img.src = '';
+    }
+    window.closeSupportImageLightbox = closeSupportImageLightbox;
+
+    function closeSupportImageLightboxOnBackdrop(ev) {
+      const modal = document.getElementById('supportImageLightboxModal');
+      if (ev && ev.target === modal) {
+        closeSupportImageLightbox();
+      }
+    }
+    window.closeSupportImageLightboxOnBackdrop = closeSupportImageLightboxOnBackdrop;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const lightbox = document.getElementById('supportImageLightboxModal');
+        if (lightbox && lightbox.style.display !== 'none') {
+          closeSupportImageLightbox();
+        }
+      }
+    });
   </script>
 </body></html>`;
 }

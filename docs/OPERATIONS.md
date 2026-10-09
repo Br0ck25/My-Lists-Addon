@@ -48,6 +48,7 @@ Set these in the dashboard: Worker → **Settings → Bindings → Add**.
 | `DB_ACTIVITY` | D1 database (`mylists-activity`) | Later (Phase 3c) | Watch events and progress | Can be added now; nothing uses it yet. Create the database (D1 → Create → `mylists-activity`), run `migrations/activity/A0001_activity.sql` in **its** Console (not the main database's), then bind it. See §4. |
 | `BLOBS` | R2 bucket (`mylists-blobs`) | Recommended (Phase 3b) | Shared channels' episode lists (P3b-8); later posters, exports and D1 backups | **Add with Phase 3b.** Create the bucket (R2 → Create bucket → `mylists-blobs`), then bind it. Without it, shared channels still get their rows and their episodes are read from KV. |
 | `JOBS` | Queue producer (`mylists-jobs`) | Recommended (Phase 5) | Background jobs: work that nobody is waiting on runs from a queue instead of inside a request or a cron tick | **Add with Phase 5**, with the queue's consumer and dead-letter queue: the steps are in §18. Without it nothing is sent to a queue, and the cron keeps doing its work itself, as before. |
+| `EMAIL` | Send Email (`support@mylistsaddon.com`) | Recommended | Customer support email routing and sending from the Admin panel via Cloudflare Email Service | **In use (Migration 0021)**. See §31. |
 
 The owner confirmed on 2026-09-27 that this account's dashboard offers Queues, R2 and Analytics Engine bindings.
 
@@ -595,4 +596,24 @@ still in Analytics Engine (it keeps 90 days) and can be put back once:
 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are accepted in place of the two names above.
 `CF_ANALYTICS_DATASET` is needed only if the binding uses a dataset other than `mylists_events`.
 Source groups (`sourcegroup:` counts) were never moved to Analytics Engine, so they are skipped.
+
+## 31. Support Email Interface & Cloudflare Email Service
+
+The Admin panel includes a dedicated Customer Support email client (`/admin` → Management & Tools → **Support Emails**) powered by Cloudflare Email Routing (inbound) and Cloudflare Email Sending (`env.EMAIL.send()`, outbound).
+
+### 1. Inbound Setup (Cloudflare Email Routing)
+1. In Cloudflare dashboard, navigate to your zone (`mylistsaddon.com`) → **Email Routing**.
+2. If not already enabled, complete the DNS setup (MX and SPF records provided by Cloudflare).
+3. Under **Routing rules** → **Custom addresses**, click **Create address**.
+4. Set custom address to `support@mylistsaddon.com`.
+5. Under Action, select **Send to a Worker** and pick the My Lists Worker (`my-lists-addon`).
+6. Inbound emails trigger the Worker's `email(message, env, ctx)` handler, which parses MIME parts, threads replies by `In-Reply-To` and subject, and saves messages into the D1 `support_threads` and `support_messages` tables (migration `0021_support_emails.sql`).
+
+### 2. Outbound Setup (Cloudflare Email Sending Binding)
+1. Ensure the sending address/domain is verified in Cloudflare Email Routing or Email Sending settings.
+2. In Worker **Settings → Bindings → Add → Send Email**:
+   - Variable name: `EMAIL`
+   - Allowed senders: `support@mylistsaddon.com` (or entire domain `*@mylistsaddon.com`)
+3. Deploy the worker or verify binding.
+4. Admins can view threads, inspect full conversations, reply directly from `/admin` (dispatched via `env.EMAIL.send()` with standard threading headers `In-Reply-To` and `References`), update status (`open`, `pending`, `resolved`, `closed`), and compose new emails.
 

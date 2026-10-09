@@ -703,6 +703,13 @@
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
       
       <div class="resource-cards-grid">
+        <a href="mailto:support@mylistsaddon.com" class="resource-card">
+          <div>
+            <div class="resource-card-title">Email Support</div>
+            <div class="resource-card-desc">Prefer email? Write to support@mylistsaddon.com and screenshots are welcome. We reply by email.</div>
+          </div>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Email Us &rarr;</span>
+        </a>
         <a href="/guide" class="resource-card">
           <div>
             <div class="resource-card-title">User Guide &amp; Docs</div>

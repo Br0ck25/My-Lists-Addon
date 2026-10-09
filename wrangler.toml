@@ -85,6 +85,14 @@ dataset = "mylists_events"
 binding = "BLOBS"
 bucket_name = "mylists-blobs"
 
+# --- Email Sending (support@mylistsaddon.com) ----------------------------------
+# Allows the Worker and Admin panel to send outbound emails via Cloudflare
+# Email Service (env.EMAIL.send()).
+# Dashboard: Compute -> Email Service -> Email Sending -> Onboard domain,
+# then Worker -> Settings -> Bindings -> Add -> Send Email, name EMAIL.
+[[send_email]]
+name = "EMAIL"
+
 # --- Images (recommended: badged posters in Stremio / Nuvio) -------------------
 # /api/poster-badge draws "Season Premiere" / air-date badges as an SVG, which
 # Stremio and Nuvio cannot reliably show. With this binding the SVG is turned

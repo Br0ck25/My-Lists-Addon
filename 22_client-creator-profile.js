@@ -6629,8 +6629,15 @@ function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
   const targetId = String(id);
   const targetWatchedAt = (watchedAt !== undefined && watchedAt !== null && watchedAt !== '' && !isNaN(Number(watchedAt))) ? Number(watchedAt) : null;
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
+  const affectedShowIds = new Set();
+  const noteAffectedShow = (it) => {
+    if (!it) return;
+    const sId = it.showId || (it.type === 'episode' && it.id && String(it.id).includes(':') ? String(it.id).split(':')[0] : null);
+    if (sId) affectedShowIds.add(String(sId));
+  };
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
+    const beforeItems = map['watch-history'].items.slice();
     const isShowRemoval = isGrouped || !map['watch-history'].items.some(it => it && String(it.id || it.imdbId) === targetId);
     if (isShowRemoval) {
       map['watch-history'].items = map['watch-history'].items.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
@@ -6647,6 +6654,8 @@ function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
       }
     }
     if (map['watch-history'].items.length !== initialLen) {
+      beforeItems.filter((it) => map['watch-history'].items.indexOf(it) < 0).forEach(noteAffectedShow);
+      if (isShowRemoval) affectedShowIds.add(targetId);
       const stillInHistory = map['watch-history'].items.some(it => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId));
       if (!stillInHistory && window._watchedItemIds) {
         window._watchedItemIds.delete(targetId);
@@ -6663,6 +6672,13 @@ function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
       // Next's candidate set -- see syncAiringNextWatchState's own
       // comment (21_client-custom-list-builder.js).
       if (typeof syncAiringNextWatchState === 'function') syncAiringNextWatchState();
+      // Removing a watched episode rewinds or updates Continue Watching for
+      // that show (or clears it if all its episodes were removed).
+      if (typeof updateContinueWatching === 'function') {
+        affectedShowIds.forEach((showId) => {
+          updateContinueWatching(showId).catch(() => {});
+        });
+      }
     }
   }
   if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems) && window._rawWatchHistoryItems !== (map['watch-history'] && map['watch-history'].items)) {

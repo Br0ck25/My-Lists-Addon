@@ -8580,3 +8580,114 @@ describe("client: Bulk Add UX refinements", () => {
   });
 });
 
+describe("client: removing item from watch history updates Continue Watching", () => {
+  const S1 = Array.from({ length: 10 }, (_, i) => ({
+    id: 100 + i + 1,
+    name: `Episode ${i + 1}`,
+    episode_number: i + 1,
+    air_date: "2020-01-01",
+  }));
+
+  const setup = () => {
+    const client = loadClient({
+      routes: {
+        "/api/season": (req) => {
+          const s = new URL(req.url, "https://example.com").searchParams.get("seasonNum");
+          if (s === "1") return { json: { ok: true, season: { episodes: S1 } } };
+          return { json: { ok: false, error: "Not found" } };
+        },
+      },
+    });
+    return client;
+  };
+
+  it("updates Continue Watching to S1E8 when S1E8 is removed from Watch History", async () => {
+    const client = setup();
+    const map = client.call("loadLocalCustomLists");
+
+    // Seed Watch History with S1E1 through S1E8
+    const showId = "tt1234567";
+    const historyItems = [];
+    for (let e = 1; e <= 8; e++) {
+      historyItems.push({
+        id: `${showId}:1:${e}`,
+        showId: showId,
+        showTitle: "Test Show",
+        type: "episode",
+        seasonNum: 1,
+        episodeNum: e,
+        watchedAt: Date.now() + e,
+      });
+    }
+    map["watch-history"] = { slug: "watch-history", items: historyItems.slice() };
+    map["continue-watching"] = {
+      slug: "continue-watching",
+      items: [{
+        id: "109",
+        showId: showId,
+        showTitle: "Test Show",
+        type: "episode",
+        seasonNum: 1,
+        episodeNum: 9,
+        name: "Episode 9",
+      }],
+    };
+    client.call("saveLocalCustomListsMap", map);
+
+    // Initial state: CW shows S1E9
+    let cw = client.call("loadLocalCustomLists")["continue-watching"].items;
+    assert.equal(cw[0].episodeNum, 9);
+
+    // Now remove S1E8 from Watch History
+    client.call("removeWatchHistoryItemDirect", `${showId}:1:8`, null);
+    await new Promise((r) => setTimeout(r, 50));
+
+    // After removal, Watch History should not have S1E8
+    const updatedHistory = client.call("loadLocalCustomLists")["watch-history"].items;
+    assert.equal(updatedHistory.some((it) => it.episodeNum === 8), false);
+
+    // And Continue Watching should now update to S1E8!
+    cw = client.call("loadLocalCustomLists")["continue-watching"].items;
+    assert.equal(cw.length, 1);
+    assert.equal(cw[0].showId, showId);
+    assert.equal(cw[0].episodeNum, 8);
+    assert.equal(cw[0].seasonNum, 1);
+  });
+
+  it("removes show from Continue Watching when all its episodes are removed from Watch History", async () => {
+    const client = setup();
+    const map = client.call("loadLocalCustomLists");
+    const showId = "tt9999999";
+    map["watch-history"] = {
+      slug: "watch-history",
+      items: [{
+        id: `${showId}:1:1`,
+        showId: showId,
+        showTitle: "Single Ep Show",
+        type: "episode",
+        seasonNum: 1,
+        episodeNum: 1,
+      }],
+    };
+    map["continue-watching"] = {
+      slug: "continue-watching",
+      items: [{
+        id: "102",
+        showId: showId,
+        showTitle: "Single Ep Show",
+        type: "episode",
+        seasonNum: 1,
+        episodeNum: 2,
+      }],
+    };
+    client.call("saveLocalCustomListsMap", map);
+
+    client.call("removeWatchHistoryItemDirect", `${showId}:1:1`, null);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const cw = client.call("loadLocalCustomLists")["continue-watching"].items;
+    assert.equal(cw.some((it) => it.showId === showId), false);
+  });
+});
+
+

@@ -7603,6 +7603,38 @@
       }
     }
 
+    // /admin/api/support-emails/* -> Customer support email management (59_support-emails.js)
+    if (path === "/admin/api/support-emails/threads" && request.method === "GET") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/thread" && request.method === "GET") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/reply" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/compose" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/status" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/delete" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+
     // /admin/api/analytics?section=search|catalogs_lists|audience&window=...
     // Backs the Search, Catalogs & Lists, and Playback & Audience tabs in the admin dashboard.
     if (path === "/admin/api/analytics" && request.method === "GET") {
@@ -8463,5 +8495,14 @@ export default {
   // names its job type, and runJobsQueue (44_jobs-queue.js) runs its handler.
   async queue(batch, env, ctx) {
     await runJobsQueue(batch, env, ctx);
+  },
+
+  // Cloudflare Email Routing: receives incoming emails to support@mylistsaddon.com (59_support-emails.js)
+  async email(message, env, ctx) {
+    try {
+      await handleIncomingEmail(message, env, ctx);
+    } catch (err) {
+      console.error("[Email] email() handler failed:", err);
+    }
   },
 };
