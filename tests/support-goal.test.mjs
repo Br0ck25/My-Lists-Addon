@@ -11,7 +11,20 @@ async function adminCookie(env) {
   const login = await call(env, "/admin/login", { method: "POST", form: { key: env.ADMIN_KEY } });
   return (login.headers.get("set-cookie") || "").match(/^([^=]+=[^;]+)/)[1];
 }
-const month = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
+const month = (now = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now).split("-");
+  let year = Number(parts[0]);
+  let m = Number(parts[1]);
+  const day = Number(parts[2]);
+  if (day < 9) {
+    m -= 1;
+    if (m < 1) {
+      m = 12;
+      year -= 1;
+    }
+  }
+  return `${year}-${String(m).padStart(2, "0")}`;
+};
 
 describe("support goal: the public endpoint and the admin save", () => {
   it("is off until the admin turns it on", async () => {
@@ -59,6 +72,13 @@ describe("support goal: the public endpoint and the admin save", () => {
     pub = (await call(env, "/api/support-goal")).body;
     assert.equal(pub.raised, 0, "last month's amount does not carry over");
     assert.equal(pub.goal, 80);
+  });
+
+  it("billing cycle starts on the 9th: day 8 belongs to previous month, day 9 to current month", async () => {
+    assert.equal(month(new Date("2026-10-08T12:00:00-04:00")), "2026-09");
+    assert.equal(month(new Date("2026-10-09T12:00:00-04:00")), "2026-10");
+    assert.equal(month(new Date("2027-01-05T12:00:00-05:00")), "2026-12");
+    assert.equal(month(new Date("2027-01-09T12:00:00-05:00")), "2027-01");
   });
 
   it("turning it off hides everything, and bad numbers are refused", async () => {

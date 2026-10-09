@@ -5141,7 +5141,7 @@ function buildLocalListCardHtml(l) {
     } else if (isWatchlist) {
       removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchlistItemDirect" data-act-stop data-act-args="' + appActArgs([it.imdbId || it.id, "@self"]) + '" title="Remove from Watchlist" aria-label="Remove from Watchlist">\u2715</button>';
     } else if (l.slug === 'watch-history') {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self"]) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-act="removeWatchHistoryItemDirect" data-act-stop data-act-args="' + appActArgs([it.id || it.imdbId, "@self", it.watchedAt != null ? it.watchedAt : '']) + '" title="Remove from Watch History" aria-label="Remove from Watch History">\u2715</button>';
     }
     const itemPoster = resolveItemPoster(it);
     const isAiringList = l.slug === 'airing-next' || l.statusKey === 'airing-next';
@@ -6613,7 +6613,7 @@ function removeWatchlistItemDirect(id, btn) {
   }
 }
 
-function removeWatchHistoryItemDirect(id, btn) {
+function removeWatchHistoryItemDirect(id, btn, watchedAt, isGrouped) {
   if (!id) return;
   if (btn) {
     const tile = btn.closest('.list-card-mini-poster-tile, .live-preview-poster-card');
@@ -6627,36 +6627,41 @@ function removeWatchHistoryItemDirect(id, btn) {
     }
   }
   const targetId = String(id);
+  const targetWatchedAt = (watchedAt !== undefined && watchedAt !== null && watchedAt !== '' && !isNaN(Number(watchedAt))) ? Number(watchedAt) : null;
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
-  let removedItems = [];
+  const affectedShowIds = new Set();
+  const noteAffectedShow = (it) => {
+    if (!it) return;
+    const sId = it.showId || (it.type === 'episode' && it.id && String(it.id).includes(':') ? String(it.id).split(':')[0] : null);
+    if (sId) affectedShowIds.add(String(sId));
+  };
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
-    const isTarget = (it) => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId);
-    removedItems = map['watch-history'].items.filter(isTarget);
-    map['watch-history'].items = map['watch-history'].items.filter((it) => !isTarget(it));
+    const beforeItems = map['watch-history'].items.slice();
+    const isShowRemoval = isGrouped || !map['watch-history'].items.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isShowRemoval) {
+      map['watch-history'].items = map['watch-history'].items.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let removeIdx = -1;
+      if (targetWatchedAt != null) {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      }
+      if (removeIdx < 0) {
+        removeIdx = map['watch-history'].items.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+      }
+      if (removeIdx >= 0) {
+        map['watch-history'].items.splice(removeIdx, 1);
+      }
+    }
     if (map['watch-history'].items.length !== initialLen) {
-      if (window._watchedItemIds) {
+      beforeItems.filter((it) => map['watch-history'].items.indexOf(it) < 0).forEach(noteAffectedShow);
+      if (isShowRemoval) affectedShowIds.add(targetId);
+      const stillInHistory = map['watch-history'].items.some(it => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId));
+      if (!stillInHistory && window._watchedItemIds) {
         window._watchedItemIds.delete(targetId);
-        removedItems.forEach((rit) => {
-          if (!rit) return;
-          if (rit.id) window._watchedItemIds.delete(String(rit.id));
-          if (rit.imdbId) window._watchedItemIds.delete(String(rit.imdbId));
-          if (rit.tmdbId) {
-            window._watchedItemIds.delete(String(rit.tmdbId));
-            window._watchedItemIds.delete('tmdb:' + rit.tmdbId);
-          }
-          if (rit.seasonNum != null && rit.episodeNum != null) {
-            if (rit.showId) {
-              window._watchedItemIds.delete(String(rit.showId) + ':' + rit.seasonNum + ':' + rit.episodeNum);
-              if (String(rit.showId).startsWith('tmdb:')) {
-                window._watchedItemIds.delete(String(rit.showId).slice(5) + ':' + rit.seasonNum + ':' + rit.episodeNum);
-              } else {
-                window._watchedItemIds.delete('tmdb:' + rit.showId + ':' + rit.seasonNum + ':' + rit.episodeNum);
-              }
-            }
-            if (rit.showTitle) window._watchedItemIds.delete(String(rit.showTitle) + ':' + rit.seasonNum + ':' + rit.episodeNum);
-          }
-        });
+      }
+      if (typeof rebuildWatchedIndex === 'function') {
+        rebuildWatchedIndex(map['watch-history'].items);
       }
       map['watch-history'].updatedAt = Date.now();
       if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(map);
@@ -6667,24 +6672,8 @@ function removeWatchHistoryItemDirect(id, btn) {
       // Next's candidate set -- see syncAiringNextWatchState's own
       // comment (21_client-custom-list-builder.js).
       if (typeof syncAiringNextWatchState === 'function') syncAiringNextWatchState();
-
-      // Removing a watched episode rewinds or updates Continue Watching
-      // for that show (or clears the show from Continue Watching if all its
-      // episodes were removed).
-      const affectedShowIds = new Set();
-      removedItems.forEach((it) => {
-        if (!it) return;
-        const sId = it.showId || (it.type === 'episode' && it.id && String(it.id).includes(':') ? String(it.id).split(':')[0] : null);
-        if (sId) affectedShowIds.add(String(sId));
-        if (String(it.showId || '') === targetId) affectedShowIds.add(targetId);
-      });
-      if (!affectedShowIds.size && targetId) {
-        const cwList = map['continue-watching'] || {};
-        const cwItems = Array.isArray(cwList.items) ? cwList.items : [];
-        if (cwItems.some((it) => it && (String(it.showId || '') === targetId || String(it.id || '') === targetId))) {
-          affectedShowIds.add(targetId);
-        }
-      }
+      // Removing a watched episode rewinds or updates Continue Watching for
+      // that show (or clears it if all its episodes were removed).
       if (typeof updateContinueWatching === 'function') {
         affectedShowIds.forEach((showId) => {
           updateContinueWatching(showId).catch(() => {});
@@ -6692,32 +6681,31 @@ function removeWatchHistoryItemDirect(id, btn) {
       }
     }
   }
-  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems)) {
-    const rawRemoved = window._rawWatchHistoryItems.filter((it) => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId));
-    if (rawRemoved.length && !removedItems.length) {
-      const affectedShowIds = new Set();
-      rawRemoved.forEach((it) => {
-        if (!it) return;
-        const sId = it.showId || (it.type === 'episode' && it.id && String(it.id).includes(':') ? String(it.id).split(':')[0] : null);
-        if (sId) affectedShowIds.add(String(sId));
-        if (String(it.showId || '') === targetId) affectedShowIds.add(targetId);
-      });
-      if (typeof updateContinueWatching === 'function') {
-        affectedShowIds.forEach((showId) => {
-          updateContinueWatching(showId).catch(() => {});
-        });
+  if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems) && window._rawWatchHistoryItems !== (map['watch-history'] && map['watch-history'].items)) {
+    const isRawShowRemoval = isGrouped || !window._rawWatchHistoryItems.some(it => it && String(it.id || it.imdbId) === targetId);
+    if (isRawShowRemoval) {
+      window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => it && String(it.showId || '') !== targetId && String(it.id || it.imdbId) !== targetId);
+    } else {
+      let rawIdx = -1;
+      if (targetWatchedAt != null) {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId && Number(it.watchedAt) === targetWatchedAt);
+      }
+      if (rawIdx < 0) {
+        rawIdx = window._rawWatchHistoryItems.findIndex(it => it && String(it.id || it.imdbId) === targetId);
+      }
+      if (rawIdx >= 0) {
+        window._rawWatchHistoryItems.splice(rawIdx, 1);
       }
     }
-    window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
-    if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
-      // Update the open See All page in place. Rebuilding it -- which is what
-      // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
-      // the grid, re-requested every poster and scrolled back to the top on
-      // every single removal. The full render stays as the fallback for the
-      // one case that really does need re-laying out (grouped by show).
-      const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
-      if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
-    }
+  }
+  if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
+    // Update the open See All page in place. Rebuilding it -- which is what
+    // renderWatchHistoryGrid does, starting from innerHTML = '' -- blanked
+    // the grid, re-requested every poster and scrolled back to the top on
+    // every single removal. The full render stays as the fallback for the
+    // one case that really does need re-laying out (grouped by show).
+    const handled = (typeof updateWatchHistoryGridAfterRemoval === 'function') && updateWatchHistoryGridAfterRemoval();
+    if (!handled && typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
   }
 }
 

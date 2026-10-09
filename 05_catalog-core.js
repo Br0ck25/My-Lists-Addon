@@ -688,44 +688,87 @@ function getPremadeChannelLogo(payload, origin, isLandscape = false) {
   return `/api/channel-logo?${params.toString()}`;
 }
 
-function generateBadgedPosterSvg({ posterUrl, airDateText, bottomText, bottomBg, bottomBorder, bottomColor }) {
+function parseSvgColor(colorStr, defaultOpacity = '1') {
+  if (!colorStr || colorStr === 'transparent' || colorStr === 'none') {
+    return { color: 'none', opacity: defaultOpacity, isNone: true };
+  }
+  const str = String(colorStr).trim();
+  const m = str.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/i);
+  if (m) {
+    const r = Number(m[1]).toString(16).padStart(2, '0');
+    const g = Number(m[2]).toString(16).padStart(2, '0');
+    const b = Number(m[3]).toString(16).padStart(2, '0');
+    return { color: `#${r}${g}${b}`, opacity: m[4], isNone: false };
+  }
+  return { color: str, opacity: defaultOpacity, isNone: false };
+}
+
+function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomText, bottomBg, bottomBgOpacity, bottomBorder, bottomBorderOpacity, bottomColor }) {
   const safePoster = escapeXml(posterUrl || '');
-  const safeAirDate = escapeXml(airDateText || '');
+  const safeAirDate = escapeXml(airDateText ? String(airDateText).toUpperCase() : '');
+  const safeAirTime = escapeXml(airTimeText ? String(airTimeText).toUpperCase() : '');
   const safeBottom = escapeXml(bottomText || '');
 
-  // Top Air Date pill: Extra-large 36px font, 72px height, generous padding
-  const topPillWidth = Math.max(160, (safeAirDate.length * 26) + 56);
+  let topBadgeSvg = '';
+  if (safeAirDate) {
+    if (safeAirTime) {
+      // Two-line stacked pill (Date on top, Time below)
+      // Generous character width multiplier and padding so TOMORROW / 10 PM ET never extends beyond the pill
+      const dateWidth = safeAirDate.length * 25;
+      const timeWidth = safeAirTime.length * 22;
+      const topPillWidth = Math.max(170, Math.round(Math.max(dateWidth, timeWidth) + 60));
+      topBadgeSvg = `
+    <g transform="translate(20, 20)">
+      <rect x="0" y="4" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#000000" fill-opacity="0.35"/>
+      <rect x="0" y="0" width="${topPillWidth}" height="96" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2"/>
+      <text x="${topPillWidth / 2}" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
+      <text x="${topPillWidth / 2}" y="80" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" fill-opacity="0.95" text-anchor="middle" letter-spacing="0.3">${safeAirTime}</text>
+    </g>`;
+    } else {
+      // Single line pill (Date only)
+      const topPillWidth = Math.max(160, Math.round((safeAirDate.length * 26) + 56));
+      topBadgeSvg = `
+    <g transform="translate(20, 20)">
+      <rect x="0" y="4" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#000000" fill-opacity="0.35"/>
+      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.96" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2"/>
+      <text x="${topPillWidth / 2}" y="49" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${safeAirDate}</text>
+    </g>`;
+    }
+  }
 
-  // Bottom Badge pill: Extra-large 38px font, 84px height, centered
-  const bottomPillWidth = Math.max(380, (safeBottom.length * 24) + 64);
-
-  const topBadgeSvg = safeAirDate ? `
-    <g transform="translate(24, 24)">
-      <rect x="0" y="0" width="${topPillWidth}" height="72" rx="16" ry="16" fill="#007aff" fill-opacity="0.95" stroke="#66b8ff" stroke-width="3.5" filter="drop-shadow(0px 6px 12px rgba(0,0,0,0.8))"/>
-      <text x="${topPillWidth / 2}" y="49" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="1.2">${safeAirDate}</text>
-    </g>` : '';
-
-  const bottomBadgeSvg = safeBottom ? `
+  let bottomBadgeSvg = '';
+  if (safeBottom) {
+    // Bottom Badge pill: Extra-large 38px font, 84px height, centered
+    const bottomPillWidth = Math.min(460, Math.max(340, Math.round((safeBottom.length * 24) + 64)));
+    const bg = parseSvgColor(bottomBg || '#28a745', bottomBgOpacity || '0.95');
+    const border = parseSvgColor(bottomBorder, bottomBorderOpacity || '0.7');
+    const strokeAttr = (!border.isNone && border.color !== 'none')
+      ? ` stroke="${border.color}" stroke-opacity="${border.opacity}" stroke-width="3.5"`
+      : '';
+    bottomBadgeSvg = `
+    <!-- badge: ${escapeXml(bottomBg || '')} -->
     <g transform="translate(250, 715)">
-      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="20" ry="20" fill="${bottomBg || '#ff9f0a'}" fill-opacity="0.95" stroke="${bottomBorder || 'rgba(255,159,10,0.7)'}" stroke-width="4.5" filter="drop-shadow(0px 8px 16px rgba(0,0,0,0.85))"/>
-      <text x="0" y="-30" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="1.5">${safeBottom}</text>
-    </g>` : '';
+      <rect x="${-bottomPillWidth / 2}" y="-80" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="#000000" fill-opacity="0.4"/>
+      <rect x="${-bottomPillWidth / 2}" y="-84" width="${bottomPillWidth}" height="84" rx="18" ry="18" fill="${bg.color}" fill-opacity="${bg.opacity}"${strokeAttr}/>
+      <text x="0" y="-30" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="bold" fill="${bottomColor || '#ffffff'}" text-anchor="middle" letter-spacing="1.2">${safeBottom}</text>
+    </g>`;
+  }
 
   const topGradient = safeAirDate ? `
     <rect x="0" y="0" width="500" height="220" fill="url(#topScrim)" opacity="0.85"/>` : '';
 
   const bottomGradient = safeBottom ? `
-    <rect x="0" y="420" width="500" height="330" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
+    <rect x="0" y="440" width="500" height="310" fill="url(#bottomScrim)" opacity="0.95"/>` : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="500" height="750" viewBox="0 0 500 750">
   <defs>
     <linearGradient id="topScrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0.9"/>
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.85"/>
       <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="bottomScrim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.98"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.95"/>
     </linearGradient>
   </defs>
   <rect width="500" height="750" fill="#151722"/>
@@ -1638,6 +1681,9 @@ function applyBadgedPostersToMetas(metas, origin) {
     params.set("v", "5");
     if (m.id) params.set("id", m.id);
     if (hasAirDate) params.set("airDate", m.airDate);
+    const airTimeVal = hasAirDate ? (m.airTime || m.airTimeLabel || m.nextEpisodeAirTimeLabel || "") : "";
+    const airTimeStr = typeof airTimeVal === "object" ? (airTimeVal.label || "") : String(airTimeVal || "");
+    if (airTimeStr) params.set("airTime", airTimeStr);
     if (hasPremiere) params.set("premiere", "1");
     if (hasFinale) params.set("finale", "1");
     if (hasFinaleDate) params.set("finaleDate", m.seasonFinaleAirDate);
