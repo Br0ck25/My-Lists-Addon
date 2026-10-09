@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "731a9302f5";
+const WORKER_BUILD = "29b7058cbc";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -1309,6 +1309,30 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0020", kind: "table", name: "media_episodes",
     consequence: "Watch History served from the activity database shows episodes as \"Episode N\" with the show poster, and no episode name is kept from new plays.",
+  },
+  {
+    migration: "0021", kind: "table", name: "support_threads",
+    consequence: "Customer support conversation threads cannot be stored or tracked in D1.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_threads_status_updated",
+    consequence: "Filtering support threads by status and recency scans the whole table. Slower, not broken.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_threads_customer",
+    consequence: "Looking up previous conversation threads for a customer scans the whole table. Slower, not broken.",
+  },
+  {
+    migration: "0021", kind: "table", name: "support_messages",
+    consequence: "Inbound and outbound support email messages cannot be stored or retrieved in D1.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_messages_thread",
+    consequence: "Loading conversation messages for a thread scans the whole messages table. Slower, not broken.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_messages_rfc_id",
+    consequence: "Matching incoming replies by RFC Message-ID scans the whole messages table. Slower, not broken.",
   },
 ];
 
@@ -13575,6 +13599,21 @@ ${UTILITY_CSS}
   .netflix-preview-title { font-size:0.8rem; margin-top:4px; line-height:1.25; color:var(--text); }
   .netflix-preview-year { color:var(--muted); font-size:0.75rem; }
 
+  /* Support Desk */
+  .admin-badge.open { background:rgba(0,122,255,0.12); color:var(--accent); }
+  .admin-badge.replied { background:rgba(52,199,89,0.12); color:#34c759; }
+  .admin-badge.closed { background:rgba(142,142,147,0.15); color:var(--muted); }
+  .admin-badge.spam { background:rgba(255,59,48,0.12); color:var(--danger); }
+  .support-desk-layout { display:grid; grid-template-columns:360px 1fr; gap:16px; min-height:550px; align-items:start; margin-top:14px; }
+  @media (max-width:860px) { .support-desk-layout { grid-template-columns:1fr; } }
+  .support-thread-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:border-color 0.12s; }
+  .support-thread-card:hover { border-color:var(--border-strong); }
+  .support-thread-card.active { border-color:var(--accent); background:var(--panel-strong); }
+  .support-thread-card.unread { border-left:4px solid var(--accent); }
+  .support-bubble { border-radius:14px; padding:12px 16px; margin-bottom:12px; }
+  .support-bubble.inbound { background:var(--surface); border:1px solid var(--border); margin-right:40px; }
+  .support-bubble.outbound { background:var(--panel-strong); border:1.5px solid var(--accent); margin-left:40px; }
+
   /* Standard Modals & Buttons */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -13660,6 +13699,7 @@ ${UTILITY_CSS}
   <div class="admin-subnav-bar" id="adminSubnavManagement" style="display:none;">
     <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
     <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
+    <button type="button" class="subnav-pill" data-sub-tab="support_emails" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['support_emails'])}">Support Emails <span id="supportEmailsBadge" class="u-fs-v_font_size_xs u-fw-700 u-p-2px_6px u-br-v_radius_pill u-ml-4px" style="display:none;background:var(--accent);color:#fff;">0</span></button>
     <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
@@ -13849,6 +13889,102 @@ ${UTILITY_CSS}
       <div class="u-jc-flex_end u-gap-10px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-tab-panel" data-admin-panel="support_emails">
+    <div class="u-jc-space_between u-ai-center u-mb-12px u-fw2-wrap u-gap-10px" style="display:flex;">
+      <div>
+        <p class="u-c-v_muted u-m-0 u-fs-v_font_size_base">Direct customer inquiries received at <code>support@mylistsaddon.com</code> via Cloudflare Email Routing. Reply directly using Cloudflare Email Sending.</p>
+      </div>
+      <button type="button" class="lc-btn primary" data-act="openComposeEmailModal">+ Compose Email</button>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="panel u-p-10px_14px u-mb-14px u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px" style="display:flex;">
+      <div class="u-ai-center u-gap-6px u-fw2-wrap" style="display:flex;" id="supportEmailFilterGroup">
+        <button type="button" class="subnav-pill active" data-act="filterSupportEmails" data-act-args="${adminActArgs(['all'])}">All</button>
+        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['open'])}">Open</button>
+        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['replied'])}">Replied</button>
+        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['closed'])}">Closed</button>
+      </div>
+      <div class="u-ai-center u-gap-8px u-flex-1 u-maxw-340px" style="display:flex;">
+        <input type="text" id="supportEmailSearchInput" class="admin-select u-flex-1 u-m-0" placeholder="Search by email, name or subject..." data-act="onSupportEmailSearchInput" data-act-on="input">
+      </div>
+    </div>
+
+    <div class="support-desk-layout">
+      <!-- Left Column: Thread List -->
+      <div class="panel u-p-12px u-m-0" style="max-height:750px; overflow-y:auto;">
+        <div id="supportEmailThreadList" class="u-fs-v_font_size_sm u-c-v_muted">Loading conversations&hellip;</div>
+      </div>
+
+      <!-- Right Column: Conversation & Reply -->
+      <div class="panel u-p-16px u-m-0" id="supportEmailDetailContainer" style="display:flex; flex-direction:column; min-height:550px;">
+        <div id="supportEmailEmptyDetail" class="u-ta-center u-p-40px_20px u-c-v_muted">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="u-mb-10px u-o-0_4" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <div class="u-fs-v_font_size_base u-fw-600">No conversation selected</div>
+          <div class="u-fs-v_font_size_sm u-mt-4px">Select a thread from the list on the left to read and reply.</div>
+        </div>
+
+        <div id="supportEmailActiveDetail" style="display:none; flex-direction:column; flex:1;">
+          <!-- Thread Header -->
+          <div class="u-jc-space_between u-ai-flex_start u-bb-1px_solid_v_border u-pb-12px u-mb-14px" style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div class="u-flex-1">
+              <h3 id="supportActiveSubject" class="u-m-0_0_4px u-fs-v_font_size_lg u-fw-700 u-c-v_text"></h3>
+              <div class="u-fs-v_font_size_xs u-c-v_muted">
+                From: <strong id="supportActiveFrom" class="u-c-v_text"></strong> &bull; <span id="supportActiveDate"></span>
+              </div>
+            </div>
+            <div class="u-ai-center u-gap-8px" style="display:flex;">
+              <span id="supportActiveStatusBadge" class="admin-badge"></span>
+              <button type="button" class="admin-select u-cur-pointer" id="supportActiveStatusBtn" data-act="changeSupportThreadStatus">Toggle Status</button>
+              <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text" data-act="deleteSupportEmailThread">Delete</button>
+            </div>
+          </div>
+
+          <!-- Message History Timeline -->
+          <div id="supportActiveMessageList" class="u-flex-1 u-ov-auto u-mb-16px u-p-4px" style="max-height:480px; display:flex; flex-direction:column;"></div>
+
+          <!-- Reply Composer -->
+          <div class="u-bt-1px_solid_v_border u-pt-14px u-mt-auto">
+            <div class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text">Reply from support@mylistsaddon.com</div>
+            <textarea id="supportEmailReplyText" class="u-minh-100px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-10px u-ol-none" placeholder="Type your reply to customer..." style="width:100%;"></textarea>
+            <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-10px" style="display:flex;">
+              <label class="u-ai-center u-gap-6px u-fs-v_font_size_xs u-c-v_muted u-cur-pointer" style="display:flex;">
+                <input type="checkbox" id="supportEmailCloseOnReply" checked> Close thread after sending reply
+              </label>
+              <div class="u-ai-center u-gap-10px" style="display:flex;">
+                <span id="supportEmailReplyStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+                <button type="button" class="lc-btn primary" id="supportEmailSendReplyBtn" data-act="sendSupportEmailReplyBtn">Send Reply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compose Email Modal -->
+  <div id="composeEmailModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card u-maxw-500px">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
+        <h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-c-v_text">New Support Email</h3>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeComposeEmailModal">&#x2715;</button>
+      </div>
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Recipient Email</label>
+      <input type="email" id="composeEmailTo" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="user@example.com" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Customer Name (optional)</label>
+      <input type="text" id="composeEmailName" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="John Doe" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Subject</label>
+      <input type="text" id="composeEmailSubject" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="Regarding your inquiry" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Message</label>
+      <textarea id="composeEmailBody" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-14px u-ol-none" placeholder="Write your message..." style="width:100%;"></textarea>
+      <div class="u-jc-flex_end u-gap-10px u-ai-center" style="display:flex;">
+        <span id="composeEmailStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+        <button type="button" class="lc-btn secondary" data-act="closeComposeEmailModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="composeEmailSendBtn" data-act="sendComposedEmailBtn">Send Email</button>
       </div>
     </div>
   </div>
@@ -14222,6 +14358,7 @@ ${UTILITY_CSS}
       audience: 'discovery',
       creators: 'management',
       feedback: 'management',
+      support_emails: 'management',
       netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
@@ -14272,6 +14409,7 @@ ${UTILITY_CSS}
       if (tabId === 'catalogs_lists' && !window._catalogsListsLoadedOnce) { window._catalogsListsLoadedOnce = true; loadCatalogsAndListsData(); }
       if (tabId === 'audience' && !window._audienceLoadedOnce) { window._audienceLoadedOnce = true; loadAudienceData(); }
       if (tabId === 'feedback' && !window._feedbackLoadedOnce) { window._feedbackLoadedOnce = true; loadFeedback(); }
+      if (tabId === 'support_emails' && !window._supportEmailsLoadedOnce) { window._supportEmailsLoadedOnce = true; loadSupportEmailThreads(); }
       if (tabId === 'apiusage' && !window._apiUsageLoadedOnce) { window._apiUsageLoadedOnce = true; loadApiUsage(); }
       if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
@@ -16968,6 +17106,345 @@ ${UTILITY_CSS}
         }
       }, true);
     }
+
+    // --- Support Emails Desk ---
+    let supportEmailThreads = [];
+    let currentSupportThreadId = null;
+    let supportEmailFilter = 'all';
+    let supportEmailSearchTimeout = null;
+
+    async function loadSupportEmailThreads() {
+      const listEl = document.getElementById('supportEmailThreadList');
+      if (!listEl) return;
+      const q = (document.getElementById('supportEmailSearchInput') && document.getElementById('supportEmailSearchInput').value || '').trim();
+      const url = '/admin/api/support-emails/threads?status=' + encodeURIComponent(supportEmailFilter) + (q ? '&q=' + encodeURIComponent(q) : '');
+
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        if (data && data.notConfigured) {
+          listEl.innerHTML = '<div class="u-p-12px u-c-v_muted u-fs-v_font_size_sm">' + escapeHtmlAdmin(data.error) + '</div>';
+          return;
+        }
+        if (!data || !data.ok) {
+          listEl.innerHTML = '<div class="u-p-12px u-c-v_color_danger_text u-fs-v_font_size_sm">Could not load email threads.</div>';
+          return;
+        }
+
+        supportEmailThreads = data.threads || [];
+        const badge = document.getElementById('supportEmailsBadge');
+        if (badge && data.counts) {
+          badge.textContent = String(data.counts.open || 0);
+          badge.style.display = data.counts.open > 0 ? 'inline-block' : 'none';
+        }
+
+        renderSupportEmailThreadList();
+      } catch (err) {
+        listEl.innerHTML = '<div class="u-p-12px u-c-v_color_danger_text u-fs-v_font_size_sm">Network error loading emails.</div>';
+      }
+    }
+    window.loadSupportEmailThreads = loadSupportEmailThreads;
+
+    function renderSupportEmailThreadList() {
+      const listEl = document.getElementById('supportEmailThreadList');
+      if (!listEl) return;
+      if (!supportEmailThreads.length) {
+        listEl.innerHTML = '<div class="u-p-20px_10px u-ta-center u-c-v_muted u-fs-v_font_size_sm">No support conversations found.</div>';
+        return;
+      }
+
+      listEl.innerHTML = supportEmailThreads.map((t) => {
+        const activeClass = (t.id === currentSupportThreadId) ? ' active' : '';
+        const unreadClass = (t.unread > 0) ? ' unread' : '';
+        const statusClass = t.status || 'open';
+        const dateStr = new Date(t.last_message_at || t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const sender = t.customer_name ? (t.customer_name + ' &lt;' + t.customer_email + '&gt;') : t.customer_email;
+
+        return '<div class="support-thread-card' + activeClass + unreadClass + '" data-act="selectSupportEmailThread" data-act-args="' + adminActAttr([t.id]) + '">' +
+          '<div class="u-jc-space_between u-ai-center u-mb-4px" style="display:flex;">' +
+            '<strong class="u-fs-v_font_size_sm u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap" style="max-width:190px;">' + sender + '</strong>' +
+            '<span class="admin-badge ' + statusClass + '">' + escapeHtmlAdmin(statusClass) + '</span>' +
+          '</div>' +
+          '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap u-mb-4px">' + escapeHtmlAdmin(t.subject || '(No subject)') + '</div>' +
+          '<div class="u-fs-v_font_size_xs u-c-v_muted">' + dateStr + (t.unread > 0 ? ' &bull; <strong style="color:var(--accent);">New</strong>' : '') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function filterSupportEmails(status) {
+      supportEmailFilter = status;
+      const group = document.getElementById('supportEmailFilterGroup');
+      if (group) {
+        group.querySelectorAll('.subnav-pill').forEach((btn) => {
+          const btnStatus = btn.textContent.trim().toLowerCase();
+          btn.classList.toggle('active', btnStatus === status);
+        });
+      }
+      loadSupportEmailThreads();
+    }
+    window.filterSupportEmails = filterSupportEmails;
+
+    function onSupportEmailSearchInput() {
+      if (supportEmailSearchTimeout) clearTimeout(supportEmailSearchTimeout);
+      supportEmailSearchTimeout = setTimeout(() => {
+        loadSupportEmailThreads();
+      }, 300);
+    }
+    window.onSupportEmailSearchInput = onSupportEmailSearchInput;
+
+    async function selectSupportEmailThread(threadId) {
+      currentSupportThreadId = threadId;
+      renderSupportEmailThreadList();
+
+      const emptyBox = document.getElementById('supportEmailEmptyDetail');
+      const activeBox = document.getElementById('supportEmailActiveDetail');
+      if (emptyBox) emptyBox.style.display = 'none';
+      if (activeBox) activeBox.style.display = 'flex';
+
+      const msgContainer = document.getElementById('supportActiveMessageList');
+      if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_muted">Loading message history...</div>';
+
+      try {
+        const res = await fetch('/admin/api/support-emails/thread?id=' + encodeURIComponent(threadId), { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok || !data.thread) {
+          if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_color_danger_text">Could not load conversation.</div>';
+          return;
+        }
+
+        const t = data.thread;
+        const messages = data.messages || [];
+
+        // Update active header
+        const subjEl = document.getElementById('supportActiveSubject');
+        const fromEl = document.getElementById('supportActiveFrom');
+        const dateEl = document.getElementById('supportActiveDate');
+        const badgeEl = document.getElementById('supportActiveStatusBadge');
+        const statusBtn = document.getElementById('supportActiveStatusBtn');
+
+        if (subjEl) subjEl.textContent = t.subject || '(No subject)';
+        if (fromEl) fromEl.textContent = (t.customer_name ? (t.customer_name + ' <' + t.customer_email + '>') : t.customer_email);
+        if (dateEl) dateEl.textContent = new Date(t.created_at).toLocaleString();
+        if (badgeEl) {
+          badgeEl.className = 'admin-badge ' + (t.status || 'open');
+          badgeEl.textContent = t.status || 'open';
+        }
+        if (statusBtn) statusBtn.textContent = (t.status === 'closed') ? 'Reopen Thread' : 'Close Thread';
+
+        // Update list unread status locally
+        const localIdx = supportEmailThreads.findIndex((it) => it.id === threadId);
+        if (localIdx !== -1 && supportEmailThreads[localIdx].unread > 0) {
+          supportEmailThreads[localIdx].unread = 0;
+          renderSupportEmailThreadList();
+        }
+
+        // Render messages
+        if (msgContainer) {
+          msgContainer.innerHTML = messages.map((m) => {
+            const isInbound = (m.direction === 'inbound');
+            const senderLabel = isInbound ? (m.from_email || 'Customer') : 'Support Team (support@mylistsaddon.com)';
+            const timeStr = new Date(m.created_at).toLocaleString();
+            const textContent = m.body_text || (m.body_html ? m.body_html.replace(/<[^>]+>/g, '') : '(Empty message)');
+
+            return '<div class="support-bubble ' + (isInbound ? 'inbound' : 'outbound') + '">' +
+              '<div class="u-jc-space_between u-ai-center u-mb-6px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; gap:8px;">' +
+                '<strong>' + escapeHtmlAdmin(senderLabel) + '</strong>' +
+                '<span>' + timeStr + '</span>' +
+              '</div>' +
+              '<div class="u-fs-v_font_size_sm u-lh-1_5 u-c-v_text" style="white-space:pre-wrap; word-break:break-word;">' + escapeHtmlAdmin(textContent) + '</div>' +
+            '</div>';
+          }).join('');
+          msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+      } catch (err) {
+        if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_color_danger_text">Error loading conversation messages.</div>';
+      }
+    }
+    window.selectSupportEmailThread = selectSupportEmailThread;
+
+    async function sendSupportEmailReplyBtn() {
+      if (!currentSupportThreadId) return;
+      const textInput = document.getElementById('supportEmailReplyText');
+      const statusEl = document.getElementById('supportEmailReplyStatus');
+      const closeCheckbox = document.getElementById('supportEmailCloseOnReply');
+      const sendBtn = document.getElementById('supportEmailSendReplyBtn');
+
+      const text = textInput ? textInput.value.trim() : '';
+      if (!text) {
+        if (statusEl) { statusEl.textContent = 'Please enter a reply.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+
+      if (sendBtn) sendBtn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Sending...'; statusEl.style.color = 'var(--muted)'; }
+
+      try {
+        const res = await fetch('/admin/api/support-emails/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadId: currentSupportThreadId,
+            text: text,
+            closeOnSend: closeCheckbox ? closeCheckbox.checked : false,
+          }),
+        });
+
+        const data = await res.json();
+        if (sendBtn) sendBtn.disabled = false;
+
+        if (!data || !data.ok) {
+          if (statusEl) { statusEl.textContent = (data && data.error) || 'Failed to send reply.'; statusEl.style.color = 'var(--danger)'; }
+          return;
+        }
+
+        if (statusEl) { statusEl.textContent = 'Reply sent.'; statusEl.style.color = '#34c759'; }
+        if (textInput) textInput.value = '';
+
+        // Reload the thread conversation to display the new message
+        await selectSupportEmailThread(currentSupportThreadId);
+        await loadSupportEmailThreads();
+      } catch (err) {
+        if (sendBtn) sendBtn.disabled = false;
+        if (statusEl) { statusEl.textContent = 'Network error while sending.'; statusEl.style.color = 'var(--danger)'; }
+      }
+    }
+    window.sendSupportEmailReplyBtn = sendSupportEmailReplyBtn;
+
+    async function changeSupportThreadStatus() {
+      if (!currentSupportThreadId) return;
+      const thread = supportEmailThreads.find((t) => t.id === currentSupportThreadId);
+      const nextStatus = (thread && thread.status === 'closed') ? 'open' : 'closed';
+
+      try {
+        const res = await fetch('/admin/api/support-emails/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ threadId: currentSupportThreadId, status: nextStatus }),
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          if (thread) thread.status = nextStatus;
+          const badgeEl = document.getElementById('supportActiveStatusBadge');
+          const statusBtn = document.getElementById('supportActiveStatusBtn');
+          if (badgeEl) {
+            badgeEl.className = 'admin-badge ' + nextStatus;
+            badgeEl.textContent = nextStatus;
+          }
+          if (statusBtn) statusBtn.textContent = (nextStatus === 'closed') ? 'Reopen Thread' : 'Close Thread';
+          renderSupportEmailThreadList();
+        }
+      } catch (err) {
+        showAdminAlert('Status Error', 'Could not update thread status.', false);
+      }
+    }
+    window.changeSupportThreadStatus = changeSupportThreadStatus;
+
+    function deleteSupportEmailThread() {
+      if (!currentSupportThreadId) return;
+      showAdminConfirm('Delete Conversation', 'Permanently delete this email thread and all messages in it?', 'Delete', async () => {
+        try {
+          const res = await fetch('/admin/api/support-emails/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threadId: currentSupportThreadId }),
+          });
+          const data = await res.json();
+          if (data && data.ok) {
+            supportEmailThreads = supportEmailThreads.filter((t) => t.id !== currentSupportThreadId);
+            currentSupportThreadId = null;
+            const emptyBox = document.getElementById('supportEmailEmptyDetail');
+            const activeBox = document.getElementById('supportEmailActiveDetail');
+            if (emptyBox) emptyBox.style.display = 'block';
+            if (activeBox) activeBox.style.display = 'none';
+            renderSupportEmailThreadList();
+          } else {
+            showAdminAlert('Delete Failed', (data && data.error) || 'Could not delete conversation.', false);
+          }
+        } catch (err) {
+          showAdminAlert('Network Error', 'Error deleting conversation.', false);
+        }
+      }, true);
+    }
+    window.deleteSupportEmailThread = deleteSupportEmailThread;
+
+    function openComposeEmailModal() {
+      const modal = document.getElementById('composeEmailModal');
+      const statusEl = document.getElementById('composeEmailStatus');
+      if (statusEl) statusEl.textContent = '';
+      if (modal) modal.style.display = 'flex';
+    }
+    window.openComposeEmailModal = openComposeEmailModal;
+
+    function closeComposeEmailModal() {
+      const modal = document.getElementById('composeEmailModal');
+      if (modal) modal.style.display = 'none';
+    }
+    window.closeComposeEmailModal = closeComposeEmailModal;
+
+    async function sendComposedEmailBtn() {
+      const toInput = document.getElementById('composeEmailTo');
+      const nameInput = document.getElementById('composeEmailName');
+      const subjInput = document.getElementById('composeEmailSubject');
+      const bodyInput = document.getElementById('composeEmailBody');
+      const statusEl = document.getElementById('composeEmailStatus');
+      const sendBtn = document.getElementById('composeEmailSendBtn');
+
+      const to = toInput ? toInput.value.trim() : '';
+      const name = nameInput ? nameInput.value.trim() : '';
+      const subject = subjInput ? subjInput.value.trim() : '';
+      const body = bodyInput ? bodyInput.value.trim() : '';
+
+      if (!to || !to.includes('@')) {
+        if (statusEl) { statusEl.textContent = 'Valid email is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+      if (!subject) {
+        if (statusEl) { statusEl.textContent = 'Subject is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+      if (!body) {
+        if (statusEl) { statusEl.textContent = 'Message body is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+
+      if (sendBtn) sendBtn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Sending...'; statusEl.style.color = 'var(--muted)'; }
+
+      try {
+        const res = await fetch('/admin/api/support-emails/compose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: to,
+            customerName: name,
+            subject: subject,
+            text: body,
+          }),
+        });
+        const data = await res.json();
+        if (sendBtn) sendBtn.disabled = false;
+
+        if (!data || !data.ok) {
+          if (statusEl) { statusEl.textContent = (data && data.error) || 'Failed to send.'; statusEl.style.color = 'var(--danger)'; }
+          return;
+        }
+
+        closeComposeEmailModal();
+        if (toInput) toInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (subjInput) subjInput.value = '';
+        if (bodyInput) bodyInput.value = '';
+
+        await loadSupportEmailThreads();
+        if (data.thread && data.thread.id) {
+          await selectSupportEmailThread(data.thread.id);
+        }
+      } catch (err) {
+        if (sendBtn) sendBtn.disabled = false;
+        if (statusEl) { statusEl.textContent = 'Network error while sending.'; statusEl.style.color = 'var(--danger)'; }
+      }
+    }
+    window.sendComposedEmailBtn = sendComposedEmailBtn;
   </script>
 </body></html>`;
 }
@@ -101217,6 +101694,38 @@ function generateSearchVariations(query) {
       }
     }
 
+    // /admin/api/support-emails/* -> Customer support email management (59_support-emails.js)
+    if (path === "/admin/api/support-emails/threads" && request.method === "GET") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/thread" && request.method === "GET") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/reply" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/compose" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/status" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+    if (path === "/admin/api/support-emails/delete" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      return handleSupportEmailsApi(path, request, env);
+    }
+
     // /admin/api/analytics?section=search|catalogs_lists|audience&window=...
     // Backs the Search, Catalogs & Lists, and Playback & Audience tabs in the admin dashboard.
     if (path === "/admin/api/analytics" && request.method === "GET") {
@@ -102077,6 +102586,15 @@ export default {
   // names its job type, and runJobsQueue (44_jobs-queue.js) runs its handler.
   async queue(batch, env, ctx) {
     await runJobsQueue(batch, env, ctx);
+  },
+
+  // Cloudflare Email Routing: receives incoming emails to support@mylistsaddon.com (59_support-emails.js)
+  async email(message, env, ctx) {
+    try {
+      await handleIncomingEmail(message, env, ctx);
+    } catch (err) {
+      console.error("[Email] email() handler failed:", err);
+    }
   },
 };
 
@@ -114184,3 +114702,596 @@ definePeriodicJob("activity.copy-new", {
   everyMs: ACTIVITY_COPY_NEW_EVERY_MS,
   run: (env, payload, job) => runActivityCopyNew(env, job),
 });
+// 59_support-emails.js
+//
+// Customer Support Email System (Cloudflare Email Routing & Sending)
+//
+// Inbound: Cloudflare Email Routing delivers emails to support@mylistsaddon.com
+// directly to this Worker's email() export. The handler parses the MIME body,
+// matches the conversation thread, and stores it in D1 (support_threads & support_messages).
+//
+// Outbound: The Admin Dashboard (/admin -> Management & Tools -> Support Emails)
+// allows viewing threads and replying directly from support@mylistsaddon.com
+// using Cloudflare Email Sending (env.EMAIL.send()).
+
+function decodeQuotedPrintableText(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/=\r?\n/g, '')
+    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => {
+      try {
+        return String.fromCharCode(parseInt(hex, 16));
+      } catch {
+        return _;
+      }
+    });
+}
+
+function decodeBase64ToText(str) {
+  if (!str || typeof str !== 'string') return '';
+  try {
+    const clean = str.replace(/\s+/g, '');
+    const binary = atob(clean);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  } catch {
+    return str;
+  }
+}
+
+function escapeHtmlSupport(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function parseEmailSender(fromHeader) {
+  if (!fromHeader) return { email: '', name: '' };
+  const raw = String(fromHeader).trim();
+  const angleMatch = raw.match(/^(?:["']?([^"'<]+)["']?\s*)?<([^>]+)>$/);
+  if (angleMatch) {
+    return {
+      name: (angleMatch[1] || '').trim(),
+      email: (angleMatch[2] || '').trim().toLowerCase(),
+    };
+  }
+  const bareEmailMatch = raw.match(/([^\s@<]+@[^\s@>]+)/);
+  if (bareEmailMatch) {
+    return {
+      name: '',
+      email: bareEmailMatch[1].trim().toLowerCase(),
+    };
+  }
+  return { name: '', email: raw.toLowerCase() };
+}
+
+function parseMimeEmail(rawText, headers) {
+  const result = {
+    subject: '',
+    fromEmail: '',
+    fromName: '',
+    toEmail: '',
+    messageId: '',
+    inReplyTo: '',
+    references: '',
+    text: '',
+    html: '',
+  };
+
+  if (headers && typeof headers.get === 'function') {
+    result.subject = headers.get('subject') || '';
+    result.messageId = headers.get('message-id') || '';
+    result.inReplyTo = headers.get('in-reply-to') || '';
+    result.references = headers.get('references') || '';
+    const fromSender = parseEmailSender(headers.get('from'));
+    result.fromEmail = fromSender.email;
+    result.fromName = fromSender.name;
+    const toSender = parseEmailSender(headers.get('to'));
+    result.toEmail = toSender.email;
+  }
+
+  if (!rawText || typeof rawText !== 'string') return result;
+
+  // Split headers and body of the raw message if top-level headers were missing
+  const splitIdx = rawText.search(/\r?\n\r?\n/);
+  let rawBody = rawText;
+  if (splitIdx !== -1) {
+    const headerBlock = rawText.slice(0, splitIdx);
+    rawBody = rawText.slice(splitIdx).replace(/^\r?\n\r?\n/, '');
+
+    if (!result.subject) {
+      const m = headerBlock.match(/^subject:\s*(.*)$/im);
+      if (m) result.subject = m[1].trim();
+    }
+    if (!result.fromEmail) {
+      const m = headerBlock.match(/^from:\s*(.*)$/im);
+      if (m) {
+        const s = parseEmailSender(m[1]);
+        result.fromEmail = s.email;
+        result.fromName = s.name;
+      }
+    }
+    if (!result.toEmail) {
+      const m = headerBlock.match(/^to:\s*(.*)$/im);
+      if (m) result.toEmail = parseEmailSender(m[1]).email;
+    }
+    if (!result.messageId) {
+      const m = headerBlock.match(/^message-id:\s*(.*)$/im);
+      if (m) result.messageId = m[1].trim();
+    }
+    if (!result.inReplyTo) {
+      const m = headerBlock.match(/^in-reply-to:\s*(.*)$/im);
+      if (m) result.inReplyTo = m[1].trim();
+    }
+  }
+
+  // Parse Content-Type and boundary
+  let boundary = null;
+  const contentTypeMatch = rawText.match(/content-type:\s*([^;\r\n]+)(?:;\s*boundary=(?:"([^"]+)"|([^\s;\r\n]+)))?/i);
+  if (contentTypeMatch && (contentTypeMatch[2] || contentTypeMatch[3])) {
+    boundary = contentTypeMatch[2] || contentTypeMatch[3];
+  }
+
+  if (boundary) {
+    // Multipart message
+    const parts = rawBody.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    for (const part of parts) {
+      if (!part || part.trim() === '--' || part.trim() === '') continue;
+      const partSplit = part.search(/\r?\n\r?\n/);
+      if (partSplit === -1) continue;
+      const partHeader = part.slice(0, partSplit);
+      let partBody = part.slice(partSplit).replace(/^\r?\n\r?\n/, '').replace(/\r?\n$/, '');
+
+      const isHtml = /content-type:\s*text\/html/i.test(partHeader);
+      const isPlain = /content-type:\s*text\/plain/i.test(partHeader);
+      const isBase64 = /content-transfer-encoding:\s*base64/i.test(partHeader);
+      const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(partHeader);
+
+      let decoded = partBody;
+      if (isBase64) decoded = decodeBase64ToText(partBody);
+      else if (isQp) decoded = decodeQuotedPrintableText(partBody);
+
+      if (isPlain && !result.text) result.text = decoded.trim();
+      else if (isHtml && !result.html) result.html = decoded.trim();
+    }
+  } else {
+    // Single-part message
+    const isBase64 = /content-transfer-encoding:\s*base64/i.test(rawText.slice(0, 1000));
+    const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(rawText.slice(0, 1000));
+    const isHtml = /content-type:\s*text\/html/i.test(rawText.slice(0, 1000));
+
+    let decoded = rawBody;
+    if (isBase64) decoded = decodeBase64ToText(rawBody);
+    else if (isQp) decoded = decodeQuotedPrintableText(rawBody);
+
+    if (isHtml) result.html = decoded.trim();
+    else result.text = decoded.trim();
+  }
+
+  // If text is still empty but HTML exists, extract plain text representation
+  if (!result.text && result.html) {
+    result.text = result.html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+  }
+
+  return result;
+}
+
+// Handler for Cloudflare Email Routing (incoming email)
+async function handleIncomingEmail(message, env, ctx) {
+  if (!env || !env.DB) {
+    console.error('[Support Email] DB binding missing, cannot store incoming email.');
+    return;
+  }
+
+  try {
+    let rawText = '';
+    if (message.raw) {
+      rawText = await new Response(message.raw).text();
+    }
+
+    const parsed = parseMimeEmail(rawText, message.headers);
+    const rawFrom = (message.headers && message.headers.get('from')) || message.from || parsed.fromEmail || '';
+    const fromSender = parseEmailSender(rawFrom);
+    const fromEmail = fromSender.email || parsed.fromEmail || '';
+    const customerName = fromSender.name || parsed.fromName || '';
+    const toEmail = message.to || parsed.toEmail || 'support@mylistsaddon.com';
+    const subject = (message.headers && message.headers.get('subject')) || parsed.subject || '(No subject)';
+    const messageId = (message.headers && message.headers.get('message-id')) || parsed.messageId || ('<in-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '@mylistsaddon.com>');
+    const inReplyTo = (message.headers && message.headers.get('in-reply-to')) || parsed.inReplyTo || null;
+    const bodyText = (parsed.text || rawText || '').slice(0, 200000); // 200KB safety limit
+    const bodyHtml = (parsed.html || '').slice(0, 500000); // 500KB safety limit
+    const now = Date.now();
+
+    let threadId = null;
+
+    // 1. Try matching thread by In-Reply-To header
+    if (inReplyTo) {
+      try {
+        const match = await env.DB.prepare(
+          'SELECT thread_id FROM support_messages WHERE message_id = ? OR id = ? LIMIT 1'
+        ).bind(inReplyTo, inReplyTo).first();
+        if (match && match.thread_id) threadId = match.thread_id;
+      } catch (e) {
+        console.warn('[Support Email] In-reply-to lookup error:', e);
+      }
+    }
+
+    // 2. If not matched, try matching by same customer email and normalized subject in the last 30 days
+    if (!threadId && fromEmail) {
+      const normSubject = subject.replace(/^(?:re|fwd|fw):\s*/i, '').trim().toLowerCase();
+      try {
+        const recentThread = await env.DB.prepare(
+          "SELECT id, subject FROM support_threads WHERE customer_email = ? AND status != 'spam' AND last_message_at > ? ORDER BY last_message_at DESC LIMIT 5"
+        ).bind(fromEmail, now - 30 * 86400000).all();
+        if (recentThread && Array.isArray(recentThread.results)) {
+          const found = recentThread.results.find((t) => {
+            const tNorm = String(t.subject || '').replace(/^(?:re|fwd|fw):\s*/i, '').trim().toLowerCase();
+            return tNorm === normSubject;
+          });
+          if (found) threadId = found.id;
+        }
+      } catch (e) {
+        console.warn('[Support Email] Subject thread lookup error:', e);
+      }
+    }
+
+    // 3. Create new thread if no match found
+    if (!threadId) {
+      threadId = 'th_' + now + '_' + Math.random().toString(36).slice(2, 8);
+      await env.DB.prepare(
+        'INSERT INTO support_threads (id, customer_email, customer_name, subject, status, unread, created_at, updated_at, last_message_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)'
+      ).bind(threadId, fromEmail, customerName, subject, 'open', now, now, now).run();
+    } else {
+      await env.DB.prepare(
+        "UPDATE support_threads SET status = 'open', unread = unread + 1, updated_at = ?, last_message_at = ?, customer_name = CASE WHEN customer_name IS NULL OR customer_name = '' THEN ? ELSE customer_name END WHERE id = ?"
+      ).bind(now, now, customerName, threadId).run();
+    }
+
+    // 4. Insert message
+    const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
+    await env.DB.prepare(
+      'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      msgId,
+      threadId,
+      'inbound',
+      fromEmail,
+      toEmail,
+      subject,
+      bodyText,
+      bodyHtml,
+      messageId,
+      inReplyTo,
+      now
+    ).run();
+
+    console.log(`[Support Email] Inbound email from ${fromEmail} recorded in thread ${threadId}`);
+  } catch (err) {
+    console.error('[Support Email] Failed to process incoming email:', err);
+  }
+}
+
+// Dispatches an outbound email reply via env.EMAIL.send() and records it
+async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, actor }) {
+  if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
+  if (!threadId) return { ok: false, error: 'threadId is required.' };
+  if (!text || !String(text).trim()) return { ok: false, error: 'Reply text cannot be empty.' };
+
+  const thread = await env.DB.prepare('SELECT * FROM support_threads WHERE id = ?').bind(threadId).first();
+  if (!thread) return { ok: false, error: 'Conversation thread not found.' };
+
+  const now = Date.now();
+  const replySubject = thread.subject.startsWith('Re:') ? thread.subject : 'Re: ' + thread.subject;
+
+  // Get last inbound message's RFC Message-ID for In-Reply-To header
+  const lastInbound = await env.DB.prepare(
+    "SELECT message_id FROM support_messages WHERE thread_id = ? AND direction = 'inbound' ORDER BY created_at DESC LIMIT 1"
+  ).bind(threadId).first();
+  const inReplyTo = (lastInbound && lastInbound.message_id) ? lastInbound.message_id : null;
+
+  const outboundRfcId = '<reply-' + now + '-' + Math.random().toString(36).slice(2, 8) + '@mylistsaddon.com>';
+  const cleanText = String(text).trim();
+  const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
+
+  // Send via Cloudflare Email Sending Worker binding if available
+  if (env.EMAIL && typeof env.EMAIL.send === 'function') {
+    const payload = {
+      to: thread.customer_email,
+      from: 'support@mylistsaddon.com',
+      subject: replySubject,
+      text: cleanText,
+      html: cleanHtml,
+    };
+    if (inReplyTo) {
+      payload.headers = {
+        'In-Reply-To': inReplyTo,
+        'References': inReplyTo,
+      };
+    }
+    await env.EMAIL.send(payload);
+  } else {
+    // If EMAIL binding is not present, still record message in DB for tracking/mocking
+    console.warn('[Support Email] env.EMAIL binding missing. Recorded outbound reply in DB without sending network email.');
+  }
+
+  // Insert outbound message into DB
+  const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
+  await env.DB.prepare(
+    'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    msgId,
+    threadId,
+    'outbound',
+    'support@mylistsaddon.com',
+    thread.customer_email,
+    replySubject,
+    cleanText,
+    cleanHtml,
+    outboundRfcId,
+    inReplyTo,
+    now
+  ).run();
+
+  const newStatus = closeOnSend ? 'closed' : 'replied';
+  await env.DB.prepare(
+    'UPDATE support_threads SET status = ?, unread = 0, updated_at = ?, last_message_at = ? WHERE id = ?'
+  ).bind(newStatus, now, now, threadId).run();
+
+  // Audit log if available
+  try {
+    if (typeof recordAdminAudit === 'function' && actor) {
+      await recordAdminAudit(env, actor, 'support_email_reply', thread.customer_email, threadId);
+    }
+  } catch {}
+
+  const updatedThread = Object.assign({}, thread, {
+    status: newStatus,
+    unread: 0,
+    updated_at: now,
+    last_message_at: now,
+  });
+
+  const createdMessage = {
+    id: msgId,
+    thread_id: threadId,
+    direction: 'outbound',
+    from_email: 'support@mylistsaddon.com',
+    to_email: thread.customer_email,
+    subject: replySubject,
+    body_text: cleanText,
+    body_html: cleanHtml,
+    created_at: now,
+  };
+
+  return { ok: true, message: createdMessage, thread: updatedThread };
+}
+
+// Composes a brand-new outbound email thread to a recipient
+async function composeNewSupportEmail(env, { toEmail, customerName, subject, text, html, actor }) {
+  if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
+  if (!toEmail || !String(toEmail).includes('@')) return { ok: false, error: 'Valid recipient email is required.' };
+  if (!subject || !String(subject).trim()) return { ok: false, error: 'Subject is required.' };
+  if (!text || !String(text).trim()) return { ok: false, error: 'Email text is required.' };
+
+  const now = Date.now();
+  const threadId = 'th_' + now + '_' + Math.random().toString(36).slice(2, 8);
+  const cleanTo = String(toEmail).trim().toLowerCase();
+  const cleanSubject = String(subject).trim();
+  const cleanText = String(text).trim();
+  const cleanName = customerName ? String(customerName).trim() : '';
+  const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
+  const outboundRfcId = '<out-' + now + '-' + Math.random().toString(36).slice(2, 8) + '@mylistsaddon.com>';
+
+  if (env.EMAIL && typeof env.EMAIL.send === 'function') {
+    await env.EMAIL.send({
+      to: cleanTo,
+      from: 'support@mylistsaddon.com',
+      subject: cleanSubject,
+      text: cleanText,
+      html: cleanHtml,
+    });
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO support_threads (id, customer_email, customer_name, subject, status, unread, created_at, updated_at, last_message_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)'
+  ).bind(threadId, cleanTo, cleanName, cleanSubject, 'replied', now, now, now).run();
+
+  const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
+  await env.DB.prepare(
+    'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    msgId,
+    threadId,
+    'outbound',
+    'support@mylistsaddon.com',
+    cleanTo,
+    cleanSubject,
+    cleanText,
+    cleanHtml,
+    outboundRfcId,
+    null,
+    now
+  ).run();
+
+  return {
+    ok: true,
+    thread: {
+      id: threadId,
+      customer_email: cleanTo,
+      customer_name: cleanName,
+      subject: cleanSubject,
+      status: 'replied',
+      unread: 0,
+      created_at: now,
+      updated_at: now,
+      last_message_at: now,
+    },
+    message: {
+      id: msgId,
+      thread_id: threadId,
+      direction: 'outbound',
+      from_email: 'support@mylistsaddon.com',
+      to_email: cleanTo,
+      subject: cleanSubject,
+      body_text: cleanText,
+      body_html: cleanHtml,
+      created_at: now,
+    },
+  };
+}
+
+// Router for admin support email endpoints
+async function handleSupportEmailsApi(path, request, env) {
+  if (!env || !env.DB) {
+    return json({ ok: false, error: 'D1 database is required for support emails.' }, 503);
+  }
+
+  const url = new URL(request.url);
+
+  // GET /admin/api/support-emails/threads
+  if (path === '/admin/api/support-emails/threads' && request.method === 'GET') {
+    const status = url.searchParams.get('status') || 'all';
+    const query = (url.searchParams.get('q') || '').trim();
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
+
+    try {
+      let sql = 'SELECT * FROM support_threads';
+      const where = [];
+      const params = [];
+
+      if (status !== 'all') {
+        where.push('status = ?');
+        params.push(status);
+      }
+      if (query) {
+        where.push('(customer_email LIKE ? OR customer_name LIKE ? OR subject LIKE ?)');
+        const qPattern = '%' + query + '%';
+        params.push(qPattern, qPattern, qPattern);
+      }
+
+      if (where.length) sql += ' WHERE ' + where.join(' AND ');
+      sql += ' ORDER BY last_message_at DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+
+      const rows = await env.DB.prepare(sql).bind(...params).all();
+      const threads = (rows && Array.isArray(rows.results)) ? rows.results : [];
+
+      // Also get counts by status for admin tabs
+      const countOpen = await env.DB.prepare("SELECT count(*) as c FROM support_threads WHERE status = 'open'").first();
+      const countTotal = await env.DB.prepare('SELECT count(*) as c FROM support_threads').first();
+
+      return json({
+        ok: true,
+        threads,
+        counts: {
+          open: (countOpen && countOpen.c) || 0,
+          total: (countTotal && countTotal.c) || 0,
+        },
+      }, 200, { 'Cache-Control': 'no-store' });
+    } catch (e) {
+      const msg = safeErrorMessage(e);
+      if (msg.includes('no such table')) {
+        return json({ ok: false, notConfigured: true, error: 'Support email tables do not exist yet. Run migration 0021.' }, 200);
+      }
+      return json({ ok: false, error: msg }, 500);
+    }
+  }
+
+  // GET /admin/api/support-emails/thread?id=...
+  if (path === '/admin/api/support-emails/thread' && request.method === 'GET') {
+    const threadId = url.searchParams.get('id');
+    if (!threadId) return json({ ok: false, error: 'Thread ID required.' }, 400);
+
+    try {
+      const thread = await env.DB.prepare('SELECT * FROM support_threads WHERE id = ?').bind(threadId).first();
+      if (!thread) return json({ ok: false, error: 'Thread not found.' }, 404);
+
+      // Mark unread as 0 on view
+      if (thread.unread > 0) {
+        await env.DB.prepare('UPDATE support_threads SET unread = 0 WHERE id = ?').bind(threadId).run();
+        thread.unread = 0;
+      }
+
+      const msgRows = await env.DB.prepare(
+        'SELECT * FROM support_messages WHERE thread_id = ? ORDER BY created_at ASC'
+      ).bind(threadId).all();
+      const messages = (msgRows && Array.isArray(msgRows.results)) ? msgRows.results : [];
+
+      return json({ ok: true, thread, messages }, 200, { 'Cache-Control': 'no-store' });
+    } catch (e) {
+      return json({ ok: false, error: safeErrorMessage(e) }, 500);
+    }
+  }
+
+  // POST /admin/api/support-emails/reply
+  if (path === '/admin/api/support-emails/reply' && request.method === 'POST') {
+    try {
+      const body = await request.json();
+      const result = await sendSupportEmailReply(env, body);
+      return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
+    } catch (e) {
+      return json({ ok: false, error: safeErrorMessage(e) }, 500);
+    }
+  }
+
+  // POST /admin/api/support-emails/compose
+  if (path === '/admin/api/support-emails/compose' && request.method === 'POST') {
+    try {
+      const body = await request.json();
+      const result = await composeNewSupportEmail(env, body);
+      return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
+    } catch (e) {
+      return json({ ok: false, error: safeErrorMessage(e) }, 500);
+    }
+  }
+
+  // POST /admin/api/support-emails/status
+  if (path === '/admin/api/support-emails/status' && request.method === 'POST') {
+    try {
+      const body = await request.json();
+      const { threadId, status } = body || {};
+      if (!threadId || !['open', 'replied', 'closed', 'spam'].includes(status)) {
+        return json({ ok: false, error: 'Invalid threadId or status.' }, 400);
+      }
+      await env.DB.prepare('UPDATE support_threads SET status = ?, updated_at = ? WHERE id = ?')
+        .bind(status, Date.now(), threadId)
+        .run();
+      return json({ ok: true }, 200, { 'Cache-Control': 'no-store' });
+    } catch (e) {
+      return json({ ok: false, error: safeErrorMessage(e) }, 500);
+    }
+  }
+
+  // POST /admin/api/support-emails/delete
+  if (path === '/admin/api/support-emails/delete' && request.method === 'POST') {
+    try {
+      const body = await request.json();
+      const threadId = body && body.threadId;
+      if (!threadId) return json({ ok: false, error: 'Thread ID required.' }, 400);
+
+      await env.DB.prepare('DELETE FROM support_messages WHERE thread_id = ?').bind(threadId).run();
+      await env.DB.prepare('DELETE FROM support_threads WHERE id = ?').bind(threadId).run();
+      return json({ ok: true }, 200, { 'Cache-Control': 'no-store' });
+    } catch (e) {
+      return json({ ok: false, error: safeErrorMessage(e) }, 500);
+    }
+  }
+
+  return json({ ok: false, error: 'Endpoint not found.' }, 404);
+}

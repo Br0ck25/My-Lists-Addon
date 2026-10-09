@@ -85,6 +85,14 @@ dataset = "mylists_events"
 binding = "BLOBS"
 bucket_name = "mylists-blobs"
 
+# --- Email Sending (support@mylistsaddon.com) ----------------------------------
+# Allows the Worker and Admin panel to send outbound emails via Cloudflare
+# Email Service (env.EMAIL.send()).
+# Dashboard: Compute -> Email Service -> Email Sending -> Onboard domain,
+# then Worker -> Settings -> Bindings -> Add -> Send Email, name EMAIL.
+[[send_email]]
+name = "EMAIL"
+
 # --- Queues (recommended from Phase 5) -----------------------------------------
 # Background jobs (44_jobs-queue.js). JOBS is the producer: the Worker puts
 # jobs on mylists-jobs. The same Worker is the queue's consumer (the `queue`

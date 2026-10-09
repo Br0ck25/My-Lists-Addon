@@ -1287,6 +1287,30 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0020", kind: "table", name: "media_episodes",
     consequence: "Watch History served from the activity database shows episodes as \"Episode N\" with the show poster, and no episode name is kept from new plays.",
   },
+  {
+    migration: "0021", kind: "table", name: "support_threads",
+    consequence: "Customer support conversation threads cannot be stored or tracked in D1.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_threads_status_updated",
+    consequence: "Filtering support threads by status and recency scans the whole table. Slower, not broken.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_threads_customer",
+    consequence: "Looking up previous conversation threads for a customer scans the whole table. Slower, not broken.",
+  },
+  {
+    migration: "0021", kind: "table", name: "support_messages",
+    consequence: "Inbound and outbound support email messages cannot be stored or retrieved in D1.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_messages_thread",
+    consequence: "Loading conversation messages for a thread scans the whole messages table. Slower, not broken.",
+  },
+  {
+    migration: "0021", kind: "index", name: "idx_support_messages_rfc_id",
+    consequence: "Matching incoming replies by RFC Message-ID scans the whole messages table. Slower, not broken.",
+  },
 ];
 
 

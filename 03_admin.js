@@ -2642,6 +2642,21 @@ ${UTILITY_CSS}
   .netflix-preview-title { font-size:0.8rem; margin-top:4px; line-height:1.25; color:var(--text); }
   .netflix-preview-year { color:var(--muted); font-size:0.75rem; }
 
+  /* Support Desk */
+  .admin-badge.open { background:rgba(0,122,255,0.12); color:var(--accent); }
+  .admin-badge.replied { background:rgba(52,199,89,0.12); color:#34c759; }
+  .admin-badge.closed { background:rgba(142,142,147,0.15); color:var(--muted); }
+  .admin-badge.spam { background:rgba(255,59,48,0.12); color:var(--danger); }
+  .support-desk-layout { display:grid; grid-template-columns:360px 1fr; gap:16px; min-height:550px; align-items:start; margin-top:14px; }
+  @media (max-width:860px) { .support-desk-layout { grid-template-columns:1fr; } }
+  .support-thread-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:border-color 0.12s; }
+  .support-thread-card:hover { border-color:var(--border-strong); }
+  .support-thread-card.active { border-color:var(--accent); background:var(--panel-strong); }
+  .support-thread-card.unread { border-left:4px solid var(--accent); }
+  .support-bubble { border-radius:14px; padding:12px 16px; margin-bottom:12px; }
+  .support-bubble.inbound { background:var(--surface); border:1px solid var(--border); margin-right:40px; }
+  .support-bubble.outbound { background:var(--panel-strong); border:1.5px solid var(--accent); margin-left:40px; }
+
   /* Standard Modals & Buttons */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -2727,6 +2742,7 @@ ${UTILITY_CSS}
   <div class="admin-subnav-bar" id="adminSubnavManagement" style="display:none;">
     <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
     <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
+    <button type="button" class="subnav-pill" data-sub-tab="support_emails" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['support_emails'])}">Support Emails <span id="supportEmailsBadge" class="u-fs-v_font_size_xs u-fw-700 u-p-2px_6px u-br-v_radius_pill u-ml-4px" style="display:none;background:var(--accent);color:#fff;">0</span></button>
     <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
@@ -2916,6 +2932,102 @@ ${UTILITY_CSS}
       <div class="u-jc-flex_end u-gap-10px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeEditFeedbackModal">Cancel</button>
         <button type="button" class="lc-btn primary" id="editFeedbackSaveBtn" data-act="saveEditFeedback">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-tab-panel" data-admin-panel="support_emails">
+    <div class="u-jc-space_between u-ai-center u-mb-12px u-fw2-wrap u-gap-10px" style="display:flex;">
+      <div>
+        <p class="u-c-v_muted u-m-0 u-fs-v_font_size_base">Direct customer inquiries received at <code>support@mylistsaddon.com</code> via Cloudflare Email Routing. Reply directly using Cloudflare Email Sending.</p>
+      </div>
+      <button type="button" class="lc-btn primary" data-act="openComposeEmailModal">+ Compose Email</button>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="panel u-p-10px_14px u-mb-14px u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px" style="display:flex;">
+      <div class="u-ai-center u-gap-6px u-fw2-wrap" style="display:flex;" id="supportEmailFilterGroup">
+        <button type="button" class="subnav-pill active" data-act="filterSupportEmails" data-act-args="${adminActArgs(['all'])}">All</button>
+        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['open'])}">Open</button>
+        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['replied'])}">Replied</button>
+        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['closed'])}">Closed</button>
+      </div>
+      <div class="u-ai-center u-gap-8px u-flex-1 u-maxw-340px" style="display:flex;">
+        <input type="text" id="supportEmailSearchInput" class="admin-select u-flex-1 u-m-0" placeholder="Search by email, name or subject..." data-act="onSupportEmailSearchInput" data-act-on="input">
+      </div>
+    </div>
+
+    <div class="support-desk-layout">
+      <!-- Left Column: Thread List -->
+      <div class="panel u-p-12px u-m-0" style="max-height:750px; overflow-y:auto;">
+        <div id="supportEmailThreadList" class="u-fs-v_font_size_sm u-c-v_muted">Loading conversations&hellip;</div>
+      </div>
+
+      <!-- Right Column: Conversation & Reply -->
+      <div class="panel u-p-16px u-m-0" id="supportEmailDetailContainer" style="display:flex; flex-direction:column; min-height:550px;">
+        <div id="supportEmailEmptyDetail" class="u-ta-center u-p-40px_20px u-c-v_muted">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="u-mb-10px u-o-0_4" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <div class="u-fs-v_font_size_base u-fw-600">No conversation selected</div>
+          <div class="u-fs-v_font_size_sm u-mt-4px">Select a thread from the list on the left to read and reply.</div>
+        </div>
+
+        <div id="supportEmailActiveDetail" style="display:none; flex-direction:column; flex:1;">
+          <!-- Thread Header -->
+          <div class="u-jc-space_between u-ai-flex_start u-bb-1px_solid_v_border u-pb-12px u-mb-14px" style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div class="u-flex-1">
+              <h3 id="supportActiveSubject" class="u-m-0_0_4px u-fs-v_font_size_lg u-fw-700 u-c-v_text"></h3>
+              <div class="u-fs-v_font_size_xs u-c-v_muted">
+                From: <strong id="supportActiveFrom" class="u-c-v_text"></strong> &bull; <span id="supportActiveDate"></span>
+              </div>
+            </div>
+            <div class="u-ai-center u-gap-8px" style="display:flex;">
+              <span id="supportActiveStatusBadge" class="admin-badge"></span>
+              <button type="button" class="admin-select u-cur-pointer" id="supportActiveStatusBtn" data-act="changeSupportThreadStatus">Toggle Status</button>
+              <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text" data-act="deleteSupportEmailThread">Delete</button>
+            </div>
+          </div>
+
+          <!-- Message History Timeline -->
+          <div id="supportActiveMessageList" class="u-flex-1 u-ov-auto u-mb-16px u-p-4px" style="max-height:480px; display:flex; flex-direction:column;"></div>
+
+          <!-- Reply Composer -->
+          <div class="u-bt-1px_solid_v_border u-pt-14px u-mt-auto">
+            <div class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text">Reply from support@mylistsaddon.com</div>
+            <textarea id="supportEmailReplyText" class="u-minh-100px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-10px u-ol-none" placeholder="Type your reply to customer..." style="width:100%;"></textarea>
+            <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-10px" style="display:flex;">
+              <label class="u-ai-center u-gap-6px u-fs-v_font_size_xs u-c-v_muted u-cur-pointer" style="display:flex;">
+                <input type="checkbox" id="supportEmailCloseOnReply" checked> Close thread after sending reply
+              </label>
+              <div class="u-ai-center u-gap-10px" style="display:flex;">
+                <span id="supportEmailReplyStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+                <button type="button" class="lc-btn primary" id="supportEmailSendReplyBtn" data-act="sendSupportEmailReplyBtn">Send Reply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compose Email Modal -->
+  <div id="composeEmailModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card u-maxw-500px">
+      <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
+        <h3 class="u-m-0 u-fs-v_font_size_lg u-fw-700 u-c-v_text">New Support Email</h3>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeComposeEmailModal">&#x2715;</button>
+      </div>
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Recipient Email</label>
+      <input type="email" id="composeEmailTo" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="user@example.com" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Customer Name (optional)</label>
+      <input type="text" id="composeEmailName" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="John Doe" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Subject</label>
+      <input type="text" id="composeEmailSubject" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="Regarding your inquiry" style="width:100%;">
+      <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Message</label>
+      <textarea id="composeEmailBody" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-14px u-ol-none" placeholder="Write your message..." style="width:100%;"></textarea>
+      <div class="u-jc-flex_end u-gap-10px u-ai-center" style="display:flex;">
+        <span id="composeEmailStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+        <button type="button" class="lc-btn secondary" data-act="closeComposeEmailModal">Cancel</button>
+        <button type="button" class="lc-btn primary" id="composeEmailSendBtn" data-act="sendComposedEmailBtn">Send Email</button>
       </div>
     </div>
   </div>
@@ -3289,6 +3401,7 @@ ${UTILITY_CSS}
       audience: 'discovery',
       creators: 'management',
       feedback: 'management',
+      support_emails: 'management',
       netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
@@ -3339,6 +3452,7 @@ ${UTILITY_CSS}
       if (tabId === 'catalogs_lists' && !window._catalogsListsLoadedOnce) { window._catalogsListsLoadedOnce = true; loadCatalogsAndListsData(); }
       if (tabId === 'audience' && !window._audienceLoadedOnce) { window._audienceLoadedOnce = true; loadAudienceData(); }
       if (tabId === 'feedback' && !window._feedbackLoadedOnce) { window._feedbackLoadedOnce = true; loadFeedback(); }
+      if (tabId === 'support_emails' && !window._supportEmailsLoadedOnce) { window._supportEmailsLoadedOnce = true; loadSupportEmailThreads(); }
       if (tabId === 'apiusage' && !window._apiUsageLoadedOnce) { window._apiUsageLoadedOnce = true; loadApiUsage(); }
       if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
@@ -6035,6 +6149,345 @@ ${UTILITY_CSS}
         }
       }, true);
     }
+
+    // --- Support Emails Desk ---
+    let supportEmailThreads = [];
+    let currentSupportThreadId = null;
+    let supportEmailFilter = 'all';
+    let supportEmailSearchTimeout = null;
+
+    async function loadSupportEmailThreads() {
+      const listEl = document.getElementById('supportEmailThreadList');
+      if (!listEl) return;
+      const q = (document.getElementById('supportEmailSearchInput') && document.getElementById('supportEmailSearchInput').value || '').trim();
+      const url = '/admin/api/support-emails/threads?status=' + encodeURIComponent(supportEmailFilter) + (q ? '&q=' + encodeURIComponent(q) : '');
+
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        if (data && data.notConfigured) {
+          listEl.innerHTML = '<div class="u-p-12px u-c-v_muted u-fs-v_font_size_sm">' + escapeHtmlAdmin(data.error) + '</div>';
+          return;
+        }
+        if (!data || !data.ok) {
+          listEl.innerHTML = '<div class="u-p-12px u-c-v_color_danger_text u-fs-v_font_size_sm">Could not load email threads.</div>';
+          return;
+        }
+
+        supportEmailThreads = data.threads || [];
+        const badge = document.getElementById('supportEmailsBadge');
+        if (badge && data.counts) {
+          badge.textContent = String(data.counts.open || 0);
+          badge.style.display = data.counts.open > 0 ? 'inline-block' : 'none';
+        }
+
+        renderSupportEmailThreadList();
+      } catch (err) {
+        listEl.innerHTML = '<div class="u-p-12px u-c-v_color_danger_text u-fs-v_font_size_sm">Network error loading emails.</div>';
+      }
+    }
+    window.loadSupportEmailThreads = loadSupportEmailThreads;
+
+    function renderSupportEmailThreadList() {
+      const listEl = document.getElementById('supportEmailThreadList');
+      if (!listEl) return;
+      if (!supportEmailThreads.length) {
+        listEl.innerHTML = '<div class="u-p-20px_10px u-ta-center u-c-v_muted u-fs-v_font_size_sm">No support conversations found.</div>';
+        return;
+      }
+
+      listEl.innerHTML = supportEmailThreads.map((t) => {
+        const activeClass = (t.id === currentSupportThreadId) ? ' active' : '';
+        const unreadClass = (t.unread > 0) ? ' unread' : '';
+        const statusClass = t.status || 'open';
+        const dateStr = new Date(t.last_message_at || t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const sender = t.customer_name ? (t.customer_name + ' &lt;' + t.customer_email + '&gt;') : t.customer_email;
+
+        return '<div class="support-thread-card' + activeClass + unreadClass + '" data-act="selectSupportEmailThread" data-act-args="' + adminActAttr([t.id]) + '">' +
+          '<div class="u-jc-space_between u-ai-center u-mb-4px" style="display:flex;">' +
+            '<strong class="u-fs-v_font_size_sm u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap" style="max-width:190px;">' + sender + '</strong>' +
+            '<span class="admin-badge ' + statusClass + '">' + escapeHtmlAdmin(statusClass) + '</span>' +
+          '</div>' +
+          '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap u-mb-4px">' + escapeHtmlAdmin(t.subject || '(No subject)') + '</div>' +
+          '<div class="u-fs-v_font_size_xs u-c-v_muted">' + dateStr + (t.unread > 0 ? ' &bull; <strong style="color:var(--accent);">New</strong>' : '') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function filterSupportEmails(status) {
+      supportEmailFilter = status;
+      const group = document.getElementById('supportEmailFilterGroup');
+      if (group) {
+        group.querySelectorAll('.subnav-pill').forEach((btn) => {
+          const btnStatus = btn.textContent.trim().toLowerCase();
+          btn.classList.toggle('active', btnStatus === status);
+        });
+      }
+      loadSupportEmailThreads();
+    }
+    window.filterSupportEmails = filterSupportEmails;
+
+    function onSupportEmailSearchInput() {
+      if (supportEmailSearchTimeout) clearTimeout(supportEmailSearchTimeout);
+      supportEmailSearchTimeout = setTimeout(() => {
+        loadSupportEmailThreads();
+      }, 300);
+    }
+    window.onSupportEmailSearchInput = onSupportEmailSearchInput;
+
+    async function selectSupportEmailThread(threadId) {
+      currentSupportThreadId = threadId;
+      renderSupportEmailThreadList();
+
+      const emptyBox = document.getElementById('supportEmailEmptyDetail');
+      const activeBox = document.getElementById('supportEmailActiveDetail');
+      if (emptyBox) emptyBox.style.display = 'none';
+      if (activeBox) activeBox.style.display = 'flex';
+
+      const msgContainer = document.getElementById('supportActiveMessageList');
+      if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_muted">Loading message history...</div>';
+
+      try {
+        const res = await fetch('/admin/api/support-emails/thread?id=' + encodeURIComponent(threadId), { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok || !data.thread) {
+          if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_color_danger_text">Could not load conversation.</div>';
+          return;
+        }
+
+        const t = data.thread;
+        const messages = data.messages || [];
+
+        // Update active header
+        const subjEl = document.getElementById('supportActiveSubject');
+        const fromEl = document.getElementById('supportActiveFrom');
+        const dateEl = document.getElementById('supportActiveDate');
+        const badgeEl = document.getElementById('supportActiveStatusBadge');
+        const statusBtn = document.getElementById('supportActiveStatusBtn');
+
+        if (subjEl) subjEl.textContent = t.subject || '(No subject)';
+        if (fromEl) fromEl.textContent = (t.customer_name ? (t.customer_name + ' <' + t.customer_email + '>') : t.customer_email);
+        if (dateEl) dateEl.textContent = new Date(t.created_at).toLocaleString();
+        if (badgeEl) {
+          badgeEl.className = 'admin-badge ' + (t.status || 'open');
+          badgeEl.textContent = t.status || 'open';
+        }
+        if (statusBtn) statusBtn.textContent = (t.status === 'closed') ? 'Reopen Thread' : 'Close Thread';
+
+        // Update list unread status locally
+        const localIdx = supportEmailThreads.findIndex((it) => it.id === threadId);
+        if (localIdx !== -1 && supportEmailThreads[localIdx].unread > 0) {
+          supportEmailThreads[localIdx].unread = 0;
+          renderSupportEmailThreadList();
+        }
+
+        // Render messages
+        if (msgContainer) {
+          msgContainer.innerHTML = messages.map((m) => {
+            const isInbound = (m.direction === 'inbound');
+            const senderLabel = isInbound ? (m.from_email || 'Customer') : 'Support Team (support@mylistsaddon.com)';
+            const timeStr = new Date(m.created_at).toLocaleString();
+            const textContent = m.body_text || (m.body_html ? m.body_html.replace(/<[^>]+>/g, '') : '(Empty message)');
+
+            return '<div class="support-bubble ' + (isInbound ? 'inbound' : 'outbound') + '">' +
+              '<div class="u-jc-space_between u-ai-center u-mb-6px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; gap:8px;">' +
+                '<strong>' + escapeHtmlAdmin(senderLabel) + '</strong>' +
+                '<span>' + timeStr + '</span>' +
+              '</div>' +
+              '<div class="u-fs-v_font_size_sm u-lh-1_5 u-c-v_text" style="white-space:pre-wrap; word-break:break-word;">' + escapeHtmlAdmin(textContent) + '</div>' +
+            '</div>';
+          }).join('');
+          msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+      } catch (err) {
+        if (msgContainer) msgContainer.innerHTML = '<div class="u-p-20px u-c-v_color_danger_text">Error loading conversation messages.</div>';
+      }
+    }
+    window.selectSupportEmailThread = selectSupportEmailThread;
+
+    async function sendSupportEmailReplyBtn() {
+      if (!currentSupportThreadId) return;
+      const textInput = document.getElementById('supportEmailReplyText');
+      const statusEl = document.getElementById('supportEmailReplyStatus');
+      const closeCheckbox = document.getElementById('supportEmailCloseOnReply');
+      const sendBtn = document.getElementById('supportEmailSendReplyBtn');
+
+      const text = textInput ? textInput.value.trim() : '';
+      if (!text) {
+        if (statusEl) { statusEl.textContent = 'Please enter a reply.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+
+      if (sendBtn) sendBtn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Sending...'; statusEl.style.color = 'var(--muted)'; }
+
+      try {
+        const res = await fetch('/admin/api/support-emails/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadId: currentSupportThreadId,
+            text: text,
+            closeOnSend: closeCheckbox ? closeCheckbox.checked : false,
+          }),
+        });
+
+        const data = await res.json();
+        if (sendBtn) sendBtn.disabled = false;
+
+        if (!data || !data.ok) {
+          if (statusEl) { statusEl.textContent = (data && data.error) || 'Failed to send reply.'; statusEl.style.color = 'var(--danger)'; }
+          return;
+        }
+
+        if (statusEl) { statusEl.textContent = 'Reply sent.'; statusEl.style.color = '#34c759'; }
+        if (textInput) textInput.value = '';
+
+        // Reload the thread conversation to display the new message
+        await selectSupportEmailThread(currentSupportThreadId);
+        await loadSupportEmailThreads();
+      } catch (err) {
+        if (sendBtn) sendBtn.disabled = false;
+        if (statusEl) { statusEl.textContent = 'Network error while sending.'; statusEl.style.color = 'var(--danger)'; }
+      }
+    }
+    window.sendSupportEmailReplyBtn = sendSupportEmailReplyBtn;
+
+    async function changeSupportThreadStatus() {
+      if (!currentSupportThreadId) return;
+      const thread = supportEmailThreads.find((t) => t.id === currentSupportThreadId);
+      const nextStatus = (thread && thread.status === 'closed') ? 'open' : 'closed';
+
+      try {
+        const res = await fetch('/admin/api/support-emails/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ threadId: currentSupportThreadId, status: nextStatus }),
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          if (thread) thread.status = nextStatus;
+          const badgeEl = document.getElementById('supportActiveStatusBadge');
+          const statusBtn = document.getElementById('supportActiveStatusBtn');
+          if (badgeEl) {
+            badgeEl.className = 'admin-badge ' + nextStatus;
+            badgeEl.textContent = nextStatus;
+          }
+          if (statusBtn) statusBtn.textContent = (nextStatus === 'closed') ? 'Reopen Thread' : 'Close Thread';
+          renderSupportEmailThreadList();
+        }
+      } catch (err) {
+        showAdminAlert('Status Error', 'Could not update thread status.', false);
+      }
+    }
+    window.changeSupportThreadStatus = changeSupportThreadStatus;
+
+    function deleteSupportEmailThread() {
+      if (!currentSupportThreadId) return;
+      showAdminConfirm('Delete Conversation', 'Permanently delete this email thread and all messages in it?', 'Delete', async () => {
+        try {
+          const res = await fetch('/admin/api/support-emails/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threadId: currentSupportThreadId }),
+          });
+          const data = await res.json();
+          if (data && data.ok) {
+            supportEmailThreads = supportEmailThreads.filter((t) => t.id !== currentSupportThreadId);
+            currentSupportThreadId = null;
+            const emptyBox = document.getElementById('supportEmailEmptyDetail');
+            const activeBox = document.getElementById('supportEmailActiveDetail');
+            if (emptyBox) emptyBox.style.display = 'block';
+            if (activeBox) activeBox.style.display = 'none';
+            renderSupportEmailThreadList();
+          } else {
+            showAdminAlert('Delete Failed', (data && data.error) || 'Could not delete conversation.', false);
+          }
+        } catch (err) {
+          showAdminAlert('Network Error', 'Error deleting conversation.', false);
+        }
+      }, true);
+    }
+    window.deleteSupportEmailThread = deleteSupportEmailThread;
+
+    function openComposeEmailModal() {
+      const modal = document.getElementById('composeEmailModal');
+      const statusEl = document.getElementById('composeEmailStatus');
+      if (statusEl) statusEl.textContent = '';
+      if (modal) modal.style.display = 'flex';
+    }
+    window.openComposeEmailModal = openComposeEmailModal;
+
+    function closeComposeEmailModal() {
+      const modal = document.getElementById('composeEmailModal');
+      if (modal) modal.style.display = 'none';
+    }
+    window.closeComposeEmailModal = closeComposeEmailModal;
+
+    async function sendComposedEmailBtn() {
+      const toInput = document.getElementById('composeEmailTo');
+      const nameInput = document.getElementById('composeEmailName');
+      const subjInput = document.getElementById('composeEmailSubject');
+      const bodyInput = document.getElementById('composeEmailBody');
+      const statusEl = document.getElementById('composeEmailStatus');
+      const sendBtn = document.getElementById('composeEmailSendBtn');
+
+      const to = toInput ? toInput.value.trim() : '';
+      const name = nameInput ? nameInput.value.trim() : '';
+      const subject = subjInput ? subjInput.value.trim() : '';
+      const body = bodyInput ? bodyInput.value.trim() : '';
+
+      if (!to || !to.includes('@')) {
+        if (statusEl) { statusEl.textContent = 'Valid email is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+      if (!subject) {
+        if (statusEl) { statusEl.textContent = 'Subject is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+      if (!body) {
+        if (statusEl) { statusEl.textContent = 'Message body is required.'; statusEl.style.color = 'var(--danger)'; }
+        return;
+      }
+
+      if (sendBtn) sendBtn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Sending...'; statusEl.style.color = 'var(--muted)'; }
+
+      try {
+        const res = await fetch('/admin/api/support-emails/compose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: to,
+            customerName: name,
+            subject: subject,
+            text: body,
+          }),
+        });
+        const data = await res.json();
+        if (sendBtn) sendBtn.disabled = false;
+
+        if (!data || !data.ok) {
+          if (statusEl) { statusEl.textContent = (data && data.error) || 'Failed to send.'; statusEl.style.color = 'var(--danger)'; }
+          return;
+        }
+
+        closeComposeEmailModal();
+        if (toInput) toInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (subjInput) subjInput.value = '';
+        if (bodyInput) bodyInput.value = '';
+
+        await loadSupportEmailThreads();
+        if (data.thread && data.thread.id) {
+          await selectSupportEmailThread(data.thread.id);
+        }
+      } catch (err) {
+        if (sendBtn) sendBtn.disabled = false;
+        if (statusEl) { statusEl.textContent = 'Network error while sending.'; statusEl.style.color = 'var(--danger)'; }
+      }
+    }
+    window.sendComposedEmailBtn = sendComposedEmailBtn;
   </script>
 </body></html>`;
 }

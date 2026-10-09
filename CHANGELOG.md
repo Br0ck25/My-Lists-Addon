@@ -6,6 +6,8 @@ All notable changes to **My Lists Addon** ([mylistsaddon.com](https://mylistsadd
 
 ## [Unreleased]
 
+- **Customer Support Email Interface & Cloudflare Email Service (2026-10-09):** Added a full-featured customer support email client to `/admin` → Management & Tools → **Support Emails**. Supports inbound routing via Cloudflare Email Routing (`email(message, env, ctx)` handler), outbound delivery with Cloudflare Email Sending (`env.EMAIL.send()`), RFC 2822 / MIME decoding (quoted-printable and base64), conversation threading (`In-Reply-To` and `References`), thread status management (`open`, `pending`, `resolved`, `closed`), search, and custom email composition. Backed by D1 migration `0021_support_emails.sql` (`support_threads`, `support_messages`).
+
 - Create a Custom List no longer has a second "Add titles" box above it. "Build Custom Channel" is now "Create a Custom Channel" with the same layout as a custom list (name, Public toggle, Add Titles card, picks, Create Channel at the bottom). Every search box now shares one pill style (`.search-input-box`), including the Search tab.
 
 - Removed the Order Today tags setting: the "#N Today" numbers btttr.cc draws on posters come from data it does not publish, so the order could not be made to match them. Ko-fi strip shows on every page, has its progress bar back, reads "Server Costs", and its X hides it for 30 days. "+ Add to List" / "Mark as Watched" stay phone-sized on desktop.
