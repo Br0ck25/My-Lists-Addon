@@ -190,7 +190,8 @@ function parseMimeEmail(rawText, headers) {
         if (!part || part.trim() === '--' || part.trim() === '') continue;
         const partSplit = part.search(/\r?\n\r?\n/);
         if (partSplit === -1) continue;
-        const partHeader = part.slice(0, partSplit);
+        // Unfold wrapped header lines so a boundary/name on the next line is found.
+        const partHeader = part.slice(0, partSplit).replace(/\r?\n[ \t]+/g, ' ');
         let partBody = part.slice(partSplit).replace(/^\r?\n\r?\n/, '').replace(/\r?\n$/, '');
 
         const nestedMatch = partHeader.match(/content-type:\s*multipart\/[^;\r\n]+(?:[^\r\n]*?boundary=(?:"([^"]+)"|([^\s;]+)))?/i);

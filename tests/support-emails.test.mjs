@@ -457,6 +457,53 @@ Content-Type: text/html; charset="us-ascii"
     assert.doesNotMatch(msg.body_html, /cid:screenshot01@local/);
   });
 
+  it("parses Outlook-style mixed/alternative mail whose nested boundary is on a folded header line", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    const cookie = await adminCookie(env);
+    const outer = "outer_bnd_1";
+    const inner = "inner_bnd_2";
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const raw = [
+      "Received: from example.outbound.protection.outlook.com by cloudflare-email.net",
+      "From: Bob <bob@hotmail.com>",
+      "To: support@mylistsaddon.com",
+      "Subject: with image",
+      `Content-Type: multipart/mixed; boundary="${outer}"`,
+      "",
+      `--${outer}`,
+      "Content-Type: multipart/alternative;",
+      `\tboundary="${inner}"`,
+      "",
+      `--${inner}`,
+      "Content-Type: text/plain; charset=\"utf-8\"",
+      "",
+      "Hello with a picture",
+      `--${inner}--`,
+      `--${outer}`,
+      "Content-Type: image/png;",
+      "\tname=\"shot.png\"",
+      "Content-Transfer-Encoding: base64",
+      "Content-Disposition: attachment; filename=\"shot.png\"",
+      "",
+      png,
+      `--${outer}--`,
+      "",
+    ].join("\r\n");
+    await worker.email({
+      from: "bob@hotmail.com",
+      to: "support@mylistsaddon.com",
+      headers: new Map([["from", "Bob <bob@hotmail.com>"], ["subject", "with image"], ["content-type", `multipart/mixed; boundary="${outer}"`]]),
+      raw: new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(raw)); c.close(); } }),
+    }, env, {});
+    const th = (await db.prepare("SELECT * FROM support_threads WHERE customer_email = ?").bind("bob@hotmail.com").all()).results;
+    const res = await call(env, `/admin/api/support-emails/thread?id=${th[0].id}`, { cookie });
+    const msg = res.body.messages[0];
+    assert.equal(msg.body_text, "Hello with a picture");
+    assert.equal(msg.attachments.length, 1);
+    assert.equal(msg.attachments[0].filename, "shot.png");
+  });
+
   it("sends outgoing replies with image attachments via env.EMAIL.send", async () => {
     const db = makeD1();
     let sentEmailPayload = null;

@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c049ab4fb6";
+const WORKER_BUILD = "dbfc78b431";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -14447,7 +14447,7 @@ ${UTILITY_CSS}
       document.querySelectorAll('.admin-subnav-bar').forEach((bar) => {
         bar.style.display = bar.id === ('adminSubnav' + cat.charAt(0).toUpperCase() + cat.slice(1)) ? 'flex' : 'none';
       });
-      document.querySelectorAll('.subnav-pill').forEach((p) => p.classList.toggle('active', p.dataset.subTab === tabId));
+      document.querySelectorAll('.admin-subnav-bar .subnav-pill').forEach((p) => p.classList.toggle('active', p.dataset.subTab === tabId));
       document.querySelectorAll('.admin-tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.adminPanel === tabId));
 
       if (tabId === 'trending' && !window._trendingLoadedOnce) { window._trendingLoadedOnce = true; loadTrendingData(); }
@@ -17172,6 +17172,10 @@ ${UTILITY_CSS}
         currentSupportThreadId = savedThread;
       }
     } catch (e) {}
+    // restoreAdminActiveTab() runs above this block on a refresh, so when the page
+    // reloads on Support Emails its first load hit these not-yet-declared lets
+    // and silently fell back to All. Redo it now that the saved filter is read.
+    if (window._supportEmailsLoadedOnce) loadSupportEmailThreads();
 
     function syncSupportEmailFilterUI() {
       const group = document.getElementById('supportEmailFilterGroup');
@@ -38156,6 +38160,13 @@ if ('serviceWorker' in navigator) {
       <p class="u-m-0_0_14px u-c-v_muted u-fs-v_font_size_sm">Helpful guides, documentation, and ways to support continued hosting and development of My Lists Addon.</p>
       
       <div class="resource-cards-grid">
+        <a href="mailto:support@mylistsaddon.com" class="resource-card">
+          <div>
+            <div class="resource-card-title">Email Support</div>
+            <div class="resource-card-desc">Prefer email? Write to support@mylistsaddon.com and screenshots are welcome. We reply by email.</div>
+          </div>
+          <span class="secondary lc-btn u-as-flex_start u-p-6px_14px u-fs-v_font_size_sm" style="pointer-events:none;">Email Us &rarr;</span>
+        </a>
         <a href="/guide" class="resource-card">
           <div>
             <div class="resource-card-title">User Guide &amp; Docs</div>
@@ -115479,7 +115490,8 @@ function parseMimeEmail(rawText, headers) {
         if (!part || part.trim() === '--' || part.trim() === '') continue;
         const partSplit = part.search(/\r?\n\r?\n/);
         if (partSplit === -1) continue;
-        const partHeader = part.slice(0, partSplit);
+        // Unfold wrapped header lines so a boundary/name on the next line is found.
+        const partHeader = part.slice(0, partSplit).replace(/\r?\n[ \t]+/g, ' ');
         let partBody = part.slice(partSplit).replace(/^\r?\n\r?\n/, '').replace(/\r?\n$/, '');
 
         const nestedMatch = partHeader.match(/content-type:\s*multipart\/[^;\r\n]+(?:[^\r\n]*?boundary=(?:"([^"]+)"|([^\s;]+)))?/i);

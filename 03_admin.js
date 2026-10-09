@@ -3490,7 +3490,7 @@ ${UTILITY_CSS}
       document.querySelectorAll('.admin-subnav-bar').forEach((bar) => {
         bar.style.display = bar.id === ('adminSubnav' + cat.charAt(0).toUpperCase() + cat.slice(1)) ? 'flex' : 'none';
       });
-      document.querySelectorAll('.subnav-pill').forEach((p) => p.classList.toggle('active', p.dataset.subTab === tabId));
+      document.querySelectorAll('.admin-subnav-bar .subnav-pill').forEach((p) => p.classList.toggle('active', p.dataset.subTab === tabId));
       document.querySelectorAll('.admin-tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.adminPanel === tabId));
 
       if (tabId === 'trending' && !window._trendingLoadedOnce) { window._trendingLoadedOnce = true; loadTrendingData(); }
@@ -6215,6 +6215,10 @@ ${UTILITY_CSS}
         currentSupportThreadId = savedThread;
       }
     } catch (e) {}
+    // restoreAdminActiveTab() runs above this block on a refresh, so when the page
+    // reloads on Support Emails its first load hit these not-yet-declared lets
+    // and silently fell back to All. Redo it now that the saved filter is read.
+    if (window._supportEmailsLoadedOnce) loadSupportEmailThreads();
 
     function syncSupportEmailFilterUI() {
       const group = document.getElementById('supportEmailFilterGroup');
