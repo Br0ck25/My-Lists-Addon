@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS support_messages (
     subject      TEXT NOT NULL,
     body_text    TEXT,
     body_html    TEXT,
+    attachments_json TEXT DEFAULT '[]',
     message_id   TEXT,
     in_reply_to  TEXT,
     created_at   INTEGER NOT NULL,

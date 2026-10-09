@@ -2993,11 +2993,19 @@ ${UTILITY_CSS}
           <!-- Reply Composer -->
           <div class="u-bt-1px_solid_v_border u-pt-14px u-mt-auto">
             <div class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text">Reply from support@mylistsaddon.com</div>
-            <textarea id="supportEmailReplyText" class="u-minh-100px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-10px u-ol-none" placeholder="Type your reply to customer..." style="width:100%;"></textarea>
+            <textarea id="supportEmailReplyText" class="u-minh-100px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-8px u-ol-none" placeholder="Type your reply to customer... (Paste image Ctrl+V supported)" style="width:100%;"></textarea>
+            <div id="supportReplyAttachmentsPreview" class="u-mb-10px" style="display:none; flex-wrap:wrap; gap:8px;"></div>
             <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-10px" style="display:flex;">
-              <label class="u-ai-center u-gap-6px u-fs-v_font_size_xs u-c-v_muted u-cur-pointer" style="display:flex;">
-                <input type="checkbox" id="supportEmailCloseOnReply" checked> Close thread after sending reply
-              </label>
+              <div class="u-ai-center u-gap-10px" style="display:flex;">
+                <label class="lc-btn secondary u-fs-v_font_size_xs u-cur-pointer" style="padding:6px 12px; display:inline-flex; align-items:center; gap:6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <span>Attach Image</span>
+                  <input type="file" id="supportReplyFileInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" multiple data-act="onSupportReplyFileSelected" data-act-args="${adminActArgs(['@event'])}">
+                </label>
+                <label class="u-ai-center u-gap-6px u-fs-v_font_size_xs u-c-v_muted u-cur-pointer" style="display:flex;">
+                  <input type="checkbox" id="supportEmailCloseOnReply" checked> Close thread after sending reply
+                </label>
+              </div>
               <div class="u-ai-center u-gap-10px" style="display:flex;">
                 <span id="supportEmailReplyStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
                 <button type="button" class="lc-btn primary" id="supportEmailSendReplyBtn" data-act="sendSupportEmailReplyBtn">Send Reply</button>
@@ -3023,11 +3031,19 @@ ${UTILITY_CSS}
       <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Subject</label>
       <input type="text" id="composeEmailSubject" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="Regarding your inquiry" style="width:100%;">
       <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Message</label>
-      <textarea id="composeEmailBody" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-14px u-ol-none" placeholder="Write your message..." style="width:100%;"></textarea>
-      <div class="u-jc-flex_end u-gap-10px u-ai-center" style="display:flex;">
-        <span id="composeEmailStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
-        <button type="button" class="lc-btn secondary" data-act="closeComposeEmailModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="composeEmailSendBtn" data-act="sendComposedEmailBtn">Send Email</button>
+      <textarea id="composeEmailBody" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-8px u-ol-none" placeholder="Write your message... (Paste image Ctrl+V supported)" style="width:100%;"></textarea>
+      <div id="composeAttachmentsPreview" class="u-mb-10px" style="display:none; flex-wrap:wrap; gap:8px;"></div>
+      <div class="u-jc-space_between u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
+        <label class="lc-btn secondary u-fs-v_font_size_xs u-cur-pointer" style="padding:6px 12px; display:inline-flex; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <span>Attach Image</span>
+          <input type="file" id="composeFileInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" multiple data-act="onComposeFileSelected" data-act-args="${adminActArgs(['@event'])}">
+        </label>
+        <div class="u-ai-center u-gap-10px" style="display:flex;">
+          <span id="composeEmailStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+          <button type="button" class="lc-btn secondary" data-act="closeComposeEmailModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="composeEmailSendBtn" data-act="sendComposedEmailBtn">Send Email</button>
+        </div>
       </div>
     </div>
   </div>
@@ -6155,6 +6171,8 @@ ${UTILITY_CSS}
     let currentSupportThreadId = null;
     let supportEmailFilter = 'all';
     let supportEmailSearchTimeout = null;
+    let pendingReplyAttachments = [];
+    let pendingComposeAttachments = [];
 
     try {
       const savedFilter = localStorage.getItem('myListAddon:supportEmailFilter');
@@ -6266,6 +6284,92 @@ ${UTILITY_CSS}
     }
     window.onSupportEmailSearchInput = onSupportEmailSearchInput;
 
+    function renderPendingAttachments(type) {
+      const isReply = (type === 'reply');
+      const container = document.getElementById(isReply ? 'supportReplyAttachmentsPreview' : 'composeAttachmentsPreview');
+      const list = isReply ? pendingReplyAttachments : pendingComposeAttachments;
+      if (!container) return;
+      if (!list.length) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+      }
+      container.style.display = 'flex';
+      container.innerHTML = list.map((item, idx) => {
+        return '<div style="position:relative; width:72px; height:72px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:var(--panel-strong);">' +
+          '<img src="' + item.dataUrl + '" style="width:100%; height:100%; object-fit:cover; display:block;">' +
+          '<button type="button" class="lc-btn danger" style="position:absolute; top:2px; right:2px; width:20px; height:20px; min-height:20px; padding:0; font-size:12px; border-radius:50%; line-height:1;" data-act="removePendingAttachment" data-act-args="' + adminActAttr([type, idx]) + '" title="Remove image">&times;</button>' +
+        '</div>';
+      }).join('');
+    }
+    window.renderPendingAttachments = renderPendingAttachments;
+
+    function removePendingAttachment(type, idx) {
+      if (type === 'reply') {
+        pendingReplyAttachments.splice(idx, 1);
+      } else {
+        pendingComposeAttachments.splice(idx, 1);
+      }
+      renderPendingAttachments(type);
+    }
+    window.removePendingAttachment = removePendingAttachment;
+
+    function addFilesToPending(files, type) {
+      if (!files || !files.length) return;
+      const targetList = (type === 'reply') ? pendingReplyAttachments : pendingComposeAttachments;
+      Array.from(files).forEach((file) => {
+        if (!file.type || !file.type.startsWith('image/')) return;
+        if (file.size > 5 * 1024 * 1024) {
+          showAdminAlert('Image Too Large', 'Images must be under 5MB.', false);
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          targetList.push({
+            filename: file.name || ('screenshot_' + Date.now() + '.png'),
+            type: file.type,
+            dataUrl: e.target.result,
+            size: file.size,
+          });
+          renderPendingAttachments(type);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function onSupportReplyFileSelected(ev) {
+      const files = ev && ev.target && ev.target.files;
+      if (files) addFilesToPending(files, 'reply');
+      if (ev && ev.target) ev.target.value = '';
+    }
+    window.onSupportReplyFileSelected = onSupportReplyFileSelected;
+
+    function onComposeFileSelected(ev) {
+      const files = ev && ev.target && ev.target.files;
+      if (files) addFilesToPending(files, 'compose');
+      if (ev && ev.target) ev.target.value = '';
+    }
+    window.onComposeFileSelected = onComposeFileSelected;
+
+    // Clipboard paste listener for images in reply and compose textareas
+    window.addEventListener('paste', (e) => {
+      const active = document.activeElement;
+      if (active && (active.id === 'supportEmailReplyText' || active.id === 'composeEmailBody')) {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        const type = (active.id === 'supportEmailReplyText') ? 'reply' : 'compose';
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.startsWith('image/')) {
+            const file = items[i].getAsFile();
+            if (file) {
+              e.preventDefault();
+              addFilesToPending([file], type);
+            }
+          }
+        }
+      }
+    });
+
     async function selectSupportEmailThread(threadId) {
       currentSupportThreadId = threadId;
       try {
@@ -6323,12 +6427,32 @@ ${UTILITY_CSS}
             const timeStr = new Date(m.created_at).toLocaleString();
             const textContent = m.body_text || (m.body_html ? m.body_html.replace(/<[^>]+>/g, '') : '(Empty message)');
 
+            let attHtml = '';
+            if (Array.isArray(m.attachments) && m.attachments.length > 0) {
+              attHtml = '<div class="u-mt-10px u-pt-8px u-bt-1px_solid_v_border">' +
+                '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px">Attachments (' + m.attachments.length + '):</div>' +
+                '<div style="display:flex; flex-wrap:wrap; gap:8px;">' +
+                  m.attachments.map((att, attIdx) => {
+                    const fn = att.filename || ('image_' + (attIdx + 1) + '.png');
+                    const szStr = att.size ? (' (' + Math.round(att.size / 1024) + ' KB)') : '';
+                    return '<div style="max-width:140px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface);">' +
+                      '<a href="' + (att.dataUrl || '#') + '" target="_blank" rel="noopener noreferrer" style="display:block; text-decoration:none;" download="' + escapeHtmlAdmin(fn) + '">' +
+                        '<img src="' + (att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:80px; object-fit:cover; display:block;" loading="lazy">' +
+                        '<div class="u-fs-v_font_size_xs u-p-4px_6px u-to-ellipsis u-ov-hidden u-ws-nowrap u-c-v_text" title="' + escapeHtmlAdmin(fn + szStr) + '">' + escapeHtmlAdmin(fn) + '</div>' +
+                      '</a>' +
+                    '</div>';
+                  }).join('') +
+                '</div>' +
+              '</div>';
+            }
+
             return '<div class="support-bubble ' + (isInbound ? 'inbound' : 'outbound') + '">' +
               '<div class="u-jc-space_between u-ai-center u-mb-6px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; gap:8px;">' +
                 '<strong>' + escapeHtmlAdmin(senderLabel) + '</strong>' +
                 '<span>' + timeStr + '</span>' +
               '</div>' +
               '<div class="u-fs-v_font_size_sm u-lh-1_5 u-c-v_text" style="white-space:pre-wrap; word-break:break-word;">' + escapeHtmlAdmin(textContent) + '</div>' +
+              attHtml +
             '</div>';
           }).join('');
           msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -6347,8 +6471,8 @@ ${UTILITY_CSS}
       const sendBtn = document.getElementById('supportEmailSendReplyBtn');
 
       const text = textInput ? textInput.value.trim() : '';
-      if (!text) {
-        if (statusEl) { statusEl.textContent = 'Please enter a reply.'; statusEl.style.color = 'var(--danger)'; }
+      if (!text && !pendingReplyAttachments.length) {
+        if (statusEl) { statusEl.textContent = 'Please enter a reply or attach an image.'; statusEl.style.color = 'var(--danger)'; }
         return;
       }
 
@@ -6361,7 +6485,8 @@ ${UTILITY_CSS}
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             threadId: currentSupportThreadId,
-            text: text,
+            text: text || '(Image attachment)',
+            attachments: pendingReplyAttachments,
             closeOnSend: closeCheckbox ? closeCheckbox.checked : false,
           }),
         });
@@ -6376,6 +6501,8 @@ ${UTILITY_CSS}
 
         if (statusEl) { statusEl.textContent = 'Reply sent.'; statusEl.style.color = '#34c759'; }
         if (textInput) textInput.value = '';
+        pendingReplyAttachments = [];
+        renderPendingAttachments('reply');
 
         // Reload the thread conversation to display the new message
         await selectSupportEmailThread(currentSupportThreadId);
@@ -6451,6 +6578,8 @@ ${UTILITY_CSS}
       const modal = document.getElementById('composeEmailModal');
       const statusEl = document.getElementById('composeEmailStatus');
       if (statusEl) statusEl.textContent = '';
+      pendingComposeAttachments = [];
+      renderPendingAttachments('compose');
       if (modal) modal.style.display = 'flex';
     }
     window.openComposeEmailModal = openComposeEmailModal;
@@ -6458,6 +6587,8 @@ ${UTILITY_CSS}
     function closeComposeEmailModal() {
       const modal = document.getElementById('composeEmailModal');
       if (modal) modal.style.display = 'none';
+      pendingComposeAttachments = [];
+      renderPendingAttachments('compose');
     }
     window.closeComposeEmailModal = closeComposeEmailModal;
 
@@ -6482,8 +6613,8 @@ ${UTILITY_CSS}
         if (statusEl) { statusEl.textContent = 'Subject is required.'; statusEl.style.color = 'var(--danger)'; }
         return;
       }
-      if (!body) {
-        if (statusEl) { statusEl.textContent = 'Message body is required.'; statusEl.style.color = 'var(--danger)'; }
+      if (!body && !pendingComposeAttachments.length) {
+        if (statusEl) { statusEl.textContent = 'Message body or image attachment is required.'; statusEl.style.color = 'var(--danger)'; }
         return;
       }
 
@@ -6498,7 +6629,8 @@ ${UTILITY_CSS}
             toEmail: to,
             customerName: name,
             subject: subject,
-            text: body,
+            text: body || '(Image attachment)',
+            attachments: pendingComposeAttachments,
           }),
         });
         const data = await res.json();
@@ -6514,6 +6646,8 @@ ${UTILITY_CSS}
         if (nameInput) nameInput.value = '';
         if (subjInput) subjInput.value = '';
         if (bodyInput) bodyInput.value = '';
+        pendingComposeAttachments = [];
+        renderPendingAttachments('compose');
 
         await loadSupportEmailThreads();
         if (data.thread && data.thread.id) {

@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "00501795fc";
+const WORKER_BUILD = "164391bbb6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -13950,11 +13950,19 @@ ${UTILITY_CSS}
           <!-- Reply Composer -->
           <div class="u-bt-1px_solid_v_border u-pt-14px u-mt-auto">
             <div class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text">Reply from support@mylistsaddon.com</div>
-            <textarea id="supportEmailReplyText" class="u-minh-100px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-10px u-ol-none" placeholder="Type your reply to customer..." style="width:100%;"></textarea>
+            <textarea id="supportEmailReplyText" class="u-minh-100px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-8px u-ol-none" placeholder="Type your reply to customer... (Paste image Ctrl+V supported)" style="width:100%;"></textarea>
+            <div id="supportReplyAttachmentsPreview" class="u-mb-10px" style="display:none; flex-wrap:wrap; gap:8px;"></div>
             <div class="u-jc-space_between u-ai-center u-fw2-wrap u-gap-10px" style="display:flex;">
-              <label class="u-ai-center u-gap-6px u-fs-v_font_size_xs u-c-v_muted u-cur-pointer" style="display:flex;">
-                <input type="checkbox" id="supportEmailCloseOnReply" checked> Close thread after sending reply
-              </label>
+              <div class="u-ai-center u-gap-10px" style="display:flex;">
+                <label class="lc-btn secondary u-fs-v_font_size_xs u-cur-pointer" style="padding:6px 12px; display:inline-flex; align-items:center; gap:6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <span>Attach Image</span>
+                  <input type="file" id="supportReplyFileInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" multiple data-act="onSupportReplyFileSelected" data-act-args="${adminActArgs(['@event'])}">
+                </label>
+                <label class="u-ai-center u-gap-6px u-fs-v_font_size_xs u-c-v_muted u-cur-pointer" style="display:flex;">
+                  <input type="checkbox" id="supportEmailCloseOnReply" checked> Close thread after sending reply
+                </label>
+              </div>
               <div class="u-ai-center u-gap-10px" style="display:flex;">
                 <span id="supportEmailReplyStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
                 <button type="button" class="lc-btn primary" id="supportEmailSendReplyBtn" data-act="sendSupportEmailReplyBtn">Send Reply</button>
@@ -13980,11 +13988,19 @@ ${UTILITY_CSS}
       <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Subject</label>
       <input type="text" id="composeEmailSubject" class="admin-select u-mb-10px u-p-8px_10px u-br-v_radius_sm u-bd-1px_solid_v_border_strong u-bg-v_surface u-c-v_text" placeholder="Regarding your inquiry" style="width:100%;">
       <label class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Message</label>
-      <textarea id="composeEmailBody" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-14px u-ol-none" placeholder="Write your message..." style="width:100%;"></textarea>
-      <div class="u-jc-flex_end u-gap-10px u-ai-center" style="display:flex;">
-        <span id="composeEmailStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
-        <button type="button" class="lc-btn secondary" data-act="closeComposeEmailModal">Cancel</button>
-        <button type="button" class="lc-btn primary" id="composeEmailSendBtn" data-act="sendComposedEmailBtn">Send Email</button>
+      <textarea id="composeEmailBody" class="u-minh-120px u-bs-border_box u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-ff-inherit u-fs-v_font_size_base u-rs-vertical u-mb-8px u-ol-none" placeholder="Write your message... (Paste image Ctrl+V supported)" style="width:100%;"></textarea>
+      <div id="composeAttachmentsPreview" class="u-mb-10px" style="display:none; flex-wrap:wrap; gap:8px;"></div>
+      <div class="u-jc-space_between u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
+        <label class="lc-btn secondary u-fs-v_font_size_xs u-cur-pointer" style="padding:6px 12px; display:inline-flex; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <span>Attach Image</span>
+          <input type="file" id="composeFileInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" multiple data-act="onComposeFileSelected" data-act-args="${adminActArgs(['@event'])}">
+        </label>
+        <div class="u-ai-center u-gap-10px" style="display:flex;">
+          <span id="composeEmailStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+          <button type="button" class="lc-btn secondary" data-act="closeComposeEmailModal">Cancel</button>
+          <button type="button" class="lc-btn primary" id="composeEmailSendBtn" data-act="sendComposedEmailBtn">Send Email</button>
+        </div>
       </div>
     </div>
   </div>
@@ -17112,6 +17128,8 @@ ${UTILITY_CSS}
     let currentSupportThreadId = null;
     let supportEmailFilter = 'all';
     let supportEmailSearchTimeout = null;
+    let pendingReplyAttachments = [];
+    let pendingComposeAttachments = [];
 
     try {
       const savedFilter = localStorage.getItem('myListAddon:supportEmailFilter');
@@ -17223,6 +17241,92 @@ ${UTILITY_CSS}
     }
     window.onSupportEmailSearchInput = onSupportEmailSearchInput;
 
+    function renderPendingAttachments(type) {
+      const isReply = (type === 'reply');
+      const container = document.getElementById(isReply ? 'supportReplyAttachmentsPreview' : 'composeAttachmentsPreview');
+      const list = isReply ? pendingReplyAttachments : pendingComposeAttachments;
+      if (!container) return;
+      if (!list.length) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+      }
+      container.style.display = 'flex';
+      container.innerHTML = list.map((item, idx) => {
+        return '<div style="position:relative; width:72px; height:72px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:var(--panel-strong);">' +
+          '<img src="' + item.dataUrl + '" style="width:100%; height:100%; object-fit:cover; display:block;">' +
+          '<button type="button" class="lc-btn danger" style="position:absolute; top:2px; right:2px; width:20px; height:20px; min-height:20px; padding:0; font-size:12px; border-radius:50%; line-height:1;" data-act="removePendingAttachment" data-act-args="' + adminActAttr([type, idx]) + '" title="Remove image">&times;</button>' +
+        '</div>';
+      }).join('');
+    }
+    window.renderPendingAttachments = renderPendingAttachments;
+
+    function removePendingAttachment(type, idx) {
+      if (type === 'reply') {
+        pendingReplyAttachments.splice(idx, 1);
+      } else {
+        pendingComposeAttachments.splice(idx, 1);
+      }
+      renderPendingAttachments(type);
+    }
+    window.removePendingAttachment = removePendingAttachment;
+
+    function addFilesToPending(files, type) {
+      if (!files || !files.length) return;
+      const targetList = (type === 'reply') ? pendingReplyAttachments : pendingComposeAttachments;
+      Array.from(files).forEach((file) => {
+        if (!file.type || !file.type.startsWith('image/')) return;
+        if (file.size > 5 * 1024 * 1024) {
+          showAdminAlert('Image Too Large', 'Images must be under 5MB.', false);
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          targetList.push({
+            filename: file.name || ('screenshot_' + Date.now() + '.png'),
+            type: file.type,
+            dataUrl: e.target.result,
+            size: file.size,
+          });
+          renderPendingAttachments(type);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function onSupportReplyFileSelected(ev) {
+      const files = ev && ev.target && ev.target.files;
+      if (files) addFilesToPending(files, 'reply');
+      if (ev && ev.target) ev.target.value = '';
+    }
+    window.onSupportReplyFileSelected = onSupportReplyFileSelected;
+
+    function onComposeFileSelected(ev) {
+      const files = ev && ev.target && ev.target.files;
+      if (files) addFilesToPending(files, 'compose');
+      if (ev && ev.target) ev.target.value = '';
+    }
+    window.onComposeFileSelected = onComposeFileSelected;
+
+    // Clipboard paste listener for images in reply and compose textareas
+    window.addEventListener('paste', (e) => {
+      const active = document.activeElement;
+      if (active && (active.id === 'supportEmailReplyText' || active.id === 'composeEmailBody')) {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        const type = (active.id === 'supportEmailReplyText') ? 'reply' : 'compose';
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.startsWith('image/')) {
+            const file = items[i].getAsFile();
+            if (file) {
+              e.preventDefault();
+              addFilesToPending([file], type);
+            }
+          }
+        }
+      }
+    });
+
     async function selectSupportEmailThread(threadId) {
       currentSupportThreadId = threadId;
       try {
@@ -17280,12 +17384,32 @@ ${UTILITY_CSS}
             const timeStr = new Date(m.created_at).toLocaleString();
             const textContent = m.body_text || (m.body_html ? m.body_html.replace(/<[^>]+>/g, '') : '(Empty message)');
 
+            let attHtml = '';
+            if (Array.isArray(m.attachments) && m.attachments.length > 0) {
+              attHtml = '<div class="u-mt-10px u-pt-8px u-bt-1px_solid_v_border">' +
+                '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px">Attachments (' + m.attachments.length + '):</div>' +
+                '<div style="display:flex; flex-wrap:wrap; gap:8px;">' +
+                  m.attachments.map((att, attIdx) => {
+                    const fn = att.filename || ('image_' + (attIdx + 1) + '.png');
+                    const szStr = att.size ? (' (' + Math.round(att.size / 1024) + ' KB)') : '';
+                    return '<div style="max-width:140px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface);">' +
+                      '<a href="' + (att.dataUrl || '#') + '" target="_blank" rel="noopener noreferrer" style="display:block; text-decoration:none;" download="' + escapeHtmlAdmin(fn) + '">' +
+                        '<img src="' + (att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:80px; object-fit:cover; display:block;" loading="lazy">' +
+                        '<div class="u-fs-v_font_size_xs u-p-4px_6px u-to-ellipsis u-ov-hidden u-ws-nowrap u-c-v_text" title="' + escapeHtmlAdmin(fn + szStr) + '">' + escapeHtmlAdmin(fn) + '</div>' +
+                      '</a>' +
+                    '</div>';
+                  }).join('') +
+                '</div>' +
+              '</div>';
+            }
+
             return '<div class="support-bubble ' + (isInbound ? 'inbound' : 'outbound') + '">' +
               '<div class="u-jc-space_between u-ai-center u-mb-6px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; gap:8px;">' +
                 '<strong>' + escapeHtmlAdmin(senderLabel) + '</strong>' +
                 '<span>' + timeStr + '</span>' +
               '</div>' +
               '<div class="u-fs-v_font_size_sm u-lh-1_5 u-c-v_text" style="white-space:pre-wrap; word-break:break-word;">' + escapeHtmlAdmin(textContent) + '</div>' +
+              attHtml +
             '</div>';
           }).join('');
           msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -17304,8 +17428,8 @@ ${UTILITY_CSS}
       const sendBtn = document.getElementById('supportEmailSendReplyBtn');
 
       const text = textInput ? textInput.value.trim() : '';
-      if (!text) {
-        if (statusEl) { statusEl.textContent = 'Please enter a reply.'; statusEl.style.color = 'var(--danger)'; }
+      if (!text && !pendingReplyAttachments.length) {
+        if (statusEl) { statusEl.textContent = 'Please enter a reply or attach an image.'; statusEl.style.color = 'var(--danger)'; }
         return;
       }
 
@@ -17318,7 +17442,8 @@ ${UTILITY_CSS}
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             threadId: currentSupportThreadId,
-            text: text,
+            text: text || '(Image attachment)',
+            attachments: pendingReplyAttachments,
             closeOnSend: closeCheckbox ? closeCheckbox.checked : false,
           }),
         });
@@ -17333,6 +17458,8 @@ ${UTILITY_CSS}
 
         if (statusEl) { statusEl.textContent = 'Reply sent.'; statusEl.style.color = '#34c759'; }
         if (textInput) textInput.value = '';
+        pendingReplyAttachments = [];
+        renderPendingAttachments('reply');
 
         // Reload the thread conversation to display the new message
         await selectSupportEmailThread(currentSupportThreadId);
@@ -17408,6 +17535,8 @@ ${UTILITY_CSS}
       const modal = document.getElementById('composeEmailModal');
       const statusEl = document.getElementById('composeEmailStatus');
       if (statusEl) statusEl.textContent = '';
+      pendingComposeAttachments = [];
+      renderPendingAttachments('compose');
       if (modal) modal.style.display = 'flex';
     }
     window.openComposeEmailModal = openComposeEmailModal;
@@ -17415,6 +17544,8 @@ ${UTILITY_CSS}
     function closeComposeEmailModal() {
       const modal = document.getElementById('composeEmailModal');
       if (modal) modal.style.display = 'none';
+      pendingComposeAttachments = [];
+      renderPendingAttachments('compose');
     }
     window.closeComposeEmailModal = closeComposeEmailModal;
 
@@ -17439,8 +17570,8 @@ ${UTILITY_CSS}
         if (statusEl) { statusEl.textContent = 'Subject is required.'; statusEl.style.color = 'var(--danger)'; }
         return;
       }
-      if (!body) {
-        if (statusEl) { statusEl.textContent = 'Message body is required.'; statusEl.style.color = 'var(--danger)'; }
+      if (!body && !pendingComposeAttachments.length) {
+        if (statusEl) { statusEl.textContent = 'Message body or image attachment is required.'; statusEl.style.color = 'var(--danger)'; }
         return;
       }
 
@@ -17455,7 +17586,8 @@ ${UTILITY_CSS}
             toEmail: to,
             customerName: name,
             subject: subject,
-            text: body,
+            text: body || '(Image attachment)',
+            attachments: pendingComposeAttachments,
           }),
         });
         const data = await res.json();
@@ -17471,6 +17603,8 @@ ${UTILITY_CSS}
         if (nameInput) nameInput.value = '';
         if (subjInput) subjInput.value = '';
         if (bodyInput) bodyInput.value = '';
+        pendingComposeAttachments = [];
+        renderPendingAttachments('compose');
 
         await loadSupportEmailThreads();
         if (data.thread && data.thread.id) {
@@ -114818,6 +114952,7 @@ function parseMimeEmail(rawText, headers) {
     references: '',
     text: '',
     html: '',
+    attachments: [],
   };
 
   let contentTypeHeader = '';
@@ -114909,10 +115044,37 @@ function parseMimeEmail(rawText, headers) {
           continue;
         }
 
-        const isHtml = /content-type:\s*text\/html/i.test(partHeader);
-        const isPlain = /content-type:\s*text\/plain/i.test(partHeader);
+        const ctMatch = partHeader.match(/content-type:\s*([^;\r\n]+)/i);
+        const mimeType = ctMatch ? ctMatch[1].trim().toLowerCase() : '';
+        const isHtml = mimeType === 'text/html';
+        const isPlain = mimeType === 'text/plain';
+        const isImage = mimeType.startsWith('image/') || /\.(?:png|jpe?g|gif|webp|svg|bmp)$/i.test(partHeader);
         const isBase64 = /content-transfer-encoding:\s*base64/i.test(partHeader);
         const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(partHeader);
+
+        if (isImage) {
+          const fnMatch = partHeader.match(/(?:filename|name)=["']?([^"';\r\n]+)["']?/i);
+          const ext = (mimeType.split('/')[1] || 'png').replace('jpeg', 'jpg');
+          const filename = fnMatch ? fnMatch[1].trim() : ('image_' + (result.attachments.length + 1) + '.' + ext);
+          const cidMatch = partHeader.match(/content-id:\s*<([^>]+)>/i) || partHeader.match(/content-id:\s*([^\r\n]+)/i);
+          const cid = cidMatch ? cidMatch[1].replace(/[<>]/g, '').trim() : '';
+          const isInline = /content-disposition:\s*inline/i.test(partHeader) || Boolean(cid);
+
+          const base64Clean = partBody.replace(/\s+/g, '');
+          if (base64Clean) {
+            const dataUrl = 'data:' + (mimeType || 'image/png') + ';base64,' + base64Clean;
+            result.attachments.push({
+              id: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+              filename: filename,
+              mimeType: mimeType || 'image/png',
+              dataUrl: dataUrl,
+              size: Math.round(base64Clean.length * 0.75),
+              cid: cid,
+              inline: isInline,
+            });
+          }
+          continue;
+        }
 
         let decoded = partBody;
         if (isBase64) decoded = decodeBase64ToText(partBody);
@@ -114936,6 +115098,20 @@ function parseMimeEmail(rawText, headers) {
 
     if (isHtml) result.html = decoded.trim();
     else result.text = decoded.trim();
+  }
+
+  // Replace inline CID image references in HTML
+  if (result.html && result.attachments.length > 0) {
+    for (const att of result.attachments) {
+      if (att.cid && att.dataUrl) {
+        const escapedCid = att.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        result.html = result.html.replace(new RegExp('cid:' + escapedCid, 'gi'), att.dataUrl);
+      }
+      if (att.filename && att.dataUrl) {
+        const escapedFn = att.filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        result.html = result.html.replace(new RegExp('cid:' + escapedFn, 'gi'), att.dataUrl);
+      }
+    }
   }
 
   // If text is still empty but HTML exists, extract plain text representation
@@ -115029,21 +115205,20 @@ async function handleIncomingEmail(message, env, ctx) {
 
     // 4. Insert message
     const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
-    await env.DB.prepare(
-      'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
-      msgId,
+    await insertSupportMessage(env.DB, {
+      id: msgId,
       threadId,
-      'inbound',
+      direction: 'inbound',
       fromEmail,
       toEmail,
       subject,
       bodyText,
       bodyHtml,
+      attachments: parsed.attachments || [],
       messageId,
       inReplyTo,
-      now
-    ).run();
+      createdAt: now,
+    });
 
     console.log(`[Support Email] Inbound email from ${fromEmail} recorded in thread ${threadId}`);
   } catch (err) {
@@ -115051,8 +115226,72 @@ async function handleIncomingEmail(message, env, ctx) {
   }
 }
 
+// Robust helper to insert a support message row with backward compatibility for attachments_json
+async function insertSupportMessage(db, msg) {
+  const attachmentsJson = Array.isArray(msg.attachments) ? JSON.stringify(msg.attachments) : (msg.attachmentsJson || '[]');
+  try {
+    await db.prepare(
+      'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, attachments_json, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      msg.id,
+      msg.threadId,
+      msg.direction,
+      msg.fromEmail,
+      msg.toEmail,
+      msg.subject,
+      msg.bodyText,
+      msg.bodyHtml,
+      attachmentsJson,
+      msg.messageId,
+      msg.inReplyTo,
+      msg.createdAt
+    ).run();
+  } catch (err) {
+    const errStr = safeErrorMessage(err);
+    if (errStr.includes('no column named attachments_json')) {
+      try {
+        await db.prepare("ALTER TABLE support_messages ADD COLUMN attachments_json TEXT DEFAULT '[]'").run();
+        await db.prepare(
+          'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, attachments_json, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).bind(
+          msg.id,
+          msg.threadId,
+          msg.direction,
+          msg.fromEmail,
+          msg.toEmail,
+          msg.subject,
+          msg.bodyText,
+          msg.bodyHtml,
+          attachmentsJson,
+          msg.messageId,
+          msg.inReplyTo,
+          msg.createdAt
+        ).run();
+        return;
+      } catch (alterErr) {
+        console.warn('[Support Email] Alter column failed, inserting legacy message without attachments_json:', alterErr);
+      }
+    }
+    await db.prepare(
+      'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      msg.id,
+      msg.threadId,
+      msg.direction,
+      msg.fromEmail,
+      msg.toEmail,
+      msg.subject,
+      msg.bodyText,
+      msg.bodyHtml,
+      msg.messageId,
+      msg.inReplyTo,
+      msg.createdAt
+    ).run();
+  }
+}
+
 // Dispatches an outbound email reply via env.EMAIL.send() and records it
-async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, actor }) {
+async function sendSupportEmailReply(env, { threadId, text, html, attachments, closeOnSend, actor }) {
   if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
   if (!threadId) return { ok: false, error: 'threadId is required.' };
   if (!text || !String(text).trim()) return { ok: false, error: 'Reply text cannot be empty.' };
@@ -115073,6 +115312,33 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
   const cleanText = String(text).trim();
   const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
 
+  // Process attachments for sending and storage
+  const outgoingAttachments = [];
+  const storedAttachments = [];
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    for (const att of attachments) {
+      const mime = att.type || att.mimeType || (att.dataUrl && (att.dataUrl.match(/^data:([^;]+);/) || [])[1]) || 'image/png';
+      const rawBase64 = att.content || (att.dataUrl ? att.dataUrl.replace(/^data:[^;]+;base64,/, '') : '');
+      const fn = att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1) + '.png');
+      if (rawBase64) {
+        outgoingAttachments.push({
+          filename: fn,
+          type: mime,
+          contentType: mime,
+          content: rawBase64,
+          disposition: att.disposition || 'attachment',
+        });
+        storedAttachments.push({
+          id: att.id || ('att_' + now + '_' + Math.random().toString(36).slice(2, 7)),
+          filename: fn,
+          mimeType: mime,
+          dataUrl: att.dataUrl || ('data:' + mime + ';base64,' + rawBase64),
+          size: att.size || Math.round(rawBase64.length * 0.75),
+        });
+      }
+    }
+  }
+
   // Send via Cloudflare Email Sending Worker binding if available
   if (env.EMAIL && typeof env.EMAIL.send === 'function') {
     const payload = {
@@ -115088,29 +115354,30 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
         'References': inReplyTo,
       };
     }
+    if (outgoingAttachments.length > 0) {
+      payload.attachments = outgoingAttachments;
+    }
     await env.EMAIL.send(payload);
   } else {
-    // If EMAIL binding is not present, still record message in DB for tracking/mocking
     console.warn('[Support Email] env.EMAIL binding missing. Recorded outbound reply in DB without sending network email.');
   }
 
   // Insert outbound message into DB
   const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
-  await env.DB.prepare(
-    'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    msgId,
+  await insertSupportMessage(env.DB, {
+    id: msgId,
     threadId,
-    'outbound',
-    'support@mylistsaddon.com',
-    thread.customer_email,
-    replySubject,
-    cleanText,
-    cleanHtml,
-    outboundRfcId,
+    direction: 'outbound',
+    fromEmail: 'support@mylistsaddon.com',
+    toEmail: thread.customer_email,
+    subject: replySubject,
+    bodyText: cleanText,
+    bodyHtml: cleanHtml,
+    attachments: storedAttachments,
+    messageId: outboundRfcId,
     inReplyTo,
-    now
-  ).run();
+    createdAt: now,
+  });
 
   const newStatus = closeOnSend ? 'closed' : 'replied';
   await env.DB.prepare(
@@ -115140,6 +115407,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
     subject: replySubject,
     body_text: cleanText,
     body_html: cleanHtml,
+    attachments: storedAttachments,
     created_at: now,
   };
 
@@ -115147,7 +115415,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
 }
 
 // Composes a brand-new outbound email thread to a recipient
-async function composeNewSupportEmail(env, { toEmail, customerName, subject, text, html, actor }) {
+async function composeNewSupportEmail(env, { toEmail, customerName, subject, text, html, attachments, actor }) {
   if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
   if (!toEmail || !String(toEmail).includes('@')) return { ok: false, error: 'Valid recipient email is required.' };
   if (!subject || !String(subject).trim()) return { ok: false, error: 'Subject is required.' };
@@ -115162,14 +115430,45 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
   const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
   const outboundRfcId = '<out-' + now + '-' + Math.random().toString(36).slice(2, 8) + '@mylistsaddon.com>';
 
+  // Process attachments
+  const outgoingAttachments = [];
+  const storedAttachments = [];
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    for (const att of attachments) {
+      const mime = att.type || att.mimeType || (att.dataUrl && (att.dataUrl.match(/^data:([^;]+);/) || [])[1]) || 'image/png';
+      const rawBase64 = att.content || (att.dataUrl ? att.dataUrl.replace(/^data:[^;]+;base64,/, '') : '');
+      const fn = att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1) + '.png');
+      if (rawBase64) {
+        outgoingAttachments.push({
+          filename: fn,
+          type: mime,
+          contentType: mime,
+          content: rawBase64,
+          disposition: att.disposition || 'attachment',
+        });
+        storedAttachments.push({
+          id: att.id || ('att_' + now + '_' + Math.random().toString(36).slice(2, 7)),
+          filename: fn,
+          mimeType: mime,
+          dataUrl: att.dataUrl || ('data:' + mime + ';base64,' + rawBase64),
+          size: att.size || Math.round(rawBase64.length * 0.75),
+        });
+      }
+    }
+  }
+
   if (env.EMAIL && typeof env.EMAIL.send === 'function') {
-    await env.EMAIL.send({
+    const payload = {
       to: cleanTo,
       from: 'support@mylistsaddon.com',
       subject: cleanSubject,
       text: cleanText,
       html: cleanHtml,
-    });
+    };
+    if (outgoingAttachments.length > 0) {
+      payload.attachments = outgoingAttachments;
+    }
+    await env.EMAIL.send(payload);
   }
 
   await env.DB.prepare(
@@ -115177,21 +115476,20 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
   ).bind(threadId, cleanTo, cleanName, cleanSubject, 'replied', now, now, now).run();
 
   const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
-  await env.DB.prepare(
-    'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    msgId,
+  await insertSupportMessage(env.DB, {
+    id: msgId,
     threadId,
-    'outbound',
-    'support@mylistsaddon.com',
-    cleanTo,
-    cleanSubject,
-    cleanText,
-    cleanHtml,
-    outboundRfcId,
-    null,
-    now
-  ).run();
+    direction: 'outbound',
+    fromEmail: 'support@mylistsaddon.com',
+    toEmail: cleanTo,
+    subject: cleanSubject,
+    bodyText: cleanText,
+    bodyHtml: cleanHtml,
+    attachments: storedAttachments,
+    messageId: outboundRfcId,
+    inReplyTo: null,
+    createdAt: now,
+  });
 
   return {
     ok: true,
@@ -115215,6 +115513,7 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
       subject: cleanSubject,
       body_text: cleanText,
       body_html: cleanHtml,
+      attachments: storedAttachments,
       created_at: now,
     },
   };
@@ -115298,16 +115597,28 @@ async function handleSupportEmailsApi(path, request, env) {
       ).bind(threadId).all();
       const messages = (msgRows && Array.isArray(msgRows.results)) ? msgRows.results : [];
 
-      // Auto-clean any unparsed raw MIME messages that were previously saved
+      // Parse attachments and auto-clean any unparsed raw MIME messages that were previously saved
       for (const m of messages) {
+        let attList = [];
+        if (m.attachments_json) {
+          try {
+            attList = JSON.parse(m.attachments_json);
+          } catch (e) {}
+        }
+        m.attachments = Array.isArray(attList) ? attList : [];
+
         if (m.body_text && /(?:^|\r?\n)--[a-zA-Z0-9'()+_,-./:=?]{6,100}\r?\ncontent-type:\s*/i.test(m.body_text)) {
           const cleaned = parseMimeEmail(m.body_text);
-          if (cleaned.text) {
-            m.body_text = cleaned.text;
+          if (cleaned.text || (cleaned.attachments && cleaned.attachments.length > 0)) {
+            if (cleaned.text) m.body_text = cleaned.text;
             if (cleaned.html && !m.body_html) m.body_html = cleaned.html;
+            if (cleaned.attachments && cleaned.attachments.length > 0) {
+              m.attachments = cleaned.attachments;
+              m.attachments_json = JSON.stringify(cleaned.attachments);
+            }
             try {
-              await env.DB.prepare('UPDATE support_messages SET body_text = ?, body_html = COALESCE(body_html, ?) WHERE id = ?')
-                .bind(m.body_text, cleaned.html || null, m.id).run();
+              await env.DB.prepare('UPDATE support_messages SET body_text = ?, body_html = COALESCE(body_html, ?), attachments_json = ? WHERE id = ?')
+                .bind(m.body_text, cleaned.html || null, m.attachments_json || null, m.id).run();
             } catch (err) {}
           }
         }

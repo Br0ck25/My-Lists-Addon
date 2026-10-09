@@ -392,4 +392,175 @@ Content-Type: text/html; charset="us-ascii"
     const healed = await db.prepare("SELECT body_text FROM support_messages WHERE id = ?").bind(msgId).first();
     assert.equal(healed.body_text, "Yes it worked");
   });
+
+  it("extracts inbound image attachments and replaces inline cid references in HTML", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    const cookie = await adminCookie(env);
+
+    const boundary = "==image_boundary_999==";
+    const samplePngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    const mimeWithImage = [
+      `Content-Type: multipart/related; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "",
+      '<div>Here is the screenshot: <img src="cid:screenshot01@local"></div>',
+      `--${boundary}`,
+      'Content-Type: image/png; name="screenshot.png"',
+      "Content-Transfer-Encoding: base64",
+      "Content-ID: <screenshot01@local>",
+      'Content-Disposition: inline; filename="screenshot.png"',
+      "",
+      samplePngBase64,
+      `--${boundary}--`,
+    ].join("\r\n");
+
+    const emailMsg = {
+      from: "alice@example.com",
+      to: "support@mylistsaddon.com",
+      headers: new Map([
+        ["from", "alice@example.com"],
+        ["to", "support@mylistsaddon.com"],
+        ["subject", "Found a bug with screenshot"],
+        ["content-type", `multipart/related; boundary="${boundary}"`],
+      ]),
+      raw: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(mimeWithImage));
+          controller.close();
+        },
+      }),
+    };
+
+    await worker.email(emailMsg, env, {});
+
+    const threads = (await db.prepare("SELECT * FROM support_threads WHERE customer_email = ?").bind("alice@example.com").all()).results;
+    assert.equal(threads.length, 1);
+
+    const res = await call(env, `/admin/api/support-emails/thread?id=${threads[0].id}`, { cookie });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.messages.length, 1);
+
+    const msg = res.body.messages[0];
+    assert.equal(Array.isArray(msg.attachments), true);
+    assert.equal(msg.attachments.length, 1);
+    assert.equal(msg.attachments[0].filename, "screenshot.png");
+    assert.equal(msg.attachments[0].mimeType, "image/png");
+    assert.equal(msg.attachments[0].dataUrl.startsWith("data:image/png;base64,"), true);
+
+    // Verify inline cid: was replaced in body_html
+    assert.match(msg.body_html, /data:image\/png;base64,/);
+    assert.doesNotMatch(msg.body_html, /cid:screenshot01@local/);
+  });
+
+  it("sends outgoing replies with image attachments via env.EMAIL.send", async () => {
+    const db = makeD1();
+    let sentEmailPayload = null;
+    const mockEmail = {
+      async send(payload) {
+        sentEmailPayload = payload;
+        return { messageId: "out-msg-123" };
+      },
+    };
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db, EMAIL: mockEmail });
+    const cookie = await adminCookie(env);
+
+    // Create an incoming thread first
+    const emailMsg = createMockEmailMessage({
+      from: "charlie@example.com",
+      subject: "Question about poster art",
+      text: "How do I see high-res posters?",
+    });
+    await worker.email(emailMsg, env, {});
+
+    const thread = (await db.prepare("SELECT * FROM support_threads WHERE customer_email = ?").bind("charlie@example.com").all()).results[0];
+
+    const samplePngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const replyRes = await call(env, "/admin/api/support-emails/reply", {
+      method: "POST",
+      cookie,
+      json: {
+        threadId: thread.id,
+        text: "Here is a guide showing the button:",
+        attachments: [
+          {
+            filename: "guide.png",
+            type: "image/png",
+            dataUrl: "data:image/png;base64," + samplePngBase64,
+          },
+        ],
+        closeOnSend: true,
+      },
+    });
+
+    assert.equal(replyRes.status, 200);
+    assert.equal(replyRes.body.ok, true);
+    assert.equal(replyRes.body.message.attachments.length, 1);
+    assert.equal(replyRes.body.message.attachments[0].filename, "guide.png");
+
+    // Verify env.EMAIL.send was called with attachments
+    assert.notEqual(sentEmailPayload, null);
+    assert.equal(sentEmailPayload.to, "charlie@example.com");
+    assert.equal(Array.isArray(sentEmailPayload.attachments), true);
+    assert.equal(sentEmailPayload.attachments.length, 1);
+    assert.equal(sentEmailPayload.attachments[0].filename, "guide.png");
+    assert.equal(sentEmailPayload.attachments[0].type, "image/png");
+    assert.equal(sentEmailPayload.attachments[0].content, samplePngBase64);
+
+    // Verify thread conversation includes the outbound attachment
+    const threadView = await call(env, `/admin/api/support-emails/thread?id=${thread.id}`, { cookie });
+    assert.equal(threadView.body.messages.length, 2);
+    const outboundMsg = threadView.body.messages.find((m) => m.direction === "outbound");
+    assert.notEqual(outboundMsg, undefined);
+    assert.equal(outboundMsg.attachments.length, 1);
+    assert.equal(outboundMsg.attachments[0].filename, "guide.png");
+  });
+
+  it("composes new outbound emails with image attachments", async () => {
+    const db = makeD1();
+    let sentEmailPayload = null;
+    const mockEmail = {
+      async send(payload) {
+        sentEmailPayload = payload;
+        return { messageId: "compose-msg-456" };
+      },
+    };
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db, EMAIL: mockEmail });
+    const cookie = await adminCookie(env);
+
+    const samplePngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const composeRes = await call(env, "/admin/api/support-emails/compose", {
+      method: "POST",
+      cookie,
+      json: {
+        toEmail: "david@example.com",
+        customerName: "David",
+        subject: "Information requested",
+        text: "Please find the requested chart below:",
+        attachments: [
+          {
+            filename: "chart.png",
+            type: "image/png",
+            dataUrl: "data:image/png;base64," + samplePngBase64,
+          },
+        ],
+      },
+    });
+
+    assert.equal(composeRes.status, 200);
+    assert.equal(composeRes.body.ok, true);
+    assert.notEqual(sentEmailPayload, null);
+    assert.equal(sentEmailPayload.to, "david@example.com");
+    assert.equal(sentEmailPayload.attachments.length, 1);
+    assert.equal(sentEmailPayload.attachments[0].filename, "chart.png");
+
+    const threadId = composeRes.body.thread.id;
+    const threadView = await call(env, `/admin/api/support-emails/thread?id=${threadId}`, { cookie });
+    assert.equal(threadView.body.messages[0].attachments.length, 1);
+    assert.equal(threadView.body.messages[0].attachments[0].filename, "chart.png");
+  });
 });

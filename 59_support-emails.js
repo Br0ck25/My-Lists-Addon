@@ -77,6 +77,7 @@ function parseMimeEmail(rawText, headers) {
     references: '',
     text: '',
     html: '',
+    attachments: [],
   };
 
   let contentTypeHeader = '';
@@ -168,10 +169,37 @@ function parseMimeEmail(rawText, headers) {
           continue;
         }
 
-        const isHtml = /content-type:\s*text\/html/i.test(partHeader);
-        const isPlain = /content-type:\s*text\/plain/i.test(partHeader);
+        const ctMatch = partHeader.match(/content-type:\s*([^;\r\n]+)/i);
+        const mimeType = ctMatch ? ctMatch[1].trim().toLowerCase() : '';
+        const isHtml = mimeType === 'text/html';
+        const isPlain = mimeType === 'text/plain';
+        const isImage = mimeType.startsWith('image/') || /\.(?:png|jpe?g|gif|webp|svg|bmp)$/i.test(partHeader);
         const isBase64 = /content-transfer-encoding:\s*base64/i.test(partHeader);
         const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(partHeader);
+
+        if (isImage) {
+          const fnMatch = partHeader.match(/(?:filename|name)=["']?([^"';\r\n]+)["']?/i);
+          const ext = (mimeType.split('/')[1] || 'png').replace('jpeg', 'jpg');
+          const filename = fnMatch ? fnMatch[1].trim() : ('image_' + (result.attachments.length + 1) + '.' + ext);
+          const cidMatch = partHeader.match(/content-id:\s*<([^>]+)>/i) || partHeader.match(/content-id:\s*([^\r\n]+)/i);
+          const cid = cidMatch ? cidMatch[1].replace(/[<>]/g, '').trim() : '';
+          const isInline = /content-disposition:\s*inline/i.test(partHeader) || Boolean(cid);
+
+          const base64Clean = partBody.replace(/\s+/g, '');
+          if (base64Clean) {
+            const dataUrl = 'data:' + (mimeType || 'image/png') + ';base64,' + base64Clean;
+            result.attachments.push({
+              id: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+              filename: filename,
+              mimeType: mimeType || 'image/png',
+              dataUrl: dataUrl,
+              size: Math.round(base64Clean.length * 0.75),
+              cid: cid,
+              inline: isInline,
+            });
+          }
+          continue;
+        }
 
         let decoded = partBody;
         if (isBase64) decoded = decodeBase64ToText(partBody);
@@ -195,6 +223,20 @@ function parseMimeEmail(rawText, headers) {
 
     if (isHtml) result.html = decoded.trim();
     else result.text = decoded.trim();
+  }
+
+  // Replace inline CID image references in HTML
+  if (result.html && result.attachments.length > 0) {
+    for (const att of result.attachments) {
+      if (att.cid && att.dataUrl) {
+        const escapedCid = att.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        result.html = result.html.replace(new RegExp('cid:' + escapedCid, 'gi'), att.dataUrl);
+      }
+      if (att.filename && att.dataUrl) {
+        const escapedFn = att.filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        result.html = result.html.replace(new RegExp('cid:' + escapedFn, 'gi'), att.dataUrl);
+      }
+    }
   }
 
   // If text is still empty but HTML exists, extract plain text representation
@@ -288,21 +330,20 @@ async function handleIncomingEmail(message, env, ctx) {
 
     // 4. Insert message
     const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
-    await env.DB.prepare(
-      'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
-      msgId,
+    await insertSupportMessage(env.DB, {
+      id: msgId,
       threadId,
-      'inbound',
+      direction: 'inbound',
       fromEmail,
       toEmail,
       subject,
       bodyText,
       bodyHtml,
+      attachments: parsed.attachments || [],
       messageId,
       inReplyTo,
-      now
-    ).run();
+      createdAt: now,
+    });
 
     console.log(`[Support Email] Inbound email from ${fromEmail} recorded in thread ${threadId}`);
   } catch (err) {
@@ -310,8 +351,72 @@ async function handleIncomingEmail(message, env, ctx) {
   }
 }
 
+// Robust helper to insert a support message row with backward compatibility for attachments_json
+async function insertSupportMessage(db, msg) {
+  const attachmentsJson = Array.isArray(msg.attachments) ? JSON.stringify(msg.attachments) : (msg.attachmentsJson || '[]');
+  try {
+    await db.prepare(
+      'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, attachments_json, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      msg.id,
+      msg.threadId,
+      msg.direction,
+      msg.fromEmail,
+      msg.toEmail,
+      msg.subject,
+      msg.bodyText,
+      msg.bodyHtml,
+      attachmentsJson,
+      msg.messageId,
+      msg.inReplyTo,
+      msg.createdAt
+    ).run();
+  } catch (err) {
+    const errStr = safeErrorMessage(err);
+    if (errStr.includes('no column named attachments_json')) {
+      try {
+        await db.prepare("ALTER TABLE support_messages ADD COLUMN attachments_json TEXT DEFAULT '[]'").run();
+        await db.prepare(
+          'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, attachments_json, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).bind(
+          msg.id,
+          msg.threadId,
+          msg.direction,
+          msg.fromEmail,
+          msg.toEmail,
+          msg.subject,
+          msg.bodyText,
+          msg.bodyHtml,
+          attachmentsJson,
+          msg.messageId,
+          msg.inReplyTo,
+          msg.createdAt
+        ).run();
+        return;
+      } catch (alterErr) {
+        console.warn('[Support Email] Alter column failed, inserting legacy message without attachments_json:', alterErr);
+      }
+    }
+    await db.prepare(
+      'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      msg.id,
+      msg.threadId,
+      msg.direction,
+      msg.fromEmail,
+      msg.toEmail,
+      msg.subject,
+      msg.bodyText,
+      msg.bodyHtml,
+      msg.messageId,
+      msg.inReplyTo,
+      msg.createdAt
+    ).run();
+  }
+}
+
 // Dispatches an outbound email reply via env.EMAIL.send() and records it
-async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, actor }) {
+async function sendSupportEmailReply(env, { threadId, text, html, attachments, closeOnSend, actor }) {
   if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
   if (!threadId) return { ok: false, error: 'threadId is required.' };
   if (!text || !String(text).trim()) return { ok: false, error: 'Reply text cannot be empty.' };
@@ -332,6 +437,33 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
   const cleanText = String(text).trim();
   const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
 
+  // Process attachments for sending and storage
+  const outgoingAttachments = [];
+  const storedAttachments = [];
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    for (const att of attachments) {
+      const mime = att.type || att.mimeType || (att.dataUrl && (att.dataUrl.match(/^data:([^;]+);/) || [])[1]) || 'image/png';
+      const rawBase64 = att.content || (att.dataUrl ? att.dataUrl.replace(/^data:[^;]+;base64,/, '') : '');
+      const fn = att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1) + '.png');
+      if (rawBase64) {
+        outgoingAttachments.push({
+          filename: fn,
+          type: mime,
+          contentType: mime,
+          content: rawBase64,
+          disposition: att.disposition || 'attachment',
+        });
+        storedAttachments.push({
+          id: att.id || ('att_' + now + '_' + Math.random().toString(36).slice(2, 7)),
+          filename: fn,
+          mimeType: mime,
+          dataUrl: att.dataUrl || ('data:' + mime + ';base64,' + rawBase64),
+          size: att.size || Math.round(rawBase64.length * 0.75),
+        });
+      }
+    }
+  }
+
   // Send via Cloudflare Email Sending Worker binding if available
   if (env.EMAIL && typeof env.EMAIL.send === 'function') {
     const payload = {
@@ -347,29 +479,30 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
         'References': inReplyTo,
       };
     }
+    if (outgoingAttachments.length > 0) {
+      payload.attachments = outgoingAttachments;
+    }
     await env.EMAIL.send(payload);
   } else {
-    // If EMAIL binding is not present, still record message in DB for tracking/mocking
     console.warn('[Support Email] env.EMAIL binding missing. Recorded outbound reply in DB without sending network email.');
   }
 
   // Insert outbound message into DB
   const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
-  await env.DB.prepare(
-    'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    msgId,
+  await insertSupportMessage(env.DB, {
+    id: msgId,
     threadId,
-    'outbound',
-    'support@mylistsaddon.com',
-    thread.customer_email,
-    replySubject,
-    cleanText,
-    cleanHtml,
-    outboundRfcId,
+    direction: 'outbound',
+    fromEmail: 'support@mylistsaddon.com',
+    toEmail: thread.customer_email,
+    subject: replySubject,
+    bodyText: cleanText,
+    bodyHtml: cleanHtml,
+    attachments: storedAttachments,
+    messageId: outboundRfcId,
     inReplyTo,
-    now
-  ).run();
+    createdAt: now,
+  });
 
   const newStatus = closeOnSend ? 'closed' : 'replied';
   await env.DB.prepare(
@@ -399,6 +532,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
     subject: replySubject,
     body_text: cleanText,
     body_html: cleanHtml,
+    attachments: storedAttachments,
     created_at: now,
   };
 
@@ -406,7 +540,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, closeOnSend, a
 }
 
 // Composes a brand-new outbound email thread to a recipient
-async function composeNewSupportEmail(env, { toEmail, customerName, subject, text, html, actor }) {
+async function composeNewSupportEmail(env, { toEmail, customerName, subject, text, html, attachments, actor }) {
   if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
   if (!toEmail || !String(toEmail).includes('@')) return { ok: false, error: 'Valid recipient email is required.' };
   if (!subject || !String(subject).trim()) return { ok: false, error: 'Subject is required.' };
@@ -421,14 +555,45 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
   const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
   const outboundRfcId = '<out-' + now + '-' + Math.random().toString(36).slice(2, 8) + '@mylistsaddon.com>';
 
+  // Process attachments
+  const outgoingAttachments = [];
+  const storedAttachments = [];
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    for (const att of attachments) {
+      const mime = att.type || att.mimeType || (att.dataUrl && (att.dataUrl.match(/^data:([^;]+);/) || [])[1]) || 'image/png';
+      const rawBase64 = att.content || (att.dataUrl ? att.dataUrl.replace(/^data:[^;]+;base64,/, '') : '');
+      const fn = att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1) + '.png');
+      if (rawBase64) {
+        outgoingAttachments.push({
+          filename: fn,
+          type: mime,
+          contentType: mime,
+          content: rawBase64,
+          disposition: att.disposition || 'attachment',
+        });
+        storedAttachments.push({
+          id: att.id || ('att_' + now + '_' + Math.random().toString(36).slice(2, 7)),
+          filename: fn,
+          mimeType: mime,
+          dataUrl: att.dataUrl || ('data:' + mime + ';base64,' + rawBase64),
+          size: att.size || Math.round(rawBase64.length * 0.75),
+        });
+      }
+    }
+  }
+
   if (env.EMAIL && typeof env.EMAIL.send === 'function') {
-    await env.EMAIL.send({
+    const payload = {
       to: cleanTo,
       from: 'support@mylistsaddon.com',
       subject: cleanSubject,
       text: cleanText,
       html: cleanHtml,
-    });
+    };
+    if (outgoingAttachments.length > 0) {
+      payload.attachments = outgoingAttachments;
+    }
+    await env.EMAIL.send(payload);
   }
 
   await env.DB.prepare(
@@ -436,21 +601,20 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
   ).bind(threadId, cleanTo, cleanName, cleanSubject, 'replied', now, now, now).run();
 
   const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
-  await env.DB.prepare(
-    'INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, body_html, message_id, in_reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    msgId,
+  await insertSupportMessage(env.DB, {
+    id: msgId,
     threadId,
-    'outbound',
-    'support@mylistsaddon.com',
-    cleanTo,
-    cleanSubject,
-    cleanText,
-    cleanHtml,
-    outboundRfcId,
-    null,
-    now
-  ).run();
+    direction: 'outbound',
+    fromEmail: 'support@mylistsaddon.com',
+    toEmail: cleanTo,
+    subject: cleanSubject,
+    bodyText: cleanText,
+    bodyHtml: cleanHtml,
+    attachments: storedAttachments,
+    messageId: outboundRfcId,
+    inReplyTo: null,
+    createdAt: now,
+  });
 
   return {
     ok: true,
@@ -474,6 +638,7 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
       subject: cleanSubject,
       body_text: cleanText,
       body_html: cleanHtml,
+      attachments: storedAttachments,
       created_at: now,
     },
   };
@@ -557,16 +722,28 @@ async function handleSupportEmailsApi(path, request, env) {
       ).bind(threadId).all();
       const messages = (msgRows && Array.isArray(msgRows.results)) ? msgRows.results : [];
 
-      // Auto-clean any unparsed raw MIME messages that were previously saved
+      // Parse attachments and auto-clean any unparsed raw MIME messages that were previously saved
       for (const m of messages) {
+        let attList = [];
+        if (m.attachments_json) {
+          try {
+            attList = JSON.parse(m.attachments_json);
+          } catch (e) {}
+        }
+        m.attachments = Array.isArray(attList) ? attList : [];
+
         if (m.body_text && /(?:^|\r?\n)--[a-zA-Z0-9'()+_,-./:=?]{6,100}\r?\ncontent-type:\s*/i.test(m.body_text)) {
           const cleaned = parseMimeEmail(m.body_text);
-          if (cleaned.text) {
-            m.body_text = cleaned.text;
+          if (cleaned.text || (cleaned.attachments && cleaned.attachments.length > 0)) {
+            if (cleaned.text) m.body_text = cleaned.text;
             if (cleaned.html && !m.body_html) m.body_html = cleaned.html;
+            if (cleaned.attachments && cleaned.attachments.length > 0) {
+              m.attachments = cleaned.attachments;
+              m.attachments_json = JSON.stringify(cleaned.attachments);
+            }
             try {
-              await env.DB.prepare('UPDATE support_messages SET body_text = ?, body_html = COALESCE(body_html, ?) WHERE id = ?')
-                .bind(m.body_text, cleaned.html || null, m.id).run();
+              await env.DB.prepare('UPDATE support_messages SET body_text = ?, body_html = COALESCE(body_html, ?), attachments_json = ? WHERE id = ?')
+                .bind(m.body_text, cleaned.html || null, m.attachments_json || null, m.id).run();
             } catch (err) {}
           }
         }
