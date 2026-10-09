@@ -6628,11 +6628,36 @@ function removeWatchHistoryItemDirect(id, btn) {
   }
   const targetId = String(id);
   const map = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
+  let removedItems = [];
   if (map['watch-history'] && Array.isArray(map['watch-history'].items)) {
     const initialLen = map['watch-history'].items.length;
-    map['watch-history'].items = map['watch-history'].items.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
+    const isTarget = (it) => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId);
+    removedItems = map['watch-history'].items.filter(isTarget);
+    map['watch-history'].items = map['watch-history'].items.filter((it) => !isTarget(it));
     if (map['watch-history'].items.length !== initialLen) {
-      if (window._watchedItemIds) window._watchedItemIds.delete(targetId);
+      if (window._watchedItemIds) {
+        window._watchedItemIds.delete(targetId);
+        removedItems.forEach((rit) => {
+          if (!rit) return;
+          if (rit.id) window._watchedItemIds.delete(String(rit.id));
+          if (rit.imdbId) window._watchedItemIds.delete(String(rit.imdbId));
+          if (rit.tmdbId) {
+            window._watchedItemIds.delete(String(rit.tmdbId));
+            window._watchedItemIds.delete('tmdb:' + rit.tmdbId);
+          }
+          if (rit.seasonNum != null && rit.episodeNum != null) {
+            if (rit.showId) {
+              window._watchedItemIds.delete(String(rit.showId) + ':' + rit.seasonNum + ':' + rit.episodeNum);
+              if (String(rit.showId).startsWith('tmdb:')) {
+                window._watchedItemIds.delete(String(rit.showId).slice(5) + ':' + rit.seasonNum + ':' + rit.episodeNum);
+              } else {
+                window._watchedItemIds.delete('tmdb:' + rit.showId + ':' + rit.seasonNum + ':' + rit.episodeNum);
+              }
+            }
+            if (rit.showTitle) window._watchedItemIds.delete(String(rit.showTitle) + ':' + rit.seasonNum + ':' + rit.episodeNum);
+          }
+        });
+      }
       map['watch-history'].updatedAt = Date.now();
       if (typeof saveLocalCustomListsMap === 'function') saveLocalCustomListsMap(map);
       if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave({ intentionalRemoval: true });
@@ -6642,9 +6667,47 @@ function removeWatchHistoryItemDirect(id, btn) {
       // Next's candidate set -- see syncAiringNextWatchState's own
       // comment (21_client-custom-list-builder.js).
       if (typeof syncAiringNextWatchState === 'function') syncAiringNextWatchState();
+
+      // Removing a watched episode rewinds or updates Continue Watching
+      // for that show (or clears the show from Continue Watching if all its
+      // episodes were removed).
+      const affectedShowIds = new Set();
+      removedItems.forEach((it) => {
+        if (!it) return;
+        const sId = it.showId || (it.type === 'episode' && it.id && String(it.id).includes(':') ? String(it.id).split(':')[0] : null);
+        if (sId) affectedShowIds.add(String(sId));
+        if (String(it.showId || '') === targetId) affectedShowIds.add(targetId);
+      });
+      if (!affectedShowIds.size && targetId) {
+        const cwList = map['continue-watching'] || {};
+        const cwItems = Array.isArray(cwList.items) ? cwList.items : [];
+        if (cwItems.some((it) => it && (String(it.showId || '') === targetId || String(it.id || '') === targetId))) {
+          affectedShowIds.add(targetId);
+        }
+      }
+      if (typeof updateContinueWatching === 'function') {
+        affectedShowIds.forEach((showId) => {
+          updateContinueWatching(showId).catch(() => {});
+        });
+      }
     }
   }
   if (window._rawWatchHistoryItems && Array.isArray(window._rawWatchHistoryItems)) {
+    const rawRemoved = window._rawWatchHistoryItems.filter((it) => it && (String(it.id || it.imdbId) === targetId || String(it.showId || '') === targetId));
+    if (rawRemoved.length && !removedItems.length) {
+      const affectedShowIds = new Set();
+      rawRemoved.forEach((it) => {
+        if (!it) return;
+        const sId = it.showId || (it.type === 'episode' && it.id && String(it.id).includes(':') ? String(it.id).split(':')[0] : null);
+        if (sId) affectedShowIds.add(String(sId));
+        if (String(it.showId || '') === targetId) affectedShowIds.add(targetId);
+      });
+      if (typeof updateContinueWatching === 'function') {
+        affectedShowIds.forEach((showId) => {
+          updateContinueWatching(showId).catch(() => {});
+        });
+      }
+    }
     window._rawWatchHistoryItems = window._rawWatchHistoryItems.filter(it => String(it.id || it.imdbId) !== targetId && String(it.showId || '') !== targetId);
     if (document.getElementById('content-list-details') && !document.getElementById('content-list-details').hidden) {
       // Update the open See All page in place. Rebuilding it -- which is what
