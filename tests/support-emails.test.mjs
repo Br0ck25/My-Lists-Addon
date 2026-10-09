@@ -563,4 +563,47 @@ Content-Type: text/html; charset="us-ascii"
     assert.equal(threadView.body.messages[0].attachments.length, 1);
     assert.equal(threadView.body.messages[0].attachments[0].filename, "chart.png");
   });
+
+  it("normalizes attachment filenames without extensions (e.g. UUIDs) so external email clients can preview them", async () => {
+    const db = makeD1();
+    let sentEmailPayload = null;
+    const mockEmail = {
+      async send(payload) {
+        sentEmailPayload = payload;
+        return { messageId: "uuid-ext-msg-123" };
+      },
+    };
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db, EMAIL: mockEmail });
+    const cookie = await adminCookie(env);
+
+    const samplePngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const composeRes = await call(env, "/admin/api/support-emails/compose", {
+      method: "POST",
+      cookie,
+      json: {
+        toEmail: "eve@example.com",
+        customerName: "Eve",
+        subject: "Screenshot attachment",
+        text: "Here is your screenshot:",
+        attachments: [
+          {
+            filename: "a120c1be-f07e-436f-98c4-0b1a09d6dbcd",
+            type: "image/png",
+            content: "  " + samplePngBase64 + "\n",
+          },
+        ],
+      },
+    });
+
+    assert.equal(composeRes.status, 200);
+    assert.equal(composeRes.body.ok, true);
+    assert.notEqual(sentEmailPayload, null);
+    assert.equal(sentEmailPayload.attachments.length, 1);
+    assert.equal(sentEmailPayload.attachments[0].filename, "a120c1be-f07e-436f-98c4-0b1a09d6dbcd.png");
+    assert.equal(sentEmailPayload.attachments[0].content, samplePngBase64);
+
+    const threadId = composeRes.body.thread.id;
+    const threadView = await call(env, `/admin/api/support-emails/thread?id=${threadId}`, { cookie });
+    assert.equal(threadView.body.messages[0].attachments[0].filename, "a120c1be-f07e-436f-98c4-0b1a09d6dbcd.png");
+  });
 });

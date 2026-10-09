@@ -46,6 +46,27 @@ function escapeHtmlSupport(str) {
     .replace(/'/g, '&#39;');
 }
 
+function ensureImageFilename(filename, mimeType) {
+  const extMap = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/svg+xml': '.svg',
+    'image/bmp': '.bmp',
+  };
+  let fn = String(filename || '').trim();
+  const defExt = extMap[String(mimeType || '').toLowerCase()] || '.png';
+  if (!fn || fn === 'image' || fn === 'blob') {
+    fn = 'attachment_' + Date.now() + defExt;
+  }
+  if (!/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(fn)) {
+    fn = fn + defExt;
+  }
+  return fn;
+}
+
 function parseEmailSender(fromHeader) {
   if (!fromHeader) return { email: '', name: '' };
   const raw = String(fromHeader).trim();
@@ -442,9 +463,27 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
   const storedAttachments = [];
   if (Array.isArray(attachments) && attachments.length > 0) {
     for (const att of attachments) {
-      const mime = att.type || att.mimeType || (att.dataUrl && (att.dataUrl.match(/^data:([^;]+);/) || [])[1]) || 'image/png';
-      const rawBase64 = att.content || (att.dataUrl ? att.dataUrl.replace(/^data:[^;]+;base64,/, '') : '');
-      const fn = att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1) + '.png');
+      let mime = att.type || att.mimeType;
+      if (!mime && att.dataUrl) {
+        const m = String(att.dataUrl).match(/^data:([^;]+);/);
+        if (m) mime = m[1];
+      }
+      if (!mime || mime === 'application/octet-stream') {
+        const rawName = String(att.filename || att.name || '');
+        if (/\.jpe?g$/i.test(rawName)) mime = 'image/jpeg';
+        else if (/\.png$/i.test(rawName)) mime = 'image/png';
+        else if (/\.gif$/i.test(rawName)) mime = 'image/gif';
+        else if (/\.webp$/i.test(rawName)) mime = 'image/webp';
+        else if (/\.svg$/i.test(rawName)) mime = 'image/svg+xml';
+        else mime = 'image/png';
+      }
+
+      let rawBase64 = att.content || att.dataUrl || '';
+      if (typeof rawBase64 === 'string') {
+        rawBase64 = rawBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+      }
+
+      const fn = ensureImageFilename(att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1)), mime);
       if (rawBase64) {
         outgoingAttachments.push({
           filename: fn,
@@ -560,9 +599,27 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
   const storedAttachments = [];
   if (Array.isArray(attachments) && attachments.length > 0) {
     for (const att of attachments) {
-      const mime = att.type || att.mimeType || (att.dataUrl && (att.dataUrl.match(/^data:([^;]+);/) || [])[1]) || 'image/png';
-      const rawBase64 = att.content || (att.dataUrl ? att.dataUrl.replace(/^data:[^;]+;base64,/, '') : '');
-      const fn = att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1) + '.png');
+      let mime = att.type || att.mimeType;
+      if (!mime && att.dataUrl) {
+        const m = String(att.dataUrl).match(/^data:([^;]+);/);
+        if (m) mime = m[1];
+      }
+      if (!mime || mime === 'application/octet-stream') {
+        const rawName = String(att.filename || att.name || '');
+        if (/\.jpe?g$/i.test(rawName)) mime = 'image/jpeg';
+        else if (/\.png$/i.test(rawName)) mime = 'image/png';
+        else if (/\.gif$/i.test(rawName)) mime = 'image/gif';
+        else if (/\.webp$/i.test(rawName)) mime = 'image/webp';
+        else if (/\.svg$/i.test(rawName)) mime = 'image/svg+xml';
+        else mime = 'image/png';
+      }
+
+      let rawBase64 = att.content || att.dataUrl || '';
+      if (typeof rawBase64 === 'string') {
+        rawBase64 = rawBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+      }
+
+      const fn = ensureImageFilename(att.filename || att.name || ('attachment_' + (outgoingAttachments.length + 1)), mime);
       if (rawBase64) {
         outgoingAttachments.push({
           filename: fn,

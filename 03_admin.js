@@ -3048,6 +3048,25 @@ ${UTILITY_CSS}
     </div>
   </div>
 
+  <!-- Support Image Lightbox Modal -->
+  <div id="supportImageLightboxModal" class="modal-overlay" style="display:none;" data-act="closeSupportImageLightboxOnBackdrop">
+    <div class="modal-card" style="max-width:92vw; width:auto; max-height:92vh; padding:12px; display:flex; flex-direction:column; align-items:center; background:var(--surface); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.45); border:1px solid var(--border);">
+      <div class="u-jc-space_between u-ai-center u-mb-8px" style="display:flex; width:100%; gap:12px;">
+        <span id="supportLightboxFilename" class="u-fs-v_font_size_sm u-fw-600 u-c-v_text u-to-ellipsis u-ov-hidden u-ws-nowrap" style="max-width:calc(92vw - 150px);"></span>
+        <div class="u-ai-center u-gap-8px" style="display:flex;">
+          <a id="supportLightboxDownloadLink" href="#" download class="lc-btn secondary" style="padding:4px 10px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;" title="Download image">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Download</span>
+          </a>
+          <button type="button" class="modal-close-x" aria-label="Close image preview" data-act="closeSupportImageLightbox">&#x2715;</button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:center; overflow:hidden; max-height:calc(85vh - 60px); border-radius:8px; background:var(--panel-strong);">
+        <img id="supportLightboxImage" src="" alt="Full view" style="max-width:100%; max-height:calc(85vh - 60px); object-fit:contain; display:block;">
+      </div>
+    </div>
+  </div>
+
   <div class="admin-tab-panel" data-admin-panel="apiusage">
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Requests made using this Worker's own shared API keys (the fallback used whenever a visitor hasn't supplied their own) -- not counting anyone's personal keys, which only they can rate-limit. Watch these against each provider's limit if catalogs start coming back empty or slow.</p>
     <div class="table-wrap">
@@ -6169,6 +6188,7 @@ ${UTILITY_CSS}
     // --- Support Emails Desk ---
     let supportEmailThreads = [];
     let currentSupportThreadId = null;
+    let currentSupportMessages = [];
     let supportEmailFilter = 'all';
     let supportEmailSearchTimeout = null;
     let pendingReplyAttachments = [];
@@ -6296,9 +6316,9 @@ ${UTILITY_CSS}
       }
       container.style.display = 'flex';
       container.innerHTML = list.map((item, idx) => {
-        return '<div style="position:relative; width:72px; height:72px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:var(--panel-strong);">' +
+        return '<div style="position:relative; width:72px; height:72px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:var(--panel-strong); cursor:zoom-in;" title="Click to view larger" data-act="openPendingAttachmentLightbox" data-act-args="' + adminActAttr([type, idx]) + '">' +
           '<img src="' + item.dataUrl + '" style="width:100%; height:100%; object-fit:cover; display:block;">' +
-          '<button type="button" class="lc-btn danger" style="position:absolute; top:2px; right:2px; width:20px; height:20px; min-height:20px; padding:0; font-size:12px; border-radius:50%; line-height:1;" data-act="removePendingAttachment" data-act-args="' + adminActAttr([type, idx]) + '" title="Remove image">&times;</button>' +
+          '<button type="button" class="lc-btn danger" style="position:absolute; top:2px; right:2px; width:20px; height:20px; min-height:20px; padding:0; font-size:12px; border-radius:50%; line-height:1;" data-act="removePendingAttachment" data-act-args="' + adminActAttr([type, idx]) + '" title="Remove image" data-act-stop>&times;</button>' +
         '</div>';
       }).join('');
     }
@@ -6314,6 +6334,27 @@ ${UTILITY_CSS}
     }
     window.removePendingAttachment = removePendingAttachment;
 
+    function ensureImageFilenameAdmin(filename, mimeType) {
+      const extMap = {
+        'image/png': '.png',
+        'image/jpeg': '.jpg',
+        'image/jpg': '.jpg',
+        'image/gif': '.gif',
+        'image/webp': '.webp',
+        'image/svg+xml': '.svg',
+        'image/bmp': '.bmp',
+      };
+      let fn = String(filename || '').trim();
+      const defExt = extMap[String(mimeType || '').toLowerCase()] || '.png';
+      if (!fn || fn === 'image' || fn === 'blob') {
+        fn = 'image_' + Date.now() + defExt;
+      }
+      if (!new RegExp('\\.(png|jpe?g|gif|webp|svg|bmp)$', 'i').test(fn)) {
+        fn = fn + defExt;
+      }
+      return fn;
+    }
+
     function addFilesToPending(files, type) {
       if (!files || !files.length) return;
       const targetList = (type === 'reply') ? pendingReplyAttachments : pendingComposeAttachments;
@@ -6323,10 +6364,11 @@ ${UTILITY_CSS}
           showAdminAlert('Image Too Large', 'Images must be under 5MB.', false);
           return;
         }
+        const cleanName = ensureImageFilenameAdmin(file.name, file.type);
         const reader = new FileReader();
         reader.onload = (e) => {
           targetList.push({
-            filename: file.name || ('screenshot_' + Date.now() + '.png'),
+            filename: cleanName,
             type: file.type,
             dataUrl: e.target.result,
             size: file.size,
@@ -6395,6 +6437,7 @@ ${UTILITY_CSS}
 
         const t = data.thread;
         const messages = data.messages || [];
+        currentSupportMessages = messages;
 
         // Update active header
         const subjEl = document.getElementById('supportActiveSubject');
@@ -6435,11 +6478,16 @@ ${UTILITY_CSS}
                   m.attachments.map((att, attIdx) => {
                     const fn = att.filename || ('image_' + (attIdx + 1) + '.png');
                     const szStr = att.size ? (' (' + Math.round(att.size / 1024) + ' KB)') : '';
-                    return '<div style="max-width:140px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface);">' +
-                      '<a href="' + (att.dataUrl || '#') + '" target="_blank" rel="noopener noreferrer" style="display:block; text-decoration:none;" download="' + escapeHtmlAdmin(fn) + '">' +
-                        '<img src="' + (att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:80px; object-fit:cover; display:block;" loading="lazy">' +
-                        '<div class="u-fs-v_font_size_xs u-p-4px_6px u-to-ellipsis u-ov-hidden u-ws-nowrap u-c-v_text" title="' + escapeHtmlAdmin(fn + szStr) + '">' + escapeHtmlAdmin(fn) + '</div>' +
-                      '</a>' +
+                    return '<div style="width:130px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column;">' +
+                      '<div style="width:100%; height:80px; overflow:hidden; cursor:zoom-in; background:var(--panel-strong); position:relative;" title="Click to view larger" data-act="openSupportMessageAttachmentLightbox" data-act-args="' + adminActAttr([m.id, attIdx]) + '">' +
+                        '<img src="' + (att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:100%; object-fit:cover; display:block;" loading="lazy">' +
+                      '</div>' +
+                      '<div class="u-jc-space_between u-ai-center u-p-4px_6px" style="display:flex; gap:4px; border-top:1px solid var(--border); background:var(--surface);">' +
+                        '<span class="u-fs-v_font_size_xs u-to-ellipsis u-ov-hidden u-ws-nowrap u-c-v_text u-flex-1" title="' + escapeHtmlAdmin(fn + szStr) + '">' + escapeHtmlAdmin(fn) + '</span>' +
+                        '<a href="' + (att.dataUrl || '#') + '" download="' + escapeHtmlAdmin(fn) + '" target="_blank" rel="noopener noreferrer" style="color:var(--muted); display:inline-flex; align-items:center; text-decoration:none; padding:2px;" title="Download ' + escapeHtmlAdmin(fn) + '">' +
+                          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+                        '</a>' +
+                      '</div>' +
                     '</div>';
                   }).join('') +
                 '</div>' +
@@ -6659,6 +6707,63 @@ ${UTILITY_CSS}
       }
     }
     window.sendComposedEmailBtn = sendComposedEmailBtn;
+
+    function openSupportMessageAttachmentLightbox(messageId, attIdx) {
+      const msg = currentSupportMessages.find((m) => m.id === messageId);
+      if (!msg || !msg.attachments || !msg.attachments[attIdx]) return;
+      const att = msg.attachments[attIdx];
+      openSupportImageLightbox(att.dataUrl, att.filename || 'image.png');
+    }
+    window.openSupportMessageAttachmentLightbox = openSupportMessageAttachmentLightbox;
+
+    function openPendingAttachmentLightbox(type, idx) {
+      const list = (type === 'reply') ? pendingReplyAttachments : pendingComposeAttachments;
+      if (!list || !list[idx]) return;
+      const att = list[idx];
+      openSupportImageLightbox(att.dataUrl, att.filename || 'image.png');
+    }
+    window.openPendingAttachmentLightbox = openPendingAttachmentLightbox;
+
+    function openSupportImageLightbox(dataUrl, filename) {
+      const modal = document.getElementById('supportImageLightboxModal');
+      const img = document.getElementById('supportLightboxImage');
+      const fnEl = document.getElementById('supportLightboxFilename');
+      const dlLink = document.getElementById('supportLightboxDownloadLink');
+      if (!modal || !img) return;
+      img.src = dataUrl || '';
+      if (fnEl) fnEl.textContent = filename || 'Image preview';
+      if (dlLink) {
+        dlLink.href = dataUrl || '#';
+        dlLink.download = filename || 'image.png';
+      }
+      modal.style.display = 'flex';
+    }
+    window.openSupportImageLightbox = openSupportImageLightbox;
+
+    function closeSupportImageLightbox() {
+      const modal = document.getElementById('supportImageLightboxModal');
+      const img = document.getElementById('supportLightboxImage');
+      if (modal) modal.style.display = 'none';
+      if (img) img.src = '';
+    }
+    window.closeSupportImageLightbox = closeSupportImageLightbox;
+
+    function closeSupportImageLightboxOnBackdrop(ev) {
+      const modal = document.getElementById('supportImageLightboxModal');
+      if (ev && ev.target === modal) {
+        closeSupportImageLightbox();
+      }
+    }
+    window.closeSupportImageLightboxOnBackdrop = closeSupportImageLightboxOnBackdrop;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const lightbox = document.getElementById('supportImageLightboxModal');
+        if (lightbox && lightbox.style.display !== 'none') {
+          closeSupportImageLightbox();
+        }
+      }
+    });
   </script>
 </body></html>`;
 }
