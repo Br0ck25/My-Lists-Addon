@@ -303,4 +303,93 @@ describe("support emails: Admin API & Cloudflare Email Sending", () => {
     const deletedMsgs = (await db.prepare("SELECT * FROM support_messages WHERE thread_id = ?").bind(threadId).all()).results;
     assert.equal(deletedMsgs.length, 0);
   });
+
+  it("correctly parses real Gmail and Hotmail multipart MIME bodies without exposing boundaries", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+
+    // Gmail email with body-only boundary markers
+    const gmailRaw = `--000000000000847865065d6dbcd2
+Content-Type: text/plain; charset="UTF-8"
+
+is this working?
+
+--000000000000847865065d6dbcd2
+Content-Type: text/html; charset="UTF-8"
+
+<div dir="ltr">is this working?</div>
+
+--000000000000847865065d6dbcd2--`;
+
+    const rawBytes = new TextEncoder().encode(gmailRaw);
+    const headersMap = new Map([
+      ["from", "jamesbrock2011@gmail.com"],
+      ["to", "support@mylistsaddon.com"],
+      ["subject", "support"],
+      ["content-type", 'multipart/alternative; boundary="000000000000847865065d6dbcd2"'],
+    ]);
+    const emailMsg = {
+      from: "jamesbrock2011@gmail.com",
+      to: "support@mylistsaddon.com",
+      headers: {
+        get(k) {
+          return headersMap.get(String(k).toLowerCase()) || null;
+        },
+      },
+      raw: new ReadableStream({
+        start(controller) {
+          controller.enqueue(rawBytes);
+          controller.close();
+        },
+      }),
+    };
+
+    await worker.email(emailMsg, env, {});
+
+    const msgs = (await db.prepare("SELECT * FROM support_messages WHERE from_email = ?").bind("jamesbrock2011@gmail.com").all()).results;
+    assert.equal(msgs.length, 1);
+    assert.equal(msgs[0].body_text, "is this working?");
+    assert.doesNotMatch(msgs[0].body_text, /--000000000000847865065d6dbcd2/);
+    assert.doesNotMatch(msgs[0].body_text, /Content-Type:/i);
+  });
+
+  it("auto-cleans previously stored unparsed MIME messages when viewing thread", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    const cookie = await adminCookie(env);
+
+    const threadId = "th_legacy_test";
+    const msgId = "msg_legacy_test";
+    const rawUnparsed = `--_000_SN6PR06MB4848950C8B0B98ADF8917273CF922SN6PR06MB4848namp_
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+Yes it worked
+________________________________
+From: support@mylistsaddon.com
+
+--_000_SN6PR06MB4848950C8B0B98ADF8917273CF922SN6PR06MB4848namp_
+Content-Type: text/html; charset="us-ascii"
+
+<html>Yes it worked</html>
+--_000_SN6PR06MB4848950C8B0B98ADF8917273CF922SN6PR06MB4848namp_--`;
+
+    await db.prepare("INSERT INTO support_threads (id, customer_email, subject, status, unread, created_at, updated_at, last_message_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(threadId, "jamesbrock25@hotmail.com", "Testing", "open", 1, Date.now(), Date.now(), Date.now()).run();
+
+    await db.prepare("INSERT INTO support_messages (id, thread_id, direction, from_email, to_email, subject, body_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(msgId, threadId, "inbound", "jamesbrock25@hotmail.com", "support@mylistsaddon.com", "Testing", rawUnparsed, Date.now()).run();
+
+    // Fetch thread via admin API
+    const res = await call(env, `/admin/api/support-emails/thread?id=${threadId}`, { cookie });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.messages.length, 1);
+    assert.equal(res.body.messages[0].body_text, "Yes it worked");
+    assert.doesNotMatch(res.body.messages[0].body_text, /_000_SN6PR06MB/);
+
+    // Verify D1 was auto-healed in place
+    const healed = await db.prepare("SELECT body_text FROM support_messages WHERE id = ?").bind(msgId).first();
+    assert.equal(healed.body_text, "Yes it worked");
+  });
 });

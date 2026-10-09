@@ -79,11 +79,13 @@ function parseMimeEmail(rawText, headers) {
     html: '',
   };
 
+  let contentTypeHeader = '';
   if (headers && typeof headers.get === 'function') {
     result.subject = headers.get('subject') || '';
     result.messageId = headers.get('message-id') || '';
     result.inReplyTo = headers.get('in-reply-to') || '';
     result.references = headers.get('references') || '';
+    contentTypeHeader = headers.get('content-type') || '';
     const fromSender = parseEmailSender(headers.get('from'));
     result.fromEmail = fromSender.email;
     result.fromName = fromSender.name;
@@ -93,73 +95,99 @@ function parseMimeEmail(rawText, headers) {
 
   if (!rawText || typeof rawText !== 'string') return result;
 
-  // Split headers and body of the raw message if top-level headers were missing
+  // Split headers and body of the raw message if top-level headers were present in rawText
   const splitIdx = rawText.search(/\r?\n\r?\n/);
   let rawBody = rawText;
+  let headerBlock = '';
   if (splitIdx !== -1) {
-    const headerBlock = rawText.slice(0, splitIdx);
-    rawBody = rawText.slice(splitIdx).replace(/^\r?\n\r?\n/, '');
+    const candidateHeader = rawText.slice(0, splitIdx);
+    if (/^(?:from|to|subject|date|message-id|received|mime-version|content-type):/im.test(candidateHeader)) {
+      headerBlock = candidateHeader;
+      rawBody = rawText.slice(splitIdx).replace(/^\r?\n\r?\n/, '');
 
-    if (!result.subject) {
-      const m = headerBlock.match(/^subject:\s*(.*)$/im);
-      if (m) result.subject = m[1].trim();
-    }
-    if (!result.fromEmail) {
-      const m = headerBlock.match(/^from:\s*(.*)$/im);
-      if (m) {
-        const s = parseEmailSender(m[1]);
-        result.fromEmail = s.email;
-        result.fromName = s.name;
+      if (!result.subject) {
+        const m = headerBlock.match(/^subject:\s*(.*)$/im);
+        if (m) result.subject = m[1].trim();
       }
-    }
-    if (!result.toEmail) {
-      const m = headerBlock.match(/^to:\s*(.*)$/im);
-      if (m) result.toEmail = parseEmailSender(m[1]).email;
-    }
-    if (!result.messageId) {
-      const m = headerBlock.match(/^message-id:\s*(.*)$/im);
-      if (m) result.messageId = m[1].trim();
-    }
-    if (!result.inReplyTo) {
-      const m = headerBlock.match(/^in-reply-to:\s*(.*)$/im);
-      if (m) result.inReplyTo = m[1].trim();
+      if (!result.fromEmail) {
+        const m = headerBlock.match(/^from:\s*(.*)$/im);
+        if (m) {
+          const s = parseEmailSender(m[1]);
+          result.fromEmail = s.email;
+          result.fromName = s.name;
+        }
+      }
+      if (!result.toEmail) {
+        const m = headerBlock.match(/^to:\s*(.*)$/im);
+        if (m) result.toEmail = parseEmailSender(m[1]).email;
+      }
+      if (!result.messageId) {
+        const m = headerBlock.match(/^message-id:\s*(.*)$/im);
+        if (m) result.messageId = m[1].trim();
+      }
+      if (!result.inReplyTo) {
+        const m = headerBlock.match(/^in-reply-to:\s*(.*)$/im);
+        if (m) result.inReplyTo = m[1].trim();
+      }
+      if (!contentTypeHeader) {
+        const ct = headerBlock.match(/^content-type:\s*([^\r\n]+(?:\r?\n[ \t]+[^\r\n]+)*)/im);
+        if (ct) contentTypeHeader = ct[1].replace(/\r?\n[ \t]+/g, ' ');
+      }
     }
   }
 
-  // Parse Content-Type and boundary
+  // Find boundary from: 1) content-type header, 2) rawText header block, 3) auto-detect from body markers
   let boundary = null;
-  const contentTypeMatch = rawText.match(/content-type:\s*([^;\r\n]+)(?:;\s*boundary=(?:"([^"]+)"|([^\s;\r\n]+)))?/i);
-  if (contentTypeMatch && (contentTypeMatch[2] || contentTypeMatch[3])) {
-    boundary = contentTypeMatch[2] || contentTypeMatch[3];
+  if (contentTypeHeader) {
+    const m = contentTypeHeader.match(/boundary=(?:"([^"]+)"|([^\s;]+))/i);
+    if (m) boundary = m[1] || m[2];
+  }
+  if (!boundary && headerBlock) {
+    const m = headerBlock.match(/boundary=(?:"([^"]+)"|([^\s;\r\n]+))/i);
+    if (m) boundary = m[1] || m[2];
+  }
+  if (!boundary) {
+    const bodyMatch = rawBody.match(/(?:^|\r?\n)--([a-zA-Z0-9'()+_,-./:=?]{6,100})\r?\ncontent-type:\s*/i);
+    if (bodyMatch) boundary = bodyMatch[1];
   }
 
   if (boundary) {
-    // Multipart message
-    const parts = rawBody.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    for (const part of parts) {
-      if (!part || part.trim() === '--' || part.trim() === '') continue;
-      const partSplit = part.search(/\r?\n\r?\n/);
-      if (partSplit === -1) continue;
-      const partHeader = part.slice(0, partSplit);
-      let partBody = part.slice(partSplit).replace(/^\r?\n\r?\n/, '').replace(/\r?\n$/, '');
+    function processMultipart(bodyStr, bnd) {
+      const boundaryDelimiter = '--' + bnd;
+      const parts = bodyStr.split(new RegExp(boundaryDelimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      for (const part of parts) {
+        if (!part || part.trim() === '--' || part.trim() === '') continue;
+        const partSplit = part.search(/\r?\n\r?\n/);
+        if (partSplit === -1) continue;
+        const partHeader = part.slice(0, partSplit);
+        let partBody = part.slice(partSplit).replace(/^\r?\n\r?\n/, '').replace(/\r?\n$/, '');
 
-      const isHtml = /content-type:\s*text\/html/i.test(partHeader);
-      const isPlain = /content-type:\s*text\/plain/i.test(partHeader);
-      const isBase64 = /content-transfer-encoding:\s*base64/i.test(partHeader);
-      const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(partHeader);
+        const nestedMatch = partHeader.match(/content-type:\s*multipart\/[^;\r\n]+(?:[^\r\n]*?boundary=(?:"([^"]+)"|([^\s;]+)))?/i);
+        if (nestedMatch && (nestedMatch[1] || nestedMatch[2])) {
+          processMultipart(partBody, nestedMatch[1] || nestedMatch[2]);
+          continue;
+        }
 
-      let decoded = partBody;
-      if (isBase64) decoded = decodeBase64ToText(partBody);
-      else if (isQp) decoded = decodeQuotedPrintableText(partBody);
+        const isHtml = /content-type:\s*text\/html/i.test(partHeader);
+        const isPlain = /content-type:\s*text\/plain/i.test(partHeader);
+        const isBase64 = /content-transfer-encoding:\s*base64/i.test(partHeader);
+        const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(partHeader);
 
-      if (isPlain && !result.text) result.text = decoded.trim();
-      else if (isHtml && !result.html) result.html = decoded.trim();
+        let decoded = partBody;
+        if (isBase64) decoded = decodeBase64ToText(partBody);
+        else if (isQp) decoded = decodeQuotedPrintableText(partBody);
+
+        if (isPlain && !result.text) result.text = decoded.trim();
+        else if (isHtml && !result.html) result.html = decoded.trim();
+      }
     }
+
+    processMultipart(rawBody, boundary);
   } else {
     // Single-part message
-    const isBase64 = /content-transfer-encoding:\s*base64/i.test(rawText.slice(0, 1000));
-    const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(rawText.slice(0, 1000));
-    const isHtml = /content-type:\s*text\/html/i.test(rawText.slice(0, 1000));
+    const isBase64 = /content-transfer-encoding:\s*base64/i.test((headerBlock || rawText).slice(0, 1000));
+    const isQp = /content-transfer-encoding:\s*quoted-printable/i.test((headerBlock || rawText).slice(0, 1000));
+    const isHtml = /content-type:\s*text\/html/i.test((headerBlock || rawText).slice(0, 1000));
 
     let decoded = rawBody;
     if (isBase64) decoded = decodeBase64ToText(rawBody);
@@ -528,6 +556,21 @@ async function handleSupportEmailsApi(path, request, env) {
         'SELECT * FROM support_messages WHERE thread_id = ? ORDER BY created_at ASC'
       ).bind(threadId).all();
       const messages = (msgRows && Array.isArray(msgRows.results)) ? msgRows.results : [];
+
+      // Auto-clean any unparsed raw MIME messages that were previously saved
+      for (const m of messages) {
+        if (m.body_text && /(?:^|\r?\n)--[a-zA-Z0-9'()+_,-./:=?]{6,100}\r?\ncontent-type:\s*/i.test(m.body_text)) {
+          const cleaned = parseMimeEmail(m.body_text);
+          if (cleaned.text) {
+            m.body_text = cleaned.text;
+            if (cleaned.html && !m.body_html) m.body_html = cleaned.html;
+            try {
+              await env.DB.prepare('UPDATE support_messages SET body_text = ?, body_html = COALESCE(body_html, ?) WHERE id = ?')
+                .bind(m.body_text, cleaned.html || null, m.id).run();
+            } catch (err) {}
+          }
+        }
+      }
 
       return json({ ok: true, thread, messages }, 200, { 'Cache-Control': 'no-store' });
     } catch (e) {

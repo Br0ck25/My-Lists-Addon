@@ -2947,10 +2947,10 @@ ${UTILITY_CSS}
     <!-- Filter & Search Toolbar -->
     <div class="panel u-p-10px_14px u-mb-14px u-ai-center u-jc-space_between u-fw2-wrap u-gap-10px" style="display:flex;">
       <div class="u-ai-center u-gap-6px u-fw2-wrap" style="display:flex;" id="supportEmailFilterGroup">
-        <button type="button" class="subnav-pill active" data-act="filterSupportEmails" data-act-args="${adminActArgs(['all'])}">All</button>
-        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['open'])}">Open</button>
-        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['replied'])}">Replied</button>
-        <button type="button" class="subnav-pill" data-act="filterSupportEmails" data-act-args="${adminActArgs(['closed'])}">Closed</button>
+        <button type="button" class="subnav-pill active" data-status="all" data-act="filterSupportEmails" data-act-args="${adminActArgs(['all'])}">All</button>
+        <button type="button" class="subnav-pill" data-status="open" data-act="filterSupportEmails" data-act-args="${adminActArgs(['open'])}">Open</button>
+        <button type="button" class="subnav-pill" data-status="replied" data-act="filterSupportEmails" data-act-args="${adminActArgs(['replied'])}">Replied</button>
+        <button type="button" class="subnav-pill" data-status="closed" data-act="filterSupportEmails" data-act-args="${adminActArgs(['closed'])}">Closed</button>
       </div>
       <div class="u-ai-center u-gap-8px u-flex-1 u-maxw-340px" style="display:flex;">
         <input type="text" id="supportEmailSearchInput" class="admin-select u-flex-1 u-m-0" placeholder="Search by email, name or subject..." data-act="onSupportEmailSearchInput" data-act-on="input">
@@ -6156,9 +6156,38 @@ ${UTILITY_CSS}
     let supportEmailFilter = 'all';
     let supportEmailSearchTimeout = null;
 
+    try {
+      const savedFilter = localStorage.getItem('myListAddon:supportEmailFilter');
+      if (savedFilter && ['all', 'open', 'replied', 'closed'].includes(savedFilter)) {
+        supportEmailFilter = savedFilter;
+      }
+      const savedThread = localStorage.getItem('myListAddon:supportActiveThreadId');
+      if (savedThread) {
+        currentSupportThreadId = savedThread;
+      }
+    } catch (e) {}
+
+    function syncSupportEmailFilterUI() {
+      const group = document.getElementById('supportEmailFilterGroup');
+      if (group) {
+        group.querySelectorAll('.subnav-pill').forEach((btn) => {
+          const btnStatus = btn.getAttribute('data-status') || btn.textContent.trim().toLowerCase();
+          btn.classList.toggle('active', btnStatus === supportEmailFilter);
+        });
+      }
+    }
+
     async function loadSupportEmailThreads() {
       const listEl = document.getElementById('supportEmailThreadList');
       if (!listEl) return;
+      try {
+        const savedFilter = localStorage.getItem('myListAddon:supportEmailFilter');
+        if (savedFilter && ['all', 'open', 'replied', 'closed'].includes(savedFilter)) {
+          supportEmailFilter = savedFilter;
+        }
+      } catch (e) {}
+      syncSupportEmailFilterUI();
+
       const q = (document.getElementById('supportEmailSearchInput') && document.getElementById('supportEmailSearchInput').value || '').trim();
       const url = '/admin/api/support-emails/threads?status=' + encodeURIComponent(supportEmailFilter) + (q ? '&q=' + encodeURIComponent(q) : '');
 
@@ -6182,6 +6211,11 @@ ${UTILITY_CSS}
         }
 
         renderSupportEmailThreadList();
+
+        // Restore active thread if it exists in current thread list
+        if (currentSupportThreadId && supportEmailThreads.some((t) => t.id === currentSupportThreadId)) {
+          selectSupportEmailThread(currentSupportThreadId);
+        }
       } catch (err) {
         listEl.innerHTML = '<div class="u-p-12px u-c-v_color_danger_text u-fs-v_font_size_sm">Network error loading emails.</div>';
       }
@@ -6216,13 +6250,10 @@ ${UTILITY_CSS}
 
     function filterSupportEmails(status) {
       supportEmailFilter = status;
-      const group = document.getElementById('supportEmailFilterGroup');
-      if (group) {
-        group.querySelectorAll('.subnav-pill').forEach((btn) => {
-          const btnStatus = btn.textContent.trim().toLowerCase();
-          btn.classList.toggle('active', btnStatus === status);
-        });
-      }
+      try {
+        localStorage.setItem('myListAddon:supportEmailFilter', status);
+      } catch (e) {}
+      syncSupportEmailFilterUI();
       loadSupportEmailThreads();
     }
     window.filterSupportEmails = filterSupportEmails;
@@ -6237,6 +6268,9 @@ ${UTILITY_CSS}
 
     async function selectSupportEmailThread(threadId) {
       currentSupportThreadId = threadId;
+      try {
+        localStorage.setItem('myListAddon:supportActiveThreadId', threadId);
+      } catch (e) {}
       renderSupportEmailThreadList();
 
       const emptyBox = document.getElementById('supportEmailEmptyDetail');
@@ -6395,6 +6429,9 @@ ${UTILITY_CSS}
           if (data && data.ok) {
             supportEmailThreads = supportEmailThreads.filter((t) => t.id !== currentSupportThreadId);
             currentSupportThreadId = null;
+            try {
+              localStorage.removeItem('myListAddon:supportActiveThreadId');
+            } catch (e) {}
             const emptyBox = document.getElementById('supportEmailEmptyDetail');
             const activeBox = document.getElementById('supportEmailActiveDetail');
             if (emptyBox) emptyBox.style.display = 'block';
