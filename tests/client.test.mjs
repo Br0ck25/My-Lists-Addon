@@ -5997,10 +5997,27 @@ describe("client: signed out, only the site's public lists", () => {
     const html = client.get("document").getElementById("result").innerHTML;
     // Nuvio parses addon deep links as nuvio://<host>/<path> (replacing https:// with nuvio://),
     // opening Addons Settings in Nuvio and auto-installing the addon (same as TopX).
+    // The button also runs copyNuvioInstallLink on click so the manifest URL is copied just in case.
     assert.match(html, /href="nuvio:\/\/[^"]+\/cfg123\/manifest\.json"/);
+    assert.match(html, /data-act="copyNuvioInstallLink"/);
     assert.match(html, /stremio:\/\//);
     assert.match(html, /data-act="openNuvioWeb"/);
     assert.match(html, /https:\/\/nuvio\.tv\/account\?tab=addons/);
+  });
+
+  it("copyNuvioInstallLink copies manifest and displays confirmation toast", async () => {
+    const client = loadClient();
+    let copiedText = null;
+    client.get("window").navigator.clipboard = {
+      writeText: async (t) => { copiedText = t; },
+    };
+    let toastMessage = null;
+    let toastKind = null;
+    client.set("showToast", (msg, kind) => { toastMessage = msg; toastKind = kind; });
+    client.call("copyNuvioInstallLink", "https://example.com/cfg123/manifest.json");
+    assert.equal(copiedText, "https://example.com/cfg123/manifest.json");
+    assert.equal(toastMessage, "Manifest link copied to clipboard.");
+    assert.equal(toastKind, "success");
   });
 });
 

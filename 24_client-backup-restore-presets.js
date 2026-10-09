@@ -1873,10 +1873,20 @@ function openNuvioWeb(url) {
   window.open('https://nuvio.tv/account?tab=addons', '_blank', 'noopener,noreferrer');
 }
 
+// Copies the manifest link to the clipboard and shows toast feedback so the user
+// has the link ready to paste in Nuvio settings if needed.
+function copyNuvioInstallLink(url) {
+  if (!url) return;
+  copyLink(url);
+  showToast('Manifest link copied to clipboard.', 'success');
+}
+window.copyNuvioInstallLink = copyNuvioInstallLink;
+
 // Nuvio parses addon deep links as nuvio://<host>/<path> (replacing https:// with nuvio://),
 // navigating to Addons Settings and automatically installing the addon.
 function openNuvioApp(url) {
   if (!url) return;
+  copyNuvioInstallLink(url);
   const nuvioUrl = String(url).replace(/^https?:\\/\\//i, 'nuvio://');
   window.location.href = nuvioUrl;
 }
@@ -2070,7 +2080,7 @@ async function generate() {
         <a href="\${stremioInstallUrl}" class="btn-stremio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
           Install in Stremio
         </a>
-        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" style="display:inline-flex;">
+        <a href="\${nuvioInstallUrl}" class="btn-nuvio u-flex-1 u-minw-140px u-p-10px_16px u-fw-700 u-br-v_radius_pill u-ta-center u-td-none u-ai-center u-jc-center u-fs-v_font_size_base" data-act="copyNuvioInstallLink" data-act-args="\${appActArgs([installUrl])}" style="display:inline-flex;">
           Install in Nuvio
         </a>
         <a href="\${stremioWebUrl}" target="_blank" rel="noopener noreferrer" class="secondary u-ai-center u-jc-center u-p-10px_16px u-fw-600 u-br-v_radius_pill u-ta-center u-fs-v_font_size_sm u-td-none" style="display:inline-flex;">
