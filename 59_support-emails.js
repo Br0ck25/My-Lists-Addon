@@ -36,6 +36,15 @@ function decodeBase64ToText(str) {
   }
 }
 
+// Outbound attachments go to env.EMAIL.send() as raw bytes, not a base64 string:
+// mail clients (Outlook) showed "couldn't open the image file" for the string form.
+function base64ToBytesSupport(b64) {
+  const binary = atob(String(b64).replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 function escapeHtmlSupport(str) {
   if (str == null) return '';
   return String(str)
@@ -489,7 +498,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
           filename: fn,
           type: mime,
           contentType: mime,
-          content: rawBase64,
+          content: base64ToBytesSupport(rawBase64),
           disposition: att.disposition || 'attachment',
         });
         storedAttachments.push({
@@ -625,7 +634,7 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
           filename: fn,
           type: mime,
           contentType: mime,
-          content: rawBase64,
+          content: base64ToBytesSupport(rawBase64),
           disposition: att.disposition || 'attachment',
         });
         storedAttachments.push({

@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cb5e6ed9d4";
+const WORKER_BUILD = "c049ab4fb6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -115325,6 +115325,15 @@ function decodeBase64ToText(str) {
   }
 }
 
+// Outbound attachments go to env.EMAIL.send() as raw bytes, not a base64 string:
+// mail clients (Outlook) showed "couldn't open the image file" for the string form.
+function base64ToBytesSupport(b64) {
+  const binary = atob(String(b64).replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 function escapeHtmlSupport(str) {
   if (str == null) return '';
   return String(str)
@@ -115778,7 +115787,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
           filename: fn,
           type: mime,
           contentType: mime,
-          content: rawBase64,
+          content: base64ToBytesSupport(rawBase64),
           disposition: att.disposition || 'attachment',
         });
         storedAttachments.push({
@@ -115914,7 +115923,7 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
           filename: fn,
           type: mime,
           contentType: mime,
-          content: rawBase64,
+          content: base64ToBytesSupport(rawBase64),
           disposition: att.disposition || 'attachment',
         });
         storedAttachments.push({

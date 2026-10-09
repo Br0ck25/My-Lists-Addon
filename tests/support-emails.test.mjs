@@ -509,7 +509,7 @@ Content-Type: text/html; charset="us-ascii"
     assert.equal(sentEmailPayload.attachments.length, 1);
     assert.equal(sentEmailPayload.attachments[0].filename, "guide.png");
     assert.equal(sentEmailPayload.attachments[0].type, "image/png");
-    assert.equal(sentEmailPayload.attachments[0].content, samplePngBase64);
+    assert.equal(Buffer.from(sentEmailPayload.attachments[0].content).toString("base64"), samplePngBase64);
 
     // Verify thread conversation includes the outbound attachment
     const threadView = await call(env, `/admin/api/support-emails/thread?id=${thread.id}`, { cookie });
@@ -600,7 +600,7 @@ Content-Type: text/html; charset="us-ascii"
     assert.notEqual(sentEmailPayload, null);
     assert.equal(sentEmailPayload.attachments.length, 1);
     assert.equal(sentEmailPayload.attachments[0].filename, "a120c1be-f07e-436f-98c4-0b1a09d6dbcd.png");
-    assert.equal(sentEmailPayload.attachments[0].content, samplePngBase64);
+    assert.equal(Buffer.from(sentEmailPayload.attachments[0].content).toString("base64"), samplePngBase64);
 
     const threadId = composeRes.body.thread.id;
     const threadView = await call(env, `/admin/api/support-emails/thread?id=${threadId}`, { cookie });
