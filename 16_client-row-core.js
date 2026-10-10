@@ -1603,6 +1603,46 @@ function showAddedToast(msg) {
   showToast(msg || 'Added to My Catalogs \u2713', 'success');
 }
 
+// Unified clipboard copy helper with fallback and button feedback
+async function copyTextToClipboard(text, options = {}) {
+  const { btn, toastMessage, successText = 'Copied \u2713', resetDelay = 2000 } = options;
+  let copied = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch (e) {
+      copied = false;
+    }
+  }
+  if (!copied) {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+    } catch (e) {
+      copied = false;
+    }
+  }
+  if (copied) {
+    if (btn) {
+      const origText = btn.textContent;
+      btn.textContent = successText;
+      setTimeout(() => { if (btn) btn.textContent = origText; }, resetDelay);
+    }
+    if (toastMessage) {
+      showAddedToast(toastMessage);
+    }
+  }
+  return copied;
+}
+
 function debounce(fn, delayMs = 300) {
   let timer = null;
   const debounced = function(...args) {
@@ -2619,46 +2659,6 @@ function requireSignedInFor(what) {
   return false;
 }
 
-function confirmDialog(message, title = 'Confirm Action', confirmBtnText = 'Confirm', isDanger = true) {
-  return new Promise((resolve) => {
-    let resolved = false;
-    const finish = (result) => {
-      if (!resolved) {
-        resolved = true;
-        resolve(result);
-      }
-    };
-    showAppConfirm(title, message, confirmBtnText, () => finish(true), isDanger);
-    const overlay = document.getElementById('activeModalOverlay');
-    if (overlay) {
-      const cancelBtn = overlay.querySelector('button.secondary');
-      if (cancelBtn) {
-        cancelBtn.onclick = () => {
-          closeModal();
-          finish(false);
-        };
-      }
-      const closeBtn = overlay.querySelector('.action-btn[aria-label="Close"]');
-      if (closeBtn) {
-        closeBtn.onclick = () => {
-          closeModal();
-          finish(false);
-        };
-      }
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) finish(false);
-      });
-      const onKey = (e) => {
-        if (e.key === 'Escape') {
-          document.removeEventListener('keydown', onKey, true);
-          finish(false);
-        }
-      };
-      document.addEventListener('keydown', onKey, true);
-    }
-  });
-}
-
 function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
@@ -2693,25 +2693,6 @@ function showAppPrompt(title, message, defaultValue, onConfirm) {
   }
 }
 
-function promptDialog(title, message, defaultValue = '') {
-  return new Promise((resolve) => {
-    let resolved = false;
-    showAppPrompt(title, message, defaultValue, (val) => {
-      resolved = true;
-      resolve(val);
-    });
-    const overlay = document.getElementById('activeModalOverlay');
-    if (overlay) {
-      const cancelBtn = overlay.querySelector('button.secondary');
-      if (cancelBtn) {
-        cancelBtn.onclick = () => {
-          closeModal();
-          if (!resolved) { resolved = true; resolve(null); }
-        };
-      }
-    }
-  });
-}
 
 function restoreActiveTab() {
   const p = (typeof location !== 'undefined' && location.pathname) ? location.pathname : '';

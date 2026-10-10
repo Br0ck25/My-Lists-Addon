@@ -785,6 +785,25 @@ function jsonPrivate(data, status = 200, extraHeaders = {}) {
   return json(data, status, { "Cache-Control": "no-store", ...extraHeaders });
 }
 
+// Canonical 401 response helper for unauthenticated or unauthorized requests.
+function jsonUnauthorized(extraHeaders = {}) {
+  return json({ ok: false, error: "Not authorized." }, 401, extraHeaders);
+}
+
+// Canonical 400 response helper for malformed JSON request bodies.
+function jsonInvalidBody(extraHeaders = {}) {
+  return json({ ok: false, error: "Invalid JSON body." }, 400, extraHeaders);
+}
+
+// Safely parses a JSON request body, returning null if empty or invalid.
+async function readJsonBody(request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
 // Turns an exception into something safe to hand back to a caller, and logs
 // the original.
 //
@@ -3468,23 +3487,6 @@ function ledgerKeyToListId(ledgerKey) {
     return "ch:" + ledgerKey.slice("channellikevoters:".length);
   }
   return ledgerKey;
-}
-
-function listIdToLedgerKey(listId) {
-  if (typeof listId !== "string") return "";
-  if (listId.startsWith("a:")) {
-    return "listlikevoters:user:" + listId.slice(2);
-  }
-  if (listId.startsWith("c:")) {
-    return "listlikevoters:" + listId.slice(2);
-  }
-  if (listId.startsWith("ext:")) {
-    return "extlikevoters:" + listId.slice(4);
-  }
-  if (listId.startsWith("ch:")) {
-    return "channellikevoters:" + listId.slice(3);
-  }
-  return "listlikevoters:" + listId;
 }
 
 async function readLikeVotersFromKv(env, ledgerKey) {

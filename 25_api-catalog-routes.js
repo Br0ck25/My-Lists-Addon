@@ -612,9 +612,9 @@ async function handleFetch(request, env, ctx) {
     // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
     // key works and how much of its monthly limit is spent, for Settings.
     if (path === "/api/rpdb-check" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" }); }
-      const key = body && typeof body.key === "string" ? body.key.trim() : "";
+      const body = await readJsonBody(request);
+      if (!body) return jsonInvalidBody({ "Cache-Control": "no-store" });
+      const key = typeof body.key === "string" ? body.key.trim() : "";
       if (!isValidRpdbKey(key)) return json({ ok: false, error: "That does not look like an RPDB key (it starts with t1- to t4-)." }, 400, { "Cache-Control": "no-store" });
       const checkIp = clientIpKey(request);
       if (!checkIp || await consumeRateLimit(env, ctx, "rpdbcheck", checkIp, 10, 60)) {
@@ -649,12 +649,9 @@ async function handleFetch(request, env, ctx) {
     // poster btttr.cc failed to supply in the last few minutes is not asked
     // for again here -- the cron retries those.
     if (path === "/api/bp/warm" && request.method === "POST") {
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" });
-      }
+      const body = await readJsonBody(request);
+      if (!body) return jsonInvalidBody({ "Cache-Control": "no-store" });
+
       const warmIp = clientIpKey(request);
       if (!warmIp) return json({ ok: false }, 400, { "Cache-Control": "no-store" });
       const wanted = [];

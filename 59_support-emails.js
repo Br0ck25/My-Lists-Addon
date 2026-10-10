@@ -38,22 +38,16 @@ function decodeBase64ToText(str) {
 
 // Outbound attachments go to env.EMAIL.send() as raw bytes, not a base64 string:
 // mail clients (Outlook) showed "couldn't open the image file" for the string form.
+// Uses shared base64ToUint8 from 02_http-and-creator-utils.js.
 function base64ToBytesSupport(b64) {
-  const binary = atob(String(b64).replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, ''));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  return base64ToUint8(String(b64 || "").replace(/\s+/g, ''));
 }
 
+// Uses shared escapeHtmlServer from 02_http-and-creator-utils.js.
 function escapeHtmlSupport(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return escapeHtmlServer(str);
 }
+
 
 function ensureImageFilename(filename, mimeType) {
   const extMap = {
