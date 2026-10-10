@@ -251,4 +251,4 @@ My Lists Addon is a free community service with no ads or subscriptions. If you 
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may self-host it and modify it for personal and other noncommercial use. Commercial use is not permitted. The project is not promoted for self-hosting and comes with no support.
