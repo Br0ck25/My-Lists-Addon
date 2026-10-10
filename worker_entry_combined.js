@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e3ffdffca5";
+const WORKER_BUILD = "aa21987604";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -64690,26 +64690,17 @@ async function copyChannelShareLink(channelId, btn) {
   const ch = map[channelId];
   if (!ch || !ch.shareCode) return;
   const link = channelShareUrl(ch.shareCode, ch);
-  let copied = false;
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(link);
-      copied = true;
-    }
-  } catch (e) {
-    copied = false;
+  const copied = await copyTextToClipboard(link, {
+    btn: btn,
+    toastMessage: 'Link to "' + ch.name + '" copied.',
+    successText: 'Copied \u2713',
+    resetDelay: 1600
+  });
+  if (!copied) {
+    showSavedChannelModal(ch.name, ch.visibility || 'public', link);
   }
-  if (copied) {
-    if (btn) {
-      const label = btn.textContent;
-      btn.textContent = 'Copied \u2713';
-      setTimeout(() => { if (btn) btn.textContent = label; }, 1600);
-    }
-    showAddedToast('Link to "' + ch.name + '" copied.');
-    return;
-  }
-  showSavedChannelModal(ch.name, ch.visibility || 'public', link);
 }
+
 
 async function shareChannelById(channelId, btn) {
   const map = loadLocalChannels();
@@ -72100,18 +72091,17 @@ async function loadScrobbleSeenUsers() {
   }
 }
 
-function copyScrobbleWebhookUrl() {
+async function copyScrobbleWebhookUrl() {
   const input = document.getElementById('scrobbleWebhookInput');
   if (!input || !input.value) return;
-  navigator.clipboard.writeText(input.value).then(() => {
-    if (typeof showAddedToast === 'function') showAddedToast('Webhook URL copied to clipboard! \u2713');
-    else if (typeof showAppAlert === 'function') showAppAlert('Copied', 'Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', true);
-    else showToast('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', 'success');
-  }).catch(() => {
+  const copied = await copyTextToClipboard(input.value, {
+    toastMessage: 'Webhook URL copied to clipboard! \u2713'
+  });
+  if (!copied) {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Scrobble Webhook URL', 'Copy your Scrobble Webhook URL below:', input.value);
     }
-  });
+  }
 }
 
 function toggleMediaServerSync(enabled) {
@@ -72189,18 +72179,19 @@ async function refreshTrackPlaybackStatus() {
   }
 }
 
-function copyAccountKey() {
+async function copyAccountKey() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   if (!key) return;
-  navigator.clipboard.writeText(key).then(() => {
-    if (typeof showAddedToast === 'function') showAddedToast('Key copied to clipboard! \u2713');
-    else showToast('Key copied to your clipboard.', 'success');
-  }).catch(() => {
+  const copied = await copyTextToClipboard(key, {
+    toastMessage: 'Key copied to clipboard! \u2713'
+  });
+  if (!copied) {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Account Key', 'Copy your key below:', key);
     }
-  });
+  }
 }
+
 
 function clearLocalAccountData() {
   activeCreator = null;
