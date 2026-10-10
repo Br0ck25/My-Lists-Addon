@@ -871,23 +871,12 @@ function copyShareListUrl() {
   const btn = document.getElementById('shareListCopyBtn');
   if (!input) return;
   input.select();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(input.value).then(() => {
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    }).catch(() => {
-      document.execCommand('copy');
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    });
-  } else {
-    document.execCommand('copy');
-    if (btn) btn.textContent = 'Copied \u2713';
-    showAddedToast('Link copied to clipboard!');
-    setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-  }
+  copyTextToClipboard(input.value, {
+    btn: btn,
+    toastMessage: 'Link copied to clipboard!',
+    successText: 'Copied \u2713',
+    resetDelay: 2000
+  });
 }
 
 function toggleAccountKeyVisibility() {
@@ -1432,18 +1421,17 @@ async function loadScrobbleSeenUsers() {
   }
 }
 
-function copyScrobbleWebhookUrl() {
+async function copyScrobbleWebhookUrl() {
   const input = document.getElementById('scrobbleWebhookInput');
   if (!input || !input.value) return;
-  navigator.clipboard.writeText(input.value).then(() => {
-    if (typeof showAddedToast === 'function') showAddedToast('Webhook URL copied to clipboard! \u2713');
-    else if (typeof showAppAlert === 'function') showAppAlert('Copied', 'Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', true);
-    else showToast('Scrobble Webhook URL copied to clipboard! Paste this URL into Plex, Jellyfin, or Emby webhooks settings.', 'success');
-  }).catch(() => {
+  const copied = await copyTextToClipboard(input.value, {
+    toastMessage: 'Webhook URL copied to clipboard! \u2713'
+  });
+  if (!copied) {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Scrobble Webhook URL', 'Copy your Scrobble Webhook URL below:', input.value);
     }
-  });
+  }
 }
 
 function toggleMediaServerSync(enabled) {
@@ -1521,18 +1509,19 @@ async function refreshTrackPlaybackStatus() {
   }
 }
 
-function copyAccountKey() {
+async function copyAccountKey() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   if (!key) return;
-  navigator.clipboard.writeText(key).then(() => {
-    if (typeof showAddedToast === 'function') showAddedToast('Key copied to clipboard! \u2713');
-    else showToast('Key copied to your clipboard.', 'success');
-  }).catch(() => {
+  const copied = await copyTextToClipboard(key, {
+    toastMessage: 'Key copied to clipboard! \u2713'
+  });
+  if (!copied) {
     if (typeof showAppPrompt === 'function') {
       showAppPrompt('Account Key', 'Copy your key below:', key);
     }
-  });
+  }
 }
+
 
 function clearLocalAccountData() {
   activeCreator = null;
@@ -4072,23 +4061,12 @@ function copyShareUrlById(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;
   input.select();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(input.value).then(() => {
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    }).catch(() => {
-      document.execCommand('copy');
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    });
-  } else {
-    document.execCommand('copy');
-    if (btn) btn.textContent = 'Copied \u2713';
-    showAddedToast('Link copied to clipboard!');
-    setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-  }
+  copyTextToClipboard(input.value, {
+    btn: btn,
+    toastMessage: 'Link copied to clipboard!',
+    successText: 'Copied \u2713',
+    resetDelay: 2000
+  });
 }
 
 async function confirmSaveAsCreator() {

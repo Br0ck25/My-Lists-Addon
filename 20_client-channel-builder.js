@@ -12377,26 +12377,17 @@ async function copyChannelShareLink(channelId, btn) {
   const ch = map[channelId];
   if (!ch || !ch.shareCode) return;
   const link = channelShareUrl(ch.shareCode, ch);
-  let copied = false;
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(link);
-      copied = true;
-    }
-  } catch (e) {
-    copied = false;
+  const copied = await copyTextToClipboard(link, {
+    btn: btn,
+    toastMessage: 'Link to "' + ch.name + '" copied.',
+    successText: 'Copied \u2713',
+    resetDelay: 1600
+  });
+  if (!copied) {
+    showSavedChannelModal(ch.name, ch.visibility || 'public', link);
   }
-  if (copied) {
-    if (btn) {
-      const label = btn.textContent;
-      btn.textContent = 'Copied \u2713';
-      setTimeout(() => { if (btn) btn.textContent = label; }, 1600);
-    }
-    showAddedToast('Link to "' + ch.name + '" copied.');
-    return;
-  }
-  showSavedChannelModal(ch.name, ch.visibility || 'public', link);
 }
+
 
 async function shareChannelById(channelId, btn) {
   const map = loadLocalChannels();
