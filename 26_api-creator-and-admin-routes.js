@@ -7606,32 +7606,32 @@
     // /admin/api/support-emails/* -> Customer support email management (59_support-emails.js)
     if (path === "/admin/api/support-emails/threads" && request.method === "GET") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/thread" && request.method === "GET") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/reply" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/compose" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/status" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/delete" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
 

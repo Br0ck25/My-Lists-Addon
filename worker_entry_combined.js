@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f22f290904";
+const WORKER_BUILD = "e3ffdffca5";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -4654,6 +4654,25 @@ function jsonPrivate(data, status = 200, extraHeaders = {}) {
   return json(data, status, { "Cache-Control": "no-store", ...extraHeaders });
 }
 
+// Canonical 401 response helper for unauthenticated or unauthorized requests.
+function jsonUnauthorized(extraHeaders = {}) {
+  return json({ ok: false, error: "Not authorized." }, 401, extraHeaders);
+}
+
+// Canonical 400 response helper for malformed JSON request bodies.
+function jsonInvalidBody(extraHeaders = {}) {
+  return json({ ok: false, error: "Invalid JSON body." }, 400, extraHeaders);
+}
+
+// Safely parses a JSON request body, returning null if empty or invalid.
+async function readJsonBody(request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
 // Turns an exception into something safe to hand back to a caller, and logs
 // the original.
 //
@@ -7337,23 +7356,6 @@ function ledgerKeyToListId(ledgerKey) {
     return "ch:" + ledgerKey.slice("channellikevoters:".length);
   }
   return ledgerKey;
-}
-
-function listIdToLedgerKey(listId) {
-  if (typeof listId !== "string") return "";
-  if (listId.startsWith("a:")) {
-    return "listlikevoters:user:" + listId.slice(2);
-  }
-  if (listId.startsWith("c:")) {
-    return "listlikevoters:" + listId.slice(2);
-  }
-  if (listId.startsWith("ext:")) {
-    return "extlikevoters:" + listId.slice(4);
-  }
-  if (listId.startsWith("ch:")) {
-    return "channellikevoters:" + listId.slice(3);
-  }
-  return "listlikevoters:" + listId;
 }
 
 async function readLikeVotersFromKv(env, ledgerKey) {
@@ -39802,6 +39804,46 @@ function showAddedToast(msg) {
   showToast(msg || 'Added to My Catalogs \u2713', 'success');
 }
 
+// Unified clipboard copy helper with fallback and button feedback
+async function copyTextToClipboard(text, options = {}) {
+  const { btn, toastMessage, successText = 'Copied \u2713', resetDelay = 2000 } = options;
+  let copied = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch (e) {
+      copied = false;
+    }
+  }
+  if (!copied) {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+    } catch (e) {
+      copied = false;
+    }
+  }
+  if (copied) {
+    if (btn) {
+      const origText = btn.textContent;
+      btn.textContent = successText;
+      setTimeout(() => { if (btn) btn.textContent = origText; }, resetDelay);
+    }
+    if (toastMessage) {
+      showAddedToast(toastMessage);
+    }
+  }
+  return copied;
+}
+
 function debounce(fn, delayMs = 300) {
   let timer = null;
   const debounced = function(...args) {
@@ -40818,46 +40860,6 @@ function requireSignedInFor(what) {
   return false;
 }
 
-function confirmDialog(message, title = 'Confirm Action', confirmBtnText = 'Confirm', isDanger = true) {
-  return new Promise((resolve) => {
-    let resolved = false;
-    const finish = (result) => {
-      if (!resolved) {
-        resolved = true;
-        resolve(result);
-      }
-    };
-    showAppConfirm(title, message, confirmBtnText, () => finish(true), isDanger);
-    const overlay = document.getElementById('activeModalOverlay');
-    if (overlay) {
-      const cancelBtn = overlay.querySelector('button.secondary');
-      if (cancelBtn) {
-        cancelBtn.onclick = () => {
-          closeModal();
-          finish(false);
-        };
-      }
-      const closeBtn = overlay.querySelector('.action-btn[aria-label="Close"]');
-      if (closeBtn) {
-        closeBtn.onclick = () => {
-          closeModal();
-          finish(false);
-        };
-      }
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) finish(false);
-      });
-      const onKey = (e) => {
-        if (e.key === 'Escape') {
-          document.removeEventListener('keydown', onKey, true);
-          finish(false);
-        }
-      };
-      document.addEventListener('keydown', onKey, true);
-    }
-  });
-}
-
 function showAppPrompt(title, message, defaultValue, onConfirm) {
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
@@ -40892,25 +40894,6 @@ function showAppPrompt(title, message, defaultValue, onConfirm) {
   }
 }
 
-function promptDialog(title, message, defaultValue = '') {
-  return new Promise((resolve) => {
-    let resolved = false;
-    showAppPrompt(title, message, defaultValue, (val) => {
-      resolved = true;
-      resolve(val);
-    });
-    const overlay = document.getElementById('activeModalOverlay');
-    if (overlay) {
-      const cancelBtn = overlay.querySelector('button.secondary');
-      if (cancelBtn) {
-        cancelBtn.onclick = () => {
-          closeModal();
-          if (!resolved) { resolved = true; resolve(null); }
-        };
-      }
-    }
-  });
-}
 
 function restoreActiveTab() {
   const p = (typeof location !== 'undefined' && location.pathname) ? location.pathname : '';
@@ -71567,23 +71550,12 @@ function copyShareListUrl() {
   const btn = document.getElementById('shareListCopyBtn');
   if (!input) return;
   input.select();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(input.value).then(() => {
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    }).catch(() => {
-      document.execCommand('copy');
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    });
-  } else {
-    document.execCommand('copy');
-    if (btn) btn.textContent = 'Copied \u2713';
-    showAddedToast('Link copied to clipboard!');
-    setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-  }
+  copyTextToClipboard(input.value, {
+    btn: btn,
+    toastMessage: 'Link copied to clipboard!',
+    successText: 'Copied \u2713',
+    resetDelay: 2000
+  });
 }
 
 function toggleAccountKeyVisibility() {
@@ -74768,23 +74740,12 @@ function copyShareUrlById(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;
   input.select();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(input.value).then(() => {
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    }).catch(() => {
-      document.execCommand('copy');
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    });
-  } else {
-    document.execCommand('copy');
-    if (btn) btn.textContent = 'Copied \u2713';
-    showAddedToast('Link copied to clipboard!');
-    setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-  }
+  copyTextToClipboard(input.value, {
+    btn: btn,
+    toastMessage: 'Link copied to clipboard!',
+    successText: 'Copied \u2713',
+    resetDelay: 2000
+  });
 }
 
 async function confirmSaveAsCreator() {
@@ -87107,9 +87068,9 @@ async function handleFetch(request, env, ctx) {
     // /api/rpdb-check  (POST)  { key } -> { ok, valid, used, limit }: whether a
     // key works and how much of its monthly limit is spent, for Settings.
     if (path === "/api/rpdb-check" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" }); }
-      const key = body && typeof body.key === "string" ? body.key.trim() : "";
+      const body = await readJsonBody(request);
+      if (!body) return jsonInvalidBody({ "Cache-Control": "no-store" });
+      const key = typeof body.key === "string" ? body.key.trim() : "";
       if (!isValidRpdbKey(key)) return json({ ok: false, error: "That does not look like an RPDB key (it starts with t1- to t4-)." }, 400, { "Cache-Control": "no-store" });
       const checkIp = clientIpKey(request);
       if (!checkIp || await consumeRateLimit(env, ctx, "rpdbcheck", checkIp, 10, 60)) {
@@ -87144,12 +87105,9 @@ async function handleFetch(request, env, ctx) {
     // poster btttr.cc failed to supply in the last few minutes is not asked
     // for again here -- the cron retries those.
     if (path === "/api/bp/warm" && request.method === "POST") {
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400, { "Cache-Control": "no-store" });
-      }
+      const body = await readJsonBody(request);
+      if (!body) return jsonInvalidBody({ "Cache-Control": "no-store" });
+
       const warmIp = clientIpKey(request);
       if (!warmIp) return json({ ok: false }, 400, { "Cache-Control": "no-store" });
       const wanted = [];
@@ -102294,32 +102252,32 @@ function generateSearchVariations(query) {
     // /admin/api/support-emails/* -> Customer support email management (59_support-emails.js)
     if (path === "/admin/api/support-emails/threads" && request.method === "GET") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/thread" && request.method === "GET") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/reply" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/compose" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/status" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
     if (path === "/admin/api/support-emails/delete" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!authed) return jsonUnauthorized();
       return handleSupportEmailsApi(path, request, env);
     }
 
@@ -115348,22 +115306,16 @@ function decodeBase64ToText(str) {
 
 // Outbound attachments go to env.EMAIL.send() as raw bytes, not a base64 string:
 // mail clients (Outlook) showed "couldn't open the image file" for the string form.
+// Uses shared base64ToUint8 from 02_http-and-creator-utils.js.
 function base64ToBytesSupport(b64) {
-  const binary = atob(String(b64).replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, ''));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  return base64ToUint8(String(b64 || "").replace(/\s+/g, ''));
 }
 
+// Uses shared escapeHtmlServer from 02_http-and-creator-utils.js.
 function escapeHtmlSupport(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return escapeHtmlServer(str);
 }
+
 
 function ensureImageFilename(filename, mimeType) {
   const extMap = {

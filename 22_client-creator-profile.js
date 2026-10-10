@@ -871,23 +871,12 @@ function copyShareListUrl() {
   const btn = document.getElementById('shareListCopyBtn');
   if (!input) return;
   input.select();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(input.value).then(() => {
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    }).catch(() => {
-      document.execCommand('copy');
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    });
-  } else {
-    document.execCommand('copy');
-    if (btn) btn.textContent = 'Copied \u2713';
-    showAddedToast('Link copied to clipboard!');
-    setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-  }
+  copyTextToClipboard(input.value, {
+    btn: btn,
+    toastMessage: 'Link copied to clipboard!',
+    successText: 'Copied \u2713',
+    resetDelay: 2000
+  });
 }
 
 function toggleAccountKeyVisibility() {
@@ -4072,23 +4061,12 @@ function copyShareUrlById(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;
   input.select();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(input.value).then(() => {
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    }).catch(() => {
-      document.execCommand('copy');
-      if (btn) btn.textContent = 'Copied \u2713';
-      showAddedToast('Link copied to clipboard!');
-      setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-    });
-  } else {
-    document.execCommand('copy');
-    if (btn) btn.textContent = 'Copied \u2713';
-    showAddedToast('Link copied to clipboard!');
-    setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000);
-  }
+  copyTextToClipboard(input.value, {
+    btn: btn,
+    toastMessage: 'Link copied to clipboard!',
+    successText: 'Copied \u2713',
+    resetDelay: 2000
+  });
 }
 
 async function confirmSaveAsCreator() {
