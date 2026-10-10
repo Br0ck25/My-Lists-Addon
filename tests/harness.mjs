@@ -25,12 +25,32 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 if (!globalThis.caches) {
   globalThis.caches = {
     default: { match: async () => null, put: async () => {} },
     open: async () => ({ match: async () => null, put: async () => {} }),
   };
+}
+
+// The tests run worker_entry_combined.js, which is built from the numbered
+// sources. Editing a source without running `python build.py` would test the
+// OLD code and pass, so refuse to run against a stale bundle.
+{
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  let res = null;
+  for (const py of ["python3", "python"]) {
+    res = spawnSync(py, ["check_sync.py"], { cwd: root, encoding: "utf8" });
+    if (!res.error) break;
+  }
+  if (res && !res.error && res.status !== 0) {
+    throw new Error(
+      "worker_entry_combined.js is out of date with its sources; run `python build.py` first.\n" +
+      (res.stdout || "") + (res.stderr || "")
+    );
+  }
 }
 
 export const worker = (await import("../worker_entry_combined.js")).default;
