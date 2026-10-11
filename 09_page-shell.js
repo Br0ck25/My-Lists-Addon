@@ -215,6 +215,7 @@ function renderBuilder(
 <link rel="manifest" href="${origin}/app.webmanifest">
 ${seoHeadHtml}
 <link rel="icon" type="image/png" href="${origin}/icon.png">
+<link rel="apple-touch-icon" href="${origin}/icon.png">
 <!-- Fonts: the device's own (P7-1). This page used to load Inter, Space
      Grotesk and JetBrains Mono from fonts.googleapis.com + fonts.gstatic.com,
      which cost a third-party connection on first paint, told Google which

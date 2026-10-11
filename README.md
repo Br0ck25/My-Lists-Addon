@@ -6,7 +6,7 @@
 
 A high-performance, full-featured catalog and list management add-on for media players. It transforms your **MDBList**, **Trakt**, **TMDB**, and **Simkl** lists into dynamic catalog rows on your home screen — featuring a full **Custom List Builder**, **Letterboxd CSV Import**, **Virtual TV Channels**, **Airing Next Calendars**, **Continue Watching & Watch History Sync**, **Media Server Scrobbling (Plex / Jellyfin / Emby)**, and **BetterPosters** artwork integration.
 
-This repository contains the complete open-source codebase powering the official hosted platform at [**mylistsaddon.com**](https://mylistsaddon.com). It is free to use with no advertisements or subscriptions.
+This repository is the source code of the hosted service at [**mylistsaddon.com**](https://mylistsaddon.com). It is free to use with no advertisements or subscriptions. It is not meant to be self-hosted.
 
 ---
 
@@ -71,7 +71,7 @@ Install links never expire. When you update your lists or settings at [mylistsad
 - Toggle anytime under **Settings &rarr; Account & Sync &rarr; Better Posters**. Applies seamlessly across web previews and Stremio/Nuvio catalog rows.
 
 ### Progressive Web App (PWA)
-- Installable PWA with an offline-capable app shell (`/sw.js` and `/app.webmanifest`).
+- Installable as an app on desktop and mobile (`/app.webmanifest`). Needs a connection to use.
 - Works on desktop and mobile browsers, with dark mode, clipboard shortcuts, and QR code sharing.
 
 ---
@@ -108,9 +108,7 @@ Install links never expire. When you update your lists or settings at [mylistsad
 | `/api/creator/lists` | `POST` | Paginated creator list index metadata |
 | `/api/creator/lists/items` | `POST` | Detailed items for up to 100 named lists |
 | `/api/scrobble` | `POST` | Webhook receiver for Plex, Jellyfin, and Emby playback scrobbling (`?st=<token>`) |
-| `/admin` | `GET` | Platform administrative analytics dashboard |
-| `/admin/api/*` | `GET/POST` | Administrative management, stats, feedback inbox, and moderation APIs |
-| `/sw.js` | `GET` | Service worker for offline PWA caching |
+| `/sw.js` | `GET` | Service worker (caches the app's scripts and styles) |
 | `/app.webmanifest` | `GET` | Web App Manifest for mobile and desktop installation |
 
 ### Security & Credential Handling
@@ -120,7 +118,7 @@ Install links never expire. When you update your lists or settings at [mylistsad
 
 ---
 
-## Local Development & Contributing
+## Development
 
 This project is developed as a modular JavaScript application running on Cloudflare Workers, compiled into a single production bundle without external build tooling.
 
@@ -129,7 +127,7 @@ This project is developed as a modular JavaScript application running on Cloudfl
 - **Python 3** (used by the bundle assembly and verification scripts)
 
 ### Building the Bundle
-The application source is modularized across ES modules (`00_constants.js` through the highest-numbered file (currently `58_`; `build.py` picks up every `NN_*.js`)). To compile them into `worker_entry_combined.js`:
+The application source is modularized across ES modules (`00_constants.js` onward; `build.py` picks up every `NN_*.js`). To compile them into `worker_entry_combined.js`:
 
 ```bash
 # Using Python
@@ -147,7 +145,7 @@ The project maintains a zero-external-dependency test harness using Node.js's na
 node --test tests/*.test.mjs
 
 # Run a specific test suite
-node --test tests/worker.test.mjs
+node --test tests/service-worker.test.mjs
 ```
 
 ### Verification Scripts
@@ -163,74 +161,6 @@ node --check worker_entry_combined.js
 # Verify bundle size constraints and performance budgets
 node check_bundle_budget.mjs
 ```
-
----
-
-## Environment & Configuration Reference
-
-The following environment variables, secrets, and Cloudflare bindings configure the hosted platform and the test runner:
-
-| Variable / Binding | Type | Description |
-|---|---|---|
-| `CONFIGS` | KV Binding | Fast key-value store for install configs, caches, and rate counters |
-| `DB` | D1 Binding | Primary relational database (`my-lists-db`) for accounts, lists, search, and analytics |
-| `ANALYTICS` | Analytics Engine | Per-request route, status, and performance telemetry |
-| `BLOBS` | R2 Bucket | Storage for shared channels' episode catalogs and exports |
-| `JOBS` | Queue Producer | Cloudflare Queue for asynchronous background tasks |
-| `DB_ACTIVITY` | D1 Binding | Activity and watch history database (`mylists-activity`) |
-| `TMDB_API_KEY` | Secret | TheMovieDB API key for metadata, seasons, episodes, search, and posters |
-| `TRAKT_CLIENT_ID` | Secret | Trakt OAuth application client ID |
-| `TRAKT_CLIENT_SECRET` | Secret | Trakt OAuth application client secret |
-| `SIMKL_CLIENT_ID` | Secret | Simkl API application client ID |
-| `SIMKL_CLIENT_SECRET` | Secret | Simkl API application client secret |
-| `MDBLIST_API_KEY` | Secret | MDBList API key for private lists and metadata |
-| `MDBLIST_POPULAR_KEY` | Secret | Dedicated MDBList key for Toplists and popular catalogs |
-| `MDBLIST_CLIENT_ID` | Secret | MDBList OAuth client ID |
-| `MDBLIST_CLIENT_SECRET` | Secret | MDBList OAuth client secret |
-| `TOKEN_ENCRYPTION_KEY` | Secret | AES-256-GCM encryption key (`k1:<base64>`) for stored provider credentials |
-| `LOOKUP_PEPPER` | Secret | HMAC-SHA256 secret pepper for blind indexing creator keys |
-| `ADMIN_KEY` | Secret | Administrative dashboard access passphrase |
-| `CF_ACCESS_TEAM_DOMAIN` | Variable | Cloudflare Access team domain for Zero Trust dashboard authentication |
-| `CF_ACCESS_AUD` | Variable | Cloudflare Access application AUD tag |
-| `FF_ADMIN_EMAILS` | Variable | Comma-separated admin emails permitted via Cloudflare Access |
-| `CF_ANALYTICS_TOKEN` | Secret | Cloudflare API token for querying Analytics Engine (alias: `CLOUDFLARE_API_TOKEN`) |
-| `CF_ANALYTICS_ACCOUNT_ID` | Variable | Cloudflare Account ID for Analytics queries (alias: `CLOUDFLARE_ACCOUNT_ID`) |
-| `CLOUDFLARE_API_TOKEN` | Secret | Alias for `CF_ANALYTICS_TOKEN` |
-| `CLOUDFLARE_ACCOUNT_ID` | Variable | Alias for `CF_ANALYTICS_ACCOUNT_ID` |
-| `RAPIDAPI_KEY` | Secret | RapidAPI key for optional provider lookups |
-| `KOFI_VERIFICATION_TOKEN` | Secret | Optional. Ko-fi's webhook verification token; lets the support strip's monthly total update itself (set the webhook URL shown in `/admin` → Support Goal in Ko-fi) |
-| `STREAMING_AVAILABILITY_API_KEY` | Secret | Streaming Availability API key for optional provider lookups |
-| `NEW_ON_STREAMING_ENGINE` | Variable | Configuration selector for New on Streaming catalog backend |
-| `ACTIVITY_SHARD_COUNT` | Variable | Activity sharding factor for high-throughput activity writes |
-| `INSTALL_MIGRATION_PERCENT` | Variable | Rollout percentage for migrating install secrets into encrypted D1 storage |
-| `FF_SESSIONS` | Variable | Feature flag: Enables session authentication cookies |
-| `FF_INSTALLS` | Variable | Feature flag: Enables `/api/installs` token management |
-| `FF_NEW_UI` | Variable | Feature flag: Activates the modern responsive user interface |
-| `FF_V2_LISTS_READ` | Variable | Feature flag: Reads lists from relational D1 v2 schema |
-| `FF_V2_LISTS_API` | Variable | Feature flag: Item-level v2 list manipulation API |
-| `FF_V2_LISTS_ONLY` | Variable | Feature flag: Exclusively uses relational v2 list storage |
-| `FF_PROVIDER_BREAKER` | Variable | Feature flag: Circuit breaker preventing upstream provider cascades |
-| `FF_CHART_SNAPSHOTS` | Variable | Feature flag: Background-cached provider chart snapshots |
-| `FF_CANONICAL_IDS` | Variable | Feature flag: Normalizes catalog IDs to canonical IMDb / TMDB identifiers |
-| `FF_EVENT_TRACKING` | Variable | Feature flag: Enables granular telemetry event tracking |
-| `FF_MATERIALIZER` | Variable | Feature flag: Background list materializer |
-| `FF_SHOW_SCHEDULE` | Variable | Feature flag: Background show schedule synchronizer |
-| `FF_CSP_TT_REPORT` | Variable | Feature flag: Report-only CSP Trusted Types auditing |
-| `FF_SCROBBLE_ST_ONLY` | Variable | Feature flag: Enforces scoped scrobble tokens exclusively |
-| `SCROBBLE_SUNSET_DATE` | Variable | Sunset cutover date for legacy scrobble query parameters |
-| `SUNSET_60DAY_START_DATE` | Variable | Activation date for in-app 60-day sunset deprecation notices |
-
----
-
-## Architecture & Operator Documentation
-
-For system architecture details, operational checklists, deployment runbooks, and architectural decisions, refer to the documentation in `docs/`:
-
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — Architectural design, system boundaries, and multi-tier storage models (D1, KV, R2).
-- **[docs/OPERATIONS.md](docs/OPERATIONS.md)** — Production operations, Cloudflare dashboard configurations, background queues, and maintenance runbook.
-- **[docs/DEPLOY_CHECKLIST.md](docs/DEPLOY_CHECKLIST.md)** — Step-by-step release checklist, staging verification, and rollback procedures.
-- **[docs/CUTOVER.md](docs/CUTOVER.md)** — Cutover runbook, legacy storage sunset, and migration verification.
-- **[docs/DECISIONS.md](docs/DECISIONS.md)** — Architectural Decision Records (ADRs) explaining technical choices.
 
 ---
 
@@ -251,4 +181,4 @@ My Lists Addon is a free community service with no ads or subscriptions. If you 
 
 ## License
 
-This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may self-host it and modify it for personal and other noncommercial use. Commercial use is not permitted. The project is not promoted for self-hosting and comes with no support.
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use only. The project is not intended for self-hosting and comes with no support.

@@ -360,9 +360,7 @@ After removal: `python build.py && python check_sync.py && node --check worker_e
 - [ ] `cfg:` records cleaned up (30-day per-install window).
 - [ ] Admin migration tools removed from source.
 - [ ] `FUNCTION-MAP.md` regenerated (`python gen_map.py`).
-- [ ] `CHANGELOG.md` updated with Phase 10 completion entry.
 - [ ] `docs/OPERATIONS.md`, `docs/ARCHITECTURE.md`, `README.md` updated for v2 steady state.
-- [ ] Planning documents archived to `docs/history/` (P10-5).
 
 ---
 
@@ -372,4 +370,3 @@ After removal: `python build.py && python check_sync.py && node --check worker_e
 - [`docs/DEPLOY_CHECKLIST.md`](DEPLOY_CHECKLIST.md) — per-release deploy gate procedure.
 - [`docs/STAGING.md`](STAGING.md) — staging environment isolation and provisioning.
 - [`MIGRATION_PLAN.md`](../MIGRATION_PLAN.md) — full v2 migration plan (to be archived after Phase 10).
-- [`CHANGELOG.md`](../CHANGELOG.md) — release history.

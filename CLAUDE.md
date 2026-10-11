@@ -20,7 +20,7 @@
 - "Which file?": read `FILE-INDEX.md` (5KB, one line per source file).
 - `grep` `FUNCTION-MAP.md` for the symbol (~170KB: never read it whole), then read only that file with `offset`/`limit`.
 - `DESIGN_SYSTEM.md` is 40KB: `grep -n '^## ' DESIGN_SYSTEM.md` for the section list, then read only that range.
-- Read `HANDOFF.md`, `docs/RELEASES.md` and `docs/history/` only when the task needs them.
+- Read `HANDOFF.md` and `docs/RELEASES.md` only when the task needs them.
 
 ## Verify before committing
 - While iterating: `bash verify.sh -q --fast` (build, syntax, scope) plus one test file, e.g. `node --test tests/design-system.test.mjs`.

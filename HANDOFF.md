@@ -1,6 +1,6 @@
 # Handoff
 
-Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo existing work. Keep this file short: replace stale items, don't append history (old versions: `docs/history/`).
+Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo existing work. Keep this file short: replace stale items, don't append history.
 
 ## Where things stand (2026-10-11)
 - **Live:** `main` at `d754751` (build d349e2f0ce, still labelled Release 27). **Release 28 is live** (d7bca701f6) and its Merge ran: 1,100 duplicate titles merged. **Release 29** (prepared, c82d81dc04): media.retry merges new TMDB-confirmed pairs hourly (the recs job, 53_, keeps making stubs), and the merge also takes TMDB-only rows marked looked up (the 635). Next: owner deploys 29, runs Preview/Merge and Check; then PR to main.

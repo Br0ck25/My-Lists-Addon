@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c82d81dc04";
+const WORKER_BUILD = "0ebd2b9a92";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -31004,6 +31004,7 @@ function renderBuilder(
 <link rel="manifest" href="${origin}/app.webmanifest">
 ${seoHeadHtml}
 <link rel="icon" type="image/png" href="${origin}/icon.png">
+<link rel="apple-touch-icon" href="${origin}/icon.png">
 <!-- Fonts: the device's own (P7-1). This page used to load Inter, Space
      Grotesk and JetBrains Mono from fonts.googleapis.com + fonts.gstatic.com,
      which cost a third-party connection on first paint, told Google which
@@ -87825,6 +87826,9 @@ async function handleFetch(request, env, ctx) {
       const manifest = {
         name: "My Lists",
         short_name: "My Lists",
+        description: "Build and manage the lists, charts and channels that show up in Stremio, Nuvio and Wako.",
+        id: "/",
+        scope: "/",
         start_url: "/",
         display: "standalone",
         background_color: "#F2F2F7",

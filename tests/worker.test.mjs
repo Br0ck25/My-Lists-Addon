@@ -1575,7 +1575,7 @@ describe("a list whose creator is gone is not servable", () => {
   // account before any handler runs. It only happens to a request that
   // authenticated BEFORE the tombstone existed, which is a real race rather
   // than a state a test can construct through the public surface. It is
-  // covered end to end by audit/adversarial-III-2026-09-08/p26_ghostpublic.mjs
+  // covered end to end by the (since removed) ghost-public audit script
   // and p27_ghostnatural.mjs, which hold a save open across a real deletion.
 });
 

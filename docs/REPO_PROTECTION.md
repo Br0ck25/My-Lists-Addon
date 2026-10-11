@@ -30,4 +30,4 @@ GitHub, repository **Settings -> Branches -> Add branch ruleset** (or classic br
 4. Do **not** tick "Require review from Code Owners" unless a second person with write access joins: nobody can approve their own pull request, so it would lock you out. `.github/CODEOWNERS` still documents who owns what and starts applying the day a second reviewer exists.
 5. **Settings -> Actions -> General -> Workflow permissions:** set to **Read repository contents** (CI already asks for no more).
 6. **Settings -> Code security:** turn on **Secret scanning** and **Push protection**, and **Dependabot alerts**.
-7. **Delete old branches** that are merged or abandoned (the `arena/*`, `claude/*`, `audit/*` ones). Nothing in them is needed once their pull request is merged.
+7. **Delete old branches** that are merged or abandoned (the `arena/*`, `claude/*` ones). Nothing in them is needed once their pull request is merged.

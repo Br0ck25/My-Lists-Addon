@@ -1256,6 +1256,9 @@ async function handleFetch(request, env, ctx) {
       const manifest = {
         name: "My Lists",
         short_name: "My Lists",
+        description: "Build and manage the lists, charts and channels that show up in Stremio, Nuvio and Wako.",
+        id: "/",
+        scope: "/",
         start_url: "/",
         display: "standalone",
         background_color: "#F2F2F7",

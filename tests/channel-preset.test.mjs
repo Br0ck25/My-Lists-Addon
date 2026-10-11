@@ -47,7 +47,7 @@ const CHANNEL_PRESET_NETWORK_IDS_FOR_TEST = ["129", "2", "80", "174", "4", "56",
 // preset check compared the server's (capped-at-200) preset against
 // CHANNEL_POOL_MAX_ITEMS (5000), which a preset can never reach, so every
 // click fell through to a client-built pool with no cap of its own -- see
-// CHANGELOG "New on Streaming" sibling entry and 20_client-channel-builder.js
+// "New on Streaming" sibling entry and 20_client-channel-builder.js
 // for the full story. These tests cover the server half of the fix: the
 // shared preset builder (buildNetworkChannelPreset,
 // 07_source-fetchers-tmdb-simkl.js), its KV cache, and the daily cron
