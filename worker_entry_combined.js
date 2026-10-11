@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "654148d77c";
+const WORKER_BUILD = "8857e13375";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -18849,7 +18849,7 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
   // The global "shuffle items" setting, or this one list's own shuffle toggle.
   if ((keys.shuffleItems || entry.shuffle === true) && Array.isArray(result) && result.length > 1) {
     const tot = result.totalItems;
-    result = deterministicDailyShuffle(result, `items:${entry.id || entry.name}:${keys.configParam || ''}`);
+    result = deterministicDailyShuffle(result, `items:${entry.id || entry.name || keys.shuffleSalt || ''}:${keys.configParam || ''}`);
     result.totalItems = tot;
   }
 
@@ -78919,6 +78919,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (keys.shuffleItems || s.shuffle) { body.shuffle = true; body.shuffleId = s.id; }
           const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -88178,7 +88179,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
     // callers with a normal-sized url (a plain mdblist/trakt/tmdb list
     // link is never going to hit that limit).
     if (path === "/api/preview") {
-      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region;
+      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle = false, previewShuffleId = "";
       if (request.method === "POST") {
         let reqBody;
         try {
@@ -88200,6 +88201,10 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = reqBody.region || "";
         hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
         adultContentFilter = !!reqBody.adultContentFilter;
+        // The builder's live preview shows a list as it will arrive once its
+        // (or the global) daily shuffle is on, so toggling it is visible at once.
+        previewShuffle = reqBody.shuffle === true;
+        previewShuffleId = String(reqBody.shuffleId || "").slice(0, 200);
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
         skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
       } else {
@@ -88264,7 +88269,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
 
       let body;
       try {
-        let metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog({ url: testUrl, type, shuffle: previewShuffle }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, shuffleSalt: previewShuffleId, env, ctx, origin: url.origin });
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.

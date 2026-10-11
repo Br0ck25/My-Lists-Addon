@@ -1261,6 +1261,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (keys.shuffleItems || s.shuffle) { body.shuffle = true; body.shuffleId = s.id; }
           const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
