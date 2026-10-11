@@ -1883,16 +1883,6 @@ function copyNuvioInstallLink(url) {
 }
 window.copyNuvioInstallLink = copyNuvioInstallLink;
 
-// Nuvio parses addon deep links as nuvio://<host>/<path> (replacing https:// with nuvio://),
-// navigating to Addons Settings and automatically installing the addon.
-function openNuvioApp(url) {
-  if (!url) return;
-  copyNuvioInstallLink(url);
-  const nuvioUrl = String(url).replace(/^https?:\\/\\//i, 'nuvio://');
-  window.location.href = nuvioUrl;
-}
-window.openNuvioApp = openNuvioApp;
-
 function openNuvioInstallModal(url) {
   if (!url) return;
   copyLink(url);

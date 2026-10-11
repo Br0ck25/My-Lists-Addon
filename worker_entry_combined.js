@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f2d2a4a6f7";
+const WORKER_BUILD = "d349e2f0ce";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -83468,16 +83468,6 @@ function copyNuvioInstallLink(url) {
   showToast('Manifest link copied to clipboard.', 'success');
 }
 window.copyNuvioInstallLink = copyNuvioInstallLink;
-
-// Nuvio parses addon deep links as nuvio://<host>/<path> (replacing https:// with nuvio://),
-// navigating to Addons Settings and automatically installing the addon.
-function openNuvioApp(url) {
-  if (!url) return;
-  copyNuvioInstallLink(url);
-  const nuvioUrl = String(url).replace(/^https?:\\/\\//i, 'nuvio://');
-  window.location.href = nuvioUrl;
-}
-window.openNuvioApp = openNuvioApp;
 
 function openNuvioInstallModal(url) {
   if (!url) return;
