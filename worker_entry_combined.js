@@ -21,19 +21,20 @@
  * NEXT_VERSION_ARCHITECTURE.md.
  */
 
-// --- Which release this is ---------------------------------------------------
+// --- Which build this is -----------------------------------------------------
 //
-// Shown at the top of /admin and in the answer of the "Counts missing" tool,
-// so the owner can see which pasted file is live (docs/RELEASES.md). Change it
-// with every release.
-const WORKER_RELEASE = "28";
+// /admin shows "Built <date> (build <stamp>)", so the owner can see which
+// pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
+// raises a number by hand. The date is the day the code last changed (see
+// build_date in build.py).
+const WORKER_BUILD_DATE = "2026-10-11";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
-// value only if they are the same code. /admin shows it beside the release:
+// value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "927e912ba1";
+const WORKER_BUILD = "0de238224f";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -13684,7 +13685,7 @@ ${UTILITY_CSS}
 </style></head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p class="u-c-v_muted u-mt-0">My Lists Addon usage stats. <span id="workerRelease">Release ${WORKER_RELEASE}</span> <span id="workerBuild">(build ${WORKER_BUILD})</span></p>
+  <p class="u-c-v_muted u-mt-0">My Lists Addon usage stats. <span id="workerRelease">Built ${WORKER_BUILD_DATE}</span> <span id="workerBuild">(build ${WORKER_BUILD})</span></p>
   ${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
@@ -16062,7 +16063,7 @@ ${UTILITY_CSS}
         });
         const data = await res.json();
         if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error') + (data.release ? ' (Release ' + data.release + ')' : '');
+          status.textContent = 'Failed: ' + (data.error || 'unknown error') + (data.build ? ' (build ' + data.build + ')' : '');
         } else {
           status.textContent = data.applied
             ? 'Done: ' + data.toPutBack + ' counts put back.'
@@ -100503,7 +100504,7 @@ function generateSearchVariations(query) {
       let body = {};
       try { body = await request.json(); } catch {}
       const result = await recoverStatsFromAnalyticsEngine(env, { apply: body && body.apply === true });
-      return json({ ...result, release: WORKER_RELEASE }, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+      return json({ ...result, build: WORKER_BUILD, builtOn: WORKER_BUILD_DATE }, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
 
     // /admin/api/migrate-d1 (POST) -> { ok, done, results, thisCall, scanned }

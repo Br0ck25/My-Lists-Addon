@@ -27,7 +27,7 @@
 - Before commit: `bash verify.sh -q` (everything, prints one line unless a step fails). Run `python gen_map.py` if functions were added, removed or moved (it rewrites `FUNCTION-MAP.md` and `FILE-INDEX.md`).
 - UI look changed on purpose: `node tests/ui-contract.mjs --update` and keep the `tests/ui-contract.json` diff.
 - Once per clone: `git config core.hooksPath .githooks`.
-- Release: bump `WORKER_RELEASE` and add an entry to `docs/RELEASES.md`.
+- Release: add an entry to `docs/RELEASES.md` under the build date and stamp `python build.py` prints. `/admin` shows both; there is no release number to bump.
 
 ## Handoff (only when the user says credits are low or to wrap up)
 Run verify, commit, then update `HANDOFF.md` (keep it under ~120 lines, replace stale items, never append history; move finished detail to `docs/RELEASES.md`). It holds only what the next AI needs: current state, next steps, what must not be undone.

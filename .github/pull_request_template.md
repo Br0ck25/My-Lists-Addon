@@ -11,8 +11,8 @@
 - [ ] If I added a new design token or button variant: `DESIGN_SYSTEM.md` is updated in this change.
 - [ ] If I changed the database: there is a new numbered file in `migrations/`, and `schema.sql` matches.
 - [ ] If the Worker needs a new variable, secret or binding: it is written in `docs/OPERATIONS.md` and `wrangler.toml`'s comments.
-- [ ] If this is a release: `WORKER_RELEASE` (`00_constants.js`) is bumped and `docs/RELEASES.md` has its entry.
+- [ ] If this is a release: `docs/RELEASES.md` has its entry, with the build date and stamp `python build.py` printed.
 - [ ] A bug fix has a test that fails without the fix.
 
 ## Deploying (owner)
-After this merges: paste the new `worker_entry_combined.js`, then check `/admin` shows the same **Release** and **build** value that `python build.py` printed. Keep the previous pasted file until the soak in `docs/DEPLOY_CHECKLIST.md` is over.
+After this merges: paste the new `worker_entry_combined.js`, then check `/admin` shows the same **Built** date and **build** value that `python build.py` printed. Keep the previous pasted file until the soak in `docs/DEPLOY_CHECKLIST.md` is over.
