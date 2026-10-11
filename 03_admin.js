@@ -1237,6 +1237,27 @@ function sanitizeStatGroupName(raw) {
   return /^[A-Za-z0-9 &().'-]+$/.test(s) ? s : null;
 }
 
+// The row categories the builder puts on an install's rows (a row's `group`).
+// /api/track-install is open to anyone, and used to take whatever names it was
+// sent, so one caller could make any number of rows in the "sources people use"
+// table. A known category is counted under its own name and everything else
+// under "Other". tests/anonymous-write-limits.test.mjs reads the builder's
+// sources and fails when a category is added there and not here.
+const INSTALL_STAT_GROUPS = new Set([
+  "Combined Charts", "MDBList Charts", "TMDB Charts", "Trakt Charts", "Simkl Charts",
+  "My Lists Addon Charts", "Streaming", "Streaming Top 10", "Hidden Gems", "Kids",
+  "Holidays", "Genres", "Custom", "Custom Lists", "Curated", "Channels",
+]);
+const INSTALL_STAT_OTHER_GROUP = "Other";
+// Per address, per minute: the same budget as /api/track-event.
+const TRACK_INSTALL_PER_MINUTE = 30;
+
+function installStatGroupName(raw) {
+  const name = sanitizeStatGroupName(raw);
+  if (!name) return null;
+  return INSTALL_STAT_GROUPS.has(name) ? name : INSTALL_STAT_OTHER_GROUP;
+}
+
 // The "copies" column of the admin Community Lists panel is keyed by a
 // list's own slug (see computeCatalogAndCommunityLeaderboards, which looks
 // up copiesBySlug.get(data.slug)). The client, though, sends
@@ -2385,7 +2406,7 @@ async function renderAdminDashboard(env) {
   // loadStatsByDay has to for pageviews/installs.
   let sourceGroups = [];
   if (env.DB) {
-    const { results } = await env.DB.prepare("SELECT * FROM source_groups").all();
+    const { results } = await env.DB.prepare("SELECT * FROM source_groups ORDER BY install_count DESC LIMIT ?").bind(STAT_TOTALS_READ_CAP).all();
     sourceGroups = results.map(row => ({ group: row.name, count: row.install_count }));
   } else {
     const sourceGroupPrefix = "stats:sourcegroup:";

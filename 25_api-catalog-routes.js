@@ -1684,16 +1684,24 @@ Sitemap: ${url.origin}/sitemap.xml`;
     }
 
     if (path === "/api/track-install" && request.method === "POST") {
+      // Anonymous, and it writes: the same per-address budget as
+      // /api/track-event. A beacon, so over the limit is still a plain ok.
+      const installIp = clientIpKey(request);
+      if (!installIp || await consumeRateLimit(env, ctx, "trackinstall", installIp, TRACK_INSTALL_PER_MINUTE)) {
+        return json({ ok: true });
+      }
       ctx.waitUntil(bumpStat(env, "installs"));
       try {
         const body = await request.json();
         if (body && body.groups && typeof body.groups === "object") {
-          const entries = Object.entries(body.groups).slice(0, 30);
-          for (const [rawGroup, rawCount] of entries) {
-            const group = sanitizeStatGroupName(rawGroup);
-            const count = Math.max(0, Math.min(1000, parseInt(rawCount, 10) || 0));
-            if (group && count) ctx.waitUntil(bumpStatBy(env, `sourcegroup:${group}`, count));
+          // Known categories under their own name, the rest together as Other.
+          const counted = new Map();
+          for (const [rawGroup, rawCount] of Object.entries(body.groups).slice(0, 30)) {
+            const group = installStatGroupName(rawGroup);
+            const count = Math.max(0, Math.min(SAVED_CONFIG_ENTRIES_MAX, parseInt(rawCount, 10) || 0));
+            if (group && count) counted.set(group, Math.min(SAVED_CONFIG_ENTRIES_MAX, (counted.get(group) || 0) + count));
           }
+          for (const [group, count] of counted) ctx.waitUntil(bumpStatBy(env, `sourcegroup:${group}`, count));
         }
       } catch {
         // no body, or not JSON -- the plain install counter above still
