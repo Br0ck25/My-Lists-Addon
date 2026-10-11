@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "26246e5b08";
+const WORKER_BUILD = "678af55b84";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -12976,7 +12976,7 @@ const ADMIN_AUDIT_GET_MUTATORS = new Set(["/admin/api/migrate-accounts"]);
 // token an admin form might carry. `slugs` is here for the delete flows.
 const ADMIN_AUDIT_BODY_FIELDS = [
   "username", "creatorName", "slug", "slugs", "name", "listName", "channelId", "networkId",
-  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason", "apply",
+  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason", "apply", "pass",
 ];
 const ADMIN_AUDIT_VALUE_MAX = 200;
 const ADMIN_AUDIT_DETAIL_MAX = 600;
@@ -14281,7 +14281,7 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="dupMediaBtn" data-act="runDuplicateMediaCheck" ${isD1Bound ? '' : 'disabled'}>Check duplicate titles</button>
       <span id="dupMediaStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="dupMediaResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
-      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Merge duplicate titles</strong> asks TMDB which IMDb id each title stored by its TMDB id alone (looked up or not) belongs to, and pairs it only when another title holds exactly that IMDb id. <strong>Preview</strong> only reads. <strong>Merge</strong> moves the list entries, plays, progress and recommendations onto the kept title and deletes the empty copy; take a backup first. Keep the page open until it says Done.</p>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Merge duplicate titles</strong> asks TMDB which IMDb id each title stored by its TMDB id alone (looked up or not) belongs to, and pairs it only when another title holds exactly that IMDb id. Then it takes titles stored under their own name (no id at all) and pairs each only when exactly one title of that kind has that name and year. <strong>Preview</strong> only reads. <strong>Merge</strong> moves the list entries, plays, progress and recommendations onto the kept title and deletes the empty copy; take a backup first. Keep the page open until it says Done.</p>
       <button type="button" class="admin-select u-cur-pointer" id="dupMergePreviewBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Preview</button>
       <button type="button" class="admin-select u-cur-pointer" id="dupMergeApplyBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Merge</button>
       <span id="dupMergeStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
@@ -16042,24 +16042,34 @@ ${UTILITY_CSS}
       buttons.forEach(function (b) { b.disabled = true; });
       out.textContent = '';
       const t = { scanned: 0, pairs: 0, merged: 0, noAnswer: 0, noImdb: 0, notStored: 0, otherKind: 0, otherTmdb: 0, examples: [] };
+      // Second pass: titles stored under their own name (mergeNameOnlyMedia).
+      const n = { scanned: 0, pairs: 0, merged: 0, noMatch: 0, ambiguous: 0, examples: [] };
       let total = null;
       let state = { afterId: 0, apply: !!apply };
+      const show = function () {
+        out.textContent = [
+          (apply ? t.merged + ' titles merged' : t.pairs + ' titles are stored twice (TMDB confirms it)') + ', of ' + t.scanned + ' titles stored by TMDB id alone.',
+          'Left alone: ' + t.notStored + ' with no other copy, ' + t.noAnswer + ' TMDB did not answer for, ' + t.noImdb + ' with no IMDb id at TMDB, ' + t.otherKind + ' where the other copy is filed as the other kind, ' + t.otherTmdb + ' where the other copy has another TMDB id.',
+          'Examples: ' + (t.examples.length ? t.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare + ' (TMDB ' + e.tmdbId + ')'; }).join('') : 'none'),
+          '',
+          (apply ? n.merged + ' titles merged' : n.pairs + ' titles stored under their own name match exactly one title') + ', of ' + n.scanned + ' stored under their own name. Left alone: ' + n.noMatch + ' with no matching title, ' + n.ambiguous + ' that match more than one.',
+          'Examples: ' + (n.examples.length ? n.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare; }).join('') : 'none'),
+        ].join(nl);
+      };
       try {
-        for (let i = 0; i < 2000; i++) {
+        for (let i = 0; i < 4000; i++) {
           const res = await fetch('/admin/api/jobs/duplicate-media-merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
           const d = await res.json();
           if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on from the start; merged titles stay merged.'; break; }
-          if (d.total != null) total = d.total;
-          ['scanned', 'pairs', 'merged', 'noAnswer', 'noImdb', 'notStored', 'otherKind', 'otherTmdb'].forEach(function (k) { t[k] += Number(d[k]) || 0; });
-          (d.examples || []).forEach(function (e) { if (t.examples.length < 15) t.examples.push(e); });
-          out.textContent = [
-            (apply ? t.merged + ' titles merged' : t.pairs + ' titles are stored twice (TMDB confirms it)') + ', of ' + t.scanned + ' titles stored by TMDB id alone.',
-            'Left alone: ' + t.notStored + ' with no other copy, ' + t.noAnswer + ' TMDB did not answer for, ' + t.noImdb + ' with no IMDb id at TMDB, ' + t.otherKind + ' where the other copy is filed as the other kind, ' + t.otherTmdb + ' where the other copy has another TMDB id.',
-            'Examples: ' + (t.examples.length ? t.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare + ' (TMDB ' + e.tmdbId + ')'; }).join('') : 'none'),
-          ].join(nl);
-          if (d.done) { status.textContent = 'Done.'; break; }
-          status.textContent = (apply ? 'Merging... ' : 'Checking... ') + t.scanned + (total ? ' of ' + total : '') + ' so far.';
-          state = { afterId: d.afterId, apply: !!apply };
+          const into = state.pass === 'name' ? n : t;
+          if (state.pass !== 'name' && d.total != null) total = d.total;
+          Object.keys(into).forEach(function (k) { if (k !== 'examples') into[k] += Number(d[k]) || 0; });
+          (d.examples || []).forEach(function (e) { if (into.examples.length < 15) into.examples.push(e); });
+          show();
+          if (d.done && state.pass === 'name') { status.textContent = 'Done.'; break; }
+          if (d.done) { state = { afterId: 0, apply: !!apply, pass: 'name' }; continue; }
+          status.textContent = (apply ? 'Merging... ' : 'Checking... ') + (state.pass === 'name' ? 'titles stored under their name, ' + n.scanned : t.scanned + (total ? ' of ' + total : '')) + ' so far.';
+          state = { afterId: d.afterId, apply: !!apply, pass: state.pass };
         }
       } catch (e) {
         status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';
@@ -105351,6 +105361,17 @@ async function retryUnresolvedMedia(env, opts = {}) {
       console.warn("[media.retry] merging duplicate titles failed:", String((e && e.message) || e));
     }
   }
+  const named = rows.filter((r) => r.imdb_id == null && r.tmdb_id == null && r.alt_id).map((r) => r.id);
+  if (named.length) {
+    try {
+      for (let i = 0; i < named.length; i += MEDIA_NAME_MERGE_BATCH) {
+        const m = await mergeNameOnlyMedia(env, { ids: named.slice(i, i + MEDIA_NAME_MERGE_BATCH), apply: true });
+        merged += Number(m && m.merged) || 0;
+      }
+    } catch (e) {
+      console.warn("[media.retry] merging titles stored under their name failed:", String((e && e.message) || e));
+    }
+  }
   return { tried: rows.length, resolved, merged };
 }
 
@@ -105710,6 +105731,58 @@ async function mergeDuplicateMedia(env, opts = {}) {
   }
   out.afterId = stubs.length ? Number(stubs[stubs.length - 1].id) : afterId;
   out.done = stubs.length < limit;
+  return out;
+}
+
+// --- A title stored under its own name -------------------------------------------
+//
+// An entry that reaches normalizeMediaRef with no real id (a list item or a
+// play that only says "Dexter") is kept with its name as its id: alt_id
+// "Dexter", no IMDb or TMDB id, never looked up, and apart from the real
+// Dexter. The count of 2026-10-11 found 50 such, most with list entries or
+// plays. TMDB cannot confirm these (there is no id to ask about), so a pair
+// is a row of the same kind with that name and year that has an IMDb id, and
+// only when exactly one row is such: two films called Alone (2020) leave the
+// copy alone. The kept row takes the name as its alt_id, so the next entry
+// that only says "Dexter" finds it instead of making another copy.
+const MEDIA_NAME_MERGE_BATCH = 100;
+
+async function mergeNameOnlyMedia(env, opts = {}) {
+  if (!env || !env.DB) throw new Error("mergeNameOnlyMedia: no D1 database is bound");
+  const apply = opts.apply === true;
+  const afterId = Math.max(0, Number(opts.afterId) || 0);
+  const only = Array.isArray(opts.ids) ? opts.ids.map(Number).filter(Number.isFinite).slice(0, MEDIA_NAME_MERGE_BATCH) : null;
+  const where = `m.imdb_id IS NULL AND m.tmdb_id IS NULL AND m.alt_id IS NOT NULL AND instr(m.alt_id, ':') = 0
+    AND m.title IS NOT NULL AND m.year IS NOT NULL AND lower(trim(m.alt_id)) = lower(trim(m.title))`;
+  const { results } = only
+    ? await env.DB.prepare(`SELECT m.id, m.kind, m.title, m.year, m.alt_id FROM media m WHERE m.id IN (SELECT value FROM json_each(?)) AND ${where} ORDER BY m.id`)
+      .bind(JSON.stringify(only)).all()
+    : await env.DB.prepare(`SELECT m.id, m.kind, m.title, m.year, m.alt_id FROM media m WHERE m.id > ? AND ${where} ORDER BY m.id LIMIT ?`)
+      .bind(afterId, MEDIA_NAME_MERGE_BATCH).all();
+  const rows = results || [];
+  const out = { ok: true, apply, scanned: rows.length, pairs: 0, merged: 0, noMatch: 0, ambiguous: 0, examples: [] };
+  const now = Date.now();
+  for (const s of rows) {
+    const { results: cands } = await env.DB.prepare(
+      `SELECT id, imdb_id, alt_id FROM media WHERE kind = ? AND year = ? AND lower(trim(title)) = lower(trim(?)) AND imdb_id IS NOT NULL AND id != ? LIMIT 2`
+    ).bind(s.kind, s.year, s.title, s.id).all();
+    const list = cands || [];
+    if (!list.length) { out.noMatch++; continue; }
+    if (list.length > 1) { out.ambiguous++; continue; }
+    const keep = list[0];
+    out.pairs++;
+    if (out.examples.length < MEDIA_MERGE_EXAMPLES) {
+      out.examples.push({ title: s.title, year: s.year, kind: s.kind, keep: Number(keep.id), spare: Number(s.id), imdbId: keep.imdb_id });
+    }
+    if (!apply) continue;
+    for (const db of activityDbs(env)) await db.batch(mediaMergeActivityStatements(db, Number(keep.id), Number(s.id)));
+    const main = mediaMergeMainStatements(env, Number(keep.id), Number(s.id), {}, now).slice(0, -1);
+    main.push(env.DB.prepare("UPDATE media SET alt_id = COALESCE(alt_id, ?), updated_at = ? WHERE id = ?").bind(s.alt_id, now, Number(keep.id)));
+    await env.DB.batch(main);
+    out.merged++;
+  }
+  out.afterId = rows.length ? Number(rows[rows.length - 1].id) : afterId;
+  out.done = only ? true : rows.length < MEDIA_NAME_MERGE_BATCH;
   return out;
 }
 
@@ -112404,7 +112477,9 @@ async function handleJobsAdminApi(request, env, url, path) {
       } catch {
         body = {};
       }
-      const result = await mergeDuplicateMedia(env, { afterId: body.afterId, apply: body.apply === true });
+      const result = body.pass === "name"
+        ? await mergeNameOnlyMedia(env, { afterId: body.afterId, apply: body.apply === true })
+        : await mergeDuplicateMedia(env, { afterId: body.afterId, apply: body.apply === true });
       return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {

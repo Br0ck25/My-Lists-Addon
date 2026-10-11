@@ -427,7 +427,9 @@ async function handleJobsAdminApi(request, env, url, path) {
       } catch {
         body = {};
       }
-      const result = await mergeDuplicateMedia(env, { afterId: body.afterId, apply: body.apply === true });
+      const result = body.pass === "name"
+        ? await mergeNameOnlyMedia(env, { afterId: body.afterId, apply: body.apply === true })
+        : await mergeDuplicateMedia(env, { afterId: body.afterId, apply: body.apply === true });
       return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {
