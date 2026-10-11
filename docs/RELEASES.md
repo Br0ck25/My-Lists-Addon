@@ -46,7 +46,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 26** went live on 2026-10-07. The owner reports it fine. PR #29's fixes, and a shortened job period applies at once. Details under Release 26. Merged into `main`.
 - **Release 27** went live on 2026-10-07. The owner reports it looks good. The old Continue Watching and Airing Next background jobs pass over the accounts whose shelves come from the schedule. Details under Release 27. Merged into `main`.
 - **`main` up to PR #37 is live** (2026-10-11, `/admin` showed *Release 27 (build d349e2f0ce)*): other sessions' Support Emails, badged posters as images, one-click Nuvio install, per-list shuffle, Watch History fixes. The owner set up the `EMAIL` and `IMAGES` bindings, migration 0021, and D1 read replication. `INSTALL_MIGRATION_PERCENT` is at 50 (118 moved, none removed). Saves that sent the Account Key: 51 that day, so the sunset waits.
-- **Release 28** (prepared 2026-10-11, build 0de238224f): a read-only *Check duplicate titles* on `/admin`, and `/admin` shows *Built <date> (build <stamp>)* in place of a release number. Details under Release 28.
+- **Release 28** (prepared 2026-10-11, build d7bca701f6; an earlier build 927e912ba1 had only the count): *Check duplicate titles* and *Merge duplicate titles* on `/admin`, and `/admin` shows *Built <date> (build <stamp>)* in place of a release number. Details under Release 28.
 - **From Release 28 on there is no release number in the code.** `python build.py` fills in the build date (the day the code last changed) and the stamp; `/admin` shows both. Entries here keep a name for talking about them and give that date and stamp.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
@@ -1740,7 +1740,7 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 
 **Rollback:** paste the 26 file.
 
-## Release 28: Check duplicate titles (read-only), and the build date on /admin
+## Release 28: duplicate titles (count, preview, merge), and the build date on /admin
 
 **Branch point:** `main` at `d754751` (PR #37), live as build d349e2f0ce.
 
@@ -1749,17 +1749,24 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - `/admin` → Management & Tools → Maintenance, under *Compare shelves now*: **Check duplicate titles** (`findDuplicateMedia`, `29_media.js`; `GET /admin/api/jobs/duplicate-media`, admin only). It only reads.
 - A title can be stored twice when it arrives once by its IMDb id and once by its TMDB id before anything links them; the unique indexes then keep the two rows apart, and plays, list entries and progress can be split between them.
 - It groups rows of one kind by name and year. A group is *likely the same title* when two of its rows have no id that disagrees; different titles that share a name and year each carry their own ids and are reported separately. For each likely group it counts list entries, plays and progress on each copy, and lists 15 examples. Rows with no year are not compared.
-- This is step 1. Step 2, merging the copies, comes only after the owner has seen the numbers and approved it, with a fresh backup.
-- **No hand-kept release number.** The owner asked why `/admin` said Release 27 for code that was not Release 27: other sessions had not raised it. `WORKER_RELEASE` is gone; `build.py` fills in `WORKER_BUILD_DATE`, and `/admin` reads *Built 2026-10-11 (build 0de238224f)*. The date is the day the code last changed: when the stamp equals the one in the committed Worker, its date is kept (`build_date`, `build.py`), so building the same code again on a later day (verify.sh, CI) gives the same bytes. The "Counts missing" tool answers with `build` and `builtOn` in place of `release`.
+- **The count's result (owner, 2026-10-11, build 927e912ba1):** 32,533 titles; 1,147 groups looked stored twice (2,298 rows), 84 with data on more than one copy; 2,839 not looked up, 1,100 IMDb only, 635 TMDB only. The examples showed name and year are not enough (*Alone* 2020, *Swan Song* 2021 and *The Odyssey* 2026 are different films), and the real shape: a row by IMDb id holding the list entries and plays, plus an empty stub by TMDB id, not looked up. The stubs come from the recommendations job (`recordRecommendedMedia`, 53_), which stores TMDB's recommendations by TMDB id alone. Each blocks the other (the unique indexes), so neither is ever completed.
+- **Merge duplicate titles** (`mergeDuplicateMedia`, 29_; `POST /admin/api/jobs/duplicate-media-merge`, admin only, audited as `admin.media.merge-duplicates`). Batches of 24 stubs (TMDB id, no IMDb id, not looked up). TMDB says each stub's IMDb id; it is a pair only when another row of the same kind holds that IMDb id and no TMDB id. **Preview** writes nothing. **Merge** moves, per pair:
+  - plays, watched counts (added) and progress (the more recent kept) in the activity database, first;
+  - then, in one batch: list entries (a list with both keeps one, and its count drops by one), recommendations, daily counts (added), schedule and episode names;
+  - deletes the stub, and gives the kept row the TMDB id and anything else it lacked.
+- Not prevented yet: the recommendations job can make a new stub for a title stored by IMDb id without a TMDB id. Next: merge such a pair automatically in `media.retry`, after the owner has run this once.
+- **No hand-kept release number.** The owner asked why `/admin` said Release 27 for code that was not Release 27: other sessions had not raised it. `WORKER_RELEASE` is gone; `build.py` fills in `WORKER_BUILD_DATE`, and `/admin` reads *Built 2026-10-11 (build d7bca701f6)*. The date is the day the code last changed: when the stamp equals the one in the committed Worker, its date is kept (`build_date`, `build.py`), so building the same code again on a later day (verify.sh, CI) gives the same bytes. The "Counts missing" tool answers with `build` and `builtOn` in place of `release`.
 
 ### Checked
 
 - `tests/build-stamp.test.mjs`: an earlier build's date is kept for the same code, and today's is taken for new code; `/admin` shows the date. `tests/analytics-engine-stats.test.mjs` checks the new heading and answer.
-- `tests/duplicate-media.test.mjs`: finds a show stored by IMDb id and by TMDB id with the plays and progress on each, leaves two different films with one name alone, does not compare a film with a show, changes nothing, and is admin only.
+- `tests/duplicate-media.test.mjs`: the merge pairs only what TMDB confirms (another film called Alone and a stub with no other copy are left alone), Preview writes nothing, and Merge keeps every play, list entry, recommendation and count, the more recent progress, and completes the kept row. The count finds a show stored by IMDb id and by TMDB id with the plays and progress on each, leaves two different films with one name alone, does not compare a film with a show, changes nothing, and is admin only.
 - `bash verify.sh`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,369 tests each).
 
 **Steps:**
-1. Deploy `release-28-NEW-worker.js`. Check that `/admin` says **Built 2026-10-11 (build 0de238224f)**.
-2. Press **Check duplicate titles** and send the result.
+1. Deploy `release-28-NEW-worker.js`. Check that `/admin` says **Built 2026-10-11 (build d7bca701f6)**.
+2. Take a backup (GitHub → Actions → the D1 backup → Run workflow), or check that today's ran.
+3. Press **Preview** under *Merge duplicate titles* and send the result.
+4. Only after we have looked at it: press **Merge**.
 
 **Rollback:** paste the build d349e2f0ce file (`main` at `d754751`).

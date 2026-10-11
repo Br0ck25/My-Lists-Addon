@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0de238224f";
+const WORKER_BUILD = "d7bca701f6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -12966,6 +12966,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
   "/admin/api/jobs/ping": "admin.jobs.test",
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
+  "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -12975,7 +12976,7 @@ const ADMIN_AUDIT_GET_MUTATORS = new Set(["/admin/api/migrate-accounts"]);
 // token an admin form might carry. `slugs` is here for the delete flows.
 const ADMIN_AUDIT_BODY_FIELDS = [
   "username", "creatorName", "slug", "slugs", "name", "listName", "channelId", "networkId",
-  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason",
+  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason", "apply",
 ];
 const ADMIN_AUDIT_VALUE_MAX = 200;
 const ADMIN_AUDIT_DETAIL_MAX = 600;
@@ -14280,6 +14281,11 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="dupMediaBtn" data-act="runDuplicateMediaCheck" ${isD1Bound ? '' : 'disabled'}>Check duplicate titles</button>
       <span id="dupMediaStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="dupMediaResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Merge duplicate titles</strong> asks TMDB which IMDb id each title stored by its TMDB id alone belongs to, and pairs it only when another title holds exactly that IMDb id. <strong>Preview</strong> only reads. <strong>Merge</strong> moves the list entries, plays, progress and recommendations onto the kept title and deletes the empty copy; take a backup first. Keep the page open until it says Done.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="dupMergePreviewBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Preview</button>
+      <button type="button" class="admin-select u-cur-pointer" id="dupMergeApplyBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Merge</button>
+      <span id="dupMergeStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="dupMergeResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -16024,6 +16030,41 @@ ${UTILITY_CSS}
         status.textContent = 'Stopped: network error.';
       }
       btn.disabled = false;
+    }
+
+    // The merge, a batch per request (mergeDuplicateMedia, 29_media.js).
+    async function runDuplicateMediaMerge(apply) {
+      if (apply && !confirm('Merge duplicate titles? This moves list entries and plays onto one copy of each title and deletes the empty copy. Take a database backup first.')) return;
+      const buttons = [document.getElementById('dupMergePreviewBtn'), document.getElementById('dupMergeApplyBtn')];
+      const status = document.getElementById('dupMergeStatus');
+      const out = document.getElementById('dupMergeResult');
+      const nl = String.fromCharCode(10);
+      buttons.forEach(function (b) { b.disabled = true; });
+      out.textContent = '';
+      const t = { scanned: 0, pairs: 0, merged: 0, noAnswer: 0, noImdb: 0, notStored: 0, otherKind: 0, otherTmdb: 0, examples: [] };
+      let total = null;
+      let state = { afterId: 0, apply: !!apply };
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/jobs/duplicate-media-merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const d = await res.json();
+          if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on from the start; merged titles stay merged.'; break; }
+          if (d.total != null) total = d.total;
+          ['scanned', 'pairs', 'merged', 'noAnswer', 'noImdb', 'notStored', 'otherKind', 'otherTmdb'].forEach(function (k) { t[k] += Number(d[k]) || 0; });
+          (d.examples || []).forEach(function (e) { if (t.examples.length < 15) t.examples.push(e); });
+          out.textContent = [
+            (apply ? t.merged + ' titles merged' : t.pairs + ' titles are stored twice (TMDB confirms it)') + ', of ' + t.scanned + ' titles stored by TMDB id alone.',
+            'Left alone: ' + t.notStored + ' with no other copy, ' + t.noAnswer + ' TMDB did not answer for, ' + t.noImdb + ' with no IMDb id at TMDB, ' + t.otherKind + ' where the other copy is filed as the other kind, ' + t.otherTmdb + ' where the other copy has another TMDB id.',
+            'Examples: ' + (t.examples.length ? t.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare + ' (TMDB ' + e.tmdbId + ')'; }).join('') : 'none'),
+          ].join(nl);
+          if (d.done) { status.textContent = 'Done.'; break; }
+          status.textContent = (apply ? 'Merging... ' : 'Checking... ') + t.scanned + (total ? ' of ' + total : '') + ' so far.';
+          state = { afterId: d.afterId, apply: !!apply };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';
+      }
+      buttons.forEach(function (b) { b.disabled = false; });
     }
 
     async function runKvExport() {
@@ -105522,6 +105563,132 @@ async function findDuplicateMedia(env) {
   };
 }
 
+// --- Two rows for one title: the merge -------------------------------------------
+//
+// The count above showed the shape (2026-10-11): nearly every pair is a row a
+// list or a play made by IMDb id (it holds the list entries and plays) and an
+// empty stub made by TMDB id alone. The stubs come from the recommendations
+// job (recordRecommendedMedia, 53_): TMDB's recommendations carry no IMDb id,
+// so it cannot see the title is already stored. The stub then holds the TMDB
+// id the IMDb row needs, the IMDb row holds the IMDb id the stub needs, and
+// neither can ever be completed. Same name and year is not enough to merge on
+// (two films called Alone came out in 2020), so this asks TMDB.
+//
+// One batch per call, oldest stub first: for each stub with a TMDB id and no
+// IMDb id, TMDB says its IMDb id; when another row of the same kind holds that
+// IMDb id and no TMDB id, the two are one title. With `apply`, everything that
+// points at the stub moves to that row, the stub is deleted, and the row takes
+// the TMDB id and anything else it lacked. Without it, nothing is written.
+// Plays move before the stub is deleted, so a batch that fails half way leaves
+// every play on a row that exists.
+const MEDIA_MERGE_BATCH = 24;
+const MEDIA_MERGE_EXAMPLES = 15;
+
+function mediaMergeMainStatements(env, keep, spare, f, now) {
+  const db = env.DB;
+  return [
+    // A list that has both copies keeps one entry.
+    db.prepare(
+      `UPDATE lists SET item_count = max(0, item_count - (SELECT count(*) FROM list_items a JOIN list_items b
+         ON b.list_id = a.list_id AND ifnull(b.season, -1) = ifnull(a.season, -1) AND ifnull(b.episode, -1) = ifnull(a.episode, -1)
+         WHERE a.list_id = lists.id AND a.media_id = ? AND b.media_id = ?)), updated_at = ?
+       WHERE id IN (SELECT list_id FROM list_items WHERE media_id = ?)`
+    ).bind(spare, keep, now, spare),
+    db.prepare("UPDATE OR IGNORE list_items SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM list_items WHERE media_id = ?").bind(spare),
+    db.prepare("UPDATE account_recommendations SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare(
+      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
+       SELECT day, event_type, ?, n FROM title_daily_stats WHERE media_id = ? AND true
+       ON CONFLICT (day, event_type, media_id) DO UPDATE SET n = title_daily_stats.n + excluded.n`
+    ).bind(keep, spare),
+    db.prepare("DELETE FROM title_daily_stats WHERE media_id = ?").bind(spare),
+    db.prepare("UPDATE OR IGNORE show_schedule SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM show_schedule WHERE media_id = ?").bind(spare),
+    db.prepare("UPDATE OR IGNORE media_episodes SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM media_episodes WHERE media_id = ?").bind(spare),
+    db.prepare("DELETE FROM media WHERE id = ? AND imdb_id IS NULL").bind(spare),
+    db.prepare(
+      `UPDATE media SET tmdb_id = ?, tvdb_id = COALESCE(tvdb_id, ?), title = COALESCE(title, ?), year = COALESCE(year, ?),
+         poster_path = COALESCE(poster_path, ?), backdrop_path = COALESCE(backdrop_path, ?),
+         resolved_at = COALESCE(resolved_at, ?), updated_at = ?
+       WHERE id = ? AND tmdb_id IS NULL`
+    ).bind(f.tmdbId, f.tvdbId, f.title, f.year, f.posterPath, f.backdropPath, now, now, keep),
+  ];
+}
+
+function mediaMergeActivityStatements(db, keep, spare) {
+  return [
+    db.prepare("UPDATE watch_events SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare(
+      `INSERT INTO user_media_state (account_id, media_id, watched_count, last_watched_at)
+       SELECT account_id, ?, watched_count, last_watched_at FROM user_media_state WHERE media_id = ? AND true
+       ON CONFLICT (account_id, media_id) DO UPDATE SET watched_count = user_media_state.watched_count + excluded.watched_count,
+         last_watched_at = max(COALESCE(user_media_state.last_watched_at, 0), COALESCE(excluded.last_watched_at, 0))`
+    ).bind(keep, spare),
+    db.prepare("DELETE FROM user_media_state WHERE media_id = ?").bind(spare),
+    // An account with progress on both keeps the more recent.
+    db.prepare(
+      `DELETE FROM show_progress WHERE media_id = ? AND EXISTS (
+         SELECT 1 FROM show_progress s WHERE s.account_id = show_progress.account_id AND s.media_id = ?
+           AND COALESCE(s.last_watched_at, 0) > COALESCE(show_progress.last_watched_at, 0))`
+    ).bind(keep, spare),
+    db.prepare("UPDATE OR IGNORE show_progress SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM show_progress WHERE media_id = ?").bind(spare),
+  ];
+}
+
+async function mergeDuplicateMedia(env, opts = {}) {
+  if (!env || !env.DB) throw new Error("mergeDuplicateMedia: no D1 database is bound");
+  const apply = opts.apply === true;
+  const apiKey = opts.tmdbKey !== undefined ? opts.tmdbKey : (env.TMDB_API_KEY || "");
+  if (!apiKey) return { ok: false, error: "No TMDB key is set (TMDB_API_KEY)." };
+  const afterId = Math.max(0, Number(opts.afterId) || 0);
+  const limit = Math.max(1, Math.min(Number(opts.limit) || MEDIA_MERGE_BATCH, 100));
+  const { results } = await env.DB.prepare(
+    `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE id > ? AND resolved_at IS NULL AND imdb_id IS NULL AND tmdb_id IS NOT NULL
+     ORDER BY id LIMIT ?`
+  ).bind(afterId, limit).all();
+  const stubs = results || [];
+  const total = afterId ? null : Number((await env.DB.prepare(
+    "SELECT count(*) AS n FROM media WHERE resolved_at IS NULL AND imdb_id IS NULL AND tmdb_id IS NOT NULL"
+  ).first() || {}).n) || 0;
+  const facts = await mapMediaWithConcurrency(stubs, MEDIA_TMDB_CONCURRENCY,
+    (s) => fetchTmdbMediaFacts({ kind: s.kind, tmdbId: s.tmdb_id, imdbId: null }, apiKey));
+  const imdbs = [...new Set(facts.map((f) => (f && f.imdbId) || null).filter(Boolean))];
+  const holders = new Map();
+  for (const part of d1JsonChunks(imdbs)) {
+    const { results: rows } = await env.DB.prepare(
+      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE imdb_id IN (SELECT value FROM json_each(?))`
+    ).bind(part).all();
+    for (const r of rows || []) holders.set(r.imdb_id, r);
+  }
+  const out = { ok: true, apply, scanned: stubs.length, total, pairs: 0, merged: 0, noAnswer: 0, noImdb: 0, notStored: 0, otherKind: 0, otherTmdb: 0, examples: [] };
+  const now = Date.now();
+  for (let i = 0; i < stubs.length; i++) {
+    const s = stubs[i];
+    const f = facts[i];
+    if (!f) { out.noAnswer++; continue; }
+    if (!f.imdbId) { out.noImdb++; continue; }
+    const keep = holders.get(f.imdbId);
+    if (!keep || Number(keep.id) === Number(s.id)) { out.notStored++; continue; }
+    if (keep.kind !== s.kind) { out.otherKind++; continue; }
+    if (keep.tmdb_id != null) { out.otherTmdb++; continue; }
+    out.pairs++;
+    if (out.examples.length < MEDIA_MERGE_EXAMPLES) {
+      out.examples.push({ title: keep.title || f.title, year: keep.year || f.year, kind: s.kind, keep: Number(keep.id), spare: Number(s.id), imdbId: f.imdbId, tmdbId: Number(s.tmdb_id) });
+    }
+    if (!apply) continue;
+    for (const db of activityDbs(env)) await db.batch(mediaMergeActivityStatements(db, Number(keep.id), Number(s.id)));
+    await env.DB.batch(mediaMergeMainStatements(env, Number(keep.id), Number(s.id), { ...f, tmdbId: Number(s.tmdb_id) }, now));
+    keep.tmdb_id = Number(s.tmdb_id);
+    out.merged++;
+  }
+  out.afterId = stubs.length ? Number(stubs[stubs.length - 1].id) : afterId;
+  out.done = stubs.length < limit;
+  return out;
+}
+
 // --- Lists v2 backfill: migrate.lists (Phase 3b, P3b-3) ----------------------
 //
 // Copies every existing list into the lists v2 tables (migration 0016):
@@ -112157,6 +112324,8 @@ function newJobPingNonce() {
 //                                          (runShelfShadowNow, 47_shelf-shadow.js)
 //   GET  /admin/api/jobs/duplicate-media   two rows for one title: a count, it
 //                                          only reads (findDuplicateMedia, 29_media.js)
+//   POST /admin/api/jobs/duplicate-media-merge  one batch of the merge, or of
+//                                          its preview (mergeDuplicateMedia, 29_)
 async function handleJobsAdminApi(request, env, url, path) {
   if (!path.startsWith("/admin/api/jobs/")) return null;
   if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
@@ -112203,6 +112372,16 @@ async function handleJobsAdminApi(request, env, url, path) {
     }
     if (path === "/admin/api/jobs/duplicate-media" && request.method === "GET") {
       return json(await findDuplicateMedia(env), 200, { "Cache-Control": "no-store" });
+    }
+    if (path === "/admin/api/jobs/duplicate-media-merge" && request.method === "POST") {
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const result = await mergeDuplicateMedia(env, { afterId: body.afterId, apply: body.apply === true });
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {
       const nonce = url.searchParams.get("nonce") || "";

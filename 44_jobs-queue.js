@@ -371,6 +371,8 @@ function newJobPingNonce() {
 //                                          (runShelfShadowNow, 47_shelf-shadow.js)
 //   GET  /admin/api/jobs/duplicate-media   two rows for one title: a count, it
 //                                          only reads (findDuplicateMedia, 29_media.js)
+//   POST /admin/api/jobs/duplicate-media-merge  one batch of the merge, or of
+//                                          its preview (mergeDuplicateMedia, 29_)
 async function handleJobsAdminApi(request, env, url, path) {
   if (!path.startsWith("/admin/api/jobs/")) return null;
   if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
@@ -417,6 +419,16 @@ async function handleJobsAdminApi(request, env, url, path) {
     }
     if (path === "/admin/api/jobs/duplicate-media" && request.method === "GET") {
       return json(await findDuplicateMedia(env), 200, { "Cache-Control": "no-store" });
+    }
+    if (path === "/admin/api/jobs/duplicate-media-merge" && request.method === "POST") {
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const result = await mergeDuplicateMedia(env, { afterId: body.afterId, apply: body.apply === true });
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
     if (path === "/admin/api/jobs/ping" && request.method === "GET") {
       const nonce = url.searchParams.get("nonce") || "";

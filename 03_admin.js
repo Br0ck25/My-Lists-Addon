@@ -2006,6 +2006,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
   "/admin/api/jobs/ping": "admin.jobs.test",
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
+  "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -2015,7 +2016,7 @@ const ADMIN_AUDIT_GET_MUTATORS = new Set(["/admin/api/migrate-accounts"]);
 // token an admin form might carry. `slugs` is here for the delete flows.
 const ADMIN_AUDIT_BODY_FIELDS = [
   "username", "creatorName", "slug", "slugs", "name", "listName", "channelId", "networkId",
-  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason",
+  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason", "apply",
 ];
 const ADMIN_AUDIT_VALUE_MAX = 200;
 const ADMIN_AUDIT_DETAIL_MAX = 600;
@@ -3320,6 +3321,11 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="dupMediaBtn" data-act="runDuplicateMediaCheck" ${isD1Bound ? '' : 'disabled'}>Check duplicate titles</button>
       <span id="dupMediaStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="dupMediaResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Merge duplicate titles</strong> asks TMDB which IMDb id each title stored by its TMDB id alone belongs to, and pairs it only when another title holds exactly that IMDb id. <strong>Preview</strong> only reads. <strong>Merge</strong> moves the list entries, plays, progress and recommendations onto the kept title and deletes the empty copy; take a backup first. Keep the page open until it says Done.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="dupMergePreviewBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Preview</button>
+      <button type="button" class="admin-select u-cur-pointer" id="dupMergeApplyBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Merge</button>
+      <span id="dupMergeStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="dupMergeResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -5064,6 +5070,41 @@ ${UTILITY_CSS}
         status.textContent = 'Stopped: network error.';
       }
       btn.disabled = false;
+    }
+
+    // The merge, a batch per request (mergeDuplicateMedia, 29_media.js).
+    async function runDuplicateMediaMerge(apply) {
+      if (apply && !confirm('Merge duplicate titles? This moves list entries and plays onto one copy of each title and deletes the empty copy. Take a database backup first.')) return;
+      const buttons = [document.getElementById('dupMergePreviewBtn'), document.getElementById('dupMergeApplyBtn')];
+      const status = document.getElementById('dupMergeStatus');
+      const out = document.getElementById('dupMergeResult');
+      const nl = String.fromCharCode(10);
+      buttons.forEach(function (b) { b.disabled = true; });
+      out.textContent = '';
+      const t = { scanned: 0, pairs: 0, merged: 0, noAnswer: 0, noImdb: 0, notStored: 0, otherKind: 0, otherTmdb: 0, examples: [] };
+      let total = null;
+      let state = { afterId: 0, apply: !!apply };
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/jobs/duplicate-media-merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const d = await res.json();
+          if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on from the start; merged titles stay merged.'; break; }
+          if (d.total != null) total = d.total;
+          ['scanned', 'pairs', 'merged', 'noAnswer', 'noImdb', 'notStored', 'otherKind', 'otherTmdb'].forEach(function (k) { t[k] += Number(d[k]) || 0; });
+          (d.examples || []).forEach(function (e) { if (t.examples.length < 15) t.examples.push(e); });
+          out.textContent = [
+            (apply ? t.merged + ' titles merged' : t.pairs + ' titles are stored twice (TMDB confirms it)') + ', of ' + t.scanned + ' titles stored by TMDB id alone.',
+            'Left alone: ' + t.notStored + ' with no other copy, ' + t.noAnswer + ' TMDB did not answer for, ' + t.noImdb + ' with no IMDb id at TMDB, ' + t.otherKind + ' where the other copy is filed as the other kind, ' + t.otherTmdb + ' where the other copy has another TMDB id.',
+            'Examples: ' + (t.examples.length ? t.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare + ' (TMDB ' + e.tmdbId + ')'; }).join('') : 'none'),
+          ].join(nl);
+          if (d.done) { status.textContent = 'Done.'; break; }
+          status.textContent = (apply ? 'Merging... ' : 'Checking... ') + t.scanned + (total ? ' of ' + total : '') + ' so far.';
+          state = { afterId: d.afterId, apply: !!apply };
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';
+      }
+      buttons.forEach(function (b) { b.disabled = false; });
     }
 
     async function runKvExport() {

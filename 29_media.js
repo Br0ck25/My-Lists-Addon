@@ -707,3 +707,129 @@ async function findDuplicateMedia(env) {
     examples,
   };
 }
+
+// --- Two rows for one title: the merge -------------------------------------------
+//
+// The count above showed the shape (2026-10-11): nearly every pair is a row a
+// list or a play made by IMDb id (it holds the list entries and plays) and an
+// empty stub made by TMDB id alone. The stubs come from the recommendations
+// job (recordRecommendedMedia, 53_): TMDB's recommendations carry no IMDb id,
+// so it cannot see the title is already stored. The stub then holds the TMDB
+// id the IMDb row needs, the IMDb row holds the IMDb id the stub needs, and
+// neither can ever be completed. Same name and year is not enough to merge on
+// (two films called Alone came out in 2020), so this asks TMDB.
+//
+// One batch per call, oldest stub first: for each stub with a TMDB id and no
+// IMDb id, TMDB says its IMDb id; when another row of the same kind holds that
+// IMDb id and no TMDB id, the two are one title. With `apply`, everything that
+// points at the stub moves to that row, the stub is deleted, and the row takes
+// the TMDB id and anything else it lacked. Without it, nothing is written.
+// Plays move before the stub is deleted, so a batch that fails half way leaves
+// every play on a row that exists.
+const MEDIA_MERGE_BATCH = 24;
+const MEDIA_MERGE_EXAMPLES = 15;
+
+function mediaMergeMainStatements(env, keep, spare, f, now) {
+  const db = env.DB;
+  return [
+    // A list that has both copies keeps one entry.
+    db.prepare(
+      `UPDATE lists SET item_count = max(0, item_count - (SELECT count(*) FROM list_items a JOIN list_items b
+         ON b.list_id = a.list_id AND ifnull(b.season, -1) = ifnull(a.season, -1) AND ifnull(b.episode, -1) = ifnull(a.episode, -1)
+         WHERE a.list_id = lists.id AND a.media_id = ? AND b.media_id = ?)), updated_at = ?
+       WHERE id IN (SELECT list_id FROM list_items WHERE media_id = ?)`
+    ).bind(spare, keep, now, spare),
+    db.prepare("UPDATE OR IGNORE list_items SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM list_items WHERE media_id = ?").bind(spare),
+    db.prepare("UPDATE account_recommendations SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare(
+      `INSERT INTO title_daily_stats (day, event_type, media_id, n)
+       SELECT day, event_type, ?, n FROM title_daily_stats WHERE media_id = ? AND true
+       ON CONFLICT (day, event_type, media_id) DO UPDATE SET n = title_daily_stats.n + excluded.n`
+    ).bind(keep, spare),
+    db.prepare("DELETE FROM title_daily_stats WHERE media_id = ?").bind(spare),
+    db.prepare("UPDATE OR IGNORE show_schedule SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM show_schedule WHERE media_id = ?").bind(spare),
+    db.prepare("UPDATE OR IGNORE media_episodes SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM media_episodes WHERE media_id = ?").bind(spare),
+    db.prepare("DELETE FROM media WHERE id = ? AND imdb_id IS NULL").bind(spare),
+    db.prepare(
+      `UPDATE media SET tmdb_id = ?, tvdb_id = COALESCE(tvdb_id, ?), title = COALESCE(title, ?), year = COALESCE(year, ?),
+         poster_path = COALESCE(poster_path, ?), backdrop_path = COALESCE(backdrop_path, ?),
+         resolved_at = COALESCE(resolved_at, ?), updated_at = ?
+       WHERE id = ? AND tmdb_id IS NULL`
+    ).bind(f.tmdbId, f.tvdbId, f.title, f.year, f.posterPath, f.backdropPath, now, now, keep),
+  ];
+}
+
+function mediaMergeActivityStatements(db, keep, spare) {
+  return [
+    db.prepare("UPDATE watch_events SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare(
+      `INSERT INTO user_media_state (account_id, media_id, watched_count, last_watched_at)
+       SELECT account_id, ?, watched_count, last_watched_at FROM user_media_state WHERE media_id = ? AND true
+       ON CONFLICT (account_id, media_id) DO UPDATE SET watched_count = user_media_state.watched_count + excluded.watched_count,
+         last_watched_at = max(COALESCE(user_media_state.last_watched_at, 0), COALESCE(excluded.last_watched_at, 0))`
+    ).bind(keep, spare),
+    db.prepare("DELETE FROM user_media_state WHERE media_id = ?").bind(spare),
+    // An account with progress on both keeps the more recent.
+    db.prepare(
+      `DELETE FROM show_progress WHERE media_id = ? AND EXISTS (
+         SELECT 1 FROM show_progress s WHERE s.account_id = show_progress.account_id AND s.media_id = ?
+           AND COALESCE(s.last_watched_at, 0) > COALESCE(show_progress.last_watched_at, 0))`
+    ).bind(keep, spare),
+    db.prepare("UPDATE OR IGNORE show_progress SET media_id = ? WHERE media_id = ?").bind(keep, spare),
+    db.prepare("DELETE FROM show_progress WHERE media_id = ?").bind(spare),
+  ];
+}
+
+async function mergeDuplicateMedia(env, opts = {}) {
+  if (!env || !env.DB) throw new Error("mergeDuplicateMedia: no D1 database is bound");
+  const apply = opts.apply === true;
+  const apiKey = opts.tmdbKey !== undefined ? opts.tmdbKey : (env.TMDB_API_KEY || "");
+  if (!apiKey) return { ok: false, error: "No TMDB key is set (TMDB_API_KEY)." };
+  const afterId = Math.max(0, Number(opts.afterId) || 0);
+  const limit = Math.max(1, Math.min(Number(opts.limit) || MEDIA_MERGE_BATCH, 100));
+  const { results } = await env.DB.prepare(
+    `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE id > ? AND resolved_at IS NULL AND imdb_id IS NULL AND tmdb_id IS NOT NULL
+     ORDER BY id LIMIT ?`
+  ).bind(afterId, limit).all();
+  const stubs = results || [];
+  const total = afterId ? null : Number((await env.DB.prepare(
+    "SELECT count(*) AS n FROM media WHERE resolved_at IS NULL AND imdb_id IS NULL AND tmdb_id IS NOT NULL"
+  ).first() || {}).n) || 0;
+  const facts = await mapMediaWithConcurrency(stubs, MEDIA_TMDB_CONCURRENCY,
+    (s) => fetchTmdbMediaFacts({ kind: s.kind, tmdbId: s.tmdb_id, imdbId: null }, apiKey));
+  const imdbs = [...new Set(facts.map((f) => (f && f.imdbId) || null).filter(Boolean))];
+  const holders = new Map();
+  for (const part of d1JsonChunks(imdbs)) {
+    const { results: rows } = await env.DB.prepare(
+      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE imdb_id IN (SELECT value FROM json_each(?))`
+    ).bind(part).all();
+    for (const r of rows || []) holders.set(r.imdb_id, r);
+  }
+  const out = { ok: true, apply, scanned: stubs.length, total, pairs: 0, merged: 0, noAnswer: 0, noImdb: 0, notStored: 0, otherKind: 0, otherTmdb: 0, examples: [] };
+  const now = Date.now();
+  for (let i = 0; i < stubs.length; i++) {
+    const s = stubs[i];
+    const f = facts[i];
+    if (!f) { out.noAnswer++; continue; }
+    if (!f.imdbId) { out.noImdb++; continue; }
+    const keep = holders.get(f.imdbId);
+    if (!keep || Number(keep.id) === Number(s.id)) { out.notStored++; continue; }
+    if (keep.kind !== s.kind) { out.otherKind++; continue; }
+    if (keep.tmdb_id != null) { out.otherTmdb++; continue; }
+    out.pairs++;
+    if (out.examples.length < MEDIA_MERGE_EXAMPLES) {
+      out.examples.push({ title: keep.title || f.title, year: keep.year || f.year, kind: s.kind, keep: Number(keep.id), spare: Number(s.id), imdbId: f.imdbId, tmdbId: Number(s.tmdb_id) });
+    }
+    if (!apply) continue;
+    for (const db of activityDbs(env)) await db.batch(mediaMergeActivityStatements(db, Number(keep.id), Number(s.id)));
+    await env.DB.batch(mediaMergeMainStatements(env, Number(keep.id), Number(s.id), { ...f, tmdbId: Number(s.tmdb_id) }, now));
+    keep.tmdb_id = Number(s.tmdb_id);
+    out.merged++;
+  }
+  out.afterId = stubs.length ? Number(stubs[stubs.length - 1].id) : afterId;
+  out.done = stubs.length < limit;
+  return out;
+}
