@@ -28,6 +28,9 @@ function seededEnv() {
   // The same name as a film and as a show: different kinds, not compared.
   ins.run(5, "movie", null, "tt0000555", "Dark Matter", 2024, 1);
   ins.run(6, "series", 999, null, "Dark Matter", 2024, 1);
+  // A copy saved under another scheme's id only (an imported list's).
+  db.prepare("INSERT INTO media (id, kind, alt_id, title, year, created_at, updated_at) VALUES (8, 'movie', 'trakt:123', 'X-Men', 2000, 1, 1)").run();
+  ins.run(9, "movie", 36657, "tt0120903", "X-Men", 2000, 1);
   const act = env.DB_ACTIVITY._db;
   const play = act.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key) VALUES (7, ?, 1, ?, ?, 'ping', ?)");
   play.run(1, 1, 100, "a");
@@ -43,11 +46,13 @@ describe("Check duplicate titles (admin, read-only)", () => {
     const before = JSON.stringify(env.DB._db.prepare("SELECT * FROM media ORDER BY id").all());
     const r = await call(env, "/admin/api/jobs/duplicate-media", { cookie: await adminCookie(env) });
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    assert.equal(r.body.likelyGroups, 1);
-    assert.equal(r.body.likelyRows, 2);
+    assert.equal(r.body.likelyGroups, 2);
+    assert.equal(r.body.likelyRows, 4);
+    const xmen = r.body.examples.find((g) => g.title === "X-Men");
+    assert.equal(xmen.rows.find((row) => row.id === 8).altId, "trakt:123", "the other id is shown, so it can be told where it came from");
     assert.equal(r.body.splitGroups, 1, "both copies of Breaking Bad have plays");
     assert.equal(r.body.sameNameDifferent, 1, "the two films called Home are different titles");
-    const [g] = r.body.examples;
+    const g = r.body.examples.find((x) => x.title === "Breaking Bad");
     assert.equal(g.title, "Breaking Bad");
     const byId = Object.fromEntries(g.rows.map((row) => [row.id, row]));
     assert.deepEqual([byId[1].plays, byId[1].progress], [2, 0]);

@@ -5056,7 +5056,7 @@ ${UTILITY_CSS}
           status.textContent = 'Done.';
           const ex = (d.examples || []).map(function (g) {
             return nl + '  ' + g.title + ' (' + g.year + ', ' + g.kind + '):' + g.rows.map(function (r) {
-              return nl + '    row ' + r.id + ': IMDb ' + (r.imdbId || '-') + ', TMDB ' + (r.tmdbId == null ? '-' : r.tmdbId) + (r.resolved ? '' : ', not looked up') + '; ' + r.listItems + ' list entries, ' + r.plays + ' plays, ' + r.progress + ' progress';
+              return nl + '    row ' + r.id + ': IMDb ' + (r.imdbId || '-') + ', TMDB ' + (r.tmdbId == null ? '-' : r.tmdbId) + (r.altId ? ', other id ' + r.altId : '') + (r.resolved ? '' : ', not looked up') + '; ' + r.listItems + ' list entries, ' + r.plays + ' plays, ' + r.progress + ' progress';
             }).join('');
           }).join('');
           out.textContent = [

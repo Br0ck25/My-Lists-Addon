@@ -696,6 +696,7 @@ async function findDuplicateMedia(env) {
 
   const describe = (r) => ({
     id: Number(r.id), imdbId: r.imdb_id || null, tmdbId: r.tmdb_id != null ? Number(r.tmdb_id) : null,
+    altId: r.alt_id || null, tvdbId: r.tvdb_id != null ? Number(r.tvdb_id) : null,
     resolved: r.resolved_at != null, listItems: listItems.get(Number(r.id)) || 0,
     plays: plays.get(Number(r.id)) || 0, progress: progress.get(Number(r.id)) || 0,
   });

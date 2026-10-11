@@ -1793,3 +1793,22 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 2. Press **Preview** under *Merge duplicate titles*, then **Merge** if the examples look right (yesterday's backup still holds; the merge only joins TMDB-confirmed pairs). Then **Check duplicate titles**, and send both.
 
 **Rollback:** paste the Release 28 file (build d7bca701f6).
+
+## Release 30: Check duplicate titles shows each copy's other id
+
+**Branch point:** Release 29 (build c82d81dc04), live. Built 2026-10-11, build 26246e5b08.
+
+### What it changes
+
+- After Release 29, *Check duplicate titles* still finds 50 groups. Nearly all are a full row (IMDb and TMDB ids) plus a copy with neither, stored under another scheme's id (`alt_id`: an imported list's or a media server's), most holding list entries or plays (*Dexter*, *American Horror Story*, *X-Men*). TMDB cannot confirm those, so they are not merged.
+- The check now prints each copy's other id (and TVDB id). Read-only, nothing else changes. Its answer decides how they are matched: a scheme TMDB can look up, or an id the parser misreads.
+
+### Checked
+
+- `tests/duplicate-media.test.mjs`: the other id is shown. `bash verify.sh` passes.
+
+**Steps:**
+1. Deploy `release-30-NEW-worker.js`. Check that `/admin` says **Built 2026-10-11 (build 26246e5b08)**.
+2. Press **Check duplicate titles** and send the result.
+
+**Rollback:** paste the Release 29 file (build c82d81dc04).

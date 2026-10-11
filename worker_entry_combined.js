@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c82d81dc04";
+const WORKER_BUILD = "26246e5b08";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -16016,7 +16016,7 @@ ${UTILITY_CSS}
           status.textContent = 'Done.';
           const ex = (d.examples || []).map(function (g) {
             return nl + '  ' + g.title + ' (' + g.year + ', ' + g.kind + '):' + g.rows.map(function (r) {
-              return nl + '    row ' + r.id + ': IMDb ' + (r.imdbId || '-') + ', TMDB ' + (r.tmdbId == null ? '-' : r.tmdbId) + (r.resolved ? '' : ', not looked up') + '; ' + r.listItems + ' list entries, ' + r.plays + ' plays, ' + r.progress + ' progress';
+              return nl + '    row ' + r.id + ': IMDb ' + (r.imdbId || '-') + ', TMDB ' + (r.tmdbId == null ? '-' : r.tmdbId) + (r.altId ? ', other id ' + r.altId : '') + (r.resolved ? '' : ', not looked up') + '; ' + r.listItems + ' list entries, ' + r.plays + ' plays, ' + r.progress + ' progress';
             }).join('');
           }).join('');
           out.textContent = [
@@ -105551,6 +105551,7 @@ async function findDuplicateMedia(env) {
 
   const describe = (r) => ({
     id: Number(r.id), imdbId: r.imdb_id || null, tmdbId: r.tmdb_id != null ? Number(r.tmdb_id) : null,
+    altId: r.alt_id || null, tvdbId: r.tvdb_id != null ? Number(r.tvdb_id) : null,
     resolved: r.resolved_at != null, listItems: listItems.get(Number(r.id)) || 0,
     plays: plays.get(Number(r.id)) || 0, progress: progress.get(Number(r.id)) || 0,
   });
