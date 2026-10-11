@@ -40,8 +40,9 @@ async function runMediaRetry(env, job = {}) {
   return {
     progress: {
       ...progress,
-      lastRun: { at: Date.now(), tried: out.tried, resolved: out.resolved },
+      lastRun: { at: Date.now(), tried: out.tried, resolved: out.resolved, merged: out.merged || 0 },
       totalResolved: (Number(progress.totalResolved) || 0) + out.resolved,
+      totalMerged: (Number(progress.totalMerged) || 0) + (out.merged || 0),
     },
   };
 }

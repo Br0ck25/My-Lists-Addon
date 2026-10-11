@@ -35,7 +35,6 @@ function loadSourceFunctions(...relFiles) {
 const adminFns = loadSourceFunctions("00_constants.js", "01_icon-asset.js", "02_http-and-creator-utils.js", "03_admin.js");
 const { bumpStatBy, recordSearchQuery, computeLeaderboard } = adminFns;
 // A top-level const is not a property of the sandbox; read it from its scope.
-const WORKER_RELEASE = vm.runInContext("WORKER_RELEASE", adminFns);
 
 const analyticsBound = (points) => ({ writeDataPoint: (p) => points.push(p) });
 
@@ -252,15 +251,15 @@ describe("putting back the counts Analytics Engine took (2 October onward)", () 
     const refused = await recover(env, cookie, false);
     assert.equal(refused.status, 400);
     assert.match(refused.body.error, /^Reading page views and other counters: Analytics Engine answered 422/, "which query was refused");
-    assert.equal(refused.body.release, WORKER_RELEASE, "and which release asked");
+    assert.match(refused.body.build, /^[0-9a-f]{10}$/, "and which build asked");
+    assert.match(refused.body.builtOn, /^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("the admin page names the release that is live", async () => {
+  it("the admin page names the build that is live, and the day it was built", async () => {
     const { env, cookie } = await setup();
     const page = await call(env, "/admin", { cookie });
     assert.equal(page.status, 200);
-    assert.match(WORKER_RELEASE, /^\d+[a-z]?$/);
-    assert.ok(page.text.includes(`<span id="workerRelease">Release ${WORKER_RELEASE}</span>`));
+    assert.match(page.text, /<span id="workerRelease">Built \d{4}-\d{2}-\d{2}<\/span> <span id="workerBuild">\(build [0-9a-f]{10}\)<\/span>/);
   });
 
   it("says what is missing instead of guessing without the API token", async () => {

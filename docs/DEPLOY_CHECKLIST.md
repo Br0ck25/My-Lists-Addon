@@ -138,7 +138,7 @@ Perform the deployment during a low-traffic window:
   - **Before pasting, save the Worker currently in the dashboard** (Select all, copy, keep it as `previous-worker.js` outside the repository). It is the fastest rollback.
   - **Do not run `npx wrangler deploy`** against production: see the warning at the top of `wrangler.toml`. Production is deployed by pasting.
 - [ ] **2b. Confirm the right file is live:**
-  - Open `/admin`. The heading line must read **Release N (build XXXXXXXXXX)**, where N is `WORKER_RELEASE` and the build matches the `build stamp:` line that `python build.py` printed (also shown by `python check_sync.py`).
+  - Open `/admin`. The heading line must read **Built YYYY-MM-DD (build XXXXXXXXXX)**: both are filled in by `python build.py` (the date is the day the code last changed), and the build matches the `build stamp:` line that `python build.py` printed (also shown by `python check_sync.py`).
   - If the build differs, the pasted file is not the one that passed the checks. Paste again from the committed `worker_entry_combined.js`.
   - Write the release and build in `docs/RELEASES.md` so there is a record of what was live when.
 - [ ] **3. Verify Production Smoke Tests:**
