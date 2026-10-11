@@ -47,7 +47,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 27** went live on 2026-10-07. The owner reports it looks good. The old Continue Watching and Airing Next background jobs pass over the accounts whose shelves come from the schedule. Details under Release 27. Merged into `main`.
 - **`main` up to PR #37 is live** (2026-10-11, `/admin` showed *Release 27 (build d349e2f0ce)*): other sessions' Support Emails, badged posters as images, one-click Nuvio install, per-list shuffle, Watch History fixes. The owner set up the `EMAIL` and `IMAGES` bindings, migration 0021, and D1 read replication. `INSTALL_MIGRATION_PERCENT` is at 50 (118 moved, none removed). Saves that sent the Account Key: 51 that day, so the sunset waits.
 - **Release 28 is live** (build d7bca701f6, 2026-10-11). **Merge duplicate titles ran:** 1,100 merged of 1,140 stubs; 39 TMDB did not answer for, 1 filed as the other kind. Details under Release 28.
-- **Release 30 is live** (build 26246e5b08): the 50 copies' other id is the title's own name. **Release 31** (prepared, build 678af55b84) merges those when exactly one title matches. Details under Release 31.
+- **Release 31 is live** (build 678af55b84). Its Preview: 47 of 202 titles stored under their own name match exactly one title (155 match none, 0 more than one). Its Merge stopped on the first pair with *D1_TYPE_ERROR: Type 'undefined' not supported*: that pair's plays had moved, nothing else. **Release 32** (prepared, build 0ddef4e435) fixes it. Details under Release 32.
 - **Release 29 is live** (build c82d81dc04, 2026-10-11). Its Preview: 0 more pairs; the 635 TMDB-only rows have no IMDb id at TMDB (631) or no other copy (4). Check duplicate titles after: 31,436 titles, 0 IMDb only, 1,739 not looked up; 50 name-and-year groups left, nearly all a full row plus a copy with neither id (another scheme, `alt_id`), most holding list entries or plays. The hourly `media.retry` merges new pairs, and the merge also takes rows marked looked up. Details under Release 29.
 - (Release 28 history: an earlier build 927e912ba1 had only the count): *Check duplicate titles* and *Merge duplicate titles* on `/admin`, and `/admin` shows *Built <date> (build <stamp>)* in place of a release number.)
 - **From Release 28 on there is no release number in the code.** `python build.py` fills in the build date (the day the code last changed) and the stamp; `/admin` shows both. Entries here keep a name for talking about them and give that date and stamp.
@@ -1835,3 +1835,24 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 3. If the examples look right, take a backup and press **Merge**. Then run **Check duplicate titles**.
 
 **Rollback:** paste the Release 30 file (build 26246e5b08).
+
+## Release 32: the name-only merge no longer stops on its first title
+
+**Branch point:** Release 31 (build 678af55b84), live. Built 2026-10-11, build 0ddef4e435.
+
+### What it changes
+
+- **The failure.** Release 31's Merge (the name-only pass) stopped on its first pair with *D1_TYPE_ERROR: Type 'undefined' not supported for value 'undefined'*. `mergeNameOnlyMedia` built the kept-row TMDB update with no facts and then dropped it. D1 refuses `undefined` at `bind()` itself, before anything runs. The pair's plays had already moved to the kept row (they move first), and its list entries and the copy stayed. That is safe: every play is on a row that exists.
+- **The fix.** `mediaMergeMainStatements` makes that statement only when there are TMDB facts, and binds `null` for any missing fact. Pressing **Merge** again finishes the stopped pair: its activity statements find nothing left to move, then the rest runs.
+- **The tests could not see it.** The test D1 (`tests/harness.mjs`) took `undefined` as NULL. It now refuses it at `bind()`, as D1 does. Across the whole suite, only this merge test failed under the stricter rule, so nothing else in the Worker binds `undefined`.
+
+### Checked
+
+- `tests/duplicate-media.test.mjs`: the name-only merge passes under the strict bind. A pair whose plays a stopped run already moved is finished by the next Merge.
+- `bash verify.sh`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,379 tests each).
+
+**Steps:**
+1. Deploy `release-32-NEW-worker.js`. Check that `/admin` says **Built 2026-10-11 (build 0ddef4e435)**.
+2. Press **Merge** (the backup taken before Release 31's Merge still holds: nothing but one pair's plays changed). Then **Check duplicate titles**.
+
+**Rollback:** paste the Release 31 file (build 678af55b84).

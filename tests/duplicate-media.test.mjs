@@ -225,4 +225,15 @@ describe("Merge titles stored under their own name (admin)", () => {
     assert.equal(env.DB_ACTIVITY._db.prepare("SELECT media_id FROM watch_events").get().media_id, 19);
     assert.equal(db.prepare("SELECT count(*) AS n FROM media WHERE id IN (32, 41)").get().n, 2, "the two-way name and the other scheme's id are untouched");
   });
+  // The live run of 2026-10-11 stopped after the first pair's plays had moved
+  // (the kept-row update bound undefined, which D1 refuses). Merge again must
+  // finish that pair from there.
+  it("finishes a pair whose plays were already moved by a stopped run", async () => {
+    const env = nameEnv();
+    env.DB_ACTIVITY._db.prepare("UPDATE watch_events SET media_id = 19 WHERE media_id = 779").run();
+    const r = await run(env, true);
+    assert.equal(r.body.merged, 1, JSON.stringify(r.body));
+    assert.equal(env.DB._db.prepare("SELECT media_id FROM list_items").get().media_id, 19);
+    assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM media WHERE id = 779").get().n, 0);
+  });
 });

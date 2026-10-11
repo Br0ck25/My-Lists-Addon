@@ -760,7 +760,7 @@ const MEDIA_MERGE_EXAMPLES = 15;
 
 function mediaMergeMainStatements(env, keep, spare, f, now) {
   const db = env.DB;
-  return [
+  const out = [
     // A list that has both copies keeps one entry.
     db.prepare(
       `UPDATE lists SET item_count = max(0, item_count - (SELECT count(*) FROM list_items a JOIN list_items b
@@ -782,13 +782,18 @@ function mediaMergeMainStatements(env, keep, spare, f, now) {
     db.prepare("UPDATE OR IGNORE media_episodes SET media_id = ? WHERE media_id = ?").bind(keep, spare),
     db.prepare("DELETE FROM media_episodes WHERE media_id = ?").bind(spare),
     db.prepare("DELETE FROM media WHERE id = ? AND imdb_id IS NULL").bind(spare),
-    db.prepare(
+  ];
+  // What TMDB said, for the kept row; none when the pair was found another way
+  // (mergeNameOnlyMedia). D1 refuses an undefined bind, so this statement is
+  // only made with facts.
+  if (!f) return out;
+  out.push(db.prepare(
       `UPDATE media SET tmdb_id = ?, tvdb_id = COALESCE(tvdb_id, ?), title = COALESCE(title, ?), year = COALESCE(year, ?),
          poster_path = COALESCE(poster_path, ?), backdrop_path = COALESCE(backdrop_path, ?),
          resolved_at = COALESCE(resolved_at, ?), updated_at = ?
        WHERE id = ? AND tmdb_id IS NULL`
-    ).bind(f.tmdbId, f.tvdbId, f.title, f.year, f.posterPath, f.backdropPath, now, now, keep),
-  ];
+    ).bind(f.tmdbId, f.tvdbId ?? null, f.title ?? null, f.year ?? null, f.posterPath ?? null, f.backdropPath ?? null, now, now, keep));
+  return out;
 }
 
 function mediaMergeActivityStatements(db, keep, spare) {
@@ -911,7 +916,7 @@ async function mergeNameOnlyMedia(env, opts = {}) {
     }
     if (!apply) continue;
     for (const db of activityDbs(env)) await db.batch(mediaMergeActivityStatements(db, Number(keep.id), Number(s.id)));
-    const main = mediaMergeMainStatements(env, Number(keep.id), Number(s.id), {}, now).slice(0, -1);
+    const main = mediaMergeMainStatements(env, Number(keep.id), Number(s.id), null, now);
     main.push(env.DB.prepare("UPDATE media SET alt_id = COALESCE(alt_id, ?), updated_at = ? WHERE id = ?").bind(s.alt_id, now, Number(keep.id)));
     await env.DB.batch(main);
     out.merged++;
