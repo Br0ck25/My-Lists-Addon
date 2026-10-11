@@ -11,6 +11,11 @@
 6. **Never skip or loosen a test or guard to get green.** If a guard is wrong, fix the guard and say why in the commit.
 7. **Small, root-cause fixes.** Search callers first, reuse existing helpers, fix the shared cause, and change nothing unrelated.
 
+8. **Ask only about product decisions.** If a request has two readings that change what the user sees, state your assumption or ask before building. Decide technical choices yourself and say what you chose.
+9. **Unrelated dead code:** mention it, don't delete it. Remove only what your own change made unused.
+10. **Tests check why, not just what.** A new test must fail if the business logic changes. For a bug, write the failing test first, then make it pass.
+11. **Multi-step work:** state a short plan with a check after each step.
+
 ## Finding code cheaply
 - "Which file?": read `FILE-INDEX.md` (5KB, one line per source file).
 - `grep` `FUNCTION-MAP.md` for the symbol (~170KB: never read it whole), then read only that file with `offset`/`limit`.
