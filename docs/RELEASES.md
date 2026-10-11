@@ -47,6 +47,7 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 27** went live on 2026-10-07. The owner reports it looks good. The old Continue Watching and Airing Next background jobs pass over the accounts whose shelves come from the schedule. Details under Release 27. Merged into `main`.
 - **`main` up to PR #37 is live** (2026-10-11, `/admin` showed *Release 27 (build d349e2f0ce)*): other sessions' Support Emails, badged posters as images, one-click Nuvio install, per-list shuffle, Watch History fixes. The owner set up the `EMAIL` and `IMAGES` bindings, migration 0021, and D1 read replication. `INSTALL_MIGRATION_PERCENT` is at 50 (118 moved, none removed). Saves that sent the Account Key: 51 that day, so the sunset waits.
 - **Release 28 is live** (build d7bca701f6, 2026-10-11). **Merge duplicate titles ran:** 1,100 merged of 1,140 stubs; 39 TMDB did not answer for, 1 filed as the other kind. Details under Release 28.
+- **Release 32 is live** (build 0ddef4e435). Its Merge: 47 titles stored under their own name merged. Check duplicate titles after: 3 groups left (from 1,147), 31,412 titles, 1,692 not looked up. *Devil in the Family: The Fall of Ruby Franke* was skipped for the colon in its name (fixed in **Release 33**, build 125fc325b2). *Top Boy* (2019) and *The Super Powers Team: Galactic Guardians* (1985) are an IMDb-only row plus an empty TMDB-only row that TMDB does not link either way: left alone on purpose.
 - **Release 31 is live** (build 678af55b84). Its Preview: 47 of 202 titles stored under their own name match exactly one title (155 match none, 0 more than one). Its Merge stopped on the first pair with *D1_TYPE_ERROR: Type 'undefined' not supported*: that pair's plays had moved, nothing else. **Release 32** (prepared, build 0ddef4e435) fixes it. Details under Release 32.
 - **Release 29 is live** (build c82d81dc04, 2026-10-11). Its Preview: 0 more pairs; the 635 TMDB-only rows have no IMDb id at TMDB (631) or no other copy (4). Check duplicate titles after: 31,436 titles, 0 IMDb only, 1,739 not looked up; 50 name-and-year groups left, nearly all a full row plus a copy with neither id (another scheme, `alt_id`), most holding list entries or plays. The hourly `media.retry` merges new pairs, and the merge also takes rows marked looked up. Details under Release 29.
 - (Release 28 history: an earlier build 927e912ba1 had only the count): *Check duplicate titles* and *Merge duplicate titles* on `/admin`, and `/admin` shows *Built <date> (build <stamp>)* in place of a release number.)
@@ -1856,3 +1857,23 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 2. Press **Merge** (the backup taken before Release 31's Merge still holds: nothing but one pair's plays changed). Then **Check duplicate titles**.
 
 **Rollback:** paste the Release 31 file (build 678af55b84).
+
+## Release 33: a name with a colon in it is merged too
+
+**Branch point:** Release 32 (build 0ddef4e435), live. Built 2026-10-11, build 125fc325b2.
+
+### What it changes
+
+- `mergeNameOnlyMedia` (29_) took only other ids with no `:`, to keep away from another scheme's ids (`kitsu:1234`). That also left out *Devil in the Family: The Fall of Ruby Franke*, whose name has a colon in it. The rule that matters is that the other id is the row's own name, which another scheme's id never is, so the colon condition is gone.
+- Not merged, on purpose: *Top Boy* (2019) and *The Super Powers Team: Galactic Guardians* (1985). Each is an IMDb-only row with the list entries, plus a TMDB-only row with nothing on it, and TMDB links them in neither direction. The empty rows affect no one.
+
+### Checked
+
+- `tests/duplicate-media.test.mjs`: the colon name is merged, and `kitsu:1234` and the two-way *Alone* stay apart.
+- `bash verify.sh`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,379 tests each).
+
+**Steps:**
+1. Deploy `release-33-NEW-worker.js`. Check that `/admin` says **Built 2026-10-11 (build 125fc325b2)**.
+2. Press **Merge**: it should merge 1 in the second part. Then **Check duplicate titles**: 2 groups left (Top Boy and The Super Powers Team).
+
+**Rollback:** paste the Release 32 file (build 0ddef4e435).

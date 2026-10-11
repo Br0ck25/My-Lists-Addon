@@ -885,6 +885,7 @@ async function mergeDuplicateMedia(env, opts = {}) {
 // only when exactly one row is such: two films called Alone (2020) leave the
 // copy alone. The kept row takes the name as its alt_id, so the next entry
 // that only says "Dexter" finds it instead of making another copy.
+// Another scheme's id (kitsu:1234) is left alone: it is not the row's name.
 const MEDIA_NAME_MERGE_BATCH = 100;
 
 async function mergeNameOnlyMedia(env, opts = {}) {
@@ -892,7 +893,11 @@ async function mergeNameOnlyMedia(env, opts = {}) {
   const apply = opts.apply === true;
   const afterId = Math.max(0, Number(opts.afterId) || 0);
   const only = Array.isArray(opts.ids) ? opts.ids.map(Number).filter(Number.isFinite).slice(0, MEDIA_NAME_MERGE_BATCH) : null;
-  const where = `m.imdb_id IS NULL AND m.tmdb_id IS NULL AND m.alt_id IS NOT NULL AND instr(m.alt_id, ':') = 0
+  // Its other id is its own name: that alone tells it from another scheme's id
+  // (kitsu:1234 is never a title), so a name with a colon in it counts too
+  // ("Devil in the Family: The Fall of Ruby Franke" was left out when this
+  // also asked for no colon).
+  const where = `m.imdb_id IS NULL AND m.tmdb_id IS NULL AND m.alt_id IS NOT NULL
     AND m.title IS NOT NULL AND m.year IS NOT NULL AND lower(trim(m.alt_id)) = lower(trim(m.title))`;
   const { results } = only
     ? await env.DB.prepare(`SELECT m.id, m.kind, m.title, m.year, m.alt_id FROM media m WHERE m.id IN (SELECT value FROM json_each(?)) AND ${where} ORDER BY m.id`)
