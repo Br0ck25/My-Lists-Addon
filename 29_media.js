@@ -590,3 +590,120 @@ async function episodeTitlesFor(env, keys) {
   }
   return out;
 }
+
+// --- Two rows for one title: the read-only count ---------------------------------
+//
+// A title should have one media row, but two can appear when it arrives by two
+// routes before anything links them: a list import by its IMDb id makes one,
+// a search by its TMDB id another, and the lookup that would have filled the
+// missing id failed or is still to come. The unique indexes then keep the two
+// apart for good (resolveMediaBatch above, refileSeriesFiledAsMovies, 46_).
+// Plays, list entries and progress can be split between them.
+//
+// This only reads. It groups rows of one kind by name and year, and calls a
+// group likely duplicates when two of its rows have no id that disagrees (not
+// both an IMDb id, not both a TMDB id): two different films that share a name
+// and a year each carry their own ids, so they are left out. For each likely
+// group it counts what points at each row, which is what a merge would move.
+// Rows without a year are not compared.
+const MEDIA_DUP_GROUP_LIMIT = 5000;
+const MEDIA_DUP_EXAMPLES = 15;
+
+function mediaRowsCanBeOne(a, b) {
+  if (a.imdb_id && b.imdb_id) return false;
+  if (a.tmdb_id != null && b.tmdb_id != null) return false;
+  if (a.alt_id && b.alt_id) return false;
+  return true;
+}
+
+async function mediaRefCounts(db, table, ids) {
+  const out = new Map();
+  if (!db || !ids.length) return out;
+  for (const part of d1JsonChunks(ids)) {
+    const { results } = await db.prepare(
+      `SELECT media_id, count(*) AS n FROM ${table} WHERE media_id IN (SELECT value FROM json_each(?)) GROUP BY media_id`
+    ).bind(part).all();
+    for (const r of results || []) out.set(Number(r.media_id), (out.get(Number(r.media_id)) || 0) + (Number(r.n) || 0));
+  }
+  return out;
+}
+
+async function findDuplicateMedia(env) {
+  if (!env || !env.DB) throw new Error("findDuplicateMedia: no D1 database is bound");
+  const totals = await env.DB.prepare(
+    `SELECT count(*) AS rows,
+            sum(CASE WHEN resolved_at IS NULL THEN 1 ELSE 0 END) AS stubs,
+            sum(CASE WHEN resolved_at IS NOT NULL AND imdb_id IS NOT NULL AND tmdb_id IS NULL THEN 1 ELSE 0 END) AS imdbOnly,
+            sum(CASE WHEN resolved_at IS NOT NULL AND imdb_id IS NULL AND tmdb_id IS NOT NULL THEN 1 ELSE 0 END) AS tmdbOnly
+     FROM media`
+  ).first();
+  const { results: groupRows } = await env.DB.prepare(
+    `SELECT group_concat(id) AS ids FROM media
+     WHERE title IS NOT NULL AND trim(title) != '' AND year IS NOT NULL
+     GROUP BY kind, lower(trim(title)), year HAVING count(*) > 1
+     ORDER BY count(*) DESC LIMIT ?`
+  ).bind(MEDIA_DUP_GROUP_LIMIT).all();
+  const groupIds = (groupRows || []).map((g) => String(g.ids || "").split(",").map(Number).filter(Number.isFinite));
+  const allIds = groupIds.flat();
+  const rowById = new Map();
+  for (const part of d1JsonChunks(allIds)) {
+    const { results } = await env.DB.prepare(
+      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE id IN (SELECT value FROM json_each(?))`
+    ).bind(part).all();
+    for (const r of results || []) rowById.set(Number(r.id), r);
+  }
+
+  const likely = [];
+  let sameNameDifferent = 0;
+  for (const ids of groupIds) {
+    const rows = ids.map((id) => rowById.get(id)).filter(Boolean);
+    let pair = false;
+    for (let i = 0; i < rows.length && !pair; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        if (mediaRowsCanBeOne(rows[i], rows[j])) { pair = true; break; }
+      }
+    }
+    if (pair) likely.push(rows);
+    else sameNameDifferent++;
+  }
+
+  const likelyIds = likely.flat().map((r) => Number(r.id));
+  const listItems = await mediaRefCounts(env.DB, "list_items", likelyIds);
+  const plays = new Map();
+  const progress = new Map();
+  for (const db of activityDbs(env)) {
+    for (const [table, into] of [["watch_events", plays], ["show_progress", progress]]) {
+      const got = await mediaRefCounts(db, table, likelyIds);
+      for (const [id, n] of got) into.set(id, (into.get(id) || 0) + n);
+    }
+  }
+
+  const describe = (r) => ({
+    id: Number(r.id), imdbId: r.imdb_id || null, tmdbId: r.tmdb_id != null ? Number(r.tmdb_id) : null,
+    resolved: r.resolved_at != null, listItems: listItems.get(Number(r.id)) || 0,
+    plays: plays.get(Number(r.id)) || 0, progress: progress.get(Number(r.id)) || 0,
+  });
+  let rowsInvolved = 0;
+  let withData = 0;
+  for (const rows of likely) {
+    rowsInvolved += rows.length;
+    const used = rows.filter((r) => { const d = describe(r); return d.listItems || d.plays || d.progress; }).length;
+    if (used >= 2) withData++;
+  }
+  const examples = likely.slice(0, MEDIA_DUP_EXAMPLES).map((rows) => ({
+    kind: rows[0].kind, title: rows[0].title, year: rows[0].year, rows: rows.map(describe),
+  }));
+  return {
+    ok: true,
+    mediaRows: Number(totals && totals.rows) || 0,
+    stubs: Number(totals && totals.stubs) || 0,
+    imdbOnly: Number(totals && totals.imdbOnly) || 0,
+    tmdbOnly: Number(totals && totals.tmdbOnly) || 0,
+    likelyGroups: likely.length,
+    likelyRows: rowsInvolved,
+    splitGroups: withData,
+    sameNameDifferent,
+    capped: (groupRows || []).length >= MEDIA_DUP_GROUP_LIMIT,
+    examples,
+  };
+}

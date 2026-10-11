@@ -3316,6 +3316,10 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="shelfCompareBtn" data-act="runShelfCompareNow" ${isD1Bound ? '' : 'disabled'}>Compare shelves now</button>
       <span id="shelfCompareStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="shelfCompareResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Check duplicate titles</strong> counts titles stored twice (same kind, name and year, and no ids that disagree), and how many list entries and plays sit on each copy. It only reads.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="dupMediaBtn" data-act="runDuplicateMediaCheck" ${isD1Bound ? '' : 'disabled'}>Check duplicate titles</button>
+      <span id="dupMediaStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="dupMediaResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -5024,6 +5028,40 @@ ${UTILITY_CSS}
         }
       } catch (e) {
         status.textContent = 'Stopped: network error. Press it again to start over.';
+      }
+      btn.disabled = false;
+    }
+
+    // Two rows for one title, counted (findDuplicateMedia, 29_media.js).
+    async function runDuplicateMediaCheck() {
+      const btn = document.getElementById('dupMediaBtn');
+      const status = document.getElementById('dupMediaStatus');
+      const out = document.getElementById('dupMediaResult');
+      const nl = String.fromCharCode(10);
+      btn.disabled = true;
+      out.textContent = '';
+      status.textContent = 'Counting...';
+      try {
+        const res = await fetch('/admin/api/jobs/duplicate-media');
+        const d = await res.json();
+        if (!d.ok) {
+          status.textContent = 'Stopped: ' + (d.error || 'unknown error');
+        } else {
+          status.textContent = 'Done.';
+          const ex = (d.examples || []).map(function (g) {
+            return nl + '  ' + g.title + ' (' + g.year + ', ' + g.kind + '):' + g.rows.map(function (r) {
+              return nl + '    row ' + r.id + ': IMDb ' + (r.imdbId || '-') + ', TMDB ' + (r.tmdbId == null ? '-' : r.tmdbId) + (r.resolved ? '' : ', not looked up') + '; ' + r.listItems + ' list entries, ' + r.plays + ' plays, ' + r.progress + ' progress';
+            }).join('');
+          }).join('');
+          out.textContent = [
+            d.likelyGroups + ' titles look stored twice or more (' + d.likelyRows + ' rows). On ' + d.splitGroups + ' of them, more than one copy has list entries, plays or progress.',
+            d.sameNameDifferent + ' more share a name and year but carry different ids: different titles, left alone.',
+            'All titles: ' + d.mediaRows + ' rows; ' + d.stubs + ' not looked up yet, ' + d.imdbOnly + ' with only an IMDb id, ' + d.tmdbOnly + ' with only a TMDB id.' + (d.capped ? ' (Stopped at the first 5,000 groups.)' : ''),
+            'Examples: ' + (ex || 'none'),
+          ].join(nl);
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error.';
       }
       btn.disabled = false;
     }

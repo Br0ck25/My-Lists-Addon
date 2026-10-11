@@ -23,6 +23,7 @@
   "/admin/api/feedback/status": "admin",
   "/admin/api/installs/restore": "admin",
   "/admin/api/installs/status": "admin",
+  "/admin/api/jobs/duplicate-media": "admin",
   "/admin/api/jobs/ping": "admin",
   "/admin/api/jobs/shelf-shadow-now": "admin",
   "/admin/api/jobs/status": "admin",
