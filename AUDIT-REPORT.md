@@ -1,7 +1,5 @@
 # Audit report
 
-**Status: DRAFT. Phase 4 (mutation testing), the top 5, limits and questions are still being filled in.**
-
 Scope: find and report only. No source file, test or guard was changed. Findings were traced to a real caller or input, or reproduced; anything uncertain is marked **SUSPECTED**.
 
 - Date: 2026-10-11, branch `claude/sharp-gauss-5v60qa`, `main` at `cbe0b44`.
@@ -25,7 +23,7 @@ Severity scale used: Critical = security or data loss with real impact on user d
 | 8 | Low | Auth | `26_api-creator-and-admin-routes.js:1553-1563` (`DELETE /api/me/sessions`) | CONFIRMED | `id` is used as a SQL `LIKE` prefix (`targetId + "%"`), so `id:"%"` revokes every session of the account, including the current one. `id:""` is falsy and also revokes all (current included). Own account only. | Four sessions, `DELETE /api/me/sessions {id:"%"}` answers `revoked:4`; `{id:""}` answers `revokedAll:true` and the caller is logged out. | Require `/^[0-9a-f]{16}$/` for `id`; use `substr(id_hash,1,16) = ?` instead of `LIKE`. |
 | 9 | Low | Auth | `26_api-creator-and-admin-routes.js:3088` (`/api/channel/share`) | CONFIRMED (by reading) | A share record with no `owner` (old anonymous shares) can be overwritten, and claimed, by **any** signed-in person who knows its code, replacing the channel for everyone holding the link. The code comment says the code is its own proof, so this may be intended. | Create an ownerless `channelshare:<code>`, then `POST /api/channel/share {code,...}` as any account. | Product call, see question 2. |
 | 10 | Low | Auth | `02_http-and-creator-utils.js:469` (`verifyCsrf`) | CONFIRMED (by reading) | The CSRF exemption is `path.includes("/oauth/")`, not `startsWith` on the real OAuth prefixes. Today no mutating route contains `/oauth/` other than the real ones, but a future route that does would silently skip the check. | Read the code. | `/^\/api\/(trakt\|mdblist\|simkl\|tmdb)\/oauth\//.test(path)`. |
-| 11 | Low | Backend, KV | `03` Ko-fi route `25_api-catalog-routes.js:596-600`; feedback cap `:6680-6682`, `:6763` | CONFIRMED (by reading) | Read-then-write counters on KV (not atomic, eventually consistent): two near-simultaneous Ko-fi retries of one `message_id` can both pass the `seenKey` check and be counted twice; the feedback per-IP cap can be exceeded by parallel requests. | Fire two concurrent webhook deliveries with the same `message_id`. | Put the Ko-fi dedupe in D1 (`INSERT OR IGNORE` on message id) and count only when the row was inserted. |
+| 11 | Low | Backend, KV | Ko-fi route `25_api-catalog-routes.js:596-600`; feedback cap `:6680-6682`, `:6763` | CONFIRMED (by reading) | Read-then-write counters on KV (not atomic, eventually consistent): two near-simultaneous Ko-fi retries of one `message_id` can both pass the `seenKey` check and be counted twice; the feedback per-IP cap can be exceeded by parallel requests. | Fire two concurrent webhook deliveries with the same `message_id`. | Put the Ko-fi dedupe in D1 (`INSERT OR IGNORE` on message id) and count only when the row was inserted. |
 | 12 | Low | Backend, KV | `25_api-catalog-routes.js:7958-7977` (`/api/lists/like`) | SUSPECTED | After the vote it re-reads the whole list record and writes it back with `likes` set. An edit saved by the owner between that read and write is reverted (documented in the comment as narrowed, not removed). KV has no compare-and-swap. | Race an owner save against a like. | Keep the count only in the ledger/D1 and stop writing it onto the list record. |
 | 13 | Low | Cron | `45_jobs-dispatcher.js:480-484` | SUSPECTED | Without the queue binding the legacy cron path has no lease, so ticks that overlap can run the same sweeps twice. With the queue (CAS lease at `:160-163`) this does not happen. Only the fallback is affected. | Not reproducible without a slow sweep. | Fine to leave if the queue is always bound in production. |
 | 14 | Low | UI, accessibility | `20_client-channel-builder.js:1368-1440`, `16_client-row-core.js:2501`, `24_client-backup-restore-presets.js:1849` | CONFIRMED | `var(--err, #ff453a)`: `--err` is not defined anywhere, so the hex fallback is always used (about 3.4:1 on white, under the 4.5:1 rule, and no dark variant). `color:#fff` on `var(--danger)` and `var(--success)` breaks rule 9. | Grep `--err` across the sources: only these uses. | Use `var(--color-danger-text)` (the defined `*-text` token) and `--color-on-brand`. |
@@ -66,13 +64,54 @@ Severity scale used: Critical = security or data loss with real impact on user d
 - Movie vs show/episode wording: the toast and confirm strings that say "show" or "episode" are all in channel or series contexts.
 
 ### Phase 4: test quality
-PHASE4_PLACEHOLDER
+- **Every test file run** (`node --test tests/*.test.mjs`, each file in its own process), both modes: 2349 pass / 0 fail / 0 skipped, 487 suites, about 3 minutes each. CI's `MLA_TEST_V2_LISTS_READ=1` mode also green.
+- **Static scan** of 2177 `it()/test()` blocks: only one has no assertion call (`tests/lists-v2.test.mjs:1370`, "builds the fixture", a setup step). Two tests assert only "not a 5xx" (`route-access.test.mjs:171`, `security-suite.test.mjs:185`); those are deliberate crash sweeps, not correctness tests. No `assert.ok(true)` or truthy-object-only checks.
+- **Mutation test (does a test fail if the business logic changes?)** Done on throw-away copies in the scratchpad, one mutation at a time, against 30 test files (an unmutated control of the same set: 1306 tests, exit 0, so a "caught" is a real failure):
+
+| Mutation | Result |
+|---|---|
+| M01 poster-badge host allowlist ignored | caught |
+| M02 CSRF same-origin check off | caught |
+| M03 `/api/channel/share` lets anyone overwrite another owner's code | caught |
+| M04 `/api/lists/like` accepts private lists | caught |
+| M05 v2 Lists API lets a non-owner write | caught |
+| M06 session username mismatch accepted | caught |
+| M07 feedback-thread owner check off | caught |
+| **M08 `/api/save` rate limit 20 to 2,000,000** | **SURVIVED** (no test anywhere references it) |
+| M09 `/admin/api/audit` gate off | caught |
+| M10 v2 list `If-Match` ignored | caught |
+| M11 Ko-fi webhook token not checked | caught |
+| M12 `/api/preview` source allowlist off | caught |
+| M13 installs: owner bind dropped | caught |
+| M14 catalog success TTL 300 s to 1 year | caught |
+| M15 list-delete failure treated as success | caught |
+| **M16 feedback 20/day cap removed** | **SURVIVED** (no test anywhere references it) |
+| M17 account purge no longer revokes installs | caught |
+
+  15 of 17 caught. The security and ownership checks are well pinned. The two survivors are both **rate limits on anonymous write routes**, which is also the kind of gap behind finding #3 (a route with no limit at all and no test noticing).
+- **Tests that pass while a real bug is live:** finding #1 (`/api/poster-badge` host bypass). M01 shows a test refuses a foreign host, but none uses a foreign host with the path `/api/safe-poster`. Findings #2, #5 and #7 are likewise untested: tests check the 300 s success header (M14) but not the header on the failure branches, the unknown-install-id answer, or entry shape in `/api/save`.
+- **Routes never named by any test** (apart from the anonymous-access sweep): `/api/track-install`, `/api/external-list/item-add`, `/api/external-list/item-remove`, `/api/external-sync/history`, `/api/mdblist-history-raw`, `/api/trakt-my-private-lists`, `/api/quick-channel-shows`, `/api/resolve-show`, `/api/toplists`, the four `/api/*/oauth/start` routes, `/robots.txt`, `/sitemap.xml`, `/unavailable-poster.svg` (16 of 163).
+- **Branches and error paths with no test that I found:** the two rate limits above; the `/api/me/sessions` `id` edge cases (#8); the 300-row cap in feedback threads (#6); the `copyLink` no-clipboard fallback (#15); the delete-list failure path in the page (#16); the 429 row state on a page load (#4).
+- Line coverage: I tried `node --test --experimental-test-coverage`, but this bundle's page code lives inside template literals and the aggregate was not credible (11.7 percent), so I am not reporting a number.
 
 ## (a) Top 5 to fix first
-TOP5_PLACEHOLDER
+1. **#1 `/api/poster-badge` open redirect and image proxy.** It is a live security hole on your trusted domain, a one-condition fix, and the suite passes with it present.
+2. **#2 Provider failures cached for an hour.** Every user is affected whenever MDBList, Trakt or TMDB blips; the failure outlives the outage by up to an hour in Stremio, Nuvio and Wako. Three return statements.
+3. **#3 `/api/track-install` has no rate limit.** Anyone can flood D1 and wreck the stats in minutes; add the limit and tests for it, and for the two other untested limits (`/api/save`, `/api/feedback`, mutations M08 and M16).
+4. **#4 First page load fires 168 `/api/preview` calls against a 240/min cap.** The second visit, or a second person on the same network, sees broken rows. It also costs you provider quota.
+5. **#5 with #7: an unknown install id gets a cached generic manifest, and `/api/save` accepts entries with no `id`.** Both end with a user holding an install that silently shows nothing; both are small (404 or `no-store`, and 400 on bad entries). #6 (support history vanishing after 300 newer threads) is next in line.
 
 ## (b) What I could not check
-BCANT_PLACEHOLDER
+- **Anything on real Cloudflare:** KV eventual-consistency timing and negative caching (finding #5's trigger), the Cloudflare Images JPEG path for Stremio badges (HANDOFF already says untested live), D1 per-invocation query limits (#22), real cron and queue timing, Email Routing inbound and `env.EMAIL.send()`.
+- **Real providers:** MDBList, Trakt, TMDB and Simkl were stubbed, so real response shapes, OAuth sign-in and token refresh were not exercised, nor was the Ko-fi webhook with a real payload.
+- **Real clients:** I read the manifest, catalog and meta responses (shape, CORS, cache headers), but did not run Stremio, Nuvio or Wako, so how each treats an id-less catalog or a cached error tile is inferred, not observed.
+- **UI I did not drive:** the `/admin` dashboard pages (only their route gating), the channel builder (13.5k lines), storylines, deep creator-profile screens, import flows, Trakt/Letterboxd export, the Share modal. Real-device Safari and Android touch behavior, and screen readers.
+- **Phone screenshots** came from headless Chromium, which reserves a 15 px scrollbar, so layout width was 360 not 375 px in full-page shots; I rechecked horizontal overflow with DOM measurements instead.
+- **Line coverage** (see Phase 4).
 
 ## (c) Questions that are product decisions for you
-QS_PLACEHOLDER
+1. **First-visit load (#4):** should Discover and the home page load every shelf at once (current, fast to look at but 168 provider calls), or only the shelves on screen (cheaper, a short wait when scrolling)?
+2. **Old anonymous channel share links (#9):** should anyone who holds such a link be able to replace its contents and take it over (current), or should old ownerless links become read-only?
+3. **Install link that does not resolve (#5):** should the app answer 404 (Stremio says it could not load the add-on) or keep showing the generic empty add-on (current)? The first is clearer but visible to users with a broken link.
+4. **Deleting a list (#16):** keep the confirm dialog only, or add an Undo toast like removing a row (the UI rules say reversible deletes use Undo)?
+5. **Install statistics (#3):** do you want the "sources people use" table to count only a fixed set of known source groups (safe, hides new ones until added), or keep free-form names with a per-request cap?
