@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "62accff46a";
+const WORKER_BUILD = "08712fa5d1";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -85515,6 +85515,12 @@ ${UTILITY_CSS}
 // poster URL. A request that names any other host, or a non-https scheme,
 // isn't a real poster -- it's someone probing the endpoint directly, and
 // gets rejected before either the redirect or the fetch further down.
+// What a catalog answer carries when its provider failed. A good shared row is
+// cached five minutes; the failure answers (last good copy, the "temporarily
+// unavailable" tile, an empty page) used to take jsonPublic's one-hour default,
+// so a short outage lasted an hour in the apps.
+const CATALOG_FAILURE_CACHE = { "Cache-Control": "no-store" };
+
 const POSTER_IMAGE_HOSTS = new Set([
   "image.tmdb.org",
   "images.metahub.space",
@@ -87123,7 +87129,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
               // exactly like a normal successful load. `stale` is
               // informational only (visible when debugging via curl), not
               // read by wako/Stremio itself.
-              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg });
+              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg }, 200, CATALOG_FAILURE_CACHE);
             }
           } catch {
             // Cache read/parse failed -- fall through to the placeholder below.
@@ -87143,13 +87149,13 @@ Sitemap: ${url.origin}/sitemap.xml`;
               },
             ],
             error: errMsg,
-          });
+          }, 200, CATALOG_FAILURE_CACHE);
         }
 
         // Metas stays empty so wako/Stremio just shows an empty row instead
         // of erroring out, but the reason is still visible if you curl this
         // URL directly while debugging.
-        return jsonPublic({ metas: [], error: errMsg }, 200);
+        return jsonPublic({ metas: [], error: errMsg }, 200, CATALOG_FAILURE_CACHE);
       }
     }
 
