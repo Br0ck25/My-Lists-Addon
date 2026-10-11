@@ -16,6 +16,7 @@ import {
   makeKv,
   makeR2,
   call,
+  accountsBackfill, listsBackfillStep, listsBackfillStatus, activityBackfillStep, activityBackfillStatus,
 } from "./harness.mjs";
 
 import {
@@ -156,12 +157,8 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
       const cookie = await adminCookie(env);
       const beforeSnapshot = snapshotLegacyStores(env);
 
-      // Execute account migration via admin endpoint
-      const res = await call(env, "/admin/api/migrate-accounts", {
-        method: "POST",
-        cookie,
-        json: { dryRun: false },
-      });
+      // Execute the account backfill
+      const res = await accountsBackfill(env, { dryRun: false });
 
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
@@ -199,11 +196,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
       assert.equal(byUser["deleteduser88"], undefined, "tombstoned user must not be an active account");
 
       // Verify backfill idempotency: running again changes 0 rows
-      const rerun = await call(env, "/admin/api/migrate-accounts", {
-        method: "POST",
-        cookie,
-        json: { dryRun: false },
-      });
+      const rerun = await accountsBackfill(env, { dryRun: false });
       assert.equal(rerun.body.inserted, 0);
       assert.equal(rerun.body.updated, 5);
       assert.equal(rerun.body.reconciled, true);
@@ -247,7 +240,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         const cookie = await adminCookie(env);
 
         // Pre-condition: backfill accounts first
-        await call(env, "/admin/api/migrate-accounts", { method: "POST", cookie, json: { dryRun: false } });
+        await accountsBackfill(env, { dryRun: false });
 
         const beforeSnapshot = snapshotLegacyStores(env);
 
@@ -256,11 +249,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         let stepCount = 0;
         while (!done && stepCount < 50) {
           stepCount++;
-          const stepRes = await call(env, "/admin/api/lists-backfill/step", {
-            method: "POST",
-            cookie,
-            json: { maxOps: 200, maxItems: 15 },
-          });
+          const stepRes = await listsBackfillStep(env, { maxOps: 200, maxItems: 15 });
           assert.equal(stepRes.status, 200, JSON.stringify(stepRes.body));
           done = !!stepRes.body.done;
         }
@@ -372,7 +361,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
 
 
         // INVARIANT 10: Status Check & Idempotency
-        const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
+        const status = await listsBackfillStatus(env);
         assert.equal(status.status, 200);
         assert.equal(status.body.run.phase, "done");
         assert.equal(status.body.accounts.failed, 0);
@@ -404,13 +393,13 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         const cookie = await adminCookie(env);
 
         // Run accounts and lists backfill (channels backfill runs as phase 4 of lists backfill)
-        await call(env, "/admin/api/migrate-accounts", { method: "POST", cookie, json: { dryRun: false } });
+        await accountsBackfill(env, { dryRun: false });
 
         let done = false;
         let stepCount = 0;
         while (!done && stepCount < 50) {
           stepCount++;
-          const stepRes = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+          const stepRes = await listsBackfillStep(env, {});
           done = !!stepRes.body.done;
         }
         assert.ok(done);
@@ -511,7 +500,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
       const cookie = await adminCookie(env);
 
       // Pre-condition: accounts backfill
-      await call(env, "/admin/api/migrate-accounts", { method: "POST", cookie, json: { dryRun: false } });
+      await accountsBackfill(env, { dryRun: false });
 
       const beforeSnapshot = snapshotLegacyStores(env);
 
@@ -520,11 +509,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
       let stepCount = 0;
       while (!done && stepCount < 50) {
         stepCount++;
-        const stepRes = await call(env, "/admin/api/activity-backfill/step", {
-          method: "POST",
-          cookie,
-          json: { maxOps: 200, maxItems: 10 },
-        });
+        const stepRes = await activityBackfillStep(env, { maxOps: 200, maxItems: 10 });
         assert.equal(stepRes.status, 200, JSON.stringify(stepRes.body));
         done = !!stepRes.body.done;
       }
@@ -603,7 +588,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
 
 
       // INVARIANT 6: Status Metrics
-      const actStatus = await call(env, "/admin/api/activity-backfill/status", { cookie });
+      const actStatus = await activityBackfillStatus(env);
       assert.equal(actStatus.status, 200);
       assert.equal(actStatus.body.run.phase, "done");
       assert.equal(actStatus.body.accounts.failed, 0);
@@ -699,7 +684,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         const cookie = await adminCookie(env);
 
         // Stage 1: Account Backfill
-        const accRes = await call(env, "/admin/api/migrate-accounts", { method: "POST", cookie, json: { dryRun: false } });
+        const accRes = await accountsBackfill(env, { dryRun: false });
         assert.equal(accRes.status, 200);
         assert.equal(accRes.body.reconciled, true);
 
@@ -708,7 +693,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         let lSteps = 0;
         while (!listsDone && lSteps < 50) {
           lSteps++;
-          const r = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+          const r = await listsBackfillStep(env, {});
           listsDone = !!r.body.done;
         }
         assert.ok(listsDone);
@@ -718,7 +703,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         let aSteps = 0;
         while (!actDone && aSteps < 50) {
           aSteps++;
-          const r = await call(env, "/admin/api/activity-backfill/step", { method: "POST", cookie, json: {} });
+          const r = await activityBackfillStep(env, {});
           actDone = !!r.body.done;
         }
         assert.ok(actDone);
@@ -745,7 +730,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         assert.ok(totalInstallSecrets >= 5, "100% of install secrets migrated to encrypted storage");
 
         // Reconciliation reports verification
-        const listsStatus = (await call(env, "/admin/api/lists-backfill/status", { cookie })).body;
+        const listsStatus = (await listsBackfillStatus(env)).body;
         assert.equal(listsStatus.run.phase, "done");
         // 57 valid items copied + 1 duplicate deduplicated + 1 unresolvable item without id = 59 total legacy items
         const { copied, duplicates, unusable, legacy } = listsStatus.totals.items;
@@ -753,7 +738,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
         assert.equal(unusable, 1, "only the item with no id is marked unusable");
         assert.equal(duplicates, 1, "Fight Club duplicate deduplicated");
 
-        const actStatus = (await call(env, "/admin/api/activity-backfill/status", { cookie })).body;
+        const actStatus = (await activityBackfillStatus(env)).body;
         assert.equal(actStatus.run.phase, "done");
         assert.equal(actStatus.accounts.failed, 0);
       } finally {

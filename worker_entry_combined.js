@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "125fc325b2";
+const WORKER_BUILD = "c3f7831ad9";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -219,7 +219,7 @@ const CREATOR_LIST_BYTES_MAX = 1_800_000;
 //
 // /api/list-live/save writes one of these per Custom List a browser with no
 // Creator Profile owns, so that list's catalog row is re-read live instead of
-// serving the snapshot baked into the install link. See readLiveListItems and
+// serving the snapshot baked into the install link. See readLiveListRecord and
 // fetchCustomListCatalog (05_catalog-core.js) for the read side and the route
 // itself (25_api-catalog-routes.js) for why an unauthenticated write is
 // acceptable: the token in the URL is the capability, and it only ever exists
@@ -574,53 +574,6 @@ const CHANNEL_POOL_MAX_ITEMS = 5000;
 // bigger candidate pool costs nothing extra for a popular network that hits
 // the cap early -- it only matters for a network sparse enough to need it.
 const CHANNEL_PRESET_DISCOVER_PAGES = 10;
-
-// --- Bounds on the KV -> D1 backfill sweep ----------------------------------
-//
-// /admin/api/migrate-d1 walks five KV prefixes (creator:, creatorlist:,
-// publishedlist:user:, stats:sourcegroup:, stats:) and spends a KV read plus
-// a D1 write on each key it keeps -- both of which count against Cloudflare's
-// 1,000-storage-operations-per-invocation limit. That is the KV/D1/R2 cap,
-// 1,000 on both the Free and the Paid plan; the separate outbound-fetch cap
-// (50 free, 10,000 paid) does not apply here, since this sweep makes no
-// outbound requests. It used to do the whole sweep in one request with no
-// cap, so on a site big enough to need migrating it aborted partway through
-// with "Too many subrequests" and backfilled only whatever it had reached.
-//
-// That failure is worse than it looks: per wrangler.toml, an account present
-// in KV but missing from D1 is exactly the case /api/creator/reset-key and
-// /admin/api/reset-creator-key handle incorrectly, because a D1 UPDATE
-// matching zero rows still reports success. So the endpoint whose job is to
-// prevent that state was itself the thing leaving accounts in it.
-//
-// It now runs in resumable chunks against migrated1:state, the same shape
-// /admin/api/migrate-day-counts and the public-index rebuild use. Every
-// section of the sweep is idempotent (DO NOTHING, or DO UPDATE to a value
-// derived only from KV), so re-processing a key across a chunk boundary is
-// harmless -- which is what makes chunking safe here.
-const MIGRATE_D1_STATE_KEY = "migrated1:state";
-const MIGRATE_D1_PREFIXES = [
-  "creator:",
-  "creatorlist:",
-  "publishedlist:user:",
-  "stats:sourcegroup:",
-  "stats:",
-  "listlikevoters:",
-  "feedback:",
-  "evtmeta:",
-  "creatorscrobbletoken:",
-  "creatorsynctracking:",
-  "creatorsync:",
-];
-// This endpoint has its invocation to itself (it is admin-triggered, not
-// ridden along on the cron), so it can claim more of the 1,000 storage
-// operations than the index rebuild does -- but still well short of it,
-// since a chunk that throws saves no progress.
-const MIGRATE_D1_OPS_PER_RUN = 700;
-const MIGRATE_D1_PAGE = 200;
-// Errors accumulate across every chunk of a run and are handed back to the
-// admin panel, so they need a ceiling of their own.
-const MIGRATE_D1_ERROR_CAP = 50;
 
 // --- Bound on the display-order array ----------------------------------------
 //
@@ -11039,8 +10992,7 @@ async function bumpStat(env, kind) {
     // D1 is where every counter is read from (readStatCount, loadStatsByDay,
     // the leaderboards), so it is where every counter is written. From
     // 2026-10-02 to the fix these went to Analytics Engine only, which
-    // nothing reads, and the admin dashboard froze at zero
-    // (recoverStatsFromAnalyticsEngine puts those days back).
+    // nothing reads, and the admin dashboard froze at zero.
     if (env.DB) {
       await d1BumpStat(env, kind, ["total", statsToday()], 1);
       return;
@@ -11199,7 +11151,7 @@ async function migrateGenreDecadeStatsIfNeeded(env) {
 // production; Miniflare doesn't enforce that limit, so it rendered fine
 // locally). Writing it here lets the dashboard read last-active straight
 // out of the creators SELECT it already runs. Accounts that predate this
-// have NULL in D1 and are repaired lazily by backfillCreatorLastActive.
+// have NULL in D1 until they are next seen.
 const _lastSeenMemo = new Map();
 const LAST_SEEN_THROTTLE_MS = 30 * 60 * 1000;
 
@@ -11242,21 +11194,6 @@ async function touchCreatorLastSeen(env, username) {
 // under the subrequest cap: at most this many KV reads plus a single D1
 // batch write per call, so the backfill itself can never be the thing
 // that tips a dashboard load over the limit even mid-migration.
-const LAST_ACTIVE_BACKFILL_BATCH = 100;
-
-// Lazily fills creators.last_active in D1 from the KV creatorlastseen:
-// marker for accounts that still have NULL there -- every account created
-// before touchCreatorLastSeen started mirroring into D1. Runs only on an
-// admin dashboard load, repairs a bounded batch each time, and then has
-// nothing left to do: once a row is set, touchCreatorLastSeen keeps it
-// current going forward. Converges over a handful of loads (1,200 accounts
-// -> ~12 loads) and then costs zero KV reads. Each repaired value is also
-// written onto the in-memory account object so it shows the right "Last
-// Active" on the load that repairs it, not one load later.
-// P10-4 (FT-42): backfillCreatorLastActive removed (accounts in D1 v2)
-async function backfillCreatorLastActive(env, accounts) {
-  return;
-}
 
 
 // Records one "marked as watched" or "added to a list" event for a given
@@ -12276,173 +12213,6 @@ function recordListCopySlug(rawId, origin) {
   return /^[a-z0-9][a-z0-9-]{0,80}$/.test(slug) ? slug : null;
 }
 
-// --- Putting back the counts Analytics Engine took (2026-10-02 onward) ----------
-//
-// From the P8-2 deploy (2026-10-02) to its fix, bumpStat, bumpStatBy,
-// recordTrackedEvent and recordSearchQuery wrote to Analytics Engine INSTEAD
-// of D1. Nothing reads Analytics Engine, so the admin dashboard and Most
-// Watched froze. Those writes are still in the dataset (it keeps 90 days), and
-// they are the only rows there whose blob1 is "stat", "event" or "search":
-// the per-request metrics (writeRequestMetrics) put a route family there.
-//
-// This adds them to D1 the way the counters would have. Each source row
-// (counter, day) is recorded as `aerecovery:<counter>` in the same batch --
-// one transaction -- as the additions, and an addition only happens while that
-// record is absent: a second run, or a run after a failed one, adds nothing
-// twice. Needs the Analytics Engine SQL API: CF_ANALYTICS_TOKEN (an API token
-// with Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID.
-const AE_RECOVERY_LEDGER_PREFIX = "aerecovery:";
-const AE_RECOVERY_ROW_LIMIT = 50000;
-
-async function analyticsEngineRows(env, sql) {
-  const token = env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN);
-  const accountId = env && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID);
-  if (!token || !accountId) return { ok: false, error: "Set CF_ANALYTICS_TOKEN (Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID first." };
-  let res;
-  try {
-    res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "text/plain" },
-      body: sql + " FORMAT JSON",
-    });
-  } catch (err) {
-    return { ok: false, error: "Analytics Engine could not be reached: " + safeErrorMessage(err) };
-  }
-  const text = await res.text().catch(() => "");
-  if (!res.ok) return { ok: false, error: `Analytics Engine answered ${res.status}: ${text.slice(0, 200)}` };
-  let body = null;
-  try { body = JSON.parse(text); } catch {}
-  if (!body || !Array.isArray(body.data)) return { ok: false, error: "Analytics Engine sent an answer this could not read." };
-  return { ok: true, rows: body.data };
-}
-
-// What there is to put back, per counter and day. `day` is "total" for a
-// counter bumpStatBy keeps as an all-time total only.
-async function readAnalyticsEngineCounts(env) {
-  const dataset = String((env && env.CF_ANALYTICS_DATASET) || "mylists_events");
-  if (!/^[A-Za-z0-9_]+$/.test(dataset)) return { ok: false, error: "CF_ANALYTICS_DATASET is not a dataset name." };
-  const limit = ` LIMIT ${AE_RECOVERY_ROW_LIMIT}`;
-  // Kept inside what the live API accepts (it refused both of these, 422):
-  //  - only functions its SQL reference lists. There is no concat ("unknown
-  //    function call: CONCAT"), so each query returns the raw blobs and the
-  //    counter names are put together here;
-  //  - GROUP BY takes column names only ("in the GROUP BY clause you may only
-  //    provide column names: formatDateTime(...)"). A name given with AS
-  //    counts: Cloudflare's own example groups "intDiv(...) * 60 AS t" by `t`.
-  //    Not `hour` or `day`, which the SQL also has as keywords (INTERVAL).
-  const sum = "SUM(_sample_interval * double1) AS n";
-  // An event carries no day of its own: the day is when it was written, in
-  // the Eastern time statsToday() counts in. Asked for by the hour, as a plain
-  // number, and turned into the Eastern day here (an hour never straddles two
-  // Eastern days), so the query needs no time zone support from the service.
-  const hourOf = "toUnixTimestamp(toStartOfHour(timestamp))";
-  const queries = {
-    stat: {
-      label: "Reading page views and other counters",
-      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'stat' GROUP BY blob2, blob3${limit}`,
-      kindOf: (row) => String(row.blob2 || ""),
-      dayOf: (row) => String(row.blob3 || ""),
-    },
-    event: {
-      label: "Reading Most Watched and list adds",
-      sql: `SELECT blob2, blob3, ${hourOf} AS event_hour, ${sum} FROM ${dataset} WHERE blob1 = 'event' GROUP BY blob2, blob3, event_hour${limit}`,
-      kindOf: (row) => (row.blob2 && row.blob3 ? `evt:${row.blob2}:${row.blob3}` : ""),
-      dayOf: (row) => {
-        const seconds = Number(row.event_hour);
-        return Number.isFinite(seconds) && seconds > 0 ? easternDateKey(new Date(seconds * 1000)) : "";
-      },
-    },
-    search: {
-      label: "Reading searches",
-      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'search' GROUP BY blob2, blob3${limit}`,
-      kindOf: (row) => (row.blob2 ? `searchq:${row.blob2}` : ""),
-      dayOf: (row) => String(row.blob3 || ""),
-    },
-  };
-  // Rows that end up on the same counter and day (none expected) are added
-  // together, so the ledger has one entry for each.
-  const merged = new Map();
-  const truncated = [];
-  for (const [source, q] of Object.entries(queries)) {
-    const r = await analyticsEngineRows(env, q.sql);
-    if (!r.ok) return { ...r, error: `${q.label}: ${r.error}` };
-    if (r.rows.length >= AE_RECOVERY_ROW_LIMIT) truncated.push(source);
-    for (const row of r.rows) {
-      const kind = q.kindOf(row);
-      const day = q.dayOf(row);
-      const n = Number(row.n) || 0;
-      if (!kind || n <= 0 || kind.length > 300) continue;
-      if (day !== "total" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
-      // bumpStatBy kept writing source groups to D1 all along.
-      if (kind.startsWith("sourcegroup:")) continue;
-      const key = kind + "\u0000" + day;
-      const prev = merged.get(key);
-      if (prev) prev.n += n;
-      else merged.set(key, { source, kind, day, n });
-    }
-  }
-  const out = [];
-  for (const r of merged.values()) {
-    const n = Math.round(r.n);
-    if (n > 0) out.push({ ...r, n });
-  }
-  return { ok: true, rows: out, truncated };
-}
-
-// Preview (apply false) or put back (apply true).
-async function recoverStatsFromAnalyticsEngine(env, { apply = false } = {}) {
-  if (!env || !env.DB) return { ok: false, error: "No database binding." };
-  const read = await readAnalyticsEngineCounts(env);
-  if (!read.ok) return read;
-  const rows = read.rows;
-  // Which of them were put back already.
-  const done = new Set();
-  for (let i = 0; i < rows.length; i += 50) {
-    const chunk = rows.slice(i, i + 50);
-    const { results } = await env.DB.prepare(
-      `SELECT kind, day FROM stats WHERE (kind, day) IN (${chunk.map(() => "(?, ?)").join(", ")})`
-    ).bind(...chunk.flatMap((r) => [AE_RECOVERY_LEDGER_PREFIX + r.kind, r.day])).all();
-    for (const x of results || []) done.add(x.kind + "\u0000" + x.day);
-  }
-  const todo = rows.filter((r) => !done.has(AE_RECOVERY_LEDGER_PREFIX + r.kind + "\u0000" + r.day));
-  const summary = { stat: 0, event: 0, search: 0 };
-  for (const r of todo) summary[r.source] += r.n;
-  const byKind = {};
-  for (const r of todo.filter((x) => x.source === "stat")) byKind[r.kind] = (byKind[r.kind] || 0) + r.n;
-  const result = {
-    ok: true,
-    applied: false,
-    rows: rows.length,
-    alreadyPutBack: rows.length - todo.length,
-    toPutBack: todo.length,
-    totals: summary,
-    counters: Object.fromEntries(Object.entries(byKind).sort((a, b) => b[1] - a[1]).slice(0, 25)),
-    truncated: read.truncated,
-  };
-  if (!apply || !todo.length) return result;
-
-  // One row = its additions plus its ledger record, all conditional on that
-  // record being absent; 15 rows (45 statements) per batch.
-  const ledgerAbsent = "WHERE NOT EXISTS (SELECT 1 FROM stats WHERE kind = ? AND day = ?)";
-  for (let i = 0; i < todo.length; i += 15) {
-    const stmts = [];
-    for (const r of todo.slice(i, i + 15)) {
-      const ledgerKind = AE_RECOVERY_LEDGER_PREFIX + r.kind;
-      const buckets = r.day === "total" ? ["total"] : ["total", r.day];
-      for (const bucket of buckets) {
-        stmts.push(env.DB.prepare(
-          `INSERT INTO stats (kind, day, n) SELECT ?, ?, ? ${ledgerAbsent} ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n`
-        ).bind(r.kind, bucket, r.n, ledgerKind, r.day));
-      }
-      stmts.push(env.DB.prepare(
-        "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO NOTHING"
-      ).bind(ledgerKind, r.day, r.n));
-    }
-    await env.DB.batch(stmts);
-  }
-  return { ...result, applied: true };
-}
-
 // --- Counter reads -----------------------------------------------------------
 //
 // D1 is authoritative when bound, and falls back to KV when the row is
@@ -12943,7 +12713,6 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/rebuild-search-index": "admin.search.rebuild",
   "/admin/api/rebuild-public-index": "admin.search.rebuild",
   "/admin/api/delete-creator-list": "admin.list.delete",
-  "/admin/api/delete-published-list": "admin.published-list.delete",
   "/admin/api/channel-moderate": "admin.channel.moderate",
   "/admin/api/channel-presets/rebuild": "admin.channel-presets.rebuild",
   "/admin/api/channel-presets/clear": "admin.channel-presets.clear",
@@ -12951,11 +12720,8 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/feedback/edit": "admin.feedback.edit",
   "/admin/api/feedback/delete": "admin.feedback.delete",
   "/admin/api/feedback/status": "admin.feedback.set-status",
-  "/admin/api/migrate-d1": "admin.migrate.kv-to-d1",
-  "/admin/api/migrate-accounts": "admin.migrate.accounts",
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
-  "/admin/api/recover-stats-from-analytics": "admin.recover.stats-from-analytics",
   "/admin/api/support-goal": "admin.support-goal.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
@@ -13608,11 +13374,6 @@ ${UTILITY_CSS}
   .feedback-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
   .feedback-meta { color:var(--muted); font-size:0.8rem; margin-top:6px; }
   .feedback-message { margin-top:8px; white-space:pre-wrap; font-size:0.92rem; word-break:break-word; color:var(--text); }
-  .netflix-preview-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap:10px; margin-top:10px; }
-  .netflix-preview-poster { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:8px; background:var(--panel-strong); box-shadow:var(--shadow-sm); }
-  .netflix-preview-poster-placeholder { width:100%; aspect-ratio:2/3; border-radius:8px; background:var(--panel-strong); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.75rem; text-align:center; padding:6px; }
-  .netflix-preview-title { font-size:0.8rem; margin-top:4px; line-height:1.25; color:var(--text); }
-  .netflix-preview-year { color:var(--muted); font-size:0.75rem; }
 
   /* Support Desk */
   .admin-badge.open { background:rgba(0,122,255,0.12); color:var(--accent); }
@@ -13715,7 +13476,6 @@ ${UTILITY_CSS}
     <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
     <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
     <button type="button" class="subnav-pill" data-sub-tab="support_emails" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['support_emails'])}">Support Emails <span id="supportEmailsBadge" class="u-fs-v_font_size_xs u-fw-700 u-p-2px_6px u-br-v_radius_pill u-ml-4px" style="display:none;background:var(--accent);color:#fff;">0</span></button>
-    <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
     <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support Goal</button>
@@ -14050,34 +13810,6 @@ ${UTILITY_CSS}
   </div>
   </div>
 
-  <div class="admin-tab-panel" data-admin-panel="netflixpreview">
-    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Find a provider's id</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
-      <div class="u-gap-8px u-ai-center" style="display:flex;">
-        <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
-        <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
-        <span id="providerLookupStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
-      </div>
-      <div id="providerLookupResults" class="u-mt-10px"></div>
-    </div>
-
-    <div class="u-gap-8px u-ai-center u-mb-16px u-fw2-wrap" style="display:flex;">
-      <label class="u-fs-v_font_size_sm u-c-v_muted">Provider id
-        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select u-mr-0" style="width:60px;" value="8" placeholder="8">
-      </label>
-      <label class="u-fs-v_font_size_sm u-c-v_muted">Region
-        <input type="text" id="netflixPreviewRegionInput" class="admin-select u-mr-0 u-tt-uppercase" style="width:70px;" value="US" maxlength="2" placeholder="US">
-      </label>
-      <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
-      <span id="netflixPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
-    </div>
-    <div id="netflixPreviewMovies"></div>
-    <div id="netflixPreviewShows" class="u-mt-28px"></div>
-  </div>
-
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
@@ -14214,25 +13946,6 @@ ${UTILITY_CSS}
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">D1 database: ${isD1Bound
-        ? '<span class="u-c-v_color_success_text">bound</span>'
-        : '<span class="u-c-v_color_danger_text">not bound (required)</span>'}</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">${isD1Bound
-        ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
-        : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
-      <button type="button" class="admin-select u-cur-pointer" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
-      <span id="migrateD1Status" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Unified accounts table (v2 identity)</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
-      <span id="migrateAccountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Install links: keys moving to encrypted storage</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
@@ -14240,26 +13953,6 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
       <span id="installsRestoreStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Lists v2: copy existing lists</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
-      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
-      <span id="listsBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      <div id="listsBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Activity: copy watch history</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
-      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
-      <span id="activityBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
-      <div id="activityBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
@@ -14294,15 +13987,6 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
       <span id="schemaCheckStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="schemaCheckResult" class="u-mt-10px"></div>
-    </div>
-
-    <div class="panel u-m-0 u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Counts missing since 2 October</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
-      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
-      <span id="statsRecoveryStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      <div id="statsRecoveryResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -14342,23 +14026,6 @@ ${UTILITY_CSS}
       </div>
       <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
       <span id="deleteListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-    </div>
-
-    <div class="panel u-m-0 u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Anonymously published lists</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
-      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
-      <div class="row u-mb-8px">
-        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
-        <button type="button" class="admin-select u-cur-pointer" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="anonListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      </div>
-      <div id="anonListResults" class="u-mb-8px"></div>
-      <div class="row u-mb-8px">
-        <input type="text" id="deleteAnonSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
-      </div>
-      <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
-      <span id="deleteAnonStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="admin-card u-mt-12px">
@@ -14418,7 +14085,6 @@ ${UTILITY_CSS}
       creators: 'management',
       feedback: 'management',
       support_emails: 'management',
-      netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
       supportgoal: 'management',
@@ -14470,7 +14136,6 @@ ${UTILITY_CSS}
       if (tabId === 'feedback' && !window._feedbackLoadedOnce) { window._feedbackLoadedOnce = true; loadFeedback(); }
       if (tabId === 'support_emails' && !window._supportEmailsLoadedOnce) { window._supportEmailsLoadedOnce = true; loadSupportEmailThreads(); }
       if (tabId === 'apiusage' && !window._apiUsageLoadedOnce) { window._apiUsageLoadedOnce = true; loadApiUsage(); }
-      if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
       if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
@@ -15080,77 +14745,6 @@ ${UTILITY_CSS}
       if (typeof loadSearchData === 'function') loadSearchData();
     }
 
-    // Like the loops above, /admin/api/migrate-d1 now does one bounded chunk
-    // per call rather than the whole sweep -- see its own comment for why a
-    // single pass could not survive a site large enough to need migrating --
-    // so this keeps calling until it reports done. The results object comes
-    // back cumulative for the whole run, so the final response already holds
-    // the totals and there is nothing to add up here.
-    //
-    // No backticks in this function, or anywhere else inside
-    // renderAdminDashboard's returned template literal: everything from that
-    // opening backtick onwards is string content, so one here would close the
-    // template early and break the whole admin page. (The module-scope
-    // helpers at the top of this file are ordinary JS and do use them.)
-    async function runMigrateD1() {
-      const btn = document.getElementById('migrateD1Btn');
-      const status = document.getElementById('migrateD1Status');
-      btn.disabled = true;
-      status.textContent = 'Working\u2026 this can take a moment on a large site.';
-      let safetyCounter = 0;
-      try {
-        while (safetyCounter < 1000) {
-          safetyCounter++;
-          const res = await fetch('/admin/api/migrate-d1', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-          const data = await res.json();
-          if (!data.ok) {
-            status.textContent = 'Failed: ' + (data.error || 'unknown error');
-            break;
-          }
-          const r = data.results || {};
-          if (!data.done) {
-            status.textContent = 'Working\u2026 ' + (data.scanned || 0) + ' key' + ((data.scanned || 0) === 1 ? '' : 's') +
-              ' scanned, ' + (r.creators || 0) + ' creator' + ((r.creators || 0) === 1 ? '' : 's') + ' and ' +
-              (r.lists || 0) + ' list' + ((r.lists || 0) === 1 ? '' : 's') + ' migrated so far.';
-            continue;
-          }
-          const errCount = (r.errors || []).length;
-          status.textContent = 'Done \u2014 ' + (r.creators || 0) + ' creator' + ((r.creators || 0) === 1 ? '' : 's') + ', ' +
-            (r.lists || 0) + ' list' + ((r.lists || 0) === 1 ? '' : 's') + ', ' +
-            (r.sourcegroups || 0) + ' source group' + ((r.sourcegroups || 0) === 1 ? '' : 's') + ', ' +
-            (r.feedback || 0) + ' feedback, ' +
-            (r.tracking || 0) + ' tracking migrated' +
-            (errCount ? (', ' + errCount + ' error' + (errCount === 1 ? '' : 's') + ' (see console)') : '') + '.';
-          if (errCount) console.error('migrate-d1 errors:', r.errors);
-          break;
-        }
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-    }
-
-    async function runMigrateAccounts() {
-      const btn = document.getElementById('migrateAccountsBtn');
-      const status = document.getElementById('migrateAccountsStatus');
-      btn.disabled = true;
-      status.textContent = 'Working…';
-      try {
-        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-        const data = await res.json();
-        if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error');
-        } else {
-          status.textContent = 'Done — ' + (data.accountsCount || 0) + ' accounts in table (' +
-            (data.d1Count || 0) + ' D1, ' + (data.kvCount || 0) + ' KV, union ' + (data.unionCount || 0) + '). ' +
-            (data.reconciled ? 'Reconciled ✓' : 'Mismatch!');
-        }
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-    }
-
     async function runInstallsStatus() {
       const btn = document.getElementById('installsStatusBtn');
       const status = document.getElementById('installsStatus');
@@ -15208,164 +14802,6 @@ ${UTILITY_CSS}
         status.textContent = 'Failed: network error (' + restored + ' restored so far).';
       }
       btn.disabled = false;
-    }
-
-    // Lists v2 backfill (P3b-3). One bounded step per request; this keeps
-    // asking until the server says it is done, so closing the page just
-    // pauses it and Copy lists carries on from where it stopped.
-    async function runListsBackfill(restart) {
-      if (restart && !confirm('Run the copy again from the first account? Copies already made are kept; only lists that changed are copied again.')) return;
-      const btns = [document.getElementById('listsBackfillBtn'), document.getElementById('listsBackfillRestartBtn')];
-      const status = document.getElementById('listsBackfillStatus');
-      btns.forEach(function (b) { b.disabled = true; });
-      let pendingRestart = !!restart;
-      let steps = 0;
-      try {
-        while (steps < 20000) {
-          steps++;
-          const res = await fetch('/admin/api/lists-backfill/step', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ restart: pendingRestart }),
-          });
-          const data = await res.json();
-          if (data.busy) {
-            status.textContent = 'Another step is running. Waiting...';
-            await new Promise(function (r) { setTimeout(r, 5000); });
-            continue;
-          }
-          pendingRestart = false;
-          if (!data.ok) {
-            status.textContent = 'Stopped: ' + (data.error || 'unknown error');
-            break;
-          }
-          const failedNote = data.accountsFailed ? ' (' + data.accountsFailed + ' failed)' : '';
-          if (data.done) {
-            status.textContent = 'Done: ' + data.accountsDone + ' accounts' + failedNote + '. Press Check results.';
-            break;
-          }
-          status.textContent = 'Copying (' + data.phase + '): ' + data.accountsDone + ' of ' + data.accountsTotal + ' accounts' + failedNote + '...';
-        }
-      } catch (e) {
-        status.textContent = 'Stopped: network error. Press Copy lists to carry on.';
-      }
-      btns.forEach(function (b) { b.disabled = false; });
-    }
-
-    async function runListsBackfillStatus() {
-      const status = document.getElementById('listsBackfillStatus');
-      const out = document.getElementById('listsBackfillResult');
-      status.textContent = 'Checking...';
-      try {
-        const res = await fetch('/admin/api/lists-backfill/status');
-        const d = await res.json();
-        if (!d.ok) {
-          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
-          return;
-        }
-        status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
-        const t = d.totals;
-        const lines = [
-          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting to be copied again, ' + (d.accounts.failed || 0) + ' failed.',
-          'Lists: ' + t.lists.legacy + ' found, ' + t.lists.copied + ' copied, ' + t.lists.unchanged + ' unchanged since the last run, ' + t.lists.removed + ' copies of deleted lists retired, ' + t.lists.missing + ' order entries with no list behind them.',
-          'Items: ' + t.items.legacy + ' in the old lists, ' + t.items.copied + ' copied, ' + (d.mismatchRate * 100).toFixed(3) + '% not carried: ' + t.items.unusable + ' with no usable id (no catalog could show them), ' + t.items.duplicates + ' listed twice' + (t.items.carried ? ', ' + t.items.carried + ' on lists copied in an earlier run' : '') + '. ' + t.items.stubs + ' titles TMDB could not place yet (kept, tried again later).',
-          'Likes: ' + t.likes.legacy + ' shown before, ' + t.likes.voters + ' voters copied, ' + t.likes.keptFromCount + ' kept from the old totals with no voter on record.',
-        ];
-        if (d.listsOnly) lines.unshift('FF_V2_LISTS_ONLY is on: the new tables are the only store, so there is nothing left to copy.');
-        else if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed)) lines.push('Every account is copied. FF_V2_LISTS_ONLY can be considered once reads have been on the new tables for a while (docs/OPERATIONS.md section 11).');
-        if (d.anonymous) lines.push('Anonymous lists: ' + d.anonymous.lists.legacy + ' found, ' + d.anonymous.items.copied + ' of ' + d.anonymous.items.legacy + ' items copied.');
-        if (d.external) lines.push('Likes on outside lists: ' + d.external.targets + ' lists, ' + d.external.voters + ' voters copied.');
-        if (d.channels) {
-          const c = d.channels;
-          lines.push('Shared channels: ' + c.channels.legacy + ' found (' + c.channels.listed + ' listed in Explore Channels), ' + c.channels.copied + ' copied, ' + c.channels.unchanged + ' unchanged since the last run, ' + c.channels.unreadable + ' unreadable' + (c.samples.unreadable.length ? ' (' + c.samples.unreadable.join(', ') + ')' : '') + '. Episode lists: ' + c.pools.written + ' written to R2' + (c.pools.skipped ? ', ' + c.pools.skipped + ' left in KV because the BLOBS bucket is not bound' : '') + '. Likes: ' + c.likes.voters + ' voters copied, ' + c.likes.keptFromCount + ' kept from the old totals. Adds: ' + c.adds.adders + ' accounts copied, ' + c.adds.keptFromCount + ' kept from the old totals.');
-        }
-        if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
-        if (d.worst.length) lines.push('Most items not carried: ' + d.worst.map(function (w) { return '#' + w.accountId + ' ' + (w.mismatchRate * 100).toFixed(2) + '%'; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.worst[0].samples));
-        out.innerHTML = '';
-        lines.forEach(function (line) {
-          const div = document.createElement('div');
-          div.style.margin = '0 0 4px';
-          div.textContent = line;
-          out.appendChild(div);
-        });
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-    }
-
-    // Activity backfill (P3c-3): the same loop as the list copy above.
-    async function runActivityBackfill(restart) {
-      if (restart && !confirm('Copy every account again from the start? What an earlier copy made is replaced; the history people use today is not touched.')) return;
-      const btns = [document.getElementById('activityBackfillBtn'), document.getElementById('activityBackfillRestartBtn')];
-      const status = document.getElementById('activityBackfillStatus');
-      btns.forEach(function (b) { b.disabled = true; });
-      let pendingRestart = !!restart;
-      let steps = 0;
-      try {
-        while (steps < 20000) {
-          steps++;
-          const res = await fetch('/admin/api/activity-backfill/step', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ restart: pendingRestart }),
-          });
-          const data = await res.json();
-          if (data.busy) {
-            status.textContent = 'Another step is running. Waiting...';
-            await new Promise(function (r) { setTimeout(r, 5000); });
-            continue;
-          }
-          pendingRestart = false;
-          if (!data.ok) {
-            status.textContent = 'Stopped: ' + (data.error || 'unknown error');
-            break;
-          }
-          const failedNote = data.accountsFailed ? ' (' + data.accountsFailed + ' failed)' : '';
-          if (data.done) {
-            status.textContent = 'Done: ' + data.accountsDone + ' accounts' + failedNote + '. Press Check results.';
-            break;
-          }
-          status.textContent = 'Copying: ' + data.accountsDone + ' of ' + data.accountsTotal + ' accounts' + failedNote + '...';
-        }
-      } catch (e) {
-        status.textContent = 'Stopped: network error. Press Copy history to carry on.';
-      }
-      btns.forEach(function (b) { b.disabled = false; });
-    }
-
-    async function runActivityBackfillStatus() {
-      const status = document.getElementById('activityBackfillStatus');
-      const out = document.getElementById('activityBackfillResult');
-      status.textContent = 'Checking...';
-      try {
-        const res = await fetch('/admin/api/activity-backfill/status');
-        const d = await res.json();
-        if (!d.ok) {
-          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
-          return;
-        }
-        status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
-        const h = d.totals.history;
-        const sh = d.totals.shows;
-        const lines = [
-          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting, ' + (d.accounts.failed || 0) + ' failed.',
-          'History: ' + h.kv + ' entries in KV, ' + h.d1 + ' in D1, ' + h.queue + ' in the scrobble queue, ' + h.union + ' different entries in all. ' + h.copied + ' plays copied; ' + h.duplicates + ' were the same play twice (within ten minutes), ' + h.unusable + ' had no usable id' + (h.undated ? ', ' + h.undated + ' had no date (given the record date)' : '') + '. ' + h.stubs + ' titles TMDB could not place yet (kept, tried again later).',
-          'Shows: ' + sh.progress + ' with progress, ' + sh.completed + ' finished, ' + sh.dismissed + ' hidden from Continue Watching, ' + sh.airingHidden + ' hidden from Airing Next, ' + sh.kept + ' storyline or movie suggestions kept, ' + sh.cwOnly + ' in Continue Watching with no history' + (sh.unusable ? ', ' + sh.unusable + ' with no usable id' : '') + '. Movies watched: ' + d.totals.movies + '.',
-          'Plays now in the activity database: ' + d.totals.events + ' (the larger of the KV and D1 histories added up: ' + d.totals.legacyMax + '). Accounts with fewer plays than their old history: ' + d.totals.shortAccounts + '.',
-        ];
-        if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed) && !d.totals.shortAccounts) lines.push('Every account is copied, none with fewer plays than before.');
-        if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
-        if (d.short.length) lines.push('Fewest plays against their old history: ' + d.short.map(function (s) { return '#' + s.accountId + ' ' + s.short + ' of ' + s.legacy; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.short[0].samples));
-        out.innerHTML = '';
-        lines.forEach(function (line) {
-          const div = document.createElement('div');
-          div.style.margin = '0 0 4px';
-          div.textContent = line;
-          out.appendChild(div);
-        });
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
     }
 
     // Background jobs queue (P5-1): send one test job, then ask every two
@@ -15599,9 +15035,8 @@ ${UTILITY_CSS}
       }
     }
 
-    // Fills the slug box rather than deleting, exactly as the anonymous browse
-    // does: a one-click delete next to a browse list is how the wrong list
-    // gets removed. The delete button still asks, and still names what it is
+    // Fills the slug box rather than deleting: a one-click delete next to a
+    // browse list is how the wrong list gets removed. The delete button still asks, and still names what it is
     // about to remove.
     function setSelectedCreatorSlugs(slugs) {
       const input = document.getElementById('deleteListSlugsInput');
@@ -15711,79 +15146,6 @@ ${UTILITY_CSS}
       btn.disabled = false;
     }
 
-    // Anonymous published lists (publishedlist:user:*). These have no owner,
-    // so runDeleteCreatorLists above cannot reach them -- it requires a
-    // creator username, and "user" is a reserved one. The keyspace is
-    // unbounded by construction, so this pages rather than scanning: the
-    // cursor is kept here between calls and "Load more" continues it.
-    let anonListCursor = null;
-    let anonListCount = 0;
-
-    async function loadPublishedLists(reset) {
-      const btn = document.getElementById('browseAnonBtn');
-      const moreBtn = document.getElementById('browseAnonMoreBtn');
-      const status = document.getElementById('anonListStatus');
-      const results = document.getElementById('anonListResults');
-      if (reset) {
-        anonListCursor = null;
-        anonListCount = 0;
-        results.innerHTML = '';
-        moreBtn.hidden = true;
-      }
-      btn.disabled = true;
-      moreBtn.disabled = true;
-      status.textContent = 'Loading\u2026';
-      try {
-        const qs = '?limit=50' + (anonListCursor ? '&cursor=' + encodeURIComponent(anonListCursor) : '');
-        const res = await fetch('/admin/api/published-lists' + qs);
-        const data = await res.json();
-        if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error');
-          btn.disabled = false;
-          moreBtn.disabled = false;
-          return;
-        }
-        const lists = data.lists || [];
-        anonListCount += lists.length;
-        if (!anonListCount) {
-          results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">No anonymously published lists.</p>';
-        } else {
-          const rows = lists.map(function (L) {
-            const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
-            return '<tr>' +
-              '<td class="u-p-4px_8px_4px_0"><button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs" data-anon-slug="' +
-                escapeHtmlAdmin(L.slug) + '">Select</button></td>' +
-              '<td class="u-p-4px_8px_4px_0"><code>' + escapeHtmlAdmin(L.slug) + '</code></td>' +
-              '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(L.name) + '</td>' +
-              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.itemCount) || 0) + '</td>' +
-              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.likes) || 0) + '</td>' +
-              '<td class="u-p-4px_8px_4px_0">' + vis + '</td>' +
-              '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
-              '</tr>';
-          }).join('');
-          if (reset || !results.querySelector('tbody')) {
-            results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
-              '<thead><tr class="u-c-v_muted u-ta-left">' +
-              '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
-              '<th class="u-pr-8px u-ta-right">Items</th>' +
-              '<th class="u-pr-8px u-ta-right">Likes</th>' +
-              '<th class="u-pr-8px">Visibility</th><th></th>' +
-              '</tr></thead><tbody>' + rows + '</tbody></table>';
-          } else {
-            results.querySelector('tbody').insertAdjacentHTML('beforeend', rows);
-          }
-        }
-        anonListCursor = data.cursor || null;
-        moreBtn.hidden = !anonListCursor;
-        status.textContent = anonListCount + ' list' + (anonListCount === 1 ? '' : 's') + ' shown' +
-          (anonListCursor ? ', more available.' : '. That is all of them.');
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-      moreBtn.disabled = false;
-    }
-
     // --- published channels ---------------------------------------------
     //
     // Two scopes. "listed" is the directory itself -- one cheap read of the
@@ -15880,68 +15242,6 @@ ${UTILITY_CSS}
         btn.disabled = false;
       }
     });
-
-    // "Select" fills the slug box rather than deleting directly: a one-click
-    // delete next to a browse list is how the wrong list gets removed.
-    document.getElementById('anonListResults').addEventListener('click', function (ev) {
-      const btn = ev.target.closest('[data-anon-slug]');
-      if (!btn) return;
-      const input = document.getElementById('deleteAnonSlugsInput');
-      const slug = btn.getAttribute('data-anon-slug');
-      const current = (input.value || '').split(/[\\s,]+/).map(function (x) { return x.trim(); }).filter(Boolean);
-      if (current.indexOf(slug) === -1) current.push(slug);
-      input.value = current.join(', ');
-      document.getElementById('deleteAnonStatus').textContent = current.length + ' slug' + (current.length === 1 ? '' : 's') + ' selected.';
-    });
-
-    // Same shape as runDeleteCreatorLists: irreversible, so it names what it
-    // is about to remove, and batches to ADMIN_LIST_DELETE_MAX per call.
-    async function runDeletePublishedLists() {
-      const btn = document.getElementById('deleteAnonBtn');
-      const status = document.getElementById('deleteAnonStatus');
-      const raw = (document.getElementById('deleteAnonSlugsInput').value || '').trim();
-      const slugs = raw.split(/[\\s,]+/).map(function (x) { return x.trim(); }).filter(Boolean);
-      if (!slugs.length) {
-        status.textContent = 'Enter at least one slug.';
-        return;
-      }
-      const ok = confirm('Permanently delete ' + slugs.length + ' anonymously published list' +
-        (slugs.length === 1 ? '' : 's') + '?\\n\\n' + slugs.slice(0, 12).join(', ') +
-        (slugs.length > 12 ? ', and ' + (slugs.length - 12) + ' more' : '') +
-        '\\n\\nThis cannot be undone.');
-      if (!ok) return;
-
-      btn.disabled = true;
-      const BATCH = 50;
-      let deleted = 0;
-      let missing = 0;
-      try {
-        for (let i = 0; i < slugs.length; i += BATCH) {
-          const batch = slugs.slice(i, i + BATCH);
-          status.textContent = 'Deleting\u2026 ' + (deleted + missing) + ' of ' + slugs.length + ' processed.';
-          const res = await fetch('/admin/api/delete-published-list', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slugs: batch }),
-          });
-          const data = await res.json();
-          if (!data.ok) {
-            status.textContent = 'Failed: ' + (data.error || 'unknown error');
-            btn.disabled = false;
-            return;
-          }
-          deleted += (data.deleted || []).length;
-          missing += (data.missing || []).length;
-        }
-        status.textContent = 'Done \u2014 deleted ' + deleted + ', ' + missing +
-          ' slug' + (missing === 1 ? '' : 's') + ' had no list to remove.';
-        document.getElementById('deleteAnonSlugsInput').value = '';
-        if (anonListCount) await loadPublishedLists(true);
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-    }
 
     // Reports which files under migrations/ this database has not had run,
     // and what each omission silently costs. The consequence text is the
@@ -16097,43 +15397,6 @@ ${UTILITY_CSS}
         status.textContent = 'Stopped: network error (nothing is marked complete).';
       }
       btn.disabled = false;
-    }
-
-    async function runStatsRecovery(apply) {
-      const status = document.getElementById('statsRecoveryStatus');
-      const out = document.getElementById('statsRecoveryResult');
-      const buttons = [document.getElementById('statsRecoveryPreviewBtn'), document.getElementById('statsRecoveryApplyBtn')];
-      buttons.forEach(function (b) { if (b) b.disabled = true; });
-      status.textContent = apply ? 'Putting the counts back\u2026' : 'Reading Cloudflare Analytics\u2026';
-      out.textContent = '';
-      try {
-        const res = await fetch('/admin/api/recover-stats-from-analytics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apply: apply === true }),
-        });
-        const data = await res.json();
-        if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error') + (data.build ? ' (build ' + data.build + ')' : '');
-        } else {
-          status.textContent = data.applied
-            ? 'Done: ' + data.toPutBack + ' counts put back.'
-            : (data.toPutBack ? data.toPutBack + ' counts to put back' : 'Nothing left to put back') + (data.alreadyPutBack ? ' (' + data.alreadyPutBack + ' already back).' : '.');
-          const lines = [
-            'Page views, installs, pings and other counters: ' + data.totals.stat + '. Watched and list adds: ' + data.totals.event + '. Searches: ' + data.totals.search + '.',
-          ];
-          Object.keys(data.counters || {}).forEach(function (k) { lines.push(k + ': ' + data.counters[k]); });
-          if (data.truncated && data.truncated.length) lines.push('More rows than one pass reads (' + data.truncated.join(', ') + '): run it again.');
-          lines.forEach(function (line) {
-            const div = document.createElement('div');
-            div.textContent = line;
-            out.appendChild(div);
-          });
-        }
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      buttons.forEach(function (b) { if (b) b.disabled = false; });
     }
 
     async function runSchemaCheck() {
@@ -16294,86 +15557,6 @@ ${UTILITY_CSS}
         ).join('');
       } catch (e) {
         body.innerHTML = '<tr><td colspan="5">Could not load -- try again.</td></tr>';
-      }
-    }
-
-    function netflixPreviewSectionHtml(label, section) {
-      if (!section) return '';
-      const posters = section.items.map((it) =>
-        '<div>' +
-          (it.poster
-            ? '<img class="netflix-preview-poster" src="' + escapeHtmlAdmin(it.poster) + '" alt="" loading="lazy">'
-            : '<div class="netflix-preview-poster-placeholder">No poster</div>') +
-          '<div class="netflix-preview-title">' + escapeHtmlAdmin(it.title) + '</div>' +
-          (it.date ? '<div class="netflix-preview-year">' + escapeHtmlAdmin(it.date) + '</div>' : '') +
-        '</div>'
-      ).join('');
-      return '<h3 class="u-m-0_0_4px u-fs-v_font_size_md">' + label + ' <span class="u-c-v_muted u-fw-400 u-fs-v_font_size_sm">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
-        '<div class="netflix-preview-grid">' + posters + '</div>';
-    }
-
-    async function loadNetflixPreview() {
-      const statusEl = document.getElementById('netflixPreviewStatus');
-      const moviesEl = document.getElementById('netflixPreviewMovies');
-      const showsEl = document.getElementById('netflixPreviewShows');
-      const regionInput = document.getElementById('netflixPreviewRegionInput');
-      const providerIdInput = document.getElementById('netflixPreviewProviderIdInput');
-      const region = (regionInput.value || 'US').trim().toUpperCase().slice(0, 2) || 'US';
-      const providerId = (providerIdInput.value || '8').trim() || '8';
-      statusEl.textContent = 'Loading\u2026';
-      moviesEl.innerHTML = '';
-      showsEl.innerHTML = '';
-      try {
-        const res = await fetch('/admin/api/netflix-preview?region=' + encodeURIComponent(region) + '&providerId=' + encodeURIComponent(providerId));
-        const data = await res.json();
-        if (!data.ok) {
-          statusEl.textContent = data.error || 'Could not load preview.';
-          return;
-        }
-        statusEl.textContent = '';
-        moviesEl.innerHTML = netflixPreviewSectionHtml('Movies', data.movies);
-        showsEl.innerHTML = netflixPreviewSectionHtml('Shows', data.shows);
-      } catch (e) {
-        statusEl.textContent = 'Could not load -- check your connection.';
-      }
-    }
-
-    // Fills the Provider id field from a lookup result and immediately
-    // reloads the preview with it -- clicking a name found this way should
-    // just show that provider's shelf, not require a second manual click.
-    function pickProviderId(id) {
-      document.getElementById('netflixPreviewProviderIdInput').value = id;
-      loadNetflixPreview();
-    }
-
-    async function lookupProviderIds() {
-      const statusEl = document.getElementById('providerLookupStatus');
-      const resultsEl = document.getElementById('providerLookupResults');
-      const queryInput = document.getElementById('providerLookupQueryInput');
-      const regionInput = document.getElementById('netflixPreviewRegionInput');
-      const query = (queryInput.value || '').trim();
-      const region = (regionInput.value || 'US').trim().toUpperCase().slice(0, 2) || 'US';
-      statusEl.textContent = 'Searching\u2026';
-      resultsEl.innerHTML = '';
-      try {
-        const res = await fetch('/admin/api/provider-lookup?region=' + encodeURIComponent(region) + (query ? '&query=' + encodeURIComponent(query) : ''));
-        const data = await res.json();
-        if (!data.ok) {
-          statusEl.textContent = data.error || 'Could not search.';
-          return;
-        }
-        statusEl.textContent = '';
-        if (!data.results.length) {
-          resultsEl.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">No matches.</p>';
-          return;
-        }
-        resultsEl.innerHTML = data.results.map((p) =>
-          '<button type="button" class="admin-select u-cur-pointer u-m-0_6px_6px_0" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
-            escapeHtmlAdmin(p.name) + ' <span class="u-c-v_muted">(' + p.id + ')</span>' +
-          '</button>'
-        ).join('');
-      } catch (e) {
-        statusEl.textContent = 'Could not search -- check your connection.';
       }
     }
 
@@ -20538,7 +19721,7 @@ function fetchChannelCatalog(entry, origin) {
 // creatorlist:{username}:{slug} (signed in, saved via
 // /api/creator/lists/save -- see 26_api-creator-and-admin-routes.js), or
 // under listlive:{token} (a signed-out browser's own server-side copy, see
-// readLiveListItems). Either way, adding it to Catalogs used to bake a
+// readLiveListRecord). Either way, adding it to Catalogs used to bake a
 // one-time snapshot of `items` straight into this URL, so an edit made
 // afterward (add/remove/reorder a pick) never reached a catalog shelf that
 // already existed -- the shelf, and the Live Preview reading the same
@@ -20548,7 +19731,7 @@ function fetchChannelCatalog(entry, origin) {
 // snapshot is kept as the fallback in all cases: if the row names nothing
 // live, or the account it implies has no such list, or the KV record is
 // missing altogether (list since deleted, key expired, a private list read by
-// someone who didn't prove ownership -- fetchLiveCreatorListItems serves
+// someone who didn't prove ownership -- readLiveCreatorList serves
 // public lists to anyone but private ones only to a verified owner), this
 // drops straight back to the old behavior rather than serving an empty
 // shelf. A live read that DOES answer is taken at its word, empty list
@@ -20607,11 +19790,6 @@ async function readLiveListRecord(env, token) {
     if (parsed && Array.isArray(parsed.items)) return parsed;
   } catch {}
   return null;
-}
-
-async function readLiveListItems(env, token) {
-  const rec = await readLiveListRecord(env, token);
-  return rec ? rec.items : null;
 }
 
 // True when any source line of a (possibly merged) row is a custom list that
@@ -20701,11 +19879,6 @@ async function readLiveCreatorList(env, owner, slug, verifiedOwner = "") {
     } catch {}
   }
   return null;
-}
-
-async function fetchLiveCreatorListItems(owner, slug, env, verifiedOwner = "") {
-  const rec = await readLiveCreatorList(env, owner, slug, verifiedOwner);
-  return rec ? rec.items : null;
 }
 
 // The one place that decides which copy of a custom-list payload is the live
@@ -25275,9 +24448,7 @@ async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null) {
 // Every item from a TMDB list only carries a TMDB id -- Stremio/wako
 // protocol needs an IMDB id (or a "tmdb:<id>" fallback if none exists). We
 // resolve each item's IMDB id in parallel using fetchTmdbDetails (which
-// also pulls trailer videos for free), capped at TMDB_LIST_PAGE_SIZE items
-// per page.
-const TMDB_LIST_PAGE_SIZE = 20;
+// also pulls trailer videos for free).
 
 async function fetchTmdb(entry, skip = 0, apiKey = "") {
   if (!apiKey) {
@@ -30817,20 +29988,6 @@ const APP_SHELL_TAB_ICONS = {
   settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
 };
 
-// Which view the page opens on when it is served at a shell path. The shell's
-// own routing (24_) reads the same table, written into the bundle.
-function appShellTabForPath(pathname) {
-  const p = String(pathname || "");
-  for (const t of APP_SHELL_TABS) {
-    if (p === t.path) return t;
-    if (p.startsWith(t.path + "/")) {
-      const rest = p.slice(t.path.length + 1).replace(/\/+$/, "");
-      if (rest && t.subs.indexOf(rest) !== -1) return t;
-    }
-  }
-  return null;
-}
-
 function buildAppShellNavHtml(style) {
   const isDesktop = style === "desktop";
   const tabs = isDesktop ? APP_SHELL_TABS : APP_SHELL_TABS.filter((t) => t.id !== "search");
@@ -31014,6 +30171,7 @@ function renderBuilder(
 <link rel="manifest" href="${origin}/app.webmanifest">
 ${seoHeadHtml}
 <link rel="icon" type="image/png" href="${origin}/icon.png">
+<link rel="apple-touch-icon" href="${origin}/icon.png">
 <!-- Fonts: the device's own (P7-1). This page used to load Inter, Space
      Grotesk and JetBrains Mono from fonts.googleapis.com + fonts.gstatic.com,
      which cost a third-party connection on first paint, told Google which
@@ -39881,18 +39039,6 @@ function showToast(message, type = 'info', options = {}) {
   return toast;
 }
 
-function hideToast() {
-  clearTimeout(_appToastTimer);
-  const container = document.getElementById('appToastContainer');
-  if (container) {
-    const toasts = container.querySelectorAll('.app-toast');
-    toasts.forEach((t) => {
-      t.classList.remove('show');
-      setTimeout(() => { if (t.parentNode) t.remove(); }, 250);
-    });
-  }
-}
-
 function showAddedToast(msg) {
   showToast(msg || 'Added to My Catalogs \u2713', 'success');
 }
@@ -39935,22 +39081,6 @@ async function copyTextToClipboard(text, options = {}) {
     }
   }
   return copied;
-}
-
-function debounce(fn, delayMs = 300) {
-  let timer = null;
-  const debounced = function(...args) {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      fn.apply(this, args);
-    }, delayMs);
-  };
-  debounced.cancel = function() {
-    clearTimeout(timer);
-    timer = null;
-  };
-  return debounced;
 }
 
 function formatRatingBadgeHtml(item, options = {}) {
@@ -41877,7 +41007,7 @@ function parseCustomListPayloadClient(u) {
 // browser's localStorage, and the catalog row it produced was a one-time
 // snapshot: an item added or removed on the website never reached an
 // installed add-on. Signed-in lists are live already -- the row names the
-// account's copy and the server re-reads it (fetchLiveCreatorListItems,
+// account's copy and the server re-reads it (readLiveCreatorList,
 // 05_catalog-core.js). For everyone else, the list now also gets a
 // server-side copy addressed by a token, the same shape of live-by-identity
 // read, so every list on the site behaves like Continue Watching.
@@ -43599,7 +42729,6 @@ async function startTraktDeviceLogin(retried) {
   }
 }
 
-let myPrivateTraktListsTimer = null;
 async function runMyPrivateTraktLists() {
   const box = document.getElementById('myPrivateTraktListsResult');
   if (!box) return;
@@ -53392,25 +52521,7 @@ function beginMyChannelReorder() {
 // Drag-to-reorder. Mouse goes through HTML5 drag-and-drop and touch/pen
 // through Pointer Events, which is the same split My Lists uses and for the
 // same reason: native drag-and-drop generally does not fire on touch at all.
-let myChannelDragCard = null;
-let myChannelTouchCard = null;
 let myChannelsDragBound = false;
-
-function myChannelDragAfterElement(container, y) {
-  const cards = [...container.querySelectorAll('.list-card[data-channel-id]:not(.dragging)')];
-  return cards.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: -Infinity, element: null }).element;
-}
-
-function moveMyChannelDragCard(container, card, clientY) {
-  const afterEl = myChannelDragAfterElement(container, clientY);
-  if (afterEl == null) container.appendChild(card);
-  else if (afterEl !== card) container.insertBefore(card, afterEl);
-}
 
 // Bound once on the container rather than per card, because the card list is
 // re-rendered wholesale on every change and per-card listeners would be
@@ -60397,32 +59508,6 @@ function initChannelHoldDrag() {
   });
 }
 
-function getChannelDragAfterElement(container, x, y) {
-  const els = [...container.querySelectorAll('.channel-pick:not(.dragging)')];
-  if (!els.length) return null;
-
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
-      return child;
-    }
-  }
-
-  let closest = null;
-  let closestDistance = Infinity;
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    const cx = box.left + box.width / 2;
-    const cy = box.top + box.height / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (dist < closestDistance) {
-      closestDistance = dist;
-      closest = child;
-    }
-  }
-  return closest;
-}
-
 // Rebuilds the draft order from the cards on screen after a drag.
 //
 // Only the cards ON SCREEN, which is the whole difficulty: with a filter
@@ -63829,32 +62914,6 @@ function channelNextUpSeedItems() {
   return out;
 }
 
-// Re-seeds a saved Next Up channel from Continue Watching as it stands now,
-// and rewrites the catalog row that carries it. What the card's Refresh
-// button does.
-function refreshNextUpChannelSeed(channelId, btn) {
-  const map = loadLocalChannels();
-  const ch = map[channelId];
-  if (!ch || ch.dynamic !== 'next-up') return 0;
-  const items = channelNextUpSeedItems();
-  ch.items = items;
-  saveLocalChannelsMap(map);
-  const payload = Object.assign({}, ch, { items: items });
-  const rows = [...document.querySelectorAll('#lists .entry')];
-  rows.forEach((row) => {
-    [...row.querySelectorAll('.url')].forEach((u) => {
-      if (String(u.value || '').indexOf(channelId) !== -1) u.value = 'channel:v1:' + JSON.stringify(payload);
-    });
-  });
-  if (typeof saveState === 'function') saveState();
-  renderMyCreatedChannelsList();
-  if (btn) {
-    btn.textContent = items.length + ' up next ✓';
-    setTimeout(() => { if (btn) btn.textContent = 'Refresh'; }, 1800);
-  }
-  return items.length;
-}
-
 function createNextUpChannel(btn) {
   if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
   const status = document.getElementById('channelNextUpStatus');
@@ -63909,101 +62968,6 @@ function createNextUpChannel(btn) {
     setTimeout(() => { if (status) status.innerHTML = ''; }, 8000);
   } finally {
     if (btn) btn.disabled = false;
-  }
-}
-
-// --- the Quick Channel Wizard -------------------------------------------
-//
-// Network x era x genre -> a finished 24/7 channel. The server answers with
-// a list of shows (see /api/wizard-channel-shows) and the rest is the same
-// path Quick Add's network buttons take, so a wizard channel behaves
-// exactly like one of those: a rotating daily lineup out of a large pool.
-function channelWizardName() {
-  const typed = (document.getElementById('channelWizardNameInput') || {}).value;
-  if (typed && typed.trim()) return typed.trim();
-  const pick = (id) => {
-    const sel = document.getElementById(id);
-    if (!sel || !sel.value) return '';
-    return sel.options[sel.selectedIndex].textContent.trim();
-  };
-  const network = pick('channelWizardNetwork');
-  const era = pick('channelWizardEra');
-  const genre = pick('channelWizardGenre');
-  const parts = [era, network, genre].filter(Boolean);
-  return parts.length ? parts.join(' ') : 'My Channel';
-}
-
-async function runChannelWizard(btn) {
-  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
-  const statusBox = document.getElementById('channelWizardStatus');
-  const say = (html) => { if (statusBox) statusBox.innerHTML = html; };
-  const networkId = (document.getElementById('channelWizardNetwork') || {}).value || '';
-  const era = (document.getElementById('channelWizardEra') || {}).value || '';
-  const genres = (document.getElementById('channelWizardGenre') || {}).value || '';
-  const limit = parseInt((document.getElementById('channelWizardSize') || {}).value, 10) || 8;
-  if (!networkId && !era && !genres) {
-    say('<p class="testresult err u-m-4px_0_0">✗ Choose at least one of network, era or genre first.</p>');
-    return;
-  }
-  const name = channelWizardName();
-  const originalLabel = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Building…';
-  }
-  try {
-    say('<p><small>Finding the top shows for ' + escapeHtml(name) + '…</small></p>');
-    let params = 'limit=' + encodeURIComponent(limit);
-    if (networkId) params += '&networkId=' + encodeURIComponent(networkId);
-    if (era) params += '&era=' + encodeURIComponent(era);
-    if (genres) params += '&genres=' + encodeURIComponent(genres);
-    const res = await fetch(ORIGIN + '/api/wizard-channel-shows?' + params, { cache: 'no-store' });
-    const data = await res.json();
-    if (!data.ok || !Array.isArray(data.shows) || !data.shows.length) {
-      say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(data.error || 'Nothing matched that combination.') + '</p>');
-      return;
-    }
-    const built = await buildChannelItemsFromShows(data.shows, {
-      poster: data.networkLogo || null,
-      onProgress: function (i, total, show) {
-        say('<p><small>Building ' + escapeHtml(name) + '… show ' + (i + 1) + ' of ' + total +
-          ' (' + escapeHtml(show.name || '') + ')</small></p>');
-      },
-    });
-    if (!built.items.length) {
-      say('<p class="testresult err u-m-4px_0_0">✗ Found those shows but could not read any episodes for them.</p>');
-      return;
-    }
-    const channelId = generateChannelId();
-    const payload = {
-      channelId: channelId,
-      name: name,
-      poster: built.poster,
-      backdrop: built.backdrop || built.poster,
-      items: built.items,
-      shuffle: false,
-      // A wizard channel is a pool, not a playlist, so it rotates like a
-      // network channel -- and interleaves, which is what makes a lineup of
-      // eight shows read as a block rather than eight blocks in a row.
-      autoSort: 'interleave',
-      dailyRotate: true,
-    };
-    saveLocalChannel(payload);
-    addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
-    renderMyCreatedChannelsList();
-    renderChannelMergeList();
-    showAddedToast('Channel "' + name + '" added to your Catalogs.');
-    say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(name) + '" built from ' + data.shows.length +
-      ' shows (' + built.items.length + ' episodes), rotating a fresh lineup daily.</p>');
-    const nameInput = document.getElementById('channelWizardNameInput');
-    if (nameInput) nameInput.value = '';
-  } catch (e) {
-    say('<p class="testresult err u-m-4px_0_0">✗ Network error while building that channel.</p>');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = originalLabel;
-    }
   }
 }
 
@@ -66620,32 +65584,6 @@ function initCustomListHoldDrag() {
     holdDelay: 120,
     onReorder: reorderCustomListDraftFromDom
   });
-}
-
-function getCustomListDragAfterElement(container, x, y) {
-  const els = [...container.querySelectorAll('.custom-list-pick:not(.dragging)')];
-  if (!els.length) return null;
-
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
-      return child;
-    }
-  }
-
-  let closest = null;
-  let closestDistance = Infinity;
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    const cx = box.left + box.width / 2;
-    const cy = box.top + box.height / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (dist < closestDistance) {
-      closestDistance = dist;
-      closest = child;
-    }
-  }
-  return closest;
 }
 
 function reorderCustomListDraftFromDom() {
@@ -71875,12 +70813,6 @@ function renderRemovedAiringNextSettingsSection() {
   if (panel) panel.style.display = 'none';
 }
 
-function onRestoreAiringNextShow(btn) {
-  const showId = btn && btn.dataset ? btn.dataset.showId : '';
-  if (!showId) return;
-  if (typeof restoreAiringNextShow === 'function') restoreAiringNextShow(showId);
-}
-
 // that persists anywhere outside a single browser for that link to
 // point at in the first place.
 function renderTrackPlaybackSection() {
@@ -76693,17 +75625,6 @@ function editLocalCustomList(slug) {
 // reorder-then-persist technique used for the picks draft above, just
 // keyed by data-slug instead of a data-idx into a local array, since the
 // "array" here is the server's own persisted order.
-let creatorListDragRow = null;
-
-function getCreatorListDragAfterElement(container, y) {
-  const els = [...container.querySelectorAll('.creator-list-row:not(.dragging)')];
-  return els.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: -Infinity, element: null }).element;
-}
 
 async function persistCreatorListOrderFromDom() {
   const container = document.getElementById('creatorListRows');
@@ -78098,7 +77019,7 @@ function upgradeSnapshotShelfToLive(raw, rowType) {
 // re-read them live and they stay frozen snapshots. When the slug matches a
 // list on this signed-in account, stamp creatorSlug + creatorOwner onto the
 // row so catalog requests resolve it live (public to anyone, private to a
-// proven owner -- see fetchLiveCreatorListItems, 05_catalog-core.js). The
+// proven owner -- see readLiveCreatorList, 05_catalog-core.js). The
 // embedded items stay untouched as the fallback. A no-op when the dashboard
 // data hasn't loaded yet, when the slug matches nothing, or when the row
 // already names a different owner -- every one of those means "leave it".
@@ -78437,7 +77358,7 @@ function collectKeys() {
       .some((el) => String(el.value || '').trim().startsWith('autotrack:'));
     // A Creator-list row (customlist:v1: with a creatorSlug) is also one of
     // this account's shelves once the server reads it live: private lists
-    // resolve only for a proven owner (see fetchLiveCreatorListItems,
+    // resolve only for a proven owner (see readLiveCreatorList,
     // 05_catalog-core.js), and without the key in the link the proof can't
     // be made and every private list silently falls back to its snapshot.
     //
@@ -86993,14 +85914,6 @@ async function handleFetch(request, env, ctx) {
     // connections) -- 28_connections.js.
     const connectionsResponse = await handleConnectionsApi(request, env, url, path);
     if (connectionsResponse) return connectionsResponse;
-    // /admin/api/lists-backfill/* (copying lists into the v2 tables, run from
-    // /admin) -- 30_lists-backfill.js.
-    const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
-    if (listsBackfillResponse) return listsBackfillResponse;
-    // /admin/api/activity-backfill/* (copying watch history into the
-    // activity database, run from /admin) -- 37_activity-backfill.js.
-    const activityBackfillResponse = await handleActivityBackfillApi(request, env, url, path);
-    if (activityBackfillResponse) return activityBackfillResponse;
     // /admin/api/jobs/* (the background job queue: is it bound, and a test
     // job's round trip) -- 44_jobs-queue.js.
     const jobsAdminResponse = await handleJobsAdminApi(request, env, url, path);
@@ -87835,6 +86748,9 @@ async function handleFetch(request, env, ctx) {
       const manifest = {
         name: "My Lists",
         short_name: "My Lists",
+        description: "Build and manage the lists, charts and channels that show up in Stremio, Nuvio and Wako.",
+        id: "/",
+        scope: "/",
         start_url: "/",
         display: "standalone",
         background_color: "#F2F2F7",
@@ -94377,7 +93293,7 @@ function generateSearchVariations(query) {
     // Writes the server-side copy of a Custom List that belongs to no
     // Creator Profile, so its catalog row can be re-read live instead of
     // serving the snapshot baked into the install link (see
-    // readLiveListItems / fetchCustomListCatalog, 05_catalog-core.js). This
+    // readLiveListRecord / fetchCustomListCatalog, 05_catalog-core.js). This
     // is what makes a signed-out browser's list behave like Continue
     // Watching: an item added or removed on the website reaches Stremio
     // without the link being regenerated.
@@ -100547,518 +99463,6 @@ function generateSearchVariations(query) {
       return json({ ok: true, done: false, accountsThisCall: 1, titlesThisCall, username });
     }
 
-    // /admin/api/recover-stats-from-analytics  (POST) { apply } -> what was
-    // (or would be) put back. See recoverStatsFromAnalyticsEngine (03_admin.js).
-    if (path === "/admin/api/recover-stats-from-analytics" && request.method === "POST") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      let body = {};
-      try { body = await request.json(); } catch {}
-      const result = await recoverStatsFromAnalyticsEngine(env, { apply: body && body.apply === true });
-      return json({ ...result, build: WORKER_BUILD, builtOn: WORKER_BUILD_DATE }, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
-    }
-
-    // /admin/api/migrate-d1 (POST) -> { ok, done, results, thisCall, scanned }
-    // Backfills creators, creator_lists, published-list visibility stamps,
-    // source_groups and the stats counters from KV to D1.
-    //
-    // ONE BOUNDED CHUNK PER CALL, not the whole sweep: a KV read plus a D1
-    // write per key both count against Cloudflare's 1,000-storage-operations
-    // per-invocation limit (the KV/D1 cap, 1,000 on Free and Paid alike),
-    // and the previous single-pass version simply aborted partway through on
-    // any site large enough to actually need migrating -- backfilling a
-    // prefix of the data and reporting ok. See MIGRATE_D1_* (00_constants.js)
-    // for why that particular half-finished state is dangerous rather than
-    // merely incomplete.
-    //
-    // Keep calling until `done` is true; runMigrateD1 (03_admin.js) does that
-    // loop. `results` is cumulative across the whole run, `thisCall` is just
-    // this chunk. Still safe to run repeatedly from scratch: every write here
-    // is idempotent.
-    if (path === "/admin/api/migrate-d1" && request.method === "POST") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || !env.DB || !env.CONFIGS) return json({ ok: false, error: "No D1 or KV binding." }, 500);
-      // It copies the legacy KV lists into the legacy D1 tables; with
-      // FF_V2_LISTS_ONLY (P3b-9) neither is written or read any more.
-      if (isV2ListsOnly(env)) {
-        return json({ ok: false, error: "FF_V2_LISTS_ONLY is on: the old list storage is no longer used, so there is nothing to migrate." }, 409);
-      }
-
-      // Every KV read/write and every D1 statement goes through these, so the
-      // budget reflects what was actually spent rather than a guess.
-      let ops = 0;
-      const spent = () => ops >= MIGRATE_D1_OPS_PER_RUN;
-      const countedKv = {
-        get: (...a) => { ops++; return env.CONFIGS.get(...a); },
-        put: (...a) => { ops++; return env.CONFIGS.put(...a); },
-        delete: (...a) => { ops++; return env.CONFIGS.delete(...a); },
-        list: (...a) => { ops++; return env.CONFIGS.list(...a); },
-      };
-      // stampListVisibilityIfNeeded writes through env.CONFIGS itself.
-      const countedEnv = { ...env, CONFIGS: countedKv };
-      const d1Run = (stmt) => { ops++; return stmt.run(); };
-
-      ops++;
-      const stateRaw = await env.CONFIGS.get(MIGRATE_D1_STATE_KEY);
-      let state = null;
-      try {
-        state = stateRaw ? JSON.parse(stateRaw) : null;
-      } catch {
-        state = null;
-      }
-      // Anything unparseable or from an older shape restarts the sweep rather
-      // than resuming into the middle of it. Restarting is cheap here because
-      // every write is idempotent.
-      if (!state || state.v !== 1 || typeof state.phase !== "number" || !Array.isArray(state.pending) || !state.results) {
-        state = {
-          v: 1,
-          phase: 0,
-          cursor: "",
-          pending: [],
-          scanned: 0,
-          results: { creators: 0, lists: 0, published: 0, sourcegroups: 0, stats: 0, likes: 0, feedback: 0, eventmeta: 0, tokens: 0, tracking: 0, userlists: 0, skipped: 0, errors: [] },
-        };
-      }
-      const results = state.results;
-      if (typeof results.skipped !== "number") results.skipped = 0;
-      if (typeof results.likes !== "number") results.likes = 0;
-      if (typeof results.feedback !== "number") results.feedback = 0;
-      if (typeof results.eventmeta !== "number") results.eventmeta = 0;
-      if (typeof results.tokens !== "number") results.tokens = 0;
-      if (typeof results.tracking !== "number") results.tracking = 0;
-      if (typeof results.userlists !== "number") results.userlists = 0;
-      const thisCall = { creators: 0, lists: 0, published: 0, sourcegroups: 0, stats: 0, likes: 0, feedback: 0, eventmeta: 0, tokens: 0, tracking: 0, userlists: 0, skipped: 0 };
-      // A key this sweep looked at and deliberately did not migrate. These
-      // used to vanish: `if (!raw) return;`, a key that failed its shape
-      // check, a counter whose value was not a number -- each returned with
-      // no counter touched and no error recorded, so the endpoint answered
-      // ok:true with an empty errors array whether or not records had been
-      // dropped on the floor.
-      const noteSkipped = () => { results.skipped++; thisCall.skipped++; };
-      // meta.changes, not "we got here". Every counter below used to
-      // increment once per key PROCESSED, including the ones that hit a
-      // DO NOTHING conflict and wrote nothing, so `{"creators": 60}` did not
-      // mean sixty rows had been written.
-      const wrote = (res) => !!(res && res.meta && res.meta.changes > 0);
-      const noteError = (msg) => {
-        if (results.errors.length < MIGRATE_D1_ERROR_CAP) results.errors.push(msg);
-      };
-
-      async function migrateKey(phase, keyName) {
-        // 0. Creators
-        if (phase === 0) {
-          const username = keyName.slice("creator:".length);
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const data = JSON.parse(raw);
-            // DO UPDATE, not DO NOTHING. This endpoint's stated job is to
-            // reconcile KV into D1, and DO NOTHING meant it could create a
-            // row but never correct one -- so a D1 `creators` row whose
-            // key_hash had drifted from KV stayed wrong forever, and since
-            // getCreator falls back to D1 the only tool for repairing that
-            // state could not repair it. Every column written here is
-            // derived purely from KV, which is authoritative for all three,
-            // so re-running remains idempotent.
-            //
-            // created_at is deliberately left out of the update: KV's
-            // createdAt may be missing on a legacy record, and `|| 0` would
-            // then overwrite a good creation date with zero. last_active is
-            // not written here at all, so it survives too.
-            let shareJson = null;
-            try {
-              const sRaw = await countedKv.get("creatorshare:" + username);
-              if (sRaw) shareJson = sRaw;
-            } catch {}
-            let listsStamp = null;
-            try {
-              const lsRaw = await countedKv.get("creatorliststamp:" + username);
-              if (lsRaw) {
-                const parsed = JSON.parse(lsRaw);
-                listsStamp = Number(parsed.updatedAt) || null;
-              }
-            } catch {}
-            const d1Res = await d1Run(env.DB.prepare(
-              "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at, share_json, lists_stamp) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET display_name=excluded.display_name, key_hash=excluded.key_hash, recovery_answer_hash=excluded.recovery_answer_hash, share_json=COALESCE(excluded.share_json, creators.share_json), lists_stamp=COALESCE(excluded.lists_stamp, creators.lists_stamp)"
-            ).bind(username, data.displayName || username, data.keyHash || "", data.recoveryAnswerHash || null, data.createdAt || 0, shareJson, listsStamp));
-            if (wrote(d1Res)) { results.creators++; thisCall.creators++; } else { noteSkipped(); }
-
-            // Backfill any active list tombstones
-            try {
-              const delRaw = await countedKv.get(creatorListTombstoneKey(username));
-              if (delRaw) {
-                const parsed = JSON.parse(delRaw);
-                const slugs = parsed && typeof parsed === "object" ? (parsed.slugs || parsed) : null;
-                if (slugs && typeof slugs === "object") {
-                  for (const [s, at] of Object.entries(slugs)) {
-                    const ts = Number(at) || 0;
-                    if (ts && Date.now() - ts < CREATOR_LIST_TOMBSTONE_TTL_MS) {
-                      await d1Run(env.DB.prepare(
-                        "INSERT INTO list_tombstones (username, slug, until) VALUES (?, ?, ?) ON CONFLICT(username, slug) DO UPDATE SET until = excluded.until"
-                      ).bind(username, s, ts + CREATOR_LIST_TOMBSTONE_TTL_MS));
-                    }
-                  }
-                }
-              }
-            } catch {}
-          } catch (e) {
-            noteError(`Creator ${username}: ` + e.message);
-          }
-          return;
-        }
-
-        // 1. Creator Lists
-        if (phase === 1) {
-          // Two capture groups, so they are match[1] and match[2]. The old
-          // `[, , u, slug]` skipped one element too many: slug came out
-          // undefined, the `if (u && slug)` guard below rejected every key,
-          // and the migration silently reported "lists: 0" while claiming ok.
-          const [, u, slug] = keyName.match(/^creatorlist:([^:]+):(.+)$/) || [];
-          if (!u || !slug) { noteSkipped(); return; }
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const data = JSON.parse(raw);
-            await stampListVisibilityIfNeeded(countedEnv, keyName, data);
-            const listId = `${u}:${slug}`;
-            const itemsJson = JSON.stringify(data.items || []);
-            const vis = isPublicListVisibility(data.visibility) ? "public" : "private";
-            let sortOrder = null;
-            try {
-              const ordRaw = await countedKv.get("creatorlistorder:" + u);
-              if (ordRaw) {
-                const ord = (JSON.parse(ordRaw) || {}).order || [];
-                const idx = ord.indexOf(slug);
-                if (idx !== -1) sortOrder = idx;
-              }
-            } catch {}
-            const listRes = await d1Run(env.DB.prepare(
-              "INSERT INTO creator_lists (id, username, name, type, visibility, items_json, likes, created_at, updated_at, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, visibility=excluded.visibility, items_json=excluded.items_json, likes=excluded.likes, updated_at=excluded.updated_at, sort_order=COALESCE(excluded.sort_order, creator_lists.sort_order)"
-            ).bind(listId, u, data.name || "List", data.type || "mixed", vis, itemsJson, Math.max(0, Number(data.likes) || 0), data.createdAt || 0, data.updatedAt || 0, sortOrder));
-            if (wrote(listRes)) { results.lists++; thisCall.lists++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`List ${u}:${slug}: ` + e.message);
-          }
-          return;
-        }
-
-        // 2. Anonymous published lists: backfill into published_lists table
-        // and lists_fts index.
-        if (phase === 2) {
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const data = JSON.parse(raw);
-            await stampListVisibilityIfNeeded(countedEnv, keyName, data);
-            const slug = keyName.slice("publishedlist:user:".length);
-            const name = data.name || slug;
-            const type = data.type || "mixed";
-            const vis = data.visibility || "private";
-            const items = Array.isArray(data.items) ? data.items : [];
-            const itemsJson = JSON.stringify(items);
-            if (utf8ByteLength(itemsJson) > CREATOR_LIST_BYTES_MAX) {
-              noteSkipped();
-              return;
-            }
-            const likes = Math.max(0, Number(data.likes) || 0);
-            const createdAt = data.createdAt || data.publishedAt || 0;
-            const updatedAt = data.updatedAt || data.publishedAt || data.createdAt || 0;
-
-            const plRes = await d1Run(env.DB.prepare(
-              "INSERT INTO published_lists (slug, name, type, visibility, items_json, likes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(slug) DO UPDATE SET name=excluded.name, type=excluded.type, visibility=excluded.visibility, items_json=excluded.items_json, likes=excluded.likes, updated_at=excluded.updated_at"
-            ).bind(slug, name, type, vis, itemsJson, likes, createdAt, updatedAt));
-
-            if (isPublicListVisibility(vis)) {
-              await d1Run(env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`a:${slug}`));
-              await d1Run(env.DB.prepare(
-                "INSERT INTO lists_fts (list_id, name, creator_name, username) VALUES (?, ?, ?, ?)"
-              ).bind(`a:${slug}`, name, "Anonymous", "user"));
-            } else {
-              await d1Run(env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`a:${slug}`));
-            }
-
-            if (wrote(plRes)) { results.published++; thisCall.published++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`Published ${keyName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 3. Source Groups
-        if (phase === 3) {
-          if (!keyName.endsWith(":total")) return;
-          const groupName = keyName.slice("stats:sourcegroup:".length, -":total".length);
-          const raw = await countedKv.get(keyName);
-          const count = parseInt(raw || "0", 10);
-          try {
-            const sgRes = await d1Run(env.DB.prepare(
-              "INSERT INTO source_groups (id, name, install_count) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET install_count = excluded.install_count"
-            ).bind(groupName, groupName, count));
-            if (wrote(sgRes)) { results.sourcegroups++; thisCall.sourcegroups++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`Sourcegroup ${groupName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 4. Counters (stats:{kind}:{total|YYYY-MM-DD} -> the stats table)
-        //
-        // Until these are copied across, each counter falls back to its KV
-        // value rather than reporting zero (see readStatCount, 03_admin.js),
-        // so a dashboard's history never visibly vanishes just because D1 got
-        // bound. After this runs, D1 is authoritative and the KV copies are
-        // inert.
-        //
-        // DO NOTHING on conflict, not "n = n + excluded.n": this endpoint is
-        // safe to run more than once (the admin button can be pressed again,
-        // and every other section is idempotent too), and an additive upsert
-        // here would double every counter on the second run. sourcegroup: is
-        // skipped -- phase 3 above already migrated it into its own table,
-        // and copying it here too would count it twice in the Installed
-        // Catalogs panel, which sums both.
-        if (phase === 4) {
-          if (keyName === "stats:genres:alltime" || keyName === "stats:decades:alltime") {
-            const raw = await countedKv.get(keyName);
-            if (!raw) { noteSkipped(); return; }
-            try {
-              const counts = JSON.parse(raw);
-              if (counts && typeof counts === "object") {
-                const prefix = keyName === "stats:genres:alltime" ? "genre:" : "decade:";
-                for (const [name, count] of Object.entries(counts)) {
-                  const n = parseInt(count, 10);
-                  if (name && Number.isFinite(n) && n > 0) {
-                    const sRes = await d1Run(env.DB.prepare(
-                      "INSERT INTO stats (kind, day, n) VALUES (?, 'total', ?) ON CONFLICT(kind, day) DO UPDATE SET n = excluded.n"
-                    ).bind(prefix + name, n));
-                    if (wrote(sRes)) { results.stats++; thisCall.stats++; }
-                  }
-                }
-              }
-            } catch (e) {
-              noteError(`Stats blob ${keyName}: ` + e.message);
-            }
-            return;
-          }
-          if (keyName === "stats:genredecade:migrated") {
-            noteSkipped();
-            return;
-          }
-
-          const rest = keyName.slice("stats:".length);
-          const sep = rest.lastIndexOf(":");
-          if (sep === -1) return;
-          const kind = rest.slice(0, sep);
-          const bucket = rest.slice(sep + 1);
-          if (!kind || !bucket) return;
-          // Not "skipped": phase 3 has already migrated these into their own
-          // table, and counting them here would report them twice.
-          if (kind.startsWith("sourcegroup:") || kind === "sourcegroup") return;
-          // Only the numeric counters.
-          if (bucket !== "total" && !/^\d{4}-\d{2}-\d{2}$/.test(bucket)) return;
-          const raw = await countedKv.get(keyName);
-          const n = parseInt(raw, 10);
-          if (!Number.isFinite(n)) { noteSkipped(); return; }
-          try {
-            const statRes = await d1Run(env.DB.prepare(
-              "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO NOTHING"
-            ).bind(kind, bucket, n));
-            // DO NOTHING on conflict, so a second run legitimately writes
-            // nothing -- that is "already migrated", not "skipped".
-            if (wrote(statRes)) { results.stats++; thisCall.stats++; }
-          } catch (e) {
-            noteError(`Stat ${keyName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 5. Likes (listlikevoters:* -> list_likes)
-        if (phase === 5) {
-          const listId = ledgerKeyToListId(keyName);
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const parsed = JSON.parse(raw);
-            const voters = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.voters) ? parsed.voters : []);
-            if (!voters.length) { noteSkipped(); return; }
-            for (const v of voters) {
-              if (!v) continue;
-              const lRes = await d1Run(env.DB.prepare(
-                "INSERT INTO list_likes (list_id, voter_id, created_at) VALUES (?, ?, ?) ON CONFLICT(list_id, voter_id) DO NOTHING"
-              ).bind(listId, v, Date.now()));
-              if (wrote(lRes)) { results.likes++; thisCall.likes++; }
-            }
-          } catch (e) {
-            noteError(`Like ledger ${keyName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 6. Feedback (feedback:* -> feedback table)
-        if (phase === 6) {
-          const id = keyName.slice("feedback:".length);
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const data = JSON.parse(raw);
-            const status = data.status || (data.completed ? "closed" : "open");
-            const subject = data.category || data.subject || (data.messages && data.messages[0] && data.messages[0].text ? data.messages[0].text.slice(0, 100) : null);
-            const createdAt = Number(data.createdAt) || Date.now();
-            const updatedAt = Number(data.updatedAt) || createdAt;
-            const fbRes = await d1Run(env.DB.prepare(
-              "INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=excluded.status, subject=excluded.subject, body_json=excluded.body_json, updated_at=excluded.updated_at"
-            ).bind(id, status, subject, raw, createdAt, updatedAt));
-            if (wrote(fbRes)) { results.feedback++; thisCall.feedback++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`Feedback ${keyName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 7. Event metadata (evtmeta:* -> event_meta table)
-        if (phase === 7) {
-          const rest = keyName.slice("evtmeta:".length);
-          const sep = rest.indexOf(":");
-          if (sep === -1) { noteSkipped(); return; }
-          const eventType = rest.slice(0, sep);
-          const itemId = rest.slice(sep + 1);
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const data = JSON.parse(raw);
-            const title = data.title || itemId;
-            const mediaType = data.mediaType || "";
-            const lastSeen = Number(data.lastSeen) || Date.now();
-            const emRes = await d1Run(env.DB.prepare(
-              "INSERT INTO event_meta (event_type, item_id, title, media_type, last_seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT(event_type, item_id) DO UPDATE SET title=excluded.title, media_type=excluded.media_type, last_seen=excluded.last_seen"
-            ).bind(eventType, itemId, title, mediaType, lastSeen));
-            if (wrote(emRes)) { results.eventmeta++; thisCall.eventmeta++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`Event meta ${keyName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 8. Scrobble tokens (creatorscrobbletoken:* -> scrobble_tokens table)
-        if (phase === 8) {
-          const username = keyName.slice("creatorscrobbletoken:".length);
-          const token = await countedKv.get(keyName);
-          if (!token || typeof token !== "string") { noteSkipped(); return; }
-          try {
-            const stRes = await d1Run(env.DB.prepare(
-              "INSERT INTO scrobble_tokens (token, username, created_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET username=excluded.username"
-            ).bind(token.trim(), username, Date.now()));
-            if (wrote(stRes)) { results.tokens++; thisCall.tokens++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`Scrobble token ${keyName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 9. Tracking (creatorsynctracking:* -> watch_history, continue_watching, airing_next, creator_show_states, creator_tracking_meta)
-        if (phase === 9) {
-          const username = keyName.slice("creatorsynctracking:".length);
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const data = JSON.parse(raw);
-            if (!data || typeof data !== "object") { noteSkipped(); return; }
-            ops += 2;
-            const ok = await saveCreatorTrackingD1(env, username, data, false);
-            if (ok) { results.tracking++; thisCall.tracking++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`Tracking ${keyName}: ` + e.message);
-          }
-          return;
-        }
-
-        // 10. Creator user lists (creatorsync:* -> creator_user_lists)
-        if (phase === 10) {
-          const username = keyName.slice("creatorsync:".length);
-          const raw = await countedKv.get(keyName);
-          if (!raw) { noteSkipped(); return; }
-          try {
-            const data = JSON.parse(raw);
-            if (!data || typeof data !== "object") { noteSkipped(); return; }
-            const likedLists = Array.isArray(data.likedLists) ? data.likedLists : [];
-            const hiddenLists = Array.isArray(data.hiddenLists) ? data.hiddenLists : [];
-            const hiddenSections = Array.isArray(data.hiddenMyListsSections) ? data.hiddenMyListsSections : [];
-            if (!likedLists.length && !hiddenLists.length && !hiddenSections.length) { noteSkipped(); return; }
-            ops += 2;
-            const ok = await saveCreatorUserListsD1(env, username, likedLists, hiddenLists, hiddenSections);
-            if (ok) { results.userlists++; thisCall.userlists++; } else { noteSkipped(); }
-          } catch (e) {
-            noteError(`User lists ${keyName}: ` + e.message);
-          }
-          return;
-        }
-      }
-
-      let scannedThisCall = 0;
-      while (state.phase < MIGRATE_D1_PREFIXES.length && !spent()) {
-        if (!state.pending.length) {
-          if (state.cursor === null) {
-            state.phase++;
-            state.cursor = "";
-            continue;
-          }
-          const listOpts = { prefix: MIGRATE_D1_PREFIXES[state.phase], limit: MIGRATE_D1_PAGE };
-          if (state.cursor) listOpts.cursor = state.cursor;
-          const listRes = await countedKv.list(listOpts);
-          state.pending = (listRes.keys || []).map((k) => k.name);
-          state.cursor = (listRes.list_complete || !listRes.cursor) ? null : listRes.cursor;
-          if (!state.pending.length) continue;
-        }
-        // shift() as we go, so whatever is left in `pending` when the budget
-        // runs out is exactly what this run still owes.
-        while (state.pending.length && !spent()) {
-          const keyName = state.pending.shift();
-          await migrateKey(state.phase, keyName);
-          scannedThisCall++;
-        }
-      }
-
-      state.scanned = (state.scanned || 0) + scannedThisCall;
-      const done = state.phase >= MIGRATE_D1_PREFIXES.length;
-      if (done) {
-        try {
-          await env.CONFIGS.delete(MIGRATE_D1_STATE_KEY);
-        } catch {
-          // A stranded state key only costs the next run a restart, and
-          // every write in the sweep is idempotent.
-        }
-      } else {
-        await env.CONFIGS.put(MIGRATE_D1_STATE_KEY, JSON.stringify(state));
-      }
-
-      return json({ ok: true, done, results, thisCall, scanned: state.scanned });
-    }
-
-    // /admin/api/migrate-accounts  (POST / GET)
-    // Phase 3a (P3a-3): Backfills creators and KV creator:* records into accounts.
-    // Newest keyHash wins; D1 wins ties.
-    // Returns reconciliation report showing count(accounts) = |creators ∪ creator:*|.
-    // POST runs the backfill (or dryRun if requested in body/query); GET runs dryRun reconciliation check only.
-    if (path === "/admin/api/migrate-accounts" && (request.method === "POST" || request.method === "GET")) {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 500);
-
-      let body = {};
-      if (request.method === "POST") {
-        try {
-          body = await request.json();
-        } catch {
-          body = {};
-        }
-      }
-      const url = new URL(request.url);
-      const dryRun = request.method === "GET" || !!body.dryRun || (url.searchParams.get("dry_run") === "1");
-
-      const report = await backfillAccounts(env, { dryRun });
-      return json(report, report.ok ? 200 : 500);
-    }
-
     // /admin/api/rebuild-search-index (and alias /admin/api/rebuild-public-index) (POST) -> { ok, done, count, scanned, ms }
     // Rebuilds lists_fts from creator_lists and published_lists in D1.
     // Also serves as the post-export recreation procedure.
@@ -101766,151 +100170,6 @@ function generateSearchVariations(query) {
       return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
     }
 
-    // /admin/api/published-lists  (GET)  ?limit=&cursor=
-    //   -> { ok, lists: [{ slug, name, type, itemCount, likes, visibility,
-    //                      publishedAt, url }], cursor, done }
-    //
-    // The listing half of being able to moderate anonymous lists at all.
-    // /api/publish-list is unauthenticated and writes under the literal `user`
-    // namespace, so these have no owner to ask and appear in the admin panel's
-    // Community Lists only if they are public. Finding one to remove meant
-    // knowing its slug already; this makes them enumerable.
-    //
-    // Cursor-paged rather than a full scan: the keyspace is unbounded by
-    // construction (anyone can add to it), which is exactly why an operator
-    // needs to be able to walk it.
-    if (path === "/admin/api/published-lists" && request.method === "GET") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "no-storage" });
-      const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
-      const cursor = url.searchParams.get("cursor") || "";
-      let listed = null;
-      if (env.CONFIGS) {
-        try {
-          listed = await env.CONFIGS.list({ prefix: "publishedlist:user:", limit, ...(cursor ? { cursor } : {}) });
-        } catch (e) {
-          if (!env.DB) {
-            return json({ ok: false, error: "Could not read the published lists right now." }, 500, { "Cache-Control": "no-store" });
-          }
-        }
-      }
-      if (listed && Array.isArray(listed.keys) && listed.keys.length > 0) {
-        const lists = await Promise.all((listed.keys || []).map(async (k) => {
-          const slug = k.name.slice("publishedlist:user:".length);
-          let data = null;
-          try {
-            const raw = await env.CONFIGS.get(k.name);
-            data = raw ? JSON.parse(raw) : null;
-          } catch {
-            data = null;
-          }
-          return {
-            slug,
-            name: data ? (data.name || "(untitled)") : "(unreadable record)",
-            type: data ? (data.type || "mixed") : null,
-            itemCount: data && Array.isArray(data.items) ? data.items.length : 0,
-            likes: data ? (data.likes || 0) : 0,
-            visibility: data ? effectiveListVisibility(data.visibility) : null,
-            publishedAt: data ? (data.publishedAt || null) : null,
-            url: `${url.origin}/lists/user/${slug}`,
-          };
-        }));
-        return json({
-          ok: true,
-          count: lists.length,
-          lists,
-          cursor: listed.list_complete ? null : (listed.cursor || null),
-          done: !!listed.list_complete,
-        }, 200, { "Cache-Control": "no-store" });
-      }
-
-      if (env.DB) {
-        try {
-          const offset = /^\d+$/.test(cursor) ? parseInt(cursor, 10) : 0;
-          const d1Res = await env.DB.prepare(`
-            SELECT slug, name, type, visibility, likes, created_at, updated_at,
-                   CASE WHEN json_valid(items_json) THEN json_array_length(items_json) ELSE 0 END AS item_count
-            FROM published_lists
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-          `).bind(limit + 1, offset).all();
-          const rows = (d1Res && d1Res.results) ? d1Res.results : [];
-          const hasMore = rows.length > limit;
-          const pageRows = hasMore ? rows.slice(0, limit) : rows;
-          const lists = pageRows.map((r) => ({
-            slug: r.slug,
-            name: r.name || "(untitled)",
-            type: r.type || "mixed",
-            itemCount: Number(r.item_count) || 0,
-            likes: Number(r.likes) || 0,
-            visibility: effectiveListVisibility(r.visibility),
-            publishedAt: Number(r.created_at) || null,
-            url: `${url.origin}/lists/user/${r.slug}`,
-          }));
-          const nextCursor = hasMore ? String(offset + limit) : null;
-          return json({
-            ok: true,
-            count: lists.length,
-            lists,
-            cursor: nextCursor,
-            done: !hasMore,
-          }, 200, { "Cache-Control": "no-store" });
-        } catch (dbErr) {
-          console.error("D1 published_lists read error:", dbErr);
-          return json({ ok: false, error: "Could not read the published lists right now." }, 500, { "Cache-Control": "no-store" });
-        }
-      }
-
-      return json({ ok: true, count: 0, lists: [], cursor: null, done: true }, 200, { "Cache-Control": "no-store" });
-    }
-
-    // /admin/api/delete-published-list  (POST)  { slug | slugs: [...] }
-    //
-    // The delete that did not exist. See deletePublishedLists
-    // (02_http-and-creator-utils.js) for why the creator-list endpoint could
-    // not be pointed at these: it validates the username, and `user` is
-    // reserved precisely so no creator can own that namespace.
-    if (path === "/admin/api/delete-published-list" && request.method === "POST") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
-      }
-      const rawSlugs = Array.isArray(body.slugs) ? body.slugs : (body.slug ? [body.slug] : []);
-      // Through slugifyServer, same as every other path that turns caller
-      // input into a KV key name -- these arrive from an admin rather than
-      // the public, but the rule is the rule.
-      const slugs = [...new Set(
-        rawSlugs.map((x) => slugifyServer(x)).filter(Boolean)
-      )];
-      if (!slugs.length) return json({ ok: false, error: "No slugs given." }, 400);
-      if (slugs.length > ADMIN_LIST_DELETE_MAX) {
-        return json({
-          ok: false,
-          error: `Too many lists in one request (limit ${ADMIN_LIST_DELETE_MAX}). Send them in batches.`,
-        }, 413);
-      }
-      const result = await deletePublishedLists(env, slugs);
-      if (!result.ok) {
-        return json({
-          ok: false,
-          error: "Couldn't finish deleting those lists. Some may still be visible -- please try again in a moment.",
-          deleted: result.deleted,
-          missing: result.missing,
-        }, 500, { "Cache-Control": "no-store" });
-      }
-      return json({
-        ok: true,
-        deleted: result.deleted,
-        missing: result.missing,
-      }, 200, { "Cache-Control": "no-store" });
-    }
-
     if (path === "/admin/api/migrate-day-counts" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
@@ -102466,113 +100725,6 @@ function generateSearchVariations(query) {
       // admin JSON endpoint needs this (json()'s default lets the browser
       // silently reuse an hour-old response instead of refetching).
       return json({ ok: true, keys }, 200, { "Cache-Control": "no-store" });
-    }
-
-    // /admin/api/netflix-preview?region=US&providerId=8 -> { ok, region,
-    // providerId, movies: { total, items }, shows: { total, items } } --
-    // lets the admin see roughly how big a TMDB-discover-based shelf for
-    // ANY watch provider would be, and what it'd actually contain, before
-    // wiring a tmdb:chart:X entry into Quick Add for real. providerId
-    // defaults to 8 (Netflix) but accepts any TMDB provider id -- pair
-    // this with /admin/api/provider-lookup below to find the right id for
-    // a given service by name first, since TMDB is known to have more
-    // than one entry for some providers (e.g. two separate "Disney Plus"
-    // ids) and guessing wrong fails silently -- it just quietly shows the
-    // wrong catalog under the right label. Deliberately NOT the same code
-    // path as a real catalog fetch (fetchTmdbChart/fetchTmdbPagedResults)
-    // -- this only needs TMDB's own title/poster/total_results for a
-    // quick look, not a resolved IMDb id per item (that's a separate TMDB
-    // call per title, and this is meant to be a cheap one-shot preview,
-    // not something that has to walk the whole list).
-    async function fetchNetflixPreviewTmdb(kind, region, apiKey, providerId) {
-      const src = `https://api.themoviedb.org/3/discover/${kind}?api_key=${encodeURIComponent(apiKey)}` +
-        `&with_watch_providers=${encodeURIComponent(providerId)}&watch_region=${encodeURIComponent(region)}` +
-        `&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=1`;
-      const res = await fetch(src, {
-        headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
-        cf: { cacheTtl: 3600, cacheEverything: true },
-      });
-      if (!res.ok) throw new Error(`TMDB request failed (HTTP ${res.status}).`);
-      const data = await res.json();
-      const items = (data.results || []).slice(0, 24).map((it) => ({
-        id: it.id,
-        title: it.title || it.name || "Untitled",
-        poster: it.poster_path ? `https://image.tmdb.org/t/p/w300${it.poster_path}` : null,
-        date: (it.release_date || it.first_air_date || "").slice(0, 4),
-      }));
-      return { total: data.total_results || 0, items };
-    }
-
-    if (path === "/admin/api/netflix-preview" && request.method === "GET") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!TMDB_API_KEY) return json({ ok: false, error: "TMDB_API_KEY isn't configured on this Worker." });
-      // Same normalization TMDB itself expects -- just the two-letter
-      // country code, not a locale like "en-US".
-      const region = (url.searchParams.get("region") || "US").trim().toUpperCase().slice(0, 2) || "US";
-      const providerIdParam = (url.searchParams.get("providerId") || "8").trim();
-      const providerId = /^\d+$/.test(providerIdParam) ? providerIdParam : "8";
-      try {
-        const [movies, shows] = await Promise.all([
-          fetchNetflixPreviewTmdb("movie", region, TMDB_API_KEY, providerId),
-          fetchNetflixPreviewTmdb("tv", region, TMDB_API_KEY, providerId),
-        ]);
-        // Always the shared key -- 2 TMDB calls per preview load.
-        ctx.waitUntil(bumpStatBy(env, "apiuse:tmdb", 2));
-        return json({ ok: true, region, providerId, movies, shows }, 200, { "Cache-Control": "no-store" });
-      } catch (err) {
-        return json({ ok: false, error: safeErrorMessage(err) });
-      }
-    }
-
-    // /admin/api/provider-lookup?query=disney&region=US -> { ok, results:
-    // [{ id, name }] } -- pulls TMDB's own official watch-provider list
-    // (the actual source of truth /admin/api/netflix-preview's providerId
-    // gets checked against) so a provider's real numeric id can be
-    // confirmed by name before it's wired into anything. Queries both the
-    // movie and tv provider lists and merges them, since a given service's
-    // presence can differ slightly between the two; de-duplicated by id
-    // and, when a region is given, ordered by that region's own
-    // display_priority (TMDB's closest thing to "which of these is the
-    // one people actually mean" -- relevant since some providers, like
-    // Disney Plus, have more than one id and only one is the one that
-    // actually turns up in region-filtered discover results).
-    if (path === "/admin/api/provider-lookup" && request.method === "GET") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!TMDB_API_KEY) return json({ ok: false, error: "TMDB_API_KEY isn't configured on this Worker." });
-      const region = (url.searchParams.get("region") || "US").trim().toUpperCase().slice(0, 2) || "US";
-      const query = (url.searchParams.get("query") || "").trim().toLowerCase();
-      try {
-        const [movieRes, tvRes] = await Promise.all([
-          fetch(`https://api.themoviedb.org/3/watch/providers/movie?api_key=${encodeURIComponent(TMDB_API_KEY)}&watch_region=${encodeURIComponent(region)}`, {
-            headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
-            cf: { cacheTtl: 86400, cacheEverything: true },
-          }),
-          fetch(`https://api.themoviedb.org/3/watch/providers/tv?api_key=${encodeURIComponent(TMDB_API_KEY)}&watch_region=${encodeURIComponent(region)}`, {
-            headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
-            cf: { cacheTtl: 86400, cacheEverything: true },
-          }),
-        ]);
-        if (!movieRes.ok || !tvRes.ok) throw new Error("TMDB request failed.");
-        const [movieData, tvData] = await Promise.all([movieRes.json(), tvRes.json()]);
-        ctx.waitUntil(bumpStatBy(env, "apiuse:tmdb", 2));
-
-        const byId = new Map();
-        [...(movieData.results || []), ...(tvData.results || [])].forEach((p) => {
-          if (byId.has(p.provider_id)) return;
-          const priorities = p.display_priorities || {};
-          const priority = priorities[region] != null ? priorities[region] : (p.display_priority != null ? p.display_priority : 9999);
-          byId.set(p.provider_id, { id: p.provider_id, name: p.provider_name, priority });
-        });
-        let results = [...byId.values()];
-        if (query) results = results.filter((p) => p.name.toLowerCase().includes(query));
-        results.sort((a, b) => a.priority - b.priority);
-        results = results.slice(0, 40).map((p) => ({ id: p.id, name: p.name }));
-        return json({ ok: true, results }, 200, { "Cache-Control": "no-store" });
-      } catch (err) {
-        return json({ ok: false, error: safeErrorMessage(err) });
-      }
     }
 
     // --- New on Streaming admin routes ---------------------------------------
@@ -106781,7 +104933,7 @@ async function runListsBackfillStep(env, opts = {}) {
       run.accountsTotal = Number(counted && counted.n) || 0;
       if (!run.accountsTotal) {
         await saveListsBackfillJob(menv, LISTS_BACKFILL_RUN_KEY, null, { status: "queued", progress: {}, runAfter: 0 });
-        return { ok: false, error: "The accounts table is empty. Run Migrate Accounts first." };
+        return { ok: false, error: "The accounts table is empty. Backfill the accounts table first." };
       }
     }
     while (run.phase !== "done" && listsBackfillOpsLeft(budget)) {
@@ -106892,33 +105044,6 @@ async function listsBackfillStatus(env) {
       return { accountId: r.account_id, mismatchRate: r.rate, samples };
     }),
   };
-}
-
-async function handleListsBackfillApi(request, env, url, path) {
-  if (!path.startsWith("/admin/api/lists-backfill/")) return null;
-  if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
-  if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
-  try {
-    if (path === "/admin/api/lists-backfill/step" && request.method === "POST") {
-      let body = {};
-      try {
-        body = await request.json();
-      } catch {
-        body = {};
-      }
-      const out = await runListsBackfillStep(env, body || {});
-      return json(out, out.ok || out.busy ? 200 : 409);
-    }
-    if (path === "/admin/api/lists-backfill/status" && request.method === "GET") {
-      return json(await listsBackfillStatus(env));
-    }
-    return json({ ok: false, error: "Not found." }, 404);
-  } catch (e) {
-    console.error("Lists backfill failed:", e);
-    const msg = safeErrorMessage(e);
-    if (/no such table|no such column/i.test(msg)) return json({ ok: false, error: "Apply migration 0016 first." }, 503);
-    return json({ ok: false, error: msg }, 500);
-  }
 }
 
 // --- Lists v2 API (Phase 3b, P3b-4) ------------------------------------------
@@ -110392,7 +108517,7 @@ async function runActivityBackfillStep(env, opts = {}) {
       run.accountsTotal = Number(counted && counted.n) || 0;
       if (!run.accountsTotal) {
         await saveActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY, null, { status: "queued", progress: {}, runAfter: 0 });
-        return { ok: false, error: "The accounts table is empty. Run Migrate Accounts first." };
+        return { ok: false, error: "The accounts table is empty. Backfill the accounts table first." };
       }
     }
     while (run.phase !== "done" && activityBackfillOpsLeft(budget)) {
@@ -110483,33 +108608,6 @@ async function activityBackfillStatus(env) {
       return { accountId: r.account_id, short: r.short, legacy: r.legacy, samples };
     }),
   };
-}
-
-async function handleActivityBackfillApi(request, env, url, path) {
-  if (!path.startsWith("/admin/api/activity-backfill/")) return null;
-  if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
-  if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
-  try {
-    if (path === "/admin/api/activity-backfill/step" && request.method === "POST") {
-      let body = {};
-      try {
-        body = await request.json();
-      } catch {
-        body = {};
-      }
-      const out = await runActivityBackfillStep(env, body || {});
-      return json(out, out.ok || out.busy ? 200 : 409);
-    }
-    if (path === "/admin/api/activity-backfill/status" && request.method === "GET") {
-      return json(await activityBackfillStatus(env));
-    }
-    return json({ ok: false, error: "Not found." }, 404);
-  } catch (e) {
-    console.error("Activity backfill failed:", e);
-    const msg = safeErrorMessage(e);
-    if (/no such table|no such column/i.test(msg)) return json({ ok: false, error: "Apply migrations 0016 (main database) and A0001 (activity database) first." }, 503);
-    return json({ ok: false, error: msg }, 500);
-  }
 }
 
 // --- Recording a play in the activity database (Phase 3c, P3c-4) --------------

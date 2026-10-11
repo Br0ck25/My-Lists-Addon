@@ -208,14 +208,11 @@ const ADMIN_GETS = [
   "/admin/api/feedback",
   "/admin/api/analytics",
   "/admin/api/apiusage",
-  "/admin/api/netflix-preview",
-  "/admin/api/provider-lookup",
 ];
 
 const ADMIN_POSTS = [
   "/admin/api/reset-creator-key",
   "/admin/api/backfill-trending",
-  "/admin/api/migrate-d1",
   "/admin/api/migrate-day-counts",
   "/admin/api/feedback/reply",
   "/admin/api/feedback/status",
@@ -1575,7 +1572,7 @@ describe("a list whose creator is gone is not servable", () => {
   // account before any handler runs. It only happens to a request that
   // authenticated BEFORE the tombstone existed, which is a real race rather
   // than a state a test can construct through the public surface. It is
-  // covered end to end by audit/adversarial-III-2026-09-08/p26_ghostpublic.mjs
+  // covered end to end by the (since removed) ghost-public audit script
   // and p27_ghostnatural.mjs, which hold a save open across a real deletion.
 });
 
@@ -3056,25 +3053,15 @@ describe("admin login", () => {
     assert.equal(r.status, 401);
   });
 
-  it("renders the Maintenance tab with dashboard-clickable D1/index tools", async () => {
+  it("renders the Maintenance tab with the index tools", async () => {
     const env = makeEnv();
     const cookie = await adminCookie(env);
     const r = await call(env, "/admin", { method: "GET", cookie });
     assert.equal(r.status, 200);
-    assert.match(r.text, /id="migrateD1Btn"/);
     assert.match(r.text, /id="rebuildIndexBtn"/);
-    // No env.DB bound in this test env -- the D1 action should render
-    // visibly disabled rather than silently doing nothing if clicked.
-    assert.match(r.text, /id="migrateD1Btn"[^>]*disabled/);
+    assert.doesNotMatch(r.text, /id="migrateD1Btn"/, "the one-off migration button is gone");
   });
 
-  it("enables the D1 migration button once a D1 database is actually bound", async () => {
-    const env = makeEnv({ DB: makeD1() });
-    const cookie = await adminCookie(env);
-    const r = await call(env, "/admin", { method: "GET", cookie });
-    assert.equal(r.status, 200);
-    assert.doesNotMatch(r.text, /id="migrateD1Btn"[^>]*disabled/);
-  });
 });
 
 describe("sync conflict guard", () => {
@@ -4594,19 +4581,21 @@ describe("Catalogs -> Quick Add: every section is a card with a subtitle", () =>
 });
 
 describe("audit fix 14: every env var the code requires is documented", () => {
-  it("names MDBLIST_CLIENT_SECRET in both README.md and wrangler.toml", () => {
-    const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  it("names MDBLIST_CLIENT_SECRET in both docs/OPERATIONS.md and wrangler.toml", () => {
+    // The README is for visitors now (not self-hosting), so the operator's
+    // reference for env vars is OPERATIONS.md plus wrangler.toml.
+    const ops = fs.readFileSync(path.join(REPO_ROOT, "docs", "OPERATIONS.md"), "utf8");
     const wrangler = fs.readFileSync(path.join(REPO_ROOT, "wrangler.toml"), "utf8");
-    assert.match(readme, /MDBLIST_CLIENT_SECRET/);
+    assert.match(ops, /MDBLIST_CLIENT_SECRET/);
     assert.match(wrangler, /MDBLIST_CLIENT_SECRET/);
   });
 
   it("documents every env var the Worker actually reads", () => {
     // Guards the whole class: an operator following the setup docs exactly
     // should never hit a feature that reports itself "not configured".
-    const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+    const ops = fs.readFileSync(path.join(REPO_ROOT, "docs", "OPERATIONS.md"), "utf8");
     const wrangler = fs.readFileSync(path.join(REPO_ROOT, "wrangler.toml"), "utf8");
-    const docs = readme + "\n" + wrangler;
+    const docs = ops + "\n" + wrangler;
     const used = new Set();
     for (const f of fs.readdirSync(REPO_ROOT).filter((n) => /^\d\d_.*\.js$/.test(n))) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
@@ -4666,122 +4655,6 @@ describe("audit fix 9: stat counters are atomic when D1 is bound", () => {
     const cookie = (login.headers.get("set-cookie") || "").split(";")[0];
     const r = await call(env, "/admin", { cookie });
     assert.match(r.text, /<div class="stat-value">4242<\/div>/);
-  });
-
-  it("migrate-d1 copies KV counters across, and is safe to run twice", async () => {
-    const env = makeEnv({ DB: makeD1() });
-    await env.CONFIGS.put("stats:pageviews:total", "100");
-    await env.CONFIGS.put("stats:pageviews:2026-09-01", "40");
-    // Non-counter stats keys must not be dragged into an integer column.
-    await env.CONFIGS.put("stats:genres:alltime", JSON.stringify({ Drama: 3 }));
-    await env.CONFIGS.put("stats:genredecade:migrated", "1");
-
-    const login = await call(env, "/admin/login", { method: "POST", form: { key: "test-admin-secret" } });
-    const cookie = (login.headers.get("set-cookie") || "").split(";")[0];
-
-    const first = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-    assert.equal(first.body.ok, true);
-    assert.equal(env.DB._stat("pageviews", "total"), 100);
-    assert.equal(env.DB._stat("pageviews", "2026-09-01"), 40);
-    assert.equal(env.DB._stat("genres", "alltime"), undefined, "JSON blobs must not be migrated as counters");
-
-    // Re-running must not double the counts (DO NOTHING, not n = n + ...).
-    await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-    assert.equal(env.DB._stat("pageviews", "total"), 100, "a second migration must not double counts");
-  });
-
-  // migrate-d1 spends a KV read plus a D1 statement per key, both of which
-  // count against Cloudflare's 1,000-subrequest cap. As a single unbounded
-  // pass it therefore aborted partway through on exactly the sites big
-  // enough to need it, backfilling a prefix of the accounts and reporting
-  // ok -- and an account left in KV but missing from D1 is the case the
-  // key-rotation endpoints get wrong, because a D1 UPDATE matching zero
-  // rows still reports success.
-  it("migrate-d1 backfills every account at a scale that used to abort it", async () => {
-    const n = 900;
-    // A KV that enforces the real per-invocation limit, and a D1 whose
-    // statements are charged against the same budget, as they really are.
-    const inner = makeKv();
-    let spentThisInvocation = 0;
-    let peak = 0;
-    const charge = () => {
-      spentThisInvocation += 1;
-      if (spentThisInvocation > peak) peak = spentThisInvocation;
-      if (spentThisInvocation > 1000) throw new Error("Too many subrequests.");
-    };
-    const kv = {
-      _store: inner._store,
-      async get(...a) { charge(); return inner.get(...a); },
-      async put(...a) { charge(); return inner.put(...a); },
-      async delete(...a) { charge(); return inner.delete(...a); },
-      async list(...a) { charge(); return inner.list(...a); },
-    };
-    const realDb = makeD1();
-    const db = {
-      _creators: realDb._creators,
-      _lists: realDb._lists,
-      _stat: realDb._stat,
-      prepare(sql) {
-        const st = realDb.prepare(sql);
-        const chargedRun = (target) => async () => { charge(); return target.run(); };
-        const chargedAll = (target) => async () => { charge(); return target.all(); };
-        return {
-          bind(...a) {
-            const b = st.bind(...a);
-            return { run: chargedRun(b), all: chargedAll(b) };
-          },
-          run: chargedRun(st),
-          all: chargedAll(st),
-        };
-      },
-      batch: realDb.batch,
-    };
-
-    const env = makeEnv({ CONFIGS: kv, DB: db });
-    for (let i = 0; i < n; i++) {
-      const username = `user${String(i).padStart(5, "0")}`;
-      inner._store.set(`creator:${username}`, JSON.stringify({
-        displayName: `Real ${username}`, keyHash: `hash-${i}`, createdAt: 1,
-      }));
-      inner._store.set(`creatorlist:${username}:list-${i}`, JSON.stringify({
-        name: `List ${i}`, slug: `list-${i}`, type: "movie", visibility: "public",
-        items: [{ id: "tt0111161", name: "Item" }], likes: i % 5, createdAt: 1, updatedAt: 1,
-      }));
-    }
-
-    const cookie = await adminCookie(env);
-    let calls = 0;
-    let last;
-    do {
-      calls += 1;
-      spentThisInvocation = 0; // a new call is a new invocation, with a new budget
-      last = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-      assert.equal(last.body.ok, true, `call ${calls} failed: ${last.body.error}`);
-    } while (!last.body.done && calls < 200);
-
-    assert.equal(last.body.done, true, "migration never reported done");
-    assert.ok(peak <= 1000, `one invocation spent ${peak} subrequests, over the limit`);
-    // The point of the whole endpoint: no account may be left behind.
-    assert.equal(db._creators.size, n, `only ${db._creators.size} of ${n} creators reached D1`);
-    assert.equal(db._lists.size, n, `only ${db._lists.size} of ${n} lists reached D1`);
-    assert.equal(last.body.results.creators, n);
-  });
-
-  it("migrate-d1 restarts cleanly from unparseable resume state", async () => {
-    const env = makeEnv({ DB: makeD1() });
-    await env.CONFIGS.put("stats:pageviews:total", "77");
-    await env.CONFIGS.put("migrated1:state", "{not json");
-    const cookie = await adminCookie(env);
-    let calls = 0;
-    let last;
-    do {
-      calls += 1;
-      last = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-    } while (!last.body.done && calls < 50);
-    assert.equal(last.body.done, true);
-    assert.equal(env.DB._stat("pageviews", "total"), 77);
-    // Resume state must not outlive the run that used it.
-    assert.equal(await env.CONFIGS.get("migrated1:state"), null, "resume state leaked");
   });
 
   it("keeps counting correctly in KV-only deployments", async () => {
@@ -5628,34 +5501,6 @@ describe("A5: a key rotation must never report success without rotating", () => 
     });
   }
 
-  it("migrate-d1 repairs a D1 row whose hash has drifted from KV", async () => {
-    const db = makeD1();
-    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
-    const alice = await createUser(env, "alicedrift", { recoveryAnswer: "purple mountains" });
-    const cookie = await adminCookie(env);
-
-    // However it got there, D1 now holds a hash KV does not agree with.
-    await db.prepare("UPDATE creators SET key_hash = ?, display_name = ? WHERE username = ?")
-      .bind("pbkdf2:100000:dead:beef", "Stale Name", "alicedrift").run();
-    assert.equal(db._creators.get("alicedrift").key_hash, "pbkdf2:100000:dead:beef");
-
-    let done = false;
-    for (let i = 0; i < 20 && !done; i++) {
-      done = (await call(env, "/admin/api/migrate-d1", { method: "POST", cookie })).body.done;
-    }
-    assert.equal(done, true);
-
-    const kvHash = JSON.parse(env.CONFIGS._store.get("creator:alicedrift")).keyHash;
-    assert.equal(db._creators.get("alicedrift").key_hash, kvHash,
-      "the endpoint whose job is to reconcile KV into D1 must actually reconcile it");
-    assert.equal(db._creators.get("alicedrift").display_name, "alicedrift");
-
-    const ok = await call(env, "/api/creator/restore", {
-      method: "POST",
-      json: { creatorName: "alicedrift", creatorKey: alice.creatorKey },
-    });
-    assert.equal(ok.status, 200);
-  });
 });
 
 describe("A3/A4: a purge that failed must not report success", () => {
@@ -6492,16 +6337,6 @@ describe("AIII fix: the anonymous publish route is removed", () => {
       "or in search");
   });
 
-  it("still lets an admin remove one", async () => {
-    const env = makeEnv({ CONFIGS: makeKv() });
-    seedAnonPublishedList(env, "removable", { name: "Removable" });
-    const cookie = await adminCookie(env);
-    const del = await call(env, "/admin/api/delete-published-list", {
-      method: "POST", cookie, json: { slug: "removable" },
-    });
-    assert.equal(del.body.ok, true, JSON.stringify(del.body).slice(0, 200));
-    assert.equal(env.CONFIGS._store.get("publishedlist:user:removable"), undefined);
-  });
 });
 
 // --- Free-tier removal: /api/details/batch and the cron tick -----------------
@@ -7465,40 +7300,6 @@ describe("A13: an unhandled exception must not escape the Worker", () => {
 });
 
 describe("P3: hygiene findings", () => {
-  it("A14: migrate-d1 counts rows written, not keys looked at, and reports what it skipped", async () => {
-    const db = makeD1();
-    const kv = makeKv();
-    const env = makeEnv({ CONFIGS: kv, DB: db });
-    for (const u of ["p3a", "p3b"]) {
-      kv._store.set(`creator:${u}`, JSON.stringify({ displayName: u, keyHash: "pbkdf2:1:aa:bb", createdAt: 1 }));
-      kv._store.set(`creatorlist:${u}:one`, JSON.stringify({
-        name: "One", slug: "one", type: "movie", items: [], visibility: "public", likes: 3, createdAt: 1, updatedAt: 1,
-      }));
-    }
-    // Records the sweep must skip and say so: a key with no readable record,
-    // and a counter whose stored value is not a number.
-    kv._store.set("creatorlist:p3c:orphan", JSON.stringify({ name: "X", type: "movie", items: [], visibility: "private" }));
-    kv._store.set("stats:pageviews:total", "not-a-number");
-    const cookie = await adminCookie(env);
-
-    let last;
-    for (let i = 0; i < 20; i++) {
-      last = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-      if (last.body.done) break;
-    }
-    assert.equal(last.body.done, true);
-    assert.equal(last.body.results.creators, 2);
-    assert.equal(last.body.results.lists, 2, "p3c's list has no creator row, so it cannot be written");
-    assert.ok(last.body.results.skipped >= 1,
-      `records the sweep dropped must be counted, got ${last.body.results.skipped}`);
-    assert.ok(last.body.results.errors.length >= 1,
-      "and the orphaned list, which the foreign key rejects, must surface as an error");
-
-    // Re-running writes nothing new; the counters must not imply otherwise.
-    const again = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-    assert.equal(again.body.results.stats, 0, "a second run must not claim to have migrated counters again");
-  });
-
   // This used to match on the source text -- it looked for the cursor PUT
   // appearing after the account loop in the file. That is not a test of
   // anything: it passed happily while the loop could still break out of a page
@@ -7950,71 +7751,6 @@ describe("N3: /api/lists/like must not see past a list's visibility", () => {
   });
 });
 
-describe("N9: migrate-d1 must be able to repair a drifted list row", () => {
-  it("rewrites name, type, items and updatedAt from KV, not just likes", async () => {
-    const kv = makeKv();
-    const db = makeD1();
-    const env = makeEnv({ CONFIGS: kv, DB: db });
-    const u = await createUser(env, "n9user");
-    await call(env, "/api/creator/lists/save", { method: "POST", json: {
-      creatorName: "n9user", creatorKey: u.creatorKey,
-      name: "Correct Name", type: "movie", visibility: "public", items: [{ id: "tt1" }],
-    }});
-    // The state a swallowed D1 write during an edit leaves behind.
-    db._db.exec("UPDATE creator_lists SET name='Stale Name', items_json='[]', updated_at=1 WHERE id='n9user:correct-name'");
-
-    const cookie = await adminCookie(env);
-    let r, guard = 0;
-    do { r = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie, json: {} }); }
-    while (!r.body.done && ++guard < 30);
-
-    const row = db._lists.get("n9user:correct-name");
-    // Before: DO UPDATE set only likes and visibility, so the documented
-    // repair tool could create a row but never correct one.
-    assert.equal(row.name, "Correct Name", "migrate-d1 must repair a drifted name");
-    assert.equal(row.items_json, JSON.stringify([{ id: "tt1" }]), "and drifted items");
-  });
-
-  // The column that actually drifts in production. /api/lists/like writes KV
-  // first and D1 second inside a catch, so a D1 blip during a like leaves the
-  // mirror low forever: lists/save deliberately does not push likes (the like
-  // endpoint owns that column and may have moved it since), so a later rename
-  // will not repair it either. migrate-d1 is the only thing that can, which is
-  // the whole point of N9.
-  it("repairs a like count that a D1 outage left behind", async () => {
-    const kv = makeKv();
-    const db = makeD1();
-    const env = makeEnv({ CONFIGS: kv, DB: db });
-    const u = await createUser(env, "n9likes");
-    await call(env, "/api/creator/lists/save", { method: "POST", json: {
-      creatorName: "n9likes", creatorKey: u.creatorKey,
-      name: "L", type: "movie", visibility: "public", items: [],
-    }});
-    db.failWhen((sql) => /UPDATE creator_lists SET likes/i.test(sql));
-    for (const ip of ["198.18.0.1", "198.18.0.2", "198.18.0.3"]) {
-      await callAsVoter(env, "/api/lists/like", { method: "POST", ip, json: { username: "n9likes", slug: "l" } });
-    }
-    db.failWhen(null);
-    assert.equal(JSON.parse(kv._store.get("creatorlist:n9likes:l")).likes, 3, "KV holds the true count");
-    assert.equal(db._lists.get("n9likes:l").likes, 0, "and D1 is the one that drifted");
-
-    // A rename must not be expected to fix it -- that is a different owner's
-    // column -- and must not destroy the real count either.
-    await call(env, "/api/creator/lists/save", { method: "POST", json: {
-      creatorName: "n9likes", creatorKey: u.creatorKey, slug: "l",
-      name: "Renamed", type: "movie", visibility: "public", items: [],
-    }});
-    assert.equal(JSON.parse(kv._store.get("creatorlist:n9likes:l")).likes, 3,
-      "a rename must never write D1's stale zero back over the true count");
-
-    const cookie = await adminCookie(env);
-    let r, guard = 0;
-    do { r = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie, json: {} }); }
-    while (!r.body.done && ++guard < 30);
-    assert.equal(db._lists.get("n9likes:l").likes, 3, "migrate-d1 must converge the mirror");
-  });
-});
-
 describe("N10: a response carrying one account's private data is never cacheable", () => {
   it("marks every account-scoped endpoint no-store", async () => {
     const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
@@ -8076,7 +7812,7 @@ describe("N10: a response carrying one account's private data is never cacheable
         leaky.push(`${p} -> ${r.status} ${r.headers.get("cache-control")}`);
       }
     }
-    for (const p of ["/admin", "/admin/api/published-lists", "/admin/api/leaderboard?type=trending&window=last30"]) {
+    for (const p of ["/admin", "/admin/api/leaderboard?type=trending&window=last30"]) {
       const r = await call(env, p, { cookie });
       if (!/no-store/.test(r.headers.get("cache-control") || "")) {
         leaky.push(`${p} -> ${r.status} ${r.headers.get("cache-control")}`);
@@ -8365,84 +8101,6 @@ describe("N4: a new account starts clean however data got under its username", (
     // for this username without the Creator Key.
     assert.ok(!kv._store.has("scrobbletoken:OLD-WEBHOOK-TOKEN"),
       "the previous owner's scrobble token must not still resolve");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// The audit's remaining open items, closed after the report.
-// ---------------------------------------------------------------------------
-describe("R1: an anonymously published list can be removed", () => {
-  // Seeded straight into KV. /api/publish-list was removed in 1.5.3, but the
-  // admin browse-and-delete contract is precisely what has to keep working
-  // for the records it already wrote -- that was the whole argument for
-  // removing the route rather than leaving unowned writes reachable.
-  const publish = (env, name) => seedAnonPublishedList(env, slugifyForTest(name), { name });
-
-  it("an admin can enumerate and delete them", async () => {
-    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
-    for (const n of ["Alpha List", "Beta List"]) await publish(env, n);
-    // A ledger left from when anonymous lists could be liked.
-    env.CONFIGS._store.set("listlikevoters:user:alpha-list", JSON.stringify(["a:old-voter"]));
-    await call(env, "/lists/public.json");
-    const cookie = await adminCookie(env);
-
-    const listed = await call(env, "/admin/api/published-lists", { cookie });
-    assert.equal(listed.body.ok, true);
-    assert.deepEqual(listed.body.lists.map((l) => l.slug).sort(), ["alpha-list", "beta-list"]);
-
-    const del = await call(env, "/admin/api/delete-published-list", { method: "POST", cookie, json: { slug: "alpha-list" } });
-    assert.equal(del.body.ok, true);
-    // Before: no route in the Worker could remove one of these at all -- the
-    // creator-list endpoint validates the username and `user` is reserved --
-    // so anything published anonymously was permanent.
-    assert.ok(!env.CONFIGS._store.has("publishedlist:user:alpha-list"), "the record must be gone");
-    assert.ok(!env.CONFIGS._store.has("listlikevoters:user:alpha-list"), "and its like ledger");
-    assert.equal((await call(env, "/lists/user/alpha-list.json")).status, 404);
-    const dir = await call(env, "/lists/public.json");
-    assert.ok(!JSON.stringify(dir.body).includes("alpha-list"), "and the directory must stop advertising it");
-    assert.ok(env.CONFIGS._store.has("publishedlist:user:beta-list"), "the other list is untouched");
-  });
-
-  // The admin panel's "Load more" button walks this cursor. If the cursor
-  // never went null the button would never disappear; if it went null early
-  // the operator would be shown a truncated list and conclude the rest do not
-  // exist. Both failures are silent, so the paging contract gets its own test.
-  it("pages through more lists than one call returns", async () => {
-    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
-    for (let i = 0; i < 7; i++) await publish(env, "Paged List " + i);
-    const cookie = await adminCookie(env);
-
-    const seen = [];
-    let cursor = "";
-    let calls = 0;
-    let last = null;
-    do {
-      assert.ok(++calls <= 10, "paging must terminate");
-      last = await call(env, "/admin/api/published-lists?limit=3" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""), { cookie });
-      assert.equal(last.body.ok, true);
-      assert.ok(last.body.lists.length <= 3, "a page must respect the limit");
-      for (const l of last.body.lists) seen.push(l.slug);
-      cursor = last.body.cursor || "";
-    } while (cursor);
-
-    assert.equal(last.body.done, true, "the final page must say it is the final page");
-    assert.equal(seen.length, 7, "every list must be reachable by paging");
-    assert.equal(new Set(seen).size, 7, "and none returned twice");
-  });
-
-  it("both routes need an admin session, and a failed delete says so", async () => {
-    const kv = makeKv();
-    const env = makeEnv({ CONFIGS: kv, DB: makeD1() });
-    await publish(env, "Gamma List");
-    assert.equal((await call(env, "/admin/api/published-lists")).status, 401);
-    assert.equal((await call(env, "/admin/api/delete-published-list", { method: "POST", json: { slug: "gamma-list" } })).status, 401);
-
-    const cookie = await adminCookie(env);
-    kv._hooks.beforeDelete = async (k) => { if (k.startsWith("publishedlist:")) throw new Error("KV down"); };
-    const failed = await call(env, "/admin/api/delete-published-list", { method: "POST", cookie, json: { slug: "gamma-list" } });
-    kv._hooks.beforeDelete = null;
-    assert.notEqual(failed.body.ok, true, "a delete that deleted nothing must not report success");
-    assert.ok(kv._store.has("publishedlist:user:gamma-list"));
   });
 });
 
@@ -10343,70 +10001,6 @@ describe("Phase 3: Likes, feedback, telemetry, tokens, tombstones", () => {
     assert.equal(typeof ds.rowCounts.creator_tracking_meta, "number");
   });
 
-  it("/admin/api/migrate-d1 backfills likes, feedback, event_meta, scrobble_tokens, and explodes genre/decade stats", async () => {
-    const kv = makeKv();
-    const db = makeD1();
-    const env = makeEnv({ CONFIGS: kv, DB: db });
-    const cookie = await adminCookie(env);
-
-    // Seed creator row so foreign key doesn't reject list
-    db.q("INSERT INTO creators (username, display_name, key_hash, created_at) VALUES ('miguser', 'miguser', 'hash', 1)");
-
-    // Seed KV keys for phases 4, 5, 6, 7, 8
-    kv._store.set("stats:genres:alltime", JSON.stringify({ Animation: 25, Mystery: 14 }));
-    kv._store.set("stats:decades:alltime", JSON.stringify({ "1960s": 9 }));
-    kv._store.set("listlikevoters:miguser:favs", JSON.stringify(["voter_a", "voter_b"]));
-    kv._store.set("feedback:thread101", JSON.stringify({
-      id: "thread101",
-      status: "open",
-      category: "Feature",
-      subject: "Dark mode",
-      messages: [{ text: "Please add dark mode" }],
-      createdAt: 1000,
-      updatedAt: 2000,
-    }));
-    kv._store.set("evtmeta:movie:tt7777777", JSON.stringify({
-      title: "Interstellar Odyssey",
-      mediaType: "movie",
-      lastSeen: 5000,
-    }));
-    kv._store.set("creatorscrobbletoken:migscrob", "scrob_secret_token_123");
-
-    // Run migrate-d1 to completion
-    let last;
-    for (let i = 0; i < 30; i++) {
-      last = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-      if (last.body.done) break;
-    }
-    assert.equal(last.body.done, true);
-
-    // Verify D1:
-    // 1. Stats exploded
-    assert.equal(db.q("SELECT n FROM stats WHERE kind = 'genre:Animation' AND day = 'total'")[0].n, 25);
-    assert.equal(db.q("SELECT n FROM stats WHERE kind = 'genre:Mystery' AND day = 'total'")[0].n, 14);
-    assert.equal(db.q("SELECT n FROM stats WHERE kind = 'decade:1960s' AND day = 'total'")[0].n, 9);
-
-    // 2. Likes migrated
-    const likeRows = db.q("SELECT voter_id FROM list_likes WHERE list_id = 'c:miguser:favs' ORDER BY voter_id");
-    assert.deepEqual(likeRows.map((r) => r.voter_id), ["voter_a", "voter_b"]);
-
-    // 3. Feedback migrated
-    const fb = db.q("SELECT * FROM feedback WHERE id = 'thread101'")[0];
-    assert.ok(fb);
-    assert.equal(fb.status, "open");
-    assert.equal(fb.subject, "Feature");
-
-    // 4. Event meta migrated
-    const em = db.q("SELECT * FROM event_meta WHERE event_type = 'movie' AND item_id = 'tt7777777'")[0];
-    assert.ok(em);
-    assert.equal(em.title, "Interstellar Odyssey");
-    assert.equal(em.media_type, "movie");
-
-    // 5. Scrobble token migrated
-    const st = db.q("SELECT * FROM scrobble_tokens WHERE token = 'scrob_secret_token_123'")[0];
-    assert.ok(st);
-    assert.equal(st.username, "migscrob");
-  });
 });
 
 describe("Phase 4: Split sync blobs into relational D1 tables", () => {
@@ -10955,59 +10549,6 @@ describe("Phase 4: Split sync blobs into relational D1 tables", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
-  });
-
-  it("/admin/api/migrate-d1 backfills tracking and user lists into D1", async () => {
-    const kv = makeKv();
-    const db = makeD1();
-    const env = makeEnv({ CONFIGS: kv, DB: db });
-    const cookie = await adminCookie(env);
-
-    // Seed creator row
-    db.q("INSERT INTO creators (username, display_name, key_hash, created_at) VALUES ('p4mig', 'p4mig', 'hash', 1)");
-
-    // Seed KV keys for phase 9 (tracking) and phase 10 (user lists)
-    kv._store.set("creatorsynctracking:p4mig", JSON.stringify({
-      watchHistory: [{ id: "tt301", type: "movie", title: "Migrated Film", watchedAt: 3000 }],
-      continueWatching: [{ id: "tt302:1:2", showId: "tt302", seasonNum: 1, episodeNum: 2, updatedAt: 3100 }],
-      airingNext: [{ id: "tt302:1:3", showId: "tt302", seasonNum: 1, episodeNum: 3, airDate: "2027-01-01", updatedAt: 3200 }],
-      fullyWatchedShowIds: ["tt303"],
-      clientVersion: 999,
-      updatedAt: 3300,
-    }));
-
-    kv._store.set("creatorsync:p4mig", JSON.stringify({
-      likedLists: ["c:friend:listA"],
-      hiddenLists: ["c:bad:listB"],
-      hiddenMyListsSections: ["sectionC"],
-      updatedAt: 3350,
-    }));
-
-    // Run migrate-d1
-    let last;
-    for (let i = 0; i < 35; i++) {
-      last = await call(env, "/admin/api/migrate-d1", { method: "POST", cookie });
-      if (last.body.done) break;
-    }
-    assert.equal(last.body.done, true);
-    assert.ok(last.body.results.tracking >= 1);
-    assert.ok(last.body.results.userlists >= 1);
-
-    // Verify D1 records
-    const whD1 = db.q("SELECT * FROM watch_history WHERE username = 'p4mig'");
-    assert.equal(whD1.length, 1);
-    assert.equal(whD1[0].title, "Migrated Film");
-
-    const cwD1 = db.q("SELECT * FROM continue_watching WHERE username = 'p4mig'");
-    assert.equal(cwD1.length, 1);
-    assert.equal(cwD1[0].show_id, "tt302");
-
-    const anD1 = db.q("SELECT * FROM airing_next WHERE username = 'p4mig'");
-    assert.equal(anD1.length, 1);
-    assert.equal(anD1[0].air_date, "2027-01-01");
-
-    const listsD1 = db.q("SELECT list_id, list_type FROM creator_user_lists WHERE username = 'p4mig' ORDER BY list_type");
-    assert.equal(listsD1.length, 3);
   });
 
   it("purgeCreatorData cleans up all 6 Phase 4 tables upon account deletion", async () => {
@@ -14665,40 +14206,6 @@ describe("P3a-3: accounts backfill (migrate.accounts)", () => {
     // Table accounts remains empty
     const { results: rows } = await env.DB.prepare("SELECT * FROM accounts").all();
     assert.equal(rows.length, 0);
-  });
-
-  it("/admin/api/migrate-accounts requires admin and handles POST and GET", async () => {
-    const env = makeEnv({ DB: makeD1() });
-    await env.DB.prepare(
-      "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
-    ).bind("route_user", "Route User", "route_hash", 1000).run();
-
-    // 1. Unauthenticated request rejected
-    const unauth = await call(env, "/admin/api/migrate-accounts", { method: "POST" });
-    assert.equal(unauth.status, 401);
-
-    const cookie = await getAdminCookie(env);
-
-    // 2. GET runs dry-run reconciliation report
-    const getRes = await call(env, "/admin/api/migrate-accounts", { method: "GET", cookie });
-    assert.equal(getRes.status, 200);
-    assert.equal(getRes.body.dryRun, true);
-    assert.equal(getRes.body.unionCount, 1);
-    assert.equal(getRes.body.accountsCount, 0);
-
-    // 3. POST runs the backfill
-    const postRes = await call(env, "/admin/api/migrate-accounts", { method: "POST", cookie });
-    assert.equal(postRes.status, 200);
-    assert.equal(postRes.body.ok, true);
-    assert.equal(postRes.body.reconciled, true);
-    assert.equal(postRes.body.accountsCount, 1);
-    assert.equal(postRes.body.unionCount, 1);
-
-    // 4. Subsequent GET confirms reconciled state
-    const checkRes = await call(env, "/admin/api/migrate-accounts", { method: "GET", cookie });
-    assert.equal(checkRes.status, 200);
-    assert.equal(checkRes.body.reconciled, true);
-    assert.equal(checkRes.body.accountsCount, 1);
   });
 
   it("handles database errors gracefully if accounts table does not exist", async () => {

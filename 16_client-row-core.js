@@ -1587,18 +1587,6 @@ function showToast(message, type = 'info', options = {}) {
   return toast;
 }
 
-function hideToast() {
-  clearTimeout(_appToastTimer);
-  const container = document.getElementById('appToastContainer');
-  if (container) {
-    const toasts = container.querySelectorAll('.app-toast');
-    toasts.forEach((t) => {
-      t.classList.remove('show');
-      setTimeout(() => { if (t.parentNode) t.remove(); }, 250);
-    });
-  }
-}
-
 function showAddedToast(msg) {
   showToast(msg || 'Added to My Catalogs \u2713', 'success');
 }
@@ -1641,22 +1629,6 @@ async function copyTextToClipboard(text, options = {}) {
     }
   }
   return copied;
-}
-
-function debounce(fn, delayMs = 300) {
-  let timer = null;
-  const debounced = function(...args) {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      fn.apply(this, args);
-    }, delayMs);
-  };
-  debounced.cancel = function() {
-    clearTimeout(timer);
-    timer = null;
-  };
-  return debounced;
 }
 
 function formatRatingBadgeHtml(item, options = {}) {
@@ -3583,7 +3555,7 @@ function parseCustomListPayloadClient(u) {
 // browser's localStorage, and the catalog row it produced was a one-time
 // snapshot: an item added or removed on the website never reached an
 // installed add-on. Signed-in lists are live already -- the row names the
-// account's copy and the server re-reads it (fetchLiveCreatorListItems,
+// account's copy and the server re-reads it (readLiveCreatorList,
 // 05_catalog-core.js). For everyone else, the list now also gets a
 // server-side copy addressed by a token, the same shape of live-by-identity
 // read, so every list on the site behaves like Continue Watching.

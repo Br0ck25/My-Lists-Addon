@@ -18,7 +18,7 @@ import { makeKv, makeD1, makeEnv, call, createUser } from "./harness.mjs";
 //      was frozen the same way.
 //
 // Both now resolve live against the account's own server copy, gated exactly
-// as fetchLiveCreatorListItems already gates it: a public list to anyone, a
+// as readLiveCreatorList already gates it: a public list to anyone, a
 // private one only to a reader that proved it owns the account.
 
 function localRow(slug, items) {

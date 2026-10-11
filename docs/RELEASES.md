@@ -1878,3 +1878,21 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 2. Press **Merge**: it should merge 1 in the second part. Then **Check duplicate titles**: 2 groups left (Top Boy and The Super Powers Team).
 
 **Rollback:** paste the Release 32 file (build 0ddef4e435).
+
+## 2026-10-11: PWA details, README for the hosted service, and a smaller admin page
+
+**Branch point:** Release 33 (build 125fc325b2), live. Built 2026-10-11, build c3f7831ad9.
+
+### What it changes
+
+- **PWA:** the manifest gains `id`, `scope` and `description`, and the page links an `apple-touch-icon`. The service worker is unchanged (it caches the app's scripts and styles; the app is not meant to work offline).
+- **Admin page:** removed *Provider Preview*, *Migrate KV → D1*, *Migrate Accounts*, *Lists v2: copy existing lists*, *Activity: copy watch history*, *Counts missing since 2 October* and *Anonymously published lists*, with their `/admin/api` routes, the stats-recovery helpers and the migrate-d1 constants. `CF_ANALYTICS_TOKEN`, `CF_ANALYTICS_ACCOUNT_ID` and `CF_ANALYTICS_DATASET` are no longer read and can be deleted from the Worker.
+- **Kept on purpose:** the lists and history copy engines (`30_`, `37_`) and `backfillAccounts`. The v2 bridge and the hourly `activity.copy-new` job use them, and the v2 tests build their data with them (through `tests/harness.mjs`, not an admin route).
+- **Unused code:** 19 functions and constants that nothing referenced (debounce, hideToast, the old drag helpers, two live-list wrappers, and others) were removed. Ones that tests or the design docs use were kept.
+- **Repository:** README is for visitors, not self-hosting. Removed `audit/`, `docs/history/`, `CHANGELOG.md` and `extract_html.py` (all stay in git history).
+
+### Checked
+
+- `bash verify.sh -q`: all checks passed. `tests/pwa-manifest.test.mjs` is new. Tests that only exercised the removed tools were deleted; the env-var documentation guard now reads `docs/OPERATIONS.md` and `wrangler.toml`.
+
+**Rollback:** paste the Release 33 file (build 125fc325b2).

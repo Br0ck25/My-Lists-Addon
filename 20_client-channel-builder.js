@@ -985,25 +985,7 @@ function beginMyChannelReorder() {
 // Drag-to-reorder. Mouse goes through HTML5 drag-and-drop and touch/pen
 // through Pointer Events, which is the same split My Lists uses and for the
 // same reason: native drag-and-drop generally does not fire on touch at all.
-let myChannelDragCard = null;
-let myChannelTouchCard = null;
 let myChannelsDragBound = false;
-
-function myChannelDragAfterElement(container, y) {
-  const cards = [...container.querySelectorAll('.list-card[data-channel-id]:not(.dragging)')];
-  return cards.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: -Infinity, element: null }).element;
-}
-
-function moveMyChannelDragCard(container, card, clientY) {
-  const afterEl = myChannelDragAfterElement(container, clientY);
-  if (afterEl == null) container.appendChild(card);
-  else if (afterEl !== card) container.insertBefore(card, afterEl);
-}
 
 // Bound once on the container rather than per card, because the card list is
 // re-rendered wholesale on every change and per-card listeners would be
@@ -7990,32 +7972,6 @@ function initChannelHoldDrag() {
   });
 }
 
-function getChannelDragAfterElement(container, x, y) {
-  const els = [...container.querySelectorAll('.channel-pick:not(.dragging)')];
-  if (!els.length) return null;
-
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
-      return child;
-    }
-  }
-
-  let closest = null;
-  let closestDistance = Infinity;
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    const cx = box.left + box.width / 2;
-    const cy = box.top + box.height / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (dist < closestDistance) {
-      closestDistance = dist;
-      closest = child;
-    }
-  }
-  return closest;
-}
-
 // Rebuilds the draft order from the cards on screen after a drag.
 //
 // Only the cards ON SCREEN, which is the whole difficulty: with a filter
@@ -11422,32 +11378,6 @@ function channelNextUpSeedItems() {
   return out;
 }
 
-// Re-seeds a saved Next Up channel from Continue Watching as it stands now,
-// and rewrites the catalog row that carries it. What the card's Refresh
-// button does.
-function refreshNextUpChannelSeed(channelId, btn) {
-  const map = loadLocalChannels();
-  const ch = map[channelId];
-  if (!ch || ch.dynamic !== 'next-up') return 0;
-  const items = channelNextUpSeedItems();
-  ch.items = items;
-  saveLocalChannelsMap(map);
-  const payload = Object.assign({}, ch, { items: items });
-  const rows = [...document.querySelectorAll('#lists .entry')];
-  rows.forEach((row) => {
-    [...row.querySelectorAll('.url')].forEach((u) => {
-      if (String(u.value || '').indexOf(channelId) !== -1) u.value = 'channel:v1:' + JSON.stringify(payload);
-    });
-  });
-  if (typeof saveState === 'function') saveState();
-  renderMyCreatedChannelsList();
-  if (btn) {
-    btn.textContent = items.length + ' up next ✓';
-    setTimeout(() => { if (btn) btn.textContent = 'Refresh'; }, 1800);
-  }
-  return items.length;
-}
-
 function createNextUpChannel(btn) {
   if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
   const status = document.getElementById('channelNextUpStatus');
@@ -11502,101 +11432,6 @@ function createNextUpChannel(btn) {
     setTimeout(() => { if (status) status.innerHTML = ''; }, 8000);
   } finally {
     if (btn) btn.disabled = false;
-  }
-}
-
-// --- the Quick Channel Wizard -------------------------------------------
-//
-// Network x era x genre -> a finished 24/7 channel. The server answers with
-// a list of shows (see /api/wizard-channel-shows) and the rest is the same
-// path Quick Add's network buttons take, so a wizard channel behaves
-// exactly like one of those: a rotating daily lineup out of a large pool.
-function channelWizardName() {
-  const typed = (document.getElementById('channelWizardNameInput') || {}).value;
-  if (typed && typed.trim()) return typed.trim();
-  const pick = (id) => {
-    const sel = document.getElementById(id);
-    if (!sel || !sel.value) return '';
-    return sel.options[sel.selectedIndex].textContent.trim();
-  };
-  const network = pick('channelWizardNetwork');
-  const era = pick('channelWizardEra');
-  const genre = pick('channelWizardGenre');
-  const parts = [era, network, genre].filter(Boolean);
-  return parts.length ? parts.join(' ') : 'My Channel';
-}
-
-async function runChannelWizard(btn) {
-  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
-  const statusBox = document.getElementById('channelWizardStatus');
-  const say = (html) => { if (statusBox) statusBox.innerHTML = html; };
-  const networkId = (document.getElementById('channelWizardNetwork') || {}).value || '';
-  const era = (document.getElementById('channelWizardEra') || {}).value || '';
-  const genres = (document.getElementById('channelWizardGenre') || {}).value || '';
-  const limit = parseInt((document.getElementById('channelWizardSize') || {}).value, 10) || 8;
-  if (!networkId && !era && !genres) {
-    say('<p class="testresult err u-m-4px_0_0">✗ Choose at least one of network, era or genre first.</p>');
-    return;
-  }
-  const name = channelWizardName();
-  const originalLabel = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Building…';
-  }
-  try {
-    say('<p><small>Finding the top shows for ' + escapeHtml(name) + '…</small></p>');
-    let params = 'limit=' + encodeURIComponent(limit);
-    if (networkId) params += '&networkId=' + encodeURIComponent(networkId);
-    if (era) params += '&era=' + encodeURIComponent(era);
-    if (genres) params += '&genres=' + encodeURIComponent(genres);
-    const res = await fetch(ORIGIN + '/api/wizard-channel-shows?' + params, { cache: 'no-store' });
-    const data = await res.json();
-    if (!data.ok || !Array.isArray(data.shows) || !data.shows.length) {
-      say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(data.error || 'Nothing matched that combination.') + '</p>');
-      return;
-    }
-    const built = await buildChannelItemsFromShows(data.shows, {
-      poster: data.networkLogo || null,
-      onProgress: function (i, total, show) {
-        say('<p><small>Building ' + escapeHtml(name) + '… show ' + (i + 1) + ' of ' + total +
-          ' (' + escapeHtml(show.name || '') + ')</small></p>');
-      },
-    });
-    if (!built.items.length) {
-      say('<p class="testresult err u-m-4px_0_0">✗ Found those shows but could not read any episodes for them.</p>');
-      return;
-    }
-    const channelId = generateChannelId();
-    const payload = {
-      channelId: channelId,
-      name: name,
-      poster: built.poster,
-      backdrop: built.backdrop || built.poster,
-      items: built.items,
-      shuffle: false,
-      // A wizard channel is a pool, not a playlist, so it rotates like a
-      // network channel -- and interleaves, which is what makes a lineup of
-      // eight shows read as a block rather than eight blocks in a row.
-      autoSort: 'interleave',
-      dailyRotate: true,
-    };
-    saveLocalChannel(payload);
-    addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
-    renderMyCreatedChannelsList();
-    renderChannelMergeList();
-    showAddedToast('Channel "' + name + '" added to your Catalogs.');
-    say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(name) + '" built from ' + data.shows.length +
-      ' shows (' + built.items.length + ' episodes), rotating a fresh lineup daily.</p>');
-    const nameInput = document.getElementById('channelWizardNameInput');
-    if (nameInput) nameInput.value = '';
-  } catch (e) {
-    say('<p class="testresult err u-m-4px_0_0">✗ Network error while building that channel.</p>');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = originalLabel;
-    }
   }
 }
 

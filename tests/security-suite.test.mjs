@@ -465,7 +465,7 @@ describe("P9-4: Security Regression Suite", () => {
       assert.ok(res1.status === 302 || res1.text.includes("admin/login") || res1.text.includes("Password"));
 
       // Unauthenticated POST to an admin maintenance API
-      const res2 = await call(env, "/admin/api/recover-stats-from-analytics", { method: "POST" });
+      const res2 = await call(env, "/admin/api/rebuild-public-index", { method: "POST" });
       assert.equal(res2.status, 401);
       assert.equal(res2.body.ok, false);
 

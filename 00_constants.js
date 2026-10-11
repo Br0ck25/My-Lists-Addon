@@ -196,7 +196,7 @@ const CREATOR_LIST_BYTES_MAX = 1_800_000;
 //
 // /api/list-live/save writes one of these per Custom List a browser with no
 // Creator Profile owns, so that list's catalog row is re-read live instead of
-// serving the snapshot baked into the install link. See readLiveListItems and
+// serving the snapshot baked into the install link. See readLiveListRecord and
 // fetchCustomListCatalog (05_catalog-core.js) for the read side and the route
 // itself (25_api-catalog-routes.js) for why an unauthenticated write is
 // acceptable: the token in the URL is the capability, and it only ever exists
@@ -551,53 +551,6 @@ const CHANNEL_POOL_MAX_ITEMS = 5000;
 // bigger candidate pool costs nothing extra for a popular network that hits
 // the cap early -- it only matters for a network sparse enough to need it.
 const CHANNEL_PRESET_DISCOVER_PAGES = 10;
-
-// --- Bounds on the KV -> D1 backfill sweep ----------------------------------
-//
-// /admin/api/migrate-d1 walks five KV prefixes (creator:, creatorlist:,
-// publishedlist:user:, stats:sourcegroup:, stats:) and spends a KV read plus
-// a D1 write on each key it keeps -- both of which count against Cloudflare's
-// 1,000-storage-operations-per-invocation limit. That is the KV/D1/R2 cap,
-// 1,000 on both the Free and the Paid plan; the separate outbound-fetch cap
-// (50 free, 10,000 paid) does not apply here, since this sweep makes no
-// outbound requests. It used to do the whole sweep in one request with no
-// cap, so on a site big enough to need migrating it aborted partway through
-// with "Too many subrequests" and backfilled only whatever it had reached.
-//
-// That failure is worse than it looks: per wrangler.toml, an account present
-// in KV but missing from D1 is exactly the case /api/creator/reset-key and
-// /admin/api/reset-creator-key handle incorrectly, because a D1 UPDATE
-// matching zero rows still reports success. So the endpoint whose job is to
-// prevent that state was itself the thing leaving accounts in it.
-//
-// It now runs in resumable chunks against migrated1:state, the same shape
-// /admin/api/migrate-day-counts and the public-index rebuild use. Every
-// section of the sweep is idempotent (DO NOTHING, or DO UPDATE to a value
-// derived only from KV), so re-processing a key across a chunk boundary is
-// harmless -- which is what makes chunking safe here.
-const MIGRATE_D1_STATE_KEY = "migrated1:state";
-const MIGRATE_D1_PREFIXES = [
-  "creator:",
-  "creatorlist:",
-  "publishedlist:user:",
-  "stats:sourcegroup:",
-  "stats:",
-  "listlikevoters:",
-  "feedback:",
-  "evtmeta:",
-  "creatorscrobbletoken:",
-  "creatorsynctracking:",
-  "creatorsync:",
-];
-// This endpoint has its invocation to itself (it is admin-triggered, not
-// ridden along on the cron), so it can claim more of the 1,000 storage
-// operations than the index rebuild does -- but still well short of it,
-// since a chunk that throws saves no progress.
-const MIGRATE_D1_OPS_PER_RUN = 700;
-const MIGRATE_D1_PAGE = 200;
-// Errors accumulate across every chunk of a run and are handed back to the
-// admin panel, so they need a ceiling of their own.
-const MIGRATE_D1_ERROR_CAP = 50;
 
 // --- Bound on the display-order array ----------------------------------------
 //

@@ -1111,12 +1111,6 @@ function renderRemovedAiringNextSettingsSection() {
   if (panel) panel.style.display = 'none';
 }
 
-function onRestoreAiringNextShow(btn) {
-  const showId = btn && btn.dataset ? btn.dataset.showId : '';
-  if (!showId) return;
-  if (typeof restoreAiringNextShow === 'function') restoreAiringNextShow(showId);
-}
-
 // that persists anywhere outside a single browser for that link to
 // point at in the first place.
 function renderTrackPlaybackSection() {
@@ -5929,17 +5923,6 @@ function editLocalCustomList(slug) {
 // reorder-then-persist technique used for the picks draft above, just
 // keyed by data-slug instead of a data-idx into a local array, since the
 // "array" here is the server's own persisted order.
-let creatorListDragRow = null;
-
-function getCreatorListDragAfterElement(container, y) {
-  const els = [...container.querySelectorAll('.creator-list-row:not(.dragging)')];
-  return els.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: -Infinity, element: null }).element;
-}
 
 async function persistCreatorListOrderFromDom() {
   const container = document.getElementById('creatorListRows');

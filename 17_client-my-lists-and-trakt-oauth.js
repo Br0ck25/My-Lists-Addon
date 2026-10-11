@@ -1028,7 +1028,6 @@ async function startTraktDeviceLogin(retried) {
   }
 }
 
-let myPrivateTraktListsTimer = null;
 async function runMyPrivateTraktLists() {
   const box = document.getElementById('myPrivateTraktListsResult');
   if (!box) return;

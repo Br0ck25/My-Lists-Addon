@@ -1,6 +1,6 @@
 # Handoff
 
-Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo existing work. Keep this file short: replace stale items, don't append history (old versions: `docs/history/`).
+Read this, then `AGENTS.md` and `docs/DECISIONS.md`. Do not start over or undo existing work. Keep this file short: replace stale items, don't append history.
 
 ## Where things stand (2026-10-11)
 - **Live:** `main` at `d754751` (build d349e2f0ce, still labelled Release 27). **Live:** Release 33 (125fc325b2), merged into `main`. **Duplicate titles are cleaned up** (2026-10-11): 1,100 TMDB-confirmed pairs (`mergeDuplicateMedia`) and 48 titles stored under their own name (`mergeNameOnlyMedia`) merged; 2 harmless groups left on purpose. `media.retry` merges new pairs of both kinds hourly. `/admin` shows *Built <date> (build <stamp>)*; there is no release number.

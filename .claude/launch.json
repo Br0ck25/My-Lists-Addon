@@ -4,7 +4,7 @@
     {
       "name": "mylists-harness",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["audit/frontend-2026-09-13/server.mjs"],
+      "runtimeArgs": ["dev/server.mjs"],
       "port": 8787
     }
   ]

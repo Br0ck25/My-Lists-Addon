@@ -354,7 +354,7 @@ function upgradeSnapshotShelfToLive(raw, rowType) {
 // re-read them live and they stay frozen snapshots. When the slug matches a
 // list on this signed-in account, stamp creatorSlug + creatorOwner onto the
 // row so catalog requests resolve it live (public to anyone, private to a
-// proven owner -- see fetchLiveCreatorListItems, 05_catalog-core.js). The
+// proven owner -- see readLiveCreatorList, 05_catalog-core.js). The
 // embedded items stay untouched as the fallback. A no-op when the dashboard
 // data hasn't loaded yet, when the slug matches nothing, or when the row
 // already names a different owner -- every one of those means "leave it".
@@ -693,7 +693,7 @@ function collectKeys() {
       .some((el) => String(el.value || '').trim().startsWith('autotrack:'));
     // A Creator-list row (customlist:v1: with a creatorSlug) is also one of
     // this account's shelves once the server reads it live: private lists
-    // resolve only for a proven owner (see fetchLiveCreatorListItems,
+    // resolve only for a proven owner (see readLiveCreatorList,
     // 05_catalog-core.js), and without the key in the link the proof can't
     // be made and every private list silently falls back to its snapshot.
     //

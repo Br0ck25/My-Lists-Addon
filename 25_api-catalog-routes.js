@@ -414,14 +414,6 @@ async function handleFetch(request, env, ctx) {
     // connections) -- 28_connections.js.
     const connectionsResponse = await handleConnectionsApi(request, env, url, path);
     if (connectionsResponse) return connectionsResponse;
-    // /admin/api/lists-backfill/* (copying lists into the v2 tables, run from
-    // /admin) -- 30_lists-backfill.js.
-    const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
-    if (listsBackfillResponse) return listsBackfillResponse;
-    // /admin/api/activity-backfill/* (copying watch history into the
-    // activity database, run from /admin) -- 37_activity-backfill.js.
-    const activityBackfillResponse = await handleActivityBackfillApi(request, env, url, path);
-    if (activityBackfillResponse) return activityBackfillResponse;
     // /admin/api/jobs/* (the background job queue: is it bound, and a test
     // job's round trip) -- 44_jobs-queue.js.
     const jobsAdminResponse = await handleJobsAdminApi(request, env, url, path);
@@ -1256,6 +1248,9 @@ async function handleFetch(request, env, ctx) {
       const manifest = {
         name: "My Lists",
         short_name: "My Lists",
+        description: "Build and manage the lists, charts and channels that show up in Stremio, Nuvio and Wako.",
+        id: "/",
+        scope: "/",
         start_url: "/",
         display: "standalone",
         background_color: "#F2F2F7",
@@ -7798,7 +7793,7 @@ function generateSearchVariations(query) {
     // Writes the server-side copy of a Custom List that belongs to no
     // Creator Profile, so its catalog row can be re-read live instead of
     // serving the snapshot baked into the install link (see
-    // readLiveListItems / fetchCustomListCatalog, 05_catalog-core.js). This
+    // readLiveListRecord / fetchCustomListCatalog, 05_catalog-core.js). This
     // is what makes a signed-out browser's list behave like Continue
     // Watching: an item added or removed on the website reaches Stremio
     // without the link being regenerated.

@@ -45,8 +45,6 @@ id = "98a6b193ca47426eb543d2c1de3cbbb7"
 #   npx wrangler d1 create my-lists-db
 #   npx wrangler d1 execute my-lists-db --file=./schema.sql
 #
-# If deploying an existing site with data in KV, run the "Migrate KV -> D1"
-# tool in /admin's Maintenance tab to backfill your records into D1.
 [[d1_databases]]
 binding = "DB"
 database_name = "my-lists-db"
@@ -208,13 +206,6 @@ dead_letter_queue = "mylists-jobs-dlq"
 # sunset notices. Leave unset: the site's own page still uses several of the
 # routes the notices say are going (docs/CUTOVER.md P10-2).
 # SUNSET_60DAY_START_DATE = "2026-10-02"
-# Optional: the Cloudflare account id, for /admin -> "Counts missing since
-# 2 October", which reads Analytics Engine through its SQL API (with the
-# CF_ANALYTICS_TOKEN secret below). CF_ANALYTICS_DATASET only if the
-# ANALYTICS binding uses a dataset other than mylists_events.
-# CF_ANALYTICS_ACCOUNT_ID = "00000000000000000000000000000000"
-# CLOUDFLARE_ACCOUNT_ID = "00000000000000000000000000000000"
-# CF_ANALYTICS_DATASET = "mylists_events"
 
 # --- Cron trigger (REQUIRED for Continue Watching) ---------------------------
 # Drives the scheduled() export at the bottom of
@@ -268,10 +259,6 @@ crons = ["*/6 * * * *"]
 #   npx wrangler secret put TOKEN_ENCRYPTION_KEY    # k1:<32-bytes-base64> for AES-GCM token storage
 #   npx wrangler secret put LOOKUP_PEPPER           # Pepper for HMAC blind index lookups
 #
-# Analytics Engine SQL API token, for the one-time "Counts missing since
-# 2 October" tool in /admin (can be deleted once that has been run):
-#   npx wrangler secret put CF_ANALYTICS_TOKEN      # API token with Account Analytics: Read
-#   npx wrangler secret put CLOUDFLARE_API_TOKEN    # optional alias for CF_ANALYTICS_TOKEN
 
 # ==============================================================================
 # STAGING ENVIRONMENT (Phase 9, P9-5)

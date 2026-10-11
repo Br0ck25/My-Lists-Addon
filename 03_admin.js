@@ -79,8 +79,7 @@ async function bumpStat(env, kind) {
     // D1 is where every counter is read from (readStatCount, loadStatsByDay,
     // the leaderboards), so it is where every counter is written. From
     // 2026-10-02 to the fix these went to Analytics Engine only, which
-    // nothing reads, and the admin dashboard froze at zero
-    // (recoverStatsFromAnalyticsEngine puts those days back).
+    // nothing reads, and the admin dashboard froze at zero.
     if (env.DB) {
       await d1BumpStat(env, kind, ["total", statsToday()], 1);
       return;
@@ -239,7 +238,7 @@ async function migrateGenreDecadeStatsIfNeeded(env) {
 // production; Miniflare doesn't enforce that limit, so it rendered fine
 // locally). Writing it here lets the dashboard read last-active straight
 // out of the creators SELECT it already runs. Accounts that predate this
-// have NULL in D1 and are repaired lazily by backfillCreatorLastActive.
+// have NULL in D1 until they are next seen.
 const _lastSeenMemo = new Map();
 const LAST_SEEN_THROTTLE_MS = 30 * 60 * 1000;
 
@@ -282,21 +281,6 @@ async function touchCreatorLastSeen(env, username) {
 // under the subrequest cap: at most this many KV reads plus a single D1
 // batch write per call, so the backfill itself can never be the thing
 // that tips a dashboard load over the limit even mid-migration.
-const LAST_ACTIVE_BACKFILL_BATCH = 100;
-
-// Lazily fills creators.last_active in D1 from the KV creatorlastseen:
-// marker for accounts that still have NULL there -- every account created
-// before touchCreatorLastSeen started mirroring into D1. Runs only on an
-// admin dashboard load, repairs a bounded batch each time, and then has
-// nothing left to do: once a row is set, touchCreatorLastSeen keeps it
-// current going forward. Converges over a handful of loads (1,200 accounts
-// -> ~12 loads) and then costs zero KV reads. Each repaired value is also
-// written onto the in-memory account object so it shows the right "Last
-// Active" on the load that repairs it, not one load later.
-// P10-4 (FT-42): backfillCreatorLastActive removed (accounts in D1 v2)
-async function backfillCreatorLastActive(env, accounts) {
-  return;
-}
 
 
 // Records one "marked as watched" or "added to a list" event for a given
@@ -1316,173 +1300,6 @@ function recordListCopySlug(rawId, origin) {
   return /^[a-z0-9][a-z0-9-]{0,80}$/.test(slug) ? slug : null;
 }
 
-// --- Putting back the counts Analytics Engine took (2026-10-02 onward) ----------
-//
-// From the P8-2 deploy (2026-10-02) to its fix, bumpStat, bumpStatBy,
-// recordTrackedEvent and recordSearchQuery wrote to Analytics Engine INSTEAD
-// of D1. Nothing reads Analytics Engine, so the admin dashboard and Most
-// Watched froze. Those writes are still in the dataset (it keeps 90 days), and
-// they are the only rows there whose blob1 is "stat", "event" or "search":
-// the per-request metrics (writeRequestMetrics) put a route family there.
-//
-// This adds them to D1 the way the counters would have. Each source row
-// (counter, day) is recorded as `aerecovery:<counter>` in the same batch --
-// one transaction -- as the additions, and an addition only happens while that
-// record is absent: a second run, or a run after a failed one, adds nothing
-// twice. Needs the Analytics Engine SQL API: CF_ANALYTICS_TOKEN (an API token
-// with Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID.
-const AE_RECOVERY_LEDGER_PREFIX = "aerecovery:";
-const AE_RECOVERY_ROW_LIMIT = 50000;
-
-async function analyticsEngineRows(env, sql) {
-  const token = env && (env.CF_ANALYTICS_TOKEN || env.CLOUDFLARE_API_TOKEN);
-  const accountId = env && (env.CF_ANALYTICS_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID);
-  if (!token || !accountId) return { ok: false, error: "Set CF_ANALYTICS_TOKEN (Account Analytics: Read) and CF_ANALYTICS_ACCOUNT_ID first." };
-  let res;
-  try {
-    res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "text/plain" },
-      body: sql + " FORMAT JSON",
-    });
-  } catch (err) {
-    return { ok: false, error: "Analytics Engine could not be reached: " + safeErrorMessage(err) };
-  }
-  const text = await res.text().catch(() => "");
-  if (!res.ok) return { ok: false, error: `Analytics Engine answered ${res.status}: ${text.slice(0, 200)}` };
-  let body = null;
-  try { body = JSON.parse(text); } catch {}
-  if (!body || !Array.isArray(body.data)) return { ok: false, error: "Analytics Engine sent an answer this could not read." };
-  return { ok: true, rows: body.data };
-}
-
-// What there is to put back, per counter and day. `day` is "total" for a
-// counter bumpStatBy keeps as an all-time total only.
-async function readAnalyticsEngineCounts(env) {
-  const dataset = String((env && env.CF_ANALYTICS_DATASET) || "mylists_events");
-  if (!/^[A-Za-z0-9_]+$/.test(dataset)) return { ok: false, error: "CF_ANALYTICS_DATASET is not a dataset name." };
-  const limit = ` LIMIT ${AE_RECOVERY_ROW_LIMIT}`;
-  // Kept inside what the live API accepts (it refused both of these, 422):
-  //  - only functions its SQL reference lists. There is no concat ("unknown
-  //    function call: CONCAT"), so each query returns the raw blobs and the
-  //    counter names are put together here;
-  //  - GROUP BY takes column names only ("in the GROUP BY clause you may only
-  //    provide column names: formatDateTime(...)"). A name given with AS
-  //    counts: Cloudflare's own example groups "intDiv(...) * 60 AS t" by `t`.
-  //    Not `hour` or `day`, which the SQL also has as keywords (INTERVAL).
-  const sum = "SUM(_sample_interval * double1) AS n";
-  // An event carries no day of its own: the day is when it was written, in
-  // the Eastern time statsToday() counts in. Asked for by the hour, as a plain
-  // number, and turned into the Eastern day here (an hour never straddles two
-  // Eastern days), so the query needs no time zone support from the service.
-  const hourOf = "toUnixTimestamp(toStartOfHour(timestamp))";
-  const queries = {
-    stat: {
-      label: "Reading page views and other counters",
-      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'stat' GROUP BY blob2, blob3${limit}`,
-      kindOf: (row) => String(row.blob2 || ""),
-      dayOf: (row) => String(row.blob3 || ""),
-    },
-    event: {
-      label: "Reading Most Watched and list adds",
-      sql: `SELECT blob2, blob3, ${hourOf} AS event_hour, ${sum} FROM ${dataset} WHERE blob1 = 'event' GROUP BY blob2, blob3, event_hour${limit}`,
-      kindOf: (row) => (row.blob2 && row.blob3 ? `evt:${row.blob2}:${row.blob3}` : ""),
-      dayOf: (row) => {
-        const seconds = Number(row.event_hour);
-        return Number.isFinite(seconds) && seconds > 0 ? easternDateKey(new Date(seconds * 1000)) : "";
-      },
-    },
-    search: {
-      label: "Reading searches",
-      sql: `SELECT blob2, blob3, ${sum} FROM ${dataset} WHERE blob1 = 'search' GROUP BY blob2, blob3${limit}`,
-      kindOf: (row) => (row.blob2 ? `searchq:${row.blob2}` : ""),
-      dayOf: (row) => String(row.blob3 || ""),
-    },
-  };
-  // Rows that end up on the same counter and day (none expected) are added
-  // together, so the ledger has one entry for each.
-  const merged = new Map();
-  const truncated = [];
-  for (const [source, q] of Object.entries(queries)) {
-    const r = await analyticsEngineRows(env, q.sql);
-    if (!r.ok) return { ...r, error: `${q.label}: ${r.error}` };
-    if (r.rows.length >= AE_RECOVERY_ROW_LIMIT) truncated.push(source);
-    for (const row of r.rows) {
-      const kind = q.kindOf(row);
-      const day = q.dayOf(row);
-      const n = Number(row.n) || 0;
-      if (!kind || n <= 0 || kind.length > 300) continue;
-      if (day !== "total" && !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
-      // bumpStatBy kept writing source groups to D1 all along.
-      if (kind.startsWith("sourcegroup:")) continue;
-      const key = kind + "\u0000" + day;
-      const prev = merged.get(key);
-      if (prev) prev.n += n;
-      else merged.set(key, { source, kind, day, n });
-    }
-  }
-  const out = [];
-  for (const r of merged.values()) {
-    const n = Math.round(r.n);
-    if (n > 0) out.push({ ...r, n });
-  }
-  return { ok: true, rows: out, truncated };
-}
-
-// Preview (apply false) or put back (apply true).
-async function recoverStatsFromAnalyticsEngine(env, { apply = false } = {}) {
-  if (!env || !env.DB) return { ok: false, error: "No database binding." };
-  const read = await readAnalyticsEngineCounts(env);
-  if (!read.ok) return read;
-  const rows = read.rows;
-  // Which of them were put back already.
-  const done = new Set();
-  for (let i = 0; i < rows.length; i += 50) {
-    const chunk = rows.slice(i, i + 50);
-    const { results } = await env.DB.prepare(
-      `SELECT kind, day FROM stats WHERE (kind, day) IN (${chunk.map(() => "(?, ?)").join(", ")})`
-    ).bind(...chunk.flatMap((r) => [AE_RECOVERY_LEDGER_PREFIX + r.kind, r.day])).all();
-    for (const x of results || []) done.add(x.kind + "\u0000" + x.day);
-  }
-  const todo = rows.filter((r) => !done.has(AE_RECOVERY_LEDGER_PREFIX + r.kind + "\u0000" + r.day));
-  const summary = { stat: 0, event: 0, search: 0 };
-  for (const r of todo) summary[r.source] += r.n;
-  const byKind = {};
-  for (const r of todo.filter((x) => x.source === "stat")) byKind[r.kind] = (byKind[r.kind] || 0) + r.n;
-  const result = {
-    ok: true,
-    applied: false,
-    rows: rows.length,
-    alreadyPutBack: rows.length - todo.length,
-    toPutBack: todo.length,
-    totals: summary,
-    counters: Object.fromEntries(Object.entries(byKind).sort((a, b) => b[1] - a[1]).slice(0, 25)),
-    truncated: read.truncated,
-  };
-  if (!apply || !todo.length) return result;
-
-  // One row = its additions plus its ledger record, all conditional on that
-  // record being absent; 15 rows (45 statements) per batch.
-  const ledgerAbsent = "WHERE NOT EXISTS (SELECT 1 FROM stats WHERE kind = ? AND day = ?)";
-  for (let i = 0; i < todo.length; i += 15) {
-    const stmts = [];
-    for (const r of todo.slice(i, i + 15)) {
-      const ledgerKind = AE_RECOVERY_LEDGER_PREFIX + r.kind;
-      const buckets = r.day === "total" ? ["total"] : ["total", r.day];
-      for (const bucket of buckets) {
-        stmts.push(env.DB.prepare(
-          `INSERT INTO stats (kind, day, n) SELECT ?, ?, ? ${ledgerAbsent} ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n`
-        ).bind(r.kind, bucket, r.n, ledgerKind, r.day));
-      }
-      stmts.push(env.DB.prepare(
-        "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO NOTHING"
-      ).bind(ledgerKind, r.day, r.n));
-    }
-    await env.DB.batch(stmts);
-  }
-  return { ...result, applied: true };
-}
-
 // --- Counter reads -----------------------------------------------------------
 //
 // D1 is authoritative when bound, and falls back to KV when the row is
@@ -1983,7 +1800,6 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/rebuild-search-index": "admin.search.rebuild",
   "/admin/api/rebuild-public-index": "admin.search.rebuild",
   "/admin/api/delete-creator-list": "admin.list.delete",
-  "/admin/api/delete-published-list": "admin.published-list.delete",
   "/admin/api/channel-moderate": "admin.channel.moderate",
   "/admin/api/channel-presets/rebuild": "admin.channel-presets.rebuild",
   "/admin/api/channel-presets/clear": "admin.channel-presets.clear",
@@ -1991,11 +1807,8 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/feedback/edit": "admin.feedback.edit",
   "/admin/api/feedback/delete": "admin.feedback.delete",
   "/admin/api/feedback/status": "admin.feedback.set-status",
-  "/admin/api/migrate-d1": "admin.migrate.kv-to-d1",
-  "/admin/api/migrate-accounts": "admin.migrate.accounts",
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
-  "/admin/api/recover-stats-from-analytics": "admin.recover.stats-from-analytics",
   "/admin/api/support-goal": "admin.support-goal.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
@@ -2648,11 +2461,6 @@ ${UTILITY_CSS}
   .feedback-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
   .feedback-meta { color:var(--muted); font-size:0.8rem; margin-top:6px; }
   .feedback-message { margin-top:8px; white-space:pre-wrap; font-size:0.92rem; word-break:break-word; color:var(--text); }
-  .netflix-preview-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap:10px; margin-top:10px; }
-  .netflix-preview-poster { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:8px; background:var(--panel-strong); box-shadow:var(--shadow-sm); }
-  .netflix-preview-poster-placeholder { width:100%; aspect-ratio:2/3; border-radius:8px; background:var(--panel-strong); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.75rem; text-align:center; padding:6px; }
-  .netflix-preview-title { font-size:0.8rem; margin-top:4px; line-height:1.25; color:var(--text); }
-  .netflix-preview-year { color:var(--muted); font-size:0.75rem; }
 
   /* Support Desk */
   .admin-badge.open { background:rgba(0,122,255,0.12); color:var(--accent); }
@@ -2755,7 +2563,6 @@ ${UTILITY_CSS}
     <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
     <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
     <button type="button" class="subnav-pill" data-sub-tab="support_emails" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['support_emails'])}">Support Emails <span id="supportEmailsBadge" class="u-fs-v_font_size_xs u-fw-700 u-p-2px_6px u-br-v_radius_pill u-ml-4px" style="display:none;background:var(--accent);color:#fff;">0</span></button>
-    <button type="button" class="subnav-pill" data-sub-tab="netflixpreview" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['netflixpreview'])}">Provider Preview</button>
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
     <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support Goal</button>
@@ -3090,34 +2897,6 @@ ${UTILITY_CSS}
   </div>
   </div>
 
-  <div class="admin-tab-panel" data-admin-panel="netflixpreview">
-    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">A look at what a TMDB-discover-based shelf would actually contain for any streaming provider, before wiring it into Quick Add for real -- pulled live from TMDB, not a saved list. Counts are TMDB/JustWatch's own tracking, not the provider's real numbers, and typically run a bit under what trackers like FlixPatrol report.</p>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Find a provider's id</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">TMDB sometimes has more than one entry for the same service (e.g. two separate "Disney Plus" ids) -- look the name up here rather than guessing, since a wrong id fails silently: it just quietly shows the wrong catalog under the right label.</p>
-      <div class="u-gap-8px u-ai-center" style="display:flex;">
-        <input type="text" id="providerLookupQueryInput" class="admin-select u-mr-0 u-flex-1 u-maxw-220px" placeholder="e.g. disney, max, hulu" data-act="lookupProviderIds" data-act-keys="Enter" data-act-prevent>
-        <button type="button" class="secondary lc-btn" data-act="lookupProviderIds">Search</button>
-        <span id="providerLookupStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
-      </div>
-      <div id="providerLookupResults" class="u-mt-10px"></div>
-    </div>
-
-    <div class="u-gap-8px u-ai-center u-mb-16px u-fw2-wrap" style="display:flex;">
-      <label class="u-fs-v_font_size_sm u-c-v_muted">Provider id
-        <input type="text" id="netflixPreviewProviderIdInput" class="admin-select u-mr-0" style="width:60px;" value="8" placeholder="8">
-      </label>
-      <label class="u-fs-v_font_size_sm u-c-v_muted">Region
-        <input type="text" id="netflixPreviewRegionInput" class="admin-select u-mr-0 u-tt-uppercase" style="width:70px;" value="US" maxlength="2" placeholder="US">
-      </label>
-      <button type="button" class="secondary lc-btn" data-act="loadNetflixPreview">Load Preview</button>
-      <span id="netflixPreviewStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
-    </div>
-    <div id="netflixPreviewMovies"></div>
-    <div id="netflixPreviewShows" class="u-mt-28px"></div>
-  </div>
-
   <div class="admin-tab-panel" data-admin-panel="supportgoal">
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>Ko-fi support strip</strong> at the top of Catalogs on the main site: a goal for the month's hosting bill and how much has been given toward it. It stays hidden until you turn it on. Visitors can hide it for the rest of the month with its &#x2715;; that only hides it for them.</p>
     <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
@@ -3254,25 +3033,6 @@ ${UTILITY_CSS}
     <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">One-off, click-to-run maintenance actions -- everything here is also reachable as a raw <code>POST</code> request for anyone using <code>wrangler</code>/curl, but these buttons are the point-and-click way to run the same thing entirely from this dashboard, no terminal required.</p>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">D1 database: ${isD1Bound
-        ? '<span class="u-c-v_color_success_text">bound</span>'
-        : '<span class="u-c-v_color_danger_text">not bound (required)</span>'}</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">${isD1Bound
-        ? 'This Worker has a D1 database bound as <code>DB</code>. Use the button below to backfill existing KV records into D1.'
-        : 'This Worker has no D1 database bound (Settings &rarr; Bindings). D1 is required for authoritative accounts, lists, search, likes, feedback, and tracking. Bind a D1 database as <code>DB</code> to enable full functionality.'}</p>
-      <button type="button" class="admin-select u-cur-pointer" id="migrateD1Btn" data-act="runMigrateD1" ${isD1Bound ? '' : 'disabled'}>Migrate KV &rarr; D1</button>
-      <span id="migrateD1Status" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      <p class="u-c-v_muted u-m-10px_0_0 u-fs-v_font_size_sm">Copies existing Creator Profiles, Custom Lists, likes, feedback, and tracking records from KV into D1. Safe to run more than once.</p>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Unified accounts table (v2 identity)</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Backfills existing creator identities from D1 <code>creators</code> and KV <code>creator:*</code> into the unified <code>accounts</code> table. Newest key hash wins; D1 wins ties. Copies data only &mdash; safe to run more than once.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="migrateAccountsBtn" data-act="runMigrateAccounts" ${isD1Bound ? '' : 'disabled'}>Migrate Accounts</button>
-      <span id="migrateAccountsStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
       <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Install links: keys moving to encrypted storage</div>
       <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">The first time an existing install link is used, its provider keys, tokens and Creator Key move out of its KV record into encrypted D1 storage, for the share of links set in <code>INSTALL_MIGRATION_PERCENT</code>. Links keep their URL and serve exactly as before. Needs <code>TOKEN_ENCRYPTION_KEY</code> and migration 0015. Read-only: this button only reports progress.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsStatusBtn" data-act="runInstallsStatus" ${isD1Bound ? '' : 'disabled'}>Check progress</button>
@@ -3280,26 +3040,6 @@ ${UTILITY_CSS}
       <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm">Emergency only: puts every moved link's keys back into its KV record, exactly as they were, and empties the table. Set <code>INSTALL_MIGRATION_PERCENT</code> to <code>0</code> first. Links removed from an account stay removed.</p>
       <button type="button" class="admin-select u-cur-pointer" id="installsRestoreBtn" data-act="runInstallsRestore" ${isD1Bound ? '' : 'disabled'}>Undo the move</button>
       <span id="installsRestoreStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Lists v2: copy existing lists</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s lists, the old anonymous lists, shared and published channels (their episode lists go to the <code>BLOBS</code> R2 bucket when it is bound), and their likes into the new tables (migration 0016). It only copies: the lists and channels people use today are not changed, and nothing reads the copies until <code>FF_V2_LISTS_READ</code> is on. Run <strong>Migrate Accounts</strong> first, and back up D1 before the first run. It works in small steps and can be stopped and carried on; <strong>Start over</strong> runs it again from the first account, copying only what changed.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Copy lists</button>
-      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillRestartBtn" data-act="runListsBackfill" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select u-cur-pointer" id="listsBackfillStatusBtn" data-act="runListsBackfillStatus" ${isD1Bound ? '' : 'disabled'}>Check results</button>
-      <span id="listsBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      <div id="listsBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
-    </div>
-
-    <div class="panel u-m-0_0_18px u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Activity: copy watch history</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Copies every account&rsquo;s Watch History, and where each show is up to (finished, hidden from Continue Watching or Airing Next, storyline suggestions), into the activity database (<code>DB_ACTIVITY</code>, migration A0001). It only copies: the history people see today is not changed, and nothing reads the copy yet. Needs <code>DB_ACTIVITY</code> bound, and <strong>Migrate Accounts</strong> and migration 0016 first. It works in small steps and can be stopped and carried on; <strong>Start over</strong> copies every account again from the start.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([false])}" ${isActivityBound ? '' : 'disabled'}>Copy history</button>
-      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillRestartBtn" data-act="runActivityBackfill" data-act-args="${adminActArgs([true])}" ${isActivityBound ? '' : 'disabled'}>Start over</button>
-      <button type="button" class="admin-select u-cur-pointer" id="activityBackfillStatusBtn" data-act="runActivityBackfillStatus" ${isActivityBound ? '' : 'disabled'}>Check results</button>
-      <span id="activityBackfillStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);">${isActivityBound ? '' : 'DB_ACTIVITY is not bound.'}</span>
-      <div id="activityBackfillResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
     <div class="panel u-m-0_0_18px u-p-14px_16px">
@@ -3334,15 +3074,6 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="schemaCheckBtn" data-act="runSchemaCheck">Check schema</button>
       <span id="schemaCheckStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="schemaCheckResult" class="u-mt-10px"></div>
-    </div>
-
-    <div class="panel u-m-0 u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Counts missing since 2 October</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">From 2 October until the fix, page views, install links, playback pings, Most Watched, list adds and searches were counted in Cloudflare Analytics instead of here, so this dashboard showed zeros. This puts them back. It needs the secret <code>CF_ANALYTICS_TOKEN</code> (an API token with <em>Account Analytics: Read</em>) and the variable <code>CF_ANALYTICS_ACCOUNT_ID</code>. <strong>Preview</strong> shows what would be added; <strong>Put them back</strong> adds it. Running it again adds nothing twice.</p>
-      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryPreviewBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([false])}">Preview</button>
-      <button type="button" class="admin-select u-cur-pointer" id="statsRecoveryApplyBtn" data-act="runStatsRecovery" data-act-args="${adminActArgs([true])}">Put them back</button>
-      <span id="statsRecoveryStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      <div id="statsRecoveryResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -3382,23 +3113,6 @@ ${UTILITY_CSS}
       </div>
       <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteListBtn" data-act="runDeleteCreatorLists">Delete these lists</button>
       <span id="deleteListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-    </div>
-
-    <div class="panel u-m-0 u-p-14px_16px">
-      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Anonymously published lists</div>
-      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Lists published without a Creator Profile, under the shared <code>user</code> namespace. Anyone can create one and no owner exists to ask, so this is the only way to remove one. Browse to find a list, or type slugs directly if you already know them.</p>
-      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> There is no backup of a deleted list.</p>
-      <div class="row u-mb-8px">
-        <button type="button" class="admin-select u-cur-pointer u-mr-6px" id="browseAnonBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([true])}">Browse</button>
-        <button type="button" class="admin-select u-cur-pointer" id="browseAnonMoreBtn" data-act="loadPublishedLists" data-act-args="${adminActArgs([false])}" hidden>Load more</button>
-        <span id="anonListStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
-      </div>
-      <div id="anonListResults" class="u-mb-8px"></div>
-      <div class="row u-mb-8px">
-        <input type="text" id="deleteAnonSlugsInput" class="admin-select u-minw-320px" placeholder="Slugs, comma or newline separated">
-      </div>
-      <button type="button" class="admin-select u-cur-pointer u-c-v_color_danger_text u-bdc-rgba_255_59_48_0_35" id="deleteAnonBtn" data-act="runDeletePublishedLists">Delete these lists</button>
-      <span id="deleteAnonStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
     </div>
 
     <div class="admin-card u-mt-12px">
@@ -3458,7 +3172,6 @@ ${UTILITY_CSS}
       creators: 'management',
       feedback: 'management',
       support_emails: 'management',
-      netflixpreview: 'management',
       newonstreaming: 'management',
       channelpresets: 'management',
       supportgoal: 'management',
@@ -3510,7 +3223,6 @@ ${UTILITY_CSS}
       if (tabId === 'feedback' && !window._feedbackLoadedOnce) { window._feedbackLoadedOnce = true; loadFeedback(); }
       if (tabId === 'support_emails' && !window._supportEmailsLoadedOnce) { window._supportEmailsLoadedOnce = true; loadSupportEmailThreads(); }
       if (tabId === 'apiusage' && !window._apiUsageLoadedOnce) { window._apiUsageLoadedOnce = true; loadApiUsage(); }
-      if (tabId === 'netflixpreview' && !window._netflixPreviewLoadedOnce) { window._netflixPreviewLoadedOnce = true; loadNetflixPreview(); }
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
       if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
@@ -4120,77 +3832,6 @@ ${UTILITY_CSS}
       if (typeof loadSearchData === 'function') loadSearchData();
     }
 
-    // Like the loops above, /admin/api/migrate-d1 now does one bounded chunk
-    // per call rather than the whole sweep -- see its own comment for why a
-    // single pass could not survive a site large enough to need migrating --
-    // so this keeps calling until it reports done. The results object comes
-    // back cumulative for the whole run, so the final response already holds
-    // the totals and there is nothing to add up here.
-    //
-    // No backticks in this function, or anywhere else inside
-    // renderAdminDashboard's returned template literal: everything from that
-    // opening backtick onwards is string content, so one here would close the
-    // template early and break the whole admin page. (The module-scope
-    // helpers at the top of this file are ordinary JS and do use them.)
-    async function runMigrateD1() {
-      const btn = document.getElementById('migrateD1Btn');
-      const status = document.getElementById('migrateD1Status');
-      btn.disabled = true;
-      status.textContent = 'Working\u2026 this can take a moment on a large site.';
-      let safetyCounter = 0;
-      try {
-        while (safetyCounter < 1000) {
-          safetyCounter++;
-          const res = await fetch('/admin/api/migrate-d1', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-          const data = await res.json();
-          if (!data.ok) {
-            status.textContent = 'Failed: ' + (data.error || 'unknown error');
-            break;
-          }
-          const r = data.results || {};
-          if (!data.done) {
-            status.textContent = 'Working\u2026 ' + (data.scanned || 0) + ' key' + ((data.scanned || 0) === 1 ? '' : 's') +
-              ' scanned, ' + (r.creators || 0) + ' creator' + ((r.creators || 0) === 1 ? '' : 's') + ' and ' +
-              (r.lists || 0) + ' list' + ((r.lists || 0) === 1 ? '' : 's') + ' migrated so far.';
-            continue;
-          }
-          const errCount = (r.errors || []).length;
-          status.textContent = 'Done \u2014 ' + (r.creators || 0) + ' creator' + ((r.creators || 0) === 1 ? '' : 's') + ', ' +
-            (r.lists || 0) + ' list' + ((r.lists || 0) === 1 ? '' : 's') + ', ' +
-            (r.sourcegroups || 0) + ' source group' + ((r.sourcegroups || 0) === 1 ? '' : 's') + ', ' +
-            (r.feedback || 0) + ' feedback, ' +
-            (r.tracking || 0) + ' tracking migrated' +
-            (errCount ? (', ' + errCount + ' error' + (errCount === 1 ? '' : 's') + ' (see console)') : '') + '.';
-          if (errCount) console.error('migrate-d1 errors:', r.errors);
-          break;
-        }
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-    }
-
-    async function runMigrateAccounts() {
-      const btn = document.getElementById('migrateAccountsBtn');
-      const status = document.getElementById('migrateAccountsStatus');
-      btn.disabled = true;
-      status.textContent = 'Working…';
-      try {
-        const res = await fetch('/admin/api/migrate-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-        const data = await res.json();
-        if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error');
-        } else {
-          status.textContent = 'Done — ' + (data.accountsCount || 0) + ' accounts in table (' +
-            (data.d1Count || 0) + ' D1, ' + (data.kvCount || 0) + ' KV, union ' + (data.unionCount || 0) + '). ' +
-            (data.reconciled ? 'Reconciled ✓' : 'Mismatch!');
-        }
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-    }
-
     async function runInstallsStatus() {
       const btn = document.getElementById('installsStatusBtn');
       const status = document.getElementById('installsStatus');
@@ -4248,164 +3889,6 @@ ${UTILITY_CSS}
         status.textContent = 'Failed: network error (' + restored + ' restored so far).';
       }
       btn.disabled = false;
-    }
-
-    // Lists v2 backfill (P3b-3). One bounded step per request; this keeps
-    // asking until the server says it is done, so closing the page just
-    // pauses it and Copy lists carries on from where it stopped.
-    async function runListsBackfill(restart) {
-      if (restart && !confirm('Run the copy again from the first account? Copies already made are kept; only lists that changed are copied again.')) return;
-      const btns = [document.getElementById('listsBackfillBtn'), document.getElementById('listsBackfillRestartBtn')];
-      const status = document.getElementById('listsBackfillStatus');
-      btns.forEach(function (b) { b.disabled = true; });
-      let pendingRestart = !!restart;
-      let steps = 0;
-      try {
-        while (steps < 20000) {
-          steps++;
-          const res = await fetch('/admin/api/lists-backfill/step', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ restart: pendingRestart }),
-          });
-          const data = await res.json();
-          if (data.busy) {
-            status.textContent = 'Another step is running. Waiting...';
-            await new Promise(function (r) { setTimeout(r, 5000); });
-            continue;
-          }
-          pendingRestart = false;
-          if (!data.ok) {
-            status.textContent = 'Stopped: ' + (data.error || 'unknown error');
-            break;
-          }
-          const failedNote = data.accountsFailed ? ' (' + data.accountsFailed + ' failed)' : '';
-          if (data.done) {
-            status.textContent = 'Done: ' + data.accountsDone + ' accounts' + failedNote + '. Press Check results.';
-            break;
-          }
-          status.textContent = 'Copying (' + data.phase + '): ' + data.accountsDone + ' of ' + data.accountsTotal + ' accounts' + failedNote + '...';
-        }
-      } catch (e) {
-        status.textContent = 'Stopped: network error. Press Copy lists to carry on.';
-      }
-      btns.forEach(function (b) { b.disabled = false; });
-    }
-
-    async function runListsBackfillStatus() {
-      const status = document.getElementById('listsBackfillStatus');
-      const out = document.getElementById('listsBackfillResult');
-      status.textContent = 'Checking...';
-      try {
-        const res = await fetch('/admin/api/lists-backfill/status');
-        const d = await res.json();
-        if (!d.ok) {
-          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
-          return;
-        }
-        status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
-        const t = d.totals;
-        const lines = [
-          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting to be copied again, ' + (d.accounts.failed || 0) + ' failed.',
-          'Lists: ' + t.lists.legacy + ' found, ' + t.lists.copied + ' copied, ' + t.lists.unchanged + ' unchanged since the last run, ' + t.lists.removed + ' copies of deleted lists retired, ' + t.lists.missing + ' order entries with no list behind them.',
-          'Items: ' + t.items.legacy + ' in the old lists, ' + t.items.copied + ' copied, ' + (d.mismatchRate * 100).toFixed(3) + '% not carried: ' + t.items.unusable + ' with no usable id (no catalog could show them), ' + t.items.duplicates + ' listed twice' + (t.items.carried ? ', ' + t.items.carried + ' on lists copied in an earlier run' : '') + '. ' + t.items.stubs + ' titles TMDB could not place yet (kept, tried again later).',
-          'Likes: ' + t.likes.legacy + ' shown before, ' + t.likes.voters + ' voters copied, ' + t.likes.keptFromCount + ' kept from the old totals with no voter on record.',
-        ];
-        if (d.listsOnly) lines.unshift('FF_V2_LISTS_ONLY is on: the new tables are the only store, so there is nothing left to copy.');
-        else if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed)) lines.push('Every account is copied. FF_V2_LISTS_ONLY can be considered once reads have been on the new tables for a while (docs/OPERATIONS.md section 11).');
-        if (d.anonymous) lines.push('Anonymous lists: ' + d.anonymous.lists.legacy + ' found, ' + d.anonymous.items.copied + ' of ' + d.anonymous.items.legacy + ' items copied.');
-        if (d.external) lines.push('Likes on outside lists: ' + d.external.targets + ' lists, ' + d.external.voters + ' voters copied.');
-        if (d.channels) {
-          const c = d.channels;
-          lines.push('Shared channels: ' + c.channels.legacy + ' found (' + c.channels.listed + ' listed in Explore Channels), ' + c.channels.copied + ' copied, ' + c.channels.unchanged + ' unchanged since the last run, ' + c.channels.unreadable + ' unreadable' + (c.samples.unreadable.length ? ' (' + c.samples.unreadable.join(', ') + ')' : '') + '. Episode lists: ' + c.pools.written + ' written to R2' + (c.pools.skipped ? ', ' + c.pools.skipped + ' left in KV because the BLOBS bucket is not bound' : '') + '. Likes: ' + c.likes.voters + ' voters copied, ' + c.likes.keptFromCount + ' kept from the old totals. Adds: ' + c.adds.adders + ' accounts copied, ' + c.adds.keptFromCount + ' kept from the old totals.');
-        }
-        if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
-        if (d.worst.length) lines.push('Most items not carried: ' + d.worst.map(function (w) { return '#' + w.accountId + ' ' + (w.mismatchRate * 100).toFixed(2) + '%'; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.worst[0].samples));
-        out.innerHTML = '';
-        lines.forEach(function (line) {
-          const div = document.createElement('div');
-          div.style.margin = '0 0 4px';
-          div.textContent = line;
-          out.appendChild(div);
-        });
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-    }
-
-    // Activity backfill (P3c-3): the same loop as the list copy above.
-    async function runActivityBackfill(restart) {
-      if (restart && !confirm('Copy every account again from the start? What an earlier copy made is replaced; the history people use today is not touched.')) return;
-      const btns = [document.getElementById('activityBackfillBtn'), document.getElementById('activityBackfillRestartBtn')];
-      const status = document.getElementById('activityBackfillStatus');
-      btns.forEach(function (b) { b.disabled = true; });
-      let pendingRestart = !!restart;
-      let steps = 0;
-      try {
-        while (steps < 20000) {
-          steps++;
-          const res = await fetch('/admin/api/activity-backfill/step', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ restart: pendingRestart }),
-          });
-          const data = await res.json();
-          if (data.busy) {
-            status.textContent = 'Another step is running. Waiting...';
-            await new Promise(function (r) { setTimeout(r, 5000); });
-            continue;
-          }
-          pendingRestart = false;
-          if (!data.ok) {
-            status.textContent = 'Stopped: ' + (data.error || 'unknown error');
-            break;
-          }
-          const failedNote = data.accountsFailed ? ' (' + data.accountsFailed + ' failed)' : '';
-          if (data.done) {
-            status.textContent = 'Done: ' + data.accountsDone + ' accounts' + failedNote + '. Press Check results.';
-            break;
-          }
-          status.textContent = 'Copying: ' + data.accountsDone + ' of ' + data.accountsTotal + ' accounts' + failedNote + '...';
-        }
-      } catch (e) {
-        status.textContent = 'Stopped: network error. Press Copy history to carry on.';
-      }
-      btns.forEach(function (b) { b.disabled = false; });
-    }
-
-    async function runActivityBackfillStatus() {
-      const status = document.getElementById('activityBackfillStatus');
-      const out = document.getElementById('activityBackfillResult');
-      status.textContent = 'Checking...';
-      try {
-        const res = await fetch('/admin/api/activity-backfill/status');
-        const d = await res.json();
-        if (!d.ok) {
-          status.textContent = 'Unavailable: ' + (d.error || 'unknown error');
-          return;
-        }
-        status.textContent = 'Phase: ' + d.run.phase + (d.run.lastError ? ' (last error: ' + d.run.lastError + ')' : '') + '.';
-        const h = d.totals.history;
-        const sh = d.totals.shows;
-        const lines = [
-          'Accounts: ' + (d.accounts.done || 0) + ' done, ' + (d.accounts.running || 0) + ' in progress, ' + (d.accounts.queued || 0) + ' waiting, ' + (d.accounts.failed || 0) + ' failed.',
-          'History: ' + h.kv + ' entries in KV, ' + h.d1 + ' in D1, ' + h.queue + ' in the scrobble queue, ' + h.union + ' different entries in all. ' + h.copied + ' plays copied; ' + h.duplicates + ' were the same play twice (within ten minutes), ' + h.unusable + ' had no usable id' + (h.undated ? ', ' + h.undated + ' had no date (given the record date)' : '') + '. ' + h.stubs + ' titles TMDB could not place yet (kept, tried again later).',
-          'Shows: ' + sh.progress + ' with progress, ' + sh.completed + ' finished, ' + sh.dismissed + ' hidden from Continue Watching, ' + sh.airingHidden + ' hidden from Airing Next, ' + sh.kept + ' storyline or movie suggestions kept, ' + sh.cwOnly + ' in Continue Watching with no history' + (sh.unusable ? ', ' + sh.unusable + ' with no usable id' : '') + '. Movies watched: ' + d.totals.movies + '.',
-          'Plays now in the activity database: ' + d.totals.events + ' (the larger of the KV and D1 histories added up: ' + d.totals.legacyMax + '). Accounts with fewer plays than their old history: ' + d.totals.shortAccounts + '.',
-        ];
-        if (d.run.phase === 'done' && !(d.accounts.running || d.accounts.queued || d.accounts.failed) && !d.totals.shortAccounts) lines.push('Every account is copied, none with fewer plays than before.');
-        if (d.failed.length) lines.push('Failed accounts: ' + d.failed.map(function (f) { return '#' + f.accountId + ' (' + f.error + ')'; }).join('; '));
-        if (d.short.length) lines.push('Fewest plays against their old history: ' + d.short.map(function (s) { return '#' + s.accountId + ' ' + s.short + ' of ' + s.legacy; }).join(', ') + '. Examples from the first: ' + JSON.stringify(d.short[0].samples));
-        out.innerHTML = '';
-        lines.forEach(function (line) {
-          const div = document.createElement('div');
-          div.style.margin = '0 0 4px';
-          div.textContent = line;
-          out.appendChild(div);
-        });
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
     }
 
     // Background jobs queue (P5-1): send one test job, then ask every two
@@ -4639,9 +4122,8 @@ ${UTILITY_CSS}
       }
     }
 
-    // Fills the slug box rather than deleting, exactly as the anonymous browse
-    // does: a one-click delete next to a browse list is how the wrong list
-    // gets removed. The delete button still asks, and still names what it is
+    // Fills the slug box rather than deleting: a one-click delete next to a
+    // browse list is how the wrong list gets removed. The delete button still asks, and still names what it is
     // about to remove.
     function setSelectedCreatorSlugs(slugs) {
       const input = document.getElementById('deleteListSlugsInput');
@@ -4751,79 +4233,6 @@ ${UTILITY_CSS}
       btn.disabled = false;
     }
 
-    // Anonymous published lists (publishedlist:user:*). These have no owner,
-    // so runDeleteCreatorLists above cannot reach them -- it requires a
-    // creator username, and "user" is a reserved one. The keyspace is
-    // unbounded by construction, so this pages rather than scanning: the
-    // cursor is kept here between calls and "Load more" continues it.
-    let anonListCursor = null;
-    let anonListCount = 0;
-
-    async function loadPublishedLists(reset) {
-      const btn = document.getElementById('browseAnonBtn');
-      const moreBtn = document.getElementById('browseAnonMoreBtn');
-      const status = document.getElementById('anonListStatus');
-      const results = document.getElementById('anonListResults');
-      if (reset) {
-        anonListCursor = null;
-        anonListCount = 0;
-        results.innerHTML = '';
-        moreBtn.hidden = true;
-      }
-      btn.disabled = true;
-      moreBtn.disabled = true;
-      status.textContent = 'Loading\u2026';
-      try {
-        const qs = '?limit=50' + (anonListCursor ? '&cursor=' + encodeURIComponent(anonListCursor) : '');
-        const res = await fetch('/admin/api/published-lists' + qs);
-        const data = await res.json();
-        if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error');
-          btn.disabled = false;
-          moreBtn.disabled = false;
-          return;
-        }
-        const lists = data.lists || [];
-        anonListCount += lists.length;
-        if (!anonListCount) {
-          results.innerHTML = '<p class="u-c-v_muted u-m-0 u-fs-v_font_size_sm">No anonymously published lists.</p>';
-        } else {
-          const rows = lists.map(function (L) {
-            const vis = L.visibility ? escapeHtmlAdmin(L.visibility) : 'unreadable';
-            return '<tr>' +
-              '<td class="u-p-4px_8px_4px_0"><button type="button" class="admin-select u-cur-pointer u-p-2px_8px u-fs-v_font_size_xs" data-anon-slug="' +
-                escapeHtmlAdmin(L.slug) + '">Select</button></td>' +
-              '<td class="u-p-4px_8px_4px_0"><code>' + escapeHtmlAdmin(L.slug) + '</code></td>' +
-              '<td class="u-p-4px_8px_4px_0">' + escapeHtmlAdmin(L.name) + '</td>' +
-              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.itemCount) || 0) + '</td>' +
-              '<td class="u-p-4px_8px_4px_0 u-ta-right">' + (Number(L.likes) || 0) + '</td>' +
-              '<td class="u-p-4px_8px_4px_0">' + vis + '</td>' +
-              '<td class="u-p-4px_0"><a href="' + escapeHtmlAdmin(L.url) + '" target="_blank" rel="noopener">open</a></td>' +
-              '</tr>';
-          }).join('');
-          if (reset || !results.querySelector('tbody')) {
-            results.innerHTML = '<table class="u-bordercollapse-collapse u-fs-v_font_size_sm" style="width:100%;">' +
-              '<thead><tr class="u-c-v_muted u-ta-left">' +
-              '<th></th><th class="u-pr-8px">Slug</th><th class="u-pr-8px">Name</th>' +
-              '<th class="u-pr-8px u-ta-right">Items</th>' +
-              '<th class="u-pr-8px u-ta-right">Likes</th>' +
-              '<th class="u-pr-8px">Visibility</th><th></th>' +
-              '</tr></thead><tbody>' + rows + '</tbody></table>';
-          } else {
-            results.querySelector('tbody').insertAdjacentHTML('beforeend', rows);
-          }
-        }
-        anonListCursor = data.cursor || null;
-        moreBtn.hidden = !anonListCursor;
-        status.textContent = anonListCount + ' list' + (anonListCount === 1 ? '' : 's') + ' shown' +
-          (anonListCursor ? ', more available.' : '. That is all of them.');
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-      moreBtn.disabled = false;
-    }
-
     // --- published channels ---------------------------------------------
     //
     // Two scopes. "listed" is the directory itself -- one cheap read of the
@@ -4920,68 +4329,6 @@ ${UTILITY_CSS}
         btn.disabled = false;
       }
     });
-
-    // "Select" fills the slug box rather than deleting directly: a one-click
-    // delete next to a browse list is how the wrong list gets removed.
-    document.getElementById('anonListResults').addEventListener('click', function (ev) {
-      const btn = ev.target.closest('[data-anon-slug]');
-      if (!btn) return;
-      const input = document.getElementById('deleteAnonSlugsInput');
-      const slug = btn.getAttribute('data-anon-slug');
-      const current = (input.value || '').split(/[\\s,]+/).map(function (x) { return x.trim(); }).filter(Boolean);
-      if (current.indexOf(slug) === -1) current.push(slug);
-      input.value = current.join(', ');
-      document.getElementById('deleteAnonStatus').textContent = current.length + ' slug' + (current.length === 1 ? '' : 's') + ' selected.';
-    });
-
-    // Same shape as runDeleteCreatorLists: irreversible, so it names what it
-    // is about to remove, and batches to ADMIN_LIST_DELETE_MAX per call.
-    async function runDeletePublishedLists() {
-      const btn = document.getElementById('deleteAnonBtn');
-      const status = document.getElementById('deleteAnonStatus');
-      const raw = (document.getElementById('deleteAnonSlugsInput').value || '').trim();
-      const slugs = raw.split(/[\\s,]+/).map(function (x) { return x.trim(); }).filter(Boolean);
-      if (!slugs.length) {
-        status.textContent = 'Enter at least one slug.';
-        return;
-      }
-      const ok = confirm('Permanently delete ' + slugs.length + ' anonymously published list' +
-        (slugs.length === 1 ? '' : 's') + '?\\n\\n' + slugs.slice(0, 12).join(', ') +
-        (slugs.length > 12 ? ', and ' + (slugs.length - 12) + ' more' : '') +
-        '\\n\\nThis cannot be undone.');
-      if (!ok) return;
-
-      btn.disabled = true;
-      const BATCH = 50;
-      let deleted = 0;
-      let missing = 0;
-      try {
-        for (let i = 0; i < slugs.length; i += BATCH) {
-          const batch = slugs.slice(i, i + BATCH);
-          status.textContent = 'Deleting\u2026 ' + (deleted + missing) + ' of ' + slugs.length + ' processed.';
-          const res = await fetch('/admin/api/delete-published-list', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slugs: batch }),
-          });
-          const data = await res.json();
-          if (!data.ok) {
-            status.textContent = 'Failed: ' + (data.error || 'unknown error');
-            btn.disabled = false;
-            return;
-          }
-          deleted += (data.deleted || []).length;
-          missing += (data.missing || []).length;
-        }
-        status.textContent = 'Done \u2014 deleted ' + deleted + ', ' + missing +
-          ' slug' + (missing === 1 ? '' : 's') + ' had no list to remove.';
-        document.getElementById('deleteAnonSlugsInput').value = '';
-        if (anonListCount) await loadPublishedLists(true);
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      btn.disabled = false;
-    }
 
     // Reports which files under migrations/ this database has not had run,
     // and what each omission silently costs. The consequence text is the
@@ -5137,43 +4484,6 @@ ${UTILITY_CSS}
         status.textContent = 'Stopped: network error (nothing is marked complete).';
       }
       btn.disabled = false;
-    }
-
-    async function runStatsRecovery(apply) {
-      const status = document.getElementById('statsRecoveryStatus');
-      const out = document.getElementById('statsRecoveryResult');
-      const buttons = [document.getElementById('statsRecoveryPreviewBtn'), document.getElementById('statsRecoveryApplyBtn')];
-      buttons.forEach(function (b) { if (b) b.disabled = true; });
-      status.textContent = apply ? 'Putting the counts back\u2026' : 'Reading Cloudflare Analytics\u2026';
-      out.textContent = '';
-      try {
-        const res = await fetch('/admin/api/recover-stats-from-analytics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apply: apply === true }),
-        });
-        const data = await res.json();
-        if (!data.ok) {
-          status.textContent = 'Failed: ' + (data.error || 'unknown error') + (data.build ? ' (build ' + data.build + ')' : '');
-        } else {
-          status.textContent = data.applied
-            ? 'Done: ' + data.toPutBack + ' counts put back.'
-            : (data.toPutBack ? data.toPutBack + ' counts to put back' : 'Nothing left to put back') + (data.alreadyPutBack ? ' (' + data.alreadyPutBack + ' already back).' : '.');
-          const lines = [
-            'Page views, installs, pings and other counters: ' + data.totals.stat + '. Watched and list adds: ' + data.totals.event + '. Searches: ' + data.totals.search + '.',
-          ];
-          Object.keys(data.counters || {}).forEach(function (k) { lines.push(k + ': ' + data.counters[k]); });
-          if (data.truncated && data.truncated.length) lines.push('More rows than one pass reads (' + data.truncated.join(', ') + '): run it again.');
-          lines.forEach(function (line) {
-            const div = document.createElement('div');
-            div.textContent = line;
-            out.appendChild(div);
-          });
-        }
-      } catch (e) {
-        status.textContent = 'Failed: network error.';
-      }
-      buttons.forEach(function (b) { if (b) b.disabled = false; });
     }
 
     async function runSchemaCheck() {
@@ -5334,86 +4644,6 @@ ${UTILITY_CSS}
         ).join('');
       } catch (e) {
         body.innerHTML = '<tr><td colspan="5">Could not load -- try again.</td></tr>';
-      }
-    }
-
-    function netflixPreviewSectionHtml(label, section) {
-      if (!section) return '';
-      const posters = section.items.map((it) =>
-        '<div>' +
-          (it.poster
-            ? '<img class="netflix-preview-poster" src="' + escapeHtmlAdmin(it.poster) + '" alt="" loading="lazy">'
-            : '<div class="netflix-preview-poster-placeholder">No poster</div>') +
-          '<div class="netflix-preview-title">' + escapeHtmlAdmin(it.title) + '</div>' +
-          (it.date ? '<div class="netflix-preview-year">' + escapeHtmlAdmin(it.date) + '</div>' : '') +
-        '</div>'
-      ).join('');
-      return '<h3 class="u-m-0_0_4px u-fs-v_font_size_md">' + label + ' <span class="u-c-v_muted u-fw-400 u-fs-v_font_size_sm">(~' + section.total.toLocaleString() + ' total on TMDB/JustWatch, showing first ' + section.items.length + ')</span></h3>' +
-        '<div class="netflix-preview-grid">' + posters + '</div>';
-    }
-
-    async function loadNetflixPreview() {
-      const statusEl = document.getElementById('netflixPreviewStatus');
-      const moviesEl = document.getElementById('netflixPreviewMovies');
-      const showsEl = document.getElementById('netflixPreviewShows');
-      const regionInput = document.getElementById('netflixPreviewRegionInput');
-      const providerIdInput = document.getElementById('netflixPreviewProviderIdInput');
-      const region = (regionInput.value || 'US').trim().toUpperCase().slice(0, 2) || 'US';
-      const providerId = (providerIdInput.value || '8').trim() || '8';
-      statusEl.textContent = 'Loading\u2026';
-      moviesEl.innerHTML = '';
-      showsEl.innerHTML = '';
-      try {
-        const res = await fetch('/admin/api/netflix-preview?region=' + encodeURIComponent(region) + '&providerId=' + encodeURIComponent(providerId));
-        const data = await res.json();
-        if (!data.ok) {
-          statusEl.textContent = data.error || 'Could not load preview.';
-          return;
-        }
-        statusEl.textContent = '';
-        moviesEl.innerHTML = netflixPreviewSectionHtml('Movies', data.movies);
-        showsEl.innerHTML = netflixPreviewSectionHtml('Shows', data.shows);
-      } catch (e) {
-        statusEl.textContent = 'Could not load -- check your connection.';
-      }
-    }
-
-    // Fills the Provider id field from a lookup result and immediately
-    // reloads the preview with it -- clicking a name found this way should
-    // just show that provider's shelf, not require a second manual click.
-    function pickProviderId(id) {
-      document.getElementById('netflixPreviewProviderIdInput').value = id;
-      loadNetflixPreview();
-    }
-
-    async function lookupProviderIds() {
-      const statusEl = document.getElementById('providerLookupStatus');
-      const resultsEl = document.getElementById('providerLookupResults');
-      const queryInput = document.getElementById('providerLookupQueryInput');
-      const regionInput = document.getElementById('netflixPreviewRegionInput');
-      const query = (queryInput.value || '').trim();
-      const region = (regionInput.value || 'US').trim().toUpperCase().slice(0, 2) || 'US';
-      statusEl.textContent = 'Searching\u2026';
-      resultsEl.innerHTML = '';
-      try {
-        const res = await fetch('/admin/api/provider-lookup?region=' + encodeURIComponent(region) + (query ? '&query=' + encodeURIComponent(query) : ''));
-        const data = await res.json();
-        if (!data.ok) {
-          statusEl.textContent = data.error || 'Could not search.';
-          return;
-        }
-        statusEl.textContent = '';
-        if (!data.results.length) {
-          resultsEl.innerHTML = '<p class="u-c-v_muted u-fs-v_font_size_sm">No matches.</p>';
-          return;
-        }
-        resultsEl.innerHTML = data.results.map((p) =>
-          '<button type="button" class="admin-select u-cur-pointer u-m-0_6px_6px_0" data-act="pickProviderId" data-act-args="' + adminActAttr([p.id]) + '">' +
-            escapeHtmlAdmin(p.name) + ' <span class="u-c-v_muted">(' + p.id + ')</span>' +
-          '</button>'
-        ).join('');
-      } catch (e) {
-        statusEl.textContent = 'Could not search -- check your connection.';
       }
     }
 

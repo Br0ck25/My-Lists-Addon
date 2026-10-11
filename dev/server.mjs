@@ -1,9 +1,9 @@
 // Runs the REAL Worker over HTTP with SQLite-backed D1 + in-memory KV,
 // so a real browser can drive the real frontend.
 import http from "node:http";
-import { makeKv, makeD1, makeEnv } from "../../tests/harness.mjs";
+import { makeKv, makeD1, makeEnv } from "../tests/harness.mjs";
 
-const worker = (await import(new URL("../../worker_entry_combined.js", import.meta.url).href)).default;
+const worker = (await import(new URL("../worker_entry_combined.js", import.meta.url).href)).default;
 
 const kv = makeKv();
 const db = makeD1();

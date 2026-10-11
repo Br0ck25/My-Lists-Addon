@@ -205,6 +205,8 @@ Undo needs the same `TOKEN_ENCRYPTION_KEY`. Without that key the moved keys cann
 
 ## 9. Copying lists into the new list tables (P3b-3)
 
+> **Retired (2026-10-11).** The copy was done on the live site. Its buttons and `/admin/api/lists-backfill/*` and `/admin/api/migrate-accounts` routes were removed from the dashboard. The copy code (`30_lists-backfill.js`) stays only because the v2 tests build their data with it; the steps below are history.
+
 Phase 3b moves lists, likes and channels into proper D1 tables. The first part copies every existing list into them. **It only copies.** The lists people use today are not changed, and nothing on the site reads the copies until `FF_V2_LISTS_READ` is turned on (§10). So running it changes nothing a visitor sees.
 
 From the moment migration `0016` is applied, every change to a list or a shared channel (a save, a delete, a new order, a like, a share) is also written to the new tables as it happens, a few extra D1 writes each (and one R2 write when a shared channel's episodes change). So once the copy has finished, the new tables stay current by themselves.
@@ -274,6 +276,8 @@ What it copies: every account's lists (with their order, items and likes), the o
 - The old keys and tables stay where they are, unused, until a later cleanup removes them. The old anonymous lists (from before accounts) are still served from the old storage.
 
 ## 12. Copying watch history into the activity database (P3c-3)
+
+> **Retired (2026-10-11).** The copy was done on the live site. Its button and `/admin/api/activity-backfill/*` routes were removed. `37_activity-backfill.js` stays because the hourly `activity.copy-new` job uses it for new accounts; the steps below are history.
 
 Phase 3c moves watch history and show progress into their own database, `mylists-activity` (binding `DB_ACTIVITY`, §2 and §4). The first part copies what every account has. **It only copies.** The history people see today is not changed, and nothing on the site reads the copy yet, so running it changes nothing a visitor sees.
 
@@ -454,7 +458,7 @@ What remains: a list built while signed out still lives in this browser (`myList
 **Nothing to configure.** The `/admin` page is the dashboard you use, not something visitors see: it is its own document, its own script and its own menu `/admin`, and none of it is behind a cookie, a variable or a migration. Deploying the new `worker_entry_combined.js` is the whole change.
 
 - **The dashboard's buttons name their action.** 76 inline `onclick` / `onchange` / `oninput` / `onkeydown` attributes are gone; each control carries `data-act` (plus `data-act-args` for its arguments) and one listener per event type runs it (`adminActDispatch`, in the dashboard's own script — the page does not load the builder's bundle, so it carries its own copy of that runtime). **What you should notice: nothing.** Every button does what it did.
-- **The two boxes that filter as you type** (Provider Preview's, Creator Accounts') still filter as you type — they say so with `data-act-on="input"`. **The provider search box** still searches when you press Enter, and only when you press Enter.
+- **The box that filters as you type** (Creator Accounts') still filters as you type — they say so with `data-act-on="input"`. **The provider search box** still searches when you press Enter, and only when you press Enter.
 - **A creator's display name cannot reach the markup as code.** The Reset Key button already kept the name in a `data-` attribute; the Copy Key button in the "new key" box used to have the key written into its own handler, and now takes it as an argument. A test renders a display name containing a quote and a `<script>` tag and proves it stays text.
 - **The dashboard's messages are its own dialog now** (`showAdminAlert`), not the browser's pop-up: 8 `alert()` calls became it. The ten yes/no `confirm()` prompts (delete lists, undo the installs move, restart a copy, reset a key) are **unchanged for now** — each one is inside a flow that has to be restructured around a callback, which is a change of its own.
 - **If something looks wrong:** the browser console says `Admin action not found: <name>` (once per name) if a control ever names a function that is not there, instead of the button silently doing nothing. `html_checks.py` fails the build on any inline handler on any page, so that shape cannot come back quietly.
@@ -573,29 +577,9 @@ Added and the search log are written to the D1 `stats` table and read from it
 (docs/DECISIONS.md D-33). Analytics Engine (`ANALYTICS`, dataset `mylists_events`) keeps one data
 point per request for measuring (§ above) and is not read by the site.
 
-### What went wrong, and the one-time repair
+### What went wrong (history)
 
-P8-2 (live 2026-10-02) sent those counters to Analytics Engine **instead of** D1 whenever
-`ANALYTICS` was bound. Nothing reads Analytics Engine, so the dashboard showed zeros from that
-day and Most Watched stopped moving. Release 14 writes them to D1 again. The days in between are
-still in Analytics Engine (it keeps 90 days) and can be put back once:
-
-1. Cloudflare → My Profile → API Tokens → Create Token → Custom token: permission
-   **Account → Account Analytics → Read**, for this account. Copy the token.
-2. Worker **my-lists-addon** → Settings → Variables and Secrets:
-   - add the secret `CF_ANALYTICS_TOKEN` = the token;
-   - add the variable `CF_ANALYTICS_ACCOUNT_ID` = the account id (the 32 characters in the
-     dashboard address after `dash.cloudflare.com/`).
-   Deploy.
-3. `/admin` → Maintenance → **Counts missing since 2 October** → **Preview**. It lists what it
-   found, by kind, and writes nothing.
-4. **Put them back.** Each day's count is added to that day and to the running total, once:
-   a ledger row (`stats` kind `aerecovery:…`) records each one, so pressing it again adds nothing.
-5. The token is not needed after this; delete `CF_ANALYTICS_TOKEN` (and the token in My Profile).
-
-`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are accepted in place of the two names above.
-`CF_ANALYTICS_DATASET` is needed only if the binding uses a dataset other than `mylists_events`.
-Source groups (`sourcegroup:` counts) were never moved to Analytics Engine, so they are skipped.
+From 2026-10-02 to the fix, page views, install links, playback pings and searches went to Analytics Engine only, which nothing reads. The missing days were put back from Analytics Engine with a one-time tool; that tool, and the `CF_ANALYTICS_TOKEN` / `CF_ANALYTICS_ACCOUNT_ID` / `CF_ANALYTICS_DATASET` settings it needed, were removed on 2026-10-11. The Worker no longer reads them.
 
 ## 31. Support Email Interface & Cloudflare Email Service
 

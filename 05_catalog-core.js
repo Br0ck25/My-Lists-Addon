@@ -1773,7 +1773,7 @@ function fetchChannelCatalog(entry, origin) {
 // creatorlist:{username}:{slug} (signed in, saved via
 // /api/creator/lists/save -- see 26_api-creator-and-admin-routes.js), or
 // under listlive:{token} (a signed-out browser's own server-side copy, see
-// readLiveListItems). Either way, adding it to Catalogs used to bake a
+// readLiveListRecord). Either way, adding it to Catalogs used to bake a
 // one-time snapshot of `items` straight into this URL, so an edit made
 // afterward (add/remove/reorder a pick) never reached a catalog shelf that
 // already existed -- the shelf, and the Live Preview reading the same
@@ -1783,7 +1783,7 @@ function fetchChannelCatalog(entry, origin) {
 // snapshot is kept as the fallback in all cases: if the row names nothing
 // live, or the account it implies has no such list, or the KV record is
 // missing altogether (list since deleted, key expired, a private list read by
-// someone who didn't prove ownership -- fetchLiveCreatorListItems serves
+// someone who didn't prove ownership -- readLiveCreatorList serves
 // public lists to anyone but private ones only to a verified owner), this
 // drops straight back to the old behavior rather than serving an empty
 // shelf. A live read that DOES answer is taken at its word, empty list
@@ -1842,11 +1842,6 @@ async function readLiveListRecord(env, token) {
     if (parsed && Array.isArray(parsed.items)) return parsed;
   } catch {}
   return null;
-}
-
-async function readLiveListItems(env, token) {
-  const rec = await readLiveListRecord(env, token);
-  return rec ? rec.items : null;
 }
 
 // True when any source line of a (possibly merged) row is a custom list that
@@ -1936,11 +1931,6 @@ async function readLiveCreatorList(env, owner, slug, verifiedOwner = "") {
     } catch {}
   }
   return null;
-}
-
-async function fetchLiveCreatorListItems(owner, slug, env, verifiedOwner = "") {
-  const rec = await readLiveCreatorList(env, owner, slug, verifiedOwner);
-  return rec ? rec.items : null;
 }
 
 // The one place that decides which copy of a custom-list payload is the live
