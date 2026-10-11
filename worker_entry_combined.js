@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "d6492a4877";
+const WORKER_BUILD = "89d3260f49";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -85545,6 +85545,22 @@ ${UTILITY_CSS}
 // link not yet visible where the app asked, lasted an hour in the apps.
 const CATALOG_NO_CACHE = { "Cache-Control": "no-store" };
 
+// What /api/save refuses to store, so a bad row cannot become a manifest the
+// apps reject. The id is a catalog id in a URL path (/catalog/<type>/<id>.json),
+// so it has no slash or space; the type is a catalog type. The builder always
+// sends both (it also de-duplicates ids), so only a hand-made or very old
+// request is turned away. Returns a message, or "" when every row is fine.
+function saveEntriesProblem(entries) {
+  for (const e of entries) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) return "Every list needs to be a list row.";
+    if (typeof e.id !== "string" || !e.id || e.id.length > 100 || /[\/\s]/.test(e.id)) {
+      return "A list is missing a usable id.";
+    }
+    if (e.type !== "movie" && e.type !== "series") return "A list's type has to be movie or series.";
+  }
+  return "";
+}
+
 const POSTER_IMAGE_HOSTS = new Set([
   "image.tmdb.org",
   "images.metahub.space",
@@ -93160,6 +93176,10 @@ function generateSearchVariations(query) {
       if (entries.length > SAVED_CONFIG_ENTRIES_MAX) {
         return json({ ok: false, error: "Too many lists in that configuration." }, 413);
       }
+      // Rejected, not repaired: a quietly changed row would be a different install
+      // link from the one the person built.
+      const entriesProblem = saveEntriesProblem(entries);
+      if (entriesProblem) return json({ ok: false, error: entriesProblem }, 400);
       // A config that names a Creator Profile must prove it belongs to it.
       //
       // This endpoint is unauthenticated by design -- a config is just a list of

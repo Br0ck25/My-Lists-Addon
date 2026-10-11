@@ -3871,7 +3871,7 @@ describe("audit fix 4: unauthenticated permanent writes are bounded", () => {
 
   it("still saves a normal install config", async () => {
     const env = makeEnv();
-    const entries = Array.from({ length: 30 }, (_, i) => ({ name: "row " + i, url: "https://mdblist.com/lists/x/y" }));
+    const entries = Array.from({ length: 30 }, (_, i) => ({ id: "row-" + i, name: "row " + i, url: "https://mdblist.com/lists/x/y", type: "movie" }));
     const r = await call(env, "/api/save", { method: "POST", json: { entries } });
     assert.equal(r.body.ok, true);
     assert.ok(r.body.id);
@@ -3886,7 +3886,7 @@ describe("audit fix 4: unauthenticated permanent writes are bounded", () => {
       type: "movie",
     }));
     const customUrl = "customlist:v1:" + JSON.stringify({ listSlug: "large-custom", items: largeListItems });
-    const entries = Array.from({ length: 15 }, (_, i) => ({ name: "Custom " + i, url: customUrl, type: "movie" }));
+    const entries = Array.from({ length: 15 }, (_, i) => ({ id: "custom-" + i, name: "Custom " + i, url: customUrl, type: "movie" }));
     const r = await call(env, "/api/save", { method: "POST", json: { ...(await accountProof(env)), entries } });
     assert.equal(r.body.ok, true);
     assert.ok(r.body.id);
