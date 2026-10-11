@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "aa21987604";
+const WORKER_BUILD = "d349e2f0ce";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -18846,9 +18846,11 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     }
   }
 
-  if (keys.shuffleItems && Array.isArray(result) && result.length > 1) {
+  // The global "shuffle items" setting, minus any list the user switched off
+  // in that setting's list picker (entry.noShuffle).
+  if (keys.shuffleItems && entry.noShuffle !== true && Array.isArray(result) && result.length > 1) {
     const tot = result.totalItems;
-    result = deterministicDailyShuffle(result, `items:${entry.id || entry.name}:${keys.configParam || ''}`);
+    result = deterministicDailyShuffle(result, `items:${entry.id || entry.name || keys.shuffleSalt || ''}:${keys.configParam || ''}`);
     result.totalItems = tot;
   }
 
@@ -36373,6 +36375,7 @@ if ('serviceWorker' in navigator) {
             <span class="ui-toggle-slider"></span>
           </label>
         </div>
+        <div id="shuffleItemsPicker" class="u-pl-12px" hidden></div>
       </div>
     </div>
 
@@ -40842,7 +40845,7 @@ let rowRestoreDepth = 0;
 function restoreRows(entries) {
   rowRestoreDepth++;
   try {
-    (entries || []).forEach((e) => addRow(e.name, e.url, e.type, e.enabled, e.group, e.id));
+    (entries || []).forEach((e) => addRow(e.name, e.url, e.type, e.enabled, e.group, e.id, e.noShuffle === true));
   } finally {
     rowRestoreDepth--;
   }
@@ -42160,7 +42163,7 @@ function submitAddShelfModal() {
   saveState();
 }
 
-function addRow(name, url, type, enabled, group, channelId) {
+function addRow(name, url, type, enabled, group, channelId, noShuffle) {
   // Signed out, only the site's public lists (D-8, above). Every add path in
   // the builder ends here, so this is the one check that cannot be missed.
   if (!rowRestoreDepth && !isSignedIn()) {
@@ -42192,6 +42195,7 @@ function addRow(name, url, type, enabled, group, channelId) {
   const div = document.createElement('div');
   div.className = 'entry';
   div.dataset.group = group || 'Custom';
+  if (noShuffle) div.dataset.noShuffle = '1';
   const isWatchlist = url === 'mdblist:watchlist';
   const isChannel = String(url || '').startsWith('channel:v1:');
   const isCustomList = String(url || '').startsWith('customlist:v1:');
@@ -78134,8 +78138,54 @@ function collectEntries() {
       seen[key] += 1;
       id = id + '-' + seen[key];
     }
-    return { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    const out = { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    // Set from the "Shuffle items" list picker; only written when a list is
+    // left out, so every existing install keeps shuffling all of its lists.
+    if (div.dataset.noShuffle === '1') out.noShuffle = true;
+    return out;
   }).filter(e => e.name && e.url);
+}
+
+// The list picker under "Shuffle items in Catalogs daily": shown only while
+// that toggle is on, one checkbox per list (all ticked unless the user left
+// one out). The choice lives on each row (dataset.noShuffle) so it travels
+// with the row through save, backup and restore. Rebuilt only when the set of
+// lists or the toggle changes, so it does not flicker on every keystroke.
+let shufflePickerSignature = '';
+function renderShuffleListPicker() {
+  const host = document.getElementById('shuffleItemsPicker');
+  const toggle = document.getElementById('shuffleItemsCheckbox');
+  if (!host || !toggle) return;
+  const on = !!toggle.checked;
+  host.hidden = !on;
+  const rows = [...document.querySelectorAll('#lists .entry')];
+  const items = on ? rows.map((div, i) => ({
+    i: i,
+    name: ((div.querySelector('.name') || {}).value || '').trim() || 'Untitled list',
+    type: (div.querySelector('.type') || {}).value === 'series' ? 'Shows' : 'Movies',
+    shuffled: div.dataset.noShuffle !== '1',
+  })) : [];
+  const signature = JSON.stringify(items);
+  if (signature === shufflePickerSignature) return;
+  shufflePickerSignature = signature;
+  if (!items.length) {
+    host.innerHTML = on ? '<p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">Add a list to choose what shuffles.</p>' : '';
+    return;
+  }
+  host.innerHTML = '<p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">Choose which lists shuffle:</p>' +
+    items.map((it) =>
+      '<label class="settings-toggle-row">' +
+        '<span class="u-flex-1 u-minw-0 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(it.name) + ' \u2013 ' + it.type + '</span>' +
+        '<input type="checkbox" data-act="toggleShuffleList" data-act-args="[' + it.i + ',&quot;@self&quot;]"' + (it.shuffled ? ' checked' : '') + ' aria-label="Shuffle ' + escapeAttr(it.name) + '">' +
+      '</label>'
+    ).join('');
+}
+
+function toggleShuffleList(i, el) {
+  const div = document.querySelectorAll('#lists .entry')[i];
+  if (!div) return;
+  if (el && el.checked) delete div.dataset.noShuffle; else div.dataset.noShuffle = '1';
+  saveState();
 }
 
 function collectKeys() {
@@ -78908,6 +78958,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (keys.shuffleItems && !s.noShuffle) { body.shuffle = true; body.shuffleId = s.id; }
           const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -83287,7 +83338,7 @@ function computeConfigStateHash() {
     const entries = collectEntries();
     const keys = collectKeys();
     return JSON.stringify({
-      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group })),
+      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group, noShuffle: e.noShuffle === true })),
       keys: {
         tmdbKey: keys.tmdbKey,
         mdblistKey: keys.mdblistKey,
@@ -83348,6 +83399,7 @@ function saveState() {
     // just means refreshes won't be remembered.
   }
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
+  if (typeof renderShuffleListPicker === 'function') renderShuffleListPicker();
   scheduleCreatorSyncSave();
   // The new UI's live preview follows the rows (see appShellSchedulePreview,
   // spliced in below). Guarded because saveState also runs from the legacy
@@ -83416,16 +83468,6 @@ function copyNuvioInstallLink(url) {
   showToast('Manifest link copied to clipboard.', 'success');
 }
 window.copyNuvioInstallLink = copyNuvioInstallLink;
-
-// Nuvio parses addon deep links as nuvio://<host>/<path> (replacing https:// with nuvio://),
-// navigating to Addons Settings and automatically installing the addon.
-function openNuvioApp(url) {
-  if (!url) return;
-  copyNuvioInstallLink(url);
-  const nuvioUrl = String(url).replace(/^https?:\\/\\//i, 'nuvio://');
-  window.location.href = nuvioUrl;
-}
-window.openNuvioApp = openNuvioApp;
 
 function openNuvioInstallModal(url) {
   if (!url) return;
@@ -88167,7 +88209,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
     // callers with a normal-sized url (a plain mdblist/trakt/tmdb list
     // link is never going to hit that limit).
     if (path === "/api/preview") {
-      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region;
+      let testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle = false, previewShuffleId = "";
       if (request.method === "POST") {
         let reqBody;
         try {
@@ -88189,6 +88231,10 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = reqBody.region || "";
         hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
         adultContentFilter = !!reqBody.adultContentFilter;
+        // The builder's live preview shows a list as it will arrive once the
+        // daily item shuffle is on for it, so toggling it is visible at once.
+        previewShuffle = reqBody.shuffle === true;
+        previewShuffleId = String(reqBody.shuffleId || "").slice(0, 200);
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
         skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
       } else {
@@ -88253,7 +88299,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
 
       let body;
       try {
-        let metas = await fetchCatalog({ url: testUrl, type }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, env, ctx, origin: url.origin });
+        let metas = await fetchCatalog({ url: testUrl, type, shuffle: previewShuffle }, skip, { tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName, verifiedOwner: previewVerifiedOwner, hideNonDigitalReleases, adultContentFilter, region, shuffleSalt: previewShuffleId, env, ctx, origin: url.origin });
         const totalItems = (typeof metas.totalItems === "number") ? metas.totalItems : (metas.length < PAGE_SIZE && skip === 0 ? metas.length : null);
         // Enrich sample items that lack ratings with TMDb data.
         // fetchTmdbDetails is cached (7 days) so popular titles are cache hits.

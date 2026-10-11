@@ -484,8 +484,54 @@ function collectEntries() {
       seen[key] += 1;
       id = id + '-' + seen[key];
     }
-    return { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    const out = { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    // Set from the "Shuffle items" list picker; only written when a list is
+    // left out, so every existing install keeps shuffling all of its lists.
+    if (div.dataset.noShuffle === '1') out.noShuffle = true;
+    return out;
   }).filter(e => e.name && e.url);
+}
+
+// The list picker under "Shuffle items in Catalogs daily": shown only while
+// that toggle is on, one checkbox per list (all ticked unless the user left
+// one out). The choice lives on each row (dataset.noShuffle) so it travels
+// with the row through save, backup and restore. Rebuilt only when the set of
+// lists or the toggle changes, so it does not flicker on every keystroke.
+let shufflePickerSignature = '';
+function renderShuffleListPicker() {
+  const host = document.getElementById('shuffleItemsPicker');
+  const toggle = document.getElementById('shuffleItemsCheckbox');
+  if (!host || !toggle) return;
+  const on = !!toggle.checked;
+  host.hidden = !on;
+  const rows = [...document.querySelectorAll('#lists .entry')];
+  const items = on ? rows.map((div, i) => ({
+    i: i,
+    name: ((div.querySelector('.name') || {}).value || '').trim() || 'Untitled list',
+    type: (div.querySelector('.type') || {}).value === 'series' ? 'Shows' : 'Movies',
+    shuffled: div.dataset.noShuffle !== '1',
+  })) : [];
+  const signature = JSON.stringify(items);
+  if (signature === shufflePickerSignature) return;
+  shufflePickerSignature = signature;
+  if (!items.length) {
+    host.innerHTML = on ? '<p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">Add a list to choose what shuffles.</p>' : '';
+    return;
+  }
+  host.innerHTML = '<p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">Choose which lists shuffle:</p>' +
+    items.map((it) =>
+      '<label class="settings-toggle-row">' +
+        '<span class="u-flex-1 u-minw-0 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(it.name) + ' \u2013 ' + it.type + '</span>' +
+        '<input type="checkbox" data-act="toggleShuffleList" data-act-args="[' + it.i + ',&quot;@self&quot;]"' + (it.shuffled ? ' checked' : '') + ' aria-label="Shuffle ' + escapeAttr(it.name) + '">' +
+      '</label>'
+    ).join('');
+}
+
+function toggleShuffleList(i, el) {
+  const div = document.querySelectorAll('#lists .entry')[i];
+  if (!div) return;
+  if (el && el.checked) delete div.dataset.noShuffle; else div.dataset.noShuffle = '1';
+  saveState();
 }
 
 function collectKeys() {
@@ -1258,6 +1304,7 @@ async function renderLivePreview() {
         if (previewKey) body.creatorKey = previewKey;
         if (keys.hideNonDigitalReleases) body.hideNonDigitalReleases = true;
         if (keys.adultContentFilter) body.adultContentFilter = true;
+        if (keys.shuffleItems && !s.noShuffle) { body.shuffle = true; body.shuffleId = s.id; }
           const res = await creatorApiFetch(ORIGIN + '/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

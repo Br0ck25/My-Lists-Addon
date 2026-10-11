@@ -171,9 +171,11 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     }
   }
 
-  if (keys.shuffleItems && Array.isArray(result) && result.length > 1) {
+  // The global "shuffle items" setting, minus any list the user switched off
+  // in that setting's list picker (entry.noShuffle).
+  if (keys.shuffleItems && entry.noShuffle !== true && Array.isArray(result) && result.length > 1) {
     const tot = result.totalItems;
-    result = deterministicDailyShuffle(result, `items:${entry.id || entry.name}:${keys.configParam || ''}`);
+    result = deterministicDailyShuffle(result, `items:${entry.id || entry.name || keys.shuffleSalt || ''}:${keys.configParam || ''}`);
     result.totalItems = tot;
   }
 
