@@ -496,6 +496,17 @@ async function retryUnresolvedMedia(env, opts = {}) {
       console.warn("[media.retry] merging duplicate titles failed:", String((e && e.message) || e));
     }
   }
+  const named = rows.filter((r) => r.imdb_id == null && r.tmdb_id == null && r.alt_id).map((r) => r.id);
+  if (named.length) {
+    try {
+      for (let i = 0; i < named.length; i += MEDIA_NAME_MERGE_BATCH) {
+        const m = await mergeNameOnlyMedia(env, { ids: named.slice(i, i + MEDIA_NAME_MERGE_BATCH), apply: true });
+        merged += Number(m && m.merged) || 0;
+      }
+    } catch (e) {
+      console.warn("[media.retry] merging titles stored under their name failed:", String((e && e.message) || e));
+    }
+  }
   return { tried: rows.length, resolved, merged };
 }
 
@@ -696,6 +707,7 @@ async function findDuplicateMedia(env) {
 
   const describe = (r) => ({
     id: Number(r.id), imdbId: r.imdb_id || null, tmdbId: r.tmdb_id != null ? Number(r.tmdb_id) : null,
+    altId: r.alt_id || null, tvdbId: r.tvdb_id != null ? Number(r.tvdb_id) : null,
     resolved: r.resolved_at != null, listItems: listItems.get(Number(r.id)) || 0,
     plays: plays.get(Number(r.id)) || 0, progress: progress.get(Number(r.id)) || 0,
   });
@@ -748,7 +760,7 @@ const MEDIA_MERGE_EXAMPLES = 15;
 
 function mediaMergeMainStatements(env, keep, spare, f, now) {
   const db = env.DB;
-  return [
+  const out = [
     // A list that has both copies keeps one entry.
     db.prepare(
       `UPDATE lists SET item_count = max(0, item_count - (SELECT count(*) FROM list_items a JOIN list_items b
@@ -770,13 +782,18 @@ function mediaMergeMainStatements(env, keep, spare, f, now) {
     db.prepare("UPDATE OR IGNORE media_episodes SET media_id = ? WHERE media_id = ?").bind(keep, spare),
     db.prepare("DELETE FROM media_episodes WHERE media_id = ?").bind(spare),
     db.prepare("DELETE FROM media WHERE id = ? AND imdb_id IS NULL").bind(spare),
-    db.prepare(
+  ];
+  // What TMDB said, for the kept row; none when the pair was found another way
+  // (mergeNameOnlyMedia). D1 refuses an undefined bind, so this statement is
+  // only made with facts.
+  if (!f) return out;
+  out.push(db.prepare(
       `UPDATE media SET tmdb_id = ?, tvdb_id = COALESCE(tvdb_id, ?), title = COALESCE(title, ?), year = COALESCE(year, ?),
          poster_path = COALESCE(poster_path, ?), backdrop_path = COALESCE(backdrop_path, ?),
          resolved_at = COALESCE(resolved_at, ?), updated_at = ?
        WHERE id = ? AND tmdb_id IS NULL`
-    ).bind(f.tmdbId, f.tvdbId, f.title, f.year, f.posterPath, f.backdropPath, now, now, keep),
-  ];
+    ).bind(f.tmdbId, f.tvdbId ?? null, f.title ?? null, f.year ?? null, f.posterPath ?? null, f.backdropPath ?? null, now, now, keep));
+  return out;
 }
 
 function mediaMergeActivityStatements(db, keep, spare) {
@@ -854,5 +871,62 @@ async function mergeDuplicateMedia(env, opts = {}) {
   }
   out.afterId = stubs.length ? Number(stubs[stubs.length - 1].id) : afterId;
   out.done = stubs.length < limit;
+  return out;
+}
+
+// --- A title stored under its own name -------------------------------------------
+//
+// An entry that reaches normalizeMediaRef with no real id (a list item or a
+// play that only says "Dexter") is kept with its name as its id: alt_id
+// "Dexter", no IMDb or TMDB id, never looked up, and apart from the real
+// Dexter. The count of 2026-10-11 found 50 such, most with list entries or
+// plays. TMDB cannot confirm these (there is no id to ask about), so a pair
+// is a row of the same kind with that name and year that has an IMDb id, and
+// only when exactly one row is such: two films called Alone (2020) leave the
+// copy alone. The kept row takes the name as its alt_id, so the next entry
+// that only says "Dexter" finds it instead of making another copy.
+// Another scheme's id (kitsu:1234) is left alone: it is not the row's name.
+const MEDIA_NAME_MERGE_BATCH = 100;
+
+async function mergeNameOnlyMedia(env, opts = {}) {
+  if (!env || !env.DB) throw new Error("mergeNameOnlyMedia: no D1 database is bound");
+  const apply = opts.apply === true;
+  const afterId = Math.max(0, Number(opts.afterId) || 0);
+  const only = Array.isArray(opts.ids) ? opts.ids.map(Number).filter(Number.isFinite).slice(0, MEDIA_NAME_MERGE_BATCH) : null;
+  // Its other id is its own name: that alone tells it from another scheme's id
+  // (kitsu:1234 is never a title), so a name with a colon in it counts too
+  // ("Devil in the Family: The Fall of Ruby Franke" was left out when this
+  // also asked for no colon).
+  const where = `m.imdb_id IS NULL AND m.tmdb_id IS NULL AND m.alt_id IS NOT NULL
+    AND m.title IS NOT NULL AND m.year IS NOT NULL AND lower(trim(m.alt_id)) = lower(trim(m.title))`;
+  const { results } = only
+    ? await env.DB.prepare(`SELECT m.id, m.kind, m.title, m.year, m.alt_id FROM media m WHERE m.id IN (SELECT value FROM json_each(?)) AND ${where} ORDER BY m.id`)
+      .bind(JSON.stringify(only)).all()
+    : await env.DB.prepare(`SELECT m.id, m.kind, m.title, m.year, m.alt_id FROM media m WHERE m.id > ? AND ${where} ORDER BY m.id LIMIT ?`)
+      .bind(afterId, MEDIA_NAME_MERGE_BATCH).all();
+  const rows = results || [];
+  const out = { ok: true, apply, scanned: rows.length, pairs: 0, merged: 0, noMatch: 0, ambiguous: 0, examples: [] };
+  const now = Date.now();
+  for (const s of rows) {
+    const { results: cands } = await env.DB.prepare(
+      `SELECT id, imdb_id, alt_id FROM media WHERE kind = ? AND year = ? AND lower(trim(title)) = lower(trim(?)) AND imdb_id IS NOT NULL AND id != ? LIMIT 2`
+    ).bind(s.kind, s.year, s.title, s.id).all();
+    const list = cands || [];
+    if (!list.length) { out.noMatch++; continue; }
+    if (list.length > 1) { out.ambiguous++; continue; }
+    const keep = list[0];
+    out.pairs++;
+    if (out.examples.length < MEDIA_MERGE_EXAMPLES) {
+      out.examples.push({ title: s.title, year: s.year, kind: s.kind, keep: Number(keep.id), spare: Number(s.id), imdbId: keep.imdb_id });
+    }
+    if (!apply) continue;
+    for (const db of activityDbs(env)) await db.batch(mediaMergeActivityStatements(db, Number(keep.id), Number(s.id)));
+    const main = mediaMergeMainStatements(env, Number(keep.id), Number(s.id), null, now);
+    main.push(env.DB.prepare("UPDATE media SET alt_id = COALESCE(alt_id, ?), updated_at = ? WHERE id = ?").bind(s.alt_id, now, Number(keep.id)));
+    await env.DB.batch(main);
+    out.merged++;
+  }
+  out.afterId = rows.length ? Number(rows[rows.length - 1].id) : afterId;
+  out.done = only ? true : rows.length < MEDIA_NAME_MERGE_BATCH;
   return out;
 }

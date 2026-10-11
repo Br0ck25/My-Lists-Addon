@@ -286,7 +286,13 @@ export function makeD1({ foreignKeys = true, schema = "main" } = {}) {
           const row = exec(sql, args).results[0] || null;
           return col && row ? row[col] : row;
         },
-        bind: (...a) => mk(a),
+        // Real D1 refuses undefined at bind() itself (D1_TYPE_ERROR), and so
+        // does this: node:sqlite took it as NULL, which hid a live failure
+        // (Merge duplicate titles, 2026-10-11).
+        bind: (...a) => {
+          if (a.some((v) => v === undefined)) throw new Error("D1_TYPE_ERROR: Type 'undefined' not supported for value 'undefined'");
+          return mk(a);
+        },
       });
       return mk([]);
     },

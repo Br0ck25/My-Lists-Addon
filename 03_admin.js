@@ -1829,7 +1829,7 @@ const ADMIN_AUDIT_GET_MUTATORS = new Set(["/admin/api/migrate-accounts"]);
 // token an admin form might carry. `slugs` is here for the delete flows.
 const ADMIN_AUDIT_BODY_FIELDS = [
   "username", "creatorName", "slug", "slugs", "name", "listName", "channelId", "networkId",
-  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason", "apply",
+  "feedbackId", "id", "ids", "status", "action", "day", "job", "nonce", "reason", "apply", "pass",
 ];
 const ADMIN_AUDIT_VALUE_MAX = 200;
 const ADMIN_AUDIT_DETAIL_MAX = 600;
@@ -3061,7 +3061,7 @@ ${UTILITY_CSS}
       <button type="button" class="admin-select u-cur-pointer" id="dupMediaBtn" data-act="runDuplicateMediaCheck" ${isD1Bound ? '' : 'disabled'}>Check duplicate titles</button>
       <span id="dupMediaStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
       <div id="dupMediaResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
-      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Merge duplicate titles</strong> asks TMDB which IMDb id each title stored by its TMDB id alone (looked up or not) belongs to, and pairs it only when another title holds exactly that IMDb id. <strong>Preview</strong> only reads. <strong>Merge</strong> moves the list entries, plays, progress and recommendations onto the kept title and deletes the empty copy; take a backup first. Keep the page open until it says Done.</p>
+      <p class="u-c-v_muted u-m-12px_0_8px u-fs-v_font_size_sm"><strong>Merge duplicate titles</strong> asks TMDB which IMDb id each title stored by its TMDB id alone (looked up or not) belongs to, and pairs it only when another title holds exactly that IMDb id. Then it takes titles stored under their own name (no id at all) and pairs each only when exactly one title of that kind has that name and year. <strong>Preview</strong> only reads. <strong>Merge</strong> moves the list entries, plays, progress and recommendations onto the kept title and deletes the empty copy; take a backup first. Keep the page open until it says Done.</p>
       <button type="button" class="admin-select u-cur-pointer" id="dupMergePreviewBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([false])}" ${isD1Bound ? '' : 'disabled'}>Preview</button>
       <button type="button" class="admin-select u-cur-pointer" id="dupMergeApplyBtn" data-act="runDuplicateMediaMerge" data-act-args="${adminActArgs([true])}" ${isD1Bound ? '' : 'disabled'}>Merge</button>
       <span id="dupMergeStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
@@ -4403,7 +4403,7 @@ ${UTILITY_CSS}
           status.textContent = 'Done.';
           const ex = (d.examples || []).map(function (g) {
             return nl + '  ' + g.title + ' (' + g.year + ', ' + g.kind + '):' + g.rows.map(function (r) {
-              return nl + '    row ' + r.id + ': IMDb ' + (r.imdbId || '-') + ', TMDB ' + (r.tmdbId == null ? '-' : r.tmdbId) + (r.resolved ? '' : ', not looked up') + '; ' + r.listItems + ' list entries, ' + r.plays + ' plays, ' + r.progress + ' progress';
+              return nl + '    row ' + r.id + ': IMDb ' + (r.imdbId || '-') + ', TMDB ' + (r.tmdbId == null ? '-' : r.tmdbId) + (r.altId ? ', other id ' + r.altId : '') + (r.resolved ? '' : ', not looked up') + '; ' + r.listItems + ' list entries, ' + r.plays + ' plays, ' + r.progress + ' progress';
             }).join('');
           }).join('');
           out.textContent = [
@@ -4429,24 +4429,34 @@ ${UTILITY_CSS}
       buttons.forEach(function (b) { b.disabled = true; });
       out.textContent = '';
       const t = { scanned: 0, pairs: 0, merged: 0, noAnswer: 0, noImdb: 0, notStored: 0, otherKind: 0, otherTmdb: 0, examples: [] };
+      // Second pass: titles stored under their own name (mergeNameOnlyMedia).
+      const n = { scanned: 0, pairs: 0, merged: 0, noMatch: 0, ambiguous: 0, examples: [] };
       let total = null;
       let state = { afterId: 0, apply: !!apply };
+      const show = function () {
+        out.textContent = [
+          (apply ? t.merged + ' titles merged' : t.pairs + ' titles are stored twice (TMDB confirms it)') + ', of ' + t.scanned + ' titles stored by TMDB id alone.',
+          'Left alone: ' + t.notStored + ' with no other copy, ' + t.noAnswer + ' TMDB did not answer for, ' + t.noImdb + ' with no IMDb id at TMDB, ' + t.otherKind + ' where the other copy is filed as the other kind, ' + t.otherTmdb + ' where the other copy has another TMDB id.',
+          'Examples: ' + (t.examples.length ? t.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare + ' (TMDB ' + e.tmdbId + ')'; }).join('') : 'none'),
+          '',
+          (apply ? n.merged + ' titles merged' : n.pairs + ' titles stored under their own name match exactly one title') + ', of ' + n.scanned + ' stored under their own name. Left alone: ' + n.noMatch + ' with no matching title, ' + n.ambiguous + ' that match more than one.',
+          'Examples: ' + (n.examples.length ? n.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare; }).join('') : 'none'),
+        ].join(nl);
+      };
       try {
-        for (let i = 0; i < 2000; i++) {
+        for (let i = 0; i < 4000; i++) {
           const res = await fetch('/admin/api/jobs/duplicate-media-merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
           const d = await res.json();
           if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on from the start; merged titles stay merged.'; break; }
-          if (d.total != null) total = d.total;
-          ['scanned', 'pairs', 'merged', 'noAnswer', 'noImdb', 'notStored', 'otherKind', 'otherTmdb'].forEach(function (k) { t[k] += Number(d[k]) || 0; });
-          (d.examples || []).forEach(function (e) { if (t.examples.length < 15) t.examples.push(e); });
-          out.textContent = [
-            (apply ? t.merged + ' titles merged' : t.pairs + ' titles are stored twice (TMDB confirms it)') + ', of ' + t.scanned + ' titles stored by TMDB id alone.',
-            'Left alone: ' + t.notStored + ' with no other copy, ' + t.noAnswer + ' TMDB did not answer for, ' + t.noImdb + ' with no IMDb id at TMDB, ' + t.otherKind + ' where the other copy is filed as the other kind, ' + t.otherTmdb + ' where the other copy has another TMDB id.',
-            'Examples: ' + (t.examples.length ? t.examples.map(function (e) { return nl + '  ' + e.title + ' (' + e.year + ', ' + e.kind + '): keep row ' + e.keep + ' (' + e.imdbId + '), ' + (apply ? 'merged' : 'merge') + ' row ' + e.spare + ' (TMDB ' + e.tmdbId + ')'; }).join('') : 'none'),
-          ].join(nl);
-          if (d.done) { status.textContent = 'Done.'; break; }
-          status.textContent = (apply ? 'Merging... ' : 'Checking... ') + t.scanned + (total ? ' of ' + total : '') + ' so far.';
-          state = { afterId: d.afterId, apply: !!apply };
+          const into = state.pass === 'name' ? n : t;
+          if (state.pass !== 'name' && d.total != null) total = d.total;
+          Object.keys(into).forEach(function (k) { if (k !== 'examples') into[k] += Number(d[k]) || 0; });
+          (d.examples || []).forEach(function (e) { if (into.examples.length < 15) into.examples.push(e); });
+          show();
+          if (d.done && state.pass === 'name') { status.textContent = 'Done.'; break; }
+          if (d.done) { state = { afterId: 0, apply: !!apply, pass: 'name' }; continue; }
+          status.textContent = (apply ? 'Merging... ' : 'Checking... ') + (state.pass === 'name' ? 'titles stored under their name, ' + n.scanned : t.scanned + (total ? ' of ' + total : '')) + ' so far.';
+          state = { afterId: d.afterId, apply: !!apply, pass: state.pass };
         }
       } catch (e) {
         status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';

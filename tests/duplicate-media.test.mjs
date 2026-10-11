@@ -28,6 +28,9 @@ function seededEnv() {
   // The same name as a film and as a show: different kinds, not compared.
   ins.run(5, "movie", null, "tt0000555", "Dark Matter", 2024, 1);
   ins.run(6, "series", 999, null, "Dark Matter", 2024, 1);
+  // A copy saved under another scheme's id only (an imported list's).
+  db.prepare("INSERT INTO media (id, kind, alt_id, title, year, created_at, updated_at) VALUES (8, 'movie', 'trakt:123', 'X-Men', 2000, 1, 1)").run();
+  ins.run(9, "movie", 36657, "tt0120903", "X-Men", 2000, 1);
   const act = env.DB_ACTIVITY._db;
   const play = act.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key) VALUES (7, ?, 1, ?, ?, 'ping', ?)");
   play.run(1, 1, 100, "a");
@@ -43,11 +46,13 @@ describe("Check duplicate titles (admin, read-only)", () => {
     const before = JSON.stringify(env.DB._db.prepare("SELECT * FROM media ORDER BY id").all());
     const r = await call(env, "/admin/api/jobs/duplicate-media", { cookie: await adminCookie(env) });
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    assert.equal(r.body.likelyGroups, 1);
-    assert.equal(r.body.likelyRows, 2);
+    assert.equal(r.body.likelyGroups, 2);
+    assert.equal(r.body.likelyRows, 4);
+    const xmen = r.body.examples.find((g) => g.title === "X-Men");
+    assert.equal(xmen.rows.find((row) => row.id === 8).altId, "trakt:123", "the other id is shown, so it can be told where it came from");
     assert.equal(r.body.splitGroups, 1, "both copies of Breaking Bad have plays");
     assert.equal(r.body.sameNameDifferent, 1, "the two films called Home are different titles");
-    const [g] = r.body.examples;
+    const g = r.body.examples.find((x) => x.title === "Breaking Bad");
     assert.equal(g.title, "Breaking Bad");
     const byId = Object.fromEntries(g.rows.map((row) => [row.id, row]));
     assert.deepEqual([byId[1].plays, byId[1].progress], [2, 0]);
@@ -171,5 +176,66 @@ describe("media.retry merges a new duplicate the recommendations job made", () =
     assert.equal(res.merged, 1, JSON.stringify(res));
     assert.deepEqual(env.DB._db.prepare("SELECT id, tmdb_id FROM media").all().map((r) => [r.id, r.tmdb_id]), [[1, 1396]]);
     assert.deepEqual(env.DB_ACTIVITY._db.prepare("SELECT media_id FROM watch_events").all().map((r) => r.media_id), [1, 1]);
+  });
+});
+
+// Titles stored under their own name (mergeNameOnlyMedia, 29_): an entry with
+// no real id kept its name as its id, apart from the real title. No id to ask
+// TMDB about, so a pair is the one row of that kind, name and year with an
+// IMDb id, and never when there are two.
+function nameEnv() {
+  const env = makeEnv({ DB: makeD1(), DB_ACTIVITY: makeD1({ schema: "activity" }), TMDB_API_KEY: "k" });
+  const db = env.DB._db;
+  const ins = db.prepare("INSERT INTO media (id, kind, tmdb_id, imdb_id, alt_id, title, year, resolved_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)");
+  ins.run(19, "series", 1405, "tt0773262", null, "Dexter", 2006, 1);
+  ins.run(779, "series", null, null, "Dexter", "Dexter", 2006, null);
+  ins.run(30, "movie", 661950, "tt10192566", null, "Alone", 2020, 1);
+  ins.run(31, "movie", 509635, "tt7711170", null, "Alone", 2020, 1);
+  ins.run(32, "movie", null, null, "Alone", "Alone", 2020, null);           // two films called Alone: left alone
+  ins.run(50, "series", 281371, "tt35309276", null, "Devil in the Family: The Fall of Ruby Franke", 2025, 1);
+  ins.run(780, "series", null, null, "Devil in the Family: The Fall of Ruby Franke", "Devil in the Family: The Fall of Ruby Franke", 2025, null);
+  ins.run(40, "movie", 1, "tt0000040", null, "Akira", 1988, 1);
+  ins.run(41, "movie", null, null, "kitsu:1234", "Akira", 1988, null);       // another scheme's id: not this pass
+  db.prepare("INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (7, 'ann', 'ann', 'h', 1)").run();
+  db.prepare("INSERT INTO lists (id, public_id, owner_account_id, slug, name, media_type, item_count, created_at, updated_at) VALUES (1, 'p1', 7, 'a', 'A', 'series', 1, 1, 1)").run();
+  db.prepare("INSERT INTO list_items (list_id, media_id, position, added_at) VALUES (1, 779, 1, 1)").run();
+  env.DB_ACTIVITY._db.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key) VALUES (7, 779, 1, 1, 100, 'web', 'd1')").run();
+  return env;
+}
+
+describe("Merge titles stored under their own name (admin)", () => {
+  const run = async (env, apply) => call(env, "/admin/api/jobs/duplicate-media-merge", { method: "POST", cookie: await adminCookie(env), json: { apply, pass: "name" } });
+
+  it("Preview pairs a name with the one title it names, leaves two-way names alone, and writes nothing", async () => {
+    const env = nameEnv();
+    const before = JSON.stringify(env.DB._db.prepare("SELECT * FROM media ORDER BY id").all());
+    const r = await run(env, false);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual([r.body.pairs, r.body.ambiguous, r.body.merged], [2, 1, 0]);
+    assert.deepEqual(r.body.examples.map((e) => [e.keep, e.spare]), [[19, 779], [50, 780]], "a name with a colon in it counts too");
+    assert.equal(JSON.stringify(env.DB._db.prepare("SELECT * FROM media ORDER BY id").all()), before);
+  });
+
+  it("Merge moves the list entry and play onto the real title, which takes the name so it is found next time", async () => {
+    const env = nameEnv();
+    const r = await run(env, true);
+    assert.equal(r.body.merged, 2, JSON.stringify(r.body));
+    const db = env.DB._db;
+    assert.equal(db.prepare("SELECT count(*) AS n FROM media WHERE id IN (779, 780)").get().n, 0);
+    assert.equal(db.prepare("SELECT alt_id FROM media WHERE id = 19").get().alt_id, "Dexter");
+    assert.equal(db.prepare("SELECT media_id FROM list_items").get().media_id, 19);
+    assert.equal(env.DB_ACTIVITY._db.prepare("SELECT media_id FROM watch_events").get().media_id, 19);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM media WHERE id IN (32, 41)").get().n, 2, "the two-way name and the other scheme's id are untouched");
+  });
+  // The live run of 2026-10-11 stopped after the first pair's plays had moved
+  // (the kept-row update bound undefined, which D1 refuses). Merge again must
+  // finish that pair from there.
+  it("finishes a pair whose plays were already moved by a stopped run", async () => {
+    const env = nameEnv();
+    env.DB_ACTIVITY._db.prepare("UPDATE watch_events SET media_id = 19 WHERE media_id = 779").run();
+    const r = await run(env, true);
+    assert.equal(r.body.merged, 2, JSON.stringify(r.body));
+    assert.equal(env.DB._db.prepare("SELECT media_id FROM list_items").get().media_id, 19);
+    assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM media WHERE id = 779").get().n, 0);
   });
 });
