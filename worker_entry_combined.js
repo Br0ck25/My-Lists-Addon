@@ -33,7 +33,7 @@ const WORKER_RELEASE = "27";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the release:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "aa21987604";
+const WORKER_BUILD = "654148d77c";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -18846,7 +18846,8 @@ async function fetchCatalog(entry, skip = 0, keys = {}) {
     }
   }
 
-  if (keys.shuffleItems && Array.isArray(result) && result.length > 1) {
+  // The global "shuffle items" setting, or this one list's own shuffle toggle.
+  if ((keys.shuffleItems || entry.shuffle === true) && Array.isArray(result) && result.length > 1) {
     const tot = result.totalItems;
     result = deterministicDailyShuffle(result, `items:${entry.id || entry.name}:${keys.configParam || ''}`);
     result.totalItems = tot;
@@ -40842,7 +40843,7 @@ let rowRestoreDepth = 0;
 function restoreRows(entries) {
   rowRestoreDepth++;
   try {
-    (entries || []).forEach((e) => addRow(e.name, e.url, e.type, e.enabled, e.group, e.id));
+    (entries || []).forEach((e) => addRow(e.name, e.url, e.type, e.enabled, e.group, e.id, e.shuffle === true));
   } finally {
     rowRestoreDepth--;
   }
@@ -42160,7 +42161,7 @@ function submitAddShelfModal() {
   saveState();
 }
 
-function addRow(name, url, type, enabled, group, channelId) {
+function addRow(name, url, type, enabled, group, channelId, shuffle) {
   // Signed out, only the site's public lists (D-8, above). Every add path in
   // the builder ends here, so this is the one check that cannot be missed.
   if (!rowRestoreDepth && !isSignedIn()) {
@@ -42270,6 +42271,13 @@ function addRow(name, url, type, enabled, group, channelId) {
       '</div>' +
     '</div>' +
     '<div class="sources">' + rowsHtml + '</div>' +
+    '<div class="settings-toggle-row">' +
+      '<span class="u-fs-v_font_size_sm u-c-v_text">Shuffle this list daily</span>' +
+      '<label class="ui-toggle" aria-label="Shuffle this list daily">' +
+        '<input type="checkbox" class="entry-shuffle" data-act="saveState"' + (shuffle ? ' checked' : '') + '>' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>' +
     (isWatchlist
       ? '<p class="watchlist-note"><small>Uses the MDBList API key from Settings.</small></p>'
       : (isChannel || isCustomList || isPremade)
@@ -78134,7 +78142,10 @@ function collectEntries() {
       seen[key] += 1;
       id = id + '-' + seen[key];
     }
-    return { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    const shuffleBox = div.querySelector('.entry-shuffle');
+    const out = { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    if (shuffleBox && shuffleBox.checked) out.shuffle = true;
+    return out;
   }).filter(e => e.name && e.url);
 }
 
@@ -83287,7 +83298,7 @@ function computeConfigStateHash() {
     const entries = collectEntries();
     const keys = collectKeys();
     return JSON.stringify({
-      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group })),
+      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group, shuffle: e.shuffle === true })),
       keys: {
         tmdbKey: keys.tmdbKey,
         mdblistKey: keys.mdblistKey,

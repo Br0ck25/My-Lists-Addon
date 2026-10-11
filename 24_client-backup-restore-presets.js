@@ -1752,7 +1752,7 @@ function computeConfigStateHash() {
     const entries = collectEntries();
     const keys = collectKeys();
     return JSON.stringify({
-      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group })),
+      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group, shuffle: e.shuffle === true })),
       keys: {
         tmdbKey: keys.tmdbKey,
         mdblistKey: keys.mdblistKey,

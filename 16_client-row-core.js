@@ -2641,7 +2641,7 @@ let rowRestoreDepth = 0;
 function restoreRows(entries) {
   rowRestoreDepth++;
   try {
-    (entries || []).forEach((e) => addRow(e.name, e.url, e.type, e.enabled, e.group, e.id));
+    (entries || []).forEach((e) => addRow(e.name, e.url, e.type, e.enabled, e.group, e.id, e.shuffle === true));
   } finally {
     rowRestoreDepth--;
   }
@@ -3959,7 +3959,7 @@ function submitAddShelfModal() {
   saveState();
 }
 
-function addRow(name, url, type, enabled, group, channelId) {
+function addRow(name, url, type, enabled, group, channelId, shuffle) {
   // Signed out, only the site's public lists (D-8, above). Every add path in
   // the builder ends here, so this is the one check that cannot be missed.
   if (!rowRestoreDepth && !isSignedIn()) {
@@ -4069,6 +4069,13 @@ function addRow(name, url, type, enabled, group, channelId) {
       '</div>' +
     '</div>' +
     '<div class="sources">' + rowsHtml + '</div>' +
+    '<div class="settings-toggle-row">' +
+      '<span class="u-fs-v_font_size_sm u-c-v_text">Shuffle this list daily</span>' +
+      '<label class="ui-toggle" aria-label="Shuffle this list daily">' +
+        '<input type="checkbox" class="entry-shuffle" data-act="saveState"' + (shuffle ? ' checked' : '') + '>' +
+        '<span class="ui-toggle-slider"></span>' +
+      '</label>' +
+    '</div>' +
     (isWatchlist
       ? '<p class="watchlist-note"><small>Uses the MDBList API key from Settings.</small></p>'
       : (isChannel || isCustomList || isPremade)

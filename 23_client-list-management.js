@@ -484,7 +484,10 @@ function collectEntries() {
       seen[key] += 1;
       id = id + '-' + seen[key];
     }
-    return { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    const shuffleBox = div.querySelector('.entry-shuffle');
+    const out = { id, name, type, url, enabled, group: div.dataset.group || 'Custom' };
+    if (shuffleBox && shuffleBox.checked) out.shuffle = true;
+    return out;
   }).filter(e => e.name && e.url);
 }
 
