@@ -62,6 +62,7 @@
             <span class="ui-toggle-slider"></span>
           </label>
         </div>
+        <div id="shuffleItemsPicker" class="u-pl-12px" hidden></div>
       </div>
     </div>
 

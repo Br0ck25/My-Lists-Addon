@@ -1742,8 +1742,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
         region = reqBody.region || "";
         hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
         adultContentFilter = !!reqBody.adultContentFilter;
-        // The builder's live preview shows a list as it will arrive once its
-        // (or the global) daily shuffle is on, so toggling it is visible at once.
+        // The builder's live preview shows a list as it will arrive once the
+        // daily item shuffle is on for it, so toggling it is visible at once.
         previewShuffle = reqBody.shuffle === true;
         previewShuffleId = String(reqBody.shuffleId || "").slice(0, 200);
         sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));

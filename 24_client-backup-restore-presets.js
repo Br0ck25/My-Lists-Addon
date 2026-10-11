@@ -1752,7 +1752,7 @@ function computeConfigStateHash() {
     const entries = collectEntries();
     const keys = collectKeys();
     return JSON.stringify({
-      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group, shuffle: e.shuffle === true })),
+      entries: entries.map(e => ({ name: e.name, url: e.url, type: e.type, group: e.group, noShuffle: e.noShuffle === true })),
       keys: {
         tmdbKey: keys.tmdbKey,
         mdblistKey: keys.mdblistKey,
@@ -1813,6 +1813,7 @@ function saveState() {
     // just means refreshes won't be remembered.
   }
   if (typeof updateAllListAddButtons === 'function') updateAllListAddButtons();
+  if (typeof renderShuffleListPicker === 'function') renderShuffleListPicker();
   scheduleCreatorSyncSave();
   // The new UI's live preview follows the rows (see appShellSchedulePreview,
   // spliced in below). Guarded because saveState also runs from the legacy
