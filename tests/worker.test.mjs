@@ -4594,19 +4594,21 @@ describe("Catalogs -> Quick Add: every section is a card with a subtitle", () =>
 });
 
 describe("audit fix 14: every env var the code requires is documented", () => {
-  it("names MDBLIST_CLIENT_SECRET in both README.md and wrangler.toml", () => {
-    const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  it("names MDBLIST_CLIENT_SECRET in both docs/OPERATIONS.md and wrangler.toml", () => {
+    // The README is for visitors now (not self-hosting), so the operator's
+    // reference for env vars is OPERATIONS.md plus wrangler.toml.
+    const ops = fs.readFileSync(path.join(REPO_ROOT, "docs", "OPERATIONS.md"), "utf8");
     const wrangler = fs.readFileSync(path.join(REPO_ROOT, "wrangler.toml"), "utf8");
-    assert.match(readme, /MDBLIST_CLIENT_SECRET/);
+    assert.match(ops, /MDBLIST_CLIENT_SECRET/);
     assert.match(wrangler, /MDBLIST_CLIENT_SECRET/);
   });
 
   it("documents every env var the Worker actually reads", () => {
     // Guards the whole class: an operator following the setup docs exactly
     // should never hit a feature that reports itself "not configured".
-    const readme = fs.readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+    const ops = fs.readFileSync(path.join(REPO_ROOT, "docs", "OPERATIONS.md"), "utf8");
     const wrangler = fs.readFileSync(path.join(REPO_ROOT, "wrangler.toml"), "utf8");
-    const docs = readme + "\n" + wrangler;
+    const docs = ops + "\n" + wrangler;
     const used = new Set();
     for (const f of fs.readdirSync(REPO_ROOT).filter((n) => /^\d\d_.*\.js$/.test(n))) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
