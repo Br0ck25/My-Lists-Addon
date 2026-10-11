@@ -46,7 +46,9 @@ Before Release 1, the live site, mylistsaddon.com, ran the public repository, [B
 - **Release 26** went live on 2026-10-07. The owner reports it fine. PR #29's fixes, and a shortened job period applies at once. Details under Release 26. Merged into `main`.
 - **Release 27** went live on 2026-10-07. The owner reports it looks good. The old Continue Watching and Airing Next background jobs pass over the accounts whose shelves come from the schedule. Details under Release 27. Merged into `main`.
 - **`main` up to PR #37 is live** (2026-10-11, `/admin` showed *Release 27 (build d349e2f0ce)*): other sessions' Support Emails, badged posters as images, one-click Nuvio install, per-list shuffle, Watch History fixes. The owner set up the `EMAIL` and `IMAGES` bindings, migration 0021, and D1 read replication. `INSTALL_MIGRATION_PERCENT` is at 50 (118 moved, none removed). Saves that sent the Account Key: 51 that day, so the sunset waits.
-- **Release 28** (prepared 2026-10-11, build d7bca701f6; an earlier build 927e912ba1 had only the count): *Check duplicate titles* and *Merge duplicate titles* on `/admin`, and `/admin` shows *Built <date> (build <stamp>)* in place of a release number. Details under Release 28.
+- **Release 28 is live** (build d7bca701f6, 2026-10-11). **Merge duplicate titles ran:** 1,100 merged of 1,140 stubs; 39 TMDB did not answer for, 1 filed as the other kind. Details under Release 28.
+- **Release 29** (prepared 2026-10-11, build c82d81dc04): the hourly `media.retry` merges new pairs, and the merge also takes rows marked looked up. Details under Release 29.
+- (Release 28 history: an earlier build 927e912ba1 had only the count): *Check duplicate titles* and *Merge duplicate titles* on `/admin`, and `/admin` shows *Built <date> (build <stamp>)* in place of a release number.)
 - **From Release 28 on there is no release number in the code.** `python build.py` fills in the build date (the day the code last changed) and the stamp; `/admin` shows both. Entries here keep a name for talking about them and give that date and stamp.
 - **Cloudflare Workers Builds was connected to this repository** (found 2026-10-04). The owner reports the Worker it was connected to has since been deleted, and merging PR #12 started no build. Every push makes Cloudflare try to build the Worker from GitHub. On `main` it would deploy to production. So far every attempt has failed, so nothing has been deployed that way: `main` at `a6785d6` on 2026-10-03, and this branch's preview with *Authentication error*. The `wrangler.toml` guard (Release 14: `keep_vars`, the `DB_ACTIVITY` placeholder) keeps such a deploy from replacing the dashboard's settings. Deploying stays manual (pasting) unless the owner decides otherwise.
 - **Backups work** (2026-10-04): the owner added the five GitHub secrets, and the first real backup ran (Actions run 37226668219). It copied both databases, encrypted: `my-lists-db` (9.3 MB, 709 accounts' settings, 1,147 lists, 53,082 list items) and `mylists-activity` (0.96 MB, 46,956 plays). From here it runs daily at 04:17 UTC.
@@ -1770,3 +1772,24 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 4. Only after we have looked at it: press **Merge**.
 
 **Rollback:** paste the build d349e2f0ce file (`main` at `d754751`).
+
+## Release 29: new duplicate titles are merged every hour
+
+**Branch point:** Release 28 (build d7bca701f6), live. Built 2026-10-11, build c82d81dc04.
+
+### What it changes
+
+- **Release 28's merge ran** (owner, 2026-10-11, after a backup): 1,100 titles merged of 1,140 stored by TMDB id alone; 39 TMDB did not answer for, 1 whose other copy is filed as the other kind. Examples: IF, The Bikeriders, Dark Matter, Them.
+- **The hourly `media.retry` merges a new pair** (`retryUnresolvedMedia`, 29_): a stub with a TMDB id and no IMDb id that it tried goes through `mergeDuplicateMedia` with `ids`. The recommendations job (`recordRecommendedMedia`, 53_) keeps making such stubs, and a new one is due at once, so a new duplicate lasts at most about an hour. The job's progress records `merged` and `totalMerged`. A failure there is logged and never fails the retry.
+- **The merge also takes rows marked looked up.** When the retry could not give a stub its IMDb id (another row held it), it marked it looked up anyway, without the IMDb id: those were the count's 635 "with only a TMDB id", and Release 28's Merge did not scan them. It now takes every row with a TMDB id and no IMDb id.
+
+### Checked
+
+- `tests/duplicate-media.test.mjs`: media.retry merges a new recommendations stub into the row holding its IMDb id, plays included. `tests/lists-v2.test.mjs`: the retry's answer now carries `merged`.
+- `bash verify.sh`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,376 tests each).
+
+**Steps:**
+1. Deploy `release-29-NEW-worker.js`. Check that `/admin` says **Built 2026-10-11 (build c82d81dc04)**.
+2. Press **Preview** under *Merge duplicate titles*, then **Merge** if the examples look right (yesterday's backup still holds; the merge only joins TMDB-confirmed pairs). Then **Check duplicate titles**, and send both.
+
+**Rollback:** paste the Release 28 file (build d7bca701f6).

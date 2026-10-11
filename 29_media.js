@@ -480,7 +480,23 @@ async function retryUnresolvedMedia(env, opts = {}) {
     const row = await env.DB.prepare(`SELECT count(*) AS n FROM media WHERE resolved_at IS NOT NULL AND id IN (${marks})`).bind(...chunk).first();
     resolved += Number(row && row.n) || 0;
   }
-  return { tried: rows.length, resolved };
+  // A stub by TMDB id that TMDB answered for and still could not take its
+  // IMDb id: another row holds it, the two are one title (the recommendations
+  // job keeps making such stubs, 53_). Merged the way the admin's Merge
+  // duplicate titles does. Never fails the retry.
+  let merged = 0;
+  const blocked = rows.filter((r) => r.tmdb_id != null && !r.imdb_id).map((r) => r.id);
+  if (blocked.length && (opts.tmdbKey || env.TMDB_API_KEY)) {
+    try {
+      for (let i = 0; i < blocked.length; i += 100) {
+        const m = await mergeDuplicateMedia(env, { ids: blocked.slice(i, i + 100), apply: true, tmdbKey: opts.tmdbKey });
+        merged += Number(m && m.merged) || 0;
+      }
+    } catch (e) {
+      console.warn("[media.retry] merging duplicate titles failed:", String((e && e.message) || e));
+    }
+  }
+  return { tried: rows.length, resolved, merged };
 }
 
 // --- Episode names and stills (migration 0020) ---------------------------------
@@ -719,8 +735,9 @@ async function findDuplicateMedia(env) {
 // neither can ever be completed. Same name and year is not enough to merge on
 // (two films called Alone came out in 2020), so this asks TMDB.
 //
-// One batch per call, oldest stub first: for each stub with a TMDB id and no
-// IMDb id, TMDB says its IMDb id; when another row of the same kind holds that
+// One batch per call, oldest first: for each row with a TMDB id and no IMDb id
+// (a stub, or one the retry marked looked up when its IMDb id was taken), TMDB
+// says its IMDb id; when another row of the same kind holds that
 // IMDb id and no TMDB id, the two are one title. With `apply`, everything that
 // points at the stub moves to that row, the stub is deleted, and the row takes
 // the TMDB id and anything else it lacked. Without it, nothing is written.
@@ -790,13 +807,19 @@ async function mergeDuplicateMedia(env, opts = {}) {
   if (!apiKey) return { ok: false, error: "No TMDB key is set (TMDB_API_KEY)." };
   const afterId = Math.max(0, Number(opts.afterId) || 0);
   const limit = Math.max(1, Math.min(Number(opts.limit) || MEDIA_MERGE_BATCH, 100));
-  const { results } = await env.DB.prepare(
-    `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE id > ? AND resolved_at IS NULL AND imdb_id IS NULL AND tmdb_id IS NOT NULL
-     ORDER BY id LIMIT ?`
-  ).bind(afterId, limit).all();
+  // `ids`: only these stubs (the hourly retry's own, below), not a scan.
+  const only = Array.isArray(opts.ids) ? opts.ids.map(Number).filter(Number.isFinite) : null;
+  const { results } = only
+    ? await env.DB.prepare(
+      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE id IN (SELECT value FROM json_each(?)) AND imdb_id IS NULL AND tmdb_id IS NOT NULL ORDER BY id`
+    ).bind(JSON.stringify(only.slice(0, 100))).all()
+    : await env.DB.prepare(
+      `SELECT ${MEDIA_ROW_COLUMNS} FROM media WHERE id > ? AND imdb_id IS NULL AND tmdb_id IS NOT NULL
+       ORDER BY id LIMIT ?`
+    ).bind(afterId, limit).all();
   const stubs = results || [];
-  const total = afterId ? null : Number((await env.DB.prepare(
-    "SELECT count(*) AS n FROM media WHERE resolved_at IS NULL AND imdb_id IS NULL AND tmdb_id IS NOT NULL"
+  const total = afterId || only ? null : Number((await env.DB.prepare(
+    "SELECT count(*) AS n FROM media WHERE imdb_id IS NULL AND tmdb_id IS NOT NULL"
   ).first() || {}).n) || 0;
   const facts = await mapMediaWithConcurrency(stubs, MEDIA_TMDB_CONCURRENCY,
     (s) => fetchTmdbMediaFacts({ kind: s.kind, tmdbId: s.tmdb_id, imdbId: null }, apiKey));

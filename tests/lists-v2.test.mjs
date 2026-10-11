@@ -464,7 +464,7 @@ describe("P3b-2: the media resolver", () => {
 
     fakeTmdb(sb, { finds: { tt0903747: { tv_results: [BREAKING_BAD] } } }); // now it knows one
     const res = await sb.retryUnresolvedMedia(env, { limit: 10 });
-    assert.deepEqual(plain(res), { tried: 2, resolved: 1 });
+    assert.deepEqual(plain(res), { tried: 2, resolved: 1, merged: 0 });
     const rows = mediaRows(env);
     const bb = rows.find((r) => r.imdb_id === "tt0903747");
     assert.equal(bb.id, ids[0], "the same row, so list entries already on it follow");
@@ -491,7 +491,7 @@ describe("P3b-2: the media resolver", () => {
     // Stubs are retried as they were filed (kind movie, their ids), which is
     // how media.retry asks.
     const res = await sb.retryUnresolvedMedia(env, { limit: 10 });
-    assert.deepEqual(plain(res), { tried: 1, resolved: 1 });
+    assert.deepEqual(plain(res), { tried: 1, resolved: 1, merged: 0 });
     const rows = Object.fromEntries(mediaRows(env).map((r) => [r.id, r]));
     assert.equal(rows[2].kind, "series", "a show, not a movie any more");
     assert.equal(rows[2].tmdb_id, null, "1396 stays on row 1: two rows may not share it");

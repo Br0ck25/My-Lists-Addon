@@ -149,3 +149,27 @@ describe("Merge duplicate titles (admin)", () => {
     assert.equal(r.status, 401);
   });
 });
+
+// The hourly media.retry (retryUnresolvedMedia, 29_) merges a new pair the
+// recommendations job made, so duplicates do not build up again.
+describe("media.retry merges a new duplicate the recommendations job made", () => {
+  it("a stub by TMDB id whose IMDb id another row holds is merged into that row", async () => {
+    const vm = await import("node:vm");
+    const fs = await import("node:fs");
+    const sb = { console, URL, URLSearchParams, TextEncoder, TextDecoder, Response, Headers, Request, crypto: globalThis.crypto };
+    sb.globalThis = sb;
+    vm.createContext(sb);
+    for (const rel of ["00_constants.js", "29_media.js", "36_activity-db.js"]) {
+      vm.runInContext(fs.readFileSync(new URL(`../${rel}`, import.meta.url), "utf8"), sb, { filename: rel });
+    }
+    const env = mergeEnv();
+    env.DB._db.prepare("DELETE FROM media WHERE id IN (3, 4, 5)").run();
+    sb.fetch = async (url) => String(url).includes("/3/tv/1396?")
+      ? new Response(JSON.stringify({ id: 1396, name: "Breaking Bad", first_air_date: "2008-01-20", external_ids: { imdb_id: "tt0903747" } }), { status: 200 })
+      : new Response("{}", { status: 404 });
+    const res = await sb.retryUnresolvedMedia(env, { limit: 10, tmdbKey: "k" });
+    assert.equal(res.merged, 1, JSON.stringify(res));
+    assert.deepEqual(env.DB._db.prepare("SELECT id, tmdb_id FROM media").all().map((r) => [r.id, r.tmdb_id]), [[1, 1396]]);
+    assert.deepEqual(env.DB_ACTIVITY._db.prepare("SELECT media_id FROM watch_events").all().map((r) => r.media_id), [1, 1]);
+  });
+});
