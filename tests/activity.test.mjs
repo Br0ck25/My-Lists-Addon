@@ -5,7 +5,7 @@ import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { call, createUser, drainQueue, freshIsolate, makeD1, makeEnv, makeQueue, runScheduledTick } from "./harness.mjs";
+import { activityBackfillStep, activityBackfillStatus, call, createUser, drainQueue, freshIsolate, makeD1, makeEnv, makeQueue, runScheduledTick } from "./harness.mjs";
 
 // Phase 3c: watch history and progress in their own database, DB_ACTIVITY
 // (migrations/activity/, schema_activity.sql, 36_activity-db.js).
@@ -244,7 +244,7 @@ function activityEnv(extra = {}) {
 async function runActivityBackfill(env, cookie, opts = {}) {
   const responses = [];
   for (let i = 0; i < 500; i++) {
-    const r = await call(env, "/admin/api/activity-backfill/step", { method: "POST", cookie, json: { ...opts, restart: i === 0 && !!opts.restart } });
+    const r = await activityBackfillStep(env, { ...opts, restart: i === 0 && !!opts.restart });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     responses.push(r.body);
     if (r.body.done) return responses;
@@ -343,7 +343,7 @@ describe("P3c-3: copying watch history into the activity database", () => {
     ]);
     assert.ok(events.every((e) => e.source === "migrated"));
 
-    const status = await call(env, "/admin/api/activity-backfill/status", { cookie });
+    const status = await activityBackfillStatus(env);
     const h = status.body.totals.history;
     assert.deepEqual([h.kv, h.d1, h.queue, h.union, h.copied, h.duplicates, h.unusable], [7, 2, 1, 9, 6, 1, 2]);
     assert.equal(status.body.totals.events, 6);
@@ -417,7 +417,7 @@ describe("P3c-3: copying watch history into the activity database", () => {
       });
     };
     assert.equal(shape(small), shape(whole));
-    const recon = async (env) => (await call(env, "/admin/api/activity-backfill/status", { cookie: await adminCookie(env) })).body.totals;
+    const recon = async (env) => (await activityBackfillStatus(env)).body.totals;
     assert.deepEqual(await recon(small), await recon(whole), "the same counts too");
   });
 
@@ -474,18 +474,15 @@ describe("P3c-3: copying watch history into the activity database", () => {
     const unbound = makeEnv({ DB: makeD1() });
     await createUser(unbound, "annwatch");
     const cookie = await adminCookie(unbound);
-    let r = await call(unbound, "/admin/api/activity-backfill/step", { method: "POST", cookie, json: {} });
+    let r = await activityBackfillStep(unbound, {});
     assert.equal(r.status, 409);
     assert.match(r.body.error, /DB_ACTIVITY/);
 
     const unmigrated = activityEnv();
     unmigrated.DB_ACTIVITY._db.exec("DELETE FROM schema_migrations");
-    r = await call(unmigrated, "/admin/api/activity-backfill/step", { method: "POST", cookie: await adminCookie(unmigrated), json: {} });
+    r = await activityBackfillStep(unmigrated, {});
     assert.equal(r.status, 409);
     assert.match(r.body.error, /A0001/);
-
-    r = await call(unmigrated, "/admin/api/activity-backfill/step", { method: "POST", json: {} });
-    assert.equal(r.status, 401, "admin only");
   });
 
   it("a failing account is recorded and the run carries on", async () => {
@@ -504,21 +501,13 @@ describe("P3c-3: copying watch history into the activity database", () => {
     };
     const steps = await runActivityBackfill(env, await adminCookie(env));
     assert.equal(steps.at(-1).accountsFailed, 1);
-    const status = await call(env, "/admin/api/activity-backfill/status", { cookie: await adminCookie(env) });
+    const status = await activityBackfillStatus(env);
     assert.equal(status.body.accounts.failed, 1);
     assert.equal(status.body.accounts.done, 1);
     assert.equal(status.body.failed[0].accountId, annId);
     assert.ok(eventsOf(env, accountId(env, "benwatch")).length > 0, "the next account was still copied");
   });
 
-  it("the admin page offers it only with the activity database bound", async () => {
-    const env = activityEnv();
-    const page = await call(env, "/admin", { cookie: await adminCookie(env) });
-    assert.match(page.text, /id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="\[false\]" >/);
-    const unbound = makeEnv({ DB: makeD1() });
-    const page2 = await call(unbound, "/admin", { cookie: await adminCookie(unbound) });
-    assert.match(page2.text, /id="activityBackfillBtn" data-act="runActivityBackfill" data-act-args="\[false\]" disabled>/);
-  });
 });
 
 describe("P3c-3: the copy can only copy", () => {
@@ -1003,7 +992,7 @@ describe("P3c-6: with FF_EVENT_TRACKING, a copied account is served from the act
 
   it("the copy cannot start over while the flag is on", async () => {
     const { env, cookie } = await eventTrackingSetup();
-    const r = await call(env, "/admin/api/activity-backfill/step", { method: "POST", cookie, json: { restart: true } });
+    const r = await activityBackfillStep(env, { restart: true });
     assert.equal(r.status, 409);
     assert.match(r.body.error, /FF_EVENT_TRACKING/);
   });

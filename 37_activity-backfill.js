@@ -793,7 +793,7 @@ async function runActivityBackfillStep(env, opts = {}) {
       run.accountsTotal = Number(counted && counted.n) || 0;
       if (!run.accountsTotal) {
         await saveActivityBackfillJob(menv, ACTIVITY_BACKFILL_RUN_KEY, null, { status: "queued", progress: {}, runAfter: 0 });
-        return { ok: false, error: "The accounts table is empty. Run Migrate Accounts first." };
+        return { ok: false, error: "The accounts table is empty. Backfill the accounts table first." };
       }
     }
     while (run.phase !== "done" && activityBackfillOpsLeft(budget)) {
@@ -884,31 +884,4 @@ async function activityBackfillStatus(env) {
       return { accountId: r.account_id, short: r.short, legacy: r.legacy, samples };
     }),
   };
-}
-
-async function handleActivityBackfillApi(request, env, url, path) {
-  if (!path.startsWith("/admin/api/activity-backfill/")) return null;
-  if (!(await isAdminRequest(request, env))) return json({ ok: false, error: "Not authorized." }, 401);
-  if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
-  try {
-    if (path === "/admin/api/activity-backfill/step" && request.method === "POST") {
-      let body = {};
-      try {
-        body = await request.json();
-      } catch {
-        body = {};
-      }
-      const out = await runActivityBackfillStep(env, body || {});
-      return json(out, out.ok || out.busy ? 200 : 409);
-    }
-    if (path === "/admin/api/activity-backfill/status" && request.method === "GET") {
-      return json(await activityBackfillStatus(env));
-    }
-    return json({ ok: false, error: "Not found." }, 404);
-  } catch (e) {
-    console.error("Activity backfill failed:", e);
-    const msg = safeErrorMessage(e);
-    if (/no such table|no such column/i.test(msg)) return json({ ok: false, error: "Apply migrations 0016 (main database) and A0001 (activity database) first." }, 503);
-    return json({ ok: false, error: msg }, 500);
-  }
 }

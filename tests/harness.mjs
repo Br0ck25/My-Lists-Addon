@@ -24,9 +24,10 @@
 // outage or a row-size violation does.
 
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 if (!globalThis.caches) {
   globalThis.caches = {
@@ -54,6 +55,42 @@ if (!globalThis.caches) {
 }
 
 export const worker = (await import("../worker_entry_combined.js")).default;
+
+// The two copy engines (legacy lists -> v2, legacy history -> the activity
+// database) have no admin route or button any more -- the copies are done on
+// the live site -- but the v2 tests still build their data with them, and
+// activity.copy-new still runs the activity one every hour. They are not
+// exported from the Worker, so this loads the same bundle once more with the
+// four entry points added to the end, and answers in the {status, body} shape
+// the old routes used so the tests read the same as before.
+let __engines;
+async function engines() {
+  if (!__engines) {
+    const src = readFileSync(new URL("../worker_entry_combined.js", import.meta.url), "utf8");
+    const file = `${tmpdir()}/mla-engines-${process.pid}-${Date.now()}.mjs`;
+    writeFileSync(file, src + "\nexport const __engines = { runListsBackfillStep, listsBackfillStatus, runActivityBackfillStep, activityBackfillStatus, backfillAccounts };\n");
+    try { __engines = (await import(pathToFileURL(file).href)).__engines; } finally { unlinkSync(file); }
+  }
+  return __engines;
+}
+async function engineCall(env, fn, args, stepStatus) {
+  if (!env || !env.DB) return { status: 503, body: { ok: false, error: "No D1 database binding 'DB'." } };
+  const e = await engines();
+  try {
+    const body = await e[fn](env, ...args);
+    return { status: stepStatus ? (body.ok || body.busy ? 200 : 409) : 200, body };
+  } catch (err) {
+    const msg = String((err && err.message) || err);
+    if (/no such table|no such column/i.test(msg)) return { status: 503, body: { ok: false, error: msg } };
+    return { status: 500, body: { ok: false, error: msg } };
+  }
+}
+export const listsBackfillStep = (env, opts = {}) => engineCall(env, "runListsBackfillStep", [opts], true);
+export const listsBackfillStatus = (env) => engineCall(env, "listsBackfillStatus", [], false);
+export const activityBackfillStep = (env, opts = {}) => engineCall(env, "runActivityBackfillStep", [opts], true);
+export const activityBackfillStatus = (env) => engineCall(env, "activityBackfillStatus", [], false);
+// The accounts table the two copies read from: creators (D1) + creator:* (KV).
+export const accountsBackfill = (env, opts = {}) => engineCall(env, "backfillAccounts", [opts], false);
 
 // A SECOND, independent instance of the Worker -- a different isolate.
 //

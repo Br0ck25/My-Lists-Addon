@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { makeKv, makeD1, makeEnv, call, createUser } from "./harness.mjs";
+import { makeKv, makeD1, makeEnv, call, createUser, listsBackfillStep } from "./harness.mjs";
 
 // The public site's "every list is live" (Br0ck25/My-Lists #76 and #77,
 // ported onto this repository in Release 1) over the v2 list tables.
@@ -29,7 +29,7 @@ async function adminCookie(env) {
 async function runListsCopy(env) {
   const cookie = await adminCookie(env);
   for (let i = 0; i < 500; i++) {
-    const r = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+    const r = await listsBackfillStep(env, {});
     assert.equal(r.status, 200, JSON.stringify(r.body));
     if (r.body.done) return;
   }

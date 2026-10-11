@@ -191,7 +191,7 @@ describe("P6-10: the /admin dashboard names its actions", () => {
     const missing = [...names].filter((name) => !defined.has(name));
     assert.deepEqual(missing, [], "a renamed function would have been a dead button");
     // The two the page builds at runtime from server data are in there too.
-    for (const expected of ["switchAdminSubTab", "resetCreatorKey", "pickProviderId", "closeAdminModal"]) {
+    for (const expected of ["switchAdminSubTab", "resetCreatorKey", "closeAdminModal"]) {
       assert.ok(names.has(expected), `${expected} is still a control's action`);
     }
   });
@@ -283,7 +283,7 @@ describe("P6-10: the /admin dashboard names its actions", () => {
     const seen = [];
     page.sandbox.__p610Enter = function () { seen.push("enter"); };
 
-    // The provider-lookup box: Enter searches, typing does not.
+    // A search box: Enter searches, typing does not.
     const input = control({ "data-act": "__p610Enter", "data-act-keys": "Enter", "data-act-prevent": "" }, "INPUT");
     const other = event("keydown", input, { key: "a" });
     assert.equal(page.sandbox.adminActDispatch(other), false);

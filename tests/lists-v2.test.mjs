@@ -4,7 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { call, createUser, makeD1, makeEnv, makeKv, makeR2, seedAnonPublishedList } from "./harness.mjs";
+import { call, createUser, listsBackfillStep, listsBackfillStatus, makeD1, makeEnv, makeKv, makeR2, seedAnonPublishedList } from "./harness.mjs";
 
 // Phase 3b: lists, likes and channels as rows (migrations/0016_lists_v2.sql).
 //
@@ -588,7 +588,7 @@ async function saveList(env, user, body) {
 async function runBackfill(env, cookie, opts = {}) {
   const responses = [];
   for (let i = 0; i < 500; i++) {
-    const r = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: { ...opts, restart: i === 0 && !!opts.restart } });
+    const r = await listsBackfillStep(env, { ...opts, restart: i === 0 && !!opts.restart });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     responses.push(r.body);
     if (r.body.done) return responses;
@@ -744,7 +744,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
       assert.equal(ext[0].voter, `acct:${benId}`);
       assert.ok(env.CONFIGS._store.has(`externallike:${ext[0].target_id}`), "keyed by the same URL hash as the legacy count");
 
-      const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
+      const status = await listsBackfillStatus(env);
       assert.equal(status.body.run.phase, "done");
       assert.deepEqual(status.body.accounts, { done: 3, running: 0, failed: 0, queued: 0 });
       const t = status.body.totals;
@@ -812,7 +812,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
       assert.ok(top.deleted_at > 0, "the deleted list's copy is marked deleted");
       assert.deepEqual(db.prepare("SELECT rowid FROM lists_fts2 WHERE rowid = ?").all(top.id), [], "and taken out of search");
 
-      const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
+      const status = await listsBackfillStatus(env);
       assert.equal(status.body.totals.lists.copied, 1, "only the edited list");
       assert.equal(status.body.totals.lists.removed, 1);
       assert.ok(status.body.totals.lists.unchanged >= 2);
@@ -847,28 +847,23 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     const cookie = await adminCookie(env);
     await runBackfill(env, cookie);
     env.DB.failWhen(null);
-    const status = await call(env, "/admin/api/lists-backfill/status", { cookie });
+    const status = await listsBackfillStatus(env);
     assert.deepEqual(status.body.accounts, { done: 1, running: 0, failed: 1, queued: 0 });
     assert.match(status.body.failed[0].error, /injected failure/);
     assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM lists WHERE slug = 'good'").get().n, 1);
   });
 
-  it("asks for the accounts table first, takes one step at a time, and is admin only", async () => {
+  it("asks for the accounts table first, and takes one step at a time", async () => {
     const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
     const cookie = await adminCookie(env);
-    const empty = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+    const empty = await listsBackfillStep(env, {});
     assert.equal(empty.status, 409);
-    assert.match(empty.body.error, /Migrate Accounts/);
+    assert.match(empty.body.error, /accounts table/);
 
     await createUser(env, "someoneelse");
     env.DB._db.prepare("UPDATE jobs SET run_after = ? WHERE dedupe_key = 'migrate.lists:run'").run(Date.now() + 60000);
-    const busy = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+    const busy = await listsBackfillStep(env, {});
     assert.equal(busy.body.busy, true, "a step already holds the lease");
-
-    const anon = await call(env, "/admin/api/lists-backfill/step", { method: "POST", json: {} });
-    assert.equal(anon.status, 401);
-    const anonStatus = await call(env, "/admin/api/lists-backfill/status");
-    assert.equal(anonStatus.status, 401);
   });
 
   it("can only write to the v2 tables, and cannot write KV at all", () => {
@@ -2048,7 +2043,7 @@ describe("P3b-8: shared channels on v2", () => {
     assert.equal(channelRow(db, aired.code).visibility, "unlisted");
     assert.equal(channelRow(db, "BROKEN01"), undefined);
 
-    const ch = (await call(env, "/admin/api/lists-backfill/status", { cookie })).body.channels;
+    const ch = (await listsBackfillStatus(env)).body.channels;
     assert.deepEqual(ch.channels, { legacy: 6, copied: 5, unchanged: 0, unreadable: 1, listed: 2 });
     assert.deepEqual(ch.samples.unreadable, ["BROKEN01"]);
     assert.equal(ch.pools.written, 5);
@@ -2058,7 +2053,7 @@ describe("P3b-8: shared channels on v2", () => {
     // Again: nothing changed, so no row or pool is written.
     const pools = new Map([...env.BLOBS._store.entries()]);
     await runBackfill(env, cookie, { restart: true });
-    const again = (await call(env, "/admin/api/lists-backfill/status", { cookie })).body.channels;
+    const again = (await listsBackfillStatus(env)).body.channels;
     assert.equal(again.channels.unchanged, 5);
     assert.equal(again.pools.written, 0);
     assert.deepEqual(new Map([...env.BLOBS._store.entries()]), pools);
@@ -2208,7 +2203,7 @@ describe("P3b-8: shared channels on v2", () => {
     assert.deepEqual(read.v2.body, read.legacy.body);
     const bareCookie = await adminCookie(bare.env);
     await runBackfill(bare.env, bareCookie);
-    assert.equal((await call(bare.env, "/admin/api/lists-backfill/status", { cookie: bareCookie })).body.channels.pools.skipped, 1);
+    assert.equal((await listsBackfillStatus(bare.env)).body.channels.pools.skipped, 1);
     const dir = await legacyThenV2(bare.env, () => call(bare.env, "/api/channel/directory"));
     assert.deepEqual(dir.v2.body, dir.legacy.body);
   });
@@ -2513,11 +2508,10 @@ describe("P3b-9: v2 as the only store (FF_V2_LISTS_ONLY)", () => {
     await saveList(env, ann, { name: "Beta", type: "movie", visibility: "private", items: [] });
     const code = (await shareChannel(env, ben, CH_FIXTURES.aired, { publish: true })).code;
 
-    const step = await call(env, "/admin/api/lists-backfill/step", { method: "POST", cookie, json: {} });
+    const step = await listsBackfillStep(env, {});
     assert.equal(step.status, 409);
     assert.match(step.body.error, /FF_V2_LISTS_ONLY/);
-    assert.equal((await call(env, "/admin/api/lists-backfill/status", { cookie })).body.listsOnly, true);
-    assert.equal((await call(env, "/admin/api/migrate-d1", { method: "POST", cookie, json: {} })).status, 409);
+    assert.equal((await listsBackfillStatus(env)).body.listsOnly, true);
 
     const browse = await call(env, "/admin/api/creator-lists?username=annonly", { cookie });
     assert.deepEqual(browse.body.lists.map((l) => [l.slug, l.visibility]), [["alpha", "public"], ["beta", "private"]]);

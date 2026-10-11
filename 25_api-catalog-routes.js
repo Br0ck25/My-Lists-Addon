@@ -414,14 +414,6 @@ async function handleFetch(request, env, ctx) {
     // connections) -- 28_connections.js.
     const connectionsResponse = await handleConnectionsApi(request, env, url, path);
     if (connectionsResponse) return connectionsResponse;
-    // /admin/api/lists-backfill/* (copying lists into the v2 tables, run from
-    // /admin) -- 30_lists-backfill.js.
-    const listsBackfillResponse = await handleListsBackfillApi(request, env, url, path);
-    if (listsBackfillResponse) return listsBackfillResponse;
-    // /admin/api/activity-backfill/* (copying watch history into the
-    // activity database, run from /admin) -- 37_activity-backfill.js.
-    const activityBackfillResponse = await handleActivityBackfillApi(request, env, url, path);
-    if (activityBackfillResponse) return activityBackfillResponse;
     // /admin/api/jobs/* (the background job queue: is it bound, and a test
     // job's round trip) -- 44_jobs-queue.js.
     const jobsAdminResponse = await handleJobsAdminApi(request, env, url, path);
