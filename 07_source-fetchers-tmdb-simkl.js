@@ -499,9 +499,7 @@ async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null) {
 // Every item from a TMDB list only carries a TMDB id -- Stremio/wako
 // protocol needs an IMDB id (or a "tmdb:<id>" fallback if none exists). We
 // resolve each item's IMDB id in parallel using fetchTmdbDetails (which
-// also pulls trailer videos for free), capped at TMDB_LIST_PAGE_SIZE items
-// per page.
-const TMDB_LIST_PAGE_SIZE = 20;
+// also pulls trailer videos for free).
 
 async function fetchTmdb(entry, skip = 0, apiKey = "") {
   if (!apiKey) {

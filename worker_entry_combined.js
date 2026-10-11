@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "6873118ae0";
+const WORKER_BUILD = "f1d7a8ff41";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -219,7 +219,7 @@ const CREATOR_LIST_BYTES_MAX = 1_800_000;
 //
 // /api/list-live/save writes one of these per Custom List a browser with no
 // Creator Profile owns, so that list's catalog row is re-read live instead of
-// serving the snapshot baked into the install link. See readLiveListItems and
+// serving the snapshot baked into the install link. See readLiveListRecord and
 // fetchCustomListCatalog (05_catalog-core.js) for the read side and the route
 // itself (25_api-catalog-routes.js) for why an unauthenticated write is
 // acceptable: the token in the URL is the capability, and it only ever exists
@@ -11151,7 +11151,7 @@ async function migrateGenreDecadeStatsIfNeeded(env) {
 // production; Miniflare doesn't enforce that limit, so it rendered fine
 // locally). Writing it here lets the dashboard read last-active straight
 // out of the creators SELECT it already runs. Accounts that predate this
-// have NULL in D1 and are repaired lazily by backfillCreatorLastActive.
+// have NULL in D1 until they are next seen.
 const _lastSeenMemo = new Map();
 const LAST_SEEN_THROTTLE_MS = 30 * 60 * 1000;
 
@@ -11194,21 +11194,6 @@ async function touchCreatorLastSeen(env, username) {
 // under the subrequest cap: at most this many KV reads plus a single D1
 // batch write per call, so the backfill itself can never be the thing
 // that tips a dashboard load over the limit even mid-migration.
-const LAST_ACTIVE_BACKFILL_BATCH = 100;
-
-// Lazily fills creators.last_active in D1 from the KV creatorlastseen:
-// marker for accounts that still have NULL there -- every account created
-// before touchCreatorLastSeen started mirroring into D1. Runs only on an
-// admin dashboard load, repairs a bounded batch each time, and then has
-// nothing left to do: once a row is set, touchCreatorLastSeen keeps it
-// current going forward. Converges over a handful of loads (1,200 accounts
-// -> ~12 loads) and then costs zero KV reads. Each repaired value is also
-// written onto the in-memory account object so it shows the right "Last
-// Active" on the load that repairs it, not one load later.
-// P10-4 (FT-42): backfillCreatorLastActive removed (accounts in D1 v2)
-async function backfillCreatorLastActive(env, accounts) {
-  return;
-}
 
 
 // Records one "marked as watched" or "added to a list" event for a given
@@ -19726,7 +19711,7 @@ function fetchChannelCatalog(entry, origin) {
 // creatorlist:{username}:{slug} (signed in, saved via
 // /api/creator/lists/save -- see 26_api-creator-and-admin-routes.js), or
 // under listlive:{token} (a signed-out browser's own server-side copy, see
-// readLiveListItems). Either way, adding it to Catalogs used to bake a
+// readLiveListRecord). Either way, adding it to Catalogs used to bake a
 // one-time snapshot of `items` straight into this URL, so an edit made
 // afterward (add/remove/reorder a pick) never reached a catalog shelf that
 // already existed -- the shelf, and the Live Preview reading the same
@@ -19736,7 +19721,7 @@ function fetchChannelCatalog(entry, origin) {
 // snapshot is kept as the fallback in all cases: if the row names nothing
 // live, or the account it implies has no such list, or the KV record is
 // missing altogether (list since deleted, key expired, a private list read by
-// someone who didn't prove ownership -- fetchLiveCreatorListItems serves
+// someone who didn't prove ownership -- readLiveCreatorList serves
 // public lists to anyone but private ones only to a verified owner), this
 // drops straight back to the old behavior rather than serving an empty
 // shelf. A live read that DOES answer is taken at its word, empty list
@@ -19795,11 +19780,6 @@ async function readLiveListRecord(env, token) {
     if (parsed && Array.isArray(parsed.items)) return parsed;
   } catch {}
   return null;
-}
-
-async function readLiveListItems(env, token) {
-  const rec = await readLiveListRecord(env, token);
-  return rec ? rec.items : null;
 }
 
 // True when any source line of a (possibly merged) row is a custom list that
@@ -19889,11 +19869,6 @@ async function readLiveCreatorList(env, owner, slug, verifiedOwner = "") {
     } catch {}
   }
   return null;
-}
-
-async function fetchLiveCreatorListItems(owner, slug, env, verifiedOwner = "") {
-  const rec = await readLiveCreatorList(env, owner, slug, verifiedOwner);
-  return rec ? rec.items : null;
 }
 
 // The one place that decides which copy of a custom-list payload is the live
@@ -24463,9 +24438,7 @@ async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null) {
 // Every item from a TMDB list only carries a TMDB id -- Stremio/wako
 // protocol needs an IMDB id (or a "tmdb:<id>" fallback if none exists). We
 // resolve each item's IMDB id in parallel using fetchTmdbDetails (which
-// also pulls trailer videos for free), capped at TMDB_LIST_PAGE_SIZE items
-// per page.
-const TMDB_LIST_PAGE_SIZE = 20;
+// also pulls trailer videos for free).
 
 async function fetchTmdb(entry, skip = 0, apiKey = "") {
   if (!apiKey) {
@@ -30004,20 +29977,6 @@ const APP_SHELL_TAB_ICONS = {
   search: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>',
   settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
 };
-
-// Which view the page opens on when it is served at a shell path. The shell's
-// own routing (24_) reads the same table, written into the bundle.
-function appShellTabForPath(pathname) {
-  const p = String(pathname || "");
-  for (const t of APP_SHELL_TABS) {
-    if (p === t.path) return t;
-    if (p.startsWith(t.path + "/")) {
-      const rest = p.slice(t.path.length + 1).replace(/\/+$/, "");
-      if (rest && t.subs.indexOf(rest) !== -1) return t;
-    }
-  }
-  return null;
-}
 
 function buildAppShellNavHtml(style) {
   const isDesktop = style === "desktop";
@@ -39070,18 +39029,6 @@ function showToast(message, type = 'info', options = {}) {
   return toast;
 }
 
-function hideToast() {
-  clearTimeout(_appToastTimer);
-  const container = document.getElementById('appToastContainer');
-  if (container) {
-    const toasts = container.querySelectorAll('.app-toast');
-    toasts.forEach((t) => {
-      t.classList.remove('show');
-      setTimeout(() => { if (t.parentNode) t.remove(); }, 250);
-    });
-  }
-}
-
 function showAddedToast(msg) {
   showToast(msg || 'Added to My Catalogs \u2713', 'success');
 }
@@ -39124,22 +39071,6 @@ async function copyTextToClipboard(text, options = {}) {
     }
   }
   return copied;
-}
-
-function debounce(fn, delayMs = 300) {
-  let timer = null;
-  const debounced = function(...args) {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      fn.apply(this, args);
-    }, delayMs);
-  };
-  debounced.cancel = function() {
-    clearTimeout(timer);
-    timer = null;
-  };
-  return debounced;
 }
 
 function formatRatingBadgeHtml(item, options = {}) {
@@ -41066,7 +40997,7 @@ function parseCustomListPayloadClient(u) {
 // browser's localStorage, and the catalog row it produced was a one-time
 // snapshot: an item added or removed on the website never reached an
 // installed add-on. Signed-in lists are live already -- the row names the
-// account's copy and the server re-reads it (fetchLiveCreatorListItems,
+// account's copy and the server re-reads it (readLiveCreatorList,
 // 05_catalog-core.js). For everyone else, the list now also gets a
 // server-side copy addressed by a token, the same shape of live-by-identity
 // read, so every list on the site behaves like Continue Watching.
@@ -42788,7 +42719,6 @@ async function startTraktDeviceLogin(retried) {
   }
 }
 
-let myPrivateTraktListsTimer = null;
 async function runMyPrivateTraktLists() {
   const box = document.getElementById('myPrivateTraktListsResult');
   if (!box) return;
@@ -52581,25 +52511,7 @@ function beginMyChannelReorder() {
 // Drag-to-reorder. Mouse goes through HTML5 drag-and-drop and touch/pen
 // through Pointer Events, which is the same split My Lists uses and for the
 // same reason: native drag-and-drop generally does not fire on touch at all.
-let myChannelDragCard = null;
-let myChannelTouchCard = null;
 let myChannelsDragBound = false;
-
-function myChannelDragAfterElement(container, y) {
-  const cards = [...container.querySelectorAll('.list-card[data-channel-id]:not(.dragging)')];
-  return cards.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: -Infinity, element: null }).element;
-}
-
-function moveMyChannelDragCard(container, card, clientY) {
-  const afterEl = myChannelDragAfterElement(container, clientY);
-  if (afterEl == null) container.appendChild(card);
-  else if (afterEl !== card) container.insertBefore(card, afterEl);
-}
 
 // Bound once on the container rather than per card, because the card list is
 // re-rendered wholesale on every change and per-card listeners would be
@@ -59586,32 +59498,6 @@ function initChannelHoldDrag() {
   });
 }
 
-function getChannelDragAfterElement(container, x, y) {
-  const els = [...container.querySelectorAll('.channel-pick:not(.dragging)')];
-  if (!els.length) return null;
-
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
-      return child;
-    }
-  }
-
-  let closest = null;
-  let closestDistance = Infinity;
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    const cx = box.left + box.width / 2;
-    const cy = box.top + box.height / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (dist < closestDistance) {
-      closestDistance = dist;
-      closest = child;
-    }
-  }
-  return closest;
-}
-
 // Rebuilds the draft order from the cards on screen after a drag.
 //
 // Only the cards ON SCREEN, which is the whole difficulty: with a filter
@@ -63018,32 +62904,6 @@ function channelNextUpSeedItems() {
   return out;
 }
 
-// Re-seeds a saved Next Up channel from Continue Watching as it stands now,
-// and rewrites the catalog row that carries it. What the card's Refresh
-// button does.
-function refreshNextUpChannelSeed(channelId, btn) {
-  const map = loadLocalChannels();
-  const ch = map[channelId];
-  if (!ch || ch.dynamic !== 'next-up') return 0;
-  const items = channelNextUpSeedItems();
-  ch.items = items;
-  saveLocalChannelsMap(map);
-  const payload = Object.assign({}, ch, { items: items });
-  const rows = [...document.querySelectorAll('#lists .entry')];
-  rows.forEach((row) => {
-    [...row.querySelectorAll('.url')].forEach((u) => {
-      if (String(u.value || '').indexOf(channelId) !== -1) u.value = 'channel:v1:' + JSON.stringify(payload);
-    });
-  });
-  if (typeof saveState === 'function') saveState();
-  renderMyCreatedChannelsList();
-  if (btn) {
-    btn.textContent = items.length + ' up next ✓';
-    setTimeout(() => { if (btn) btn.textContent = 'Refresh'; }, 1800);
-  }
-  return items.length;
-}
-
 function createNextUpChannel(btn) {
   if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
   const status = document.getElementById('channelNextUpStatus');
@@ -63098,101 +62958,6 @@ function createNextUpChannel(btn) {
     setTimeout(() => { if (status) status.innerHTML = ''; }, 8000);
   } finally {
     if (btn) btn.disabled = false;
-  }
-}
-
-// --- the Quick Channel Wizard -------------------------------------------
-//
-// Network x era x genre -> a finished 24/7 channel. The server answers with
-// a list of shows (see /api/wizard-channel-shows) and the rest is the same
-// path Quick Add's network buttons take, so a wizard channel behaves
-// exactly like one of those: a rotating daily lineup out of a large pool.
-function channelWizardName() {
-  const typed = (document.getElementById('channelWizardNameInput') || {}).value;
-  if (typed && typed.trim()) return typed.trim();
-  const pick = (id) => {
-    const sel = document.getElementById(id);
-    if (!sel || !sel.value) return '';
-    return sel.options[sel.selectedIndex].textContent.trim();
-  };
-  const network = pick('channelWizardNetwork');
-  const era = pick('channelWizardEra');
-  const genre = pick('channelWizardGenre');
-  const parts = [era, network, genre].filter(Boolean);
-  return parts.length ? parts.join(' ') : 'My Channel';
-}
-
-async function runChannelWizard(btn) {
-  if (!requireSignedInFor('build channels')) return; // docs/DECISIONS.md D-8
-  const statusBox = document.getElementById('channelWizardStatus');
-  const say = (html) => { if (statusBox) statusBox.innerHTML = html; };
-  const networkId = (document.getElementById('channelWizardNetwork') || {}).value || '';
-  const era = (document.getElementById('channelWizardEra') || {}).value || '';
-  const genres = (document.getElementById('channelWizardGenre') || {}).value || '';
-  const limit = parseInt((document.getElementById('channelWizardSize') || {}).value, 10) || 8;
-  if (!networkId && !era && !genres) {
-    say('<p class="testresult err u-m-4px_0_0">✗ Choose at least one of network, era or genre first.</p>');
-    return;
-  }
-  const name = channelWizardName();
-  const originalLabel = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Building…';
-  }
-  try {
-    say('<p><small>Finding the top shows for ' + escapeHtml(name) + '…</small></p>');
-    let params = 'limit=' + encodeURIComponent(limit);
-    if (networkId) params += '&networkId=' + encodeURIComponent(networkId);
-    if (era) params += '&era=' + encodeURIComponent(era);
-    if (genres) params += '&genres=' + encodeURIComponent(genres);
-    const res = await fetch(ORIGIN + '/api/wizard-channel-shows?' + params, { cache: 'no-store' });
-    const data = await res.json();
-    if (!data.ok || !Array.isArray(data.shows) || !data.shows.length) {
-      say('<p class="testresult err u-m-4px_0_0">✗ ' + escapeHtml(data.error || 'Nothing matched that combination.') + '</p>');
-      return;
-    }
-    const built = await buildChannelItemsFromShows(data.shows, {
-      poster: data.networkLogo || null,
-      onProgress: function (i, total, show) {
-        say('<p><small>Building ' + escapeHtml(name) + '… show ' + (i + 1) + ' of ' + total +
-          ' (' + escapeHtml(show.name || '') + ')</small></p>');
-      },
-    });
-    if (!built.items.length) {
-      say('<p class="testresult err u-m-4px_0_0">✗ Found those shows but could not read any episodes for them.</p>');
-      return;
-    }
-    const channelId = generateChannelId();
-    const payload = {
-      channelId: channelId,
-      name: name,
-      poster: built.poster,
-      backdrop: built.backdrop || built.poster,
-      items: built.items,
-      shuffle: false,
-      // A wizard channel is a pool, not a playlist, so it rotates like a
-      // network channel -- and interleaves, which is what makes a lineup of
-      // eight shows read as a block rather than eight blocks in a row.
-      autoSort: 'interleave',
-      dailyRotate: true,
-    };
-    saveLocalChannel(payload);
-    addRow(name, 'channel:v1:' + JSON.stringify(payload), 'series', true, 'Channels', channelId);
-    renderMyCreatedChannelsList();
-    renderChannelMergeList();
-    showAddedToast('Channel "' + name + '" added to your Catalogs.');
-    say('<p class="testresult ok u-m-4px_0_0">✓ "' + escapeHtml(name) + '" built from ' + data.shows.length +
-      ' shows (' + built.items.length + ' episodes), rotating a fresh lineup daily.</p>');
-    const nameInput = document.getElementById('channelWizardNameInput');
-    if (nameInput) nameInput.value = '';
-  } catch (e) {
-    say('<p class="testresult err u-m-4px_0_0">✗ Network error while building that channel.</p>');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = originalLabel;
-    }
   }
 }
 
@@ -65809,32 +65574,6 @@ function initCustomListHoldDrag() {
     holdDelay: 120,
     onReorder: reorderCustomListDraftFromDom
   });
-}
-
-function getCustomListDragAfterElement(container, x, y) {
-  const els = [...container.querySelectorAll('.custom-list-pick:not(.dragging)')];
-  if (!els.length) return null;
-
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
-      return child;
-    }
-  }
-
-  let closest = null;
-  let closestDistance = Infinity;
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    const cx = box.left + box.width / 2;
-    const cy = box.top + box.height / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (dist < closestDistance) {
-      closestDistance = dist;
-      closest = child;
-    }
-  }
-  return closest;
 }
 
 function reorderCustomListDraftFromDom() {
@@ -71064,12 +70803,6 @@ function renderRemovedAiringNextSettingsSection() {
   if (panel) panel.style.display = 'none';
 }
 
-function onRestoreAiringNextShow(btn) {
-  const showId = btn && btn.dataset ? btn.dataset.showId : '';
-  if (!showId) return;
-  if (typeof restoreAiringNextShow === 'function') restoreAiringNextShow(showId);
-}
-
 // that persists anywhere outside a single browser for that link to
 // point at in the first place.
 function renderTrackPlaybackSection() {
@@ -75882,17 +75615,6 @@ function editLocalCustomList(slug) {
 // reorder-then-persist technique used for the picks draft above, just
 // keyed by data-slug instead of a data-idx into a local array, since the
 // "array" here is the server's own persisted order.
-let creatorListDragRow = null;
-
-function getCreatorListDragAfterElement(container, y) {
-  const els = [...container.querySelectorAll('.creator-list-row:not(.dragging)')];
-  return els.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: -Infinity, element: null }).element;
-}
 
 async function persistCreatorListOrderFromDom() {
   const container = document.getElementById('creatorListRows');
@@ -77287,7 +77009,7 @@ function upgradeSnapshotShelfToLive(raw, rowType) {
 // re-read them live and they stay frozen snapshots. When the slug matches a
 // list on this signed-in account, stamp creatorSlug + creatorOwner onto the
 // row so catalog requests resolve it live (public to anyone, private to a
-// proven owner -- see fetchLiveCreatorListItems, 05_catalog-core.js). The
+// proven owner -- see readLiveCreatorList, 05_catalog-core.js). The
 // embedded items stay untouched as the fallback. A no-op when the dashboard
 // data hasn't loaded yet, when the slug matches nothing, or when the row
 // already names a different owner -- every one of those means "leave it".
@@ -77626,7 +77348,7 @@ function collectKeys() {
       .some((el) => String(el.value || '').trim().startsWith('autotrack:'));
     // A Creator-list row (customlist:v1: with a creatorSlug) is also one of
     // this account's shelves once the server reads it live: private lists
-    // resolve only for a proven owner (see fetchLiveCreatorListItems,
+    // resolve only for a proven owner (see readLiveCreatorList,
     // 05_catalog-core.js), and without the key in the link the proof can't
     // be made and every private list silently falls back to its snapshot.
     //
@@ -93561,7 +93283,7 @@ function generateSearchVariations(query) {
     // Writes the server-side copy of a Custom List that belongs to no
     // Creator Profile, so its catalog row can be re-read live instead of
     // serving the snapshot baked into the install link (see
-    // readLiveListItems / fetchCustomListCatalog, 05_catalog-core.js). This
+    // readLiveListRecord / fetchCustomListCatalog, 05_catalog-core.js). This
     // is what makes a signed-out browser's list behave like Continue
     // Watching: an item added or removed on the website reaches Stremio
     // without the link being regenerated.

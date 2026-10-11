@@ -7793,7 +7793,7 @@ function generateSearchVariations(query) {
     // Writes the server-side copy of a Custom List that belongs to no
     // Creator Profile, so its catalog row can be re-read live instead of
     // serving the snapshot baked into the install link (see
-    // readLiveListItems / fetchCustomListCatalog, 05_catalog-core.js). This
+    // readLiveListRecord / fetchCustomListCatalog, 05_catalog-core.js). This
     // is what makes a signed-out browser's list behave like Continue
     // Watching: an item added or removed on the website reaches Stremio
     // without the link being regenerated.

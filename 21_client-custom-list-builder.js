@@ -516,32 +516,6 @@ function initCustomListHoldDrag() {
   });
 }
 
-function getCustomListDragAfterElement(container, x, y) {
-  const els = [...container.querySelectorAll('.custom-list-pick:not(.dragging)')];
-  if (!els.length) return null;
-
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
-      return child;
-    }
-  }
-
-  let closest = null;
-  let closestDistance = Infinity;
-  for (const child of els) {
-    const box = child.getBoundingClientRect();
-    const cx = box.left + box.width / 2;
-    const cy = box.top + box.height / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (dist < closestDistance) {
-      closestDistance = dist;
-      closest = child;
-    }
-  }
-  return closest;
-}
-
 function reorderCustomListDraftFromDom() {
   const container = document.getElementById('customListDraftList');
   const rows = [...container.querySelectorAll('.custom-list-pick')];

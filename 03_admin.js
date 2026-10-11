@@ -238,7 +238,7 @@ async function migrateGenreDecadeStatsIfNeeded(env) {
 // production; Miniflare doesn't enforce that limit, so it rendered fine
 // locally). Writing it here lets the dashboard read last-active straight
 // out of the creators SELECT it already runs. Accounts that predate this
-// have NULL in D1 and are repaired lazily by backfillCreatorLastActive.
+// have NULL in D1 until they are next seen.
 const _lastSeenMemo = new Map();
 const LAST_SEEN_THROTTLE_MS = 30 * 60 * 1000;
 
@@ -281,21 +281,6 @@ async function touchCreatorLastSeen(env, username) {
 // under the subrequest cap: at most this many KV reads plus a single D1
 // batch write per call, so the backfill itself can never be the thing
 // that tips a dashboard load over the limit even mid-migration.
-const LAST_ACTIVE_BACKFILL_BATCH = 100;
-
-// Lazily fills creators.last_active in D1 from the KV creatorlastseen:
-// marker for accounts that still have NULL there -- every account created
-// before touchCreatorLastSeen started mirroring into D1. Runs only on an
-// admin dashboard load, repairs a bounded batch each time, and then has
-// nothing left to do: once a row is set, touchCreatorLastSeen keeps it
-// current going forward. Converges over a handful of loads (1,200 accounts
-// -> ~12 loads) and then costs zero KV reads. Each repaired value is also
-// written onto the in-memory account object so it shows the right "Last
-// Active" on the load that repairs it, not one load later.
-// P10-4 (FT-42): backfillCreatorLastActive removed (accounts in D1 v2)
-async function backfillCreatorLastActive(env, accounts) {
-  return;
-}
 
 
 // Records one "marked as watched" or "added to a list" event for a given
