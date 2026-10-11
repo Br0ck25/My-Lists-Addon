@@ -2940,6 +2940,36 @@ describe("likes and preview guards", () => {
     assert.equal(fetchCase.status, 404);
   });
 
+  // The allowlist let any host through whose path started with
+  // /api/safe-poster, so the open redirect and the open image proxy above were
+  // still there for anyone who knew to add that path. Only this Worker's own
+  // safe-poster URL is allowed.
+  it("poster-badge refuses another host's /api/safe-poster path, and still accepts this Worker's own", async () => {
+    const env = makeEnv();
+    const seen = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (u) => {
+      seen.push(String(u));
+      return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
+    };
+    try {
+      const foreign = "https://evil.example/api/safe-poster?title=x";
+      const redirectCase = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(foreign));
+      assert.equal(redirectCase.status, 404, "no redirect off this domain");
+      assert.equal(redirectCase.headers.get("location"), null);
+      const fetchCase = await call(env, "/api/poster-badge?premiere=1&poster=" + encodeURIComponent(foreign));
+      assert.equal(fetchCase.status, 404);
+      assert.ok(!seen.some((u) => u.includes("evil.example")), "the Worker must not fetch the foreign host: " + seen.join(", "));
+      // The URL this add-on itself puts in a poster field (getSafePosterUrl).
+      const own = "https://example.test/api/safe-poster?title=x";
+      const ownCase = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(own));
+      assert.equal(ownCase.status, 302);
+      assert.equal(ownCase.headers.get("location"), own);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   // The companion to the race test below. Retrying whenever a vote is not
   // visible in the read-back treats every stale read as contention, and KV
   // reads are edge-cached, so on an otherwise idle list that spent a second

@@ -27,7 +27,10 @@ const POSTER_IMAGE_HOSTS = new Set([
   "btttr.cc",
 ]);
 
-function isAllowedPosterUrl(raw) {
+// `origin` is this Worker's own origin. The safe-poster tile is this add-on's
+// own route, so it counts only on that origin: matched by path alone it let
+// any host through (an open redirect and an open image proxy).
+function isAllowedPosterUrl(raw, origin) {
   let u;
   try {
     u = new URL(String(raw || ""));
@@ -35,7 +38,7 @@ function isAllowedPosterUrl(raw) {
     return false;
   }
   if (u.protocol !== "https:") return false;
-  if (u.pathname.startsWith("/api/safe-poster")) return true;
+  if (u.origin === origin && u.pathname.startsWith("/api/safe-poster")) return true;
   return POSTER_IMAGE_HOSTS.has(u.hostname.toLowerCase());
 }
 
@@ -702,7 +705,7 @@ async function handleFetch(request, env, ctx) {
         if (pu.origin === url.origin && pu.pathname.startsWith("/bp/")) ownBetterPoster = parseBetterPosterPath(pu.pathname, pu.searchParams);
       } catch {}
 
-      if (!posterUrl || (!ownBetterPoster && !isAllowedPosterUrl(posterUrl))) {
+      if (!posterUrl || (!ownBetterPoster && !isAllowedPosterUrl(posterUrl, url.origin))) {
         // Missing entirely, or not one of the image hosts this add-on
         // itself ever puts in a `poster` field (see isAllowedPosterUrl).
         // This is a public, CORS-open, unauthenticated endpoint -- without
