@@ -49,8 +49,10 @@ describe("P8-1: D1 Read Replication with withSession()", () => {
     const env = makeEnv({ DB: db });
     const token = "A".repeat(43);
 
+    // No install holds this token, so the answer is a 404 (it used to be an
+    // empty 200); what this test is about is that the lookup was a replica read.
     const res = await call(env, `/i/${token}/manifest.json`);
-    assert.equal(res.status, 200);
+    assert.equal(res.status, 404);
     assert.equal(db._state.sessions, 1, "v2 install read should use withSession");
     assert.equal(res.headers.get("x-d1-bookmark"), "bmk_1");
   });

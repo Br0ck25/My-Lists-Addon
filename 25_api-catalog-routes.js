@@ -15,11 +15,12 @@
 // poster URL. A request that names any other host, or a non-https scheme,
 // isn't a real poster -- it's someone probing the endpoint directly, and
 // gets rejected before either the redirect or the fetch further down.
-// What a catalog answer carries when its provider failed. A good shared row is
-// cached five minutes; the failure answers (last good copy, the "temporarily
-// unavailable" tile, an empty page) used to take jsonPublic's one-hour default,
-// so a short outage lasted an hour in the apps.
-const CATALOG_FAILURE_CACHE = { "Cache-Control": "no-store" };
+// What a catalog answer carries when it is not a real answer: its provider
+// failed, or the install or row is not there. A good shared row is cached five
+// minutes; these (last good copy, the "temporarily unavailable" tile, an empty
+// page) used to take jsonPublic's one-hour default, so a short outage, or a
+// link not yet visible where the app asked, lasted an hour in the apps.
+const CATALOG_NO_CACHE = { "Cache-Control": "no-store" };
 
 const POSTER_IMAGE_HOSTS = new Set([
   "image.tmdb.org",
@@ -1180,6 +1181,11 @@ async function handleFetch(request, env, ctx) {
         return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
       }
       const resolved = await resolveConfig(m[1], env);
+      // Nothing by that name: a 404 the app can show, and nothing cached, so a
+      // link whose record is not yet visible here works on the next try.
+      if (resolved.unresolved) {
+        return json({ ok: false, error: "That install link was not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+      }
       const { entries, track, shuffleShelves } = resolved;
       // Moves this link's keys and tokens out of its KV record, if they are
       // still there and the move is switched on. After the response.
@@ -1509,7 +1515,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
-      if (!entry || entry.enabled === false) return jsonPublic({ metas: [] });
+      if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its
       // sources newline-separated (see fetchCatalog), and one personal source
@@ -1629,7 +1635,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
               // exactly like a normal successful load. `stale` is
               // informational only (visible when debugging via curl), not
               // read by wako/Stremio itself.
-              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg }, 200, CATALOG_FAILURE_CACHE);
+              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg }, 200, CATALOG_NO_CACHE);
             }
           } catch {
             // Cache read/parse failed -- fall through to the placeholder below.
@@ -1649,13 +1655,13 @@ Sitemap: ${url.origin}/sitemap.xml`;
               },
             ],
             error: errMsg,
-          }, 200, CATALOG_FAILURE_CACHE);
+          }, 200, CATALOG_NO_CACHE);
         }
 
         // Metas stays empty so wako/Stremio just shows an empty row instead
         // of erroring out, but the reason is still visible if you curl this
         // URL directly while debugging.
-        return jsonPublic({ metas: [], error: errMsg }, 200, CATALOG_FAILURE_CACHE);
+        return jsonPublic({ metas: [], error: errMsg }, 200, CATALOG_NO_CACHE);
       }
     }
 
@@ -1949,7 +1955,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // dynamic Next Up channel. resolveConfig only fills them in for a
           // config that PROVED whose it is (see trackOwner there), so an
           // unverified config simply gets a channel with neither applied.
-          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env, { withTracking: true });
+          const metaResolved = await resolveConfig(config, env, { withTracking: true });
+          if (metaResolved.unresolved) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
+          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = metaResolved;
           let matchedEntry = null;
           for (const e of entries) {
             if (e.enabled === false) continue;

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ed2a8a0769";
+const WORKER_BUILD = "d6492a4877";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -4811,7 +4811,9 @@ function decodeConfig(config) {
       trackOwner: "",
     };
   } catch {
-    return { entries: [], ...readInstallConfigFields({}), ...noAccount };
+    // Not a config at all (a short id nobody holds, or garbage): say so, so the
+    // routes can answer "not found" instead of serving an empty add-on.
+    return { entries: [], ...readInstallConfigFields({}), ...noAccount, unresolved: true };
   }
 }
 
@@ -85536,11 +85538,12 @@ ${UTILITY_CSS}
 // poster URL. A request that names any other host, or a non-https scheme,
 // isn't a real poster -- it's someone probing the endpoint directly, and
 // gets rejected before either the redirect or the fetch further down.
-// What a catalog answer carries when its provider failed. A good shared row is
-// cached five minutes; the failure answers (last good copy, the "temporarily
-// unavailable" tile, an empty page) used to take jsonPublic's one-hour default,
-// so a short outage lasted an hour in the apps.
-const CATALOG_FAILURE_CACHE = { "Cache-Control": "no-store" };
+// What a catalog answer carries when it is not a real answer: its provider
+// failed, or the install or row is not there. A good shared row is cached five
+// minutes; these (last good copy, the "temporarily unavailable" tile, an empty
+// page) used to take jsonPublic's one-hour default, so a short outage, or a
+// link not yet visible where the app asked, lasted an hour in the apps.
+const CATALOG_NO_CACHE = { "Cache-Control": "no-store" };
 
 const POSTER_IMAGE_HOSTS = new Set([
   "image.tmdb.org",
@@ -86701,6 +86704,11 @@ async function handleFetch(request, env, ctx) {
         return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
       }
       const resolved = await resolveConfig(m[1], env);
+      // Nothing by that name: a 404 the app can show, and nothing cached, so a
+      // link whose record is not yet visible here works on the next try.
+      if (resolved.unresolved) {
+        return json({ ok: false, error: "That install link was not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+      }
       const { entries, track, shuffleShelves } = resolved;
       // Moves this link's keys and tokens out of its KV record, if they are
       // still there and the move is switched on. After the response.
@@ -87030,7 +87038,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
-      if (!entry || entry.enabled === false) return jsonPublic({ metas: [] });
+      if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its
       // sources newline-separated (see fetchCatalog), and one personal source
@@ -87150,7 +87158,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
               // exactly like a normal successful load. `stale` is
               // informational only (visible when debugging via curl), not
               // read by wako/Stremio itself.
-              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg }, 200, CATALOG_FAILURE_CACHE);
+              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg }, 200, CATALOG_NO_CACHE);
             }
           } catch {
             // Cache read/parse failed -- fall through to the placeholder below.
@@ -87170,13 +87178,13 @@ Sitemap: ${url.origin}/sitemap.xml`;
               },
             ],
             error: errMsg,
-          }, 200, CATALOG_FAILURE_CACHE);
+          }, 200, CATALOG_NO_CACHE);
         }
 
         // Metas stays empty so wako/Stremio just shows an empty row instead
         // of erroring out, but the reason is still visible if you curl this
         // URL directly while debugging.
-        return jsonPublic({ metas: [], error: errMsg }, 200, CATALOG_FAILURE_CACHE);
+        return jsonPublic({ metas: [], error: errMsg }, 200, CATALOG_NO_CACHE);
       }
     }
 
@@ -87470,7 +87478,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // dynamic Next Up channel. resolveConfig only fills them in for a
           // config that PROVED whose it is (see trackOwner there), so an
           // unverified config simply gets a channel with neither applied.
-          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env, { withTracking: true });
+          const metaResolved = await resolveConfig(config, env, { withTracking: true });
+          if (metaResolved.unresolved) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
+          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = metaResolved;
           let matchedEntry = null;
           for (const e of entries) {
             if (e.enabled === false) continue;
@@ -101622,6 +101632,12 @@ function emptyResolvedInstallConfig() {
   };
 }
 
+// A link that names nothing this Worker holds. The routes answer it with a 404
+// (manifest) or an uncached empty page, never the generic add-on.
+function unresolvedInstallConfig() {
+  return { ...emptyResolvedInstallConfig(), unresolved: true };
+}
+
 // Splits a stored config into what may stay in KV and what has to move.
 // `byProvider` maps provider -> { column: plaintext }; `other` collects
 // credential-looking fields the table does not name.
@@ -101825,16 +101841,18 @@ async function applyLegacyInstallRecord(env, id, parsed) {
 
 async function resolveV2InstallConfig(param, env, { withTracking = false } = {}) {
   const token = param.slice(INSTALL_TOKEN_PARAM_PREFIX.length);
-  if (!isWellFormedInstallToken(token)) return emptyResolvedInstallConfig();
+  if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
-  if (!snap || snap.missing || snap.revoked || typeof snap.config !== "string") return emptyResolvedInstallConfig();
+  // A removed install stays what it was: an empty add-on, not a not-found.
+  if (snap && snap.revoked) return emptyResolvedInstallConfig();
+  if (!snap || snap.missing || typeof snap.config !== "string") return unresolvedInstallConfig();
   let cfg;
   try {
     cfg = JSON.parse(snap.config);
   } catch {
-    return emptyResolvedInstallConfig();
+    return unresolvedInstallConfig();
   }
-  if (!cfg || typeof cfg !== "object") return emptyResolvedInstallConfig();
+  if (!cfg || typeof cfg !== "object") return unresolvedInstallConfig();
   // The owner is the account that created it while signed in: proven once, at
   // creation, and ended by revoking the install or deleting the account (which
   // deletes the row).

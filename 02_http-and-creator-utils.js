@@ -988,7 +988,9 @@ function decodeConfig(config) {
       trackOwner: "",
     };
   } catch {
-    return { entries: [], ...readInstallConfigFields({}), ...noAccount };
+    // Not a config at all (a short id nobody holds, or garbage): say so, so the
+    // routes can answer "not found" instead of serving an empty add-on.
+    return { entries: [], ...readInstallConfigFields({}), ...noAccount, unresolved: true };
   }
 }
 

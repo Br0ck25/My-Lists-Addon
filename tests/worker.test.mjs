@@ -16318,8 +16318,11 @@ describe("P3a-8: installs", () => {
         assert.equal(list.headers.get("cache-control"), "no-store");
 
         // A token nobody was given serves nothing.
+        // (It used to be a 200 with no list catalogs; it is a 404 now, see
+        // tests/unknown-install.test.mjs.)
         const wrong = await call(env, `/i/${"A".repeat(43)}/manifest.json`);
-        assert.deepEqual(wrong.body.catalogs.filter((c) => !c.id.startsWith("search")), []);
+        assert.equal(wrong.status, 404);
+        assert.equal(wrong.body.ok, false);
       } finally {
         globalThis.fetch = realFetch;
       }
@@ -16353,7 +16356,7 @@ describe("P3a-8: installs", () => {
       const newToken = rotated.body.token;
       assert.notEqual(newToken, token);
       const oldServes = await call(env, `/i/${token}/manifest.json`);
-      assert.deepEqual(oldServes.body.catalogs.filter((c) => !c.id.startsWith("search")), [], "the old token stops working");
+      assert.equal(oldServes.status, 404, "the old token stops working: nothing holds it any more");
       const newServes = await call(env, `/i/${newToken}/manifest.json`);
       assert.equal(newServes.body.catalogs.filter((c) => !c.id.startsWith("search")).length, 2);
 
