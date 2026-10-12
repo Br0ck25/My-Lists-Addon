@@ -1751,7 +1751,7 @@
       // endpoint already rate-limited to one call per IP per minute. It cannot
       // touch a live account either, because the uniqueness check above has
       // already established there is none.
-      const preCreatePurge = await purgeCreatorData(env, v.normalized, { deleteIdentity: false });
+      const preCreatePurge = await purgeCreatorData(env, v.normalized, { deleteIdentity: false, detachSupportThreads: true });
       if (!preCreatePurge.ok) {
         return json({
           ok: false,

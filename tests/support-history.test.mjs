@@ -15,12 +15,20 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { awaitFreshRateWindow, call, createUser, makeD1, makeEnv, makeKv, nextIp } from "./harness.mjs";
+import { awaitFreshRateWindow, call, createUser, lapseCreatorTombstone, makeD1, makeEnv, makeKv, nextIp } from "./harness.mjs";
 
 const ROOT = new URL("../", import.meta.url);
 const read = (f) => readFileSync(new URL(f, ROOT), "utf8");
 
 const newEnv = () => makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+
+// A database that has not run migration 0022: the column and its index really
+// are absent, so statements fail the way D1 reports it ("no such column").
+function dbWithoutMigration0022() {
+  const DB = makeD1();
+  DB._db.exec("DROP INDEX idx_feedback_creator_updated; ALTER TABLE feedback DROP COLUMN creator_name;");
+  return DB;
+}
 
 async function file(env, message, who = null) {
   const r = await call(env, "/api/feedback", {
@@ -67,8 +75,7 @@ describe("support history by account", () => {
   });
 
   it("a database without migration 0022 still files and lists threads", async () => {
-    const DB = makeD1();
-    DB.failWhen((sql) => /creator_name/.test(sql));
+    const DB = dbWithoutMigration0022();
     const env = makeEnv({ DB, CONFIGS: makeKv() });
     const alice = await createUser(env, "histdave");
     const t = await file(env, "before the migration", alice);
@@ -153,8 +160,7 @@ describe("deleting your support chat history", () => {
   });
 
   it("works on a database that has not run migration 0022", async () => {
-    const DB = makeD1();
-    DB.failWhen((sql) => /creator_name/.test(sql));
+    const DB = dbWithoutMigration0022();
     const env = makeEnv({ DB, CONFIGS: makeKv() });
     const alice = await createUser(env, "delhank");
     const t = await file(env, "old shape", alice);
@@ -173,5 +179,82 @@ describe("deleting your support chat history", () => {
     for (let i = 0; i < 25; i++) results.push((await remove(env, { threadIds: ["x"] }, ip)).status);
     assert.equal(results[0], 200);
     assert.ok(results.includes(429), "some request is refused: " + results.join(","));
+  });
+});
+
+// A username can be registered again a few minutes after its account is
+// deleted (CREATOR_TOMBSTONE_TTL_SEC = 300), and "my support history" is looked
+// up by that name. The sweep that deletes an account (and the clean-up when a
+// name is registered) did not touch feedback, so the next holder of the name
+// was shown the previous owner's messages and the contact address they gave.
+// Their threads are detached from the name instead: the developer keeps the
+// conversation, nobody can reach it by name.
+describe("support threads of a deleted account", () => {
+  const deleteAccount = (env, who) =>
+    call(env, "/api/creator/delete-account", { method: "POST", json: { creatorName: who.creatorName, creatorKey: who.creatorKey, confirm: "DELETE" } });
+
+  it("are not shown to whoever registers the name next, but are kept", async () => {
+    const env = newEnv();
+    const alice = await createUser(env, "reuseme");
+    const bob = await createUser(env, "keepbob");
+    const t = await file(env, "my private problem", alice);
+    const other = await file(env, "bob's thread", bob);
+    assert.equal((await deleteAccount(env, alice)).body.ok, true);
+    lapseCreatorTombstone(env, "reuseme");
+
+    const stranger = await createUser(env, "reuseme");
+    assert.deepEqual((await mine(env, stranger)).body.threads, [], "the new holder of the name sees nothing");
+
+    assert.deepEqual(await stored(env, t.id), { d1: true, kv: true }, "the conversation is kept");
+    const byId = await call(env, "/api/feedback/threads", { method: "POST", json: { threadIds: [t.id] } });
+    assert.equal(byId.body.threads[0].message, "my private problem", "still readable with its id");
+    assert.equal(byId.body.threads[0].creatorName, null);
+    assert.deepEqual((await mine(env, bob)).body.threads.map((x) => x.id), [other.id], "another account's thread keeps its owner");
+  });
+
+  it("are detached when the name is registered again, even if the account was deleted long ago", async () => {
+    // A thread left by an account deleted before the sweep handled feedback.
+    const env = newEnv();
+    const entry = { id: "1700000000000:ghost", category: "other", message: "old secret", contact: "ghost@example.com", creatorName: "ghostname", createdAt: 1700000000000, updatedAt: 1700000000000, status: "open", messages: [] };
+    await env.DB.prepare("INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at, creator_name) VALUES (?, 'open', 'other', ?, ?, ?, 'ghostname')")
+      .bind(entry.id, JSON.stringify(entry), entry.createdAt, entry.updatedAt).run();
+    await env.CONFIGS.put("feedback:" + entry.id, JSON.stringify(entry));
+    const stranger = await createUser(env, "ghostname");
+    assert.deepEqual((await mine(env, stranger)).body.threads, []);
+    assert.deepEqual(await stored(env, entry.id), { d1: true, kv: true });
+  });
+
+  it("a deletion that cannot detach them does not free the name", async () => {
+    const DB = makeD1();
+    const env = makeEnv({ DB, CONFIGS: makeKv() });
+    const alice = await createUser(env, "stuckname");
+    await file(env, "kept", alice);
+    DB.failWhen((sql) => /^\s*UPDATE feedback/i.test(sql));
+    const r = await deleteAccount(env, alice);
+    assert.equal(r.body.ok, false, "reported as not deleted");
+    DB.failWhen(null);
+    const again = await mine(env, alice);
+    assert.equal(again.status, 200, "the account can still sign in and try again");
+  });
+
+  it("a deletion that cannot even look its threads up does not free the name", async () => {
+    const DB = makeD1();
+    const env = makeEnv({ DB, CONFIGS: makeKv() });
+    const alice = await createUser(env, "unreadable");
+    await file(env, "kept", alice);
+    DB.failWhen((sql) => /FROM feedback WHERE creator_name/i.test(sql));
+    const r = await deleteAccount(env, alice);
+    assert.equal(r.body.ok, false, "a failed lookup is not 'no threads'");
+    DB.failWhen(null);
+    assert.equal((await mine(env, alice)).status, 200, "the account can still sign in and try again");
+  });
+
+  it("a reset keeps the account's support history: the account is still its owner", async () => {
+    const env = newEnv();
+    const alice = await createUser(env, "resetme");
+    const t = await file(env, "still mine", alice);
+    const r = await call(env, "/api/creator/account/reset", { method: "POST", json: { creatorName: alice.creatorName, creatorKey: alice.creatorKey, confirm: "RESET" } });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.deepEqual((await mine(env, alice)).body.threads.map((x) => x.id), [t.id]);
   });
 });

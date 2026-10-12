@@ -4928,6 +4928,19 @@ async function purgeCreatorData(env, username, options = {}) {
     }
   }
 
+  // Support threads are looked up by username, so a deleted or re-registered
+  // name must not keep any (see detachFeedbackThreadsFromCreator). Not for a
+  // reset: the account stays and stays their owner. A failure counts like any
+  // other leftover: the name is not freed.
+  if (deleteIdentity || options.detachSupportThreads === true) {
+    try {
+      await detachFeedbackThreadsFromCreator(env, u);
+    } catch (e) {
+      console.error("purgeCreatorData: could not detach the support threads", e);
+      dataSweepFailed = true;
+    }
+  }
+
   let identityRemoved = false;
   if (deleteIdentity) {
     // Last, and only for delete-account: the identity itself. Done after

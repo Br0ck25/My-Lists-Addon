@@ -365,7 +365,11 @@ async function putFeedbackThread(env, key, entry) {
 // 300-key window, for a deployment with no database at all.
 const FEEDBACK_CREATOR_THREAD_CAP = 100;
 
-async function findFeedbackThreadsByCreator(env, creatorName) {
+//
+// `strict` is for callers that must not mistake a failed read for "none"
+// (detachFeedbackThreadsFromCreator): a database error other than the missing
+// creator_name column is thrown instead of answering with an empty list.
+async function findFeedbackThreadsByCreator(env, creatorName, { strict = false } = {}) {
   const name = String(creatorName || "").trim().toLowerCase();
   const found = [];
   if (!name) return found;
@@ -384,14 +388,17 @@ async function findFeedbackThreadsByCreator(env, creatorName) {
       ).bind(name, FEEDBACK_CREATOR_THREAD_CAP).all();
       searchedD1 = true;
       for (const r of (rows && rows.results) || []) keep(r.body_json);
-    } catch {
+    } catch (e) {
+      if (strict && !/creator_name|no such column/i.test(String((e && e.message) || e))) throw e;
       try {
         const rows = await env.DB.prepare("SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300").all();
         if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
           searchedD1 = true;
           for (const r of rows.results) keep(r.body_json);
         }
-      } catch {}
+      } catch (e2) {
+        if (strict) throw e2;
+      }
     }
   }
   if (!searchedD1 && env && env.CONFIGS) {
@@ -410,11 +417,53 @@ async function findFeedbackThreadsByCreator(env, creatorName) {
       }
       scanKeys.reverse();
       await Promise.all(scanKeys.map(async (kName) => {
-        try { keep(await env.CONFIGS.get(kName)); } catch {}
+        try { keep(await env.CONFIGS.get(kName)); } catch (e) { if (strict) throw e; }
       }));
-    } catch {}
+    } catch (e) {
+      if (strict) throw e;
+    }
   }
   return found;
+}
+
+// Takes every support thread off a username, keeping the conversation. A name
+// can be registered again minutes after its account is deleted, and "my
+// support history" is looked up by name, so a thread left under it would be
+// shown -- messages and the contact address -- to the next holder. The thread
+// becomes an ordinary one (readable only with its id, like an anonymous
+// report); the developer still has it, with the old name in formerCreatorName.
+// Throws if a thread could not be updated, so the caller does not go on to free
+// the name. Returns how many were detached.
+async function detachFeedbackThreadsFromCreator(env, username) {
+  const name = String(username || "").trim().toLowerCase();
+  let detached = 0;
+  if (!name) return detached;
+  // Each round takes up to FEEDBACK_CREATOR_THREAD_CAP; the 20-round ceiling
+  // only stops a loop that somehow makes no progress.
+  for (let round = 0; round < 20; round++) {
+    const entries = await findFeedbackThreadsByCreator(env, name, { strict: true });
+    if (!entries.length) break;
+    for (const entry of entries) {
+      entry.formerCreatorName = entry.creatorName;
+      entry.creatorName = null;
+      const bodyJson = JSON.stringify(entry);
+      if (env.DB) {
+        try {
+          await env.DB.prepare("UPDATE feedback SET creator_name = NULL, body_json = ? WHERE id = ?").bind(bodyJson, entry.id).run();
+        } catch (e) {
+          if (!/creator_name|no such column/i.test(String((e && e.message) || e))) throw e;
+          await env.DB.prepare("UPDATE feedback SET body_json = ? WHERE id = ?").bind(bodyJson, entry.id).run();
+        }
+      }
+      if (env.CONFIGS) {
+        await env.CONFIGS.put(`feedback:${entry.id}`, bodyJson, { expirationTtl: FEEDBACK_TTL_SEC });
+      }
+      detached++;
+    }
+    // Without a database the KV scan is the only lookup and it is one pass.
+    if (!env.DB) break;
+  }
+  return detached;
 }
 
 // The display fields for a tracked title -- its name and media type.

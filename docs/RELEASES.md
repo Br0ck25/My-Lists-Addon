@@ -2021,3 +2021,20 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 - `bash verify.sh -q` passes.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build b1c230a142)**. No data or migration involved.
+
+## 2026-10-12: a deleted account's support threads are no longer shown to the next holder of the name
+
+**Branch point:** the "admin dashboard colours" entry above (build b1c230a142). Built 2026-10-12, build 2747c901d9.
+
+### What it changes
+
+- **Found while checking the chat-history work, not in the audit.** "My support history" is looked up by username, and a deleted username can be registered again five minutes later (`CREATOR_TOMBSTONE_TTL_SEC`). Nothing in the account sweep touched feedback, so the next holder of the name signed in and was shown the previous owner's threads: their messages and the contact address they gave. Reproduced end to end (file a thread, delete the account, let the hold lapse, register the name, ask for threads). The old 300-thread window had the same leak for recent threads; the new by-account lookup (release above) made it complete, and D1 keeps threads with no expiry.
+- **Now:** `detachFeedbackThreadsFromCreator` (03_) takes every support thread off the name, keeping the conversation. The thread becomes an ordinary one (readable only with its id, like an anonymous report), with `creatorName` empty and the old name in `formerCreatorName` for the developer; nothing is deleted. It runs in the account-deletion sweep (`purgeCreatorData`, so both `/api/creator/delete-account` and the `account.purge` job) and in the clean-up when a username is registered, which also cures threads left by accounts deleted before this release, the next time that name is registered. A reset keeps them (the account stays their owner). A lookup or update that fails stops the deletion, like any other leftover, and the name is not freed.
+- The by-name lookup has a `strict` mode for this (a failed read is thrown, not taken as "none").
+
+### Checked
+
+- 6 new tests in `tests/support-history.test.mjs` (the leak, an old orphan, a failed update, a failed lookup, a reset, another account untouched); 5 failed before the fix, and each of six deliberate breakages is caught. The two older tests that faked "migration 0022 not run" now drop the column for real, so the error is the one D1 gives ("no such column").
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 2747c901d9)**. No migration, and it works with or without 0022. Threads of accounts already deleted keep their old name in the database until that name is registered again, at which point they are detached; nobody can sign in as a deleted name in between.
