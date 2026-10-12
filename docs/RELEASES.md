@@ -2005,3 +2005,19 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 - **Flaky RPDB test fixed.** "asks RPDB at most 20 new posters a minute" failed when a run straddled a clock minute, because the limiter counts per clock minute and the next minute is a second budget. Reproduced by starting the clock 40 ms before a boundary (26 posters asked instead of 20); it waits for a fresh window now (`awaitFreshRateWindow`). The new `/api/feedback/delete` limit test had the same hazard and got the same wait.
 - **Audit #12 kept as a known gap.** A like's write of the list record can still land on top of an owner's save that arrived a round-trip earlier (5 items become 2, both requests return 200). It is reproduced as a `todo` test in `tests/worker.test.mjs` (reported, does not fail the suite). Not fixed: KV has no compare-and-swap, and closing it means moving `likes` off the list record, which several places read. See `AUDIT-REPORT.md`.
+
+## 2026-10-12: admin dashboard colours and transition
+
+**Branch point:** the "tests only" entry above (build b598fce9b6). Built 2026-10-12, build b1c230a142.
+
+### What it changes
+
+- **Admin dashboard and sign-in page** (`03_admin.js`, their own stylesheet): `.subnav-pill` named `transition: all`; it names `background`, `border-color` and `color`. `.lc-btn.danger` was white on `--danger` (3.5:1); it is `--color-danger-text` with `--color-text-inverse` (5.4:1 light, 6.2:1 dark), like the confirm dialog in the main app. `.lc-btn`, `.subnav-pill.active` and the sign-in button were white on `--accent` (the brand blue: 5.4:1 light but 3.7:1 in dark); they use `--color-brand-fill` with `--color-on-brand` like the main app's primary buttons (5.5:1 in both themes). Measured in the page, light and dark, for all four.
+- This closes the leftovers noted in the previous two entries (the admin `transition: all`, the admin white-on-danger). The `transition: all` guard and the contrast guard now cover the admin pages as well as `/app.css` and `/guide`.
+
+### Checked
+
+- New `tests/admin-colours.test.mjs` (4 tests, all failed before the fix; putting white-on-danger back fails 2).
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build b1c230a142)**. No data or migration involved.

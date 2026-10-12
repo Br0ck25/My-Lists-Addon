@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b598fce9b6";
+const WORKER_BUILD = "b1c230a142";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -13087,8 +13087,8 @@ ${UTILITY_CSS}
     min-height: 44px;
     border-radius: var(--radius-pill);
     border: none;
-    background: var(--accent);
-    color: #fff;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     cursor: pointer;
     font-weight: 600;
     font-size: 0.925rem;
@@ -13468,10 +13468,10 @@ ${UTILITY_CSS}
   .admin-subnav-bar { display:flex; gap:8px; margin:14px 0 16px; flex-wrap:wrap; }
   .subnav-pill {
     background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:6px 14px;
-    font-size:0.85rem; font-weight:600; color:var(--muted); cursor:pointer; transition:all 0.15s ease;
+    font-size:0.85rem; font-weight:600; color:var(--muted); cursor:pointer; transition:background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .subnav-pill:hover { border-color:var(--border-strong); color:var(--text); }
-  .subnav-pill.active { background:var(--accent); color:#FFFFFF; border-color:var(--accent); }
+  .subnav-pill.active { background:var(--color-brand-fill); color:var(--color-on-brand); border-color:var(--color-brand-fill); }
   .admin-tab-panel { display:none; }
   .admin-tab-panel.active { display:block; }
   .admin-select { padding:6px 10px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.85rem; margin-right:6px; outline:none; }
@@ -13536,7 +13536,7 @@ ${UTILITY_CSS}
   .modal-close-x:hover { color: var(--text); border-color: var(--text-2); }
   .lc-btn {
     padding: 10px 18px; min-height: 38px; border-radius: var(--radius-pill);
-    border: none; background: var(--accent); color: #fff; cursor: pointer;
+    border: none; background: var(--color-brand-fill); color: var(--color-on-brand); cursor: pointer;
     font-weight: 600; font-size: 0.925rem; font-family: inherit;
     display: inline-flex; align-items: center; justify-content: center;
     transition: opacity 0.12s; text-decoration: none;
@@ -13546,7 +13546,7 @@ ${UTILITY_CSS}
     border: 1.5px solid var(--border-strong);
   }
   .lc-btn.danger {
-    background: var(--danger); color: #fff; border: none;
+    background: var(--color-danger-text); color: var(--color-text-inverse); border: none;
   }
   .lc-btn:hover:not(:disabled) { opacity: 0.85; }
   .lc-btn:disabled { opacity: 0.4; cursor: default; }
