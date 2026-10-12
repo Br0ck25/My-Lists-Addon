@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "d8e8420d20";
+const WORKER_BUILD = "2c7c88a8ad";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -85069,7 +85069,7 @@ ${UTILITY_CSS}
     font-size: 0.9rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
     cursor: pointer;
     border: none;
   }
@@ -85162,7 +85162,7 @@ ${UTILITY_CSS}
     font-size: 0.85rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   }
   .toc-pill:hover {
     color: var(--text);

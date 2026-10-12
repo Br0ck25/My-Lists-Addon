@@ -40,6 +40,13 @@ describe("design system: shared stylesheet", () => {
     assert.doesNotMatch(css, /transition:\s*all\b/);
   });
 
+  it("the guide page never uses transition: all either (it has its own stylesheet)", async () => {
+    const res = await call(makeEnv(), "/guide");
+    assert.equal(res.status, 200);
+    assert.ok(/<style[\s>]/.test(res.text), "the guide page carries its own CSS");
+    assert.doesNotMatch(res.text, /transition:\s*all\b/);
+  });
+
   it("has no malformed transition shorthand", async () => {
     const css = await appCss();
     assert.doesNotMatch(css, /transition:\s*[\w-]+:/);

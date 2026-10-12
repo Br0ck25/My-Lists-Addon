@@ -4086,7 +4086,7 @@ ${UTILITY_CSS}
     font-size: 0.9rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
     cursor: pointer;
     border: none;
   }
@@ -4179,7 +4179,7 @@ ${UTILITY_CSS}
     font-size: 0.85rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   }
   .toc-pill:hover {
     color: var(--text);
