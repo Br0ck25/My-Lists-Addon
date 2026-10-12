@@ -1963,3 +1963,20 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - `bash verify.sh -q` passes.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build f6d66597e8)**. No data or migration involved.
+
+## 2026-10-12: CSRF exemption, route scan and position labels
+
+**Branch point:** the entry above (build f6d66597e8). Built 2026-10-12, build 9bc63cec43.
+
+### What it changes
+
+- **Audit #10.** `verifyCsrf` skipped the same-origin and JSON checks for any path containing `/oauth/`. Probing every mutating prefix showed it reached real handlers (`/api/connections/x/oauth/x`, `/api/imports/x/oauth/x`, `/admin/api/jobs/x/oauth/x`, `/admin/api/installs/x/oauth/x`); only their sign-in checks stopped it, and the same request without `/oauth/` is a 403. The exemption is now an exact match on the eight provider routes (`/api/{trakt,mdblist,simkl,tmdb}/oauth/{start,callback}`). A test pins that list to the OAuth routes in `tests/route-access.json`.
+- **Audit #23.** `tests/route-access.test.mjs` matched only `path === "/..."` with double quotes, so a route added with single quotes (as `59_support-emails.js` is written) would never be checked against the manifest. It accepts either, with a self-test; the nine single-quoted routes already in the sources are all in the manifest. A test change only.
+- **Audit #18.** The number box on each pick of a custom list and of a channel had only a `title`; it has `aria-label="Position in list"` / `"Position in channel"`. The audit named the list builder; the channel builder had the same markup and is fixed with it.
+
+### Checked
+
+- New `tests/csrf-oauth-exemption.test.mjs` (25 tests; 16 failed before the fix) and `tests/pick-position-label.client.test.mjs` (2 tests, both failed before). The route-scan self-test fails with the old double-quote pattern.
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 9bc63cec43)**. No data or migration involved.

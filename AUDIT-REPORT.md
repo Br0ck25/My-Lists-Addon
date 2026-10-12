@@ -24,12 +24,15 @@ Commits on `claude/sharp-gauss-5v60qa`, each with a test that failed first and a
 | #7 `/api/save` accepts broken rows | **Fixed** (`23def51`) |
 | #9 ownerless channel codes can be overwritten | **Guard fixed** (`cfe7e1e`). The old links themselves are **not deleted yet**: the new Maintenance panel counts and deletes them when you choose, after a KV export |
 | #8 `DELETE /api/me/sessions` `id:"%"` revokes everything | **Fixed**: reproduced (`revoked:3`), then only a 16 hex character id is accepted (400 otherwise) and it is matched exactly, not with `LIKE` |
+| #10 CSRF exemption is `includes("/oauth/")` | **Fixed**: probing showed it reached real handlers (connections, imports, admin jobs and installs); now an exact match on the eight provider routes |
+| #18 pick position input has no label | **Fixed** for the list builder and the channel builder (same markup) |
+| #23 route scan misses single-quoted routes | **Fixed**, with a self-test; nothing was hidden today |
 | #14 `--err` undefined; white text on danger/success | **Fixed where real**: the two `--err` uses and the confirm dialog's danger button. The `copyLink` "Copied!" colours are overridden by the stylesheet's `!important`, so that part never showed and is left alone |
 | #15 `copyLink` throws without a clipboard API | **Fixed**: reproduced first ("Cannot read properties of undefined (reading 'writeText')"); uses `copyTextToClipboard`. `sharePreset` had the same call and is fixed too; the Nuvio buttons no longer claim a copy that failed |
 | #16 delete list: no Undo, early deletion record | **Fixed** (`0ee1361`) |
 | Test gaps: `/api/save` and feedback limits (mutations M08, M16) | **Closed**: 14 mutations of the new code, all caught |
 
-Still open, as reported: #10, #11, #12, #13, #17 to #23. One more thing seen while verifying: `tests/rpdb.test.mjs` "asks RPDB at most 20 new posters a minute" can fail when a run crosses a minute boundary (it does not use `awaitFreshRateWindow`); it passes on a rerun.
+Still open, as reported: #11, #12, #13, #17, #19 to #22. One more thing seen while verifying: `tests/rpdb.test.mjs` "asks RPDB at most 20 new posters a minute" can fail when a run crosses a minute boundary (it does not use `awaitFreshRateWindow`); it passes on a rerun.
 
 ## Findings
 
