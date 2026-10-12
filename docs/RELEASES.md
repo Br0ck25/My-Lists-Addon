@@ -1896,3 +1896,31 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - `bash verify.sh -q`: all checks passed. `tests/pwa-manifest.test.mjs` is new. Tests that only exercised the removed tools were deleted; the env-var documentation guard now reads `docs/OPERATIONS.md` and `wrangler.toml`.
 
 **Rollback:** paste the Release 33 file (build 125fc325b2).
+
+## 2026-10-12: fixes from the audit (AUDIT-REPORT.md)
+
+**Branch point:** the 2026-10-11 entry above (build c3f7831ad9), live. Built 2026-10-12, build 4d2bb52b05.
+
+### What it changes
+
+- **`/api/poster-badge`** no longer lets another host through on a `/api/safe-poster` path. It was an open redirect and an open image proxy; only this Worker's own safe-poster URL is allowed now (`isAllowedPosterUrl`, 25_).
+- **A catalog row whose provider failed is never cached.** The last good copy, the "temporarily unavailable" tile and the empty page took the one-hour default; they are `no-store` now (`CATALOG_NO_CACHE`, 25_).
+- **`/api/track-install`** has a per-address limit (30 a minute, like `/api/track-event`) and counts only the builder's own categories by name; any other name is counted under "Other" (`INSTALL_STAT_GROUPS`, 03_). A test reads the builder's sources so a new category added there and not in the list fails. The admin read of `source_groups` has a `LIMIT`.
+- **An install link that does not resolve is a 404** (manifest, with CORS and `no-store`); a catalog row or a channel's meta asked of it is empty and `no-store`. `resolveConfig` marks such a link `unresolved`. A removed install and a valid-but-empty old base64 link are unchanged. Three existing assertions that expected the old 200 now expect the 404.
+- **`/api/save`** refuses (400) a row with no usable `id`, an id with a slash or space, or a type other than movie or series. Duplicate ids are still accepted.
+- **Deleting a list** shows an **Undo** toast; Undo saves the list back at the same address. The "deleted" record that stops a sync restoring the list is now taken back when the server refuses the delete or the request never arrives.
+- **Discover and the home page** load poster strips as cards come near the screen (an `IntersectionObserver`, 600px ahead) through one queue of five at a time: 34 `/api/preview` calls at load instead of 168.
+- **Ownerless shared channels** (links minted before shares needed an account): sharing under such a code makes a new link instead of overwriting it. New **Old anonymous channel links** panel under Maintenance: *Count* looks, *Delete* removes them (with their likes, listing and new-tables copy) in batches, and only after a confirmation.
+
+### Checked
+
+- New tests: `catalog-failure-cache`, `anonymous-write-limits` (it also pins the `/api/save` and `/api/feedback` limits, which no test mentioned), `unknown-install`, `delete-list-undo.client`, `lazy-poster-slots.client`, `ownerless-channels`. Each failed before its fix.
+- In a real browser (Chromium against the Worker over HTTP): delete then Undo restores the list with its items at the same address and survives a reload; Discover's first screen resolves as before; the admin panel counts 3 of 4 channels, then deletes only those.
+- `bash verify.sh -q` passes. `tests/rpdb.test.mjs` ("asks RPDB at most 20 new posters a minute") can fail when a run crosses a minute boundary, because it does not wait for a fresh rate window (`awaitFreshRateWindow`); it passes on a rerun. Not changed here.
+
+**Steps:**
+1. Deploy the new `worker_entry_combined.js`. Check that `/admin` says **Built 2026-10-12 (build 4d2bb52b05)**.
+2. Optional, when you are ready to remove the old anonymous channel links (nothing is deleted by the deploy): `/admin` → Management & Tools → Maintenance. Run **Export old data to R2** with the prefix `channelshare:`, press **Count** and look at the number, then **Delete**.
+3. Separately, and only if you want it: the `source_groups` table can hold invented names from before the limit. That is stored data, so it is not touched; ask for a clean-up.
+
+**Rollback:** paste the previous file (build c3f7831ad9). The new tests and the Maintenance panel go with it; nothing stored changes.

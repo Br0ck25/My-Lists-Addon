@@ -9,6 +9,24 @@ Scope: find and report only. No source file, test or guard was changed. Findings
 
 Severity scale used: Critical = security or data loss with real impact on user data; High = wrong behavior or a real security hole with limited impact; Medium; Low = polish. Where a finding is a security issue but exposes no user data I say so, and rate it High, not Critical.
 
+## Update 2026-10-12: what has been fixed
+
+Commits on `claude/sharp-gauss-5v60qa`, each with a test that failed first and a passing `bash verify.sh -q`. Release notes: `docs/RELEASES.md`, entry 2026-10-12.
+
+| Finding | Status |
+|---|---|
+| #1 poster-badge host bypass | **Fixed** (`5c97f98`) |
+| #2 failure answers cached an hour | **Fixed** (`6f46246`) |
+| #3 `/api/track-install` unlimited, free-form groups | **Fixed** (`9aea722`): 30/minute, known groups plus "Other", `LIMIT` on the admin read. Stored rows from before the limit are not touched (that is stored data: ask) |
+| #4 168 preview calls on first load | **Fixed** (`223e7c3`): 34 at load in a real browser |
+| #5 unknown install id cached as a generic manifest | **Fixed** (`6df9393`): 404 for the manifest, uncached empty answers for catalog and meta |
+| #7 `/api/save` accepts broken rows | **Fixed** (`23def51`) |
+| #9 ownerless channel codes can be overwritten | **Guard fixed** (`cfe7e1e`). The old links themselves are **not deleted yet**: the new Maintenance panel counts and deletes them when you choose, after a KV export |
+| #16 delete list: no Undo, early deletion record | **Fixed** (`0ee1361`) |
+| Test gaps: `/api/save` and feedback limits (mutations M08, M16) | **Closed**: 14 mutations of the new code, all caught |
+
+Still open, as reported: #6 (support history after 300 newer threads), #8, #10, #11, #12, #13, #14, #15, #17 to #23. One more thing seen while verifying: `tests/rpdb.test.mjs` "asks RPDB at most 20 new posters a minute" can fail when a run crosses a minute boundary (it does not use `awaitFreshRateWindow`); it passes on a rerun.
+
 ## Findings
 
 | # | Severity | Area | File:line | Confirmed? | What is wrong | How to reproduce | Proposed small fix |
