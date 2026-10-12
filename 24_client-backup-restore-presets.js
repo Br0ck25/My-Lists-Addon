@@ -2659,7 +2659,7 @@ window.addEventListener('popstate', (e) => {
 //
 //   * real-path routing for the six views (APP_SHELL_TAB_LIST, injected from
 //     APP_SHELL_TABS in 00_constants.js): /catalogs, /catalogs/quickadd,
-//     /settings/connections and so on. The server renders the same table into
+//     /settings/account and so on. The server renders the same table into
 //     the nav (buildAppShellNavHtml, 09_page-shell.js), so the two cannot
 //     drift;
 //   * appShellState, one small observable object instead of the globals the

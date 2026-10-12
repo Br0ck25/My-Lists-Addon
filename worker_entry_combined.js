@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2c7c88a8ad";
+const WORKER_BUILD = "44f194cb61";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -83642,7 +83642,7 @@ window.addEventListener('popstate', (e) => {
 //
 //   * real-path routing for the six views (APP_SHELL_TAB_LIST, injected from
 //     APP_SHELL_TABS in 00_constants.js): /catalogs, /catalogs/quickadd,
-//     /settings/connections and so on. The server renders the same table into
+//     /settings/account and so on. The server renders the same table into
 //     the nav (buildAppShellNavHtml, 09_page-shell.js), so the two cannot
 //     drift;
 //   * appShellState, one small observable object instead of the globals the
@@ -86332,7 +86332,7 @@ async function handleFetch(request, env, ctx) {
 
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
-    // (/settings/connections, /catalogs/quickadd).
+    // (/settings/account, /catalogs/quickadd).
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
