@@ -38,7 +38,7 @@ All tokens live in `:root` (light) and `:root.dark-theme` (dark) in `09_page-she
 | `--color-text-primary` | `#1C1C1E` | `#FFFFFF` | Headings, body |
 | `--color-text-secondary` | `#3A3A3C` | `#EBEBF5` | Button labels, secondary body |
 | `--color-text-muted` | `#636366` | `#AEAEB2` | Meta text, hints, placeholders |
-| `--color-text-inverse` | `#FFFFFF` | `#000000` | Text on brand/danger fills |
+| `--color-text-inverse` | `#FFFFFF` | `#000000` | Text on danger-text fills (the confirm dialog's danger button). On the brand fill use `--color-on-brand`, which is white in both themes |
 | `--color-brand` | `#0066D6` | `#0A84FF` | Brand **text**, borders, links, focus ring |
 | `--color-brand-hover` / `-active` | `#0055B8` / `#00459A` | `#0071E3` / `#0056B3` | Text/border hover states |
 | `--color-brand-fill` / `-fill-hover` / `-fill-active` | `#0066D6` / `#0055B8` / `#00459A` | `#0A64D8` / `#0B5FCC` / `#0A54B3` | **Backgrounds that carry white text** (primary button, active tab, badges). ≥ 5:1 with white |
@@ -324,7 +324,7 @@ Observed conventions (enforce for new copy):
 
 ## 7. DO / DON'T
 
-1. **DO** use `var(--color-…)` tokens. **DON'T** hard-code hex (there are 63 distinct hex literals already; don't add more). White-on-fill text uses `var(--color-text-inverse)`.
+1. **DO** use `var(--color-…)` tokens. **DON'T** hard-code hex (there are 63 distinct hex literals already; don't add more). White-on-fill text uses `var(--color-on-brand)` on the brand fill (`--color-text-inverse` turns black in dark mode).
 2. **DO** reuse `.btn-primary / .btn-secondary / .btn-ghost / .btn-danger` (+ `.btn-sm/-lg`). **DON'T** create a new button class or restyle one inline.
 3. **DO** use `.lc-btn` only for compact buttons inside cards/rows. **DON'T** use `.lc-btn` for page-level actions.
 4. **DO** use `.panel` for sections and `.list-card` for list rows. **DON'T** invent a card with a new border/radius/shadow combination.

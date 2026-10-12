@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9bc63cec43";
+const WORKER_BUILD = "d8e8420d20";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -32080,7 +32080,7 @@ ${UTILITY_CSS}
   button.lc-btn.primary,
   .actions button.lc-btn.primary {
     background: var(--color-brand-fill);
-    color: var(--color-text-inverse, var(--color-on-brand));
+    color: var(--color-on-brand);
     border-color: var(--color-brand-fill);
     box-shadow: 0 2px 6px var(--color-brand-subtle);
   }
@@ -33780,7 +33780,7 @@ ${UTILITY_CSS}
   .btn-primary,
   .primary:not(.lc-btn) {
     background: var(--color-brand-fill);
-    color: var(--color-text-inverse, var(--color-on-brand));
+    color: var(--color-on-brand);
     border-color: var(--color-brand-fill);
     box-shadow: 0 2px 8px var(--color-brand-subtle);
     min-height: var(--control-height-md, 40px);
@@ -33792,7 +33792,7 @@ ${UTILITY_CSS}
   .primary:not(.lc-btn):hover:not(:disabled) {
     background: var(--color-brand-fill-hover);
     border-color: var(--color-brand-fill-hover);
-    color: var(--color-text-inverse, var(--color-on-brand));
+    color: var(--color-on-brand);
   }
 
   :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):active:not(:disabled),
@@ -34087,14 +34087,14 @@ ${UTILITY_CSS}
   }
   .install-url-copy-btn.primary {
     background: var(--color-brand-fill) !important;
-    color: var(--color-text-inverse, var(--color-on-brand)) !important;
+    color: var(--color-on-brand) !important;
     border-color: var(--color-brand-fill) !important;
     box-shadow: 0 2px 6px var(--color-brand-subtle) !important;
   }
   .install-url-copy-btn.primary:hover {
     background: var(--color-brand-fill-hover) !important;
     border-color: var(--color-brand-fill-hover) !important;
-    color: var(--color-text-inverse, var(--color-on-brand)) !important;
+    color: var(--color-on-brand) !important;
   }
   .install-url-copy-btn.primary svg {
     stroke: var(--color-on-brand);
