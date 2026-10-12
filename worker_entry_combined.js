@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-10-11";
+const WORKER_BUILD_DATE = "2026-10-12";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4914547396";
+const WORKER_BUILD = "7c1a8712da";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -47556,25 +47556,74 @@ async function loadPosterSlot(slot) {
   }
 }
 
+// A card fills its poster strip when it is near the screen, not when the page is
+// drawn. Every card used to load at once: 168 /api/preview calls for one load of
+// Discover, against a limit of 240 a minute for the address, so the next load
+// (or a second person on the same network) got 429s and rows of "Couldn't load
+// previews". The observer reports the cards already on screen straight away,
+// so the top of the page fills as quickly as before.
+const POSTER_SLOT_CONCURRENCY = 5;
+const POSTER_SLOT_LOOKAHEAD = '600px 0px';
+const posterSlotQueue = [];
+const posterSlotsPending = new WeakSet();
+let posterSlotsLoading = 0;
+let posterSlotObserver = null;
+
+function posterSlotIsHidden(slot) {
+  return !!slot.closest('[style*="display: none"], [style*="display:none"]');
+}
+
+// At most POSTER_SLOT_CONCURRENCY cards load at a time, whichever way they were
+// asked for (right away, or by scrolling).
+function pumpPosterSlotQueue() {
+  while (posterSlotsLoading < POSTER_SLOT_CONCURRENCY && posterSlotQueue.length) {
+    const slot = posterSlotQueue.shift();
+    if (!slot || posterSlotIsHidden(slot)) {
+      // In a hidden tab: left as it is, so showing the tab loads it.
+      if (slot) posterSlotsPending.delete(slot);
+      continue;
+    }
+    posterSlotsLoading++;
+    Promise.resolve(loadPosterSlot(slot)).catch(() => {}).then(() => {
+      posterSlotsLoading--;
+      posterSlotsPending.delete(slot);
+      pumpPosterSlotQueue();
+    });
+  }
+}
+
+function queuePosterSlot(slot) {
+  if (posterSlotsPending.has(slot)) return;
+  posterSlotsPending.add(slot);
+  posterSlotQueue.push(slot);
+  pumpPosterSlotQueue();
+}
+
+function watchPosterSlot(slot) {
+  if (posterSlotsPending.has(slot)) return;
+  if (typeof IntersectionObserver === 'undefined') {
+    queuePosterSlot(slot);
+    return;
+  }
+  if (!posterSlotObserver) {
+    posterSlotObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        posterSlotObserver.unobserve(entry.target);
+        queuePosterSlot(entry.target);
+      });
+    }, { rootMargin: POSTER_SLOT_LOOKAHEAD });
+  }
+  // Observing an element twice is a no-op, so this is safe when the function
+  // below runs again for the same page.
+  posterSlotObserver.observe(slot);
+}
+
 async function populateSearchResultPosters() {
   const allSlots = [...document.querySelectorAll('.poster-preview-slot')];
   // Filter out slots that are inside hidden containers (e.g. inactive tabs)
-  const slots = allSlots.filter((slot) => {
-    return !slot.closest('[style*="display: none"], [style*="display:none"]');
-  });
-  let idx = 0;
-  const CONCURRENCY = 5;
-
-  async function worker() {
-    while (idx < slots.length) {
-      const slot = slots[idx++];
-      if (!slot) continue;
-      if (slot.closest('[style*="display: none"], [style*="display:none"]')) continue;
-      await loadPosterSlot(slot);
-    }
-  }
-
-  Array.from({ length: Math.min(CONCURRENCY, slots.length) }, () => worker());
+  const slots = allSlots.filter((slot) => !posterSlotIsHidden(slot));
+  slots.forEach((slot) => watchPosterSlot(slot));
 }
 
 // Every reader treats these as URL strings -- getLikedListsSet().has(url),
