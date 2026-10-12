@@ -1980,3 +1980,21 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - `bash verify.sh -q` passes.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 9bc63cec43)**. No data or migration involved.
+
+## 2026-10-12: dark-mode buttons, guide-page transitions and a faster logo encoder
+
+**Branch point:** the entry above (build 9bc63cec43). Built 2026-10-12, build b598fce9b6.
+
+### What it changes
+
+- **Dark mode: white text on every primary button** (your decision). `--color-text-inverse` is black in dark mode, and five rules in `09_page-shell.js` (`.btn-primary`, `.primary`, `.lc-btn.primary`, their hover, and the install-link Copy button) paired it with `--color-brand-fill`, giving black on `#0A64D8` at 3.8:1. They use `--color-on-brand` (white in both themes): 5.5:1 in dark, measured in the page for four button types. Light mode is unchanged. A guard in `tests/design-system.test.mjs` fails on the old pairing and checks the ratio on the fill, hover and pressed colours in both themes. `DESIGN_SYSTEM.md` said the opposite and is corrected. The confirm dialog's danger button keeps `--color-text-inverse` on purpose (black on `#FF453A` in dark, 6.2:1).
+- **Audit #17.** `.btn` and `.toc-pill` in the guide page named `transition: all`; they name `background`, `border-color` and `color`, the properties their hover changes. The guard that forbids `transition: all` read only `/app.css`; it reads `/guide` as well. (The admin dashboard has one more at `03_admin.js`, not changed: it was not in the audit and the guard cannot render that page without a login.)
+- **Audit #20.** Two comments cited `/settings/connections`, which answers 404; they name `/settings/account`. Comment-only.
+- **Audit #21.** `/api/channel-logo` encoded the image with a byte-by-byte loop although `bytesToBase64` (chunked) is in the same file; it calls that now. Output is identical (checked against a 100 KB image of every byte value); at the 2 MB cap the loop took 170-270 ms against 23 ms.
+
+### Checked
+
+- New `tests/channel-logo-encoding.test.mjs` (2 tests; it passes before and after, because the change must not alter output, and an off-by-one in the chunk stride fails it). The `/guide` guard failed before the fix, as did the primary-button pairing guard.
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build b598fce9b6)**. No data or migration involved.

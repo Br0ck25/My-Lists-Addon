@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "44f194cb61";
+const WORKER_BUILD = "b598fce9b6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -87927,13 +87927,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // Escaped because it lands in an SVG attribute and comes from an
         // upstream response header rather than from this Worker.
         const safeContentType = escapeXml(contentType.split(";")[0].trim() || "image/png");
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
+        const base64 = bytesToBase64(arrayBuffer);
         const dataUri = `data:${safeContentType};base64,${base64}`;
 
         const svg = format === "landscape"

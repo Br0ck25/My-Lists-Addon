@@ -2070,13 +2070,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // Escaped because it lands in an SVG attribute and comes from an
         // upstream response header rather than from this Worker.
         const safeContentType = escapeXml(contentType.split(";")[0].trim() || "image/png");
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
+        const base64 = bytesToBase64(arrayBuffer);
         const dataUri = `data:${safeContentType};base64,${base64}`;
 
         const svg = format === "landscape"
