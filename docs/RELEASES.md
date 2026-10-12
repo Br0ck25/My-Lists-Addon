@@ -1998,3 +1998,10 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - `bash verify.sh -q` passes.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build b598fce9b6)**. No data or migration involved.
+
+## 2026-10-12: tests only (no change to the Worker)
+
+Build stamp unchanged (b598fce9b6): nothing to deploy for this.
+
+- **Flaky RPDB test fixed.** "asks RPDB at most 20 new posters a minute" failed when a run straddled a clock minute, because the limiter counts per clock minute and the next minute is a second budget. Reproduced by starting the clock 40 ms before a boundary (26 posters asked instead of 20); it waits for a fresh window now (`awaitFreshRateWindow`). The new `/api/feedback/delete` limit test had the same hazard and got the same wait.
+- **Audit #12 kept as a known gap.** A like's write of the list record can still land on top of an owner's save that arrived a round-trip earlier (5 items become 2, both requests return 200). It is reproduced as a `todo` test in `tests/worker.test.mjs` (reported, does not fail the suite). Not fixed: KV has no compare-and-swap, and closing it means moving `likes` off the list record, which several places read. See `AUDIT-REPORT.md`.

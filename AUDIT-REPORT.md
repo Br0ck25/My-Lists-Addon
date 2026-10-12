@@ -31,12 +31,14 @@ Commits on `claude/sharp-gauss-5v60qa`, each with a test that failed first and a
 | #20 comments cite `/settings/connections` | **Fixed** (`/settings/connections` answers 404) |
 | #21 `/api/channel-logo` per-byte base64 loop | **Fixed**: same output, about ten times faster at the 2 MB cap |
 | Dark mode: black text on primary buttons (found while checking #14) | **Fixed**: `--color-on-brand` on the brand fill, 5.5:1 |
+| #12 a like can revert an owner's save | **Confirmed, not fixed.** Reproduced deterministically (a save landing between the like's re-read and its write: 5 items become 2, both requests answer 200, a reader sees 2). Odds are low (one KV round-trip) and no small fix exists: KV has no compare-and-swap, and the only complete one moves `likes` off the list record, which six places read. Kept as a `todo` test in `tests/worker.test.mjs`. Needs your decision |
+| Flaky `tests/rpdb.test.mjs` (20 posters a minute) | **Fixed**: reproduced by starting the clock 40 ms before a minute boundary (26 asked, not 20); the test waits for a fresh window now. A new test of mine had the same hazard and got the same fix |
 | #14 `--err` undefined; white text on danger/success | **Fixed where real**: the two `--err` uses and the confirm dialog's danger button. The `copyLink` "Copied!" colours are overridden by the stylesheet's `!important`, so that part never showed and is left alone |
 | #15 `copyLink` throws without a clipboard API | **Fixed**: reproduced first ("Cannot read properties of undefined (reading 'writeText')"); uses `copyTextToClipboard`. `sharePreset` had the same call and is fixed too; the Nuvio buttons no longer claim a copy that failed |
 | #16 delete list: no Undo, early deletion record | **Fixed** (`0ee1361`) |
 | Test gaps: `/api/save` and feedback limits (mutations M08, M16) | **Closed**: 14 mutations of the new code, all caught |
 
-Still open, as reported: #11, #12, #13, #19, #22. One more thing seen while verifying: `tests/rpdb.test.mjs` "asks RPDB at most 20 new posters a minute" can fail when a run crosses a minute boundary (it does not use `awaitFreshRateWindow`); it passes on a rerun.
+Still open, as reported: #11, #12 (confirmed, see below), #13, #19, #22.
 
 ## Findings
 

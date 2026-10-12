@@ -3855,6 +3855,57 @@ describe("audit fix 2: a like cannot revert a concurrent list save", () => {
   });
 });
 
+// KNOWN GAP (AUDIT-REPORT.md #12), kept as a `todo` so it is run and reported
+// but does not fail the suite. The test above parks a like right after it reads
+// the list record; this one parks it right before it WRITES the record, which
+// is the one-round-trip window the write-back narrowed but cannot close (KV has
+// no compare-and-swap). An owner save landing there is reverted, and both
+// requests answer 200; a reader then sees the old items. Closing it means
+// moving the denormalised `likes` off the list record (six readers: the list
+// page's max() with the D1 count, channels, admin, and the save's preservation
+// of it), which is a product decision, not a small fix. When that is done, drop
+// the `todo` and this becomes the regression test.
+describe("known gap: a like can still revert a save that lands between its re-read and its write", () => {
+  it("keeps the creator's newer items", { todo: "audit #12: needs the likes count moved off the list record" }, async () => {
+    const env = makeEnv();
+    const alice = await createUser(env, "alicenarrow");
+    await call(env, "/api/creator/lists/save", {
+      method: "POST",
+      json: { creatorName: alice.creatorName, creatorKey: alice.creatorKey, name: "Race List", type: "movie", visibility: "public", items: [{ id: "tt1" }, { id: "tt2" }] },
+    });
+    const listKey = [...env.CONFIGS._store.keys()].find((k) => k.startsWith("creatorlist:alicenarrow:"));
+    const ip = nextIp();
+    await voterFor(env, ip);
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    let parked;
+    const atGate = new Promise((r) => { parked = r; });
+    let armed = false;
+    const origPut = env.CONFIGS.put.bind(env.CONFIGS);
+    // The like's own write of the list record is the one carrying likes: 1.
+    env.CONFIGS.put = async (k, v, o) => {
+      if (k === listKey && !armed && JSON.parse(v).likes === 1) { armed = true; parked(); await gate; }
+      return origPut(k, v, o);
+    };
+    const likeP = callAsVoter(env, "/api/lists/like", {
+      method: "POST", ip, json: { username: "alicenarrow", slug: "race-list", action: "like" },
+    });
+    await atGate;
+    await call(env, "/api/creator/lists/save", {
+      method: "POST",
+      json: {
+        creatorName: alice.creatorName, creatorKey: alice.creatorKey, slug: "race-list",
+        name: "Race List", type: "movie", visibility: "public",
+        items: [{ id: "tt1" }, { id: "tt2" }, { id: "tt3" }, { id: "tt4" }, { id: "tt5" }],
+      },
+    });
+    release();
+    await likeP;
+    const stored = JSON.parse(env.CONFIGS._store.get(listKey));
+    assert.equal(stored.items.length, 5, "the like's write must not put its older snapshot over the owner's save");
+  });
+});
+
 describe("audit fix 4: unauthenticated permanent writes are bounded", () => {
   // The three anonymous-publish cases that used to open this block went with
   // /api/publish-list itself in 1.5.3 -- an unbounded write is not something to
