@@ -91,13 +91,21 @@ const REGEX_ROUTES = {
   "/^\\/rpdb\\/([^/]+)\\/(tt\\d+)\\.jpg$/": "public: poster image",
 };
 
-const sourceRoutes = [...new Set([...SOURCES.matchAll(/(?:path|pathname|p)\s*===\s*"(\/[^"]*)"/g)].map((m) => m[1]))].sort();
+// The scans take the source text as an argument so the test below can prove
+// they see a route written either way. They matched only double quotes, so a
+// route compared with single quotes (59_support-emails.js does) was invisible.
+const Q = `(["'])(\\/[^"']*)\\1`;
+const scanExactRoutes = (src) => [...new Set([...src.matchAll(new RegExp(`(?:path|pathname|p)\\s*===\\s*${Q}`, "g"))].map((m) => m[2]))].sort();
 // Any prefix test on the request path, not only /admin and /api: /lists/,
 // /channels/ and /bp/ serve account data and were invisible to this scan.
-const sourcePrefixes = [...new Set([...SOURCES.matchAll(/\bpath(?:name)?\.startsWith\("(\/[^"]*)"\)/g)].map((m) => m[1]))].sort();
+const scanPrefixRoutes = (src) => [...new Set([...src.matchAll(new RegExp(`\\bpath(?:name)?\\.startsWith\\(${Q}\\)`, "g"))].map((m) => m[2]))].sort();
 // A regular-expression literal matched against the path. Handles a "/" inside
 // a [...] class, which is how most of them are written.
-const sourceRegexRoutes = [...new Set([...SOURCES.matchAll(/\b(?:path|pathname)\.match\((\/\^(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^\/\\\n\[])*\/[a-z]*)\)/g)].map((m) => m[1]))].sort();
+const scanRegexRoutes = (src) => [...new Set([...src.matchAll(/\b(?:path|pathname)\.match\((\/\^(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^\/\\\n\[])*\/[a-z]*)\)/g)].map((m) => m[1]))].sort();
+
+const sourceRoutes = scanExactRoutes(SOURCES);
+const sourcePrefixes = scanPrefixRoutes(SOURCES);
+const sourceRegexRoutes = scanRegexRoutes(SOURCES);
 
 describe("route access inventory", () => {
   it("every route in the source is listed in tests/route-access.json", () => {
@@ -128,6 +136,12 @@ describe("route access inventory", () => {
     assert.deepEqual(unknown, [], "a new regex route needs a line in REGEX_ROUTES above saying who may call it");
     const stale = Object.keys(REGEX_ROUTES).filter((r) => !sourceRegexRoutes.includes(r));
     assert.deepEqual(stale, [], "remove these from REGEX_ROUTES: no source matches them any more");
+  });
+
+  it("the scans see a route whichever quotes it is written with", () => {
+    assert.deepEqual(scanExactRoutes(`if (path === "/api/double") {} if (path === '/api/single') {}`), ["/api/double", "/api/single"]);
+    assert.deepEqual(scanExactRoutes(`if (url.pathname === '/api/p') {}`), ["/api/p"]);
+    assert.deepEqual(scanPrefixRoutes(`path.startsWith("/a/") || pathname.startsWith('/b/')`), ["/a/", "/b/"]);
   });
 
   it("the scan itself still finds the routes it is meant to (a guard that finds nothing passes everything)", () => {
