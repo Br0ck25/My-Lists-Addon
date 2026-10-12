@@ -20,12 +20,13 @@ Commits on `claude/sharp-gauss-5v60qa`, each with a test that failed first and a
 | #3 `/api/track-install` unlimited, free-form groups | **Fixed** (`9aea722`): 30/minute, known groups plus "Other", `LIMIT` on the admin read. Stored rows from before the limit are not touched (that is stored data: ask) |
 | #4 168 preview calls on first load | **Fixed** (`223e7c3`): 34 at load in a real browser |
 | #5 unknown install id cached as a generic manifest | **Fixed** (`6df9393`): 404 for the manifest, uncached empty answers for catalog and meta |
+| #6 support history vanishes after 300 newer threads | **Fixed**: `feedback.creator_name` (migration 0022) and a lookup by account; falls back to the old window until 0022 is run |
 | #7 `/api/save` accepts broken rows | **Fixed** (`23def51`) |
 | #9 ownerless channel codes can be overwritten | **Guard fixed** (`cfe7e1e`). The old links themselves are **not deleted yet**: the new Maintenance panel counts and deletes them when you choose, after a KV export |
 | #16 delete list: no Undo, early deletion record | **Fixed** (`0ee1361`) |
 | Test gaps: `/api/save` and feedback limits (mutations M08, M16) | **Closed**: 14 mutations of the new code, all caught |
 
-Still open, as reported: #6 (support history after 300 newer threads), #8, #10, #11, #12, #13, #14, #15, #17 to #23. One more thing seen while verifying: `tests/rpdb.test.mjs` "asks RPDB at most 20 new posters a minute" can fail when a run crosses a minute boundary (it does not use `awaitFreshRateWindow`); it passes on a rerun.
+Still open, as reported: #8, #10, #11, #12, #13, #14, #15, #17 to #23. One more thing seen while verifying: `tests/rpdb.test.mjs` "asks RPDB at most 20 new posters a minute" can fail when a run crosses a minute boundary (it does not use `awaitFreshRateWindow`); it passes on a rerun.
 
 ## Findings
 

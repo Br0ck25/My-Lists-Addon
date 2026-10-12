@@ -1924,3 +1924,22 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 3. Separately, and only if you want it: the `source_groups` table can hold invented names from before the limit. That is stored data, so it is not touched; ask for a clean-up.
 
 **Rollback:** paste the previous file (build c3f7831ad9). The new tests and the Maintenance panel go with it; nothing stored changes.
+
+## 2026-10-12: support history keeps every conversation, and can be deleted
+
+**Branch point:** the "fixes from the audit" entry above (build 4d2bb52b05). Built 2026-10-12, build e196580c5d.
+
+### What it changes
+
+- **Audit #6.** "My support history" no longer loses an older conversation once 300 newer threads from other people exist. `feedback` gets a `creator_name` column (migration `0022_feedback_creator_name.sql`, filled in from the stored thread, lower case) and the lookup is `WHERE creator_name = ?` on an index, newest 100 (`findFeedbackThreadsByCreator`, 03_). A database that has not run 0022 still files and lists threads on the old newest-300 statement, so deploying before the migration breaks nothing.
+- **Delete chat history.** Settings → Support shows a **Delete chat history** button under the conversation, behind a confirmation ("cannot be undone"). New `POST /api/feedback/delete` (public, 20 a minute per address) removes the threads from the database and the KV copy, so the developer's Support panel loses them too. A thread nobody owns is deleted with its id (the same rule that lets an anonymous reporter reply); a thread that belongs to an account needs that account's key, and with the key every thread filed under the account goes, including ones this device never saw. Another account's id is skipped, not an error. This device forgets the threads only after the server says they are gone.
+
+### Checked
+
+- New tests: `support-history` (the 305-thread case failed first; the 0022 backfill; a database without 0022; delete rules, wrong key, limit) and `support-history-delete.client`. Seven deliberate breakages of the new code were each caught.
+- `bash verify.sh -q` passes.
+
+**Steps:**
+1. Run the migration once, before or after the deploy: `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0022_feedback_creator_name.sql` (or paste it into the D1 Console). Run it only once: SQLite cannot add the column twice.
+2. Deploy the new `worker_entry_combined.js`. Check that `/admin` says **Built 2026-10-12 (build e196580c5d)**.
+3. No stored data is deleted by either step. Threads are deleted only when a person presses the button and confirms.

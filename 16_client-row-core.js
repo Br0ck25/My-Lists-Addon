@@ -2914,6 +2914,52 @@ function refreshUserFeedbackThreads() {
   });
 }
 
+// Settings > Support > "Delete chat history". The threads are removed on the
+// server as well (the developer's panel loses them), so it is confirmed first
+// rather than offered as an undo. This device only forgets them once the server
+// has said they are gone: a refused delete leaves the chat as it was.
+function deleteUserFeedbackHistory() {
+  const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
+  confirmFn(
+    'Delete chat history',
+    'This deletes every support conversation you have had with the developer, here and on the server. It cannot be undone.',
+    'Delete',
+    async () => {
+      const auth = feedbackCreatorAuth();
+      const failed = (why) => {
+        const text = why || 'Please try again in a moment.';
+        if (typeof showAppAlert === 'function') showAppAlert('Could not delete chat history', text);
+        else if (typeof showToast === 'function') showToast('Could not delete chat history. ' + text, 'error');
+      };
+      try {
+        const res = await creatorApiFetch(ORIGIN + '/api/feedback/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadIds: getUserFeedbackThreadIds(),
+            creatorName: auth.creatorName,
+            creatorKey: auth.creatorKey,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!data || !data.ok) {
+          failed(data && data.error);
+          return;
+        }
+      } catch (e) {
+        failed();
+        return;
+      }
+      try { localStorage.removeItem('myListAddon:feedbackThreadIds'); } catch (e) {}
+      userFeedbackThreads = [];
+      activeFeedbackThreadId = null;
+      isComposingNewFeedback = false;
+      renderUserFeedbackThreadsUI();
+      if (typeof showToast === 'function') showToast('Chat history deleted', 'success');
+    }
+  );
+}
+
 function toggleNewFeedbackForm(showNew) {
   isComposingNewFeedback = !!showNew;
   renderUserFeedbackThreadsUI();

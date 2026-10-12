@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4d2bb52b05";
+const WORKER_BUILD = "e196580c5d";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -1287,6 +1287,14 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0021", kind: "index", name: "idx_support_messages_rfc_id",
     consequence: "Matching incoming replies by RFC Message-ID scans the whole messages table. Slower, not broken.",
+  },
+  {
+    migration: "0022", kind: "column", table: "feedback", name: "creator_name",
+    consequence: "My support history can only see the newest 300 threads of everyone: once 300 newer threads exist, an account's older conversations drop out of its own list. The Worker falls back to that older statement while the column is missing.",
+  },
+  {
+    migration: "0022", kind: "index", name: "idx_feedback_creator_updated",
+    consequence: "Looking up one account's support threads scans the whole feedback table. Slower, not broken.",
   },
 ];
 
@@ -11231,18 +11239,35 @@ async function putFeedbackThread(env, key, entry) {
   const createdAt = Number(entry.createdAt) || Date.now();
   const updatedAt = Number(entry.updatedAt) || createdAt;
   const bodyJson = JSON.stringify(entry);
+  // The account a thread belongs to, in the form the lookup compares. NULL for
+  // an anonymous report. Absent from the statement on a database without
+  // migration 0022, which is the second attempt below.
+  const creatorName = entry.creatorName ? String(entry.creatorName).trim().toLowerCase() || null : null;
 
   if (env && env.DB) {
     try {
-      await env.DB.prepare(
-        `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           status = excluded.status,
-           subject = excluded.subject,
-           body_json = excluded.body_json,
-           updated_at = excluded.updated_at`
-      ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at, creator_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at,
+             creator_name = excluded.creator_name`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt, creatorName).run();
+      } catch (noColumn) {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      }
     } catch (dbErr) {
       console.error("D1 write error (putFeedbackThread):", dbErr);
     }
@@ -11250,6 +11275,69 @@ async function putFeedbackThread(env, key, entry) {
   if (env && env.CONFIGS) {
     await env.CONFIGS.put(key, bodyJson, { expirationTtl: FEEDBACK_TTL_SEC });
   }
+}
+
+// Every support thread filed under one account, newest first, at most
+// FEEDBACK_CREATOR_THREAD_CAP of them. `creatorName` is the proven username.
+//
+// The database is asked for that account's rows (feedback.creator_name,
+// migration 0022). It used to read the newest 300 rows of EVERYONE and filter
+// by name here, so an account's older conversations vanished once 300 newer
+// threads existed. A database that has not run 0022 still gets that older
+// window rather than an error. KV is the last resort, as before: the same
+// 300-key window, for a deployment with no database at all.
+const FEEDBACK_CREATOR_THREAD_CAP = 100;
+
+async function findFeedbackThreadsByCreator(env, creatorName) {
+  const name = String(creatorName || "").trim().toLowerCase();
+  const found = [];
+  if (!name) return found;
+  const keep = (raw) => {
+    if (!raw) return;
+    try {
+      const entry = JSON.parse(raw);
+      if (entry && entry.id && entry.creatorName && String(entry.creatorName).trim().toLowerCase() === name) found.push(entry);
+    } catch {}
+  };
+  let searchedD1 = false;
+  if (env && env.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        "SELECT body_json FROM feedback WHERE creator_name = ? ORDER BY updated_at DESC LIMIT ?"
+      ).bind(name, FEEDBACK_CREATOR_THREAD_CAP).all();
+      searchedD1 = true;
+      for (const r of (rows && rows.results) || []) keep(r.body_json);
+    } catch {
+      try {
+        const rows = await env.DB.prepare("SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300").all();
+        if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
+          searchedD1 = true;
+          for (const r of rows.results) keep(r.body_json);
+        }
+      } catch {}
+    }
+  }
+  if (!searchedD1 && env && env.CONFIGS) {
+    try {
+      const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
+      let scanKeys = [];
+      let cursor;
+      let pages = 0;
+      while (pages < 30) {
+        const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
+        scanKeys.push(...(listRes.keys || []).map((k) => k.name));
+        if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
+        pages++;
+        if (listRes.list_complete || !listRes.cursor) break;
+        cursor = listRes.cursor;
+      }
+      scanKeys.reverse();
+      await Promise.all(scanKeys.map(async (kName) => {
+        try { keep(await env.CONFIGS.get(kName)); } catch {}
+      }));
+    } catch {}
+  }
+  return found;
 }
 
 // The display fields for a tracked title -- its name and media type.
@@ -37458,7 +37546,10 @@ if ('serviceWorker' in navigator) {
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
             <span id="supportChatStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
-            <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
+            <span class="u-gap-8px" style="display:inline-flex;">
+              <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="deleteUserFeedbackHistory">Delete chat history</button>
+              <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
+            </span>
           </div>
         </div>
 
@@ -40447,6 +40538,52 @@ function refreshUserFeedbackThreads() {
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
     }
   });
+}
+
+// Settings > Support > "Delete chat history". The threads are removed on the
+// server as well (the developer's panel loses them), so it is confirmed first
+// rather than offered as an undo. This device only forgets them once the server
+// has said they are gone: a refused delete leaves the chat as it was.
+function deleteUserFeedbackHistory() {
+  const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
+  confirmFn(
+    'Delete chat history',
+    'This deletes every support conversation you have had with the developer, here and on the server. It cannot be undone.',
+    'Delete',
+    async () => {
+      const auth = feedbackCreatorAuth();
+      const failed = (why) => {
+        const text = why || 'Please try again in a moment.';
+        if (typeof showAppAlert === 'function') showAppAlert('Could not delete chat history', text);
+        else if (typeof showToast === 'function') showToast('Could not delete chat history. ' + text, 'error');
+      };
+      try {
+        const res = await creatorApiFetch(ORIGIN + '/api/feedback/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadIds: getUserFeedbackThreadIds(),
+            creatorName: auth.creatorName,
+            creatorKey: auth.creatorKey,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!data || !data.ok) {
+          failed(data && data.error);
+          return;
+        }
+      } catch (e) {
+        failed();
+        return;
+      }
+      try { localStorage.removeItem('myListAddon:feedbackThreadIds'); } catch (e) {}
+      userFeedbackThreads = [];
+      activeFeedbackThreadId = null;
+      isComposingNewFeedback = false;
+      renderUserFeedbackThreadsUI();
+      if (typeof showToast === 'function') showToast('Chat history deleted', 'success');
+    }
+  );
 }
 
 function toggleNewFeedbackForm(showNew) {
@@ -92711,78 +92848,20 @@ function generateSearchVariations(query) {
         await Promise.all(lookups);
       }
 
-      // 2. If creatorName is given, also scan recent feedback for this creator
+      // 2. If creatorName is given, also load every thread filed under that account
       if (creatorName) {
-        let searchedD1 = false;
-        if (env && env.DB) {
-          try {
-            const rows = await env.DB.prepare(
-              "SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300"
-            ).all();
-            if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
-              searchedD1 = true;
-              for (const r of rows.results) {
-                if (!r.body_json) continue;
-                try {
-                  const entry = JSON.parse(r.body_json);
-                  if (entry && entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!threadsMap.has(entry.id)) {
-                      if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                        entry.messages = [{
-                          id: `msg_init`,
-                          sender: "user",
-                          senderName: entry.creatorName || "User",
-                          text: entry.message || "(Initial message)",
-                          timestamp: entry.createdAt || Date.now()
-                        }];
-                      }
-                      threadsMap.set(entry.id, entry);
-                    }
-                  }
-                } catch {}
-              }
-            }
-          } catch {}
-        }
-        if (!searchedD1 && env && env.CONFIGS) {
-          try {
-            const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
-            let scanKeys = [];
-            let cursor;
-            let pages = 0;
-            while (pages < 30) {
-              const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
-              scanKeys.push(...(listRes.keys || []).map((k) => k.name));
-              if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
-              pages++;
-              if (listRes.list_complete || !listRes.cursor) break;
-              cursor = listRes.cursor;
-            }
-            scanKeys.reverse();
-            const scanLookups = scanKeys.map(async (kName) => {
-              const tid = kName.replace(/^feedback:/, "");
-              if (threadsMap.has(tid)) return;
-              try {
-                const raw = await env.CONFIGS.get(kName);
-                if (raw) {
-                  const entry = JSON.parse(raw);
-                  if (entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                      entry.messages = [{
-                        id: `msg_init`,
-                        sender: "user",
-                        senderName: entry.creatorName || "User",
-                        text: entry.message || "(Initial message)",
-                        timestamp: entry.createdAt || Date.now()
-                      }];
-                    }
-                    threadsMap.set(entry.id, entry);
-                  }
-                }
-              } catch {}
-            });
-            await Promise.all(scanLookups);
-          } catch {}
+        for (const entry of await findFeedbackThreadsByCreator(env, creatorName)) {
+          if (threadsMap.has(entry.id)) continue;
+          if (!Array.isArray(entry.messages) || !entry.messages.length) {
+            entry.messages = [{
+              id: `msg_init`,
+              sender: "user",
+              senderName: entry.creatorName || "User",
+              text: entry.message || "(Initial message)",
+              timestamp: entry.createdAt || Date.now()
+            }];
+          }
+          threadsMap.set(entry.id, entry);
         }
       }
 
@@ -92793,6 +92872,84 @@ function generateSearchVariations(query) {
       });
 
       return json({ ok: true, threads }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /api/feedback/delete (POST) { threadIds?, creatorName?, creatorKey? } -> { ok, deleted }
+    // Settings > Support: "Delete chat history". Removes the threads from the
+    // database and the KV copy, for good, so the developer's panel loses them too.
+    //
+    // Who may delete what is the rule replying already follows. A thread nobody
+    // owns is a bare capability -- whoever holds its id can delete it, which is
+    // how an anonymous reporter, with no account, clears their own. A thread
+    // that belongs to an account takes that account's key. Signing in with the
+    // key also removes every thread filed under the account, including ones
+    // this device never saw. An id that belongs to somebody else is skipped,
+    // not an error: `deleted` says how many went.
+    if (path === "/api/feedback/delete" && request.method === "POST") {
+      if (!env || !env.CONFIGS) return json({ ok: true, deleted: 0 }, 200, { "Cache-Control": "no-store" });
+      const deleteIp = clientIpKey(request);
+      if (await consumeRateLimit(env, ctx, "feedbackdelete", deleteIp, 20)) {
+        return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { "Cache-Control": "no-store" });
+      }
+      let body = null;
+      try { body = await request.json(); } catch {}
+      body = body && typeof body === "object" ? body : {};
+      const threadIds = Array.isArray(body.threadIds) ? body.threadIds.map((t) => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+      let owner = null;
+      if (body.creatorName) {
+        const auth = await authenticateCreator(String(body.creatorName).trim().toLowerCase(), body.creatorKey ? String(body.creatorKey) : "");
+        if (!auth.ok) {
+          return json({ ok: false, error: "Username or Key is incorrect." }, 401, { "Cache-Control": "no-store" });
+        }
+        owner = auth.username;
+      }
+
+      const doomed = new Set();
+      for (const tid of threadIds) {
+        let entry = null;
+        if (env.DB) {
+          try {
+            const row = await env.DB.prepare("SELECT body_json FROM feedback WHERE id = ?").bind(tid).first();
+            if (row && row.body_json) entry = JSON.parse(row.body_json);
+          } catch {}
+        }
+        if (!entry) {
+          try {
+            const raw = await env.CONFIGS.get(`feedback:${tid}`);
+            if (raw) entry = JSON.parse(raw);
+          } catch {}
+        }
+        if (!entry) continue;
+        const ownerRaw = entry.creatorName ? String(entry.creatorName).trim() : "";
+        let ownerNorm = "";
+        if (ownerRaw) {
+          const v = validateCreatorUsername(ownerRaw);
+          if (v && v.ok) ownerNorm = v.normalized;
+        }
+        if (ownerNorm && ownerNorm !== owner) continue;
+        doomed.add(tid);
+      }
+      if (owner) {
+        for (const entry of await findFeedbackThreadsByCreator(env, owner)) doomed.add(entry.id);
+      }
+
+      let deleted = 0;
+      for (const tid of doomed) {
+        if (env.DB) {
+          try {
+            await env.DB.prepare("DELETE FROM feedback WHERE id = ?").bind(tid).run();
+          } catch (dbErr) {
+            console.error("D1 write error (feedback delete):", dbErr);
+          }
+        }
+        try {
+          await env.CONFIGS.delete(`feedback:${tid}`);
+          deleted++;
+        } catch (e) {
+          safeErrorMessage(e);
+        }
+      }
+      return json({ ok: true, deleted }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/track-search  (POST)  { query } -> { ok }

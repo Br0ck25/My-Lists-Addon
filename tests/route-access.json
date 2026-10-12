@@ -93,6 +93,7 @@
   "/api/external-list/item-remove": "public",
   "/api/external-sync/history": "public",
   "/api/feedback": "public",
+  "/api/feedback/delete": "public",
   "/api/feedback/threads": "public",
   "/api/imdb-ids": "public",
   "/api/installs": "public",

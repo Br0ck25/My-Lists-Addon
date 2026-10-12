@@ -136,9 +136,11 @@ CREATE TABLE IF NOT EXISTS feedback (
     subject    TEXT,
     body_json  TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    creator_name TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_status_updated ON feedback(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_creator_updated ON feedback(creator_name, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS scrobble_tokens (
     token      TEXT PRIMARY KEY,

@@ -163,7 +163,7 @@ Configure them under **Security → WAF → Rate limiting rules** on the zone. E
 | `POST /api/installs/*` | 30 | Install links are written, not just read |
 | `POST /api/likes/*` | 60 | Liking and unliking |
 | `POST /api/imports`, `/api/imports/*` | 10 | Each import can call four providers with this site's keys |
-| `POST /api/feedback`, `/api/feedback/threads` | 20 | Feedback writes |
+| `POST /api/feedback`, `/api/feedback/threads`, `/api/feedback/delete` | 20 | Feedback writes |
 | `POST /api/scrobble*` | 120 | A webhook from someone's media server, so a first sync arrives in a burst — keep this one generous |
 | `POST /api/save` | 30 | Anonymous 10 MB blobs (S-12) |
 

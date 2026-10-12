@@ -316,18 +316,35 @@ async function putFeedbackThread(env, key, entry) {
   const createdAt = Number(entry.createdAt) || Date.now();
   const updatedAt = Number(entry.updatedAt) || createdAt;
   const bodyJson = JSON.stringify(entry);
+  // The account a thread belongs to, in the form the lookup compares. NULL for
+  // an anonymous report. Absent from the statement on a database without
+  // migration 0022, which is the second attempt below.
+  const creatorName = entry.creatorName ? String(entry.creatorName).trim().toLowerCase() || null : null;
 
   if (env && env.DB) {
     try {
-      await env.DB.prepare(
-        `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           status = excluded.status,
-           subject = excluded.subject,
-           body_json = excluded.body_json,
-           updated_at = excluded.updated_at`
-      ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at, creator_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at,
+             creator_name = excluded.creator_name`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt, creatorName).run();
+      } catch (noColumn) {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      }
     } catch (dbErr) {
       console.error("D1 write error (putFeedbackThread):", dbErr);
     }
@@ -335,6 +352,69 @@ async function putFeedbackThread(env, key, entry) {
   if (env && env.CONFIGS) {
     await env.CONFIGS.put(key, bodyJson, { expirationTtl: FEEDBACK_TTL_SEC });
   }
+}
+
+// Every support thread filed under one account, newest first, at most
+// FEEDBACK_CREATOR_THREAD_CAP of them. `creatorName` is the proven username.
+//
+// The database is asked for that account's rows (feedback.creator_name,
+// migration 0022). It used to read the newest 300 rows of EVERYONE and filter
+// by name here, so an account's older conversations vanished once 300 newer
+// threads existed. A database that has not run 0022 still gets that older
+// window rather than an error. KV is the last resort, as before: the same
+// 300-key window, for a deployment with no database at all.
+const FEEDBACK_CREATOR_THREAD_CAP = 100;
+
+async function findFeedbackThreadsByCreator(env, creatorName) {
+  const name = String(creatorName || "").trim().toLowerCase();
+  const found = [];
+  if (!name) return found;
+  const keep = (raw) => {
+    if (!raw) return;
+    try {
+      const entry = JSON.parse(raw);
+      if (entry && entry.id && entry.creatorName && String(entry.creatorName).trim().toLowerCase() === name) found.push(entry);
+    } catch {}
+  };
+  let searchedD1 = false;
+  if (env && env.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        "SELECT body_json FROM feedback WHERE creator_name = ? ORDER BY updated_at DESC LIMIT ?"
+      ).bind(name, FEEDBACK_CREATOR_THREAD_CAP).all();
+      searchedD1 = true;
+      for (const r of (rows && rows.results) || []) keep(r.body_json);
+    } catch {
+      try {
+        const rows = await env.DB.prepare("SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300").all();
+        if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
+          searchedD1 = true;
+          for (const r of rows.results) keep(r.body_json);
+        }
+      } catch {}
+    }
+  }
+  if (!searchedD1 && env && env.CONFIGS) {
+    try {
+      const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
+      let scanKeys = [];
+      let cursor;
+      let pages = 0;
+      while (pages < 30) {
+        const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
+        scanKeys.push(...(listRes.keys || []).map((k) => k.name));
+        if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
+        pages++;
+        if (listRes.list_complete || !listRes.cursor) break;
+        cursor = listRes.cursor;
+      }
+      scanKeys.reverse();
+      await Promise.all(scanKeys.map(async (kName) => {
+        try { keep(await env.CONFIGS.get(kName)); } catch {}
+      }));
+    } catch {}
+  }
+  return found;
 }
 
 // The display fields for a tracked title -- its name and media type.

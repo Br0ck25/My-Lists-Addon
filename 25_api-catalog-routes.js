@@ -6968,78 +6968,20 @@ function generateSearchVariations(query) {
         await Promise.all(lookups);
       }
 
-      // 2. If creatorName is given, also scan recent feedback for this creator
+      // 2. If creatorName is given, also load every thread filed under that account
       if (creatorName) {
-        let searchedD1 = false;
-        if (env && env.DB) {
-          try {
-            const rows = await env.DB.prepare(
-              "SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300"
-            ).all();
-            if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
-              searchedD1 = true;
-              for (const r of rows.results) {
-                if (!r.body_json) continue;
-                try {
-                  const entry = JSON.parse(r.body_json);
-                  if (entry && entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!threadsMap.has(entry.id)) {
-                      if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                        entry.messages = [{
-                          id: `msg_init`,
-                          sender: "user",
-                          senderName: entry.creatorName || "User",
-                          text: entry.message || "(Initial message)",
-                          timestamp: entry.createdAt || Date.now()
-                        }];
-                      }
-                      threadsMap.set(entry.id, entry);
-                    }
-                  }
-                } catch {}
-              }
-            }
-          } catch {}
-        }
-        if (!searchedD1 && env && env.CONFIGS) {
-          try {
-            const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
-            let scanKeys = [];
-            let cursor;
-            let pages = 0;
-            while (pages < 30) {
-              const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
-              scanKeys.push(...(listRes.keys || []).map((k) => k.name));
-              if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
-              pages++;
-              if (listRes.list_complete || !listRes.cursor) break;
-              cursor = listRes.cursor;
-            }
-            scanKeys.reverse();
-            const scanLookups = scanKeys.map(async (kName) => {
-              const tid = kName.replace(/^feedback:/, "");
-              if (threadsMap.has(tid)) return;
-              try {
-                const raw = await env.CONFIGS.get(kName);
-                if (raw) {
-                  const entry = JSON.parse(raw);
-                  if (entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                      entry.messages = [{
-                        id: `msg_init`,
-                        sender: "user",
-                        senderName: entry.creatorName || "User",
-                        text: entry.message || "(Initial message)",
-                        timestamp: entry.createdAt || Date.now()
-                      }];
-                    }
-                    threadsMap.set(entry.id, entry);
-                  }
-                }
-              } catch {}
-            });
-            await Promise.all(scanLookups);
-          } catch {}
+        for (const entry of await findFeedbackThreadsByCreator(env, creatorName)) {
+          if (threadsMap.has(entry.id)) continue;
+          if (!Array.isArray(entry.messages) || !entry.messages.length) {
+            entry.messages = [{
+              id: `msg_init`,
+              sender: "user",
+              senderName: entry.creatorName || "User",
+              text: entry.message || "(Initial message)",
+              timestamp: entry.createdAt || Date.now()
+            }];
+          }
+          threadsMap.set(entry.id, entry);
         }
       }
 
@@ -7050,6 +6992,84 @@ function generateSearchVariations(query) {
       });
 
       return json({ ok: true, threads }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /api/feedback/delete (POST) { threadIds?, creatorName?, creatorKey? } -> { ok, deleted }
+    // Settings > Support: "Delete chat history". Removes the threads from the
+    // database and the KV copy, for good, so the developer's panel loses them too.
+    //
+    // Who may delete what is the rule replying already follows. A thread nobody
+    // owns is a bare capability -- whoever holds its id can delete it, which is
+    // how an anonymous reporter, with no account, clears their own. A thread
+    // that belongs to an account takes that account's key. Signing in with the
+    // key also removes every thread filed under the account, including ones
+    // this device never saw. An id that belongs to somebody else is skipped,
+    // not an error: `deleted` says how many went.
+    if (path === "/api/feedback/delete" && request.method === "POST") {
+      if (!env || !env.CONFIGS) return json({ ok: true, deleted: 0 }, 200, { "Cache-Control": "no-store" });
+      const deleteIp = clientIpKey(request);
+      if (await consumeRateLimit(env, ctx, "feedbackdelete", deleteIp, 20)) {
+        return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { "Cache-Control": "no-store" });
+      }
+      let body = null;
+      try { body = await request.json(); } catch {}
+      body = body && typeof body === "object" ? body : {};
+      const threadIds = Array.isArray(body.threadIds) ? body.threadIds.map((t) => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+      let owner = null;
+      if (body.creatorName) {
+        const auth = await authenticateCreator(String(body.creatorName).trim().toLowerCase(), body.creatorKey ? String(body.creatorKey) : "");
+        if (!auth.ok) {
+          return json({ ok: false, error: "Username or Key is incorrect." }, 401, { "Cache-Control": "no-store" });
+        }
+        owner = auth.username;
+      }
+
+      const doomed = new Set();
+      for (const tid of threadIds) {
+        let entry = null;
+        if (env.DB) {
+          try {
+            const row = await env.DB.prepare("SELECT body_json FROM feedback WHERE id = ?").bind(tid).first();
+            if (row && row.body_json) entry = JSON.parse(row.body_json);
+          } catch {}
+        }
+        if (!entry) {
+          try {
+            const raw = await env.CONFIGS.get(`feedback:${tid}`);
+            if (raw) entry = JSON.parse(raw);
+          } catch {}
+        }
+        if (!entry) continue;
+        const ownerRaw = entry.creatorName ? String(entry.creatorName).trim() : "";
+        let ownerNorm = "";
+        if (ownerRaw) {
+          const v = validateCreatorUsername(ownerRaw);
+          if (v && v.ok) ownerNorm = v.normalized;
+        }
+        if (ownerNorm && ownerNorm !== owner) continue;
+        doomed.add(tid);
+      }
+      if (owner) {
+        for (const entry of await findFeedbackThreadsByCreator(env, owner)) doomed.add(entry.id);
+      }
+
+      let deleted = 0;
+      for (const tid of doomed) {
+        if (env.DB) {
+          try {
+            await env.DB.prepare("DELETE FROM feedback WHERE id = ?").bind(tid).run();
+          } catch (dbErr) {
+            console.error("D1 write error (feedback delete):", dbErr);
+          }
+        }
+        try {
+          await env.CONFIGS.delete(`feedback:${tid}`);
+          deleted++;
+        } catch (e) {
+          safeErrorMessage(e);
+        }
+      }
+      return json({ ok: true, deleted }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/track-search  (POST)  { query } -> { ok }
