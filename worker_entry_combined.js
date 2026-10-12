@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "89d3260f49";
+const WORKER_BUILD = "4914547396";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -74147,6 +74147,165 @@ function recordCreatorListDeletion(slug) {
 }
 window.recordCreatorListDeletion = recordCreatorListDeletion;
 
+// The deletion record is for a delete that happened. When the server refuses,
+// or the request never arrives, the list still exists and must not be recorded
+// as gone (the record stops a sync from restoring or re-uploading that slug).
+function clearCreatorListDeletion(slug) {
+  if (!slug) return;
+  try {
+    const map = loadDeletedCreatorLists();
+    delete map[String(slug)];
+    localStorage.setItem(DELETED_CREATOR_LISTS_KEY, JSON.stringify(map));
+  } catch (e) {}
+}
+window.clearCreatorListDeletion = clearCreatorListDeletion;
+
+// A copy of a list taken before it is deleted, so Undo can put it back. From
+// the dashboard's own data when that carries the items, else from this
+// browser's copy. null when neither has them: there is nothing to restore from,
+// and no Undo is offered.
+function snapshotListForUndo(slug) {
+  let found = null;
+  if (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
+    found = lastCreatorListsData.find((l) => l && l.slug === slug) || null;
+  }
+  if (!found || !Array.isArray(found.items)) {
+    const map = loadLocalCustomLists();
+    let local = map[slug] || null;
+    if (!local) {
+      Object.keys(map).forEach((k) => {
+        const l = map[k];
+        if (!local && l && (l.slug === slug || l.creatorSlug === slug || l.localSlug === slug || l.listSlug === slug)) local = l;
+      });
+    }
+    if (local && Array.isArray(local.items)) found = local;
+  }
+  if (!found || !Array.isArray(found.items)) return null;
+  const copy = JSON.parse(JSON.stringify(found));
+  copy.slug = slug;
+  return copy;
+}
+
+// The rows of the builder that use this list, as they are now, so Undo can add
+// them back. Only these rows: whatever else was changed in the meantime stays.
+function listRowsReferencing(slug) {
+  if (typeof collectEntries !== 'function') return [];
+  let rows = [];
+  try { rows = collectEntries(); } catch (e) { rows = []; }
+  return rows.filter((row) => {
+    const payload = row && row.url ? parseCustomListPayloadClient(row.url) : null;
+    return !!payload && (payload.localSlug === slug || payload.creatorSlug === slug || payload.slug === slug || payload.listSlug === slug);
+  });
+}
+
+async function undoListDelete(snap, rows) {
+  if (!snap) return;
+  clearCreatorListDeletion(snap.slug);
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  if (typeof activeCreator !== 'undefined' && activeCreator && creatorKey) {
+    const out = await saveCreatorListWithBaseline({
+      slug: snap.slug, name: snap.name, type: snap.type, items: snap.items, visibility: snap.visibility,
+      sourceUrl: snap.sourceUrl, synced: snap.synced, lastSyncedAt: snap.lastSyncedAt, baseItemIds: snap.baseItemIds,
+    }, null);
+    if (!out.ok) {
+      recordCreatorListDeletion(snap.slug);
+      showToast('Could not restore "' + snap.name + '".', 'error');
+      return;
+    }
+  }
+  backfillCreatorListsIntoLocalMap([snap]);
+  (rows || []).forEach((row) => {
+    if (typeof addRow === 'function') addRow(row.name, row.url, row.type, row.enabled, row.group, row.id, row.noShuffle === true);
+  });
+  if (rows && rows.length) {
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+  }
+  if (typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  renderCreatorDashboard();
+  showToast('"' + snap.name + '" restored.', 'success');
+}
+
+function showListDeletedToast(snap, rows, slug) {
+  const name = (snap && snap.name) || slug || 'List';
+  if (!snap) {
+    showToast('Deleted "' + name + '".', 'success');
+    return;
+  }
+  showToast('Deleted "' + name + '".', 'undo', {
+    duration: 8000,
+    actionText: 'Undo',
+    onAction: function () { return undoListDelete(snap, rows); },
+  });
+}
+
+// Deleting one of the account's own lists, after the person confirmed. The
+// deletion record is written first, so a sync that runs while the request is in
+// flight cannot bring the list back, and taken back if the list was not deleted.
+async function deleteCreatorListConfirmed(slug) {
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  const snap = snapshotListForUndo(slug);
+  const rows = listRowsReferencing(slug);
+  recordCreatorListDeletion(slug);
+  let deleted = false;
+  try {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      clearCreatorListDeletion(slug);
+      if (typeof showAppAlert === 'function') {
+        showAppAlert('Error', 'Could not delete: ' + (data.error || 'unknown error'), false);
+      } else {
+        showToast('Could not delete: ' + (data.error || 'unknown error'), 'error');
+      }
+      return;
+    }
+    deleted = true;
+
+    // Remove from local storage map so it doesn't get resurrected
+    const map = loadLocalCustomLists();
+    delete map[slug];
+    Object.keys(map).forEach((k) => {
+      if (map[k] && (map[k].slug === slug || map[k].creatorSlug === slug || map[k].localSlug === slug || map[k].listSlug === slug)) {
+        delete map[k];
+      }
+    });
+    saveLocalCustomListsMap(map);
+
+    // Remove from main lists config if present
+    document.querySelectorAll('#lists .url').forEach((urlInput) => {
+      const rowPayload = parseCustomListPayloadClient(urlInput.value);
+      if (rowPayload && (rowPayload.creatorSlug === slug || rowPayload.slug === slug || rowPayload.localSlug === slug || rowPayload.listSlug === slug)) {
+        const entry = urlInput.closest('.entry');
+        if (entry) {
+          entry.remove();
+        }
+      }
+    });
+    if (typeof saveState === 'function') saveState();
+    if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
+    if (typeof pushCreatorSync === 'function') pushCreatorSync();
+
+    renderCreatorDashboard();
+    showListDeletedToast(snap, rows, slug);
+  } catch (err) {
+    if (deleted) {
+      console.error('List deleted, but tidying up afterwards failed:', err);
+      return;
+    }
+    clearCreatorListDeletion(slug);
+    if (typeof showAppAlert === 'function') {
+      showAppAlert('Network Error', 'Network error while deleting.', false);
+    } else {
+      showToast('Network error while deleting.', 'error');
+    }
+  }
+}
+
 // Matches the way the delete paths look a list up: a local entry can be
 // keyed by its map key while carrying the slug under any of several fields.
 function localMapHasList(map, slug) {
@@ -75232,58 +75391,7 @@ if (_creatorDashEl) {
     const slug = deleteBtn.dataset.slug;
     if (slug === 'watchlist') return;
     const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
-    confirmFn("Delete List", "Delete this list? This cannot be undone.", "Delete", async () => {
-      const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      recordCreatorListDeletion(slug);
-      try {
-        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
-        });
-        const data = await res.json();
-        if (!data.ok) {
-          if (typeof showAppAlert === 'function') {
-            showAppAlert('Error', 'Could not delete: ' + (data.error || 'unknown error'), false);
-          } else {
-            showToast('Could not delete: ' + (data.error || 'unknown error'), 'error');
-          }
-          return;
-        }
-        
-        // Remove from local storage map so it doesn't get resurrected
-        const map = loadLocalCustomLists();
-        delete map[slug];
-        Object.keys(map).forEach((k) => {
-          if (map[k] && (map[k].slug === slug || map[k].creatorSlug === slug || map[k].localSlug === slug || map[k].listSlug === slug)) {
-            delete map[k];
-          }
-        });
-        saveLocalCustomListsMap(map);
-        
-        // Remove from main lists config if present
-        document.querySelectorAll('#lists .url').forEach((urlInput) => {
-          const rowPayload = parseCustomListPayloadClient(urlInput.value);
-          if (rowPayload && (rowPayload.creatorSlug === slug || rowPayload.slug === slug || rowPayload.localSlug === slug || rowPayload.listSlug === slug)) {
-            const entry = urlInput.closest('.entry');
-            if (entry) {
-              entry.remove();
-            }
-          }
-        });
-        if (typeof saveState === 'function') saveState();
-        if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
-        if (typeof pushCreatorSync === 'function') pushCreatorSync();
-        
-        renderCreatorDashboard();
-      } catch (err) {
-        if (typeof showAppAlert === 'function') {
-          showAppAlert('Network Error', 'Network error while deleting.', false);
-        } else {
-          showToast('Network error while deleting.', 'error');
-        }
-      }
-    }, true);
+    confirmFn("Delete List", "Delete this list?", "Delete", () => { deleteCreatorListConfirmed(slug); }, true);
     return;
   }
   const syncBtn = e.target.closest('.customListSyncBtn');
@@ -75364,7 +75472,9 @@ if (_creatorDashEl) {
     // background account sync (a full overwrite, not a merge).
     if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') return;
     const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
-    confirmFn("Delete List", "Delete this list? This cannot be undone.", "Delete", () => {
+    confirmFn("Delete List", "Delete this list?", "Delete", () => {
+      const undoSnap = snapshotListForUndo(slug);
+      const undoRows = listRowsReferencing(slug);
       const map = loadLocalCustomLists();
       delete map[slug];
       Object.keys(map).forEach((k) => {
@@ -75403,6 +75513,7 @@ if (_creatorDashEl) {
       if (typeof pushCreatorSync === 'function') pushCreatorSync();
       
       renderCreatorDashboard();
+      showListDeletedToast(undoSnap, undoRows, slug);
     }, true);
     return;
   }
