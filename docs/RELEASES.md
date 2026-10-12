@@ -1944,19 +1944,21 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 2. Deploy the new `worker_entry_combined.js`. Check that `/admin` says **Built 2026-10-12 (build e196580c5d)**.
 3. No stored data is deleted by either step. Threads are deleted only when a person presses the button and confirms.
 
-## 2026-10-12: copying the install link works without a clipboard API
+## 2026-10-12: copying the install link works without a clipboard API, and session revoke takes only real ids
 
-**Branch point:** the "support history" entry above (build e196580c5d). Built 2026-10-12, build 041d94c5a2.
+**Branch point:** the "support history" entry above (build e196580c5d). Built 2026-10-12, build 7f0fd4b7e1.
 
 ### What it changes
 
 - **Audit #15.** `copyLink` (the install-link copy, and the Nuvio buttons that use it) called `navigator.clipboard.writeText` with no guard. Where there is no clipboard API (a page over http, some in-app webviews) it threw before its own "show the link" fallback could run, so the click did nothing. It now goes through `copyTextToClipboard` (`16_`), which falls back to a hidden textarea and `execCommand('copy')`; only if both fail is the link shown to copy by hand, as before.
 - **The Nuvio buttons** ("Install in Nuvio", "Nuvio Web") said "Manifest link copied to clipboard" whether or not it had been. They now say it only when it was.
 - **`sharePreset`** (copy a preset as JSON) had the same unguarded call and the same dead fallback prompt; it uses the same helper.
+- **Audit #8.** `DELETE /api/me/sessions` used `id` as a SQL `LIKE` prefix, so `{"id":"%"}` revoked every session of the account, the caller's own included, and `{"id":""}` fell through to "revoke everything". An `id` that is given must now be exactly the 16 hex characters `GET /api/me/sessions` returns, matched with `substr(id_hash, 1, 16) = ?`; anything else is a 400 and revokes nothing. Leaving `id` out entirely still means every session (unchanged, and tested). No page calls this route, so nothing in the UI changes.
+- **Removed `openNuvioInstallModal`** (24_), which nothing called.
 
 ### Checked
 
-- New `tests/copy-link.client.test.mjs` (10 tests). Seven of them fail on the previous code, with "Cannot read properties of undefined (reading 'writeText')". One existing assertion in `tests/client.test.mjs` (`copyNuvioInstallLink`) now awaits the call, because the toast follows the copy.
+- New `tests/session-revoke.test.mjs` (13 tests; 10 failed before the fix, `{"id":"%"}` answered `revoked: 3`). New `tests/copy-link.client.test.mjs` (10 tests). Seven of them fail on the previous code, with "Cannot read properties of undefined (reading 'writeText')". One existing assertion in `tests/client.test.mjs` (`copyNuvioInstallLink`) now awaits the call, because the toast follows the copy.
 - `bash verify.sh -q` passes.
 
-**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 041d94c5a2)**. No data or migration involved.
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 7f0fd4b7e1)**. No data or migration involved.

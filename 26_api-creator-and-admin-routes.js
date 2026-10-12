@@ -1550,17 +1550,25 @@
       const currentHash = request.session ? request.session.idHash : null;
       const url = new URL(request.url);
       const revokeOthers = body.allExceptCurrent || url.searchParams.get("other") === "1";
-      const targetId = body.id || url.searchParams.get("id");
+      // An id the caller names must be exactly what GET /api/me/sessions hands
+      // out (16 hex characters). It used to be a LIKE prefix, so "%" matched
+      // every session and "" fell through to "revoke everything". Leaving the
+      // id out altogether still means every session.
+      const idGiven = body.id !== undefined || url.searchParams.has("id");
+      const targetId = body.id !== undefined ? body.id : url.searchParams.get("id");
 
       if (revokeOthers) {
         await revokeAccountSessions(env, request.account.id, currentHash);
         return json({ ok: true, revokedOthers: true }, 200, { "Cache-Control": "no-store" });
       }
 
-      if (targetId) {
+      if (idGiven) {
+        if (typeof targetId !== "string" || !/^[0-9a-f]{16}$/.test(targetId)) {
+          return json({ ok: false, error: "Invalid session id." }, 400, { "Cache-Control": "no-store" });
+        }
         const { results } = await env.DB.prepare(
-          "SELECT id_hash FROM sessions WHERE account_id = ? AND id_hash LIKE ? AND revoked_at IS NULL"
-        ).bind(request.account.id, targetId + "%").all();
+          "SELECT id_hash FROM sessions WHERE account_id = ? AND substr(id_hash, 1, 16) = ? AND revoked_at IS NULL"
+        ).bind(request.account.id, targetId).all();
 
         let revokedCurrent = false;
         for (const r of (results || [])) {
