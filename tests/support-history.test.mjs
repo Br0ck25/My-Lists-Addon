@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { call, createUser, makeD1, makeEnv, makeKv, nextIp } from "./harness.mjs";
+import { awaitFreshRateWindow, call, createUser, makeD1, makeEnv, makeKv, nextIp } from "./harness.mjs";
 
 const ROOT = new URL("../", import.meta.url);
 const read = (f) => readFileSync(new URL(f, ROOT), "utf8");
@@ -167,6 +167,9 @@ describe("deleting your support chat history", () => {
     const env = newEnv();
     const ip = nextIp();
     const results = [];
+    // 20 a minute, counted per clock minute: 25 requests across a boundary
+    // would get a second budget and never see the 429.
+    await awaitFreshRateWindow();
     for (let i = 0; i < 25; i++) results.push((await remove(env, { threadIds: ["x"] }, ip)).status);
     assert.equal(results[0], 200);
     assert.ok(results.includes(429), "some request is refused: " + results.join(","));
