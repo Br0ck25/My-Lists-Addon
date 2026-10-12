@@ -1946,7 +1946,7 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 
 ## 2026-10-12: copying the install link works without a clipboard API, and session revoke takes only real ids
 
-**Branch point:** the "support history" entry above (build e196580c5d). Built 2026-10-12, build 7f0fd4b7e1.
+**Branch point:** the "support history" entry above (build e196580c5d). Built 2026-10-12, build f6d66597e8.
 
 ### What it changes
 
@@ -1955,10 +1955,11 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - **`sharePreset`** (copy a preset as JSON) had the same unguarded call and the same dead fallback prompt; it uses the same helper.
 - **Audit #8.** `DELETE /api/me/sessions` used `id` as a SQL `LIKE` prefix, so `{"id":"%"}` revoked every session of the account, the caller's own included, and `{"id":""}` fell through to "revoke everything". An `id` that is given must now be exactly the 16 hex characters `GET /api/me/sessions` returns, matched with `substr(id_hash, 1, 16) = ?`; anything else is a 400 and revokes nothing. Leaving `id` out entirely still means every session (unchanged, and tested). No page calls this route, so nothing in the UI changes.
 - **Removed `openNuvioInstallModal`** (24_), which nothing called.
+- **Audit #14 (contrast).** The channel logo URL errors were coloured `var(--err, #ff453a)`; `--err` is defined nowhere, so the hex fallback (3.4:1 on white, no dark variant) always showed. They use `--color-danger-text` now (5.4:1 light, 5.0:1 dark, measured in the page). The danger button of every confirmation dialog was white on `--danger` (3.5:1); it is still solid red but uses `--color-danger-text` with `--color-text-inverse` (white on `#D70015`, 5.4:1; black on `#FF453A` in dark, 6.2:1). Not changed, because it does not apply: the "Copied!" state of the install-link button, which the audit also named. Its inline white-on-green is overridden by the stylesheet's `!important` brand fill, so the green never showed.
 
 ### Checked
 
-- New `tests/session-revoke.test.mjs` (13 tests; 10 failed before the fix, `{"id":"%"}` answered `revoked: 3`). New `tests/copy-link.client.test.mjs` (10 tests). Seven of them fail on the previous code, with "Cannot read properties of undefined (reading 'writeText')". One existing assertion in `tests/client.test.mjs` (`copyNuvioInstallLink`) now awaits the call, because the toast follows the copy.
+- New `tests/session-revoke.test.mjs` (13 tests; 10 failed before the fix, `{"id":"%"}` answered `revoked: 3`). New `tests/error-colours.client.test.mjs` (6 tests; 5 failed before the fix). New `tests/copy-link.client.test.mjs` (10 tests). Seven of them fail on the previous code, with "Cannot read properties of undefined (reading 'writeText')". One existing assertion in `tests/client.test.mjs` (`copyNuvioInstallLink`) now awaits the call, because the toast follows the copy.
 - `bash verify.sh -q` passes.
 
-**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 7f0fd4b7e1)**. No data or migration involved.
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build f6d66597e8)**. No data or migration involved.

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7f0fd4b7e1";
+const WORKER_BUILD = "f6d66597e8";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -40124,7 +40124,10 @@ function showAppBusy(title, message) {
 function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = true) {
   const icon = isDanger ? '&#x26A0;' : '?';
   const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
-  const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
+  // White text straight on --danger measures about 3.6:1. --color-danger-text
+  // with --color-text-inverse is the pair for text on a danger fill: white on
+  // #D70015 (5.4:1) in light, black on #FF453A (6.2:1) in dark.
+  const confirmBtnStyle = isDanger ? ' background:var(--color-danger-text); color:var(--color-text-inverse); border:none;' : '';
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
@@ -40136,7 +40139,7 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
     '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
     '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
       '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
-      '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
+      '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px;' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
   const btn = document.getElementById('appConfirmBtn');
@@ -53170,14 +53173,14 @@ function applyChannelPosterUrl() {
   try {
     url = new URL(raw);
   } catch (_) {
-    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--err, #ff453a)'; }
+    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;
   }
 
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--err, #ff453a)'; }
+    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;

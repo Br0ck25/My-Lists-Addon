@@ -1365,14 +1365,14 @@ function applyChannelPosterUrl() {
   try {
     url = new URL(raw);
   } catch (_) {
-    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--err, #ff453a)'; }
+    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;
   }
 
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--err, #ff453a)'; }
+    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;
