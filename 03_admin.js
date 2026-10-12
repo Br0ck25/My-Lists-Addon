@@ -316,18 +316,35 @@ async function putFeedbackThread(env, key, entry) {
   const createdAt = Number(entry.createdAt) || Date.now();
   const updatedAt = Number(entry.updatedAt) || createdAt;
   const bodyJson = JSON.stringify(entry);
+  // The account a thread belongs to, in the form the lookup compares. NULL for
+  // an anonymous report. Absent from the statement on a database without
+  // migration 0022, which is the second attempt below.
+  const creatorName = entry.creatorName ? String(entry.creatorName).trim().toLowerCase() || null : null;
 
   if (env && env.DB) {
     try {
-      await env.DB.prepare(
-        `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           status = excluded.status,
-           subject = excluded.subject,
-           body_json = excluded.body_json,
-           updated_at = excluded.updated_at`
-      ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at, creator_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at,
+             creator_name = excluded.creator_name`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt, creatorName).run();
+      } catch (noColumn) {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      }
     } catch (dbErr) {
       console.error("D1 write error (putFeedbackThread):", dbErr);
     }
@@ -335,6 +352,118 @@ async function putFeedbackThread(env, key, entry) {
   if (env && env.CONFIGS) {
     await env.CONFIGS.put(key, bodyJson, { expirationTtl: FEEDBACK_TTL_SEC });
   }
+}
+
+// Every support thread filed under one account, newest first, at most
+// FEEDBACK_CREATOR_THREAD_CAP of them. `creatorName` is the proven username.
+//
+// The database is asked for that account's rows (feedback.creator_name,
+// migration 0022). It used to read the newest 300 rows of EVERYONE and filter
+// by name here, so an account's older conversations vanished once 300 newer
+// threads existed. A database that has not run 0022 still gets that older
+// window rather than an error. KV is the last resort, as before: the same
+// 300-key window, for a deployment with no database at all.
+const FEEDBACK_CREATOR_THREAD_CAP = 100;
+
+//
+// `strict` is for callers that must not mistake a failed read for "none"
+// (detachFeedbackThreadsFromCreator): a database error other than the missing
+// creator_name column is thrown instead of answering with an empty list.
+async function findFeedbackThreadsByCreator(env, creatorName, { strict = false } = {}) {
+  const name = String(creatorName || "").trim().toLowerCase();
+  const found = [];
+  if (!name) return found;
+  const keep = (raw) => {
+    if (!raw) return;
+    try {
+      const entry = JSON.parse(raw);
+      if (entry && entry.id && entry.creatorName && String(entry.creatorName).trim().toLowerCase() === name) found.push(entry);
+    } catch {}
+  };
+  let searchedD1 = false;
+  if (env && env.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        "SELECT body_json FROM feedback WHERE creator_name = ? ORDER BY updated_at DESC LIMIT ?"
+      ).bind(name, FEEDBACK_CREATOR_THREAD_CAP).all();
+      searchedD1 = true;
+      for (const r of (rows && rows.results) || []) keep(r.body_json);
+    } catch (e) {
+      if (strict && !/creator_name|no such column/i.test(String((e && e.message) || e))) throw e;
+      try {
+        const rows = await env.DB.prepare("SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300").all();
+        if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
+          searchedD1 = true;
+          for (const r of rows.results) keep(r.body_json);
+        }
+      } catch (e2) {
+        if (strict) throw e2;
+      }
+    }
+  }
+  if (!searchedD1 && env && env.CONFIGS) {
+    try {
+      const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
+      let scanKeys = [];
+      let cursor;
+      let pages = 0;
+      while (pages < 30) {
+        const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
+        scanKeys.push(...(listRes.keys || []).map((k) => k.name));
+        if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
+        pages++;
+        if (listRes.list_complete || !listRes.cursor) break;
+        cursor = listRes.cursor;
+      }
+      scanKeys.reverse();
+      await Promise.all(scanKeys.map(async (kName) => {
+        try { keep(await env.CONFIGS.get(kName)); } catch (e) { if (strict) throw e; }
+      }));
+    } catch (e) {
+      if (strict) throw e;
+    }
+  }
+  return found;
+}
+
+// Takes every support thread off a username, keeping the conversation. A name
+// can be registered again minutes after its account is deleted, and "my
+// support history" is looked up by name, so a thread left under it would be
+// shown -- messages and the contact address -- to the next holder. The thread
+// becomes an ordinary one (readable only with its id, like an anonymous
+// report); the developer still has it, with the old name in formerCreatorName.
+// Throws if a thread could not be updated, so the caller does not go on to free
+// the name. Returns how many were detached.
+async function detachFeedbackThreadsFromCreator(env, username) {
+  const name = String(username || "").trim().toLowerCase();
+  let detached = 0;
+  if (!name) return detached;
+  // Each round takes up to FEEDBACK_CREATOR_THREAD_CAP; the 20-round ceiling
+  // only stops a loop that somehow makes no progress.
+  for (let round = 0; round < 20; round++) {
+    const entries = await findFeedbackThreadsByCreator(env, name, { strict: true });
+    if (!entries.length) break;
+    for (const entry of entries) {
+      entry.formerCreatorName = entry.creatorName;
+      entry.creatorName = null;
+      const bodyJson = JSON.stringify(entry);
+      if (env.DB) {
+        try {
+          await env.DB.prepare("UPDATE feedback SET creator_name = NULL, body_json = ? WHERE id = ?").bind(bodyJson, entry.id).run();
+        } catch (e) {
+          if (!/creator_name|no such column/i.test(String((e && e.message) || e))) throw e;
+          await env.DB.prepare("UPDATE feedback SET body_json = ? WHERE id = ?").bind(bodyJson, entry.id).run();
+        }
+      }
+      if (env.CONFIGS) {
+        await env.CONFIGS.put(`feedback:${entry.id}`, bodyJson, { expirationTtl: FEEDBACK_TTL_SEC });
+      }
+      detached++;
+    }
+    // Without a database the KV scan is the only lookup and it is one pass.
+    if (!env.DB) break;
+  }
+  return detached;
 }
 
 // The display fields for a tracked title -- its name and media type.
@@ -1237,6 +1366,27 @@ function sanitizeStatGroupName(raw) {
   return /^[A-Za-z0-9 &().'-]+$/.test(s) ? s : null;
 }
 
+// The row categories the builder puts on an install's rows (a row's `group`).
+// /api/track-install is open to anyone, and used to take whatever names it was
+// sent, so one caller could make any number of rows in the "sources people use"
+// table. A known category is counted under its own name and everything else
+// under "Other". tests/anonymous-write-limits.test.mjs reads the builder's
+// sources and fails when a category is added there and not here.
+const INSTALL_STAT_GROUPS = new Set([
+  "Combined Charts", "MDBList Charts", "TMDB Charts", "Trakt Charts", "Simkl Charts",
+  "My Lists Addon Charts", "Streaming", "Streaming Top 10", "Hidden Gems", "Kids",
+  "Holidays", "Genres", "Custom", "Custom Lists", "Curated", "Channels",
+]);
+const INSTALL_STAT_OTHER_GROUP = "Other";
+// Per address, per minute: the same budget as /api/track-event.
+const TRACK_INSTALL_PER_MINUTE = 30;
+
+function installStatGroupName(raw) {
+  const name = sanitizeStatGroupName(raw);
+  if (!name) return null;
+  return INSTALL_STAT_GROUPS.has(name) ? name : INSTALL_STAT_OTHER_GROUP;
+}
+
 // The "copies" column of the admin Community Lists panel is keyed by a
 // list's own slug (see computeCatalogAndCommunityLeaderboards, which looks
 // up copiesBySlug.get(data.slug)). The client, though, sends
@@ -1820,6 +1970,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/jobs/ping": "admin.jobs.test",
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
+  "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -2059,8 +2210,8 @@ ${UTILITY_CSS}
     min-height: 44px;
     border-radius: var(--radius-pill);
     border: none;
-    background: var(--accent);
-    color: #fff;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     cursor: pointer;
     font-weight: 600;
     font-size: 0.925rem;
@@ -2385,7 +2536,7 @@ async function renderAdminDashboard(env) {
   // loadStatsByDay has to for pageviews/installs.
   let sourceGroups = [];
   if (env.DB) {
-    const { results } = await env.DB.prepare("SELECT * FROM source_groups").all();
+    const { results } = await env.DB.prepare("SELECT * FROM source_groups ORDER BY install_count DESC LIMIT ?").bind(STAT_TOTALS_READ_CAP).all();
     sourceGroups = results.map(row => ({ group: row.name, count: row.install_count }));
   } else {
     const sourceGroupPrefix = "stats:sourcegroup:";
@@ -2440,10 +2591,10 @@ ${UTILITY_CSS}
   .admin-subnav-bar { display:flex; gap:8px; margin:14px 0 16px; flex-wrap:wrap; }
   .subnav-pill {
     background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:6px 14px;
-    font-size:0.85rem; font-weight:600; color:var(--muted); cursor:pointer; transition:all 0.15s ease;
+    font-size:0.85rem; font-weight:600; color:var(--muted); cursor:pointer; transition:background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .subnav-pill:hover { border-color:var(--border-strong); color:var(--text); }
-  .subnav-pill.active { background:var(--accent); color:#FFFFFF; border-color:var(--accent); }
+  .subnav-pill.active { background:var(--color-brand-fill); color:var(--color-on-brand); border-color:var(--color-brand-fill); }
   .admin-tab-panel { display:none; }
   .admin-tab-panel.active { display:block; }
   .admin-select { padding:6px 10px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.85rem; margin-right:6px; outline:none; }
@@ -2508,7 +2659,7 @@ ${UTILITY_CSS}
   .modal-close-x:hover { color: var(--text); border-color: var(--text-2); }
   .lc-btn {
     padding: 10px 18px; min-height: 38px; border-radius: var(--radius-pill);
-    border: none; background: var(--accent); color: #fff; cursor: pointer;
+    border: none; background: var(--color-brand-fill); color: var(--color-on-brand); cursor: pointer;
     font-weight: 600; font-size: 0.925rem; font-family: inherit;
     display: inline-flex; align-items: center; justify-content: center;
     transition: opacity 0.12s; text-decoration: none;
@@ -2518,7 +2669,7 @@ ${UTILITY_CSS}
     border: 1.5px solid var(--border-strong);
   }
   .lc-btn.danger {
-    background: var(--danger); color: #fff; border: none;
+    background: var(--color-danger-text); color: var(--color-text-inverse); border: none;
   }
   .lc-btn:hover:not(:disabled) { opacity: 0.85; }
   .lc-btn:disabled { opacity: 0.4; cursor: default; }
@@ -3082,6 +3233,16 @@ ${UTILITY_CSS}
       <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
       <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
       <span id="kvExportStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+    </div>
+
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Old anonymous channel links</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Before shares needed an account, anyone could make a channel link with no owner. Nobody can withdraw one. <strong>Count</strong> only looks: it shows how many there are. <strong>Delete</strong> removes them, their likes and their Explore Channels listing, so those share links stop working; an install that already holds a channel keeps it.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> Run <strong>Export old data to R2</strong> above with the prefix <code>channelshare:</code> first.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessCountBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([false])}">Count</button>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessDeleteBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([true])}">Delete</button>
+      <span id="ownerlessStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="ownerlessResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -4460,6 +4621,55 @@ ${UTILITY_CSS}
         }
       } catch (e) {
         status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';
+      }
+      buttons.forEach(function (b) { b.disabled = false; });
+    }
+
+    // Shared channels no account owns (removeOwnerlessChannels, 60_). A count
+    // unless apply, a batch per request.
+    async function runOwnerlessChannels(apply) {
+      if (apply && !confirm('Delete every shared channel that no account owns? Their share links stop working and this cannot be undone. Export channelshare: to R2 first.')) return;
+      const buttons = [document.getElementById('ownerlessCountBtn'), document.getElementById('ownerlessDeleteBtn')];
+      const status = document.getElementById('ownerlessStatus');
+      const out = document.getElementById('ownerlessResult');
+      const nl = String.fromCharCode(10);
+      buttons.forEach(function (b) { b.disabled = true; });
+      out.textContent = '';
+      let found = [];
+      let failed = [];
+      let unreadable = [];
+      let scanned = 0;
+      let deleted = 0;
+      const show = function () {
+        const listed = found.filter(function (c) { return c.published; }).length;
+        out.textContent = [
+          found.length + ' shared channels have no owner (' + listed + ' of them listed in Explore Channels), of ' + scanned + ' looked at.',
+          apply ? deleted + ' deleted.' : 'Nothing was deleted: this is only a count.',
+          failed.length ? 'Could not delete: ' + failed.join(', ') : '',
+          unreadable.length ? 'Could not read, left alone: ' + unreadable.join(', ') : '',
+          'Examples: ' + (found.length ? found.slice(0, 15).map(function (c) { return nl + '  ' + c.code + (c.name ? ' ' + c.name : '') + (c.published ? ' (listed)' : ''); }).join('') : 'none'),
+        ].filter(Boolean).join(nl);
+      };
+      let state = { apply: !!apply };
+      if (apply) state.confirm = 'delete ownerless channels';
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/channel-ownerless', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const d = await res.json();
+          if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on; deleted channels stay deleted.'; break; }
+          scanned += Number(d.scanned) || 0;
+          deleted += Number(d.deleted) || 0;
+          found = found.concat(d.ownerless || []);
+          failed = failed.concat(d.failed || []);
+          unreadable = unreadable.concat(d.unreadable || []);
+          show();
+          if (d.done) { status.textContent = 'Done.'; break; }
+          status.textContent = (apply ? 'Deleting... ' : 'Counting... ') + scanned + ' channels looked at so far.';
+          state = { apply: !!apply, cursor: d.next };
+          if (apply) state.confirm = 'delete ownerless channels';
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to carry on; deleted channels stay deleted.';
       }
       buttons.forEach(function (b) { b.disabled = false; });
     }

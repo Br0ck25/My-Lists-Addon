@@ -151,6 +151,12 @@ function emptyResolvedInstallConfig() {
   };
 }
 
+// A link that names nothing this Worker holds. The routes answer it with a 404
+// (manifest) or an uncached empty page, never the generic add-on.
+function unresolvedInstallConfig() {
+  return { ...emptyResolvedInstallConfig(), unresolved: true };
+}
+
 // Splits a stored config into what may stay in KV and what has to move.
 // `byProvider` maps provider -> { column: plaintext }; `other` collects
 // credential-looking fields the table does not name.
@@ -354,16 +360,18 @@ async function applyLegacyInstallRecord(env, id, parsed) {
 
 async function resolveV2InstallConfig(param, env, { withTracking = false } = {}) {
   const token = param.slice(INSTALL_TOKEN_PARAM_PREFIX.length);
-  if (!isWellFormedInstallToken(token)) return emptyResolvedInstallConfig();
+  if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
-  if (!snap || snap.missing || snap.revoked || typeof snap.config !== "string") return emptyResolvedInstallConfig();
+  // A removed install stays what it was: an empty add-on, not a not-found.
+  if (snap && snap.revoked) return emptyResolvedInstallConfig();
+  if (!snap || snap.missing || typeof snap.config !== "string") return unresolvedInstallConfig();
   let cfg;
   try {
     cfg = JSON.parse(snap.config);
   } catch {
-    return emptyResolvedInstallConfig();
+    return unresolvedInstallConfig();
   }
-  if (!cfg || typeof cfg !== "object") return emptyResolvedInstallConfig();
+  if (!cfg || typeof cfg !== "object") return unresolvedInstallConfig();
   // The owner is the account that created it while signed in: proven once, at
   // creation, and ended by revoking the install or deleting the account (which
   // deletes the row).

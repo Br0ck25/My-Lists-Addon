@@ -1431,14 +1431,14 @@ function sharePreset(name) {
   if (preset.customLists) payload.customLists = preset.customLists;
   if (preset.channels) payload.channels = preset.channels;
   const jsonStr = JSON.stringify(payload, null, 2);
-  navigator.clipboard.writeText(jsonStr).then(() => {
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
-    } else {
-      showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
-    }
-  }).catch(() => {
-    if (typeof showAppPrompt === 'function') {
+  return copyTextToClipboard(jsonStr).then((copied) => {
+    if (copied) {
+      if (typeof showAppAlert === 'function') {
+        showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
+      } else {
+        showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
+      }
+    } else if (typeof showAppPrompt === 'function') {
       showAppPrompt('Preset JSON', 'Copy this preset JSON below:', jsonStr);
     }
   });
@@ -1839,8 +1839,13 @@ function loadSavedState() {
   }
 }
 
-function copyLink(url) {
-  navigator.clipboard.writeText(url).then(() => {
+// Resolves true when the link reached the clipboard. copyTextToClipboard tries
+// the clipboard API and then a hidden textarea, so this also works where there
+// is no navigator.clipboard (a page over http, some in-app webviews); only when
+// both fail is the link shown for copying by hand.
+async function copyLink(url) {
+  const copied = await copyTextToClipboard(url);
+  if (copied) {
     const urlBtn = document.getElementById('copyUrlBtn');
     if (urlBtn) {
       const oldUrlHtml = urlBtn.innerHTML;
@@ -1855,76 +1860,42 @@ function copyLink(url) {
         urlBtn.style.borderColor = '';
       }, 1800);
     }
-  }).catch(() => {
-    const display = document.getElementById('manifestLinkDisplay');
-    if (window.getSelection && display) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(display);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-    showToast('Manifest URL: ' + url, 'error');
-  });
+    return true;
+  }
+  const display = document.getElementById('manifestLinkDisplay');
+  if (window.getSelection && display) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(display);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  showToast('Manifest URL: ' + url, 'error');
+  return false;
 }
 
 function openNuvioWeb(url) {
-  if (url) copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
+  // window.open stays synchronous, inside the click, or a popup blocker eats it.
   window.open('https://nuvio.tv/account?tab=addons', '_blank', 'noopener,noreferrer');
+  if (!url) return Promise.resolve(false);
+  return copyLink(url).then((copied) => {
+    if (copied) showToast('Manifest link copied to clipboard.', 'success');
+    return copied;
+  });
 }
 
 // Copies the manifest link to the clipboard and shows toast feedback so the user
 // has the link ready to paste in Nuvio settings if needed.
 function copyNuvioInstallLink(url) {
-  if (!url) return;
-  copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
+  if (!url) return Promise.resolve(false);
+  return copyLink(url).then((copied) => {
+    if (copied) showToast('Manifest link copied to clipboard.', 'success');
+    return copied;
+  });
 }
 window.copyNuvioInstallLink = copyNuvioInstallLink;
 
-function openNuvioInstallModal(url) {
-  if (!url) return;
-  copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
-  const html =
-    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">&#x2715;</button>' +
-    '<h2>Install in Nuvio</h2>' +
-    '<p class="modal-sub">Nuvio syncs addons across all your devices via your Nuvio account, or via app settings.</p>' +
-    '<div class="u-p-10px_14px u-br-v_radius_sm u-mb-16px u-ai-center u-gap-10px" style="display:flex; background:var(--color-success-subtle); border:1px solid var(--color-success);">' +
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="u-fsh-0"><polyline points="20 6 9 17 4 12"></polyline></svg>' +
-      '<div class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Manifest link copied to clipboard!</div>' +
-    '</div>' +
-    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-12px u-bg-v_surface">' +
-      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Web Browser / Account Sync (Recommended)</div>' +
-      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">Install on nuvio.tv to automatically sync this addon across your Desktop app, Mobile app, and TV.</p>' +
-      '<div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">' +
-        '<a href="https://nuvio.tv/account?tab=addons" target="_blank" rel="noopener noreferrer" class="btn btn-primary u-p-8px_16px u-fs-v_font_size_sm u-fw-600 u-br-v_radius_pill u-td-none u-ai-center u-gap-6px" style="display:inline-flex;">' +
-          '<span>Open nuvio.tv Addons</span>' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>' +
-        '</a>' +
-        '<span class="u-c-v_muted u-fs-v_font_size_xs">Paste the copied link into Addon URL and confirm</span>' +
-      '</div>' +
-    '</div>' +
-    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-14px u-bg-v_surface">' +
-      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Nuvio Desktop &amp; Mobile App</div>' +
-      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">In the Nuvio app, go to: <strong>Settings &rarr; Content &amp; Discovery &rarr; Addons</strong> and paste your copied manifest link.</p>' +
-    '</div>' +
-    '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px">Manifest Link:</div>' +
-    '<div class="install-url-input-group u-ai-stretch u-gap-8px u-mb-16px" style="display:flex; width:100%;">' +
-      '<div class="install-url-box u-flex-1 u-minw-0 u-m-0 u-ai-center u-fs-v_font_size_xs u-overflowwrap-anywhere" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Click to copy" style="display:flex;">' + escapeHtml(url) + '</div>' +
-      '<button type="button" class="lc-btn secondary u-flex-none u-p-0_14px u-minh-36px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_xs u-br-v_radius_pill" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Copy link" style="display:inline-flex;">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
-        '<span>Copy</span>' +
-      '</button>' +
-    '</div>' +
-    '<div class="actions u-mt-14px">' +
-      '<button type="button" class="primary" data-act="closeModal">Done</button>' +
-    '</div>';
-  showModal(html);
-}
 window.openNuvioWeb = openNuvioWeb;
-window.openNuvioInstallModal = openNuvioInstallModal;
 
 // docs/DECISIONS.md D-8. Signed in, the save proves the account (/api/save
 // verifies it and never stores it in the link). Signed out, the save carries
@@ -2688,7 +2659,7 @@ window.addEventListener('popstate', (e) => {
 //
 //   * real-path routing for the six views (APP_SHELL_TAB_LIST, injected from
 //     APP_SHELL_TABS in 00_constants.js): /catalogs, /catalogs/quickadd,
-//     /settings/connections and so on. The server renders the same table into
+//     /settings/account and so on. The server renders the same table into
 //     the nav (buildAppShellNavHtml, 09_page-shell.js), so the two cannot
 //     drift;
 //   * appShellState, one small observable object instead of the globals the
@@ -4115,7 +4086,7 @@ ${UTILITY_CSS}
     font-size: 0.9rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
     cursor: pointer;
     border: none;
   }
@@ -4208,7 +4179,7 @@ ${UTILITY_CSS}
     font-size: 0.85rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   }
   .toc-pill:hover {
     color: var(--text);

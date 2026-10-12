@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-10-11";
+const WORKER_BUILD_DATE = "2026-10-12";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c3f7831ad9";
+const WORKER_BUILD = "2747c901d9";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -1287,6 +1287,14 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0021", kind: "index", name: "idx_support_messages_rfc_id",
     consequence: "Matching incoming replies by RFC Message-ID scans the whole messages table. Slower, not broken.",
+  },
+  {
+    migration: "0022", kind: "column", table: "feedback", name: "creator_name",
+    consequence: "My support history can only see the newest 300 threads of everyone: once 300 newer threads exist, an account's older conversations drop out of its own list. The Worker falls back to that older statement while the column is missing.",
+  },
+  {
+    migration: "0022", kind: "index", name: "idx_feedback_creator_updated",
+    consequence: "Looking up one account's support threads scans the whole feedback table. Slower, not broken.",
   },
 ];
 
@@ -4268,7 +4276,7 @@ async function schemaWriteGate(request, env) {
 // our own origin (or have Sec-Fetch-Site: same-origin) AND carry Content-Type: application/json.
 // Exemptions:
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
-// 2. OAuth provider callbacks and starts (/api/*/oauth/*)
+// 2. OAuth provider callbacks and starts (/api/{trakt,mdblist,simkl,tmdb}/oauth/{start,callback})
 // 3. Admin form login and logout (/admin/login, /admin/logout)
 // 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
 function verifyCsrf(request) {
@@ -4289,7 +4297,10 @@ function verifyCsrf(request) {
   if (path.startsWith("/api/scrobble")) {
     return null;
   }
-  if (path.includes("/oauth/")) {
+  // Exactly the eight provider routes (tests/route-access.json). This was
+  // path.includes("/oauth/"), which also skipped the check for any path with
+  // those characters in it, ids in the middle of a real route included.
+  if (/^\/api\/(trakt|mdblist|simkl|tmdb)\/oauth\/(start|callback)$/.test(path)) {
     return null;
   }
   // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
@@ -4811,7 +4822,9 @@ function decodeConfig(config) {
       trackOwner: "",
     };
   } catch {
-    return { entries: [], ...readInstallConfigFields({}), ...noAccount };
+    // Not a config at all (a short id nobody holds, or garbage): say so, so the
+    // routes can answer "not found" instead of serving an empty add-on.
+    return { entries: [], ...readInstallConfigFields({}), ...noAccount, unresolved: true };
   }
 }
 
@@ -8746,6 +8759,19 @@ async function purgeCreatorData(env, username, options = {}) {
     }
   }
 
+  // Support threads are looked up by username, so a deleted or re-registered
+  // name must not keep any (see detachFeedbackThreadsFromCreator). Not for a
+  // reset: the account stays and stays their owner. A failure counts like any
+  // other leftover: the name is not freed.
+  if (deleteIdentity || options.detachSupportThreads === true) {
+    try {
+      await detachFeedbackThreadsFromCreator(env, u);
+    } catch (e) {
+      console.error("purgeCreatorData: could not detach the support threads", e);
+      dataSweepFailed = true;
+    }
+  }
+
   let identityRemoved = false;
   if (deleteIdentity) {
     // Last, and only for delete-account: the identity itself. Done after
@@ -11229,18 +11255,35 @@ async function putFeedbackThread(env, key, entry) {
   const createdAt = Number(entry.createdAt) || Date.now();
   const updatedAt = Number(entry.updatedAt) || createdAt;
   const bodyJson = JSON.stringify(entry);
+  // The account a thread belongs to, in the form the lookup compares. NULL for
+  // an anonymous report. Absent from the statement on a database without
+  // migration 0022, which is the second attempt below.
+  const creatorName = entry.creatorName ? String(entry.creatorName).trim().toLowerCase() || null : null;
 
   if (env && env.DB) {
     try {
-      await env.DB.prepare(
-        `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           status = excluded.status,
-           subject = excluded.subject,
-           body_json = excluded.body_json,
-           updated_at = excluded.updated_at`
-      ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at, creator_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at,
+             creator_name = excluded.creator_name`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt, creatorName).run();
+      } catch (noColumn) {
+        await env.DB.prepare(
+          `INSERT INTO feedback (id, status, subject, body_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             status = excluded.status,
+             subject = excluded.subject,
+             body_json = excluded.body_json,
+             updated_at = excluded.updated_at`
+        ).bind(id, status, subject, bodyJson, createdAt, updatedAt).run();
+      }
     } catch (dbErr) {
       console.error("D1 write error (putFeedbackThread):", dbErr);
     }
@@ -11248,6 +11291,118 @@ async function putFeedbackThread(env, key, entry) {
   if (env && env.CONFIGS) {
     await env.CONFIGS.put(key, bodyJson, { expirationTtl: FEEDBACK_TTL_SEC });
   }
+}
+
+// Every support thread filed under one account, newest first, at most
+// FEEDBACK_CREATOR_THREAD_CAP of them. `creatorName` is the proven username.
+//
+// The database is asked for that account's rows (feedback.creator_name,
+// migration 0022). It used to read the newest 300 rows of EVERYONE and filter
+// by name here, so an account's older conversations vanished once 300 newer
+// threads existed. A database that has not run 0022 still gets that older
+// window rather than an error. KV is the last resort, as before: the same
+// 300-key window, for a deployment with no database at all.
+const FEEDBACK_CREATOR_THREAD_CAP = 100;
+
+//
+// `strict` is for callers that must not mistake a failed read for "none"
+// (detachFeedbackThreadsFromCreator): a database error other than the missing
+// creator_name column is thrown instead of answering with an empty list.
+async function findFeedbackThreadsByCreator(env, creatorName, { strict = false } = {}) {
+  const name = String(creatorName || "").trim().toLowerCase();
+  const found = [];
+  if (!name) return found;
+  const keep = (raw) => {
+    if (!raw) return;
+    try {
+      const entry = JSON.parse(raw);
+      if (entry && entry.id && entry.creatorName && String(entry.creatorName).trim().toLowerCase() === name) found.push(entry);
+    } catch {}
+  };
+  let searchedD1 = false;
+  if (env && env.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        "SELECT body_json FROM feedback WHERE creator_name = ? ORDER BY updated_at DESC LIMIT ?"
+      ).bind(name, FEEDBACK_CREATOR_THREAD_CAP).all();
+      searchedD1 = true;
+      for (const r of (rows && rows.results) || []) keep(r.body_json);
+    } catch (e) {
+      if (strict && !/creator_name|no such column/i.test(String((e && e.message) || e))) throw e;
+      try {
+        const rows = await env.DB.prepare("SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300").all();
+        if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
+          searchedD1 = true;
+          for (const r of rows.results) keep(r.body_json);
+        }
+      } catch (e2) {
+        if (strict) throw e2;
+      }
+    }
+  }
+  if (!searchedD1 && env && env.CONFIGS) {
+    try {
+      const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
+      let scanKeys = [];
+      let cursor;
+      let pages = 0;
+      while (pages < 30) {
+        const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
+        scanKeys.push(...(listRes.keys || []).map((k) => k.name));
+        if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
+        pages++;
+        if (listRes.list_complete || !listRes.cursor) break;
+        cursor = listRes.cursor;
+      }
+      scanKeys.reverse();
+      await Promise.all(scanKeys.map(async (kName) => {
+        try { keep(await env.CONFIGS.get(kName)); } catch (e) { if (strict) throw e; }
+      }));
+    } catch (e) {
+      if (strict) throw e;
+    }
+  }
+  return found;
+}
+
+// Takes every support thread off a username, keeping the conversation. A name
+// can be registered again minutes after its account is deleted, and "my
+// support history" is looked up by name, so a thread left under it would be
+// shown -- messages and the contact address -- to the next holder. The thread
+// becomes an ordinary one (readable only with its id, like an anonymous
+// report); the developer still has it, with the old name in formerCreatorName.
+// Throws if a thread could not be updated, so the caller does not go on to free
+// the name. Returns how many were detached.
+async function detachFeedbackThreadsFromCreator(env, username) {
+  const name = String(username || "").trim().toLowerCase();
+  let detached = 0;
+  if (!name) return detached;
+  // Each round takes up to FEEDBACK_CREATOR_THREAD_CAP; the 20-round ceiling
+  // only stops a loop that somehow makes no progress.
+  for (let round = 0; round < 20; round++) {
+    const entries = await findFeedbackThreadsByCreator(env, name, { strict: true });
+    if (!entries.length) break;
+    for (const entry of entries) {
+      entry.formerCreatorName = entry.creatorName;
+      entry.creatorName = null;
+      const bodyJson = JSON.stringify(entry);
+      if (env.DB) {
+        try {
+          await env.DB.prepare("UPDATE feedback SET creator_name = NULL, body_json = ? WHERE id = ?").bind(bodyJson, entry.id).run();
+        } catch (e) {
+          if (!/creator_name|no such column/i.test(String((e && e.message) || e))) throw e;
+          await env.DB.prepare("UPDATE feedback SET body_json = ? WHERE id = ?").bind(bodyJson, entry.id).run();
+        }
+      }
+      if (env.CONFIGS) {
+        await env.CONFIGS.put(`feedback:${entry.id}`, bodyJson, { expirationTtl: FEEDBACK_TTL_SEC });
+      }
+      detached++;
+    }
+    // Without a database the KV scan is the only lookup and it is one pass.
+    if (!env.DB) break;
+  }
+  return detached;
 }
 
 // The display fields for a tracked title -- its name and media type.
@@ -12150,6 +12305,27 @@ function sanitizeStatGroupName(raw) {
   return /^[A-Za-z0-9 &().'-]+$/.test(s) ? s : null;
 }
 
+// The row categories the builder puts on an install's rows (a row's `group`).
+// /api/track-install is open to anyone, and used to take whatever names it was
+// sent, so one caller could make any number of rows in the "sources people use"
+// table. A known category is counted under its own name and everything else
+// under "Other". tests/anonymous-write-limits.test.mjs reads the builder's
+// sources and fails when a category is added there and not here.
+const INSTALL_STAT_GROUPS = new Set([
+  "Combined Charts", "MDBList Charts", "TMDB Charts", "Trakt Charts", "Simkl Charts",
+  "My Lists Addon Charts", "Streaming", "Streaming Top 10", "Hidden Gems", "Kids",
+  "Holidays", "Genres", "Custom", "Custom Lists", "Curated", "Channels",
+]);
+const INSTALL_STAT_OTHER_GROUP = "Other";
+// Per address, per minute: the same budget as /api/track-event.
+const TRACK_INSTALL_PER_MINUTE = 30;
+
+function installStatGroupName(raw) {
+  const name = sanitizeStatGroupName(raw);
+  if (!name) return null;
+  return INSTALL_STAT_GROUPS.has(name) ? name : INSTALL_STAT_OTHER_GROUP;
+}
+
 // The "copies" column of the admin Community Lists panel is keyed by a
 // list's own slug (see computeCatalogAndCommunityLeaderboards, which looks
 // up copiesBySlug.get(data.slug)). The client, though, sends
@@ -12733,6 +12909,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/jobs/ping": "admin.jobs.test",
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
+  "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -12972,8 +13149,8 @@ ${UTILITY_CSS}
     min-height: 44px;
     border-radius: var(--radius-pill);
     border: none;
-    background: var(--accent);
-    color: #fff;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     cursor: pointer;
     font-weight: 600;
     font-size: 0.925rem;
@@ -13298,7 +13475,7 @@ async function renderAdminDashboard(env) {
   // loadStatsByDay has to for pageviews/installs.
   let sourceGroups = [];
   if (env.DB) {
-    const { results } = await env.DB.prepare("SELECT * FROM source_groups").all();
+    const { results } = await env.DB.prepare("SELECT * FROM source_groups ORDER BY install_count DESC LIMIT ?").bind(STAT_TOTALS_READ_CAP).all();
     sourceGroups = results.map(row => ({ group: row.name, count: row.install_count }));
   } else {
     const sourceGroupPrefix = "stats:sourcegroup:";
@@ -13353,10 +13530,10 @@ ${UTILITY_CSS}
   .admin-subnav-bar { display:flex; gap:8px; margin:14px 0 16px; flex-wrap:wrap; }
   .subnav-pill {
     background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:6px 14px;
-    font-size:0.85rem; font-weight:600; color:var(--muted); cursor:pointer; transition:all 0.15s ease;
+    font-size:0.85rem; font-weight:600; color:var(--muted); cursor:pointer; transition:background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .subnav-pill:hover { border-color:var(--border-strong); color:var(--text); }
-  .subnav-pill.active { background:var(--accent); color:#FFFFFF; border-color:var(--accent); }
+  .subnav-pill.active { background:var(--color-brand-fill); color:var(--color-on-brand); border-color:var(--color-brand-fill); }
   .admin-tab-panel { display:none; }
   .admin-tab-panel.active { display:block; }
   .admin-select { padding:6px 10px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--surface); color:var(--text); font-size:0.85rem; margin-right:6px; outline:none; }
@@ -13421,7 +13598,7 @@ ${UTILITY_CSS}
   .modal-close-x:hover { color: var(--text); border-color: var(--text-2); }
   .lc-btn {
     padding: 10px 18px; min-height: 38px; border-radius: var(--radius-pill);
-    border: none; background: var(--accent); color: #fff; cursor: pointer;
+    border: none; background: var(--color-brand-fill); color: var(--color-on-brand); cursor: pointer;
     font-weight: 600; font-size: 0.925rem; font-family: inherit;
     display: inline-flex; align-items: center; justify-content: center;
     transition: opacity 0.12s; text-decoration: none;
@@ -13431,7 +13608,7 @@ ${UTILITY_CSS}
     border: 1.5px solid var(--border-strong);
   }
   .lc-btn.danger {
-    background: var(--danger); color: #fff; border: none;
+    background: var(--color-danger-text); color: var(--color-text-inverse); border: none;
   }
   .lc-btn:hover:not(:disabled) { opacity: 0.85; }
   .lc-btn:disabled { opacity: 0.4; cursor: default; }
@@ -13995,6 +14172,16 @@ ${UTILITY_CSS}
       <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
       <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
       <span id="kvExportStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+    </div>
+
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Old anonymous channel links</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Before shares needed an account, anyone could make a channel link with no owner. Nobody can withdraw one. <strong>Count</strong> only looks: it shows how many there are. <strong>Delete</strong> removes them, their likes and their Explore Channels listing, so those share links stop working; an install that already holds a channel keeps it.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> Run <strong>Export old data to R2</strong> above with the prefix <code>channelshare:</code> first.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessCountBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([false])}">Count</button>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessDeleteBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([true])}">Delete</button>
+      <span id="ownerlessStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="ownerlessResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -15373,6 +15560,55 @@ ${UTILITY_CSS}
         }
       } catch (e) {
         status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';
+      }
+      buttons.forEach(function (b) { b.disabled = false; });
+    }
+
+    // Shared channels no account owns (removeOwnerlessChannels, 60_). A count
+    // unless apply, a batch per request.
+    async function runOwnerlessChannels(apply) {
+      if (apply && !confirm('Delete every shared channel that no account owns? Their share links stop working and this cannot be undone. Export channelshare: to R2 first.')) return;
+      const buttons = [document.getElementById('ownerlessCountBtn'), document.getElementById('ownerlessDeleteBtn')];
+      const status = document.getElementById('ownerlessStatus');
+      const out = document.getElementById('ownerlessResult');
+      const nl = String.fromCharCode(10);
+      buttons.forEach(function (b) { b.disabled = true; });
+      out.textContent = '';
+      let found = [];
+      let failed = [];
+      let unreadable = [];
+      let scanned = 0;
+      let deleted = 0;
+      const show = function () {
+        const listed = found.filter(function (c) { return c.published; }).length;
+        out.textContent = [
+          found.length + ' shared channels have no owner (' + listed + ' of them listed in Explore Channels), of ' + scanned + ' looked at.',
+          apply ? deleted + ' deleted.' : 'Nothing was deleted: this is only a count.',
+          failed.length ? 'Could not delete: ' + failed.join(', ') : '',
+          unreadable.length ? 'Could not read, left alone: ' + unreadable.join(', ') : '',
+          'Examples: ' + (found.length ? found.slice(0, 15).map(function (c) { return nl + '  ' + c.code + (c.name ? ' ' + c.name : '') + (c.published ? ' (listed)' : ''); }).join('') : 'none'),
+        ].filter(Boolean).join(nl);
+      };
+      let state = { apply: !!apply };
+      if (apply) state.confirm = 'delete ownerless channels';
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/channel-ownerless', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const d = await res.json();
+          if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on; deleted channels stay deleted.'; break; }
+          scanned += Number(d.scanned) || 0;
+          deleted += Number(d.deleted) || 0;
+          found = found.concat(d.ownerless || []);
+          failed = failed.concat(d.failed || []);
+          unreadable = unreadable.concat(d.unreadable || []);
+          show();
+          if (d.done) { status.textContent = 'Done.'; break; }
+          status.textContent = (apply ? 'Deleting... ' : 'Counting... ') + scanned + ' channels looked at so far.';
+          state = { apply: !!apply, cursor: d.next };
+          if (apply) state.confirm = 'delete ownerless channels';
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to carry on; deleted channels stay deleted.';
       }
       buttons.forEach(function (b) { b.disabled = false; });
     }
@@ -31906,7 +32142,7 @@ ${UTILITY_CSS}
   button.lc-btn.primary,
   .actions button.lc-btn.primary {
     background: var(--color-brand-fill);
-    color: var(--color-text-inverse, var(--color-on-brand));
+    color: var(--color-on-brand);
     border-color: var(--color-brand-fill);
     box-shadow: 0 2px 6px var(--color-brand-subtle);
   }
@@ -33606,7 +33842,7 @@ ${UTILITY_CSS}
   .btn-primary,
   .primary:not(.lc-btn) {
     background: var(--color-brand-fill);
-    color: var(--color-text-inverse, var(--color-on-brand));
+    color: var(--color-on-brand);
     border-color: var(--color-brand-fill);
     box-shadow: 0 2px 8px var(--color-brand-subtle);
     min-height: var(--control-height-md, 40px);
@@ -33618,7 +33854,7 @@ ${UTILITY_CSS}
   .primary:not(.lc-btn):hover:not(:disabled) {
     background: var(--color-brand-fill-hover);
     border-color: var(--color-brand-fill-hover);
-    color: var(--color-text-inverse, var(--color-on-brand));
+    color: var(--color-on-brand);
   }
 
   :where(button:not(.secondary, .btn-secondary, .btn-ghost, .btn-danger, .btn-tertiary, .bottom-nav-item, .lc-btn, .tab-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, .theme-toggle-btn, .modal-close-x, .cw-remove-btn, .ec-btn, .item-back-btn, .view-btn, .text-action-btn, .search-clear-btn)):active:not(:disabled),
@@ -33913,14 +34149,14 @@ ${UTILITY_CSS}
   }
   .install-url-copy-btn.primary {
     background: var(--color-brand-fill) !important;
-    color: var(--color-text-inverse, var(--color-on-brand)) !important;
+    color: var(--color-on-brand) !important;
     border-color: var(--color-brand-fill) !important;
     box-shadow: 0 2px 6px var(--color-brand-subtle) !important;
   }
   .install-url-copy-btn.primary:hover {
     background: var(--color-brand-fill-hover) !important;
     border-color: var(--color-brand-fill-hover) !important;
-    color: var(--color-text-inverse, var(--color-on-brand)) !important;
+    color: var(--color-on-brand) !important;
   }
   .install-url-copy-btn.primary svg {
     stroke: var(--color-on-brand);
@@ -37375,7 +37611,10 @@ if ('serviceWorker' in navigator) {
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
             <span id="supportChatStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
-            <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
+            <span class="u-gap-8px" style="display:inline-flex;">
+              <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="deleteUserFeedbackHistory">Delete chat history</button>
+              <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
+            </span>
           </div>
         </div>
 
@@ -39950,7 +40189,10 @@ function showAppBusy(title, message) {
 function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = true) {
   const icon = isDanger ? '&#x26A0;' : '?';
   const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
-  const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
+  // White text straight on --danger measures about 3.6:1. --color-danger-text
+  // with --color-text-inverse is the pair for text on a danger fill: white on
+  // #D70015 (5.4:1) in light, black on #FF453A (6.2:1) in dark.
+  const confirmBtnStyle = isDanger ? ' background:var(--color-danger-text); color:var(--color-text-inverse); border:none;' : '';
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
@@ -39962,7 +40204,7 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
     '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
     '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
       '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
-      '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
+      '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px;' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
   const btn = document.getElementById('appConfirmBtn');
@@ -40364,6 +40606,52 @@ function refreshUserFeedbackThreads() {
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
     }
   });
+}
+
+// Settings > Support > "Delete chat history". The threads are removed on the
+// server as well (the developer's panel loses them), so it is confirmed first
+// rather than offered as an undo. This device only forgets them once the server
+// has said they are gone: a refused delete leaves the chat as it was.
+function deleteUserFeedbackHistory() {
+  const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
+  confirmFn(
+    'Delete chat history',
+    'This deletes every support conversation you have had with the developer, here and on the server. It cannot be undone.',
+    'Delete',
+    async () => {
+      const auth = feedbackCreatorAuth();
+      const failed = (why) => {
+        const text = why || 'Please try again in a moment.';
+        if (typeof showAppAlert === 'function') showAppAlert('Could not delete chat history', text);
+        else if (typeof showToast === 'function') showToast('Could not delete chat history. ' + text, 'error');
+      };
+      try {
+        const res = await creatorApiFetch(ORIGIN + '/api/feedback/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadIds: getUserFeedbackThreadIds(),
+            creatorName: auth.creatorName,
+            creatorKey: auth.creatorKey,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!data || !data.ok) {
+          failed(data && data.error);
+          return;
+        }
+      } catch (e) {
+        failed();
+        return;
+      }
+      try { localStorage.removeItem('myListAddon:feedbackThreadIds'); } catch (e) {}
+      userFeedbackThreads = [];
+      activeFeedbackThreadId = null;
+      isComposingNewFeedback = false;
+      renderUserFeedbackThreadsUI();
+      if (typeof showToast === 'function') showToast('Chat history deleted', 'success');
+    }
+  );
 }
 
 function toggleNewFeedbackForm(showNew) {
@@ -47533,25 +47821,74 @@ async function loadPosterSlot(slot) {
   }
 }
 
+// A card fills its poster strip when it is near the screen, not when the page is
+// drawn. Every card used to load at once: 168 /api/preview calls for one load of
+// Discover, against a limit of 240 a minute for the address, so the next load
+// (or a second person on the same network) got 429s and rows of "Couldn't load
+// previews". The observer reports the cards already on screen straight away,
+// so the top of the page fills as quickly as before.
+const POSTER_SLOT_CONCURRENCY = 5;
+const POSTER_SLOT_LOOKAHEAD = '600px 0px';
+const posterSlotQueue = [];
+const posterSlotsPending = new WeakSet();
+let posterSlotsLoading = 0;
+let posterSlotObserver = null;
+
+function posterSlotIsHidden(slot) {
+  return !!slot.closest('[style*="display: none"], [style*="display:none"]');
+}
+
+// At most POSTER_SLOT_CONCURRENCY cards load at a time, whichever way they were
+// asked for (right away, or by scrolling).
+function pumpPosterSlotQueue() {
+  while (posterSlotsLoading < POSTER_SLOT_CONCURRENCY && posterSlotQueue.length) {
+    const slot = posterSlotQueue.shift();
+    if (!slot || posterSlotIsHidden(slot)) {
+      // In a hidden tab: left as it is, so showing the tab loads it.
+      if (slot) posterSlotsPending.delete(slot);
+      continue;
+    }
+    posterSlotsLoading++;
+    Promise.resolve(loadPosterSlot(slot)).catch(() => {}).then(() => {
+      posterSlotsLoading--;
+      posterSlotsPending.delete(slot);
+      pumpPosterSlotQueue();
+    });
+  }
+}
+
+function queuePosterSlot(slot) {
+  if (posterSlotsPending.has(slot)) return;
+  posterSlotsPending.add(slot);
+  posterSlotQueue.push(slot);
+  pumpPosterSlotQueue();
+}
+
+function watchPosterSlot(slot) {
+  if (posterSlotsPending.has(slot)) return;
+  if (typeof IntersectionObserver === 'undefined') {
+    queuePosterSlot(slot);
+    return;
+  }
+  if (!posterSlotObserver) {
+    posterSlotObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        posterSlotObserver.unobserve(entry.target);
+        queuePosterSlot(entry.target);
+      });
+    }, { rootMargin: POSTER_SLOT_LOOKAHEAD });
+  }
+  // Observing an element twice is a no-op, so this is safe when the function
+  // below runs again for the same page.
+  posterSlotObserver.observe(slot);
+}
+
 async function populateSearchResultPosters() {
   const allSlots = [...document.querySelectorAll('.poster-preview-slot')];
   // Filter out slots that are inside hidden containers (e.g. inactive tabs)
-  const slots = allSlots.filter((slot) => {
-    return !slot.closest('[style*="display: none"], [style*="display:none"]');
-  });
-  let idx = 0;
-  const CONCURRENCY = 5;
-
-  async function worker() {
-    while (idx < slots.length) {
-      const slot = slots[idx++];
-      if (!slot) continue;
-      if (slot.closest('[style*="display: none"], [style*="display:none"]')) continue;
-      await loadPosterSlot(slot);
-    }
-  }
-
-  Array.from({ length: Math.min(CONCURRENCY, slots.length) }, () => worker());
+  const slots = allSlots.filter((slot) => !posterSlotIsHidden(slot));
+  slots.forEach((slot) => watchPosterSlot(slot));
 }
 
 // Every reader treats these as URL strings -- getLikedListsSet().has(url),
@@ -52719,7 +53056,7 @@ function renderChannelDraftList() {
           ' aria-label="Select this pick" style="width:20px; height:20px;">' +
         '</div>'
       : '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-          '<input type="number" class="pos channelPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
+          '<input type="number" class="pos channelPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + channelDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" aria-label="Position in channel" style="width:34px; height:24px;">' +
         '</div>';
     const removeBtn = selecting ? '' : '<button type="button" class="cw-remove-btn channelRemovePickBtn" title="Remove pick" aria-label="Remove pick" style="z-index:4;">\u2715</button>';
 
@@ -52901,14 +53238,14 @@ function applyChannelPosterUrl() {
   try {
     url = new URL(raw);
   } catch (_) {
-    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--err, #ff453a)'; }
+    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;
   }
 
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--err, #ff453a)'; }
+    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;
@@ -65504,7 +65841,7 @@ function renderCustomListDraftList() {
     const typeLabel = itType === 'series' ? 'Show' : 'Movie';
     const yearSub = (it.year ? it.year + ' \u2022 ' : '') + typeLabel;
     const posBox = '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-      '<input type="number" class="pos customListPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
+      '<input type="number" class="pos customListPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" aria-label="Position in list" style="width:34px; height:24px;">' +
     '</div>';
     const removeBtn = '<button type="button" class="cw-remove-btn customListRemovePickBtn" title="Remove from list" aria-label="Remove from list" style="z-index:4;">\u2715</button>';
 
@@ -74124,6 +74461,165 @@ function recordCreatorListDeletion(slug) {
 }
 window.recordCreatorListDeletion = recordCreatorListDeletion;
 
+// The deletion record is for a delete that happened. When the server refuses,
+// or the request never arrives, the list still exists and must not be recorded
+// as gone (the record stops a sync from restoring or re-uploading that slug).
+function clearCreatorListDeletion(slug) {
+  if (!slug) return;
+  try {
+    const map = loadDeletedCreatorLists();
+    delete map[String(slug)];
+    localStorage.setItem(DELETED_CREATOR_LISTS_KEY, JSON.stringify(map));
+  } catch (e) {}
+}
+window.clearCreatorListDeletion = clearCreatorListDeletion;
+
+// A copy of a list taken before it is deleted, so Undo can put it back. From
+// the dashboard's own data when that carries the items, else from this
+// browser's copy. null when neither has them: there is nothing to restore from,
+// and no Undo is offered.
+function snapshotListForUndo(slug) {
+  let found = null;
+  if (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData)) {
+    found = lastCreatorListsData.find((l) => l && l.slug === slug) || null;
+  }
+  if (!found || !Array.isArray(found.items)) {
+    const map = loadLocalCustomLists();
+    let local = map[slug] || null;
+    if (!local) {
+      Object.keys(map).forEach((k) => {
+        const l = map[k];
+        if (!local && l && (l.slug === slug || l.creatorSlug === slug || l.localSlug === slug || l.listSlug === slug)) local = l;
+      });
+    }
+    if (local && Array.isArray(local.items)) found = local;
+  }
+  if (!found || !Array.isArray(found.items)) return null;
+  const copy = JSON.parse(JSON.stringify(found));
+  copy.slug = slug;
+  return copy;
+}
+
+// The rows of the builder that use this list, as they are now, so Undo can add
+// them back. Only these rows: whatever else was changed in the meantime stays.
+function listRowsReferencing(slug) {
+  if (typeof collectEntries !== 'function') return [];
+  let rows = [];
+  try { rows = collectEntries(); } catch (e) { rows = []; }
+  return rows.filter((row) => {
+    const payload = row && row.url ? parseCustomListPayloadClient(row.url) : null;
+    return !!payload && (payload.localSlug === slug || payload.creatorSlug === slug || payload.slug === slug || payload.listSlug === slug);
+  });
+}
+
+async function undoListDelete(snap, rows) {
+  if (!snap) return;
+  clearCreatorListDeletion(snap.slug);
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  if (typeof activeCreator !== 'undefined' && activeCreator && creatorKey) {
+    const out = await saveCreatorListWithBaseline({
+      slug: snap.slug, name: snap.name, type: snap.type, items: snap.items, visibility: snap.visibility,
+      sourceUrl: snap.sourceUrl, synced: snap.synced, lastSyncedAt: snap.lastSyncedAt, baseItemIds: snap.baseItemIds,
+    }, null);
+    if (!out.ok) {
+      recordCreatorListDeletion(snap.slug);
+      showToast('Could not restore "' + snap.name + '".', 'error');
+      return;
+    }
+  }
+  backfillCreatorListsIntoLocalMap([snap]);
+  (rows || []).forEach((row) => {
+    if (typeof addRow === 'function') addRow(row.name, row.url, row.type, row.enabled, row.group, row.id, row.noShuffle === true);
+  });
+  if (rows && rows.length) {
+    if (typeof renumber === 'function') renumber();
+    if (typeof saveState === 'function') saveState();
+  }
+  if (typeof resetCreatorListsCache === 'function') resetCreatorListsCache();
+  renderCreatorDashboard();
+  showToast('"' + snap.name + '" restored.', 'success');
+}
+
+function showListDeletedToast(snap, rows, slug) {
+  const name = (snap && snap.name) || slug || 'List';
+  if (!snap) {
+    showToast('Deleted "' + name + '".', 'success');
+    return;
+  }
+  showToast('Deleted "' + name + '".', 'undo', {
+    duration: 8000,
+    actionText: 'Undo',
+    onAction: function () { return undoListDelete(snap, rows); },
+  });
+}
+
+// Deleting one of the account's own lists, after the person confirmed. The
+// deletion record is written first, so a sync that runs while the request is in
+// flight cannot bring the list back, and taken back if the list was not deleted.
+async function deleteCreatorListConfirmed(slug) {
+  const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+  const snap = snapshotListForUndo(slug);
+  const rows = listRowsReferencing(slug);
+  recordCreatorListDeletion(slug);
+  let deleted = false;
+  try {
+    const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      clearCreatorListDeletion(slug);
+      if (typeof showAppAlert === 'function') {
+        showAppAlert('Error', 'Could not delete: ' + (data.error || 'unknown error'), false);
+      } else {
+        showToast('Could not delete: ' + (data.error || 'unknown error'), 'error');
+      }
+      return;
+    }
+    deleted = true;
+
+    // Remove from local storage map so it doesn't get resurrected
+    const map = loadLocalCustomLists();
+    delete map[slug];
+    Object.keys(map).forEach((k) => {
+      if (map[k] && (map[k].slug === slug || map[k].creatorSlug === slug || map[k].localSlug === slug || map[k].listSlug === slug)) {
+        delete map[k];
+      }
+    });
+    saveLocalCustomListsMap(map);
+
+    // Remove from main lists config if present
+    document.querySelectorAll('#lists .url').forEach((urlInput) => {
+      const rowPayload = parseCustomListPayloadClient(urlInput.value);
+      if (rowPayload && (rowPayload.creatorSlug === slug || rowPayload.slug === slug || rowPayload.localSlug === slug || rowPayload.listSlug === slug)) {
+        const entry = urlInput.closest('.entry');
+        if (entry) {
+          entry.remove();
+        }
+      }
+    });
+    if (typeof saveState === 'function') saveState();
+    if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
+    if (typeof pushCreatorSync === 'function') pushCreatorSync();
+
+    renderCreatorDashboard();
+    showListDeletedToast(snap, rows, slug);
+  } catch (err) {
+    if (deleted) {
+      console.error('List deleted, but tidying up afterwards failed:', err);
+      return;
+    }
+    clearCreatorListDeletion(slug);
+    if (typeof showAppAlert === 'function') {
+      showAppAlert('Network Error', 'Network error while deleting.', false);
+    } else {
+      showToast('Network error while deleting.', 'error');
+    }
+  }
+}
+
 // Matches the way the delete paths look a list up: a local entry can be
 // keyed by its map key while carrying the slug under any of several fields.
 function localMapHasList(map, slug) {
@@ -75209,58 +75705,7 @@ if (_creatorDashEl) {
     const slug = deleteBtn.dataset.slug;
     if (slug === 'watchlist') return;
     const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
-    confirmFn("Delete List", "Delete this list? This cannot be undone.", "Delete", async () => {
-      const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      recordCreatorListDeletion(slug);
-      try {
-        const res = await creatorApiFetch(ORIGIN + '/api/creator/lists/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ creatorName: activeCreator.creatorName, creatorKey: creatorKey, slug: slug }),
-        });
-        const data = await res.json();
-        if (!data.ok) {
-          if (typeof showAppAlert === 'function') {
-            showAppAlert('Error', 'Could not delete: ' + (data.error || 'unknown error'), false);
-          } else {
-            showToast('Could not delete: ' + (data.error || 'unknown error'), 'error');
-          }
-          return;
-        }
-        
-        // Remove from local storage map so it doesn't get resurrected
-        const map = loadLocalCustomLists();
-        delete map[slug];
-        Object.keys(map).forEach((k) => {
-          if (map[k] && (map[k].slug === slug || map[k].creatorSlug === slug || map[k].localSlug === slug || map[k].listSlug === slug)) {
-            delete map[k];
-          }
-        });
-        saveLocalCustomListsMap(map);
-        
-        // Remove from main lists config if present
-        document.querySelectorAll('#lists .url').forEach((urlInput) => {
-          const rowPayload = parseCustomListPayloadClient(urlInput.value);
-          if (rowPayload && (rowPayload.creatorSlug === slug || rowPayload.slug === slug || rowPayload.localSlug === slug || rowPayload.listSlug === slug)) {
-            const entry = urlInput.closest('.entry');
-            if (entry) {
-              entry.remove();
-            }
-          }
-        });
-        if (typeof saveState === 'function') saveState();
-        if (typeof scheduleCreatorSyncSave === 'function') scheduleCreatorSyncSave();
-        if (typeof pushCreatorSync === 'function') pushCreatorSync();
-        
-        renderCreatorDashboard();
-      } catch (err) {
-        if (typeof showAppAlert === 'function') {
-          showAppAlert('Network Error', 'Network error while deleting.', false);
-        } else {
-          showToast('Network error while deleting.', 'error');
-        }
-      }
-    }, true);
+    confirmFn("Delete List", "Delete this list?", "Delete", () => { deleteCreatorListConfirmed(slug); }, true);
     return;
   }
   const syncBtn = e.target.closest('.customListSyncBtn');
@@ -75341,7 +75786,9 @@ if (_creatorDashEl) {
     // background account sync (a full overwrite, not a merge).
     if (slug === 'watch-history' || slug === 'continue-watching' || slug === 'watchlist') return;
     const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
-    confirmFn("Delete List", "Delete this list? This cannot be undone.", "Delete", () => {
+    confirmFn("Delete List", "Delete this list?", "Delete", () => {
+      const undoSnap = snapshotListForUndo(slug);
+      const undoRows = listRowsReferencing(slug);
       const map = loadLocalCustomLists();
       delete map[slug];
       Object.keys(map).forEach((k) => {
@@ -75380,6 +75827,7 @@ if (_creatorDashEl) {
       if (typeof pushCreatorSync === 'function') pushCreatorSync();
       
       renderCreatorDashboard();
+      showListDeletedToast(undoSnap, undoRows, slug);
     }, true);
     return;
   }
@@ -82028,14 +82476,14 @@ function sharePreset(name) {
   if (preset.customLists) payload.customLists = preset.customLists;
   if (preset.channels) payload.channels = preset.channels;
   const jsonStr = JSON.stringify(payload, null, 2);
-  navigator.clipboard.writeText(jsonStr).then(() => {
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
-    } else {
-      showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
-    }
-  }).catch(() => {
-    if (typeof showAppPrompt === 'function') {
+  return copyTextToClipboard(jsonStr).then((copied) => {
+    if (copied) {
+      if (typeof showAppAlert === 'function') {
+        showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
+      } else {
+        showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
+      }
+    } else if (typeof showAppPrompt === 'function') {
       showAppPrompt('Preset JSON', 'Copy this preset JSON below:', jsonStr);
     }
   });
@@ -82436,8 +82884,13 @@ function loadSavedState() {
   }
 }
 
-function copyLink(url) {
-  navigator.clipboard.writeText(url).then(() => {
+// Resolves true when the link reached the clipboard. copyTextToClipboard tries
+// the clipboard API and then a hidden textarea, so this also works where there
+// is no navigator.clipboard (a page over http, some in-app webviews); only when
+// both fail is the link shown for copying by hand.
+async function copyLink(url) {
+  const copied = await copyTextToClipboard(url);
+  if (copied) {
     const urlBtn = document.getElementById('copyUrlBtn');
     if (urlBtn) {
       const oldUrlHtml = urlBtn.innerHTML;
@@ -82452,76 +82905,42 @@ function copyLink(url) {
         urlBtn.style.borderColor = '';
       }, 1800);
     }
-  }).catch(() => {
-    const display = document.getElementById('manifestLinkDisplay');
-    if (window.getSelection && display) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(display);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-    showToast('Manifest URL: ' + url, 'error');
-  });
+    return true;
+  }
+  const display = document.getElementById('manifestLinkDisplay');
+  if (window.getSelection && display) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(display);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  showToast('Manifest URL: ' + url, 'error');
+  return false;
 }
 
 function openNuvioWeb(url) {
-  if (url) copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
+  // window.open stays synchronous, inside the click, or a popup blocker eats it.
   window.open('https://nuvio.tv/account?tab=addons', '_blank', 'noopener,noreferrer');
+  if (!url) return Promise.resolve(false);
+  return copyLink(url).then((copied) => {
+    if (copied) showToast('Manifest link copied to clipboard.', 'success');
+    return copied;
+  });
 }
 
 // Copies the manifest link to the clipboard and shows toast feedback so the user
 // has the link ready to paste in Nuvio settings if needed.
 function copyNuvioInstallLink(url) {
-  if (!url) return;
-  copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
+  if (!url) return Promise.resolve(false);
+  return copyLink(url).then((copied) => {
+    if (copied) showToast('Manifest link copied to clipboard.', 'success');
+    return copied;
+  });
 }
 window.copyNuvioInstallLink = copyNuvioInstallLink;
 
-function openNuvioInstallModal(url) {
-  if (!url) return;
-  copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
-  const html =
-    '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">&#x2715;</button>' +
-    '<h2>Install in Nuvio</h2>' +
-    '<p class="modal-sub">Nuvio syncs addons across all your devices via your Nuvio account, or via app settings.</p>' +
-    '<div class="u-p-10px_14px u-br-v_radius_sm u-mb-16px u-ai-center u-gap-10px" style="display:flex; background:var(--color-success-subtle); border:1px solid var(--color-success);">' +
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="u-fsh-0"><polyline points="20 6 9 17 4 12"></polyline></svg>' +
-      '<div class="u-fs-v_font_size_sm u-fw-600 u-c-v_text">Manifest link copied to clipboard!</div>' +
-    '</div>' +
-    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-12px u-bg-v_surface">' +
-      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Web Browser / Account Sync (Recommended)</div>' +
-      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">Install on nuvio.tv to automatically sync this addon across your Desktop app, Mobile app, and TV.</p>' +
-      '<div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">' +
-        '<a href="https://nuvio.tv/account?tab=addons" target="_blank" rel="noopener noreferrer" class="btn btn-primary u-p-8px_16px u-fs-v_font_size_sm u-fw-600 u-br-v_radius_pill u-td-none u-ai-center u-gap-6px" style="display:inline-flex;">' +
-          '<span>Open nuvio.tv Addons</span>' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>' +
-        '</a>' +
-        '<span class="u-c-v_muted u-fs-v_font_size_xs">Paste the copied link into Addon URL and confirm</span>' +
-      '</div>' +
-    '</div>' +
-    '<div class="u-p-14px u-br-v_radius_md u-bd-1px_solid_v_border u-mb-14px u-bg-v_surface">' +
-      '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_text u-mb-4px">Nuvio Desktop &amp; Mobile App</div>' +
-      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_xs u-lh-1_4">In the Nuvio app, go to: <strong>Settings &rarr; Content &amp; Discovery &rarr; Addons</strong> and paste your copied manifest link.</p>' +
-    '</div>' +
-    '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-4px">Manifest Link:</div>' +
-    '<div class="install-url-input-group u-ai-stretch u-gap-8px u-mb-16px" style="display:flex; width:100%;">' +
-      '<div class="install-url-box u-flex-1 u-minw-0 u-m-0 u-ai-center u-fs-v_font_size_xs u-overflowwrap-anywhere" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Click to copy" style="display:flex;">' + escapeHtml(url) + '</div>' +
-      '<button type="button" class="lc-btn secondary u-flex-none u-p-0_14px u-minh-36px u-ai-center u-gap-6px u-fw-600 u-fs-v_font_size_xs u-br-v_radius_pill" data-act="copyLink" data-act-args="' + escapeAttr(JSON.stringify([url])) + '" title="Copy link" style="display:inline-flex;">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
-        '<span>Copy</span>' +
-      '</button>' +
-    '</div>' +
-    '<div class="actions u-mt-14px">' +
-      '<button type="button" class="primary" data-act="closeModal">Done</button>' +
-    '</div>';
-  showModal(html);
-}
 window.openNuvioWeb = openNuvioWeb;
-window.openNuvioInstallModal = openNuvioInstallModal;
 
 // docs/DECISIONS.md D-8. Signed in, the save proves the account (/api/save
 // verifies it and never stores it in the link). Signed out, the save carries
@@ -83285,7 +83704,7 @@ window.addEventListener('popstate', (e) => {
 //
 //   * real-path routing for the six views (APP_SHELL_TAB_LIST, injected from
 //     APP_SHELL_TABS in 00_constants.js): /catalogs, /catalogs/quickadd,
-//     /settings/connections and so on. The server renders the same table into
+//     /settings/account and so on. The server renders the same table into
 //     the nav (buildAppShellNavHtml, 09_page-shell.js), so the two cannot
 //     drift;
 //   * appShellState, one small observable object instead of the globals the
@@ -84712,7 +85131,7 @@ ${UTILITY_CSS}
     font-size: 0.9rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
     cursor: pointer;
     border: none;
   }
@@ -84805,7 +85224,7 @@ ${UTILITY_CSS}
     font-size: 0.85rem;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   }
   .toc-pill:hover {
     color: var(--text);
@@ -85515,6 +85934,29 @@ ${UTILITY_CSS}
 // poster URL. A request that names any other host, or a non-https scheme,
 // isn't a real poster -- it's someone probing the endpoint directly, and
 // gets rejected before either the redirect or the fetch further down.
+// What a catalog answer carries when it is not a real answer: its provider
+// failed, or the install or row is not there. A good shared row is cached five
+// minutes; these (last good copy, the "temporarily unavailable" tile, an empty
+// page) used to take jsonPublic's one-hour default, so a short outage, or a
+// link not yet visible where the app asked, lasted an hour in the apps.
+const CATALOG_NO_CACHE = { "Cache-Control": "no-store" };
+
+// What /api/save refuses to store, so a bad row cannot become a manifest the
+// apps reject. The id is a catalog id in a URL path (/catalog/<type>/<id>.json),
+// so it has no slash or space; the type is a catalog type. The builder always
+// sends both (it also de-duplicates ids), so only a hand-made or very old
+// request is turned away. Returns a message, or "" when every row is fine.
+function saveEntriesProblem(entries) {
+  for (const e of entries) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) return "Every list needs to be a list row.";
+    if (typeof e.id !== "string" || !e.id || e.id.length > 100 || /[\/\s]/.test(e.id)) {
+      return "A list is missing a usable id.";
+    }
+    if (e.type !== "movie" && e.type !== "series") return "A list's type has to be movie or series.";
+  }
+  return "";
+}
+
 const POSTER_IMAGE_HOSTS = new Set([
   "image.tmdb.org",
   "images.metahub.space",
@@ -85527,7 +85969,10 @@ const POSTER_IMAGE_HOSTS = new Set([
   "btttr.cc",
 ]);
 
-function isAllowedPosterUrl(raw) {
+// `origin` is this Worker's own origin. The safe-poster tile is this add-on's
+// own route, so it counts only on that origin: matched by path alone it let
+// any host through (an open redirect and an open image proxy).
+function isAllowedPosterUrl(raw, origin) {
   let u;
   try {
     u = new URL(String(raw || ""));
@@ -85535,7 +85980,7 @@ function isAllowedPosterUrl(raw) {
     return false;
   }
   if (u.protocol !== "https:") return false;
-  if (u.pathname.startsWith("/api/safe-poster")) return true;
+  if (u.origin === origin && u.pathname.startsWith("/api/safe-poster")) return true;
   return POSTER_IMAGE_HOSTS.has(u.hostname.toLowerCase());
 }
 
@@ -85949,7 +86394,7 @@ async function handleFetch(request, env, ctx) {
 
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
-    // (/settings/connections, /catalogs/quickadd).
+    // (/settings/account, /catalogs/quickadd).
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
@@ -86202,7 +86647,7 @@ async function handleFetch(request, env, ctx) {
         if (pu.origin === url.origin && pu.pathname.startsWith("/bp/")) ownBetterPoster = parseBetterPosterPath(pu.pathname, pu.searchParams);
       } catch {}
 
-      if (!posterUrl || (!ownBetterPoster && !isAllowedPosterUrl(posterUrl))) {
+      if (!posterUrl || (!ownBetterPoster && !isAllowedPosterUrl(posterUrl, url.origin))) {
         // Missing entirely, or not one of the image hosts this add-on
         // itself ever puts in a `poster` field (see isAllowedPosterUrl).
         // This is a public, CORS-open, unauthenticated endpoint -- without
@@ -86671,6 +87116,11 @@ async function handleFetch(request, env, ctx) {
         return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
       }
       const resolved = await resolveConfig(m[1], env);
+      // Nothing by that name: a 404 the app can show, and nothing cached, so a
+      // link whose record is not yet visible here works on the next try.
+      if (resolved.unresolved) {
+        return json({ ok: false, error: "That install link was not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+      }
       const { entries, track, shuffleShelves } = resolved;
       // Moves this link's keys and tokens out of its KV record, if they are
       // still there and the move is switched on. After the response.
@@ -87000,7 +87450,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
-      if (!entry || entry.enabled === false) return jsonPublic({ metas: [] });
+      if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its
       // sources newline-separated (see fetchCatalog), and one personal source
@@ -87120,7 +87570,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
               // exactly like a normal successful load. `stale` is
               // informational only (visible when debugging via curl), not
               // read by wako/Stremio itself.
-              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg });
+              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg }, 200, CATALOG_NO_CACHE);
             }
           } catch {
             // Cache read/parse failed -- fall through to the placeholder below.
@@ -87140,13 +87590,13 @@ Sitemap: ${url.origin}/sitemap.xml`;
               },
             ],
             error: errMsg,
-          });
+          }, 200, CATALOG_NO_CACHE);
         }
 
         // Metas stays empty so wako/Stremio just shows an empty row instead
         // of erroring out, but the reason is still visible if you curl this
         // URL directly while debugging.
-        return jsonPublic({ metas: [], error: errMsg }, 200);
+        return jsonPublic({ metas: [], error: errMsg }, 200, CATALOG_NO_CACHE);
       }
     }
 
@@ -87175,16 +87625,24 @@ Sitemap: ${url.origin}/sitemap.xml`;
     }
 
     if (path === "/api/track-install" && request.method === "POST") {
+      // Anonymous, and it writes: the same per-address budget as
+      // /api/track-event. A beacon, so over the limit is still a plain ok.
+      const installIp = clientIpKey(request);
+      if (!installIp || await consumeRateLimit(env, ctx, "trackinstall", installIp, TRACK_INSTALL_PER_MINUTE)) {
+        return json({ ok: true });
+      }
       ctx.waitUntil(bumpStat(env, "installs"));
       try {
         const body = await request.json();
         if (body && body.groups && typeof body.groups === "object") {
-          const entries = Object.entries(body.groups).slice(0, 30);
-          for (const [rawGroup, rawCount] of entries) {
-            const group = sanitizeStatGroupName(rawGroup);
-            const count = Math.max(0, Math.min(1000, parseInt(rawCount, 10) || 0));
-            if (group && count) ctx.waitUntil(bumpStatBy(env, `sourcegroup:${group}`, count));
+          // Known categories under their own name, the rest together as Other.
+          const counted = new Map();
+          for (const [rawGroup, rawCount] of Object.entries(body.groups).slice(0, 30)) {
+            const group = installStatGroupName(rawGroup);
+            const count = Math.max(0, Math.min(SAVED_CONFIG_ENTRIES_MAX, parseInt(rawCount, 10) || 0));
+            if (group && count) counted.set(group, Math.min(SAVED_CONFIG_ENTRIES_MAX, (counted.get(group) || 0) + count));
           }
+          for (const [group, count] of counted) ctx.waitUntil(bumpStatBy(env, `sourcegroup:${group}`, count));
         }
       } catch {
         // no body, or not JSON -- the plain install counter above still
@@ -87432,7 +87890,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // dynamic Next Up channel. resolveConfig only fills them in for a
           // config that PROVED whose it is (see trackOwner there), so an
           // unverified config simply gets a channel with neither applied.
-          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env, { withTracking: true });
+          const metaResolved = await resolveConfig(config, env, { withTracking: true });
+          if (metaResolved.unresolved) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
+          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = metaResolved;
           let matchedEntry = null;
           for (const e of entries) {
             if (e.enabled === false) continue;
@@ -87529,13 +87989,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // Escaped because it lands in an SVG attribute and comes from an
         // upstream response header rather than from this Worker.
         const safeContentType = escapeXml(contentType.split(";")[0].trim() || "image/png");
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
+        const base64 = bytesToBase64(arrayBuffer);
         const dataUri = `data:${safeContentType};base64,${base64}`;
 
         const svg = format === "landscape"
@@ -92427,78 +92881,20 @@ function generateSearchVariations(query) {
         await Promise.all(lookups);
       }
 
-      // 2. If creatorName is given, also scan recent feedback for this creator
+      // 2. If creatorName is given, also load every thread filed under that account
       if (creatorName) {
-        let searchedD1 = false;
-        if (env && env.DB) {
-          try {
-            const rows = await env.DB.prepare(
-              "SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300"
-            ).all();
-            if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
-              searchedD1 = true;
-              for (const r of rows.results) {
-                if (!r.body_json) continue;
-                try {
-                  const entry = JSON.parse(r.body_json);
-                  if (entry && entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!threadsMap.has(entry.id)) {
-                      if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                        entry.messages = [{
-                          id: `msg_init`,
-                          sender: "user",
-                          senderName: entry.creatorName || "User",
-                          text: entry.message || "(Initial message)",
-                          timestamp: entry.createdAt || Date.now()
-                        }];
-                      }
-                      threadsMap.set(entry.id, entry);
-                    }
-                  }
-                } catch {}
-              }
-            }
-          } catch {}
-        }
-        if (!searchedD1 && env && env.CONFIGS) {
-          try {
-            const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
-            let scanKeys = [];
-            let cursor;
-            let pages = 0;
-            while (pages < 30) {
-              const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
-              scanKeys.push(...(listRes.keys || []).map((k) => k.name));
-              if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
-              pages++;
-              if (listRes.list_complete || !listRes.cursor) break;
-              cursor = listRes.cursor;
-            }
-            scanKeys.reverse();
-            const scanLookups = scanKeys.map(async (kName) => {
-              const tid = kName.replace(/^feedback:/, "");
-              if (threadsMap.has(tid)) return;
-              try {
-                const raw = await env.CONFIGS.get(kName);
-                if (raw) {
-                  const entry = JSON.parse(raw);
-                  if (entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                      entry.messages = [{
-                        id: `msg_init`,
-                        sender: "user",
-                        senderName: entry.creatorName || "User",
-                        text: entry.message || "(Initial message)",
-                        timestamp: entry.createdAt || Date.now()
-                      }];
-                    }
-                    threadsMap.set(entry.id, entry);
-                  }
-                }
-              } catch {}
-            });
-            await Promise.all(scanLookups);
-          } catch {}
+        for (const entry of await findFeedbackThreadsByCreator(env, creatorName)) {
+          if (threadsMap.has(entry.id)) continue;
+          if (!Array.isArray(entry.messages) || !entry.messages.length) {
+            entry.messages = [{
+              id: `msg_init`,
+              sender: "user",
+              senderName: entry.creatorName || "User",
+              text: entry.message || "(Initial message)",
+              timestamp: entry.createdAt || Date.now()
+            }];
+          }
+          threadsMap.set(entry.id, entry);
         }
       }
 
@@ -92509,6 +92905,84 @@ function generateSearchVariations(query) {
       });
 
       return json({ ok: true, threads }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /api/feedback/delete (POST) { threadIds?, creatorName?, creatorKey? } -> { ok, deleted }
+    // Settings > Support: "Delete chat history". Removes the threads from the
+    // database and the KV copy, for good, so the developer's panel loses them too.
+    //
+    // Who may delete what is the rule replying already follows. A thread nobody
+    // owns is a bare capability -- whoever holds its id can delete it, which is
+    // how an anonymous reporter, with no account, clears their own. A thread
+    // that belongs to an account takes that account's key. Signing in with the
+    // key also removes every thread filed under the account, including ones
+    // this device never saw. An id that belongs to somebody else is skipped,
+    // not an error: `deleted` says how many went.
+    if (path === "/api/feedback/delete" && request.method === "POST") {
+      if (!env || !env.CONFIGS) return json({ ok: true, deleted: 0 }, 200, { "Cache-Control": "no-store" });
+      const deleteIp = clientIpKey(request);
+      if (await consumeRateLimit(env, ctx, "feedbackdelete", deleteIp, 20)) {
+        return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { "Cache-Control": "no-store" });
+      }
+      let body = null;
+      try { body = await request.json(); } catch {}
+      body = body && typeof body === "object" ? body : {};
+      const threadIds = Array.isArray(body.threadIds) ? body.threadIds.map((t) => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+      let owner = null;
+      if (body.creatorName) {
+        const auth = await authenticateCreator(String(body.creatorName).trim().toLowerCase(), body.creatorKey ? String(body.creatorKey) : "");
+        if (!auth.ok) {
+          return json({ ok: false, error: "Username or Key is incorrect." }, 401, { "Cache-Control": "no-store" });
+        }
+        owner = auth.username;
+      }
+
+      const doomed = new Set();
+      for (const tid of threadIds) {
+        let entry = null;
+        if (env.DB) {
+          try {
+            const row = await env.DB.prepare("SELECT body_json FROM feedback WHERE id = ?").bind(tid).first();
+            if (row && row.body_json) entry = JSON.parse(row.body_json);
+          } catch {}
+        }
+        if (!entry) {
+          try {
+            const raw = await env.CONFIGS.get(`feedback:${tid}`);
+            if (raw) entry = JSON.parse(raw);
+          } catch {}
+        }
+        if (!entry) continue;
+        const ownerRaw = entry.creatorName ? String(entry.creatorName).trim() : "";
+        let ownerNorm = "";
+        if (ownerRaw) {
+          const v = validateCreatorUsername(ownerRaw);
+          if (v && v.ok) ownerNorm = v.normalized;
+        }
+        if (ownerNorm && ownerNorm !== owner) continue;
+        doomed.add(tid);
+      }
+      if (owner) {
+        for (const entry of await findFeedbackThreadsByCreator(env, owner)) doomed.add(entry.id);
+      }
+
+      let deleted = 0;
+      for (const tid of doomed) {
+        if (env.DB) {
+          try {
+            await env.DB.prepare("DELETE FROM feedback WHERE id = ?").bind(tid).run();
+          } catch (dbErr) {
+            console.error("D1 write error (feedback delete):", dbErr);
+          }
+        }
+        try {
+          await env.CONFIGS.delete(`feedback:${tid}`);
+          deleted++;
+        } catch (e) {
+          safeErrorMessage(e);
+        }
+      }
+      return json({ ok: true, deleted }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/track-search  (POST)  { query } -> { ok }
@@ -93112,6 +93586,10 @@ function generateSearchVariations(query) {
       if (entries.length > SAVED_CONFIG_ENTRIES_MAX) {
         return json({ ok: false, error: "Too many lists in that configuration." }, 413);
       }
+      // Rejected, not repaired: a quietly changed row would be a different install
+      // link from the one the person built.
+      const entriesProblem = saveEntriesProblem(entries);
+      if (entriesProblem) return json({ ok: false, error: entriesProblem }, 400);
       // A config that names a Creator Profile must prove it belongs to it.
       //
       // This endpoint is unauthenticated by design -- a config is just a list of
@@ -95239,17 +95717,25 @@ function generateSearchVariations(query) {
       const currentHash = request.session ? request.session.idHash : null;
       const url = new URL(request.url);
       const revokeOthers = body.allExceptCurrent || url.searchParams.get("other") === "1";
-      const targetId = body.id || url.searchParams.get("id");
+      // An id the caller names must be exactly what GET /api/me/sessions hands
+      // out (16 hex characters). It used to be a LIKE prefix, so "%" matched
+      // every session and "" fell through to "revoke everything". Leaving the
+      // id out altogether still means every session.
+      const idGiven = body.id !== undefined || url.searchParams.has("id");
+      const targetId = body.id !== undefined ? body.id : url.searchParams.get("id");
 
       if (revokeOthers) {
         await revokeAccountSessions(env, request.account.id, currentHash);
         return json({ ok: true, revokedOthers: true }, 200, { "Cache-Control": "no-store" });
       }
 
-      if (targetId) {
+      if (idGiven) {
+        if (typeof targetId !== "string" || !/^[0-9a-f]{16}$/.test(targetId)) {
+          return json({ ok: false, error: "Invalid session id." }, 400, { "Cache-Control": "no-store" });
+        }
         const { results } = await env.DB.prepare(
-          "SELECT id_hash FROM sessions WHERE account_id = ? AND id_hash LIKE ? AND revoked_at IS NULL"
-        ).bind(request.account.id, targetId + "%").all();
+          "SELECT id_hash FROM sessions WHERE account_id = ? AND substr(id_hash, 1, 16) = ? AND revoked_at IS NULL"
+        ).bind(request.account.id, targetId).all();
 
         let revokedCurrent = false;
         for (const r of (results || [])) {
@@ -95432,7 +95918,7 @@ function generateSearchVariations(query) {
       // endpoint already rate-limited to one call per IP per minute. It cannot
       // touch a live account either, because the uniqueness check above has
       // already established there is none.
-      const preCreatePurge = await purgeCreatorData(env, v.normalized, { deleteIdentity: false });
+      const preCreatePurge = await purgeCreatorData(env, v.normalized, { deleteIdentity: false, detachSupportThreads: true });
       if (!preCreatePurge.ok) {
         return json({
           ok: false,
@@ -96774,6 +97260,10 @@ function generateSearchVariations(query) {
         } catch {
           existing = null;
         }
+        // A link minted before shares needed an account has no owner, so nobody
+        // may overwrite it: sharing under its code makes a new link and leaves the
+        // old one as it was (it still opens for whoever holds it).
+        if (existing && !existing.owner) existing = null;
         if (existing && existing.owner && existing.owner !== owner) {
           return json({ ok: false, error: "That share link belongs to someone else." }, 403);
         }
@@ -100170,6 +100660,34 @@ function generateSearchVariations(query) {
       return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
     }
 
+    // /admin/api/channel-ownerless  (POST)  { cursor?, limit?, apply?, confirm? }
+    //   -> { ok, apply, scanned, ownerless: [{ code, name, published, updatedAt }],
+    //        deleted, failed, unreadable, next, done }
+    // The shared channels no account owns (see 60_ownerless-channels.js). A count
+    // by default; with apply it deletes this batch, and only when `confirm` is the
+    // confirmation phrase. Run it again with `next` as `cursor` until `done`.
+    if (path === "/admin/api/channel-ownerless" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const apply = body.apply === true;
+      if (apply && body.confirm !== OWNERLESS_CHANNELS_CONFIRM) {
+        return json({ ok: false, error: `To delete, send confirm: "${OWNERLESS_CHANNELS_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+      }
+      let result;
+      try {
+        result = await removeOwnerlessChannels(env, { cursor: body.cursor, limit: body.limit, apply });
+      } catch (e) {
+        return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+      }
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+    }
+
     if (path === "/admin/api/migrate-day-counts" && request.method === "POST") {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
@@ -101584,6 +102102,12 @@ function emptyResolvedInstallConfig() {
   };
 }
 
+// A link that names nothing this Worker holds. The routes answer it with a 404
+// (manifest) or an uncached empty page, never the generic add-on.
+function unresolvedInstallConfig() {
+  return { ...emptyResolvedInstallConfig(), unresolved: true };
+}
+
 // Splits a stored config into what may stay in KV and what has to move.
 // `byProvider` maps provider -> { column: plaintext }; `other` collects
 // credential-looking fields the table does not name.
@@ -101787,16 +102311,18 @@ async function applyLegacyInstallRecord(env, id, parsed) {
 
 async function resolveV2InstallConfig(param, env, { withTracking = false } = {}) {
   const token = param.slice(INSTALL_TOKEN_PARAM_PREFIX.length);
-  if (!isWellFormedInstallToken(token)) return emptyResolvedInstallConfig();
+  if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
-  if (!snap || snap.missing || snap.revoked || typeof snap.config !== "string") return emptyResolvedInstallConfig();
+  // A removed install stays what it was: an empty add-on, not a not-found.
+  if (snap && snap.revoked) return emptyResolvedInstallConfig();
+  if (!snap || snap.missing || typeof snap.config !== "string") return unresolvedInstallConfig();
   let cfg;
   try {
     cfg = JSON.parse(snap.config);
   } catch {
-    return emptyResolvedInstallConfig();
+    return unresolvedInstallConfig();
   }
-  if (!cfg || typeof cfg !== "object") return emptyResolvedInstallConfig();
+  if (!cfg || typeof cfg !== "object") return unresolvedInstallConfig();
   // The owner is the account that created it while signed in: proven once, at
   // creation, and ended by revoking the install or deleting the account (which
   // deletes the row).
@@ -114724,4 +115250,107 @@ async function handleSupportEmailsApi(path, request, env) {
   }
 
   return json({ ok: false, error: 'Endpoint not found.' }, 404);
+}
+// --- Shared channels no account owns ------------------------------------------
+//
+// Shares used to need no account, so some channel links were minted with no
+// owner. They still open (a link already handed out) but nobody can withdraw
+// one. /admin/api/channel-ownerless (26_) counts them and removes them in
+// batches. A count is the default; nothing is deleted unless the request says so
+// and carries OWNERLESS_CHANNELS_CONFIRM, so the operator can look first and take
+// a backup first (docs/OPERATIONS.md, the KV export).
+//
+// An install link that carries one of these channels holds the channel's lineup
+// inside its own row, so removing the shared record only ends the share link
+// (/channel/<code>) and "import by code".
+
+const OWNERLESS_CHANNELS_CONFIRM = "delete ownerless channels";
+const OWNERLESS_CHANNELS_BATCH = 50;
+const OWNERLESS_CHANNELS_BATCH_MAX = 200;
+
+// One shared channel, gone from every place that holds it: the record and its
+// like ledger, the Explore Channels listing, and the copy in the new tables. The
+// same steps as the admin takedown ("delete" in /admin/api/channel-moderate).
+async function deleteSharedChannelEverywhere(env, code) {
+  await removePublicChannelIndex(env, code);
+  await env.CONFIGS.delete(`channelshare:${code}`);
+  await env.CONFIGS.delete(`channellikevoters:${code}`);
+  if (!(await channelsV2Delete(env, code))) throw new Error("the copy in the new tables could not be removed");
+}
+
+function ownerlessChannelSummary(code, record) {
+  return {
+    code,
+    name: record && record.channel && record.channel.name ? String(record.channel.name).slice(0, 80) : "",
+    published: !!(record && record.published),
+    updatedAt: record && Number.isFinite(record.updatedAt) ? record.updatedAt : null,
+  };
+}
+
+// One batch. `cursor` is what the previous call returned as `next`; `done` is
+// true when the whole set has been looked at.
+async function removeOwnerlessChannels(env, { cursor, limit, apply } = {}) {
+  if (!env || !env.CONFIGS) return { ok: false, error: "no-storage" };
+  const n = Math.max(1, Math.min(OWNERLESS_CHANNELS_BATCH_MAX, Number(limit) || OWNERLESS_CHANNELS_BATCH));
+  const out = { ok: true, apply: !!apply, scanned: 0, ownerless: [], deleted: 0, failed: [], unreadable: [], next: null, done: true };
+
+  if (isV2ListsOnly(env)) {
+    // Shared channels live in the new tables only: an owner that is NULL there.
+    if (!listsV2Usable(env)) return { ok: false, error: "The new tables are not available." };
+    const after = Math.max(0, Number(cursor) || 0);
+    const { results } = await env.DB.prepare(
+      "SELECT id, public_code, name, visibility, updated_at FROM channels WHERE owner_account_id IS NULL AND deleted_at IS NULL AND id > ? ORDER BY id LIMIT ?"
+    ).bind(after, n).all();
+    const rows = results || [];
+    out.scanned = rows.length;
+    for (const r of rows) {
+      out.ownerless.push({ code: r.public_code, name: String(r.name || "").slice(0, 80), published: r.visibility === "public", updatedAt: r.updated_at || null });
+      if (!apply) continue;
+      try {
+        if (await channelsV2Delete(env, r.public_code)) out.deleted++;
+        else out.failed.push(r.public_code);
+      } catch {
+        out.failed.push(r.public_code);
+      }
+    }
+    if (rows.length === n) {
+      out.done = false;
+      out.next = String(rows[rows.length - 1].id);
+    }
+    return out;
+  }
+
+  const listed = await env.CONFIGS.list({ prefix: "channelshare:", limit: n, ...(cursor ? { cursor: String(cursor) } : {}) });
+  for (const k of listed.keys || []) {
+    const code = k.name.slice("channelshare:".length);
+    out.scanned++;
+    let record = null;
+    try {
+      const raw = await env.CONFIGS.get(k.name);
+      record = raw ? JSON.parse(raw) : null;
+    } catch {
+      record = null;
+    }
+    // A record that cannot be read is reported and left alone: whether it has an
+    // owner is not known.
+    if (!record || typeof record !== "object") {
+      out.unreadable.push(code);
+      continue;
+    }
+    if (record.owner) continue;
+    out.ownerless.push(ownerlessChannelSummary(code, record));
+    if (!apply) continue;
+    try {
+      await deleteSharedChannelEverywhere(env, code);
+      out.deleted++;
+    } catch (e) {
+      console.error("ownerless channel: could not remove", code, e);
+      out.failed.push(code);
+    }
+  }
+  if (!listed.list_complete && listed.cursor) {
+    out.done = false;
+    out.next = listed.cursor;
+  }
+  return out;
 }

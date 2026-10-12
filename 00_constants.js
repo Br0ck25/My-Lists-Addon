@@ -1265,6 +1265,14 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0021", kind: "index", name: "idx_support_messages_rfc_id",
     consequence: "Matching incoming replies by RFC Message-ID scans the whole messages table. Slower, not broken.",
   },
+  {
+    migration: "0022", kind: "column", table: "feedback", name: "creator_name",
+    consequence: "My support history can only see the newest 300 threads of everyone: once 300 newer threads exist, an account's older conversations drop out of its own list. The Worker falls back to that older statement while the column is missing.",
+  },
+  {
+    migration: "0022", kind: "index", name: "idx_feedback_creator_updated",
+    consequence: "Looking up one account's support threads scans the whole feedback table. Slower, not broken.",
+  },
 ];
 
 

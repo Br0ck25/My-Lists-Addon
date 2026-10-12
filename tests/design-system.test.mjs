@@ -40,6 +40,13 @@ describe("design system: shared stylesheet", () => {
     assert.doesNotMatch(css, /transition:\s*all\b/);
   });
 
+  it("the guide page never uses transition: all either (it has its own stylesheet)", async () => {
+    const res = await call(makeEnv(), "/guide");
+    assert.equal(res.status, 200);
+    assert.ok(/<style[\s>]/.test(res.text), "the guide page carries its own CSS");
+    assert.doesNotMatch(res.text, /transition:\s*all\b/);
+  });
+
   it("has no malformed transition shorthand", async () => {
     const css = await appCss();
     assert.doesNotMatch(css, /transition:\s*[\w-]+:/);
@@ -83,6 +90,36 @@ describe("design system: shared stylesheet", () => {
       /background(-color)?:\s*var\(--(accent|color-brand|brand)\)/.test(b) &&
       /(^|[;\s{])color:\s*(var\(--color-on-brand\)|var\(--color-text-inverse[^)]*\)|#fff)/.test(b));
     assert.deepEqual(bad, []);
+  });
+});
+
+describe("design system: text on the brand fill is readable in both themes", () => {
+  // Relative luminance and contrast ratio (WCAG 2.x), enough for hex colours.
+  const lum = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  // A token is defined once for light, and again for dark when dark differs.
+  const tokenValues = (css, name) => [...css.matchAll(new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6})`, "g"))].map((m) => m[1]);
+
+  it("a button on --color-brand-fill takes --color-on-brand, never --color-text-inverse (black in dark mode)", async () => {
+    const css = await appCss();
+    const bad = [...css.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]).filter((b) =>
+      /background(-color)?:\s*var\(--color-brand-fill/.test(b) && /(^|[;\s{])color:\s*var\(--color-text-inverse/.test(b));
+    assert.deepEqual(bad, []);
+  });
+
+  it("--color-on-brand reaches 4.5:1 on the fill, its hover and its pressed colour, in light and dark", async () => {
+    const css = await appCss();
+    const onBrand = tokenValues(css, "--color-on-brand");
+    for (const name of ["--color-brand-fill", "--color-brand-fill-hover", "--color-brand-fill-active"]) {
+      const [light, dark] = tokenValues(css, name);
+      assert.ok(light && dark, name + " is defined for light and dark");
+      assert.ok(contrast(onBrand[0], light) >= 4.5, `${name} light: ${contrast(onBrand[0], light).toFixed(2)}`);
+      assert.ok(contrast(onBrand[onBrand.length - 1], dark) >= 4.5, `${name} dark: ${contrast(onBrand[onBrand.length - 1], dark).toFixed(2)}`);
+    }
   });
 });
 

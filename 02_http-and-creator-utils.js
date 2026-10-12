@@ -445,7 +445,7 @@ async function schemaWriteGate(request, env) {
 // our own origin (or have Sec-Fetch-Site: same-origin) AND carry Content-Type: application/json.
 // Exemptions:
 // 1. Webhook ingestion routes (/api/scrobble*) - called by media servers/Stremio
-// 2. OAuth provider callbacks and starts (/api/*/oauth/*)
+// 2. OAuth provider callbacks and starts (/api/{trakt,mdblist,simkl,tmdb}/oauth/{start,callback})
 // 3. Admin form login and logout (/admin/login, /admin/logout)
 // 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
 function verifyCsrf(request) {
@@ -466,7 +466,10 @@ function verifyCsrf(request) {
   if (path.startsWith("/api/scrobble")) {
     return null;
   }
-  if (path.includes("/oauth/")) {
+  // Exactly the eight provider routes (tests/route-access.json). This was
+  // path.includes("/oauth/"), which also skipped the check for any path with
+  // those characters in it, ids in the middle of a real route included.
+  if (/^\/api\/(trakt|mdblist|simkl|tmdb)\/oauth\/(start|callback)$/.test(path)) {
     return null;
   }
   // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
@@ -988,7 +991,9 @@ function decodeConfig(config) {
       trackOwner: "",
     };
   } catch {
-    return { entries: [], ...readInstallConfigFields({}), ...noAccount };
+    // Not a config at all (a short id nobody holds, or garbage): say so, so the
+    // routes can answer "not found" instead of serving an empty add-on.
+    return { entries: [], ...readInstallConfigFields({}), ...noAccount, unresolved: true };
   }
 }
 
@@ -4919,6 +4924,19 @@ async function purgeCreatorData(env, username, options = {}) {
       keysCleared++;
     } catch (e) {
       console.error("purgeCreatorData: could not delete", key, e);
+      dataSweepFailed = true;
+    }
+  }
+
+  // Support threads are looked up by username, so a deleted or re-registered
+  // name must not keep any (see detachFeedbackThreadsFromCreator). Not for a
+  // reset: the account stays and stays their owner. A failure counts like any
+  // other leftover: the name is not freed.
+  if (deleteIdentity || options.detachSupportThreads === true) {
+    try {
+      await detachFeedbackThreadsFromCreator(env, u);
+    } catch (e) {
+      console.error("purgeCreatorData: could not detach the support threads", e);
       dataSweepFailed = true;
     }
   }

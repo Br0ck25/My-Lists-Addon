@@ -434,7 +434,7 @@ function renderCustomListDraftList() {
     const typeLabel = itType === 'series' ? 'Show' : 'Movie';
     const yearSub = (it.year ? it.year + ' \u2022 ' : '') + typeLabel;
     const posBox = '<div style="position:absolute; top:4px; left:4px; z-index:4;">' +
-      '<input type="number" class="pos customListPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" style="width:34px; height:24px;">' +
+      '<input type="number" class="pos customListPosInput u-minh-unset u-p-2px u-fs-v_font_size_xs u-ta-center u-br-v_radius_sm u-bg-rgba_0_0_0_0_75 u-c-v_color_on_brand u-bd-1px_solid_rgba_255_255_255_0_3 u-fw-700" min="1" max="' + customListDraftItems.length + '" value="' + (i + 1) + '" title="Type position to move" aria-label="Position in list" style="width:34px; height:24px;">' +
     '</div>';
     const removeBtn = '<button type="button" class="cw-remove-btn customListRemovePickBtn" title="Remove from list" aria-label="Remove from list" style="z-index:4;">\u2715</button>';
 

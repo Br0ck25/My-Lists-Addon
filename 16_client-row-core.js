@@ -2498,7 +2498,10 @@ function showAppBusy(title, message) {
 function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = true) {
   const icon = isDanger ? '&#x26A0;' : '?';
   const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
-  const confirmBtnStyle = isDanger ? 'background:var(--danger, #e63946); color:#fff; border:none;' : '';
+  // White text straight on --danger measures about 3.6:1. --color-danger-text
+  // with --color-text-inverse is the pair for text on a danger fill: white on
+  // #D70015 (5.4:1) in light, black on #FF453A (6.2:1) in dark.
+  const confirmBtnStyle = isDanger ? ' background:var(--color-danger-text); color:var(--color-text-inverse); border:none;' : '';
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
@@ -2510,7 +2513,7 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
     '<p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base u-lh-1_4 u-ws-pre_wrap u-overflowwrap-anywhere u-wb-break_word">' + escapeHtml(message) + '</p>' +
     '<div class="u-jc-flex_end u-gap-8px" style="display:flex;">' +
       '<button type="button" class="secondary u-minw-80px u-p-8px_16px" data-act="closeModal">Cancel</button>' +
-      '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px; ' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
+      '<button type="button" class="primary" id="appConfirmBtn" style="min-width:80px; padding:8px 16px;' + confirmBtnStyle + '">' + escapeHtml(confirmBtnText || 'Confirm') + '</button>' +
     '</div>';
   showModal(html);
   const btn = document.getElementById('appConfirmBtn');
@@ -2912,6 +2915,52 @@ function refreshUserFeedbackThreads() {
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
     }
   });
+}
+
+// Settings > Support > "Delete chat history". The threads are removed on the
+// server as well (the developer's panel loses them), so it is confirmed first
+// rather than offered as an undo. This device only forgets them once the server
+// has said they are gone: a refused delete leaves the chat as it was.
+function deleteUserFeedbackHistory() {
+  const confirmFn = typeof showAppConfirm === 'function' ? showAppConfirm : (title, msg, btnText, cb) => { cb(); };
+  confirmFn(
+    'Delete chat history',
+    'This deletes every support conversation you have had with the developer, here and on the server. It cannot be undone.',
+    'Delete',
+    async () => {
+      const auth = feedbackCreatorAuth();
+      const failed = (why) => {
+        const text = why || 'Please try again in a moment.';
+        if (typeof showAppAlert === 'function') showAppAlert('Could not delete chat history', text);
+        else if (typeof showToast === 'function') showToast('Could not delete chat history. ' + text, 'error');
+      };
+      try {
+        const res = await creatorApiFetch(ORIGIN + '/api/feedback/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadIds: getUserFeedbackThreadIds(),
+            creatorName: auth.creatorName,
+            creatorKey: auth.creatorKey,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!data || !data.ok) {
+          failed(data && data.error);
+          return;
+        }
+      } catch (e) {
+        failed();
+        return;
+      }
+      try { localStorage.removeItem('myListAddon:feedbackThreadIds'); } catch (e) {}
+      userFeedbackThreads = [];
+      activeFeedbackThreadId = null;
+      isComposingNewFeedback = false;
+      renderUserFeedbackThreadsUI();
+      if (typeof showToast === 'function') showToast('Chat history deleted', 'success');
+    }
+  );
 }
 
 function toggleNewFeedbackForm(showNew) {

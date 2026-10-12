@@ -411,7 +411,7 @@ describe("Quick Add network channels stay resolvable and small end to end", () =
         shuffle: false,
         dailyRotate: true,
       };
-      return { name: "Network " + i, url: "channel:v1:" + JSON.stringify(pointerPayload), type: "series", group: "Channels" };
+      return { id: "ch-" + i, name: "Network " + i, url: "channel:v1:" + JSON.stringify(pointerPayload), type: "series", group: "Channels" };
     });
 
     const res = await call(env, "/api/save", { method: "POST", json: { ...(await accountProof(env)), entries } });

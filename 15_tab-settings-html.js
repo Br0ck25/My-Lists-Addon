@@ -665,7 +665,10 @@
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
             <span id="supportChatStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
-            <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
+            <span class="u-gap-8px" style="display:inline-flex;">
+              <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="deleteUserFeedbackHistory">Delete chat history</button>
+              <button type="button" class="secondary lc-btn u-p-2px_8px u-fs-v_font_size_xs u-bd-none u-bg-none u-c-v_muted u-cur-pointer" data-act="refreshUserFeedbackThreads">&#x21BB; Refresh</button>
+            </span>
           </div>
         </div>
 

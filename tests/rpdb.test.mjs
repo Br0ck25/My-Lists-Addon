@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 // RatingPosterDB artwork: posters come through this Worker's /rpdb/ route so a
 // person's monthly request limit is not spent by every render.
 
-const { accountProof, makeKv, makeD1, makeEnv, call } = await import("./harness.mjs");
+const { accountProof, makeKv, makeD1, makeEnv, call, awaitFreshRateWindow } = await import("./harness.mjs");
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -104,6 +104,9 @@ describe("the /rpdb/ route spares the person's request limit", () => {
   it("asks RPDB at most 20 new posters a minute; the rest get the ordinary poster for now", async () => {
     const log = stubRpdb();
     const inst = await install({ rpdb: true, rpdbKey: newKey() });
+    // The 20 are counted per clock minute; a run that straddles a boundary
+    // gets a second budget and asks RPDB for more than 20.
+    await awaitFreshRateWindow();
     const statuses = [];
     for (let i = 0; i < 26; i++) statuses.push((await call(inst.env, `/rpdb/${inst.id}/${imdb(100 + i)}.jpg`)).status);
     assert.equal(log.posters.length, 20);

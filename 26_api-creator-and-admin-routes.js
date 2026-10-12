@@ -1550,17 +1550,25 @@
       const currentHash = request.session ? request.session.idHash : null;
       const url = new URL(request.url);
       const revokeOthers = body.allExceptCurrent || url.searchParams.get("other") === "1";
-      const targetId = body.id || url.searchParams.get("id");
+      // An id the caller names must be exactly what GET /api/me/sessions hands
+      // out (16 hex characters). It used to be a LIKE prefix, so "%" matched
+      // every session and "" fell through to "revoke everything". Leaving the
+      // id out altogether still means every session.
+      const idGiven = body.id !== undefined || url.searchParams.has("id");
+      const targetId = body.id !== undefined ? body.id : url.searchParams.get("id");
 
       if (revokeOthers) {
         await revokeAccountSessions(env, request.account.id, currentHash);
         return json({ ok: true, revokedOthers: true }, 200, { "Cache-Control": "no-store" });
       }
 
-      if (targetId) {
+      if (idGiven) {
+        if (typeof targetId !== "string" || !/^[0-9a-f]{16}$/.test(targetId)) {
+          return json({ ok: false, error: "Invalid session id." }, 400, { "Cache-Control": "no-store" });
+        }
         const { results } = await env.DB.prepare(
-          "SELECT id_hash FROM sessions WHERE account_id = ? AND id_hash LIKE ? AND revoked_at IS NULL"
-        ).bind(request.account.id, targetId + "%").all();
+          "SELECT id_hash FROM sessions WHERE account_id = ? AND substr(id_hash, 1, 16) = ? AND revoked_at IS NULL"
+        ).bind(request.account.id, targetId).all();
 
         let revokedCurrent = false;
         for (const r of (results || [])) {
@@ -1743,7 +1751,7 @@
       // endpoint already rate-limited to one call per IP per minute. It cannot
       // touch a live account either, because the uniqueness check above has
       // already established there is none.
-      const preCreatePurge = await purgeCreatorData(env, v.normalized, { deleteIdentity: false });
+      const preCreatePurge = await purgeCreatorData(env, v.normalized, { deleteIdentity: false, detachSupportThreads: true });
       if (!preCreatePurge.ok) {
         return json({
           ok: false,
@@ -3085,6 +3093,10 @@
         } catch {
           existing = null;
         }
+        // A link minted before shares needed an account has no owner, so nobody
+        // may overwrite it: sharing under its code makes a new link and leaves the
+        // old one as it was (it still opens for whoever holds it).
+        if (existing && !existing.owner) existing = null;
         if (existing && existing.owner && existing.owner !== owner) {
           return json({ ok: false, error: "That share link belongs to someone else." }, 403);
         }
@@ -6479,6 +6491,34 @@
         return json({ ok: false, error: "That channel is still listed in the new tables. Please try again." }, 500, { "Cache-Control": "no-store" });
       }
       return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /admin/api/channel-ownerless  (POST)  { cursor?, limit?, apply?, confirm? }
+    //   -> { ok, apply, scanned, ownerless: [{ code, name, published, updatedAt }],
+    //        deleted, failed, unreadable, next, done }
+    // The shared channels no account owns (see 60_ownerless-channels.js). A count
+    // by default; with apply it deletes this batch, and only when `confirm` is the
+    // confirmation phrase. Run it again with `next` as `cursor` until `done`.
+    if (path === "/admin/api/channel-ownerless" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const apply = body.apply === true;
+      if (apply && body.confirm !== OWNERLESS_CHANNELS_CONFIRM) {
+        return json({ ok: false, error: `To delete, send confirm: "${OWNERLESS_CHANNELS_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+      }
+      let result;
+      try {
+        result = await removeOwnerlessChannels(env, { cursor: body.cursor, limit: body.limit, apply });
+      } catch (e) {
+        return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+      }
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
 
     if (path === "/admin/api/migrate-day-counts" && request.method === "POST") {

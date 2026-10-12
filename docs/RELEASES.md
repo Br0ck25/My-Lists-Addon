@@ -1896,3 +1896,145 @@ The owner decided both on 2026-10-05: retire the classic page (13) and delete th
 - `bash verify.sh -q`: all checks passed. `tests/pwa-manifest.test.mjs` is new. Tests that only exercised the removed tools were deleted; the env-var documentation guard now reads `docs/OPERATIONS.md` and `wrangler.toml`.
 
 **Rollback:** paste the Release 33 file (build 125fc325b2).
+
+## 2026-10-12: fixes from the audit (AUDIT-REPORT.md)
+
+**Branch point:** the 2026-10-11 entry above (build c3f7831ad9), live. Built 2026-10-12, build 4d2bb52b05.
+
+### What it changes
+
+- **`/api/poster-badge`** no longer lets another host through on a `/api/safe-poster` path. It was an open redirect and an open image proxy; only this Worker's own safe-poster URL is allowed now (`isAllowedPosterUrl`, 25_).
+- **A catalog row whose provider failed is never cached.** The last good copy, the "temporarily unavailable" tile and the empty page took the one-hour default; they are `no-store` now (`CATALOG_NO_CACHE`, 25_).
+- **`/api/track-install`** has a per-address limit (30 a minute, like `/api/track-event`) and counts only the builder's own categories by name; any other name is counted under "Other" (`INSTALL_STAT_GROUPS`, 03_). A test reads the builder's sources so a new category added there and not in the list fails. The admin read of `source_groups` has a `LIMIT`.
+- **An install link that does not resolve is a 404** (manifest, with CORS and `no-store`); a catalog row or a channel's meta asked of it is empty and `no-store`. `resolveConfig` marks such a link `unresolved`. A removed install and a valid-but-empty old base64 link are unchanged. Three existing assertions that expected the old 200 now expect the 404.
+- **`/api/save`** refuses (400) a row with no usable `id`, an id with a slash or space, or a type other than movie or series. Duplicate ids are still accepted.
+- **Deleting a list** shows an **Undo** toast; Undo saves the list back at the same address. The "deleted" record that stops a sync restoring the list is now taken back when the server refuses the delete or the request never arrives.
+- **Discover and the home page** load poster strips as cards come near the screen (an `IntersectionObserver`, 600px ahead) through one queue of five at a time: 34 `/api/preview` calls at load instead of 168.
+- **Ownerless shared channels** (links minted before shares needed an account): sharing under such a code makes a new link instead of overwriting it. New **Old anonymous channel links** panel under Maintenance: *Count* looks, *Delete* removes them (with their likes, listing and new-tables copy) in batches, and only after a confirmation.
+
+### Checked
+
+- New tests: `catalog-failure-cache`, `anonymous-write-limits` (it also pins the `/api/save` and `/api/feedback` limits, which no test mentioned), `unknown-install`, `delete-list-undo.client`, `lazy-poster-slots.client`, `ownerless-channels`. Each failed before its fix.
+- In a real browser (Chromium against the Worker over HTTP): delete then Undo restores the list with its items at the same address and survives a reload; Discover's first screen resolves as before; the admin panel counts 3 of 4 channels, then deletes only those.
+- `bash verify.sh -q` passes. `tests/rpdb.test.mjs` ("asks RPDB at most 20 new posters a minute") can fail when a run crosses a minute boundary, because it does not wait for a fresh rate window (`awaitFreshRateWindow`); it passes on a rerun. Not changed here.
+
+**Steps:**
+1. Deploy the new `worker_entry_combined.js`. Check that `/admin` says **Built 2026-10-12 (build 4d2bb52b05)**.
+2. Optional, when you are ready to remove the old anonymous channel links (nothing is deleted by the deploy): `/admin` → Management & Tools → Maintenance. Run **Export old data to R2** with the prefix `channelshare:`, press **Count** and look at the number, then **Delete**.
+3. Separately, and only if you want it: the `source_groups` table can hold invented names from before the limit. That is stored data, so it is not touched; ask for a clean-up.
+
+**Rollback:** paste the previous file (build c3f7831ad9). The new tests and the Maintenance panel go with it; nothing stored changes.
+
+## 2026-10-12: support history keeps every conversation, and can be deleted
+
+**Branch point:** the "fixes from the audit" entry above (build 4d2bb52b05). Built 2026-10-12, build e196580c5d.
+
+### What it changes
+
+- **Audit #6.** "My support history" no longer loses an older conversation once 300 newer threads from other people exist. `feedback` gets a `creator_name` column (migration `0022_feedback_creator_name.sql`, filled in from the stored thread, lower case) and the lookup is `WHERE creator_name = ?` on an index, newest 100 (`findFeedbackThreadsByCreator`, 03_). A database that has not run 0022 still files and lists threads on the old newest-300 statement, so deploying before the migration breaks nothing.
+- **Delete chat history.** Settings → Support shows a **Delete chat history** button under the conversation, behind a confirmation ("cannot be undone"). New `POST /api/feedback/delete` (public, 20 a minute per address) removes the threads from the database and the KV copy, so the developer's Support panel loses them too. A thread nobody owns is deleted with its id (the same rule that lets an anonymous reporter reply); a thread that belongs to an account needs that account's key, and with the key every thread filed under the account goes, including ones this device never saw. Another account's id is skipped, not an error. This device forgets the threads only after the server says they are gone.
+
+### Checked
+
+- New tests: `support-history` (the 305-thread case failed first; the 0022 backfill; a database without 0022; delete rules, wrong key, limit) and `support-history-delete.client`. Seven deliberate breakages of the new code were each caught.
+- `bash verify.sh -q` passes.
+
+**Steps:**
+1. Run the migration once, before or after the deploy: `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0022_feedback_creator_name.sql` (or paste it into the D1 Console). Run it only once: SQLite cannot add the column twice.
+2. Deploy the new `worker_entry_combined.js`. Check that `/admin` says **Built 2026-10-12 (build e196580c5d)**.
+3. No stored data is deleted by either step. Threads are deleted only when a person presses the button and confirms.
+
+## 2026-10-12: copying the install link works without a clipboard API, and session revoke takes only real ids
+
+**Branch point:** the "support history" entry above (build e196580c5d). Built 2026-10-12, build f6d66597e8.
+
+### What it changes
+
+- **Audit #15.** `copyLink` (the install-link copy, and the Nuvio buttons that use it) called `navigator.clipboard.writeText` with no guard. Where there is no clipboard API (a page over http, some in-app webviews) it threw before its own "show the link" fallback could run, so the click did nothing. It now goes through `copyTextToClipboard` (`16_`), which falls back to a hidden textarea and `execCommand('copy')`; only if both fail is the link shown to copy by hand, as before.
+- **The Nuvio buttons** ("Install in Nuvio", "Nuvio Web") said "Manifest link copied to clipboard" whether or not it had been. They now say it only when it was.
+- **`sharePreset`** (copy a preset as JSON) had the same unguarded call and the same dead fallback prompt; it uses the same helper.
+- **Audit #8.** `DELETE /api/me/sessions` used `id` as a SQL `LIKE` prefix, so `{"id":"%"}` revoked every session of the account, the caller's own included, and `{"id":""}` fell through to "revoke everything". An `id` that is given must now be exactly the 16 hex characters `GET /api/me/sessions` returns, matched with `substr(id_hash, 1, 16) = ?`; anything else is a 400 and revokes nothing. Leaving `id` out entirely still means every session (unchanged, and tested). No page calls this route, so nothing in the UI changes.
+- **Removed `openNuvioInstallModal`** (24_), which nothing called.
+- **Audit #14 (contrast).** The channel logo URL errors were coloured `var(--err, #ff453a)`; `--err` is defined nowhere, so the hex fallback (3.4:1 on white, no dark variant) always showed. They use `--color-danger-text` now (5.4:1 light, 5.0:1 dark, measured in the page). The danger button of every confirmation dialog was white on `--danger` (3.5:1); it is still solid red but uses `--color-danger-text` with `--color-text-inverse` (white on `#D70015`, 5.4:1; black on `#FF453A` in dark, 6.2:1). Not changed, because it does not apply: the "Copied!" state of the install-link button, which the audit also named. Its inline white-on-green is overridden by the stylesheet's `!important` brand fill, so the green never showed.
+
+### Checked
+
+- New `tests/session-revoke.test.mjs` (13 tests; 10 failed before the fix, `{"id":"%"}` answered `revoked: 3`). New `tests/error-colours.client.test.mjs` (6 tests; 5 failed before the fix). New `tests/copy-link.client.test.mjs` (10 tests). Seven of them fail on the previous code, with "Cannot read properties of undefined (reading 'writeText')". One existing assertion in `tests/client.test.mjs` (`copyNuvioInstallLink`) now awaits the call, because the toast follows the copy.
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build f6d66597e8)**. No data or migration involved.
+
+## 2026-10-12: CSRF exemption, route scan and position labels
+
+**Branch point:** the entry above (build f6d66597e8). Built 2026-10-12, build 9bc63cec43.
+
+### What it changes
+
+- **Audit #10.** `verifyCsrf` skipped the same-origin and JSON checks for any path containing `/oauth/`. Probing every mutating prefix showed it reached real handlers (`/api/connections/x/oauth/x`, `/api/imports/x/oauth/x`, `/admin/api/jobs/x/oauth/x`, `/admin/api/installs/x/oauth/x`); only their sign-in checks stopped it, and the same request without `/oauth/` is a 403. The exemption is now an exact match on the eight provider routes (`/api/{trakt,mdblist,simkl,tmdb}/oauth/{start,callback}`). A test pins that list to the OAuth routes in `tests/route-access.json`.
+- **Audit #23.** `tests/route-access.test.mjs` matched only `path === "/..."` with double quotes, so a route added with single quotes (as `59_support-emails.js` is written) would never be checked against the manifest. It accepts either, with a self-test; the nine single-quoted routes already in the sources are all in the manifest. A test change only.
+- **Audit #18.** The number box on each pick of a custom list and of a channel had only a `title`; it has `aria-label="Position in list"` / `"Position in channel"`. The audit named the list builder; the channel builder had the same markup and is fixed with it.
+
+### Checked
+
+- New `tests/csrf-oauth-exemption.test.mjs` (25 tests; 16 failed before the fix) and `tests/pick-position-label.client.test.mjs` (2 tests, both failed before). The route-scan self-test fails with the old double-quote pattern.
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 9bc63cec43)**. No data or migration involved.
+
+## 2026-10-12: dark-mode buttons, guide-page transitions and a faster logo encoder
+
+**Branch point:** the entry above (build 9bc63cec43). Built 2026-10-12, build b598fce9b6.
+
+### What it changes
+
+- **Dark mode: white text on every primary button** (your decision). `--color-text-inverse` is black in dark mode, and five rules in `09_page-shell.js` (`.btn-primary`, `.primary`, `.lc-btn.primary`, their hover, and the install-link Copy button) paired it with `--color-brand-fill`, giving black on `#0A64D8` at 3.8:1. They use `--color-on-brand` (white in both themes): 5.5:1 in dark, measured in the page for four button types. Light mode is unchanged. A guard in `tests/design-system.test.mjs` fails on the old pairing and checks the ratio on the fill, hover and pressed colours in both themes. `DESIGN_SYSTEM.md` said the opposite and is corrected. The confirm dialog's danger button keeps `--color-text-inverse` on purpose (black on `#FF453A` in dark, 6.2:1).
+- **Audit #17.** `.btn` and `.toc-pill` in the guide page named `transition: all`; they name `background`, `border-color` and `color`, the properties their hover changes. The guard that forbids `transition: all` read only `/app.css`; it reads `/guide` as well. (The admin dashboard has one more at `03_admin.js`, not changed: it was not in the audit and the guard cannot render that page without a login.)
+- **Audit #20.** Two comments cited `/settings/connections`, which answers 404; they name `/settings/account`. Comment-only.
+- **Audit #21.** `/api/channel-logo` encoded the image with a byte-by-byte loop although `bytesToBase64` (chunked) is in the same file; it calls that now. Output is identical (checked against a 100 KB image of every byte value); at the 2 MB cap the loop took 170-270 ms against 23 ms.
+
+### Checked
+
+- New `tests/channel-logo-encoding.test.mjs` (2 tests; it passes before and after, because the change must not alter output, and an off-by-one in the chunk stride fails it). The `/guide` guard failed before the fix, as did the primary-button pairing guard.
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build b598fce9b6)**. No data or migration involved.
+
+## 2026-10-12: tests only (no change to the Worker)
+
+Build stamp unchanged (b598fce9b6): nothing to deploy for this.
+
+- **Flaky RPDB test fixed.** "asks RPDB at most 20 new posters a minute" failed when a run straddled a clock minute, because the limiter counts per clock minute and the next minute is a second budget. Reproduced by starting the clock 40 ms before a boundary (26 posters asked instead of 20); it waits for a fresh window now (`awaitFreshRateWindow`). The new `/api/feedback/delete` limit test had the same hazard and got the same wait.
+- **Audit #12 kept as a known gap.** A like's write of the list record can still land on top of an owner's save that arrived a round-trip earlier (5 items become 2, both requests return 200). It is reproduced as a `todo` test in `tests/worker.test.mjs` (reported, does not fail the suite). Not fixed: KV has no compare-and-swap, and closing it means moving `likes` off the list record, which several places read. See `AUDIT-REPORT.md`.
+
+## 2026-10-12: admin dashboard colours and transition
+
+**Branch point:** the "tests only" entry above (build b598fce9b6). Built 2026-10-12, build b1c230a142.
+
+### What it changes
+
+- **Admin dashboard and sign-in page** (`03_admin.js`, their own stylesheet): `.subnav-pill` named `transition: all`; it names `background`, `border-color` and `color`. `.lc-btn.danger` was white on `--danger` (3.5:1); it is `--color-danger-text` with `--color-text-inverse` (5.4:1 light, 6.2:1 dark), like the confirm dialog in the main app. `.lc-btn`, `.subnav-pill.active` and the sign-in button were white on `--accent` (the brand blue: 5.4:1 light but 3.7:1 in dark); they use `--color-brand-fill` with `--color-on-brand` like the main app's primary buttons (5.5:1 in both themes). Measured in the page, light and dark, for all four.
+- This closes the leftovers noted in the previous two entries (the admin `transition: all`, the admin white-on-danger). The `transition: all` guard and the contrast guard now cover the admin pages as well as `/app.css` and `/guide`.
+
+### Checked
+
+- New `tests/admin-colours.test.mjs` (4 tests, all failed before the fix; putting white-on-danger back fails 2).
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build b1c230a142)**. No data or migration involved.
+
+## 2026-10-12: a deleted account's support threads are no longer shown to the next holder of the name
+
+**Branch point:** the "admin dashboard colours" entry above (build b1c230a142). Built 2026-10-12, build 2747c901d9.
+
+### What it changes
+
+- **Found while checking the chat-history work, not in the audit.** "My support history" is looked up by username, and a deleted username can be registered again five minutes later (`CREATOR_TOMBSTONE_TTL_SEC`). Nothing in the account sweep touched feedback, so the next holder of the name signed in and was shown the previous owner's threads: their messages and the contact address they gave. Reproduced end to end (file a thread, delete the account, let the hold lapse, register the name, ask for threads). The old 300-thread window had the same leak for recent threads; the new by-account lookup (release above) made it complete, and D1 keeps threads with no expiry.
+- **Now:** `detachFeedbackThreadsFromCreator` (03_) takes every support thread off the name, keeping the conversation. The thread becomes an ordinary one (readable only with its id, like an anonymous report), with `creatorName` empty and the old name in `formerCreatorName` for the developer; nothing is deleted. It runs in the account-deletion sweep (`purgeCreatorData`, so both `/api/creator/delete-account` and the `account.purge` job) and in the clean-up when a username is registered, which also cures threads left by accounts deleted before this release, the next time that name is registered. A reset keeps them (the account stays their owner). A lookup or update that fails stops the deletion, like any other leftover, and the name is not freed.
+- The by-name lookup has a `strict` mode for this (a failed read is thrown, not taken as "none").
+
+### Checked
+
+- 6 new tests in `tests/support-history.test.mjs` (the leak, an old orphan, a failed update, a failed lookup, a reset, another account untouched); 5 failed before the fix, and each of six deliberate breakages is caught. The two older tests that faked "migration 0022 not run" now drop the column for real, so the error is the one D1 gives ("no such column").
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 2747c901d9)**. No migration, and it works with or without 0022. Threads of accounts already deleted keep their old name in the database until that name is registered again, at which point they are detached; nobody can sign in as a deleted name in between.

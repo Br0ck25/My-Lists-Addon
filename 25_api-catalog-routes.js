@@ -15,6 +15,29 @@
 // poster URL. A request that names any other host, or a non-https scheme,
 // isn't a real poster -- it's someone probing the endpoint directly, and
 // gets rejected before either the redirect or the fetch further down.
+// What a catalog answer carries when it is not a real answer: its provider
+// failed, or the install or row is not there. A good shared row is cached five
+// minutes; these (last good copy, the "temporarily unavailable" tile, an empty
+// page) used to take jsonPublic's one-hour default, so a short outage, or a
+// link not yet visible where the app asked, lasted an hour in the apps.
+const CATALOG_NO_CACHE = { "Cache-Control": "no-store" };
+
+// What /api/save refuses to store, so a bad row cannot become a manifest the
+// apps reject. The id is a catalog id in a URL path (/catalog/<type>/<id>.json),
+// so it has no slash or space; the type is a catalog type. The builder always
+// sends both (it also de-duplicates ids), so only a hand-made or very old
+// request is turned away. Returns a message, or "" when every row is fine.
+function saveEntriesProblem(entries) {
+  for (const e of entries) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) return "Every list needs to be a list row.";
+    if (typeof e.id !== "string" || !e.id || e.id.length > 100 || /[\/\s]/.test(e.id)) {
+      return "A list is missing a usable id.";
+    }
+    if (e.type !== "movie" && e.type !== "series") return "A list's type has to be movie or series.";
+  }
+  return "";
+}
+
 const POSTER_IMAGE_HOSTS = new Set([
   "image.tmdb.org",
   "images.metahub.space",
@@ -27,7 +50,10 @@ const POSTER_IMAGE_HOSTS = new Set([
   "btttr.cc",
 ]);
 
-function isAllowedPosterUrl(raw) {
+// `origin` is this Worker's own origin. The safe-poster tile is this add-on's
+// own route, so it counts only on that origin: matched by path alone it let
+// any host through (an open redirect and an open image proxy).
+function isAllowedPosterUrl(raw, origin) {
   let u;
   try {
     u = new URL(String(raw || ""));
@@ -35,7 +61,7 @@ function isAllowedPosterUrl(raw) {
     return false;
   }
   if (u.protocol !== "https:") return false;
-  if (u.pathname.startsWith("/api/safe-poster")) return true;
+  if (u.origin === origin && u.pathname.startsWith("/api/safe-poster")) return true;
   return POSTER_IMAGE_HOSTS.has(u.hostname.toLowerCase());
 }
 
@@ -449,7 +475,7 @@ async function handleFetch(request, env, ctx) {
 
     // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
     // /channels, /discover, /search, /settings and a sub-tab below any of them
-    // (/settings/connections, /catalogs/quickadd).
+    // (/settings/account, /catalogs/quickadd).
     //
     // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
     // links and keep their own routes below.
@@ -702,7 +728,7 @@ async function handleFetch(request, env, ctx) {
         if (pu.origin === url.origin && pu.pathname.startsWith("/bp/")) ownBetterPoster = parseBetterPosterPath(pu.pathname, pu.searchParams);
       } catch {}
 
-      if (!posterUrl || (!ownBetterPoster && !isAllowedPosterUrl(posterUrl))) {
+      if (!posterUrl || (!ownBetterPoster && !isAllowedPosterUrl(posterUrl, url.origin))) {
         // Missing entirely, or not one of the image hosts this add-on
         // itself ever puts in a `poster` field (see isAllowedPosterUrl).
         // This is a public, CORS-open, unauthenticated endpoint -- without
@@ -1171,6 +1197,11 @@ async function handleFetch(request, env, ctx) {
         return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
       }
       const resolved = await resolveConfig(m[1], env);
+      // Nothing by that name: a 404 the app can show, and nothing cached, so a
+      // link whose record is not yet visible here works on the next try.
+      if (resolved.unresolved) {
+        return json({ ok: false, error: "That install link was not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+      }
       const { entries, track, shuffleShelves } = resolved;
       // Moves this link's keys and tokens out of its KV record, if they are
       // still there and the move is switched on. After the response.
@@ -1500,7 +1531,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
       const entry = entryIndex >= 0 ? entries[entryIndex] : null;
-      if (!entry || entry.enabled === false) return jsonPublic({ metas: [] });
+      if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its
       // sources newline-separated (see fetchCatalog), and one personal source
@@ -1620,7 +1651,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
               // exactly like a normal successful load. `stale` is
               // informational only (visible when debugging via curl), not
               // read by wako/Stremio itself.
-              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg });
+              return jsonPublic({ metas: JSON.parse(stale), stale: true, error: errMsg }, 200, CATALOG_NO_CACHE);
             }
           } catch {
             // Cache read/parse failed -- fall through to the placeholder below.
@@ -1640,13 +1671,13 @@ Sitemap: ${url.origin}/sitemap.xml`;
               },
             ],
             error: errMsg,
-          });
+          }, 200, CATALOG_NO_CACHE);
         }
 
         // Metas stays empty so wako/Stremio just shows an empty row instead
         // of erroring out, but the reason is still visible if you curl this
         // URL directly while debugging.
-        return jsonPublic({ metas: [], error: errMsg }, 200);
+        return jsonPublic({ metas: [], error: errMsg }, 200, CATALOG_NO_CACHE);
       }
     }
 
@@ -1675,16 +1706,24 @@ Sitemap: ${url.origin}/sitemap.xml`;
     }
 
     if (path === "/api/track-install" && request.method === "POST") {
+      // Anonymous, and it writes: the same per-address budget as
+      // /api/track-event. A beacon, so over the limit is still a plain ok.
+      const installIp = clientIpKey(request);
+      if (!installIp || await consumeRateLimit(env, ctx, "trackinstall", installIp, TRACK_INSTALL_PER_MINUTE)) {
+        return json({ ok: true });
+      }
       ctx.waitUntil(bumpStat(env, "installs"));
       try {
         const body = await request.json();
         if (body && body.groups && typeof body.groups === "object") {
-          const entries = Object.entries(body.groups).slice(0, 30);
-          for (const [rawGroup, rawCount] of entries) {
-            const group = sanitizeStatGroupName(rawGroup);
-            const count = Math.max(0, Math.min(1000, parseInt(rawCount, 10) || 0));
-            if (group && count) ctx.waitUntil(bumpStatBy(env, `sourcegroup:${group}`, count));
+          // Known categories under their own name, the rest together as Other.
+          const counted = new Map();
+          for (const [rawGroup, rawCount] of Object.entries(body.groups).slice(0, 30)) {
+            const group = installStatGroupName(rawGroup);
+            const count = Math.max(0, Math.min(SAVED_CONFIG_ENTRIES_MAX, parseInt(rawCount, 10) || 0));
+            if (group && count) counted.set(group, Math.min(SAVED_CONFIG_ENTRIES_MAX, (counted.get(group) || 0) + count));
           }
+          for (const [group, count] of counted) ctx.waitUntil(bumpStatBy(env, `sourcegroup:${group}`, count));
         }
       } catch {
         // no body, or not JSON -- the plain install counter above still
@@ -1932,7 +1971,9 @@ Sitemap: ${url.origin}/sitemap.xml`;
           // dynamic Next Up channel. resolveConfig only fills them in for a
           // config that PROVED whose it is (see trackOwner there), so an
           // unverified config simply gets a channel with neither applied.
-          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = await resolveConfig(config, env, { withTracking: true });
+          const metaResolved = await resolveConfig(config, env, { withTracking: true });
+          if (metaResolved.unresolved) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
+          const { entries, watchHistory, continueWatching, tmdbKey, mdblistKey, traktKey, traktAccessToken } = metaResolved;
           let matchedEntry = null;
           for (const e of entries) {
             if (e.enabled === false) continue;
@@ -2029,13 +2070,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // Escaped because it lands in an SVG attribute and comes from an
         // upstream response header rather than from this Worker.
         const safeContentType = escapeXml(contentType.split(";")[0].trim() || "image/png");
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
+        const base64 = bytesToBase64(arrayBuffer);
         const dataUri = `data:${safeContentType};base64,${base64}`;
 
         const svg = format === "landscape"
@@ -6927,78 +6962,20 @@ function generateSearchVariations(query) {
         await Promise.all(lookups);
       }
 
-      // 2. If creatorName is given, also scan recent feedback for this creator
+      // 2. If creatorName is given, also load every thread filed under that account
       if (creatorName) {
-        let searchedD1 = false;
-        if (env && env.DB) {
-          try {
-            const rows = await env.DB.prepare(
-              "SELECT body_json FROM feedback ORDER BY updated_at DESC LIMIT 300"
-            ).all();
-            if (rows && Array.isArray(rows.results) && rows.results.length > 0) {
-              searchedD1 = true;
-              for (const r of rows.results) {
-                if (!r.body_json) continue;
-                try {
-                  const entry = JSON.parse(r.body_json);
-                  if (entry && entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!threadsMap.has(entry.id)) {
-                      if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                        entry.messages = [{
-                          id: `msg_init`,
-                          sender: "user",
-                          senderName: entry.creatorName || "User",
-                          text: entry.message || "(Initial message)",
-                          timestamp: entry.createdAt || Date.now()
-                        }];
-                      }
-                      threadsMap.set(entry.id, entry);
-                    }
-                  }
-                } catch {}
-              }
-            }
-          } catch {}
-        }
-        if (!searchedD1 && env && env.CONFIGS) {
-          try {
-            const FEEDBACK_USER_SCAN_CAP = 300; // matches /admin/api/feedback's cap
-            let scanKeys = [];
-            let cursor;
-            let pages = 0;
-            while (pages < 30) {
-              const listRes = await env.CONFIGS.list({ prefix: "feedback:", limit: 1000, cursor });
-              scanKeys.push(...(listRes.keys || []).map((k) => k.name));
-              if (scanKeys.length > FEEDBACK_USER_SCAN_CAP) scanKeys = scanKeys.slice(-FEEDBACK_USER_SCAN_CAP);
-              pages++;
-              if (listRes.list_complete || !listRes.cursor) break;
-              cursor = listRes.cursor;
-            }
-            scanKeys.reverse();
-            const scanLookups = scanKeys.map(async (kName) => {
-              const tid = kName.replace(/^feedback:/, "");
-              if (threadsMap.has(tid)) return;
-              try {
-                const raw = await env.CONFIGS.get(kName);
-                if (raw) {
-                  const entry = JSON.parse(raw);
-                  if (entry.creatorName && entry.creatorName.trim().toLowerCase() === creatorName) {
-                    if (!Array.isArray(entry.messages) || !entry.messages.length) {
-                      entry.messages = [{
-                        id: `msg_init`,
-                        sender: "user",
-                        senderName: entry.creatorName || "User",
-                        text: entry.message || "(Initial message)",
-                        timestamp: entry.createdAt || Date.now()
-                      }];
-                    }
-                    threadsMap.set(entry.id, entry);
-                  }
-                }
-              } catch {}
-            });
-            await Promise.all(scanLookups);
-          } catch {}
+        for (const entry of await findFeedbackThreadsByCreator(env, creatorName)) {
+          if (threadsMap.has(entry.id)) continue;
+          if (!Array.isArray(entry.messages) || !entry.messages.length) {
+            entry.messages = [{
+              id: `msg_init`,
+              sender: "user",
+              senderName: entry.creatorName || "User",
+              text: entry.message || "(Initial message)",
+              timestamp: entry.createdAt || Date.now()
+            }];
+          }
+          threadsMap.set(entry.id, entry);
         }
       }
 
@@ -7009,6 +6986,84 @@ function generateSearchVariations(query) {
       });
 
       return json({ ok: true, threads }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /api/feedback/delete (POST) { threadIds?, creatorName?, creatorKey? } -> { ok, deleted }
+    // Settings > Support: "Delete chat history". Removes the threads from the
+    // database and the KV copy, for good, so the developer's panel loses them too.
+    //
+    // Who may delete what is the rule replying already follows. A thread nobody
+    // owns is a bare capability -- whoever holds its id can delete it, which is
+    // how an anonymous reporter, with no account, clears their own. A thread
+    // that belongs to an account takes that account's key. Signing in with the
+    // key also removes every thread filed under the account, including ones
+    // this device never saw. An id that belongs to somebody else is skipped,
+    // not an error: `deleted` says how many went.
+    if (path === "/api/feedback/delete" && request.method === "POST") {
+      if (!env || !env.CONFIGS) return json({ ok: true, deleted: 0 }, 200, { "Cache-Control": "no-store" });
+      const deleteIp = clientIpKey(request);
+      if (await consumeRateLimit(env, ctx, "feedbackdelete", deleteIp, 20)) {
+        return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { "Cache-Control": "no-store" });
+      }
+      let body = null;
+      try { body = await request.json(); } catch {}
+      body = body && typeof body === "object" ? body : {};
+      const threadIds = Array.isArray(body.threadIds) ? body.threadIds.map((t) => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+      let owner = null;
+      if (body.creatorName) {
+        const auth = await authenticateCreator(String(body.creatorName).trim().toLowerCase(), body.creatorKey ? String(body.creatorKey) : "");
+        if (!auth.ok) {
+          return json({ ok: false, error: "Username or Key is incorrect." }, 401, { "Cache-Control": "no-store" });
+        }
+        owner = auth.username;
+      }
+
+      const doomed = new Set();
+      for (const tid of threadIds) {
+        let entry = null;
+        if (env.DB) {
+          try {
+            const row = await env.DB.prepare("SELECT body_json FROM feedback WHERE id = ?").bind(tid).first();
+            if (row && row.body_json) entry = JSON.parse(row.body_json);
+          } catch {}
+        }
+        if (!entry) {
+          try {
+            const raw = await env.CONFIGS.get(`feedback:${tid}`);
+            if (raw) entry = JSON.parse(raw);
+          } catch {}
+        }
+        if (!entry) continue;
+        const ownerRaw = entry.creatorName ? String(entry.creatorName).trim() : "";
+        let ownerNorm = "";
+        if (ownerRaw) {
+          const v = validateCreatorUsername(ownerRaw);
+          if (v && v.ok) ownerNorm = v.normalized;
+        }
+        if (ownerNorm && ownerNorm !== owner) continue;
+        doomed.add(tid);
+      }
+      if (owner) {
+        for (const entry of await findFeedbackThreadsByCreator(env, owner)) doomed.add(entry.id);
+      }
+
+      let deleted = 0;
+      for (const tid of doomed) {
+        if (env.DB) {
+          try {
+            await env.DB.prepare("DELETE FROM feedback WHERE id = ?").bind(tid).run();
+          } catch (dbErr) {
+            console.error("D1 write error (feedback delete):", dbErr);
+          }
+        }
+        try {
+          await env.CONFIGS.delete(`feedback:${tid}`);
+          deleted++;
+        } catch (e) {
+          safeErrorMessage(e);
+        }
+      }
+      return json({ ok: true, deleted }, 200, { "Cache-Control": "no-store" });
     }
 
     // /api/track-search  (POST)  { query } -> { ok }
@@ -7612,6 +7667,10 @@ function generateSearchVariations(query) {
       if (entries.length > SAVED_CONFIG_ENTRIES_MAX) {
         return json({ ok: false, error: "Too many lists in that configuration." }, 413);
       }
+      // Rejected, not repaired: a quietly changed row would be a different install
+      // link from the one the person built.
+      const entriesProblem = saveEntriesProblem(entries);
+      if (entriesProblem) return json({ ok: false, error: entriesProblem }, 400);
       // A config that names a Creator Profile must prove it belongs to it.
       //
       // This endpoint is unauthenticated by design -- a config is just a list of

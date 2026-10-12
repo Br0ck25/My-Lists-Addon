@@ -2940,6 +2940,36 @@ describe("likes and preview guards", () => {
     assert.equal(fetchCase.status, 404);
   });
 
+  // The allowlist let any host through whose path started with
+  // /api/safe-poster, so the open redirect and the open image proxy above were
+  // still there for anyone who knew to add that path. Only this Worker's own
+  // safe-poster URL is allowed.
+  it("poster-badge refuses another host's /api/safe-poster path, and still accepts this Worker's own", async () => {
+    const env = makeEnv();
+    const seen = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (u) => {
+      seen.push(String(u));
+      return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
+    };
+    try {
+      const foreign = "https://evil.example/api/safe-poster?title=x";
+      const redirectCase = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(foreign));
+      assert.equal(redirectCase.status, 404, "no redirect off this domain");
+      assert.equal(redirectCase.headers.get("location"), null);
+      const fetchCase = await call(env, "/api/poster-badge?premiere=1&poster=" + encodeURIComponent(foreign));
+      assert.equal(fetchCase.status, 404);
+      assert.ok(!seen.some((u) => u.includes("evil.example")), "the Worker must not fetch the foreign host: " + seen.join(", "));
+      // The URL this add-on itself puts in a poster field (getSafePosterUrl).
+      const own = "https://example.test/api/safe-poster?title=x";
+      const ownCase = await call(env, "/api/poster-badge?poster=" + encodeURIComponent(own));
+      assert.equal(ownCase.status, 302);
+      assert.equal(ownCase.headers.get("location"), own);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   // The companion to the race test below. Retrying whenever a vote is not
   // visible in the read-back treats every stale read as contention, and KV
   // reads are edge-cached, so on an otherwise idle list that spent a second
@@ -3825,6 +3855,57 @@ describe("audit fix 2: a like cannot revert a concurrent list save", () => {
   });
 });
 
+// KNOWN GAP (AUDIT-REPORT.md #12), kept as a `todo` so it is run and reported
+// but does not fail the suite. The test above parks a like right after it reads
+// the list record; this one parks it right before it WRITES the record, which
+// is the one-round-trip window the write-back narrowed but cannot close (KV has
+// no compare-and-swap). An owner save landing there is reverted, and both
+// requests answer 200; a reader then sees the old items. Closing it means
+// moving the denormalised `likes` off the list record (six readers: the list
+// page's max() with the D1 count, channels, admin, and the save's preservation
+// of it), which is a product decision, not a small fix. When that is done, drop
+// the `todo` and this becomes the regression test.
+describe("known gap: a like can still revert a save that lands between its re-read and its write", () => {
+  it("keeps the creator's newer items", { todo: "audit #12: needs the likes count moved off the list record" }, async () => {
+    const env = makeEnv();
+    const alice = await createUser(env, "alicenarrow");
+    await call(env, "/api/creator/lists/save", {
+      method: "POST",
+      json: { creatorName: alice.creatorName, creatorKey: alice.creatorKey, name: "Race List", type: "movie", visibility: "public", items: [{ id: "tt1" }, { id: "tt2" }] },
+    });
+    const listKey = [...env.CONFIGS._store.keys()].find((k) => k.startsWith("creatorlist:alicenarrow:"));
+    const ip = nextIp();
+    await voterFor(env, ip);
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    let parked;
+    const atGate = new Promise((r) => { parked = r; });
+    let armed = false;
+    const origPut = env.CONFIGS.put.bind(env.CONFIGS);
+    // The like's own write of the list record is the one carrying likes: 1.
+    env.CONFIGS.put = async (k, v, o) => {
+      if (k === listKey && !armed && JSON.parse(v).likes === 1) { armed = true; parked(); await gate; }
+      return origPut(k, v, o);
+    };
+    const likeP = callAsVoter(env, "/api/lists/like", {
+      method: "POST", ip, json: { username: "alicenarrow", slug: "race-list", action: "like" },
+    });
+    await atGate;
+    await call(env, "/api/creator/lists/save", {
+      method: "POST",
+      json: {
+        creatorName: alice.creatorName, creatorKey: alice.creatorKey, slug: "race-list",
+        name: "Race List", type: "movie", visibility: "public",
+        items: [{ id: "tt1" }, { id: "tt2" }, { id: "tt3" }, { id: "tt4" }, { id: "tt5" }],
+      },
+    });
+    release();
+    await likeP;
+    const stored = JSON.parse(env.CONFIGS._store.get(listKey));
+    assert.equal(stored.items.length, 5, "the like's write must not put its older snapshot over the owner's save");
+  });
+});
+
 describe("audit fix 4: unauthenticated permanent writes are bounded", () => {
   // The three anonymous-publish cases that used to open this block went with
   // /api/publish-list itself in 1.5.3 -- an unbounded write is not something to
@@ -3841,7 +3922,7 @@ describe("audit fix 4: unauthenticated permanent writes are bounded", () => {
 
   it("still saves a normal install config", async () => {
     const env = makeEnv();
-    const entries = Array.from({ length: 30 }, (_, i) => ({ name: "row " + i, url: "https://mdblist.com/lists/x/y" }));
+    const entries = Array.from({ length: 30 }, (_, i) => ({ id: "row-" + i, name: "row " + i, url: "https://mdblist.com/lists/x/y", type: "movie" }));
     const r = await call(env, "/api/save", { method: "POST", json: { entries } });
     assert.equal(r.body.ok, true);
     assert.ok(r.body.id);
@@ -3856,7 +3937,7 @@ describe("audit fix 4: unauthenticated permanent writes are bounded", () => {
       type: "movie",
     }));
     const customUrl = "customlist:v1:" + JSON.stringify({ listSlug: "large-custom", items: largeListItems });
-    const entries = Array.from({ length: 15 }, (_, i) => ({ name: "Custom " + i, url: customUrl, type: "movie" }));
+    const entries = Array.from({ length: 15 }, (_, i) => ({ id: "custom-" + i, name: "Custom " + i, url: customUrl, type: "movie" }));
     const r = await call(env, "/api/save", { method: "POST", json: { ...(await accountProof(env)), entries } });
     assert.equal(r.body.ok, true);
     assert.ok(r.body.id);
@@ -16288,8 +16369,11 @@ describe("P3a-8: installs", () => {
         assert.equal(list.headers.get("cache-control"), "no-store");
 
         // A token nobody was given serves nothing.
+        // (It used to be a 200 with no list catalogs; it is a 404 now, see
+        // tests/unknown-install.test.mjs.)
         const wrong = await call(env, `/i/${"A".repeat(43)}/manifest.json`);
-        assert.deepEqual(wrong.body.catalogs.filter((c) => !c.id.startsWith("search")), []);
+        assert.equal(wrong.status, 404);
+        assert.equal(wrong.body.ok, false);
       } finally {
         globalThis.fetch = realFetch;
       }
@@ -16323,7 +16407,7 @@ describe("P3a-8: installs", () => {
       const newToken = rotated.body.token;
       assert.notEqual(newToken, token);
       const oldServes = await call(env, `/i/${token}/manifest.json`);
-      assert.deepEqual(oldServes.body.catalogs.filter((c) => !c.id.startsWith("search")), [], "the old token stops working");
+      assert.equal(oldServes.status, 404, "the old token stops working: nothing holds it any more");
       const newServes = await call(env, `/i/${newToken}/manifest.json`);
       assert.equal(newServes.body.catalogs.filter((c) => !c.id.startsWith("search")).length, 2);
 
