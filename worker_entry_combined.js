@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7c1a8712da";
+const WORKER_BUILD = "4d2bb52b05";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -12756,6 +12756,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/jobs/ping": "admin.jobs.test",
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
+  "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -14018,6 +14019,16 @@ ${UTILITY_CSS}
       <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
       <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
       <span id="kvExportStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+    </div>
+
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Old anonymous channel links</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Before shares needed an account, anyone could make a channel link with no owner. Nobody can withdraw one. <strong>Count</strong> only looks: it shows how many there are. <strong>Delete</strong> removes them, their likes and their Explore Channels listing, so those share links stop working; an install that already holds a channel keeps it.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> Run <strong>Export old data to R2</strong> above with the prefix <code>channelshare:</code> first.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessCountBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([false])}">Count</button>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessDeleteBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([true])}">Delete</button>
+      <span id="ownerlessStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="ownerlessResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -15396,6 +15407,55 @@ ${UTILITY_CSS}
         }
       } catch (e) {
         status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';
+      }
+      buttons.forEach(function (b) { b.disabled = false; });
+    }
+
+    // Shared channels no account owns (removeOwnerlessChannels, 60_). A count
+    // unless apply, a batch per request.
+    async function runOwnerlessChannels(apply) {
+      if (apply && !confirm('Delete every shared channel that no account owns? Their share links stop working and this cannot be undone. Export channelshare: to R2 first.')) return;
+      const buttons = [document.getElementById('ownerlessCountBtn'), document.getElementById('ownerlessDeleteBtn')];
+      const status = document.getElementById('ownerlessStatus');
+      const out = document.getElementById('ownerlessResult');
+      const nl = String.fromCharCode(10);
+      buttons.forEach(function (b) { b.disabled = true; });
+      out.textContent = '';
+      let found = [];
+      let failed = [];
+      let unreadable = [];
+      let scanned = 0;
+      let deleted = 0;
+      const show = function () {
+        const listed = found.filter(function (c) { return c.published; }).length;
+        out.textContent = [
+          found.length + ' shared channels have no owner (' + listed + ' of them listed in Explore Channels), of ' + scanned + ' looked at.',
+          apply ? deleted + ' deleted.' : 'Nothing was deleted: this is only a count.',
+          failed.length ? 'Could not delete: ' + failed.join(', ') : '',
+          unreadable.length ? 'Could not read, left alone: ' + unreadable.join(', ') : '',
+          'Examples: ' + (found.length ? found.slice(0, 15).map(function (c) { return nl + '  ' + c.code + (c.name ? ' ' + c.name : '') + (c.published ? ' (listed)' : ''); }).join('') : 'none'),
+        ].filter(Boolean).join(nl);
+      };
+      let state = { apply: !!apply };
+      if (apply) state.confirm = 'delete ownerless channels';
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/channel-ownerless', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const d = await res.json();
+          if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on; deleted channels stay deleted.'; break; }
+          scanned += Number(d.scanned) || 0;
+          deleted += Number(d.deleted) || 0;
+          found = found.concat(d.ownerless || []);
+          failed = failed.concat(d.failed || []);
+          unreadable = unreadable.concat(d.unreadable || []);
+          show();
+          if (d.done) { status.textContent = 'Done.'; break; }
+          status.textContent = (apply ? 'Deleting... ' : 'Counting... ') + scanned + ' channels looked at so far.';
+          state = { apply: !!apply, cursor: d.next };
+          if (apply) state.confirm = 'delete ownerless channels';
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to carry on; deleted channels stay deleted.';
       }
       buttons.forEach(function (b) { b.disabled = false; });
     }
@@ -97002,6 +97062,10 @@ function generateSearchVariations(query) {
         } catch {
           existing = null;
         }
+        // A link minted before shares needed an account has no owner, so nobody
+        // may overwrite it: sharing under its code makes a new link and leaves the
+        // old one as it was (it still opens for whoever holds it).
+        if (existing && !existing.owner) existing = null;
         if (existing && existing.owner && existing.owner !== owner) {
           return json({ ok: false, error: "That share link belongs to someone else." }, 403);
         }
@@ -100396,6 +100460,34 @@ function generateSearchVariations(query) {
         return json({ ok: false, error: "That channel is still listed in the new tables. Please try again." }, 500, { "Cache-Control": "no-store" });
       }
       return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /admin/api/channel-ownerless  (POST)  { cursor?, limit?, apply?, confirm? }
+    //   -> { ok, apply, scanned, ownerless: [{ code, name, published, updatedAt }],
+    //        deleted, failed, unreadable, next, done }
+    // The shared channels no account owns (see 60_ownerless-channels.js). A count
+    // by default; with apply it deletes this batch, and only when `confirm` is the
+    // confirmation phrase. Run it again with `next` as `cursor` until `done`.
+    if (path === "/admin/api/channel-ownerless" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const apply = body.apply === true;
+      if (apply && body.confirm !== OWNERLESS_CHANNELS_CONFIRM) {
+        return json({ ok: false, error: `To delete, send confirm: "${OWNERLESS_CHANNELS_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+      }
+      let result;
+      try {
+        result = await removeOwnerlessChannels(env, { cursor: body.cursor, limit: body.limit, apply });
+      } catch (e) {
+        return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+      }
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
 
     if (path === "/admin/api/migrate-day-counts" && request.method === "POST") {
@@ -114960,4 +115052,107 @@ async function handleSupportEmailsApi(path, request, env) {
   }
 
   return json({ ok: false, error: 'Endpoint not found.' }, 404);
+}
+// --- Shared channels no account owns ------------------------------------------
+//
+// Shares used to need no account, so some channel links were minted with no
+// owner. They still open (a link already handed out) but nobody can withdraw
+// one. /admin/api/channel-ownerless (26_) counts them and removes them in
+// batches. A count is the default; nothing is deleted unless the request says so
+// and carries OWNERLESS_CHANNELS_CONFIRM, so the operator can look first and take
+// a backup first (docs/OPERATIONS.md, the KV export).
+//
+// An install link that carries one of these channels holds the channel's lineup
+// inside its own row, so removing the shared record only ends the share link
+// (/channel/<code>) and "import by code".
+
+const OWNERLESS_CHANNELS_CONFIRM = "delete ownerless channels";
+const OWNERLESS_CHANNELS_BATCH = 50;
+const OWNERLESS_CHANNELS_BATCH_MAX = 200;
+
+// One shared channel, gone from every place that holds it: the record and its
+// like ledger, the Explore Channels listing, and the copy in the new tables. The
+// same steps as the admin takedown ("delete" in /admin/api/channel-moderate).
+async function deleteSharedChannelEverywhere(env, code) {
+  await removePublicChannelIndex(env, code);
+  await env.CONFIGS.delete(`channelshare:${code}`);
+  await env.CONFIGS.delete(`channellikevoters:${code}`);
+  if (!(await channelsV2Delete(env, code))) throw new Error("the copy in the new tables could not be removed");
+}
+
+function ownerlessChannelSummary(code, record) {
+  return {
+    code,
+    name: record && record.channel && record.channel.name ? String(record.channel.name).slice(0, 80) : "",
+    published: !!(record && record.published),
+    updatedAt: record && Number.isFinite(record.updatedAt) ? record.updatedAt : null,
+  };
+}
+
+// One batch. `cursor` is what the previous call returned as `next`; `done` is
+// true when the whole set has been looked at.
+async function removeOwnerlessChannels(env, { cursor, limit, apply } = {}) {
+  if (!env || !env.CONFIGS) return { ok: false, error: "no-storage" };
+  const n = Math.max(1, Math.min(OWNERLESS_CHANNELS_BATCH_MAX, Number(limit) || OWNERLESS_CHANNELS_BATCH));
+  const out = { ok: true, apply: !!apply, scanned: 0, ownerless: [], deleted: 0, failed: [], unreadable: [], next: null, done: true };
+
+  if (isV2ListsOnly(env)) {
+    // Shared channels live in the new tables only: an owner that is NULL there.
+    if (!listsV2Usable(env)) return { ok: false, error: "The new tables are not available." };
+    const after = Math.max(0, Number(cursor) || 0);
+    const { results } = await env.DB.prepare(
+      "SELECT id, public_code, name, visibility, updated_at FROM channels WHERE owner_account_id IS NULL AND deleted_at IS NULL AND id > ? ORDER BY id LIMIT ?"
+    ).bind(after, n).all();
+    const rows = results || [];
+    out.scanned = rows.length;
+    for (const r of rows) {
+      out.ownerless.push({ code: r.public_code, name: String(r.name || "").slice(0, 80), published: r.visibility === "public", updatedAt: r.updated_at || null });
+      if (!apply) continue;
+      try {
+        if (await channelsV2Delete(env, r.public_code)) out.deleted++;
+        else out.failed.push(r.public_code);
+      } catch {
+        out.failed.push(r.public_code);
+      }
+    }
+    if (rows.length === n) {
+      out.done = false;
+      out.next = String(rows[rows.length - 1].id);
+    }
+    return out;
+  }
+
+  const listed = await env.CONFIGS.list({ prefix: "channelshare:", limit: n, ...(cursor ? { cursor: String(cursor) } : {}) });
+  for (const k of listed.keys || []) {
+    const code = k.name.slice("channelshare:".length);
+    out.scanned++;
+    let record = null;
+    try {
+      const raw = await env.CONFIGS.get(k.name);
+      record = raw ? JSON.parse(raw) : null;
+    } catch {
+      record = null;
+    }
+    // A record that cannot be read is reported and left alone: whether it has an
+    // owner is not known.
+    if (!record || typeof record !== "object") {
+      out.unreadable.push(code);
+      continue;
+    }
+    if (record.owner) continue;
+    out.ownerless.push(ownerlessChannelSummary(code, record));
+    if (!apply) continue;
+    try {
+      await deleteSharedChannelEverywhere(env, code);
+      out.deleted++;
+    } catch (e) {
+      console.error("ownerless channel: could not remove", code, e);
+      out.failed.push(code);
+    }
+  }
+  if (!listed.list_complete && listed.cursor) {
+    out.done = false;
+    out.next = listed.cursor;
+  }
+  return out;
 }

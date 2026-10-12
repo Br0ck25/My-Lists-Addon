@@ -1841,6 +1841,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/jobs/ping": "admin.jobs.test",
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
+  "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
   "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
@@ -3103,6 +3104,16 @@ ${UTILITY_CSS}
       <input type="text" id="kvExportPrefix" class="admin-select u-minw-180px" placeholder="creator:">
       <button type="button" class="admin-select u-cur-pointer" id="kvExportBtn" data-act="runKvExport">Export</button>
       <span id="kvExportStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+    </div>
+
+    <div class="panel u-m-0 u-p-14px_16px">
+      <div class="u-fw-600 u-fs-v_font_size_base u-mb-8px">Old anonymous channel links</div>
+      <p class="u-c-v_muted u-m-0_0_10px u-fs-v_font_size_sm">Before shares needed an account, anyone could make a channel link with no owner. Nobody can withdraw one. <strong>Count</strong> only looks: it shows how many there are. <strong>Delete</strong> removes them, their likes and their Explore Channels listing, so those share links stop working; an install that already holds a channel keeps it.</p>
+      <p class="u-c-v_color_warn_text u-m-0_0_10px u-fs-v_font_size_sm"><strong>This cannot be undone.</strong> Run <strong>Export old data to R2</strong> above with the prefix <code>channelshare:</code> first.</p>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessCountBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([false])}">Count</button>
+      <button type="button" class="admin-select u-cur-pointer" id="ownerlessDeleteBtn" data-act="runOwnerlessChannels" data-act-args="${adminActArgs([true])}">Delete</button>
+      <span id="ownerlessStatus" class="u-fs-v_font_size_sm u-ml-6px" style="color:var(--muted);"></span>
+      <div id="ownerlessResult" class="u-mt-10px u-fs-v_font_size_sm u-c-v_muted u-ws-pre_wrap u-wb-break_word"></div>
     </div>
 
     <div class="panel u-m-0 u-p-14px_16px">
@@ -4481,6 +4492,55 @@ ${UTILITY_CSS}
         }
       } catch (e) {
         status.textContent = 'Stopped: network error. Press it again to carry on; merged titles stay merged.';
+      }
+      buttons.forEach(function (b) { b.disabled = false; });
+    }
+
+    // Shared channels no account owns (removeOwnerlessChannels, 60_). A count
+    // unless apply, a batch per request.
+    async function runOwnerlessChannels(apply) {
+      if (apply && !confirm('Delete every shared channel that no account owns? Their share links stop working and this cannot be undone. Export channelshare: to R2 first.')) return;
+      const buttons = [document.getElementById('ownerlessCountBtn'), document.getElementById('ownerlessDeleteBtn')];
+      const status = document.getElementById('ownerlessStatus');
+      const out = document.getElementById('ownerlessResult');
+      const nl = String.fromCharCode(10);
+      buttons.forEach(function (b) { b.disabled = true; });
+      out.textContent = '';
+      let found = [];
+      let failed = [];
+      let unreadable = [];
+      let scanned = 0;
+      let deleted = 0;
+      const show = function () {
+        const listed = found.filter(function (c) { return c.published; }).length;
+        out.textContent = [
+          found.length + ' shared channels have no owner (' + listed + ' of them listed in Explore Channels), of ' + scanned + ' looked at.',
+          apply ? deleted + ' deleted.' : 'Nothing was deleted: this is only a count.',
+          failed.length ? 'Could not delete: ' + failed.join(', ') : '',
+          unreadable.length ? 'Could not read, left alone: ' + unreadable.join(', ') : '',
+          'Examples: ' + (found.length ? found.slice(0, 15).map(function (c) { return nl + '  ' + c.code + (c.name ? ' ' + c.name : '') + (c.published ? ' (listed)' : ''); }).join('') : 'none'),
+        ].filter(Boolean).join(nl);
+      };
+      let state = { apply: !!apply };
+      if (apply) state.confirm = 'delete ownerless channels';
+      try {
+        for (let i = 0; i < 2000; i++) {
+          const res = await fetch('/admin/api/channel-ownerless', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+          const d = await res.json();
+          if (!d.ok) { status.textContent = 'Stopped: ' + (d.error || 'unknown error') + '. Press it again to carry on; deleted channels stay deleted.'; break; }
+          scanned += Number(d.scanned) || 0;
+          deleted += Number(d.deleted) || 0;
+          found = found.concat(d.ownerless || []);
+          failed = failed.concat(d.failed || []);
+          unreadable = unreadable.concat(d.unreadable || []);
+          show();
+          if (d.done) { status.textContent = 'Done.'; break; }
+          status.textContent = (apply ? 'Deleting... ' : 'Counting... ') + scanned + ' channels looked at so far.';
+          state = { apply: !!apply, cursor: d.next };
+          if (apply) state.confirm = 'delete ownerless channels';
+        }
+      } catch (e) {
+        status.textContent = 'Stopped: network error. Press it again to carry on; deleted channels stay deleted.';
       }
       buttons.forEach(function (b) { b.disabled = false; });
     }

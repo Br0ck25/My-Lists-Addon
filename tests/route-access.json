@@ -7,6 +7,7 @@
   "/admin/api/audit": "admin",
   "/admin/api/backfill-trending": "admin",
   "/admin/api/channel-moderate": "admin",
+  "/admin/api/channel-ownerless": "admin",
   "/admin/api/channel-presets": "admin",
   "/admin/api/channel-presets/clear": "admin",
   "/admin/api/channel-presets/rebuild": "admin",

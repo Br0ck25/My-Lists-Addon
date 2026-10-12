@@ -3085,6 +3085,10 @@
         } catch {
           existing = null;
         }
+        // A link minted before shares needed an account has no owner, so nobody
+        // may overwrite it: sharing under its code makes a new link and leaves the
+        // old one as it was (it still opens for whoever holds it).
+        if (existing && !existing.owner) existing = null;
         if (existing && existing.owner && existing.owner !== owner) {
           return json({ ok: false, error: "That share link belongs to someone else." }, 403);
         }
@@ -6479,6 +6483,34 @@
         return json({ ok: false, error: "That channel is still listed in the new tables. Please try again." }, 500, { "Cache-Control": "no-store" });
       }
       return json({ ok: true, action, code }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /admin/api/channel-ownerless  (POST)  { cursor?, limit?, apply?, confirm? }
+    //   -> { ok, apply, scanned, ownerless: [{ code, name, published, updatedAt }],
+    //        deleted, failed, unreadable, next, done }
+    // The shared channels no account owns (see 60_ownerless-channels.js). A count
+    // by default; with apply it deletes this batch, and only when `confirm` is the
+    // confirmation phrase. Run it again with `next` as `cursor` until `done`.
+    if (path === "/admin/api/channel-ownerless" && request.method === "POST") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      let body = {};
+      try {
+        body = (await request.json()) || {};
+      } catch {
+        body = {};
+      }
+      const apply = body.apply === true;
+      if (apply && body.confirm !== OWNERLESS_CHANNELS_CONFIRM) {
+        return json({ ok: false, error: `To delete, send confirm: "${OWNERLESS_CHANNELS_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+      }
+      let result;
+      try {
+        result = await removeOwnerlessChannels(env, { cursor: body.cursor, limit: body.limit, apply });
+      } catch (e) {
+        return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+      }
+      return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
     }
 
     if (path === "/admin/api/migrate-day-counts" && request.method === "POST") {
