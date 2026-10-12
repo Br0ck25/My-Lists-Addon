@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-12";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e196580c5d";
+const WORKER_BUILD = "041d94c5a2";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -82408,14 +82408,14 @@ function sharePreset(name) {
   if (preset.customLists) payload.customLists = preset.customLists;
   if (preset.channels) payload.channels = preset.channels;
   const jsonStr = JSON.stringify(payload, null, 2);
-  navigator.clipboard.writeText(jsonStr).then(() => {
-    if (typeof showAppAlert === 'function') {
-      showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
-    } else {
-      showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
-    }
-  }).catch(() => {
-    if (typeof showAppPrompt === 'function') {
+  return copyTextToClipboard(jsonStr).then((copied) => {
+    if (copied) {
+      if (typeof showAppAlert === 'function') {
+        showAppAlert('Preset Copied', '"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', true);
+      } else {
+        showToast('"' + name + '" copied to your clipboard as JSON -- paste it into the Backup/Restore box above (on this device or another) to import it.', 'success');
+      }
+    } else if (typeof showAppPrompt === 'function') {
       showAppPrompt('Preset JSON', 'Copy this preset JSON below:', jsonStr);
     }
   });
@@ -82816,8 +82816,13 @@ function loadSavedState() {
   }
 }
 
-function copyLink(url) {
-  navigator.clipboard.writeText(url).then(() => {
+// Resolves true when the link reached the clipboard. copyTextToClipboard tries
+// the clipboard API and then a hidden textarea, so this also works where there
+// is no navigator.clipboard (a page over http, some in-app webviews); only when
+// both fail is the link shown for copying by hand.
+async function copyLink(url) {
+  const copied = await copyTextToClipboard(url);
+  if (copied) {
     const urlBtn = document.getElementById('copyUrlBtn');
     if (urlBtn) {
       const oldUrlHtml = urlBtn.innerHTML;
@@ -82832,31 +82837,38 @@ function copyLink(url) {
         urlBtn.style.borderColor = '';
       }, 1800);
     }
-  }).catch(() => {
-    const display = document.getElementById('manifestLinkDisplay');
-    if (window.getSelection && display) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(display);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-    showToast('Manifest URL: ' + url, 'error');
-  });
+    return true;
+  }
+  const display = document.getElementById('manifestLinkDisplay');
+  if (window.getSelection && display) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(display);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  showToast('Manifest URL: ' + url, 'error');
+  return false;
 }
 
 function openNuvioWeb(url) {
-  if (url) copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
+  // window.open stays synchronous, inside the click, or a popup blocker eats it.
   window.open('https://nuvio.tv/account?tab=addons', '_blank', 'noopener,noreferrer');
+  if (!url) return Promise.resolve(false);
+  return copyLink(url).then((copied) => {
+    if (copied) showToast('Manifest link copied to clipboard.', 'success');
+    return copied;
+  });
 }
 
 // Copies the manifest link to the clipboard and shows toast feedback so the user
 // has the link ready to paste in Nuvio settings if needed.
 function copyNuvioInstallLink(url) {
-  if (!url) return;
-  copyLink(url);
-  showToast('Manifest link copied to clipboard.', 'success');
+  if (!url) return Promise.resolve(false);
+  return copyLink(url).then((copied) => {
+    if (copied) showToast('Manifest link copied to clipboard.', 'success');
+    return copied;
+  });
 }
 window.copyNuvioInstallLink = copyNuvioInstallLink;
 

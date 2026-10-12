@@ -6014,7 +6014,7 @@ describe("client: signed out, only the site's public lists", () => {
     let toastMessage = null;
     let toastKind = null;
     client.set("showToast", (msg, kind) => { toastMessage = msg; toastKind = kind; });
-    client.call("copyNuvioInstallLink", "https://example.com/cfg123/manifest.json");
+    await client.call("copyNuvioInstallLink", "https://example.com/cfg123/manifest.json");
     assert.equal(copiedText, "https://example.com/cfg123/manifest.json");
     assert.equal(toastMessage, "Manifest link copied to clipboard.");
     assert.equal(toastKind, "success");
