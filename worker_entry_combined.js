@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0df308f4f5";
+const WORKER_BUILD = "7aa76f48a6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -44188,6 +44188,12 @@ async function mediaAppUiCall(provider, sub, method, body) {
   }
 }
 
+// The server's message, with the reason it gives (what is missing, what the service answered) after it.
+function mediaAppUiMessage(r, fallback) {
+  const d = r && r.data ? r.data : {};
+  return (d.error || fallback) + (d.detail ? ' (' + d.detail + ')' : '');
+}
+
 function mediaAppUiSyncLine(sync) {
   if (!sync) return '';
   if (sync.error) return sync.error;
@@ -44267,7 +44273,7 @@ async function startStremioConnect() {
   stopStremioLinkPoll();
   const r = await mediaAppUiCall('stremio', 'link/start', 'POST');
   if (!r.ok || !r.data.code) {
-    showToast(r.data.error || 'Could not start the Stremio link. Please try again.', 'error');
+    showToast(mediaAppUiMessage(r, 'Could not start the Stremio link. Please try again.'), 'error');
     return;
   }
   const box = document.getElementById('stremioLinkBox');
@@ -44293,7 +44299,7 @@ async function startStremioConnect() {
       mediaAppUiRefresh('stremio');
     } else if (!p.ok && p.status !== 0 && p.status !== 429 && p.status < 500) {
       stopStremioLinkPoll();
-      showToast(p.data.error || 'Could not connect Stremio. Please try again.', 'error');
+      showToast(mediaAppUiMessage(p, 'Could not connect Stremio. Please try again.'), 'error');
     }
   }, 3000);
 }
@@ -44314,7 +44320,7 @@ async function submitNuvioLogin() {
   if (btn) btn.disabled = false;
   if (passEl) passEl.value = '';
   if (!r.ok) {
-    showToast(r.data.error || 'Could not sign in to Nuvio. Please try again.', 'error');
+    showToast(mediaAppUiMessage(r, 'Could not sign in to Nuvio. Please try again.'), 'error');
     return;
   }
   mediaAppUiNuvioProfiles = Array.isArray(r.data.profiles) ? r.data.profiles : [];
@@ -44332,7 +44338,7 @@ async function setMediaAppSyncOption(provider, key, value) {
     body[key] = !!value;
   }
   const r = await mediaAppUiCall(provider, 'settings', 'POST', body);
-  if (!r.ok) showToast(r.data.error || 'Could not save that setting. Please try again.', 'error');
+  if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not save that setting. Please try again.'), 'error');
   mediaAppUiRefresh(provider);
 }
 
@@ -44341,7 +44347,7 @@ async function syncMediaAppNow(provider, btn) {
   const r = await mediaAppUiCall(provider, 'sync', 'POST');
   if (btn) btn.disabled = false;
   if (!r.ok) {
-    showToast(r.data.error || 'Could not start the sync. Please try again.', 'error');
+    showToast(mediaAppUiMessage(r, 'Could not start the sync. Please try again.'), 'error');
     return;
   }
   showToast(r.data.started ? MEDIA_APP_UI_NAMES[provider] + ' is syncing. It can take a few minutes.' : MEDIA_APP_UI_NAMES[provider] + ' is already syncing.', 'info');
@@ -44356,7 +44362,7 @@ function disconnectMediaApp(provider) {
     async function () {
       stopStremioLinkPoll();
       const r = await mediaAppUiCall(provider, '', 'DELETE');
-      if (!r.ok) showToast(r.data.error || 'Could not disconnect ' + name + '. Please try again.', 'error');
+      if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not disconnect ' + name + '. Please try again.'), 'error');
       else showToast(name + ' disconnected.', 'success');
       mediaAppUiRefresh(provider);
     }
@@ -115883,9 +115889,11 @@ const MEDIA_APP_SYNC_JOB = "mediaapp.sync-account";
 
 // kind: "invalid" (the service refused the sign-in), "pending" (a Link code not
 // approved yet) or "unreachable" (no answer we can trust either way).
-function mediaAppError(kind, message) {
+// detail: what to show next to the generic message, never a secret.
+function mediaAppError(kind, message, detail) {
   const e = new Error(message || kind);
   e.kind = kind;
+  if (detail) e.detail = detail;
   return e;
 }
 
@@ -115897,8 +115905,12 @@ async function mediaAppFetch(url, init = {}) {
       ...init,
       headers: { "User-Agent": `my-list-addon/${ADDON_VERSION}`, ...(init.headers || {}) },
     });
-  } catch {
-    throw mediaAppError("unreachable", "The service could not be reached.");
+  } catch (e) {
+    let host = "the service";
+    try {
+      host = new URL(url).hostname;
+    } catch {}
+    throw mediaAppError("unreachable", "The service could not be reached.", `${host} request failed (${(e && e.name) || "error"})`);
   }
 }
 
@@ -115964,9 +115976,10 @@ async function stremioCall(method, body) {
 // Step 1 of the Link flow: a short code and the address that approves it.
 async function stremioLinkStart() {
   const res = await mediaAppFetch(`${STREMIO_LINK_URL}create?type=Create`);
-  const data = res.ok ? await res.json().catch(() => null) : null;
+  if (!res.ok) throw mediaAppError("unreachable", `link.stremio.com answered ${res.status}.`);
+  const data = await res.json().catch(() => null);
   const r = data && data.result;
-  if (!r || !r.code || !r.link) throw mediaAppError("unreachable", "Stremio did not start the link.");
+  if (!r || !r.code || !r.link) throw mediaAppError("unreachable", "link.stremio.com sent a reply we could not read.");
   return { code: String(r.code), link: String(r.link), qrcode: r.qrcode ? String(r.qrcode) : "" };
 }
 
@@ -115975,8 +115988,9 @@ async function stremioLinkPoll(code) {
   const c = String(code || "").trim().toUpperCase();
   if (!/^[A-Z0-9]{3,20}$/.test(c)) throw mediaAppError("invalid", "That link code is not valid.");
   const res = await mediaAppFetch(`${STREMIO_LINK_URL}read?type=Read&code=${encodeURIComponent(c)}`);
-  const data = res.ok ? await res.json().catch(() => null) : null;
-  if (!data) throw mediaAppError("unreachable", "Stremio could not be asked.");
+  if (!res.ok) throw mediaAppError("unreachable", `link.stremio.com answered ${res.status}.`);
+  const data = await res.json().catch(() => null);
+  if (!data) throw mediaAppError("unreachable", "link.stremio.com sent a reply we could not read.");
   if (data.error) {
     if (Number(data.error.code) === 101) return { pending: true };
     throw mediaAppError("invalid", "The link was not approved or has expired.");
@@ -116716,8 +116730,9 @@ function mediaAppSyncSummary(row) {
 // The caller has already required a session.
 async function handleMediaAppRoute(request, env, account, provider, sub) {
   const accountId = account.id;
-  const unavailable = () => json({ ok: false, error: "Connecting this account isn't available right now." }, 503);
-  if (!hasTokenEncryptionKey(env)) return unavailable();
+  // `why` is for whoever runs the site: it names what is missing.
+  const unavailable = (why) => json({ ok: false, error: "Connecting this account isn't available right now.", detail: why }, 503);
+  if (!hasTokenEncryptionKey(env)) return unavailable("TOKEN_ENCRYPTION_KEY is not set");
 
   if (sub === "settings" && request.method === "GET") {
     const conn = await loadProviderConnection(env, accountId, provider);
@@ -116744,9 +116759,9 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const polled = await stremioLinkPoll(body.code);
       if (polled.pending) return json({ ok: true, status: "pending" });
       const user = await stremioUser(polled.authKey);
-      if (!(await ensureMediaAppSync(env, accountId, provider, null))) return unavailable();
+      if (!(await ensureMediaAppSync(env, accountId, provider, null))) return unavailable("migration 0023 has not been applied");
       const stored = await storeProviderConnection(env, account, provider, { accessToken: polled.authKey, externalUser: { username: user.name, id: user.id } });
-      if (!stored) return unavailable();
+      if (!stored) return unavailable("the connection could not be stored");
       await startMediaAppSync(env, accountId, provider);
       return json({ ok: true, status: "connected", username: user.name });
     }
@@ -116757,12 +116772,12 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const session = await nuvioToken(env, "password", { email, password });
       const profiles = await nuvioProfiles(env, session.accessToken);
       const only = profiles.length === 1 ? profiles[0].index : (profiles.length === 0 ? 1 : null);
-      if (!(await ensureMediaAppSync(env, accountId, provider, only))) return unavailable();
+      if (!(await ensureMediaAppSync(env, accountId, provider, only))) return unavailable("migration 0023 has not been applied");
       const stored = await storeProviderConnection(env, account, provider, {
         accessToken: session.accessToken, refreshToken: session.refreshToken, expiresAt: session.expiresAt,
         externalUser: { username: session.email || email, id: session.userId },
       });
-      if (!stored) return unavailable();
+      if (!stored) return unavailable("the connection could not be stored");
       const row = await loadMediaAppSync(env, accountId, provider);
       if (row && row.profile_index) await startMediaAppSync(env, accountId, provider);
       return json({ ok: true, status: "connected", username: session.email || email, profiles, profileIndex: row ? row.profile_index : only });
@@ -116803,7 +116818,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
   } catch (e) {
     if (e && e.kind) {
       const status = e.kind === "invalid" ? 400 : 502;
-      return json({ ok: false, error: e.kind === "unreachable" ? "That service didn't answer. Please try again in a minute." : e.message }, status);
+      if (e.kind === "unreachable") return json({ ok: false, error: "That service didn't answer. Please try again in a minute.", detail: e.detail || e.message }, status);
+      return json({ ok: false, error: e.message }, status);
     }
     throw e;
   }

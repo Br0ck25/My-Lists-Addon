@@ -87,6 +87,17 @@ describe("Stremio and Nuvio cards", () => {
     assert.ok(!JSON.stringify([...c.localStorage._store.entries()]).includes("hunter2-secret"), "not written to storage");
   });
 
+  it("shows the reason the server gives next to the message", async () => {
+    const c = loadClient({
+      signedIn: true,
+      routes: { "/api/connections/stremio/link/start": () => ({ status: 502, json: { ok: false, error: "That service didn't answer. Please try again in a minute.", detail: "link.stremio.com answered 403" } }) },
+    });
+    const toasts = [];
+    c.set("showToast", (m, kind) => toasts.push([m, kind]));
+    await c.call("startStremioConnect");
+    assert.deepEqual(toasts, [["That service didn't answer. Please try again in a minute. (link.stremio.com answered 403)", "error"]]);
+  });
+
   it("does not call the server for an empty Nuvio form", async () => {
     const c = loadClient({ signedIn: true, routes: {} });
     el(c, "nuvioEmailInput").value = "";

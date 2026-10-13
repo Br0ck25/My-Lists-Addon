@@ -733,3 +733,45 @@ describe("two-way sync: Nuvio", () => {
     assert.deepEqual(seen.pushed.map((p) => p.content_id), ["tt5555555"]);
   });
 });
+
+
+describe("saying why a connection could not be made", () => {
+  it("names the missing migration when media_app_sync is not there", async () => {
+    const state = { watched: [], progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nodetail1");
+    ctx.env.DB._db.exec("DROP TABLE media_app_sync");
+    const r = await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    assert.equal(r.status, 503);
+    assert.match(r.body.detail, /migration 0023/);
+    assert.equal(ctx.env.DB._db.prepare("SELECT count(*) AS n FROM provider_connections").get().n, 0, "nothing is stored without its settings row");
+  });
+
+  it("names the missing encryption key", async () => {
+    fakeServices({});
+    const ctx = await setup("nodetail2", { TOKEN_ENCRYPTION_KEY: undefined });
+    const r = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", cookie: ctx.cookie, json: {} });
+    assert.equal(r.status, 503);
+    assert.match(r.body.detail, /TOKEN_ENCRYPTION_KEY/);
+  });
+
+  it("says what Stremio answered when the link cannot be started", async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input, init) => (String(input.url || input).includes("link.stremio.com") ? new Response("blocked", { status: 403 }) : real(input, init));
+    restore = () => { globalThis.fetch = real; };
+    const ctx = await setup("nodetail3");
+    const r = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", cookie: ctx.cookie, json: {} });
+    assert.equal(r.status, 502);
+    assert.match(r.body.detail, /link\.stremio\.com answered 403/);
+  });
+
+  it("says when the request itself failed", async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input, init) => { if (String(input.url || input).includes("link.stremio.com")) throw new TypeError("network lost"); return real(input, init); };
+    restore = () => { globalThis.fetch = real; };
+    const ctx = await setup("nodetail4");
+    const r = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", cookie: ctx.cookie, json: {} });
+    assert.equal(r.status, 502);
+    assert.match(r.body.detail, /TypeError/);
+  });
+});

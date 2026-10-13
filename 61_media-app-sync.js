@@ -78,9 +78,11 @@ const MEDIA_APP_SYNC_JOB = "mediaapp.sync-account";
 
 // kind: "invalid" (the service refused the sign-in), "pending" (a Link code not
 // approved yet) or "unreachable" (no answer we can trust either way).
-function mediaAppError(kind, message) {
+// detail: what to show next to the generic message, never a secret.
+function mediaAppError(kind, message, detail) {
   const e = new Error(message || kind);
   e.kind = kind;
+  if (detail) e.detail = detail;
   return e;
 }
 
@@ -92,8 +94,12 @@ async function mediaAppFetch(url, init = {}) {
       ...init,
       headers: { "User-Agent": `my-list-addon/${ADDON_VERSION}`, ...(init.headers || {}) },
     });
-  } catch {
-    throw mediaAppError("unreachable", "The service could not be reached.");
+  } catch (e) {
+    let host = "the service";
+    try {
+      host = new URL(url).hostname;
+    } catch {}
+    throw mediaAppError("unreachable", "The service could not be reached.", `${host} request failed (${(e && e.name) || "error"})`);
   }
 }
 
@@ -159,9 +165,10 @@ async function stremioCall(method, body) {
 // Step 1 of the Link flow: a short code and the address that approves it.
 async function stremioLinkStart() {
   const res = await mediaAppFetch(`${STREMIO_LINK_URL}create?type=Create`);
-  const data = res.ok ? await res.json().catch(() => null) : null;
+  if (!res.ok) throw mediaAppError("unreachable", `link.stremio.com answered ${res.status}.`);
+  const data = await res.json().catch(() => null);
   const r = data && data.result;
-  if (!r || !r.code || !r.link) throw mediaAppError("unreachable", "Stremio did not start the link.");
+  if (!r || !r.code || !r.link) throw mediaAppError("unreachable", "link.stremio.com sent a reply we could not read.");
   return { code: String(r.code), link: String(r.link), qrcode: r.qrcode ? String(r.qrcode) : "" };
 }
 
@@ -170,8 +177,9 @@ async function stremioLinkPoll(code) {
   const c = String(code || "").trim().toUpperCase();
   if (!/^[A-Z0-9]{3,20}$/.test(c)) throw mediaAppError("invalid", "That link code is not valid.");
   const res = await mediaAppFetch(`${STREMIO_LINK_URL}read?type=Read&code=${encodeURIComponent(c)}`);
-  const data = res.ok ? await res.json().catch(() => null) : null;
-  if (!data) throw mediaAppError("unreachable", "Stremio could not be asked.");
+  if (!res.ok) throw mediaAppError("unreachable", `link.stremio.com answered ${res.status}.`);
+  const data = await res.json().catch(() => null);
+  if (!data) throw mediaAppError("unreachable", "link.stremio.com sent a reply we could not read.");
   if (data.error) {
     if (Number(data.error.code) === 101) return { pending: true };
     throw mediaAppError("invalid", "The link was not approved or has expired.");
@@ -911,8 +919,9 @@ function mediaAppSyncSummary(row) {
 // The caller has already required a session.
 async function handleMediaAppRoute(request, env, account, provider, sub) {
   const accountId = account.id;
-  const unavailable = () => json({ ok: false, error: "Connecting this account isn't available right now." }, 503);
-  if (!hasTokenEncryptionKey(env)) return unavailable();
+  // `why` is for whoever runs the site: it names what is missing.
+  const unavailable = (why) => json({ ok: false, error: "Connecting this account isn't available right now.", detail: why }, 503);
+  if (!hasTokenEncryptionKey(env)) return unavailable("TOKEN_ENCRYPTION_KEY is not set");
 
   if (sub === "settings" && request.method === "GET") {
     const conn = await loadProviderConnection(env, accountId, provider);
@@ -939,9 +948,9 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const polled = await stremioLinkPoll(body.code);
       if (polled.pending) return json({ ok: true, status: "pending" });
       const user = await stremioUser(polled.authKey);
-      if (!(await ensureMediaAppSync(env, accountId, provider, null))) return unavailable();
+      if (!(await ensureMediaAppSync(env, accountId, provider, null))) return unavailable("migration 0023 has not been applied");
       const stored = await storeProviderConnection(env, account, provider, { accessToken: polled.authKey, externalUser: { username: user.name, id: user.id } });
-      if (!stored) return unavailable();
+      if (!stored) return unavailable("the connection could not be stored");
       await startMediaAppSync(env, accountId, provider);
       return json({ ok: true, status: "connected", username: user.name });
     }
@@ -952,12 +961,12 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const session = await nuvioToken(env, "password", { email, password });
       const profiles = await nuvioProfiles(env, session.accessToken);
       const only = profiles.length === 1 ? profiles[0].index : (profiles.length === 0 ? 1 : null);
-      if (!(await ensureMediaAppSync(env, accountId, provider, only))) return unavailable();
+      if (!(await ensureMediaAppSync(env, accountId, provider, only))) return unavailable("migration 0023 has not been applied");
       const stored = await storeProviderConnection(env, account, provider, {
         accessToken: session.accessToken, refreshToken: session.refreshToken, expiresAt: session.expiresAt,
         externalUser: { username: session.email || email, id: session.userId },
       });
-      if (!stored) return unavailable();
+      if (!stored) return unavailable("the connection could not be stored");
       const row = await loadMediaAppSync(env, accountId, provider);
       if (row && row.profile_index) await startMediaAppSync(env, accountId, provider);
       return json({ ok: true, status: "connected", username: session.email || email, profiles, profileIndex: row ? row.profile_index : only });
@@ -998,7 +1007,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
   } catch (e) {
     if (e && e.kind) {
       const status = e.kind === "invalid" ? 400 : 502;
-      return json({ ok: false, error: e.kind === "unreachable" ? "That service didn't answer. Please try again in a minute." : e.message }, status);
+      if (e.kind === "unreachable") return json({ ok: false, error: "That service didn't answer. Please try again in a minute.", detail: e.detail || e.message }, status);
+      return json({ ok: false, error: e.message }, status);
     }
     throw e;
   }

@@ -2096,6 +2096,12 @@ async function mediaAppUiCall(provider, sub, method, body) {
   }
 }
 
+// The server's message, with the reason it gives (what is missing, what the service answered) after it.
+function mediaAppUiMessage(r, fallback) {
+  const d = r && r.data ? r.data : {};
+  return (d.error || fallback) + (d.detail ? ' (' + d.detail + ')' : '');
+}
+
 function mediaAppUiSyncLine(sync) {
   if (!sync) return '';
   if (sync.error) return sync.error;
@@ -2175,7 +2181,7 @@ async function startStremioConnect() {
   stopStremioLinkPoll();
   const r = await mediaAppUiCall('stremio', 'link/start', 'POST');
   if (!r.ok || !r.data.code) {
-    showToast(r.data.error || 'Could not start the Stremio link. Please try again.', 'error');
+    showToast(mediaAppUiMessage(r, 'Could not start the Stremio link. Please try again.'), 'error');
     return;
   }
   const box = document.getElementById('stremioLinkBox');
@@ -2201,7 +2207,7 @@ async function startStremioConnect() {
       mediaAppUiRefresh('stremio');
     } else if (!p.ok && p.status !== 0 && p.status !== 429 && p.status < 500) {
       stopStremioLinkPoll();
-      showToast(p.data.error || 'Could not connect Stremio. Please try again.', 'error');
+      showToast(mediaAppUiMessage(p, 'Could not connect Stremio. Please try again.'), 'error');
     }
   }, 3000);
 }
@@ -2222,7 +2228,7 @@ async function submitNuvioLogin() {
   if (btn) btn.disabled = false;
   if (passEl) passEl.value = '';
   if (!r.ok) {
-    showToast(r.data.error || 'Could not sign in to Nuvio. Please try again.', 'error');
+    showToast(mediaAppUiMessage(r, 'Could not sign in to Nuvio. Please try again.'), 'error');
     return;
   }
   mediaAppUiNuvioProfiles = Array.isArray(r.data.profiles) ? r.data.profiles : [];
@@ -2240,7 +2246,7 @@ async function setMediaAppSyncOption(provider, key, value) {
     body[key] = !!value;
   }
   const r = await mediaAppUiCall(provider, 'settings', 'POST', body);
-  if (!r.ok) showToast(r.data.error || 'Could not save that setting. Please try again.', 'error');
+  if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not save that setting. Please try again.'), 'error');
   mediaAppUiRefresh(provider);
 }
 
@@ -2249,7 +2255,7 @@ async function syncMediaAppNow(provider, btn) {
   const r = await mediaAppUiCall(provider, 'sync', 'POST');
   if (btn) btn.disabled = false;
   if (!r.ok) {
-    showToast(r.data.error || 'Could not start the sync. Please try again.', 'error');
+    showToast(mediaAppUiMessage(r, 'Could not start the sync. Please try again.'), 'error');
     return;
   }
   showToast(r.data.started ? MEDIA_APP_UI_NAMES[provider] + ' is syncing. It can take a few minutes.' : MEDIA_APP_UI_NAMES[provider] + ' is already syncing.', 'info');
@@ -2264,7 +2270,7 @@ function disconnectMediaApp(provider) {
     async function () {
       stopStremioLinkPoll();
       const r = await mediaAppUiCall(provider, '', 'DELETE');
-      if (!r.ok) showToast(r.data.error || 'Could not disconnect ' + name + '. Please try again.', 'error');
+      if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not disconnect ' + name + '. Please try again.'), 'error');
       else showToast(name + ' disconnected.', 'success');
       mediaAppUiRefresh(provider);
     }
