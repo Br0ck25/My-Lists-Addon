@@ -2061,7 +2061,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: connect Stremio and Nuvio accounts, pull their watch history, optional two-way sync
 
-**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build 9a72ea2e17.
+**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build ab0e451091.
 
 ### What it changes
 
@@ -2094,4 +2094,6 @@ Neither service documents its API. The calls follow stremio-core's library item 
 
 **Fifth follow-up (same day):** the new Nuvio and Stremio cards under My Lists showed only a title and an Add button. Each card now has the poster preview the other services' cards have (a `poster-preview-slot` reading `autotrack:<app>-<list>:mixed:<username>` through `/api/preview` with the account's own key), and its title opens the list's details page. For that, an `autotrack:` row ending in `mixed` now answers movies and shows together, each with its own type and a show once (`fetchAutoTrackedCatalog`, 05_); Add still creates one movie row and one show row.
 
-**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 9a72ea2e17)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
+**Sixth follow-up (same day):** the list cards still said *No items found in this list.* `/api/preview` only checked who was asking when the page sent both a Creator Name and a Creator Key, and a page signed in with a session sends only the name, so a private `autotrack:` shelf previewed empty for exactly the people it belongs to. It now proves the caller by the session too (`authenticateCreator` already did when no key is given); another account's session or no session still reads nothing. Settings also says what the last check found (*Found 12 titles.*, and how many could not be matched), kept with the pull position in `media_app_sync.cursor_json`, so an empty list can be told from an empty app.
+
+**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build ab0e451091)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.

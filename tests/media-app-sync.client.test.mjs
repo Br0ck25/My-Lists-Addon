@@ -31,6 +31,19 @@ describe("Stremio and Nuvio cards", () => {
     assert.equal(el(c, "stremioPushRow").style.display, "none");
   });
 
+  it("says how many titles the last check found", () => {
+    const c = loadClient({ signedIn: true });
+    const base = { connected: true, status: "ok", username: "a@b.test" };
+    c.call("renderMediaAppStatus", "nuvio", { ...base, sync: { pull: true, lastPullAt: 5, lastResult: { found: 12, plays: 30, progress: 2, resumes: 1, unresolved: 0 } } });
+    assert.match(el(c, "nuvioSyncStatus").textContent, /Found 12 titles\./);
+    c.call("renderMediaAppStatus", "nuvio", { ...base, sync: { pull: true, lastPullAt: 5, lastResult: { found: 0, plays: 0, progress: 0, resumes: 0, unresolved: 0 } } });
+    assert.match(el(c, "nuvioSyncStatus").textContent, /Found 0 titles\./);
+    c.call("renderMediaAppStatus", "nuvio", { ...base, sync: { pull: true, lastPullAt: 5, lastResult: { found: 1, plays: 1, progress: 0, resumes: 0, unresolved: 0 } } });
+    assert.match(el(c, "nuvioSyncStatus").textContent, /Found 1 title\./);
+    c.call("renderMediaAppStatus", "nuvio", { ...base, sync: { pull: true, lastPullAt: 5, lastResult: { found: 4, plays: 1, progress: 0, resumes: 0, unresolved: 3 } } });
+    assert.match(el(c, "nuvioSyncStatus").textContent, /3 could not be matched/);
+  });
+
   it("shows the error the last sync ended with in place of the time", () => {
     const c = loadClient({ signedIn: true });
     c.call("renderMediaAppStatus", "stremio", { connected: true, status: "ok", username: "a@b.test", sync: { pull: true, push: false, lastPullAt: 5, error: "Sign in again to keep syncing." } });

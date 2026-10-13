@@ -2112,7 +2112,15 @@ function mediaAppUiMessage(r, fallback) {
 function mediaAppUiSyncLine(sync) {
   if (!sync) return '';
   if (sync.error) return sync.error;
-  if (sync.lastPullAt) return 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
+  if (sync.lastPullAt) {
+    let line = 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
+    const r = sync.lastResult;
+    if (r) {
+      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.');
+      if (r.unresolved) line += ' ' + r.unresolved + ' could not be matched.';
+    }
+    return line;
+  }
   return 'Waiting for the first check…';
 }
 

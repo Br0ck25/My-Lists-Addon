@@ -849,6 +849,29 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     assert.equal(denied.body.count, 0, "another account's key reads nothing");
   });
 
+  it("previews for a signed-in page that holds a session and no Creator Key", async () => {
+    const ctx = await connected("lssess", { FF_EVENT_TRACKING: "1", FF_SESSIONS: "1" });
+    const url = `autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`;
+    const ask = (cookie) => call(ctx.env, "/api/preview", { method: "POST", cookie, json: { url, type: "mixed", sample: 20, creatorName: ctx.owner.creatorName } });
+    const mine = await ask(ctx.cookie);
+    assert.equal(mine.body.count, 2, "the session proves whose list it is");
+    assert.equal((await ask("")).body.count, 0, "no session, no key: nothing");
+    const other = await createUser(ctx.env, "lssessother");
+    const r = await call(ctx.env, "/api/session", { method: "POST", json: { username: "lssessother", key: other.creatorKey } });
+    const otherCookie = (r.headers.get("set-cookie") || "").split(";")[0];
+    assert.equal((await ask(otherCookie)).body.count, 0, "another account's session reads nothing");
+  });
+
+  it("reports what the last pull found, and keeps it across a profile change", async () => {
+    const ctx = await connected("lsfound");
+    const found = async () => (await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.sync.lastResult;
+    assert.deepEqual(await found(), { found: 3, plays: 3, progress: 0, resumes: 1, unresolved: 0 }, "titles, plays, undated progress, part-way, and ones with no usable id");
+    await runAgain(ctx, "nuvio");
+    assert.deepEqual(await found(), { found: 3, plays: 0, progress: 0, resumes: 1, unresolved: 0 }, "a later pull that changes nothing still says how many titles the app holds");
+    await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { profileIndex: 1 } });
+    assert.equal((await found()).found, 3, "choosing a profile does not lose it");
+  });
+
   it("belongs to its owner alone", async () => {
     const ctx = await connected("lsown");
     const other = await createUser(ctx.env, "lsother");

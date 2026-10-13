@@ -570,6 +570,32 @@ async function saveNuvioProfiles(env, accountId, profiles) {
     .bind(JSON.stringify({ ...cursor, profiles }), Date.now(), accountId).run();
 }
 
+// What the last finished pull found, kept in cursor_json for the settings card:
+// titles the app holds, what was recorded this run, and titles with no usable id.
+async function saveMediaAppLastResult(env, accountId, provider, last) {
+  try {
+    const row = await loadMediaAppSync(env, accountId, provider);
+    if (!row) return;
+    let cursor = {};
+    try {
+      cursor = row.cursor_json ? JSON.parse(row.cursor_json) : {};
+    } catch {}
+    await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?")
+      .bind(JSON.stringify({ ...cursor, last }), accountId, provider).run();
+  } catch (e) {
+    console.error("mediaapp: could not keep the last result", e);
+  }
+}
+
+function mediaAppLastResultOf(row) {
+  try {
+    const l = row && row.cursor_json ? JSON.parse(row.cursor_json).last : null;
+    return l && typeof l === "object" ? l : null;
+  } catch {
+    return null;
+  }
+}
+
 function mediaAppProfilesOf(row) {
   try {
     const p = row && row.cursor_json ? JSON.parse(row.cursor_json).profiles : null;
@@ -609,11 +635,12 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
       const rec = await stremioItemRecord(item, episodes);
       if (rec) records.push(rec);
     }
-    return { records, total: changed.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
+    return { records, total: changed.length, libraryTotal: library.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
   }
   const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
-  const all = nuvioRecords(profile).filter(fresh);
-  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, newest: all.length ? all[0].mtime : 0 };
+  const every = nuvioRecords(profile);
+  const all = every.filter(fresh);
+  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: every.length, newest: all.length ? all[0].mtime : 0 };
 }
 
 // One step of an account's pull. Returns { done, offset, total, ... }; throws
@@ -660,7 +687,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
   ).bind(JSON.stringify({ ...cursor, mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
-  return { done: true, total: fetched.total, applied, pullDone: true };
+  return { done: true, total: fetched.total, found: fetched.libraryTotal, applied, pullDone: true };
 }
 
 // The job. Each run is one bounded step: a slice of the pull, then (when
@@ -671,16 +698,19 @@ async function runMediaAppSyncJob(env, payload, job = {}) {
   const provider = String((payload && payload.provider) || "");
   if (!Number.isInteger(accountId) || !MEDIA_APP_PROVIDERS.includes(provider)) return { progress: {} };
   const prev = job.progress || {};
-  const totals = { plays: Number(prev.plays) || 0, progress: Number(prev.progress) || 0, pushed: Number(prev.pushed) || 0 };
+  const totals = { plays: Number(prev.plays) || 0, progress: Number(prev.progress) || 0, resumes: Number(prev.resumes) || 0, unresolved: Number(prev.unresolved) || 0, pushed: Number(prev.pushed) || 0 };
   if (prev.phase !== "push") {
     const offset = Number(prev.offset) || 0;
     const out = await pullMediaAppStep(env, accountId, provider, offset, offset > 0 && prev.since != null ? Number(prev.since) : null);
     if (out.applied) {
       totals.plays += out.applied.plays;
       totals.progress += out.applied.progress;
+      totals.resumes += out.applied.resumes;
+      totals.unresolved += out.applied.unresolved;
     }
     if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
     if (!out.pullDone) return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, plays: totals.plays, progress: totals.progress, resumes: totals.resumes, unresolved: totals.unresolved });
   }
   const pushed = await pushMediaAppStep(env, accountId, provider);
   totals.pushed += pushed.sent || 0;
@@ -907,6 +937,7 @@ function mediaAppSyncSummary(row) {
     push: Boolean(row.push_enabled),
     lastPullAt: row.last_pull_at || null,
     lastPushAt: row.last_push_at || null,
+    lastResult: mediaAppLastResultOf(row),
     error: row.last_error || null,
   };
 }
@@ -984,9 +1015,13 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         const idx = mediaAppInt(body.profileIndex);
         if (idx == null || idx < 1 || idx > 6) return json({ ok: false, error: "Choose one of your profiles." }, 400);
         // A new profile starts its pull over; the profile names are kept.
+        const keep = {};
         const names = mediaAppProfilesOf(row);
+        if (names.length) keep.profiles = names;
+        const last = mediaAppLastResultOf(row);
+        if (last) keep.last = last;
         sets.push("profile_index = ?", "cursor_json = ?", "last_pull_at = NULL");
-        binds.push(idx, names.length ? JSON.stringify({ profiles: names }) : null);
+        binds.push(idx, Object.keys(keep).length ? JSON.stringify(keep) : null);
       }
       if (sets.length) {
         await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)
