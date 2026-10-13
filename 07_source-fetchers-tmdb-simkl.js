@@ -4174,7 +4174,11 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
     releaseDate: match.release_date || match.first_air_date || null,
     seasonsData: type === "tv" && match.seasons ? match.seasons : null,
     tmdbId: tmdbId,
-    runtime: match.runtime || (match.episode_run_time && match.episode_run_time[0]) || null,
+    // A show's episode_run_time is often empty at TMDB, so its latest aired
+    // (or next) episode's own runtime stands in for the typical length.
+    runtime: match.runtime || (match.episode_run_time && match.episode_run_time[0]) ||
+      (match.last_episode_to_air && match.last_episode_to_air.runtime) ||
+      (match.next_episode_to_air && match.next_episode_to_air.runtime) || null,
     budget: match.budget || null,
     revenue: match.revenue || null,
     contentRating: contentRating || null,

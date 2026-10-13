@@ -3215,6 +3215,111 @@ function seasonEpisodeCountState(d, seasonMeta) {
 }
 window.seasonEpisodeCountState = seasonEpisodeCountState;
 
+// "45% watched - 9h 0m left" for a whole show, read off the same per-season
+// tallies as the season headers so the two cannot disagree. Counted against
+// what has AIRED (specials excluded), the same denominator isShowFullyWatched
+// uses, so a caught-up show reads 100% rather than stopping short at the
+// episodes still to come. Time left is episodes left x the show's typical
+// episode length (TMDB's episode_run_time); with no runtime on record the
+// percentage still shows and the time is left out.
+function showWatchProgressState(d) {
+  const empty = { label: '', percent: 0, watched: 0, total: 0, minutesLeft: null };
+  if (!d || !Array.isArray(d.seasonsData)) return empty;
+  let total = 0;
+  let watched = 0;
+  // Minutes of unwatched episodes whose own length is known, and how many
+  // unwatched episodes are left without one (their season's list is not
+  // loaded yet, or TMDB has no runtime for them).
+  let knownMinutes = 0;
+  let unknownLeft = 0;
+  let lengthSum = 0;
+  let lengthCount = 0;
+  d.seasonsData.forEach((s) => {
+    if (!s || Number(s.season_number) === 0) return;
+    const sNum = Number(s.season_number);
+    const aired = seasonAiredEpisodeCount(sNum, s, d);
+    if (!(aired > 0)) return;
+    total += aired;
+    const seen = watchedEpisodeNumbersInSeason(d.id, sNum);
+    watched += Math.min(seen.size, aired);
+    const eps = window._seasonEpisodesMap && window._seasonEpisodesMap[sNum];
+    if (Array.isArray(eps) && eps.length) {
+      eps.forEach((ep) => {
+        if (!ep || (typeof isEpisodeAired === 'function' && !isEpisodeAired(ep))) return;
+        const mins = Number(ep.runtime);
+        if (mins > 0) { lengthSum += mins; lengthCount++; }
+        if (seen.has(Number(ep.episode_number))) return;
+        if (mins > 0) knownMinutes += mins; else unknownLeft++;
+      });
+    } else {
+      unknownLeft += Math.max(0, aired - Math.min(seen.size, aired));
+    }
+  });
+  if (!(total > 0)) return empty;
+  const percent = Math.floor((watched / total) * 100);
+  // An episode with no length of its own counts as the show's typical one:
+  // TMDB's episode_run_time when it has it, else the average of the
+  // episodes that do have a length.
+  const typical = Number(d.runtime) > 0 ? Number(d.runtime) : (lengthCount ? lengthSum / lengthCount : 0);
+  const minutesLeft = (unknownLeft === 0 || typical > 0) ? Math.round(knownMinutes + unknownLeft * typical) : null;
+  let label = percent + '% watched';
+  if (minutesLeft != null) {
+    if (minutesLeft === 0) label += ' \u2022 nothing left';
+    else {
+      const h = Math.floor(minutesLeft / 60);
+      const m = minutesLeft % 60;
+      label += ' \u2022 ' + (h > 0 ? h + 'h ' : '') + m + 'm left';
+    }
+  }
+  return { label: label, percent: percent, watched: watched, total: total, minutesLeft: minutesLeft };
+}
+window.showWatchProgressState = showWatchProgressState;
+
+// Repaints that line after a watch change (see refreshItemWatchState).
+function updateShowWatchProgress() {
+  const el = (typeof document !== 'undefined' && document.getElementById)
+    ? document.getElementById('itemWatchProgress') : null;
+  if (!el) return;
+  const state = showWatchProgressState(window._currentItemDetails);
+  el.textContent = state.label;
+}
+window.updateShowWatchProgress = updateShowWatchProgress;
+
+// Loads every aired season's episode list in the background so time left can
+// be added up from each episode's own length (many shows have no typical
+// length at TMDB). Four at a time; a season that fails to load is skipped and
+// its episodes count at the typical length. Does nothing for a show that has
+// since been replaced by another one in the modal.
+async function preloadShowSeasonRuntimes(d) {
+  if (!d || !d.id || !Array.isArray(d.seasonsData)) return;
+  const tkInput = document.getElementById('tmdbKeyInput');
+  const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
+  const todo = d.seasonsData
+    .filter((s) => s && Number(s.season_number) > 0 && seasonHasAiredEpisodes(Number(s.season_number), s))
+    .map((s) => Number(s.season_number))
+    .filter((n) => !(window._seasonEpisodesMap && window._seasonEpisodesMap[n]));
+  for (let i = 0; i < todo.length; i += 4) {
+    await Promise.all(todo.slice(i, i + 4).map(async (n) => {
+      try {
+        const res = await fetch(ORIGIN + '/api/season?imdbId=' + encodeURIComponent(d.id) +
+          (d.tmdbId ? '&tmdbId=' + encodeURIComponent(d.tmdbId) : '') +
+          '&seasonNum=' + n + (tmdbKey ? '&tmdbKey=' + encodeURIComponent(tmdbKey) : ''));
+        const data = await res.json();
+        if (window._currentItemDetails !== d) return;
+        if (data && data.ok && data.season && Array.isArray(data.season.episodes)) {
+          if (!window._seasonEpisodesMap) window._seasonEpisodesMap = {};
+          window._seasonEpisodesMap[n] = data.season.episodes;
+        }
+      } catch (e) {}
+    }));
+    if (window._currentItemDetails !== d) return;
+    // Season buttons and counts too: a loaded list replaces the guess from
+    // episode_count with the real aired count.
+    refreshItemWatchState();
+  }
+}
+window.preloadShowSeasonRuntimes = preloadShowSeasonRuntimes;
+
 function updateSeasonWatchedButton(seasonNum) {
   const d = window._currentItemDetails;
   if (!d) return;
@@ -3245,6 +3350,10 @@ function updateSeasonEpisodeCounts(seasonNum) {
     el.textContent = state.label;
     if (el.classList && el.classList.toggle) el.classList.toggle('is-complete', state.complete);
   });
+  // The show's own percent and time left move whenever a season's count
+  // does, and every path that repaints these counts (episode, season and
+  // whole-show toggles) passes through here.
+  updateShowWatchProgress();
 }
 window.updateSeasonEpisodeCounts = updateSeasonEpisodeCounts;
 
@@ -3294,6 +3403,7 @@ function refreshItemWatchState() {
     });
   }
   updateShowWatchedButton();
+  updateShowWatchProgress();
 }
 window.refreshItemWatchState = refreshItemWatchState;
 
@@ -3805,6 +3915,7 @@ async function openItemDetailsModal(id, type, opts) {
     // offering to mark what the person has already seen.
     const showBtnState = showWatchedButtonState(isShowFullyWatched(d));
 
+    const watchProgress = showWatchProgressState(d);
     const heroImg = d.background || d.poster || '';
     const isSeriesItem = !!((d.seasonsData && d.seasonsData.length > 0) || type === 'series');
     const genreList = (Array.isArray(d.genres) ? d.genres : String(d.genres || '').split(','))
@@ -3823,7 +3934,9 @@ async function openItemDetailsModal(id, type, opts) {
         (d.poster ? '<img class="item-head-poster" src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
         '<div class="item-head-main">' +
           '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
-          (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
+          (infoHtml || watchProgress.label ? '<div class="item-pills">' + infoHtml +
+            (watchProgress.label ? (infoHtml ? '<span class="item-pill-sep" aria-hidden="true">\u2022</span>' : '') + '<span class="item-pill" id="itemWatchProgress">' + escapeHtml(watchProgress.label) + '</span>' : '') +
+          '</div>' : '') +
         '</div>' +
       '</div>' +
       '<div class="item-actions">' +
@@ -3846,6 +3959,7 @@ async function openItemDetailsModal(id, type, opts) {
       (seasonsHtml ? '<div class="u-mt-32px">' + seasonsHtml + '</div>' : '') +
       (storylinesHtml ? '<div class="u-mt-32px">' + storylinesHtml + '</div>' : '');
     syncItemSynopsisToggle();
+    preloadShowSeasonRuntimes(d).catch(() => {});
       
   } catch (err) {
     body.innerHTML = '<p class="testresult err u-mt-48px">\u2717 ' + escapeHtml(err.message) + '</p>';

@@ -8707,3 +8707,108 @@ describe("client: removing item from watch history updates Continue Watching", (
 });
 
 
+
+describe("client: a show's page reads percent watched and time left", () => {
+  const SHOW = {
+    id: "tt_progress",
+    title: "Progress Show",
+    runtime: 60,
+    seasonsData: [
+      { season_number: 0, name: "Specials", episode_count: 4, air_date: "2020-01-01" },
+      { season_number: 1, name: "Season 1", episode_count: 10, air_date: "2021-01-01" },
+    ],
+  };
+
+  function seeded(show, upTo) {
+    const client = loadClient();
+    client.set("_fullyWatchedShowIds", new Set());
+    client.set("_seasonEpisodesMap", {});
+    client.set("_currentItemDetails", show);
+    client.call("saveLocalCustomListsMap", {
+      "watch-history": {
+        slug: "watch-history",
+        items: Array.from({ length: upTo }, (_, i) => ({
+          id: "tt_progress:1:" + (i + 1), type: "episode",
+          showId: "tt_progress", showTitle: "Progress Show", seasonNum: 1, episodeNum: i + 1,
+        })),
+      },
+    });
+    return client;
+  }
+
+  it("10 one-hour episodes with 1 watched is 10% watched and 9h left", () => {
+    assert.equal(seeded(SHOW, 1).call("showWatchProgressState", SHOW).label, "10% watched • 9h 0m left");
+  });
+
+  it("counts episodes left, not the percentage, for the time", () => {
+    const show = { ...SHOW, runtime: 45 };
+    assert.equal(seeded(show, 4).call("showWatchProgressState", show).label, "40% watched • 4h 30m left");
+  });
+
+  it("says nothing is left once every aired episode is watched", () => {
+    assert.equal(seeded(SHOW, 10).call("showWatchProgressState", SHOW).label, "100% watched • nothing left");
+  });
+
+  it("leaves the time out when the show has no runtime on record", () => {
+    const show = { ...SHOW, runtime: null };
+    assert.equal(seeded(show, 1).call("showWatchProgressState", show).label, "10% watched");
+  });
+
+  it("repaints the line when a season's count is repainted, so every toggle path moves it", () => {
+    const client = seeded(SHOW, 1);
+    const el = client.get("document").getElementById("itemWatchProgress");
+    client.call("updateSeasonEpisodeCounts");
+    assert.equal(el.textContent, "10% watched \u2022 9h 0m left");
+    client.call("saveLocalCustomListsMap", {
+      "watch-history": {
+        slug: "watch-history",
+        items: Array.from({ length: 5 }, (_, i) => ({
+          id: "tt_progress:1:" + (i + 1), type: "episode",
+          showId: "tt_progress", showTitle: "Progress Show", seasonNum: 1, episodeNum: i + 1,
+        })),
+      },
+    });
+    client.call("updateSeasonEpisodeCounts");
+    assert.equal(el.textContent, "50% watched \u2022 5h 0m left");
+  });
+
+  it("adds up each unwatched episode's own length when the show has no typical one", () => {
+    const show = { ...SHOW, runtime: null };
+    const client = seeded(show, 2);
+    // Episodes 1-2 watched; 3 is 40 min, 4 is 50 min, the other six have no length.
+    client.set("_seasonEpisodesMap", {
+      1: Array.from({ length: 10 }, (_, i) => ({
+        episode_number: i + 1, air_date: "2021-01-01", runtime: i === 2 ? 40 : i === 3 ? 50 : (i < 2 ? 100 : null),
+      })),
+    });
+    // Unknown episodes count at the average of those with a length: (100+100+40+50)/4 = 72.5
+    // 40 + 50 + 6 x 72.5 = 525 minutes = 8h 45m
+    assert.equal(client.call("showWatchProgressState", show).label, "20% watched \u2022 8h 45m left");
+  });
+
+  it("loads every season in the background and shows the time from them", async () => {
+    const show = {
+      id: "tt_progress", tmdbId: "9", title: "Progress Show", overview: "x", poster: "", runtime: null, seasons: 1,
+      seasonsData: [{ season_number: 1, name: "Season 1", episode_count: 3, air_date: "2021-01-01" }],
+    };
+    const client = loadClient({
+      routes: {
+        "/api/details": () => ({ json: { ok: true, details: show } }),
+        "/api/season": () => ({ json: { ok: true, season: { episodes: [1, 2, 3].map((n) => ({ episode_number: n, air_date: "2021-01-01", runtime: 30 })) } } }),
+      },
+    });
+    client.set("_fullyWatchedShowIds", new Set());
+    client.call("saveLocalCustomListsMap", {
+      "watch-history": { slug: "watch-history", items: [{
+        id: "tt_progress:1:1", type: "episode", showId: "tt_progress", showTitle: "Progress Show", seasonNum: 1, episodeNum: 1,
+      }] },
+    });
+    await client.call("openItemDetailsModal", "tt_progress", "series");
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(client.get("document").getElementById("itemWatchProgress").textContent, "33% watched \u2022 1h 0m left");
+  });
+
+  it("ignores specials", () => {
+    assert.equal(seeded(SHOW, 0).call("showWatchProgressState", SHOW).total, 10);
+  });
+});
