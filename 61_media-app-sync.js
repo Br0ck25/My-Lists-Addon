@@ -501,7 +501,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
         out.resumes++;
         if (!knownShows.has(r.mediaId) && !newShows.includes(r.mediaId)) newShows.push(r.mediaId);
       } else {
-        const entry = { id: r.imdbId || `tmdb:${r.tmdbId}`, imdbId: r.imdbId || undefined, type: "movie", name: r.title || undefined, poster: r.poster || undefined, progress: Math.round(r.resume.ratio * 100) };
+        const entry = { id: r.imdbId || `tmdb:${r.tmdbId}`, imdbId: r.imdbId || undefined, source: provider, type: "movie", name: r.title || undefined, poster: r.poster || undefined, progress: Math.round(r.resume.ratio * 100) };
         stmts.push(actDb.prepare(
           `INSERT INTO show_progress (account_id, media_id, last_watched_at, companion_json, updated_at)
            VALUES (?, ?, ?, ?, ?)

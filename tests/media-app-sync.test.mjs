@@ -118,7 +118,7 @@ async function setup(name, extra = {}) {
   const accountId = env.DB._db.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE").get(name).id;
   // The account's history copy is done, as for any account that has been around.
   env.DB._db.prepare("INSERT INTO jobs (type, dedupe_key, account_id, status, run_after, created_at, updated_at) VALUES ('migrate.activity', ?, ?, 'done', 0, 0, 0)").run(`migrate.activity:acct:${accountId}`, accountId);
-  return { env, cookie, accountId };
+  return { env, cookie, accountId, user: u };
 }
 
 // Runs due jobs until the account's pull has nothing left.
@@ -778,5 +778,76 @@ describe("saying why a connection could not be made", () => {
     assert.deepEqual(await names(), [{ index: 1, name: "Me" }, { index: 3, name: "Kids" }], "choosing a profile does not lose them");
     await pull(ctx.env);
     assert.deepEqual(await names(), [{ index: 1, name: "Me" }, { index: 3, name: "Kids" }], "nor does a pull");
+  });
+});
+
+
+// --- The lists under Lists, My Lists ------------------------------------------------
+
+describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
+  const ROWS = ["watch-history", "continue-watching"].flatMap((slug) => ["nuvio", "stremio"].flatMap((app) => ["movie", "series"].map((type) => [app, slug, type])));
+
+  // A stored config, the shape an install link points at, owned by `ownerName` with its Creator Key.
+  async function storeConfig(env, id, owner, urlsFor = owner.creatorName) {
+    await env.CONFIGS.put(`cfg:${id}`, JSON.stringify({
+      track: true, trackCreatorName: owner.creatorName, trackCreatorKey: owner.creatorKey, showBadgesStremio: false,
+      entries: ROWS.map(([app, slug, type]) => ({ id: `${app}-${slug}-${type}`, type, name: `${app} ${slug}`, url: `autotrack:${app}-${slug}:${type}:${urlsFor}` })),
+    }));
+  }
+  const row = async (env, config, app, slug, type) =>
+    ((await call(env, `/${config}/catalog/${type}/${app}-${slug}-${type}.json`)).body.metas || []).map((m) => m.id).sort();
+
+  async function connected(name, extra) {
+    const state = { watched: [
+      { content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR },
+      { content_id: SHOW, content_type: "series", title: "Show S", season: 1, episode: 1, watched_at: NOW - 10 * HOUR },
+      { content_id: SHOW, content_type: "series", title: "Show S", season: 1, episode: 2, watched_at: NOW - 9 * HOUR },
+    ], progress: [{ content_id: "tt3333333", content_type: "movie", name: "Movie Half", position: 1500000, duration: 6000000, last_watched: NOW - 2 * HOUR }] };
+    fakeServices(state);
+    const ctx = await setup(name, extra || { FF_EVENT_TRACKING: "1" });
+    // The account the sync runs for is the one this user signed in as.
+    ctx.owner = ctx.user;
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    return { ...ctx, state };
+  }
+
+  it("a list shows only the plays that came from that app, movies and shows apart", async () => {
+    const ctx = await connected("lsmain");
+    addEvent(ctx, "tt5555555", "movie", null, null, NOW - 5 * HOUR, "ping");
+    addEvent(ctx, "tt6666666", "movie", null, null, NOW - 4 * HOUR, "stremio");
+    await storeConfig(ctx.env, "lsmaincfg", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "lsmaincfg", "nuvio", "watch-history", "movie"), ["tt1111111"], "not the ping play, not the Stremio one");
+    assert.deepEqual(await row(ctx.env, "lsmaincfg", "nuvio", "watch-history", "series"), [SHOW]);
+    assert.deepEqual(await row(ctx.env, "lsmaincfg", "stremio", "watch-history", "movie"), ["tt6666666"]);
+    assert.deepEqual(await row(ctx.env, "lsmaincfg", "stremio", "watch-history", "series"), []);
+  });
+
+  it("Continue Watching has the movie Nuvio left part way through, and the next episode of its shows", async () => {
+    const ctx = await connected("lscw");
+    const mediaId = ctx.env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(SHOW).id;
+    // The schedule says the show has five episodes in season 1.
+    ctx.env.DB._db.prepare("UPDATE show_schedule SET status = 'Ended', last_aired_season = 1, last_aired_episode = 5, last_aired_date = '2020-01-01', season_episode_counts = '{\"1\":5}', checked_at = 1 WHERE media_id = ?").run(mediaId);
+    await storeConfig(ctx.env, "lscwcfg", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "lscwcfg", "nuvio", "continue-watching", "movie"), ["tt3333333"]);
+    assert.deepEqual(await row(ctx.env, "lscwcfg", "nuvio", "continue-watching", "series"), [SHOW]);
+    assert.deepEqual(await row(ctx.env, "lscwcfg", "stremio", "continue-watching", "movie"), [], "not Stremio's");
+    assert.deepEqual(await row(ctx.env, "lscwcfg", "stremio", "continue-watching", "series"), []);
+  });
+
+  it("belongs to its owner alone", async () => {
+    const ctx = await connected("lsown");
+    const other = await createUser(ctx.env, "lsother");
+    // Another account's config naming this account's lists is refused.
+    await storeConfig(ctx.env, "lsothercfg", other, ctx.owner.creatorName);
+    assert.deepEqual(await row(ctx.env, "lsothercfg", "nuvio", "watch-history", "movie"), []);
+    await storeConfig(ctx.env, "lsownercfg", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "lsownercfg", "nuvio", "watch-history", "movie"), ["tt1111111"]);
+  });
+
+  it("is empty, not the whole history, when the account is not served from the activity database", async () => {
+    const ctx = await connected("lsoff", { FF_EVENT_TRACKING: undefined });
+    await storeConfig(ctx.env, "lsoffcfg", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "lsoffcfg", "nuvio", "watch-history", "movie"), []);
   });
 });

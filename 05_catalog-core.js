@@ -2510,11 +2510,25 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   try {
     let items;
     let airingItems;
+    // The Nuvio and Stremio lists (Lists, My Lists): the account's Watch
+    // History or Continue Watching kept to what came from that app, read from
+    // the activity database. Owner only (the gate above), and nothing when the
+    // account is not served from it: the legacy records know no source, so
+    // falling back to them would show everything under the app's name.
+    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching)$/.exec(slug);
+    if (appShelf) {
+      const accountId = await eventTrackingOwns(env, username);
+      if (accountId == null) return [];
+      const read = appShelf[2] === 'watch-history'
+        ? (await watchHistoryPage(env, accountId, { limit: 100, source: appShelf[1] })).items
+        : await appContinueWatching(env, accountId, appShelf[1]);
+      items = read.map(({ mediaId, ...it }) => it);
+    }
     // D1 is the cheap read, but only while it is current: a tracking write
     // that failed leaves the rows as they were, and these rows used to keep
     // serving them regardless. The KV record below is the newer copy then.
     // See isTrackingD1Behind.
-    const d1Current = !!(env && env.DB) && slug !== 'watchlist' && !(await isTrackingD1Behind(env, username));
+    const d1Current = !appShelf && !!(env && env.DB) && slug !== 'watchlist' && !(await isTrackingD1Behind(env, username));
     if (d1Current) {
       if (slug === 'watch-history') {
         const rows = await env.DB.prepare(

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "efef935bf8";
+const WORKER_BUILD = "32044a2d17";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -20698,11 +20698,25 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   try {
     let items;
     let airingItems;
+    // The Nuvio and Stremio lists (Lists, My Lists): the account's Watch
+    // History or Continue Watching kept to what came from that app, read from
+    // the activity database. Owner only (the gate above), and nothing when the
+    // account is not served from it: the legacy records know no source, so
+    // falling back to them would show everything under the app's name.
+    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching)$/.exec(slug);
+    if (appShelf) {
+      const accountId = await eventTrackingOwns(env, username);
+      if (accountId == null) return [];
+      const read = appShelf[2] === 'watch-history'
+        ? (await watchHistoryPage(env, accountId, { limit: 100, source: appShelf[1] })).items
+        : await appContinueWatching(env, accountId, appShelf[1]);
+      items = read.map(({ mediaId, ...it }) => it);
+    }
     // D1 is the cheap read, but only while it is current: a tracking write
     // that failed leaves the rows as they were, and these rows used to keep
     // serving them regardless. The KV record below is the newer copy then.
     // See isTrackingD1Behind.
-    const d1Current = !!(env && env.DB) && slug !== 'watchlist' && !(await isTrackingD1Behind(env, username));
+    const d1Current = !appShelf && !!(env && env.DB) && slug !== 'watchlist' && !(await isTrackingD1Behind(env, username));
     if (d1Current) {
       if (slug === 'watch-history') {
         const rows = await env.DB.prepare(
@@ -36179,6 +36193,22 @@ if ('serviceWorker' in navigator) {
       <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Lists, Watchlist, and Watch History from your connected Simkl account.</p>
       <div id="mySimklListsResult"></div>
     </div>
+
+    <div class="panel u-mt-12px" id="myListsSectionPanel-nuvio">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your Nuvio Lists</h2>
+      </div>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History and Continue Watching from your connected Nuvio account.</p>
+      <div id="myNuvioListsResult"></div>
+    </div>
+
+    <div class="panel u-mt-12px" id="myListsSectionPanel-stremio">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Your Stremio Lists</h2>
+      </div>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History and Continue Watching from your connected Stremio account.</p>
+      <div id="myStremioListsResult"></div>
+    </div>
   </div>
 
   <!-- Submenu 2: Liked Lists Feed -->
@@ -44172,6 +44202,14 @@ function renderSimklConnectStatus() {
 // connection and its settings, over the signed-in session. It holds no token.
 const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
 let mediaAppUiPoll = null;
+// Whether each app is connected and working, from its settings answer.
+const mediaAppListsLive = { stremio: false, nuvio: false };
+// The lists each app offers under Lists, My Lists. The server serves them as
+// autotrack:<app>-<slug>:<movie|series>:<username> rows (fetchAutoTrackedCatalog, 05_).
+const MEDIA_APP_LISTS = [
+  { slug: 'watch-history', title: 'Watch History', blurb: 'Movies and shows you watched there.' },
+  { slug: 'continue-watching', title: 'Continue Watching', blurb: 'Where you stopped there: movies part way through and the next episode of your shows.' },
+];
 
 async function mediaAppUiCall(provider, sub, method, body) {
   try {
@@ -44200,12 +44238,68 @@ function mediaAppUiSyncLine(sync) {
   return 'Waiting for the first check…';
 }
 
+function mediaAppListUrls(provider, slug) {
+  const user = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
+  if (!user) return null;
+  const base = 'autotrack:' + provider + '-' + slug + ':';
+  return { movie: base + 'movie:' + user, series: base + 'series:' + user };
+}
+
+// The cards under Lists, My Lists. Shown once the app is connected.
+function renderMediaAppLists(provider) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  const box = document.getElementById('my' + name + 'ListsResult');
+  if (!box) return;
+  if (!mediaAppListsLive[provider]) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect ' + name + ' in Settings, under External Accounts, to see its lists here.</small></p>';
+    return;
+  }
+  box.innerHTML = MEDIA_APP_LISTS.map(function (l) {
+    const urls = mediaAppListUrls(provider, l.slug);
+    const added = !!urls && typeof isListAddedToConfig === 'function' && isListAddedToConfig(urls.movie, 'movie') && isListAddedToConfig(urls.series, 'series');
+    const listName = name + ' ' + l.title;
+    return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '">' +
+      '<div class="list-card-header">' +
+        '<div class="list-card-body">' +
+          '<div class="list-card-title">' + escapeHtml(listName) + '</div>' +
+          '<div class="list-card-meta"><span>' + escapeHtml(l.blurb) + '</span></div>' +
+        '</div>' +
+        '<div class="list-card-actions">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleMediaAppListAdd" data-act-args="' + appActArgs([provider, l.slug, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// Adds or removes the list's two catalog rows, one for movies and one for shows.
+function toggleMediaAppListAdd(provider, slug, isAdded) {
+  if (!requireSignedInFor('add your ' + MEDIA_APP_UI_NAMES[provider] + ' lists')) return;
+  const urls = mediaAppListUrls(provider, slug);
+  const meta = MEDIA_APP_LISTS.filter(function (l) { return l.slug === slug; })[0];
+  if (!urls || !meta) return;
+  const name = MEDIA_APP_UI_NAMES[provider] + ' ' + meta.title;
+  if (isAdded) {
+    removeListFromConfig(urls.movie, 'movie');
+    removeListFromConfig(urls.series, 'series');
+    if (typeof showAddedToast === 'function') showAddedToast('Removed "' + name + '" from your Catalogs.');
+  } else {
+    addRow(name + ' (Movies)', urls.movie, 'movie', true, 'My Lists');
+    addRow(name + ' (Shows)', urls.series, 'series', true, 'My Lists');
+    if (typeof showAddedToast === 'function') showAddedToast('Added "' + name + '" to your Catalogs.');
+  }
+  renderMediaAppLists(provider);
+}
+
 // info: the settings answer, or null when signed out or unavailable.
 function renderMediaAppStatus(provider, info) {
   const name = MEDIA_APP_UI_NAMES[provider];
   const connected = !!(info && info.connected);
   const lapsed = connected && !!info.status && info.status !== 'ok';
   const live = connected && !lapsed;
+  mediaAppListsLive[provider] = live;
+  renderMediaAppLists(provider);
   const statusEl = document.getElementById(provider + 'ConnectStatus');
   if (statusEl) {
     if (live) statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected' + (info.username ? ' as ' + escapeHtml(info.username) : '') + '</span>';
@@ -110017,6 +110111,18 @@ async function continueWatching(env, accountId, opts = {}) {
   return { items, missingSchedule };
 }
 
+// Continue Watching as one app (nuvio or stremio) left it: the shelf above,
+// kept to the shows it has plays of, and the part-way movies it tagged with its
+// own name when it recorded them (applyMediaAppRecords, 61_).
+async function appContinueWatching(env, accountId, source) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return [];
+  const { results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all();
+  const mine = new Set((results || []).map((r) => r.media_id));
+  const { items } = await continueWatching(env, accountId);
+  return items.filter((it) => mine.has(it.mediaId) || it.source === source);
+}
+
 async function airingNext(env, accountId, opts = {}) {
   const today = shelfToday(opts.now);
   const rows = await shelfProgressRows(env, accountId);
@@ -110103,7 +110209,7 @@ async function watchHistoryPage(env, accountId, opts = {}) {
   if (!actDb) return { items: [], cursor: null };
   const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
   const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
-  const rows = await watchEventRows(actDb, accountId, m ? { t: Number(m[1]), id: Number(m[2]) } : null, limit + 1);
+  const rows = await watchEventRows(actDb, accountId, m ? { t: Number(m[1]), id: Number(m[2]) } : null, limit + 1, opts.source);
   const more = rows.length > limit;
   const page = more ? rows.slice(0, limit) : rows;
   const items = await watchHistoryItems(env, page);
@@ -110112,9 +110218,15 @@ async function watchHistoryPage(env, accountId, opts = {}) {
 }
 
 // Up to `limit` of an account's plays, newest first, after `cursor` ({ t, id }).
-async function watchEventRows(actDb, accountId, cursor, limit) {
+// `source` keeps only the plays that came from there (the Nuvio and Stremio
+// lists, 61_media-app-sync.js); without it every play is read, as before.
+async function watchEventRows(actDb, accountId, cursor, limit, source) {
   let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
   const args = [accountId];
+  if (source) {
+    sql += " AND source = ?";
+    args.push(source);
+  }
   if (cursor) {
     sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
     args.push(cursor.t, cursor.t, cursor.id);
@@ -116334,7 +116446,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
         out.resumes++;
         if (!knownShows.has(r.mediaId) && !newShows.includes(r.mediaId)) newShows.push(r.mediaId);
       } else {
-        const entry = { id: r.imdbId || `tmdb:${r.tmdbId}`, imdbId: r.imdbId || undefined, type: "movie", name: r.title || undefined, poster: r.poster || undefined, progress: Math.round(r.resume.ratio * 100) };
+        const entry = { id: r.imdbId || `tmdb:${r.tmdbId}`, imdbId: r.imdbId || undefined, source: provider, type: "movie", name: r.title || undefined, poster: r.poster || undefined, progress: Math.round(r.resume.ratio * 100) };
         stmts.push(actDb.prepare(
           `INSERT INTO show_progress (account_id, media_id, last_watched_at, companion_json, updated_at)
            VALUES (?, ?, ?, ?, ?)

@@ -174,6 +174,70 @@ describe("Stremio and Nuvio cards", () => {
   });
 });
 
+describe("Nuvio and Stremio under Lists, My Lists", () => {
+  const live = { connected: true, status: "ok", username: "a@b.test", sync: { pull: true, profileIndex: 1 } };
+
+  it("offers Watch History and Continue Watching once the app is connected", () => {
+    const c = loadClient({ signedIn: true });
+    c.call("renderMediaAppStatus", "nuvio", live);
+    const html = el(c, "myNuvioListsResult").innerHTML;
+    assert.match(html, /Nuvio Watch History/);
+    assert.match(html, /Nuvio Continue Watching/);
+    assert.match(html, /\+ Add/);
+    assert.ok(!/Stremio/.test(html), "each app has its own panel");
+  });
+
+  it("says where to connect when the app is not connected, or its sign-in lapsed", () => {
+    const c = loadClient({ signedIn: true });
+    c.call("renderMediaAppStatus", "stremio", { connected: false });
+    assert.match(el(c, "myStremioListsResult").innerHTML, /Connect Stremio in Settings/);
+    c.call("renderMediaAppStatus", "stremio", { ...live, status: "expired" });
+    assert.match(el(c, "myStremioListsResult").innerHTML, /Connect Stremio in Settings/);
+    assert.ok(!/Watch History/.test(el(c, "myStremioListsResult").innerHTML));
+  });
+
+  it("adds a movie row and a show row, each reading the account's own list", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const rows = [];
+    c.set("addRow", (...args) => rows.push(args));
+    c.call("toggleMediaAppListAdd", "nuvio", "continue-watching", false);
+    assert.deepEqual(rows.map((r) => [r[0], r[1], r[2]]), [
+      ["Nuvio Continue Watching (Movies)", "autotrack:nuvio-continue-watching:movie:alice", "movie"],
+      ["Nuvio Continue Watching (Shows)", "autotrack:nuvio-continue-watching:series:alice", "series"],
+    ]);
+  });
+
+  it("removes both rows when the list was already added", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const gone = [];
+    c.set("removeListFromConfig", (...args) => gone.push(args));
+    c.call("toggleMediaAppListAdd", "stremio", "watch-history", true);
+    assert.deepEqual(gone, [
+      ["autotrack:stremio-watch-history:movie:alice", "movie"],
+      ["autotrack:stremio-watch-history:series:alice", "series"],
+    ]);
+  });
+
+  it("shows Remove for a list whose rows are in the catalogs", () => {
+    const c = loadClient({ signedIn: "alice" });
+    c.set("isListAddedToConfig", () => true);
+    c.call("renderMediaAppStatus", "nuvio", live);
+    assert.match(el(c, "myNuvioListsResult").innerHTML, /Remove/);
+  });
+
+  it("has a panel for each app on the Lists page, beside the other providers", () => {
+    const html = renderPage();
+    for (const id of ["myListsSectionPanel-nuvio", "myListsSectionPanel-stremio", "myNuvioListsResult", "myStremioListsResult"]) assert.ok(html.includes(`id="${id}"`), id);
+    const depth = (id) => {
+      let d = 0;
+      for (const m of html.slice(0, html.indexOf(`id="${id}"`)).matchAll(/<(\/?)div\b[^>]*>/g)) d += m[1] ? -1 : 1;
+      return d;
+    };
+    assert.equal(depth("myListsSectionPanel-nuvio"), depth("myListsSectionPanel-simkl"));
+    assert.equal(depth("myListsSectionPanel-stremio"), depth("myListsSectionPanel-simkl"));
+  });
+});
+
 describe("Stremio and Nuvio cards in the page", () => {
   // They once sat inside the Simkl card (a missing </div>), narrower than the rest with a card inside the card.
   it("sit beside the other provider cards, not inside one", () => {

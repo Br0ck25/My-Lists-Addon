@@ -2080,6 +2080,14 @@ function renderSimklConnectStatus() {
 // connection and its settings, over the signed-in session. It holds no token.
 const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
 let mediaAppUiPoll = null;
+// Whether each app is connected and working, from its settings answer.
+const mediaAppListsLive = { stremio: false, nuvio: false };
+// The lists each app offers under Lists, My Lists. The server serves them as
+// autotrack:<app>-<slug>:<movie|series>:<username> rows (fetchAutoTrackedCatalog, 05_).
+const MEDIA_APP_LISTS = [
+  { slug: 'watch-history', title: 'Watch History', blurb: 'Movies and shows you watched there.' },
+  { slug: 'continue-watching', title: 'Continue Watching', blurb: 'Where you stopped there: movies part way through and the next episode of your shows.' },
+];
 
 async function mediaAppUiCall(provider, sub, method, body) {
   try {
@@ -2108,12 +2116,68 @@ function mediaAppUiSyncLine(sync) {
   return 'Waiting for the first check…';
 }
 
+function mediaAppListUrls(provider, slug) {
+  const user = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
+  if (!user) return null;
+  const base = 'autotrack:' + provider + '-' + slug + ':';
+  return { movie: base + 'movie:' + user, series: base + 'series:' + user };
+}
+
+// The cards under Lists, My Lists. Shown once the app is connected.
+function renderMediaAppLists(provider) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  const box = document.getElementById('my' + name + 'ListsResult');
+  if (!box) return;
+  if (!mediaAppListsLive[provider]) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect ' + name + ' in Settings, under External Accounts, to see its lists here.</small></p>';
+    return;
+  }
+  box.innerHTML = MEDIA_APP_LISTS.map(function (l) {
+    const urls = mediaAppListUrls(provider, l.slug);
+    const added = !!urls && typeof isListAddedToConfig === 'function' && isListAddedToConfig(urls.movie, 'movie') && isListAddedToConfig(urls.series, 'series');
+    const listName = name + ' ' + l.title;
+    return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '">' +
+      '<div class="list-card-header">' +
+        '<div class="list-card-body">' +
+          '<div class="list-card-title">' + escapeHtml(listName) + '</div>' +
+          '<div class="list-card-meta"><span>' + escapeHtml(l.blurb) + '</span></div>' +
+        '</div>' +
+        '<div class="list-card-actions">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleMediaAppListAdd" data-act-args="' + appActArgs([provider, l.slug, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// Adds or removes the list's two catalog rows, one for movies and one for shows.
+function toggleMediaAppListAdd(provider, slug, isAdded) {
+  if (!requireSignedInFor('add your ' + MEDIA_APP_UI_NAMES[provider] + ' lists')) return;
+  const urls = mediaAppListUrls(provider, slug);
+  const meta = MEDIA_APP_LISTS.filter(function (l) { return l.slug === slug; })[0];
+  if (!urls || !meta) return;
+  const name = MEDIA_APP_UI_NAMES[provider] + ' ' + meta.title;
+  if (isAdded) {
+    removeListFromConfig(urls.movie, 'movie');
+    removeListFromConfig(urls.series, 'series');
+    if (typeof showAddedToast === 'function') showAddedToast('Removed "' + name + '" from your Catalogs.');
+  } else {
+    addRow(name + ' (Movies)', urls.movie, 'movie', true, 'My Lists');
+    addRow(name + ' (Shows)', urls.series, 'series', true, 'My Lists');
+    if (typeof showAddedToast === 'function') showAddedToast('Added "' + name + '" to your Catalogs.');
+  }
+  renderMediaAppLists(provider);
+}
+
 // info: the settings answer, or null when signed out or unavailable.
 function renderMediaAppStatus(provider, info) {
   const name = MEDIA_APP_UI_NAMES[provider];
   const connected = !!(info && info.connected);
   const lapsed = connected && !!info.status && info.status !== 'ok';
   const live = connected && !lapsed;
+  mediaAppListsLive[provider] = live;
+  renderMediaAppLists(provider);
   const statusEl = document.getElementById(provider + 'ConnectStatus');
   if (statusEl) {
     if (live) statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected' + (info.username ? ' as ' + escapeHtml(info.username) : '') + '</span>';

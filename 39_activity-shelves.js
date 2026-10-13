@@ -266,6 +266,18 @@ async function continueWatching(env, accountId, opts = {}) {
   return { items, missingSchedule };
 }
 
+// Continue Watching as one app (nuvio or stremio) left it: the shelf above,
+// kept to the shows it has plays of, and the part-way movies it tagged with its
+// own name when it recorded them (applyMediaAppRecords, 61_).
+async function appContinueWatching(env, accountId, source) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb) return [];
+  const { results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all();
+  const mine = new Set((results || []).map((r) => r.media_id));
+  const { items } = await continueWatching(env, accountId);
+  return items.filter((it) => mine.has(it.mediaId) || it.source === source);
+}
+
 async function airingNext(env, accountId, opts = {}) {
   const today = shelfToday(opts.now);
   const rows = await shelfProgressRows(env, accountId);
@@ -352,7 +364,7 @@ async function watchHistoryPage(env, accountId, opts = {}) {
   if (!actDb) return { items: [], cursor: null };
   const limit = Math.max(1, Math.min(SHELF_HISTORY_PAGE_MAX, Math.floor(Number(opts.limit)) || SHELF_HISTORY_PAGE));
   const m = /^(\d+):(\d+)$/.exec(String(opts.cursor || ""));
-  const rows = await watchEventRows(actDb, accountId, m ? { t: Number(m[1]), id: Number(m[2]) } : null, limit + 1);
+  const rows = await watchEventRows(actDb, accountId, m ? { t: Number(m[1]), id: Number(m[2]) } : null, limit + 1, opts.source);
   const more = rows.length > limit;
   const page = more ? rows.slice(0, limit) : rows;
   const items = await watchHistoryItems(env, page);
@@ -361,9 +373,15 @@ async function watchHistoryPage(env, accountId, opts = {}) {
 }
 
 // Up to `limit` of an account's plays, newest first, after `cursor` ({ t, id }).
-async function watchEventRows(actDb, accountId, cursor, limit) {
+// `source` keeps only the plays that came from there (the Nuvio and Stremio
+// lists, 61_media-app-sync.js); without it every play is read, as before.
+async function watchEventRows(actDb, accountId, cursor, limit, source) {
   let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
   const args = [accountId];
+  if (source) {
+    sql += " AND source = ?";
+    args.push(source);
+  }
   if (cursor) {
     sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
     args.push(cursor.t, cursor.t, cursor.id);
