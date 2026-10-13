@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-10-12";
+const WORKER_BUILD_DATE = "2026-10-13";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2747c901d9";
+const WORKER_BUILD = "3d5dc3a938";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -49619,6 +49619,53 @@ function seasonEpisodeCountState(d, seasonMeta) {
 }
 window.seasonEpisodeCountState = seasonEpisodeCountState;
 
+// "45% watched - 9h 0m left" for a whole show, read off the same per-season
+// tallies as the season headers so the two cannot disagree. Counted against
+// what has AIRED (specials excluded), the same denominator isShowFullyWatched
+// uses, so a caught-up show reads 100% rather than stopping short at the
+// episodes still to come. Time left is episodes left x the show's typical
+// episode length (TMDB's episode_run_time); with no runtime on record the
+// percentage still shows and the time is left out.
+function showWatchProgressState(d) {
+  const empty = { label: '', percent: 0, watched: 0, total: 0, minutesLeft: null };
+  if (!d || !Array.isArray(d.seasonsData)) return empty;
+  let total = 0;
+  let watched = 0;
+  d.seasonsData.forEach((s) => {
+    if (!s || Number(s.season_number) === 0) return;
+    const sNum = Number(s.season_number);
+    const aired = seasonAiredEpisodeCount(sNum, s, d);
+    if (!(aired > 0)) return;
+    total += aired;
+    watched += Math.min(watchedEpisodeNumbersInSeason(d.id, sNum).size, aired);
+  });
+  if (!(total > 0)) return empty;
+  const percent = Math.floor((watched / total) * 100);
+  const runtime = Number(d.runtime);
+  const minutesLeft = runtime > 0 ? (total - watched) * runtime : null;
+  let label = percent + '% watched';
+  if (minutesLeft != null) {
+    if (minutesLeft === 0) label += ' \u2022 nothing left';
+    else {
+      const h = Math.floor(minutesLeft / 60);
+      const m = minutesLeft % 60;
+      label += ' \u2022 ' + (h > 0 ? h + 'h ' : '') + m + 'm left';
+    }
+  }
+  return { label: label, percent: percent, watched: watched, total: total, minutesLeft: minutesLeft };
+}
+window.showWatchProgressState = showWatchProgressState;
+
+// Repaints that line after a watch change (see refreshItemWatchState).
+function updateShowWatchProgress() {
+  const el = (typeof document !== 'undefined' && document.getElementById)
+    ? document.getElementById('itemWatchProgress') : null;
+  if (!el) return;
+  const state = showWatchProgressState(window._currentItemDetails);
+  el.textContent = state.label;
+}
+window.updateShowWatchProgress = updateShowWatchProgress;
+
 function updateSeasonWatchedButton(seasonNum) {
   const d = window._currentItemDetails;
   if (!d) return;
@@ -49698,6 +49745,7 @@ function refreshItemWatchState() {
     });
   }
   updateShowWatchedButton();
+  updateShowWatchProgress();
 }
 window.refreshItemWatchState = refreshItemWatchState;
 
@@ -50209,6 +50257,7 @@ async function openItemDetailsModal(id, type, opts) {
     // offering to mark what the person has already seen.
     const showBtnState = showWatchedButtonState(isShowFullyWatched(d));
 
+    const watchProgress = showWatchProgressState(d);
     const heroImg = d.background || d.poster || '';
     const isSeriesItem = !!((d.seasonsData && d.seasonsData.length > 0) || type === 'series');
     const genreList = (Array.isArray(d.genres) ? d.genres : String(d.genres || '').split(','))
@@ -50228,6 +50277,7 @@ async function openItemDetailsModal(id, type, opts) {
         '<div class="item-head-main">' +
           '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
           (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
+          (watchProgress.label ? '<div class="item-pills"><span class="item-pill" id="itemWatchProgress">' + escapeHtml(watchProgress.label) + '</span></div>' : '') +
         '</div>' +
       '</div>' +
       '<div class="item-actions">' +

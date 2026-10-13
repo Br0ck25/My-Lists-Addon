@@ -8707,3 +8707,54 @@ describe("client: removing item from watch history updates Continue Watching", (
 });
 
 
+
+describe("client: a show's page reads percent watched and time left", () => {
+  const SHOW = {
+    id: "tt_progress",
+    title: "Progress Show",
+    runtime: 60,
+    seasonsData: [
+      { season_number: 0, name: "Specials", episode_count: 4, air_date: "2020-01-01" },
+      { season_number: 1, name: "Season 1", episode_count: 10, air_date: "2021-01-01" },
+    ],
+  };
+
+  function seeded(show, upTo) {
+    const client = loadClient();
+    client.set("_fullyWatchedShowIds", new Set());
+    client.set("_seasonEpisodesMap", {});
+    client.set("_currentItemDetails", show);
+    client.call("saveLocalCustomListsMap", {
+      "watch-history": {
+        slug: "watch-history",
+        items: Array.from({ length: upTo }, (_, i) => ({
+          id: "tt_progress:1:" + (i + 1), type: "episode",
+          showId: "tt_progress", showTitle: "Progress Show", seasonNum: 1, episodeNum: i + 1,
+        })),
+      },
+    });
+    return client;
+  }
+
+  it("10 one-hour episodes with 1 watched is 10% watched and 9h left", () => {
+    assert.equal(seeded(SHOW, 1).call("showWatchProgressState", SHOW).label, "10% watched • 9h 0m left");
+  });
+
+  it("counts episodes left, not the percentage, for the time", () => {
+    const show = { ...SHOW, runtime: 45 };
+    assert.equal(seeded(show, 4).call("showWatchProgressState", show).label, "40% watched • 4h 30m left");
+  });
+
+  it("says nothing is left once every aired episode is watched", () => {
+    assert.equal(seeded(SHOW, 10).call("showWatchProgressState", SHOW).label, "100% watched • nothing left");
+  });
+
+  it("leaves the time out when the show has no runtime on record", () => {
+    const show = { ...SHOW, runtime: null };
+    assert.equal(seeded(show, 1).call("showWatchProgressState", show).label, "10% watched");
+  });
+
+  it("ignores specials", () => {
+    assert.equal(seeded(SHOW, 0).call("showWatchProgressState", SHOW).total, 10);
+  });
+});

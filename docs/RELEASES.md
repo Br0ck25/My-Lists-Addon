@@ -2038,3 +2038,19 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 - `bash verify.sh -q` passes.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-12 (build 2747c901d9)**. No migration, and it works with or without 0022. Threads of accounts already deleted keep their old name in the database until that name is registered again, at which point they are detached; nobody can sign in as a deleted name in between.
+
+## 2026-10-13: a show's page shows percent watched and time left
+
+**Branch point:** the "deleted account's support threads" entry above (build 2747c901d9). Built 2026-10-13, build 3d5dc3a938.
+
+### What it changes
+
+- **Asked for by the owner.** Opening a show shows a line under its pills such as *10% watched • 9h 0m left*. `showWatchProgressState` (19_) adds up every numbered season's aired episodes (specials left out, the same denominator `isShowFullyWatched` uses) against `watchedEpisodeNumbersInSeason`, the tally behind the season headers' "3/8 episodes". Time left is episodes left x TMDB's typical episode length (`d.runtime`); with no runtime on record only the percentage shows. The line repaints with the season buttons in `refreshItemWatchState`. Movies are unchanged.
+- Time left is an estimate: it uses one typical length for every episode.
+
+### Checked
+
+- 5 new tests in `tests/client.test.mjs` (the 10 one-hour episodes example, a 45-minute show, finished, no runtime, specials ignored).
+- `bash verify.sh -q` passes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 3d5dc3a938)**. No migration.
