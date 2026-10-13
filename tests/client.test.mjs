@@ -8754,6 +8754,24 @@ describe("client: a show's page reads percent watched and time left", () => {
     assert.equal(seeded(show, 1).call("showWatchProgressState", show).label, "10% watched");
   });
 
+  it("repaints the line when a season's count is repainted, so every toggle path moves it", () => {
+    const client = seeded(SHOW, 1);
+    const el = client.get("document").getElementById("itemWatchProgress");
+    client.call("updateSeasonEpisodeCounts");
+    assert.equal(el.textContent, "10% watched \u2022 9h 0m left");
+    client.call("saveLocalCustomListsMap", {
+      "watch-history": {
+        slug: "watch-history",
+        items: Array.from({ length: 5 }, (_, i) => ({
+          id: "tt_progress:1:" + (i + 1), type: "episode",
+          showId: "tt_progress", showTitle: "Progress Show", seasonNum: 1, episodeNum: i + 1,
+        })),
+      },
+    });
+    client.call("updateSeasonEpisodeCounts");
+    assert.equal(el.textContent, "50% watched \u2022 5h 0m left");
+  });
+
   it("ignores specials", () => {
     assert.equal(seeded(SHOW, 0).call("showWatchProgressState", SHOW).total, 10);
   });

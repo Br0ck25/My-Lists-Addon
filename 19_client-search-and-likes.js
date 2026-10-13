@@ -3292,6 +3292,10 @@ function updateSeasonEpisodeCounts(seasonNum) {
     el.textContent = state.label;
     if (el.classList && el.classList.toggle) el.classList.toggle('is-complete', state.complete);
   });
+  // The show's own percent and time left move whenever a season's count
+  // does, and every path that repaints these counts (episode, season and
+  // whole-show toggles) passes through here.
+  updateShowWatchProgress();
 }
 window.updateSeasonEpisodeCounts = updateSeasonEpisodeCounts;
 

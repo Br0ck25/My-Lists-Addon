@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1240efb878";
+const WORKER_BUILD = "bc6de57199";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -28359,7 +28359,11 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
     releaseDate: match.release_date || match.first_air_date || null,
     seasonsData: type === "tv" && match.seasons ? match.seasons : null,
     tmdbId: tmdbId,
-    runtime: match.runtime || (match.episode_run_time && match.episode_run_time[0]) || null,
+    // A show's episode_run_time is often empty at TMDB, so its latest aired
+    // (or next) episode's own runtime stands in for the typical length.
+    runtime: match.runtime || (match.episode_run_time && match.episode_run_time[0]) ||
+      (match.last_episode_to_air && match.last_episode_to_air.runtime) ||
+      (match.next_episode_to_air && match.next_episode_to_air.runtime) || null,
     budget: match.budget || null,
     revenue: match.revenue || null,
     contentRating: contentRating || null,
@@ -49696,6 +49700,10 @@ function updateSeasonEpisodeCounts(seasonNum) {
     el.textContent = state.label;
     if (el.classList && el.classList.toggle) el.classList.toggle('is-complete', state.complete);
   });
+  // The show's own percent and time left move whenever a season's count
+  // does, and every path that repaints these counts (episode, season and
+  // whole-show toggles) passes through here.
+  updateShowWatchProgress();
 }
 window.updateSeasonEpisodeCounts = updateSeasonEpisodeCounts;
 

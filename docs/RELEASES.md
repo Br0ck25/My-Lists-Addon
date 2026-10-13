@@ -2041,7 +2041,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: a show's page shows percent watched and time left
 
-**Branch point:** the "deleted account's support threads" entry above (build 2747c901d9). Built 2026-10-13, build 1240efb878.
+**Branch point:** the "deleted account's support threads" entry above (build 2747c901d9). Built 2026-10-13, build bc6de57199.
 
 ### What it changes
 
@@ -2053,4 +2053,6 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 - 5 new tests in `tests/client.test.mjs` (the 10 one-hour episodes example, a 45-minute show, finished, no runtime, specials ignored).
 - `bash verify.sh -q` passes.
 
-**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 1240efb878)**. No migration.
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build bc6de57199)**. No migration.
+
+**Follow-up (same day):** the line did not move when a whole season or the whole show was marked, because only the season counts were repainted on those paths; `updateSeasonEpisodeCounts` now repaints it too. Some shows showed a percentage with no time left because TMDB's `episode_run_time` is empty for them; the details now fall back to the latest (or next) episode's own runtime (07_). A show where TMDB has neither still shows only the percentage.
