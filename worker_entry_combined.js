@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e3f1bb6c9d";
+const WORKER_BUILD = "4eccbb5cbf";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -21079,6 +21079,9 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
         isAdult: it.isAdult,
         certification: it.certification || it.ageRating || it.contentRating,
         genres: it.genres,
+        // How far through, and how long is left (the Nuvio and Stremio lists).
+        progress: typeof it.progress === 'number' ? it.progress : undefined,
+        timeLeftMin: typeof it.timeLeftMin === 'number' ? it.timeLeftMin : undefined,
       };
       
       if (!mapped.id) return;
@@ -33208,6 +33211,22 @@ ${UTILITY_CSS}
     overflow: hidden;
     word-break: break-word;
     min-height: 2.5em;
+  }
+  /* How far through a Continue Watching item is: a bar along the foot of its poster. */
+  .resume-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--space-1);
+    background: var(--color-bg-sunken);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    overflow: hidden;
+    z-index: 2;
+  }
+  .resume-progress-fill {
+    height: 100%;
+    background: var(--color-brand-fill);
   }
   .list-card-mini-poster-subtitle {
     font-size: var(--font-size-3xs);
@@ -48136,6 +48155,22 @@ function retryPosterSlot(btn) {
   loadPosterSlot(slot);
 }
 
+// The bar and the label for a Continue Watching item that has progress (the Nuvio and Stremio
+// lists): how much is watched, and "1h 15m left". Nothing for an item with none.
+function resumeProgressParts(it) {
+  const pct = Number(it && it.progress);
+  const min = Math.round(Number(it && it.timeLeftMin));
+  if (!(pct > 0)) return { barHtml: '', label: '' };
+  const barHtml = '<div class="resume-progress" aria-hidden="true"><div class="resume-progress-fill" style="width:' + Math.min(100, Math.round(pct)) + '%"></div></div>';
+  let label = '';
+  if (min > 0) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    label = (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '') + ' left';
+  }
+  return { barHtml: barHtml, label: label };
+}
+
 async function fetchPreviewForSlot(listUrl, type) {
   if (type !== 'mixed') {
     const res = await fetchListPreviewWithRetry(listUrl, type);
@@ -48268,15 +48303,18 @@ async function loadPosterSlot(slot) {
 
             const itemPoster = resolveClientPoster(Object.assign({}, s, { listName, listUrl }), s.poster);
             const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
+            const resume = resumeProgressParts(s);
+            const resumeText = resume.label ? ((s.seasonNum != null && s.episodeNum != null ? 'S' + s.seasonNum + 'E' + s.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
             inner += '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' +
               '<div class="list-card-mini-poster-img-wrap clickable-poster" data-id="' + escapeAttr(s.id || '') + '" data-type="' + escapeAttr(s.type || type || '') + '" data-title="' + escapeAttr(s.name || '') + '" data-poster="' + escapeAttr(itemPoster || '') + '">' +
                 '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' +
                 removeBtn +
                 '<div class="poster-add-overlay">+</div>' +
+                resume.barHtml +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              ((resumeText || s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(resumeText || s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';
@@ -79798,9 +79836,12 @@ function livePreviewPosterHtml(m) {
     : (m.name || '');
   const ratingSpan = (!m.isLivePreviewShelf && typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(m) : '';
   let subtitleHtml = '';
-  const subText = (m.isLivePreviewShelf && (isCwItem || isAiringItem))
+  // A Nuvio or Stremio item part way through: how long is left, in place of the year.
+  const resume = typeof resumeProgressParts === 'function' ? resumeProgressParts(m) : { barHtml: '', label: '' };
+  const resumeText = resume.label ? ((m.seasonNum != null && m.episodeNum != null ? 'S' + m.seasonNum + 'E' + m.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
+  const subText = resumeText || ((m.isLivePreviewShelf && (isCwItem || isAiringItem))
     ? ''
-    : (m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : '')));
+    : (m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : ''))));
   if (subText && ratingSpan) {
     subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
   } else if (subText) {
@@ -79820,6 +79861,7 @@ function livePreviewPosterHtml(m) {
       dateBadge +
       bottomBadge +
       removeBtn +
+      resume.barHtml +
     '</div>' +
     '<div class="live-preview-poster-name">' + escapeHtml(displayName) + '</div>' +
     subtitleHtml +
@@ -88431,6 +88473,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
             score: m.score != null ? m.score : undefined,
             isAdult: isAdultOrNsfw(m),
             isAdultPosterFiltered: !!m.isAdultPosterFiltered,
+            progress: typeof m.progress === "number" ? m.progress : undefined,
+            timeLeftMin: typeof m.timeLeftMin === "number" ? m.timeLeftMin : undefined,
           })),
         };
       } catch (err) {
@@ -110192,7 +110236,30 @@ async function appContinueWatching(env, accountId, source) {
   const { results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all();
   const mine = new Set((results || []).map((r) => r.media_id));
   const { items } = await continueWatching(env, accountId);
-  return items.filter((it) => mine.has(it.mediaId) || it.source === source);
+  const resumes = await mediaAppResumes(env, accountId, source);
+  return items.filter((it) => mine.has(it.mediaId) || it.source === source).map((it) => withResumeProgress(it, resumes));
+}
+
+// How far through the app has the account's titles (kept on its sync row, 61_).
+async function mediaAppResumes(env, accountId, provider) {
+  try {
+    const row = await env.DB.prepare("SELECT cursor_json FROM media_app_sync WHERE account_id = ? AND provider = ?").bind(accountId, provider).first();
+    const map = row && row.cursor_json ? JSON.parse(row.cursor_json).resumes : null;
+    return map && typeof map === "object" ? map : {};
+  } catch {
+    return {};
+  }
+}
+
+// The item with its percentage and minutes left, when the app's resume point is the very
+// item shown: a movie by its id, an episode only while the show stands at it.
+function withResumeProgress(item, resumes) {
+  const isEpisode = item.seasonNum != null && item.episodeNum != null;
+  const r = resumes[String(isEpisode ? (item.showId || "") : (item.imdbId || item.id || ""))];
+  if (!r || !(r.duration > 0) || !(r.position >= 0)) return item;
+  if (isEpisode ? (r.season !== item.seasonNum || r.episode !== item.episodeNum) : r.season != null) return item;
+  const left = Math.max(0, r.duration - r.position);
+  return { ...item, progress: Math.min(100, Math.max(0, Math.round((r.position / r.duration) * 100))), timeLeftMin: Math.max(1, Math.ceil(left / 60000)) };
 }
 
 async function airingNext(env, accountId, opts = {}) {
@@ -116275,7 +116342,7 @@ async function stremioItemRecord(item, episodes) {
   if (kind === "movie") {
     const finished = Number(st.timesWatched) > 0 || Number(st.flaggedWatched) > 0 || ratio >= MEDIA_APP_FINISHED;
     if (finished && lastWatched) rec.plays.push({ season: null, episode: null, watchedAt: lastWatched });
-    else if (!finished && ratio >= MEDIA_APP_STARTED) rec.resume = { season: null, episode: null, ratio };
+    else if (!finished && ratio >= MEDIA_APP_STARTED) rec.resume = { season: null, episode: null, ratio, position: offset, duration };
     return rec;
   }
   const watchedEps = episodes && st.watched ? await stremioWatchedEpisodes(st.watched, episodes) : [];
@@ -116287,7 +116354,7 @@ async function stremioItemRecord(item, episodes) {
       if (!inWatched(cur)) watchedEps.push(cur);
       if (lastWatched) rec.plays.push({ season: cur.season, episode: cur.episode, watchedAt: lastWatched });
     } else if (ratio >= MEDIA_APP_STARTED) {
-      rec.resume = { ...cur, ratio };
+      rec.resume = { ...cur, ratio, position: offset, duration };
     }
   }
   for (const e of watchedEps) {
@@ -116423,7 +116490,7 @@ function nuvioRecords({ watched, progress }) {
     bump(rec, at);
     if (ratio >= MEDIA_APP_FINISHED) addPlay(rec, season, episode, at);
     else if (ratio >= MEDIA_APP_STARTED && (!rec.resume || at > rec.resume.at)) {
-      rec.resume = { season: rec.kind === "series" ? season : null, episode: rec.kind === "series" ? episode : null, ratio, at };
+      rec.resume = { season: rec.kind === "series" ? season : null, episode: rec.kind === "series" ? episode : null, ratio, at, position, duration };
     }
   }
   const out = [...by.values()];
@@ -116455,6 +116522,12 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
   const copied = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(`${ACTIVITY_BACKFILL_TYPE}:acct:${accountId}`).first();
   if (!copied || copied.status !== "done") return { skipped: "Your existing history is still being copied. This will run again shortly." };
   const out = { plays: 0, progress: 0, resumes: 0, unresolved: 0, lookups: 0 };
+  // How far through each title is, for the lists' bars: set for a title part way through with a
+  // known length, removed for one that is not (finished, or not started).
+  out.resumeChanges = records.map((r) => [
+    r.imdbId || `tmdb:${r.tmdbId}`,
+    r.resume && r.resume.duration > 0 ? { season: r.resume.season, episode: r.resume.episode, position: r.resume.position, duration: r.resume.duration, at: r.at } : null,
+  ]);
   if (!records.length) return out;
 
   const refs = records.map((r) => ({ imdbId: r.imdbId, tmdbId: r.tmdbId, kind: r.kind, title: r.title }));
@@ -116613,6 +116686,21 @@ function mediaAppLastResultOf(row) {
   }
 }
 
+// The resume map with the changes applied, newest MEDIA_APP_RESUMES_MAX kept.
+const MEDIA_APP_RESUMES_MAX = 300;
+function mergeMediaAppResumes(current, changes) {
+  const map = { ...(current && typeof current === "object" ? current : {}) };
+  for (const [key, value] of changes || []) {
+    if (value) map[key] = value;
+    else delete map[key];
+  }
+  const keys = Object.keys(map);
+  if (keys.length > MEDIA_APP_RESUMES_MAX) {
+    keys.sort((a, b) => (map[b].at || 0) - (map[a].at || 0)).slice(MEDIA_APP_RESUMES_MAX).forEach((k) => delete map[k]);
+  }
+  return map;
+}
+
 function mediaAppProfilesOf(row) {
   try {
     const p = row && row.cursor_json ? JSON.parse(row.cursor_json).profiles : null;
@@ -116698,8 +116786,14 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     await setMediaAppSyncError(env, accountId, provider, applied.skipped);
     return { done: true, skipped: applied.skipped };
   }
+  if (applied.resumeChanges && applied.resumeChanges.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, applied.resumeChanges);
   const next = offset + MEDIA_APP_STEP_ITEMS;
-  if (next < fetched.total) return { done: false, offset: next, total: fetched.total, since, applied };
+  if (next < fetched.total) {
+    if (applied.resumeChanges && applied.resumeChanges.length) {
+      await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
+    }
+    return { done: false, offset: next, total: fetched.total, since, applied };
+  }
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"

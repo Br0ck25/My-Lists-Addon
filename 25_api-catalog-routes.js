@@ -1904,6 +1904,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
             score: m.score != null ? m.score : undefined,
             isAdult: isAdultOrNsfw(m),
             isAdultPosterFiltered: !!m.isAdultPosterFiltered,
+            progress: typeof m.progress === "number" ? m.progress : undefined,
+            timeLeftMin: typeof m.timeLeftMin === "number" ? m.timeLeftMin : undefined,
           })),
         };
       } catch (err) {

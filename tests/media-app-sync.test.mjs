@@ -803,7 +803,10 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
       { content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR },
       { content_id: SHOW, content_type: "series", title: "Show S", season: 1, episode: 1, watched_at: NOW - 10 * HOUR },
       { content_id: SHOW, content_type: "series", title: "Show S", season: 1, episode: 2, watched_at: NOW - 9 * HOUR },
-    ], progress: [{ content_id: "tt3333333", content_type: "movie", name: "Movie Half", position: 1500000, duration: 6000000, last_watched: NOW - 2 * HOUR }] };
+    ], progress: [
+      { content_id: "tt3333333", content_type: "movie", name: "Movie Half", position: 1500000, duration: 6000000, last_watched: NOW - 2 * HOUR },
+      { content_id: SHOW, content_type: "series", name: "Show S", season: 1, episode: 3, position: 600000, duration: 2400000, last_watched: NOW - HOUR },
+    ] };
     fakeServices(state);
     const ctx = await setup(name, extra || { FF_EVENT_TRACKING: "1" });
     // The account the sync runs for is the one this user signed in as.
@@ -875,11 +878,91 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
   it("reports what the last pull found, and keeps it across a profile change", async () => {
     const ctx = await connected("lsfound");
     const found = async () => (await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.sync.lastResult;
-    assert.deepEqual(await found(), { found: 3, plays: 3, progress: 0, resumes: 1, unresolved: 0 }, "titles, plays, undated progress, part-way, and ones with no usable id");
+    assert.deepEqual(await found(), { found: 3, plays: 3, progress: 0, resumes: 2, unresolved: 0 }, "titles, plays, undated progress, part-way, and ones with no usable id");
     await runAgain(ctx, "nuvio");
-    assert.deepEqual(await found(), { found: 3, plays: 0, progress: 0, resumes: 1, unresolved: 0 }, "a later pull that changes nothing still says how many titles the app holds");
+    assert.deepEqual(await found(), { found: 3, plays: 0, progress: 1, resumes: 1, unresolved: 0 }, "a later pull that changes nothing still says how many titles the app holds");
     await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { profileIndex: 1 } });
     assert.equal((await found()).found, 3, "choosing a profile does not lose it");
+  });
+
+  describe("how far through, and how long is left", () => {
+    const ask = (ctx, app, type, creator = ctx.owner) => call(ctx.env, "/api/preview", {
+      method: "POST",
+      json: { url: `autotrack:${app}-continue-watching:mixed:${creator.creatorName}`, type, sample: 20, creatorName: creator.creatorName, creatorKey: creator.creatorKey },
+    }).then((r) => r.body.sample || []);
+    const schedule = (ctx) => {
+      const mediaId = ctx.env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(SHOW).id;
+      ctx.env.DB._db.prepare("UPDATE show_schedule SET status = 'Ended', last_aired_season = 1, last_aired_episode = 5, last_aired_date = '2020-01-01', season_episode_counts = '{\"1\":5}', checked_at = 1 WHERE media_id = ?").run(mediaId);
+    };
+
+    it("gives a movie and an episode part way through their percentage and the minutes left", async () => {
+      const ctx = await connected("lsbar");
+      schedule(ctx);
+      const movies = await ask(ctx, "nuvio", "movie");
+      assert.deepEqual(movies.map((m) => [m.id, m.progress, m.timeLeftMin]), [["tt3333333", 25, 75]], "a quarter of 100 minutes: 75 left");
+      const shows = await ask(ctx, "nuvio", "series");
+      assert.deepEqual(shows.map((m) => [m.id, m.seasonNum, m.episodeNum, m.progress, m.timeLeftMin]), [[SHOW, 1, 3, 25, 30]], "a quarter of 40 minutes: 30 left");
+    });
+
+    it("rounds the minutes left up, so an item with a few seconds under a whole minute does not read one short", async () => {
+      const ctx = await connected("lsbarround");
+      ctx.state.progress = [{ content_id: "tt3333333", content_type: "movie", name: "Movie Half", position: 1500500, duration: 6000000, last_watched: NOW - 60 * 1000 }];
+      await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+      const movies = await ask(ctx, "nuvio", "movie");
+      assert.deepEqual(movies.map((m) => [m.progress, m.timeLeftMin]), [[25, 75]], "74.99 minutes left reads 75");
+    });
+
+    it("shows no bar for an episode once the show has been watched past it, or for a movie once it is finished", async () => {
+      const ctx = await connected("lsbardone");
+      schedule(ctx);
+      ctx.state.watched.push({ content_id: SHOW, content_type: "series", title: "Show S", season: 1, episode: 3, watched_at: NOW - 60 * 1000 });
+      ctx.state.watched.push({ content_id: "tt3333333", content_type: "movie", title: "Movie Half", watched_at: NOW - 60 * 1000 });
+      ctx.state.progress = [];
+      await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+      const shows = await ask(ctx, "nuvio", "series");
+      assert.ok(shows.every((m) => m.progress === undefined && m.timeLeftMin === undefined), JSON.stringify(shows));
+      assert.deepEqual(await ask(ctx, "nuvio", "movie"), [], "a finished movie is no longer in Continue Watching");
+    });
+
+    it("keeps the bar of an episode only while the show still stands at it", async () => {
+      const ctx = await connected("lsbarstale");
+      schedule(ctx);
+      // The show moves on in another app: the next episode is E4, so E3's numbers do not belong to it.
+      const mediaId = ctx.env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(SHOW).id;
+      ctx.env.DB_ACTIVITY._db.prepare("UPDATE show_progress SET last_episode = 3 WHERE account_id = ? AND media_id = ?").run(ctx.accountId, mediaId);
+      const shows = await ask(ctx, "nuvio", "series");
+      assert.deepEqual(shows.map((m) => [m.episodeNum, m.progress]), [[4, undefined]]);
+    });
+
+    it("does not give Stremio's list Nuvio's numbers, and gives Stremio its own", async () => {
+      const ctx = await connected("lsbarapp");
+      schedule(ctx);
+      assert.deepEqual(await ask(ctx, "stremio", "movie"), []);
+      // Stremio's own movie, half watched.
+      const lib = [{ _id: "tt8888888", type: "movie", name: "Stremio Half", _mtime: new Date(NOW - HOUR).toISOString(), state: { lastWatched: new Date(NOW - HOUR).toISOString(), timesWatched: 0, duration: 6000000, timeOffset: 3000000 } }];
+      ctx.state.approved = true;
+      ctx.state.library = lib;
+      ctx.state.episodes = {};
+      await connectStremio(ctx, ctx.state);
+      const movies = await ask(ctx, "stremio", "movie");
+      assert.deepEqual(movies.map((m) => [m.id, m.progress, m.timeLeftMin]), [["tt8888888", 50, 50]]);
+    });
+
+    it("rebuilds the numbers when the profile changes, and drops them when the account is disconnected", async () => {
+      const ctx = await connected("lsbarkeep");
+      schedule(ctx);
+      const resumes = () => {
+        const row = ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync").get();
+        return row ? Object.keys(JSON.parse(row.cursor_json || "{}").resumes || {}).sort() : null;
+      };
+      assert.deepEqual(resumes(), [SHOW, "tt3333333"].sort());
+      await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { profileIndex: 1 } });
+      assert.deepEqual(resumes(), [], "another profile's numbers are not kept");
+      await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+      assert.deepEqual(resumes(), [SHOW, "tt3333333"].sort(), "the pull of the profile brings them back");
+      await call(ctx.env, "/api/connections/nuvio", { method: "DELETE", cookie: ctx.cookie });
+      assert.equal(resumes(), null, "gone with the connection");
+    });
   });
 
   it("belongs to its owner alone", async () => {

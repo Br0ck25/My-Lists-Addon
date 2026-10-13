@@ -2085,9 +2085,12 @@ function livePreviewPosterHtml(m) {
     : (m.name || '');
   const ratingSpan = (!m.isLivePreviewShelf && typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(m) : '';
   let subtitleHtml = '';
-  const subText = (m.isLivePreviewShelf && (isCwItem || isAiringItem))
+  // A Nuvio or Stremio item part way through: how long is left, in place of the year.
+  const resume = typeof resumeProgressParts === 'function' ? resumeProgressParts(m) : { barHtml: '', label: '' };
+  const resumeText = resume.label ? ((m.seasonNum != null && m.episodeNum != null ? 'S' + m.seasonNum + 'E' + m.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
+  const subText = resumeText || ((m.isLivePreviewShelf && (isCwItem || isAiringItem))
     ? ''
-    : (m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : '')));
+    : (m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : ''))));
   if (subText && ratingSpan) {
     subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
   } else if (subText) {
@@ -2107,6 +2110,7 @@ function livePreviewPosterHtml(m) {
       dateBadge +
       bottomBadge +
       removeBtn +
+      resume.barHtml +
     '</div>' +
     '<div class="live-preview-poster-name">' + escapeHtml(displayName) + '</div>' +
     subtitleHtml +

@@ -275,7 +275,30 @@ async function appContinueWatching(env, accountId, source) {
   const { results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all();
   const mine = new Set((results || []).map((r) => r.media_id));
   const { items } = await continueWatching(env, accountId);
-  return items.filter((it) => mine.has(it.mediaId) || it.source === source);
+  const resumes = await mediaAppResumes(env, accountId, source);
+  return items.filter((it) => mine.has(it.mediaId) || it.source === source).map((it) => withResumeProgress(it, resumes));
+}
+
+// How far through the app has the account's titles (kept on its sync row, 61_).
+async function mediaAppResumes(env, accountId, provider) {
+  try {
+    const row = await env.DB.prepare("SELECT cursor_json FROM media_app_sync WHERE account_id = ? AND provider = ?").bind(accountId, provider).first();
+    const map = row && row.cursor_json ? JSON.parse(row.cursor_json).resumes : null;
+    return map && typeof map === "object" ? map : {};
+  } catch {
+    return {};
+  }
+}
+
+// The item with its percentage and minutes left, when the app's resume point is the very
+// item shown: a movie by its id, an episode only while the show stands at it.
+function withResumeProgress(item, resumes) {
+  const isEpisode = item.seasonNum != null && item.episodeNum != null;
+  const r = resumes[String(isEpisode ? (item.showId || "") : (item.imdbId || item.id || ""))];
+  if (!r || !(r.duration > 0) || !(r.position >= 0)) return item;
+  if (isEpisode ? (r.season !== item.seasonNum || r.episode !== item.episodeNum) : r.season != null) return item;
+  const left = Math.max(0, r.duration - r.position);
+  return { ...item, progress: Math.min(100, Math.max(0, Math.round((r.position / r.duration) * 100))), timeLeftMin: Math.max(1, Math.ceil(left / 60000)) };
 }
 
 async function airingNext(env, accountId, opts = {}) {

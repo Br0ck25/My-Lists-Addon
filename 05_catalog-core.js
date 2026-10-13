@@ -2891,6 +2891,9 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
         isAdult: it.isAdult,
         certification: it.certification || it.ageRating || it.contentRating,
         genres: it.genres,
+        // How far through, and how long is left (the Nuvio and Stremio lists).
+        progress: typeof it.progress === 'number' ? it.progress : undefined,
+        timeLeftMin: typeof it.timeLeftMin === 'number' ? it.timeLeftMin : undefined,
       };
       
       if (!mapped.id) return;

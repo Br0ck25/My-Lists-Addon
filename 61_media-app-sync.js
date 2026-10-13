@@ -258,7 +258,7 @@ async function stremioItemRecord(item, episodes) {
   if (kind === "movie") {
     const finished = Number(st.timesWatched) > 0 || Number(st.flaggedWatched) > 0 || ratio >= MEDIA_APP_FINISHED;
     if (finished && lastWatched) rec.plays.push({ season: null, episode: null, watchedAt: lastWatched });
-    else if (!finished && ratio >= MEDIA_APP_STARTED) rec.resume = { season: null, episode: null, ratio };
+    else if (!finished && ratio >= MEDIA_APP_STARTED) rec.resume = { season: null, episode: null, ratio, position: offset, duration };
     return rec;
   }
   const watchedEps = episodes && st.watched ? await stremioWatchedEpisodes(st.watched, episodes) : [];
@@ -270,7 +270,7 @@ async function stremioItemRecord(item, episodes) {
       if (!inWatched(cur)) watchedEps.push(cur);
       if (lastWatched) rec.plays.push({ season: cur.season, episode: cur.episode, watchedAt: lastWatched });
     } else if (ratio >= MEDIA_APP_STARTED) {
-      rec.resume = { ...cur, ratio };
+      rec.resume = { ...cur, ratio, position: offset, duration };
     }
   }
   for (const e of watchedEps) {
@@ -406,7 +406,7 @@ function nuvioRecords({ watched, progress }) {
     bump(rec, at);
     if (ratio >= MEDIA_APP_FINISHED) addPlay(rec, season, episode, at);
     else if (ratio >= MEDIA_APP_STARTED && (!rec.resume || at > rec.resume.at)) {
-      rec.resume = { season: rec.kind === "series" ? season : null, episode: rec.kind === "series" ? episode : null, ratio, at };
+      rec.resume = { season: rec.kind === "series" ? season : null, episode: rec.kind === "series" ? episode : null, ratio, at, position, duration };
     }
   }
   const out = [...by.values()];
@@ -438,6 +438,12 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
   const copied = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(`${ACTIVITY_BACKFILL_TYPE}:acct:${accountId}`).first();
   if (!copied || copied.status !== "done") return { skipped: "Your existing history is still being copied. This will run again shortly." };
   const out = { plays: 0, progress: 0, resumes: 0, unresolved: 0, lookups: 0 };
+  // How far through each title is, for the lists' bars: set for a title part way through with a
+  // known length, removed for one that is not (finished, or not started).
+  out.resumeChanges = records.map((r) => [
+    r.imdbId || `tmdb:${r.tmdbId}`,
+    r.resume && r.resume.duration > 0 ? { season: r.resume.season, episode: r.resume.episode, position: r.resume.position, duration: r.resume.duration, at: r.at } : null,
+  ]);
   if (!records.length) return out;
 
   const refs = records.map((r) => ({ imdbId: r.imdbId, tmdbId: r.tmdbId, kind: r.kind, title: r.title }));
@@ -596,6 +602,21 @@ function mediaAppLastResultOf(row) {
   }
 }
 
+// The resume map with the changes applied, newest MEDIA_APP_RESUMES_MAX kept.
+const MEDIA_APP_RESUMES_MAX = 300;
+function mergeMediaAppResumes(current, changes) {
+  const map = { ...(current && typeof current === "object" ? current : {}) };
+  for (const [key, value] of changes || []) {
+    if (value) map[key] = value;
+    else delete map[key];
+  }
+  const keys = Object.keys(map);
+  if (keys.length > MEDIA_APP_RESUMES_MAX) {
+    keys.sort((a, b) => (map[b].at || 0) - (map[a].at || 0)).slice(MEDIA_APP_RESUMES_MAX).forEach((k) => delete map[k]);
+  }
+  return map;
+}
+
 function mediaAppProfilesOf(row) {
   try {
     const p = row && row.cursor_json ? JSON.parse(row.cursor_json).profiles : null;
@@ -681,8 +702,14 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     await setMediaAppSyncError(env, accountId, provider, applied.skipped);
     return { done: true, skipped: applied.skipped };
   }
+  if (applied.resumeChanges && applied.resumeChanges.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, applied.resumeChanges);
   const next = offset + MEDIA_APP_STEP_ITEMS;
-  if (next < fetched.total) return { done: false, offset: next, total: fetched.total, since, applied };
+  if (next < fetched.total) {
+    if (applied.resumeChanges && applied.resumeChanges.length) {
+      await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
+    }
+    return { done: false, offset: next, total: fetched.total, since, applied };
+  }
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"

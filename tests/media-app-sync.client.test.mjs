@@ -370,6 +370,51 @@ describe("refreshing when Lists is opened", () => {
   });
 });
 
+describe("progress and time left on Continue Watching items", () => {
+  it("says how long is left in hours and minutes", () => {
+    const c = loadClient({ signedIn: true });
+    const label = (m) => c.call("resumeProgressParts", { progress: 40, timeLeftMin: m }).label;
+    assert.equal(label(24), "24m left");
+    assert.equal(label(75), "1h 15m left");
+    assert.equal(label(60), "1h left");
+    assert.equal(label(135), "2h 15m left");
+    assert.equal(label(1), "1m left");
+  });
+
+  it("draws a bar as wide as the part watched, and nothing for an item with no progress", () => {
+    const c = loadClient({ signedIn: true });
+    const parts = c.call("resumeProgressParts", { progress: 37, timeLeftMin: 20 });
+    assert.match(parts.barHtml, /class="resume-progress"/);
+    assert.match(parts.barHtml, /width:37%/);
+    const none = (it) => { const p = c.call("resumeProgressParts", it); return [p.barHtml, p.label]; };
+    assert.deepEqual(none({}), ["", ""]);
+    assert.deepEqual(none({ progress: 0, timeLeftMin: 5 }), ["", ""], "no bar before anything is watched");
+    assert.equal(c.call("resumeProgressParts", { progress: 250, timeLeftMin: 5 }).barHtml.includes("width:100%"), true, "never wider than the poster");
+  });
+
+  it("shows the bar and the time left on a card's poster strip", async () => {
+    const sample = { id: "tt3333333", type: "movie", name: "Movie Half", poster: "https://img.test/p.jpg", progress: 25, timeLeftMin: 75 };
+    const c = loadClient({
+      signedIn: "alice",
+      routes: { "/api/preview": () => ({ json: { ok: true, count: 1, sample: [sample], maybeMore: false } }) },
+    });
+    const slot = { dataset: { url: "autotrack:nuvio-continue-watching:mixed:alice", type: "mixed", name: "Nuvio Continue Watching" }, closest: () => null, className: "", innerHTML: "" };
+    await c.call("loadPosterSlot", slot);
+    assert.match(slot.innerHTML, /class="resume-progress"/);
+    assert.match(slot.innerHTML, /width:25%/);
+    assert.match(slot.innerHTML, /1h 15m left/);
+  });
+
+  it("shows them on a See all tile as well", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const html = c.call("livePreviewPosterHtml", { id: "tt3333333", type: "movie", name: "Movie Half", poster: "https://img.test/p.jpg", progress: 25, timeLeftMin: 24 });
+    assert.match(html, /class="resume-progress"/);
+    assert.match(html, /24m left/);
+    const plain = c.call("livePreviewPosterHtml", { id: "tt1", type: "movie", name: "Plain", poster: "https://img.test/p.jpg" });
+    assert.ok(!/resume-progress|left</.test(plain));
+  });
+});
+
 describe("Stremio and Nuvio cards in the page", () => {
   // They once sat inside the Simkl card (a missing </div>), narrower than the rest with a card inside the card.
   it("sit beside the other provider cards, not inside one", () => {

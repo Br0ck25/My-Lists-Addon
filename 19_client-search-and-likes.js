@@ -1247,6 +1247,22 @@ function retryPosterSlot(btn) {
   loadPosterSlot(slot);
 }
 
+// The bar and the label for a Continue Watching item that has progress (the Nuvio and Stremio
+// lists): how much is watched, and "1h 15m left". Nothing for an item with none.
+function resumeProgressParts(it) {
+  const pct = Number(it && it.progress);
+  const min = Math.round(Number(it && it.timeLeftMin));
+  if (!(pct > 0)) return { barHtml: '', label: '' };
+  const barHtml = '<div class="resume-progress" aria-hidden="true"><div class="resume-progress-fill" style="width:' + Math.min(100, Math.round(pct)) + '%"></div></div>';
+  let label = '';
+  if (min > 0) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    label = (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '') + ' left';
+  }
+  return { barHtml: barHtml, label: label };
+}
+
 async function fetchPreviewForSlot(listUrl, type) {
   if (type !== 'mixed') {
     const res = await fetchListPreviewWithRetry(listUrl, type);
@@ -1379,15 +1395,18 @@ async function loadPosterSlot(slot) {
 
             const itemPoster = resolveClientPoster(Object.assign({}, s, { listName, listUrl }), s.poster);
             const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
+            const resume = resumeProgressParts(s);
+            const resumeText = resume.label ? ((s.seasonNum != null && s.episodeNum != null ? 'S' + s.seasonNum + 'E' + s.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
             inner += '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' +
               '<div class="list-card-mini-poster-img-wrap clickable-poster" data-id="' + escapeAttr(s.id || '') + '" data-type="' + escapeAttr(s.type || type || '') + '" data-title="' + escapeAttr(s.name || '') + '" data-poster="' + escapeAttr(itemPoster || '') + '">' +
                 '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' +
                 removeBtn +
                 '<div class="poster-add-overlay">+</div>' +
+                resume.barHtml +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              ((resumeText || s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(resumeText || s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';
