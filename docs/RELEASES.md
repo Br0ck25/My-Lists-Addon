@@ -2061,7 +2061,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: connect Stremio and Nuvio accounts, pull their watch history, optional two-way sync
 
-**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build 85d8082d06.
+**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build e3f1bb6c9d.
 
 ### What it changes
 
@@ -2098,4 +2098,6 @@ Neither service documents its API. The calls follow stremio-core's library item 
 
 **Seventh follow-up (same day):** (1) Each title showed twice in a card: a mixed card asks for movies and for shows separately and merges them, but the list's own `mixed` in its URL overrode the requested type, so both calls returned everything. A `mixed` row asked for as `movie` or `series` now answers only that (`fetchAutoTrackedCatalog`, 05_). (2) *See all* said "No items found.": the details page never loaded an `autotrack:` list from the server (those were local copies) and sent the label under the title, "My Lists Addon", as the account name. The Nuvio and Stremio lists now load from the server as the signed-in account. (3) Their Continue Watching page is no longer forced to shows only, so part-way movies appear.
 
-**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 85d8082d06)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
+**Eighth follow-up (same day):** the lists no longer wait for the hourly job. (1) Connecting pulls the first slices in the same request (`refreshAfterConnect`, 61_), so the lists have content the moment the card says Connected; a library too big for the request is handed to the job from where it stopped, and a failed first pull never fails the connection. (2) `POST /api/connections/:provider/sync` with `{ wait: true }` pulls now and answers with what it found; it skips a copy under two minutes old (`force` for Sync now) and an account whose job is already running (`refreshMediaAppNow`). (3) Opening Lists, or loading Settings, brings a copy older than two minutes up to date first, showing *Updating from Nuvio…* on the cards, at most once per two minutes. *Sync now* waits and says *Nuvio is up to date. Found N titles.* The hourly job stays as the safety net. What the site sees is what the app has saved to its cloud, so a play can still trail the app by the app's own sync delay.
+
+**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build e3f1bb6c9d)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.

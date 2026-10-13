@@ -79,7 +79,7 @@ function fakeServices(state) {
         seen.nuvio.push({ fn, auth, body });
         if (state.nuvioRejects || auth !== "Bearer " + state.nuvioToken) return json({ message: "JWT expired" }, 401);
         if (fn === "sync_pull_profiles") return json(state.profiles || [{ profile_index: 1, name: "Main" }]);
-        if (fn === "sync_pull_watched_items") return json(body.p_page === 1 ? state.watched || [] : []);
+        if (fn === "sync_pull_watched_items") return state.pullFails ? json({ message: "boom" }, 500) : json(body.p_page === 1 ? state.watched || [] : []);
         if (fn === "sync_pull_watch_progress") return json(state.progress || []);
         if (fn === "sync_push_watched_items") {
           if (state.pushFails) return json({ message: "boom" }, 500);
@@ -318,11 +318,11 @@ describe("Stremio: pulling the library", () => {
     const state = { approved: true, library: library().slice(0, 1), episodes: {} };
     fakeServices(state);
     const ctx = await setup("stremping");
-    await connectStremio(ctx, state);
     // The ping fired when the film started, two hours before Stremio's lastWatched.
     const start = Date.parse(state.library[0].state.lastWatched) - 2 * HOUR;
     const refMedia = ctx.env.DB._db.prepare("INSERT INTO media (kind, imdb_id, title, created_at, updated_at) VALUES ('movie', 'tt1111111', 'Movie A', 1, 1)").run().lastInsertRowid;
     ctx.env.DB_ACTIVITY._db.prepare("INSERT INTO watch_events (account_id, media_id, watched_at, source, dedupe_key) VALUES (?, ?, ?, 'ping', 'ping-1')").run(ctx.accountId, refMedia, start);
+    await connectStremio(ctx, state);
     await pull(ctx.env);
     const ev = events(ctx.env, ctx.accountId);
     assert.equal(ev.length, 1);
@@ -475,11 +475,11 @@ describe("Nuvio: connecting and pulling", () => {
     await connectNuvio(ctx, state);
     ctx.env.DB._db.prepare("UPDATE provider_connections SET expires_at = ? WHERE provider = 'nuvio'").run(Date.now() - 1000);
     state.nuvioRefresh = "SOMETHING-ELSE";
-    await pull(ctx.env, 2);
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
     // The shared renewal path marks it "expired" (28_); either way it is no longer "ok".
     assert.notEqual(ctx.env.DB._db.prepare("SELECT status FROM provider_connections WHERE provider = 'nuvio'").get().status, "ok");
     assert.match(ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error, /sign in again/);
-    assert.equal(events(ctx.env, ctx.accountId).length, 0);
+    assert.equal(events(ctx.env, ctx.accountId).length, 3, "what was imported when connecting stays");
   });
 });
 
@@ -489,18 +489,19 @@ describe("the hourly sweep", () => {
     fakeServices(state);
     const ctx = await setup("sweepacct", { JOBS: makeQueue() });
     await connectStremio(ctx, state);
-    ctx.env.DB._db.exec("UPDATE jobs SET status = 'done' WHERE type = 'mediaapp.sync-account'");
+    const jobs = () => ctx.env.DB._db.prepare("SELECT status FROM jobs WHERE type = 'mediaapp.sync-account'").all();
+    // Connecting did the first pull itself, so no job is waiting.
+    assert.deepEqual(jobs(), []);
     ctx.env.DB._db.prepare("UPDATE media_app_sync SET last_pull_at = ?").run(Date.now() - 5 * 60 * 1000);
     ctx.env.DB._db.exec("UPDATE jobs SET run_after = 1 WHERE dedupe_key = 'periodic:mediaapp.sync'");
     await runScheduledTick(ctx.env);
-    assert.equal(ctx.env.DB._db.prepare("SELECT status FROM jobs WHERE type = 'mediaapp.sync-account'").get().status, "done", "pulled five minutes ago: left alone");
+    assert.deepEqual(jobs(), [], "pulled five minutes ago: left alone");
     ctx.env.DB._db.prepare("UPDATE media_app_sync SET last_pull_at = ?").run(Date.now() - 2 * HOUR);
     ctx.env.DB._db.exec("UPDATE jobs SET run_after = 1 WHERE dedupe_key = 'periodic:mediaapp.sync'");
     await runScheduledTick(ctx.env);
-    assert.notEqual(ctx.env.DB._db.prepare("SELECT status FROM jobs WHERE type = 'mediaapp.sync-account'").get().status, "done", "two hours ago: started again");
+    assert.equal(jobs().length, 1, "two hours ago: started again");
   });
 });
-
 
 // --- Two-way sync -----------------------------------------------------------------
 
@@ -895,5 +896,98 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     const ctx = await connected("lsoff", { FF_EVENT_TRACKING: undefined });
     await storeConfig(ctx.env, "lsoffcfg", ctx.owner);
     assert.deepEqual(await row(ctx.env, "lsoffcfg", "nuvio", "watch-history", "movie"), []);
+  });
+});
+
+
+// --- Fresh when you look --------------------------------------------------------------
+
+describe("refreshing when the person looks, not only every hour", () => {
+  const watchedRows = () => [
+    { content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR },
+    { content_id: SHOW, content_type: "series", title: "Show S", season: 1, episode: 1, watched_at: NOW - 10 * HOUR },
+  ];
+  const login = (ctx) => call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+  const sync = (ctx, body) => call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: body });
+  const watchedCalls = (seen) => seen.nuvio.filter((c) => c.fn === "sync_pull_watched_items").length;
+
+  it("has the history in place the moment the account is connected, with no job having run", async () => {
+    const state = { watched: watchedRows(), progress: [] };
+    fakeServices(state);
+    const ctx = await setup("freshconn");
+    await login(ctx);
+    assert.equal(events(ctx.env, ctx.accountId).length, 2, "imported by the connect request itself");
+    const settings = await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie });
+    assert.equal(settings.body.sync.lastResult.found, 2);
+    assert.ok(settings.body.sync.lastPullAt > 0);
+  });
+
+  it("brings in a play added in the app since, when asked to wait, and leaves a fresh copy alone otherwise", async () => {
+    const state = { watched: watchedRows(), progress: [] };
+    const seen = fakeServices(state);
+    const ctx = await setup("freshwait");
+    await login(ctx);
+    state.watched.push({ content_id: "tt4444444", content_type: "movie", title: "Movie New", watched_at: NOW - 60 * 1000 });
+    const before = watchedCalls(seen);
+    const quiet = await sync(ctx, { wait: true });
+    assert.equal(quiet.body.skipped, "fresh", "checked a minute ago: not asked again");
+    assert.equal(watchedCalls(seen), before, "no call to Nuvio");
+    assert.equal(events(ctx.env, ctx.accountId).length, 2);
+    const forced = await sync(ctx, { wait: true, force: true });
+    assert.equal(forced.status, 200);
+    assert.equal(forced.body.done, true);
+    assert.equal(events(ctx.env, ctx.accountId).length, 3, "the new play is in the list when the call returns");
+    // And once the copy is two minutes old, an ordinary look refreshes it.
+    state.watched.push({ content_id: "tt5555555", content_type: "movie", title: "Movie Newer", watched_at: NOW - 30 * 1000 });
+    ctx.env.DB._db.prepare("UPDATE media_app_sync SET last_pull_at = ?").run(Date.now() - 3 * 60 * 1000);
+    await sync(ctx, { wait: true });
+    assert.equal(events(ctx.env, ctx.accountId).length, 4);
+  });
+
+  it("does not run alongside a pull that is already running for the account", async () => {
+    const state = { watched: watchedRows(), progress: [] };
+    const seen = fakeServices(state);
+    const ctx = await setup("freshbusy");
+    await login(ctx);
+    ctx.env.DB._db.prepare("INSERT INTO jobs (type, dedupe_key, account_id, status, run_after, created_at, updated_at) VALUES ('mediaapp.sync-account', ?, ?, 'running', ?, 1, 1) ON CONFLICT(dedupe_key) DO UPDATE SET status = 'running', run_after = excluded.run_after")
+      .run(`mediaapp:${ctx.accountId}:nuvio`, ctx.accountId, Date.now() + 10 * 60 * 1000);
+    const before = watchedCalls(seen);
+    const r = await sync(ctx, { wait: true, force: true });
+    assert.equal(r.body.skipped, "busy");
+    assert.equal(watchedCalls(seen), before);
+  });
+
+  it("still connects when the first pull fails, and the hourly job tries again", async () => {
+    const state = { watched: watchedRows(), progress: [], pullFails: true };
+    fakeServices(state);
+    const ctx = await setup("freshfail");
+    const r = await login(ctx);
+    assert.equal(r.status, 200, "the connection is made");
+    assert.equal(ctx.env.DB._db.prepare("SELECT status FROM provider_connections WHERE provider = 'nuvio'").get().status, "ok");
+    assert.equal(events(ctx.env, ctx.accountId).length, 0);
+    state.pullFails = false;
+    ctx.env.DB._db.exec("UPDATE jobs SET run_after = 1 WHERE type = 'mediaapp.sync-account'");
+    await pull(ctx.env);
+    ctx.env.DB._db.exec("UPDATE jobs SET run_after = 1 WHERE dedupe_key = 'periodic:mediaapp.sync'");
+    await runScheduledTick(ctx.env);
+    await pull(ctx.env);
+    assert.equal(events(ctx.env, ctx.accountId).length, 2, "imported by the job instead");
+  });
+
+  it("hands what a connect request could not finish to the background job, from where it stopped", async () => {
+    const library = Array.from({ length: 300 }, (_, i) => ({
+      _id: "tt" + String(7000000 + i), type: "movie", name: "Movie " + i, _mtime: new Date(NOW - i * 1000).toISOString(),
+      state: { lastWatched: new Date(NOW - (i + 5) * 3600 * 1000).toISOString(), timesWatched: 1, duration: 100, timeOffset: 100 },
+    }));
+    const state = { library, episodes: {} };
+    const seen = fakeServices(state);
+    const ctx = await setup("freshbig");
+    await connectStremio(ctx, state);
+    const first = events(ctx.env, ctx.accountId).length;
+    assert.ok(first > 0 && first < 300, "a bounded part was done in the request: " + first);
+    const job = ctx.env.DB._db.prepare("SELECT payload_json FROM jobs WHERE type = 'mediaapp.sync-account'").get();
+    assert.ok(JSON.parse(job.payload_json).offset > 0, "the job starts where the request stopped");
+    await pull(ctx.env, 6);
+    assert.equal(events(ctx.env, ctx.accountId).length, 300);
   });
 });

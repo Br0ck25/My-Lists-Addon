@@ -2759,6 +2759,8 @@ function switchListsSubmenu(name, btn) {
     if (!hasSimklContent && typeof runMySimklLists === 'function') {
       runMySimklLists();
     }
+    // Nuvio and Stremio: reads their settings, and brings a stale copy up to date.
+    if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
   }
   if (name === 'liked') {
     // Called unconditionally, unlike the five above, because #likedListsFeed

@@ -2082,6 +2082,11 @@ const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
 let mediaAppUiPoll = null;
 // Whether each app is connected and working, from its settings answer.
 const mediaAppListsLive = { stremio: false, nuvio: false };
+// An update is under way / when the page last asked for one, per app. A copy older than
+// this is brought up to date when Lists is looked at (61_media-app-sync.js, refreshMediaAppNow).
+const mediaAppListsBusy = { stremio: false, nuvio: false };
+const mediaAppUpdateTried = { stremio: 0, nuvio: 0 };
+const MEDIA_APP_UI_FRESH_MS = 2 * 60 * 1000;
 // The lists each app offers under Lists, My Lists. The server serves them as
 // autotrack:<app>-<slug>:<movie|series>:<username> rows (fetchAutoTrackedCatalog, 05_).
 const MEDIA_APP_LISTS = [
@@ -2107,6 +2112,22 @@ async function mediaAppUiCall(provider, sub, method, body) {
 function mediaAppUiMessage(r, fallback) {
   const d = r && r.data ? r.data : {};
   return (d.error || fallback) + (d.detail ? ' (' + d.detail + ')' : '');
+}
+
+// Brings the copy up to date, in the request, when it is older than two minutes, and
+// then shows what it found. Once per two minutes at most, so a pull that cannot be done
+// does not repeat every time the lists are drawn.
+function mediaAppUiMaybeUpdate(provider, sync) {
+  if (mediaAppListsBusy[provider]) return;
+  const now = Date.now();
+  if (sync.lastPullAt && now - sync.lastPullAt < MEDIA_APP_UI_FRESH_MS) return;
+  if (now - mediaAppUpdateTried[provider] < MEDIA_APP_UI_FRESH_MS) return;
+  mediaAppUpdateTried[provider] = now;
+  mediaAppListsBusy[provider] = true;
+  mediaAppUiCall(provider, 'sync', 'POST', { wait: true }).then(function () {
+    mediaAppListsBusy[provider] = false;
+    mediaAppUiRefresh(provider);
+  });
 }
 
 function mediaAppUiSyncLine(sync) {
@@ -2138,6 +2159,10 @@ function renderMediaAppLists(provider) {
   if (!box) return;
   if (!mediaAppListsLive[provider]) {
     box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect ' + name + ' in Settings, under External Accounts, to see its lists here.</small></p>';
+    return;
+  }
+  if (mediaAppListsBusy[provider]) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted" role="status"><small>Updating from ' + name + '\u2026</small></p>';
     return;
   }
   box.innerHTML = MEDIA_APP_LISTS.map(function (l) {
@@ -2196,6 +2221,7 @@ function renderMediaAppStatus(provider, info) {
   const lapsed = connected && !!info.status && info.status !== 'ok';
   const live = connected && !lapsed;
   mediaAppListsLive[provider] = live;
+  if (live) mediaAppUiMaybeUpdate(provider, info.sync || {});
   renderMediaAppLists(provider);
   const statusEl = document.getElementById(provider + 'ConnectStatus');
   if (statusEl) {
@@ -2355,15 +2381,25 @@ async function setMediaAppSyncOption(provider, key, value) {
   mediaAppUiRefresh(provider);
 }
 
+// Pulls now and waits, so the answer is what the app holds.
 async function syncMediaAppNow(provider, btn) {
   if (btn) btn.disabled = true;
-  const r = await mediaAppUiCall(provider, 'sync', 'POST');
+  mediaAppUpdateTried[provider] = Date.now();
+  mediaAppListsBusy[provider] = true;
+  renderMediaAppLists(provider);
+  const r = await mediaAppUiCall(provider, 'sync', 'POST', { wait: true, force: true });
+  mediaAppListsBusy[provider] = false;
   if (btn) btn.disabled = false;
   if (!r.ok) {
-    showToast(mediaAppUiMessage(r, 'Could not start the sync. Please try again.'), 'error');
-    return;
+    showToast(mediaAppUiMessage(r, 'Could not sync ' + MEDIA_APP_UI_NAMES[provider] + '. Please try again.'), 'error');
+  } else if (r.data.skipped === 'busy') {
+    showToast(MEDIA_APP_UI_NAMES[provider] + ' is already syncing. It can take a few minutes.', 'info');
+  } else {
+    const last = r.data.sync && r.data.sync.lastResult;
+    const line = !r.data.done ? ' is syncing. The rest will follow in a few minutes.' : ' is up to date.' + (last ? ' Found ' + last.found + (last.found === 1 ? ' title.' : ' titles.') : '');
+    showToast(MEDIA_APP_UI_NAMES[provider] + line, r.data.done ? 'success' : 'info');
   }
-  showToast(r.data.started ? MEDIA_APP_UI_NAMES[provider] + ' is syncing. It can take a few minutes.' : MEDIA_APP_UI_NAMES[provider] + ' is already syncing.', 'info');
+  mediaAppUiRefresh(provider);
 }
 
 function disconnectMediaApp(provider) {

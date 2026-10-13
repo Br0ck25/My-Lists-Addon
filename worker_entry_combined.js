@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "85d8082d06";
+const WORKER_BUILD = "e3f1bb6c9d";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -40588,6 +40588,8 @@ function switchListsSubmenu(name, btn) {
     if (!hasSimklContent && typeof runMySimklLists === 'function') {
       runMySimklLists();
     }
+    // Nuvio and Stremio: reads their settings, and brings a stale copy up to date.
+    if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
   }
   if (name === 'liked') {
     // Called unconditionally, unlike the five above, because #likedListsFeed
@@ -44209,6 +44211,11 @@ const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
 let mediaAppUiPoll = null;
 // Whether each app is connected and working, from its settings answer.
 const mediaAppListsLive = { stremio: false, nuvio: false };
+// An update is under way / when the page last asked for one, per app. A copy older than
+// this is brought up to date when Lists is looked at (61_media-app-sync.js, refreshMediaAppNow).
+const mediaAppListsBusy = { stremio: false, nuvio: false };
+const mediaAppUpdateTried = { stremio: 0, nuvio: 0 };
+const MEDIA_APP_UI_FRESH_MS = 2 * 60 * 1000;
 // The lists each app offers under Lists, My Lists. The server serves them as
 // autotrack:<app>-<slug>:<movie|series>:<username> rows (fetchAutoTrackedCatalog, 05_).
 const MEDIA_APP_LISTS = [
@@ -44234,6 +44241,22 @@ async function mediaAppUiCall(provider, sub, method, body) {
 function mediaAppUiMessage(r, fallback) {
   const d = r && r.data ? r.data : {};
   return (d.error || fallback) + (d.detail ? ' (' + d.detail + ')' : '');
+}
+
+// Brings the copy up to date, in the request, when it is older than two minutes, and
+// then shows what it found. Once per two minutes at most, so a pull that cannot be done
+// does not repeat every time the lists are drawn.
+function mediaAppUiMaybeUpdate(provider, sync) {
+  if (mediaAppListsBusy[provider]) return;
+  const now = Date.now();
+  if (sync.lastPullAt && now - sync.lastPullAt < MEDIA_APP_UI_FRESH_MS) return;
+  if (now - mediaAppUpdateTried[provider] < MEDIA_APP_UI_FRESH_MS) return;
+  mediaAppUpdateTried[provider] = now;
+  mediaAppListsBusy[provider] = true;
+  mediaAppUiCall(provider, 'sync', 'POST', { wait: true }).then(function () {
+    mediaAppListsBusy[provider] = false;
+    mediaAppUiRefresh(provider);
+  });
 }
 
 function mediaAppUiSyncLine(sync) {
@@ -44265,6 +44288,10 @@ function renderMediaAppLists(provider) {
   if (!box) return;
   if (!mediaAppListsLive[provider]) {
     box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect ' + name + ' in Settings, under External Accounts, to see its lists here.</small></p>';
+    return;
+  }
+  if (mediaAppListsBusy[provider]) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted" role="status"><small>Updating from ' + name + '\u2026</small></p>';
     return;
   }
   box.innerHTML = MEDIA_APP_LISTS.map(function (l) {
@@ -44323,6 +44350,7 @@ function renderMediaAppStatus(provider, info) {
   const lapsed = connected && !!info.status && info.status !== 'ok';
   const live = connected && !lapsed;
   mediaAppListsLive[provider] = live;
+  if (live) mediaAppUiMaybeUpdate(provider, info.sync || {});
   renderMediaAppLists(provider);
   const statusEl = document.getElementById(provider + 'ConnectStatus');
   if (statusEl) {
@@ -44482,15 +44510,25 @@ async function setMediaAppSyncOption(provider, key, value) {
   mediaAppUiRefresh(provider);
 }
 
+// Pulls now and waits, so the answer is what the app holds.
 async function syncMediaAppNow(provider, btn) {
   if (btn) btn.disabled = true;
-  const r = await mediaAppUiCall(provider, 'sync', 'POST');
+  mediaAppUpdateTried[provider] = Date.now();
+  mediaAppListsBusy[provider] = true;
+  renderMediaAppLists(provider);
+  const r = await mediaAppUiCall(provider, 'sync', 'POST', { wait: true, force: true });
+  mediaAppListsBusy[provider] = false;
   if (btn) btn.disabled = false;
   if (!r.ok) {
-    showToast(mediaAppUiMessage(r, 'Could not start the sync. Please try again.'), 'error');
-    return;
+    showToast(mediaAppUiMessage(r, 'Could not sync ' + MEDIA_APP_UI_NAMES[provider] + '. Please try again.'), 'error');
+  } else if (r.data.skipped === 'busy') {
+    showToast(MEDIA_APP_UI_NAMES[provider] + ' is already syncing. It can take a few minutes.', 'info');
+  } else {
+    const last = r.data.sync && r.data.sync.lastResult;
+    const line = !r.data.done ? ' is syncing. The rest will follow in a few minutes.' : ' is up to date.' + (last ? ' Found ' + last.found + (last.found === 1 ? ' title.' : ' titles.') : '');
+    showToast(MEDIA_APP_UI_NAMES[provider] + line, r.data.done ? 'success' : 'info');
   }
-  showToast(r.data.started ? MEDIA_APP_UI_NAMES[provider] + ' is syncing. It can take a few minutes.' : MEDIA_APP_UI_NAMES[provider] + ' is already syncing.', 'info');
+  mediaAppUiRefresh(provider);
 }
 
 function disconnectMediaApp(provider) {
@@ -116679,8 +116717,10 @@ async function runMediaAppSyncJob(env, payload, job = {}) {
   const prev = job.progress || {};
   const totals = { plays: Number(prev.plays) || 0, progress: Number(prev.progress) || 0, resumes: Number(prev.resumes) || 0, unresolved: Number(prev.unresolved) || 0, pushed: Number(prev.pushed) || 0 };
   if (prev.phase !== "push") {
-    const offset = Number(prev.offset) || 0;
-    const out = await pullMediaAppStep(env, accountId, provider, offset, offset > 0 && prev.since != null ? Number(prev.since) : null);
+    // Where to start: this job's own progress, or where the request that started it stopped.
+    const offset = Number(prev.offset != null ? prev.offset : payload.offset) || 0;
+    const sinceAt = prev.offset != null ? prev.since : payload.since;
+    const out = await pullMediaAppStep(env, accountId, provider, offset, offset > 0 && sinceAt != null ? Number(sinceAt) : null);
     if (out.applied) {
       totals.plays += out.applied.plays;
       totals.progress += out.applied.progress;
@@ -116876,8 +116916,63 @@ async function pushMediaAppStep(env, accountId, provider) {
 }
 
 // Starts a pull for one account's app (what connecting and "Sync now" do).
-async function startMediaAppSync(env, accountId, provider) {
-  return createJob(env, MEDIA_APP_SYNC_JOB, { dedupeKey: `mediaapp:${accountId}:${provider}`, accountId, payload: { accountId, provider } });
+async function startMediaAppSync(env, accountId, provider, from) {
+  const payload = { accountId, provider };
+  if (from && from.offset > 0) {
+    payload.offset = from.offset;
+    payload.since = from.since;
+  }
+  return createJob(env, MEDIA_APP_SYNC_JOB, { dedupeKey: `mediaapp:${accountId}:${provider}`, accountId, payload });
+}
+
+// A copy younger than this is not asked about again when someone looks.
+const MEDIA_APP_FRESH_MS = 2 * 60 * 1000;
+// What one request may do: a few slices of the library, the rest goes to the job.
+const MEDIA_APP_REQUEST_STEPS = 3;
+
+// The pull, done now and in the request, so what is on the page is what the app
+// holds (connecting, opening Lists, Sync now). The same step the job runs, so it is
+// idempotent. Skipped when the copy is fresh or the account's job is running; a
+// library too big for the request is handed on from where it stopped.
+// { skipped } or { done, completed }. Throws what the pull throws.
+async function refreshMediaAppNow(env, accountId, provider, { maxSteps = MEDIA_APP_REQUEST_STEPS, force = false } = {}) {
+  const sync = await loadMediaAppSync(env, accountId, provider);
+  if (!sync) return { skipped: "off" };
+  if (!force && sync.last_pull_at && Date.now() - Number(sync.last_pull_at) < MEDIA_APP_FRESH_MS) return { skipped: "fresh" };
+  try {
+    const running = await env.DB.prepare("SELECT status, run_after FROM jobs WHERE dedupe_key = ?").bind(`mediaapp:${accountId}:${provider}`).first();
+    if (running && running.status === "running" && Number(running.run_after) > Date.now()) return { skipped: "busy" };
+  } catch {}
+  const totals = { plays: 0, progress: 0, resumes: 0, unresolved: 0 };
+  let offset = 0;
+  let since = null;
+  for (let i = 0; i < maxSteps; i++) {
+    const out = await pullMediaAppStep(env, accountId, provider, offset, since);
+    if (out.applied) for (const k of Object.keys(totals)) totals[k] += out.applied[k] || 0;
+    if (!out.done) {
+      offset = out.offset;
+      since = out.since;
+      continue;
+    }
+    if (!out.pullDone) return { done: true, skipped: out.skipped || "off" };
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, ...totals });
+    return { done: true, completed: true };
+  }
+  await startMediaAppSync(env, accountId, provider, { offset, since });
+  return { done: false };
+}
+
+// After connecting: the first slices now, so the lists have content when the card says
+// Connected. Never fails the connection: whatever is left, or went wrong, is the job's.
+async function refreshAfterConnect(env, accountId, provider) {
+  let done = false;
+  try {
+    const r = await refreshMediaAppNow(env, accountId, provider, { maxSteps: 2, force: true });
+    done = Boolean(r.completed || r.done === false);
+  } catch (e) {
+    console.error(`mediaapp: the first pull of ${provider} failed`, e);
+  }
+  if (!done) await startMediaAppSync(env, accountId, provider);
 }
 
 // Accounts whose last pull is older than the interval, a few at a time.
@@ -116955,7 +117050,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (!(await ensureMediaAppSync(env, accountId, provider, null))) return unavailable("migration 0023 has not been applied");
       const stored = await storeProviderConnection(env, account, provider, { accessToken: authKey, externalUser: { username: user.name, id: user.id } });
       if (!stored) return unavailable("the connection could not be stored");
-      await startMediaAppSync(env, accountId, provider);
+      await refreshAfterConnect(env, accountId, provider);
       return json({ ok: true, status: "connected", username: user.name });
     }
     if (provider === "nuvio" && sub === "login") {
@@ -116973,7 +117068,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (!stored) return unavailable("the connection could not be stored");
       await saveNuvioProfiles(env, accountId, profiles);
       const row = await loadMediaAppSync(env, accountId, provider);
-      if (row && row.profile_index) await startMediaAppSync(env, accountId, provider);
+      if (row && row.profile_index) await refreshAfterConnect(env, accountId, provider);
       return json({ ok: true, status: "connected", username: session.email || email, profiles, profileIndex: row ? row.profile_index : only });
     }
     if (sub === "settings") {
@@ -117012,6 +117107,11 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     if (sub === "sync") {
       const row = await loadMediaAppSync(env, accountId, provider);
       if (!row) return json({ ok: false, error: "That account isn't connected." }, 404);
+      if (body.wait === true) {
+        // Done now, in this request: what Lists shows next is what the app holds.
+        const r = await refreshMediaAppNow(env, accountId, provider, { force: body.force === true });
+        return json({ ok: true, done: Boolean(r.done), skipped: r.skipped || null, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
+      }
       const made = await startMediaAppSync(env, accountId, provider);
       return json({ ok: Boolean(made && made.ok), started: Boolean(made && made.created) }, made && made.ok ? 202 : 503);
     }

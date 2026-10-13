@@ -188,7 +188,8 @@ describe("Stremio and Nuvio cards", () => {
 });
 
 describe("Nuvio and Stremio under Lists, My Lists", () => {
-  const live = { connected: true, status: "ok", username: "a@b.test", sync: { pull: true, profileIndex: 1 } };
+  // Checked a moment ago, so drawing the lists does not start an update.
+  const live = { connected: true, status: "ok", username: "a@b.test", sync: { pull: true, profileIndex: 1, lastPullAt: Date.now() } };
 
   it("offers Watch History and Continue Watching once the app is connected", () => {
     const c = loadClient({ signedIn: true });
@@ -287,6 +288,85 @@ describe("Nuvio and Stremio under Lists, My Lists", () => {
     };
     assert.equal(depth("myListsSectionPanel-nuvio"), depth("myListsSectionPanel-simkl"));
     assert.equal(depth("myListsSectionPanel-stremio"), depth("myListsSectionPanel-simkl"));
+  });
+});
+
+describe("refreshing when Lists is opened", () => {
+  const settingsRoute = (lastPullAt, calls) => () => { calls.push("settings"); return { json: { ok: true, connected: true, status: "ok", username: "a@b.test", sync: { pull: true, profileIndex: 1, lastPullAt } } }; };
+
+  async function open(lastPullAt) {
+    const calls = [];
+    const c = loadClient({
+      signedIn: "alice",
+      routes: {
+        "/api/connections/nuvio/settings": settingsRoute(lastPullAt, calls),
+        "/api/connections/stremio/settings": () => ({ json: { ok: true, connected: false } }),
+        "/api/connections/nuvio/sync": () => { calls.push("sync"); return { json: { ok: true, done: true } }; },
+      },
+    });
+    await c.call("mediaAppUiRefresh", "nuvio");
+    await new Promise((r) => setTimeout(r, 20));
+    return { c, calls };
+  }
+
+  it("updates a copy older than two minutes before showing the lists, and says so", async () => {
+    const { c, calls } = await open(Date.now() - 10 * 60 * 1000);
+    const sync = requestsTo(c, "/api/connections/nuvio/sync");
+    assert.equal(sync.length, 1);
+    assert.deepEqual(sync[0].body, { wait: true });
+    assert.deepEqual(calls.slice(0, 2), ["settings", "sync"]);
+    assert.equal(calls.filter((x) => x === "settings").length, 2, "then reads the settings again for the new time");
+  });
+
+  it("leaves a fresh copy alone", async () => {
+    const { c } = await open(Date.now() - 30 * 1000);
+    assert.equal(requestsTo(c, "/api/connections/nuvio/sync").length, 0);
+  });
+
+  it("shows Updating while it waits", async () => {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const c = loadClient({
+      signedIn: "alice",
+      routes: {
+        "/api/connections/nuvio/settings": () => ({ json: { ok: true, connected: true, status: "ok", username: "a@b.test", sync: { pull: true, profileIndex: 1, lastPullAt: 1 } } }),
+        "/api/connections/nuvio/sync": async () => { await gate; return { json: { ok: true, done: true } }; },
+      },
+    });
+    c.call("mediaAppUiRefresh", "nuvio");
+    await new Promise((r) => setTimeout(r, 20));
+    assert.match(c.document.getElementById("myNuvioListsResult").innerHTML, /Updating/);
+    release();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+
+  it("does not ask again and again when the update could not be done", async () => {
+    const calls = [];
+    const c = loadClient({
+      signedIn: "alice",
+      routes: {
+        "/api/connections/nuvio/settings": () => { calls.push("settings"); return { json: { ok: true, connected: true, status: "ok", username: "a@b.test", sync: { pull: true, profileIndex: 1, lastPullAt: 1 } } }; },
+        "/api/connections/nuvio/sync": () => { calls.push("sync"); return { status: 502, json: { ok: false } }; },
+      },
+    });
+    await c.call("mediaAppUiRefresh", "nuvio");
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(calls.filter((x) => x === "sync").length, 1);
+  });
+
+  it("Sync now waits for the pull and forces it", async () => {
+    const c = loadClient({
+      signedIn: "alice",
+      routes: {
+        "/api/connections/nuvio/sync": () => ({ json: { ok: true, done: true, sync: { lastResult: { found: 7, unresolved: 0 } } } }),
+        "/api/connections/nuvio/settings": () => ({ json: { ok: true, connected: true, status: "ok", username: "a@b.test", sync: { pull: true, profileIndex: 1, lastPullAt: Date.now(), lastResult: { found: 7, unresolved: 0 } } } }),
+      },
+    });
+    const toasts = [];
+    c.set("showToast", (m, k) => toasts.push([m, k]));
+    await c.call("syncMediaAppNow", "nuvio", null);
+    assert.deepEqual(requestsTo(c, "/api/connections/nuvio/sync")[0].body, { wait: true, force: true });
+    assert.deepEqual(toasts, [["Nuvio is up to date. Found 7 titles.", "success"]]);
   });
 });
 
