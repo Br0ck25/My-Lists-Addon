@@ -1273,6 +1273,10 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0022", kind: "index", name: "idx_feedback_creator_updated",
     consequence: "Looking up one account's support threads scans the whole feedback table. Slower, not broken.",
   },
+  {
+    migration: "0023", kind: "table", name: "media_app_sync",
+    consequence: "Connecting a Stremio or Nuvio account answers \"isn't available right now\", and nothing is pulled from them. Nothing else changes.",
+  },
 ];
 
 

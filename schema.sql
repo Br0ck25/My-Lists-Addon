@@ -331,6 +331,20 @@ CREATE TABLE IF NOT EXISTS provider_connections (
     PRIMARY KEY (account_id, provider)
 );
 
+CREATE TABLE IF NOT EXISTS media_app_sync (
+    account_id     INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    provider       TEXT NOT NULL,
+    profile_index  INTEGER,
+    pull_enabled   INTEGER NOT NULL DEFAULT 1,
+    push_enabled   INTEGER NOT NULL DEFAULT 0,
+    cursor_json    TEXT,
+    last_pull_at   INTEGER,
+    last_push_at   INTEGER,
+    last_error     TEXT,
+    updated_at     INTEGER NOT NULL,
+    PRIMARY KEY (account_id, provider)
+);
+
 CREATE TABLE IF NOT EXISTS install_secrets (
     install_id        INTEGER NOT NULL REFERENCES installs(id) ON DELETE CASCADE,
     provider          TEXT NOT NULL,
