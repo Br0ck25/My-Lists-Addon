@@ -2080,11 +2080,10 @@ function renderSimklConnectStatus() {
 // connection and its settings, over the signed-in session. It holds no token.
 const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
 let mediaAppUiPoll = null;
-let mediaAppUiNuvioProfiles = [];
 
 async function mediaAppUiCall(provider, sub, method, body) {
   try {
-    const res = await fetch(ORIGIN + '/api/connections/' + provider + '/' + sub, {
+    const res = await fetch(ORIGIN + '/api/connections/' + provider + (sub ? '/' + sub : ''), {
       method: method,
       headers: { 'Content-Type': 'application/json' },
       body: method === 'GET' ? undefined : JSON.stringify(body || {}),
@@ -2145,10 +2144,12 @@ function renderMediaAppStatus(provider, info) {
   if (provider === 'nuvio') {
     const sel = document.getElementById('nuvioProfileSelect');
     if (sel) {
+      // The profiles Nuvio named; Profile 1 to 6 only when none came back.
+      let profiles = Array.isArray(info.profiles) ? info.profiles : [];
+      if (!profiles.length) profiles = [1, 2, 3, 4, 5, 6].map(function (i) { return { index: i, name: 'Profile ' + i }; });
       let html = sync.profileIndex ? '' : '<option value="">Choose a profile</option>';
-      for (let i = 1; i <= 6; i++) {
-        const known = mediaAppUiNuvioProfiles.filter(function (p) { return p.index === i; })[0];
-        html += '<option value="' + i + '"' + (sync.profileIndex === i ? ' selected' : '') + '>' + escapeHtml(known ? known.name : 'Profile ' + i) + '</option>';
+      for (let i = 0; i < profiles.length; i++) {
+        html += '<option value="' + profiles[i].index + '"' + (sync.profileIndex === profiles[i].index ? ' selected' : '') + '>' + escapeHtml(profiles[i].name) + '</option>';
       }
       sel.innerHTML = html;
     }
@@ -2176,20 +2177,50 @@ function stopStremioLinkPoll() {
   if (box) box.style.display = 'none';
 }
 
+// Stremio's Link service answers the browser (and not our Worker), so the page
+// runs the flow and hands the finished authKey to the server once.
+async function mediaAppUiStremioLink(path) {
+  try {
+    const res = await fetch('https://link.stremio.com/api/v2/' + path);
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+// One check of the code. True once the server has the connection; false while
+// Stremio waits for the person to approve it.
+async function mediaAppUiStremioPoll(code) {
+  const data = await mediaAppUiStremioLink('read?type=Read&code=' + encodeURIComponent(code));
+  const key = data && data.result && data.result.authKey;
+  if (!key) return false;
+  const done = await mediaAppUiCall('stremio', 'link/complete', 'POST', { authKey: key });
+  if (!done.ok) {
+    stopStremioLinkPoll();
+    showToast(mediaAppUiMessage(done, 'Could not connect Stremio. Please try again.'), 'error');
+    return false;
+  }
+  stopStremioLinkPoll();
+  showToast('Stremio connected.', 'success');
+  mediaAppUiRefresh('stremio');
+  return true;
+}
+
 async function startStremioConnect() {
   if (!requireSignedInFor('connect your Stremio account')) return;
   stopStremioLinkPoll();
-  const r = await mediaAppUiCall('stremio', 'link/start', 'POST');
-  if (!r.ok || !r.data.code) {
-    showToast(mediaAppUiMessage(r, 'Could not start the Stremio link. Please try again.'), 'error');
+  const started = await mediaAppUiStremioLink('create?type=Create');
+  const link = started && started.result;
+  if (!link || !link.code) {
+    showToast('Could not reach Stremio to start the link. Please try again.', 'error');
     return;
   }
   const box = document.getElementById('stremioLinkBox');
   if (box) {
-    const safeLink = typeof r.data.link === 'string' && r.data.link.indexOf('https://link.stremio.com/') === 0 ? r.data.link : '';
+    const safeLink = typeof link.link === 'string' && link.link.indexOf('https://link.stremio.com/') === 0 ? link.link : '';
     box.innerHTML = '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Open <a href="' + escapeAttr(safeLink || 'https://link.stremio.com/') + '" target="_blank" rel="noopener" class="u-c-v_accent_2">link.stremio.com</a>, sign in to Stremio if asked, and enter this code:</p>' +
-      '<p class="u-m-6px_0 u-fw-600">' + escapeHtml(r.data.code) + '</p>' +
-      '<p class="u-m-0 u-fs-v_font_size_xs u-c-v_muted">Waiting for you to approve it in Stremio…</p>';
+      '<p class="u-m-6px_0 u-fw-600">' + escapeHtml(link.code) + '</p>' +
+      '<p class="u-m-0 u-fs-v_font_size_xs u-c-v_muted">Waiting for you to approve it in Stremio\u2026</p>';
     box.style.display = '';
   }
   let ticks = 0;
@@ -2200,15 +2231,7 @@ async function startStremioConnect() {
       showToast('The Stremio link expired. Start again to get a new code.', 'error');
       return;
     }
-    const p = await mediaAppUiCall('stremio', 'link/poll', 'POST', { code: r.data.code });
-    if (p.ok && p.data.status === 'connected') {
-      stopStremioLinkPoll();
-      showToast('Stremio connected.', 'success');
-      mediaAppUiRefresh('stremio');
-    } else if (!p.ok && p.status !== 0 && p.status !== 429 && p.status < 500) {
-      stopStremioLinkPoll();
-      showToast(mediaAppUiMessage(p, 'Could not connect Stremio. Please try again.'), 'error');
-    }
+    await mediaAppUiStremioPoll(link.code);
   }, 3000);
 }
 
@@ -2231,7 +2254,6 @@ async function submitNuvioLogin() {
     showToast(mediaAppUiMessage(r, 'Could not sign in to Nuvio. Please try again.'), 'error');
     return;
   }
-  mediaAppUiNuvioProfiles = Array.isArray(r.data.profiles) ? r.data.profiles : [];
   if (emailEl) emailEl.value = '';
   showToast(r.data.profileIndex ? 'Nuvio connected.' : 'Nuvio connected. Choose which profile to read.', 'success');
   mediaAppUiRefresh('nuvio');

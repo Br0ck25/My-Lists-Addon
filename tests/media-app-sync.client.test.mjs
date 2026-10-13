@@ -90,12 +90,14 @@ describe("Stremio and Nuvio cards", () => {
   it("shows the reason the server gives next to the message", async () => {
     const c = loadClient({
       signedIn: true,
-      routes: { "/api/connections/stremio/link/start": () => ({ status: 502, json: { ok: false, error: "That service didn't answer. Please try again in a minute.", detail: "link.stremio.com answered 403" } }) },
+      routes: { "/api/connections/nuvio/login": () => ({ status: 502, json: { ok: false, error: "That service didn't answer. Please try again in a minute.", detail: "Nuvio answered 403" } }) },
     });
     const toasts = [];
     c.set("showToast", (m, kind) => toasts.push([m, kind]));
-    await c.call("startStremioConnect");
-    assert.deepEqual(toasts, [["That service didn't answer. Please try again in a minute. (link.stremio.com answered 403)", "error"]]);
+    el(c, "nuvioEmailInput").value = "a@b.test";
+    el(c, "nuvioPasswordInput").value = "pw";
+    await c.call("submitNuvioLogin");
+    assert.deepEqual(toasts, [["That service didn't answer. Please try again in a minute. (Nuvio answered 403)", "error"]]);
   });
 
   it("does not call the server for an empty Nuvio form", async () => {
@@ -106,16 +108,69 @@ describe("Stremio and Nuvio cards", () => {
     assert.equal(c.requests.length, 0);
   });
 
-  it("only links to Stremio's own link page", async () => {
-    const c = loadClient({
-      signedIn: true,
-      routes: { "/api/connections/stremio/link/start": () => ({ json: { ok: true, code: "ABCD1234", link: "javascript:alert(1)" } }) },
-    });
+  const linkRoutes = (extra = {}) => ({
+    "/api/v2/create": () => ({ json: { result: { success: true, code: "L5YR", link: "https://link.stremio.com/L5YR" } } }),
+    ...extra,
+  });
+
+  it("starts the Stremio link from the browser, and only links to Stremio's own page", async () => {
+    const c = loadClient({ signedIn: true, routes: linkRoutes({ "/api/v2/create": () => ({ json: { result: { code: "ABCD", link: "javascript:alert(1)" } } }) }) });
     await c.call("startStremioConnect");
     const html = el(c, "stremioLinkBox").innerHTML;
     assert.ok(!html.includes("javascript:"));
     assert.match(html, /href="https:\/\/link\.stremio\.com\/"/);
-    assert.match(html, /ABCD1234/);
+    assert.match(html, /ABCD/);
+    assert.equal(requestsTo(c, "/api/connections/stremio/link/start").length, 0, "the Worker is not asked to start it");
+    assert.match(requestsTo(c, "/api/v2/create")[0].url, /^https:\/\/link\.stremio\.com\/api\/v2\/create\?type=Create$/);
+  });
+
+  it("hands the authKey Stremio returns to the server once, and nothing else", async () => {
+    const c = loadClient({
+      signedIn: true,
+      routes: linkRoutes({
+        "/api/v2/read": () => ({ json: { result: { authKey: "KEY-FROM-STREMIO" } } }),
+        "/api/connections/stremio/link/complete": () => ({ json: { ok: true, status: "connected", username: "a@b.test" } }),
+        "/api/connections/stremio/settings": () => ({ json: { ok: true, connected: true, status: "ok", username: "a@b.test", sync: { pull: true } } }),
+      }),
+    });
+    await c.call("startStremioConnect");
+    await c.call("mediaAppUiStremioPoll", "L5YR");
+    const sent = requestsTo(c, "/api/connections/stremio/link/complete");
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].body, { authKey: "KEY-FROM-STREMIO" });
+    assert.ok(!JSON.stringify([...c.localStorage._store.entries()]).includes("KEY-FROM-STREMIO"), "not kept in the page");
+    assert.match(requestsTo(c, "/api/v2/read")[0].url, /code=L5YR/);
+  });
+
+  it("keeps waiting while Stremio says the code is not approved yet", async () => {
+    const c = loadClient({ signedIn: true, routes: linkRoutes({ "/api/v2/read": () => ({ json: { error: { code: 101, message: "Invalid or expired token" } } }) }) });
+    const done = await c.call("mediaAppUiStremioPoll", "L5YR");
+    assert.equal(done, false);
+    assert.equal(requestsTo(c, "/api/connections/stremio/link/complete").length, 0);
+  });
+
+  it("asks the server to disconnect on the exact path, with no trailing slash", async () => {
+    const c = loadClient({
+      signedIn: true,
+      routes: {
+        "/api/connections/nuvio": () => ({ json: { ok: true, removed: true } }),
+        "/api/connections/nuvio/settings": () => ({ json: { ok: true, connected: false } }),
+      },
+    });
+    c.set("showAppConfirm", (title, msg, label, onConfirm) => onConfirm());
+    await c.call("disconnectMediaApp", "nuvio");
+    await new Promise((r) => setTimeout(r, 0));
+    const del = c.requests.filter((r) => r.method === "DELETE");
+    assert.deepEqual(del.map((r) => r.pathname), ["/api/connections/nuvio"]);
+  });
+
+  it("lists the Nuvio profiles the server named, and only those", () => {
+    const c = loadClient({ signedIn: true });
+    c.call("renderMediaAppStatus", "nuvio", { connected: true, status: "ok", username: "a@b.test", profiles: [{ index: 1, name: "Me" }, { index: 3, name: "Kids" }], sync: { profileIndex: 3, pull: true } });
+    const html = el(c, "nuvioProfileSelect").innerHTML;
+    assert.match(html, /<option value="1">Me<\/option>/);
+    assert.match(html, /<option value="3" selected>Kids<\/option>/);
+    assert.ok(!html.includes("Profile 2"), "no made-up profiles");
   });
 });
 

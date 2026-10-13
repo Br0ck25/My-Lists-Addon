@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7aa76f48a6";
+const WORKER_BUILD = "efef935bf8";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -44172,11 +44172,10 @@ function renderSimklConnectStatus() {
 // connection and its settings, over the signed-in session. It holds no token.
 const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
 let mediaAppUiPoll = null;
-let mediaAppUiNuvioProfiles = [];
 
 async function mediaAppUiCall(provider, sub, method, body) {
   try {
-    const res = await fetch(ORIGIN + '/api/connections/' + provider + '/' + sub, {
+    const res = await fetch(ORIGIN + '/api/connections/' + provider + (sub ? '/' + sub : ''), {
       method: method,
       headers: { 'Content-Type': 'application/json' },
       body: method === 'GET' ? undefined : JSON.stringify(body || {}),
@@ -44237,10 +44236,12 @@ function renderMediaAppStatus(provider, info) {
   if (provider === 'nuvio') {
     const sel = document.getElementById('nuvioProfileSelect');
     if (sel) {
+      // The profiles Nuvio named; Profile 1 to 6 only when none came back.
+      let profiles = Array.isArray(info.profiles) ? info.profiles : [];
+      if (!profiles.length) profiles = [1, 2, 3, 4, 5, 6].map(function (i) { return { index: i, name: 'Profile ' + i }; });
       let html = sync.profileIndex ? '' : '<option value="">Choose a profile</option>';
-      for (let i = 1; i <= 6; i++) {
-        const known = mediaAppUiNuvioProfiles.filter(function (p) { return p.index === i; })[0];
-        html += '<option value="' + i + '"' + (sync.profileIndex === i ? ' selected' : '') + '>' + escapeHtml(known ? known.name : 'Profile ' + i) + '</option>';
+      for (let i = 0; i < profiles.length; i++) {
+        html += '<option value="' + profiles[i].index + '"' + (sync.profileIndex === profiles[i].index ? ' selected' : '') + '>' + escapeHtml(profiles[i].name) + '</option>';
       }
       sel.innerHTML = html;
     }
@@ -44268,20 +44269,50 @@ function stopStremioLinkPoll() {
   if (box) box.style.display = 'none';
 }
 
+// Stremio's Link service answers the browser (and not our Worker), so the page
+// runs the flow and hands the finished authKey to the server once.
+async function mediaAppUiStremioLink(path) {
+  try {
+    const res = await fetch('https://link.stremio.com/api/v2/' + path);
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+// One check of the code. True once the server has the connection; false while
+// Stremio waits for the person to approve it.
+async function mediaAppUiStremioPoll(code) {
+  const data = await mediaAppUiStremioLink('read?type=Read&code=' + encodeURIComponent(code));
+  const key = data && data.result && data.result.authKey;
+  if (!key) return false;
+  const done = await mediaAppUiCall('stremio', 'link/complete', 'POST', { authKey: key });
+  if (!done.ok) {
+    stopStremioLinkPoll();
+    showToast(mediaAppUiMessage(done, 'Could not connect Stremio. Please try again.'), 'error');
+    return false;
+  }
+  stopStremioLinkPoll();
+  showToast('Stremio connected.', 'success');
+  mediaAppUiRefresh('stremio');
+  return true;
+}
+
 async function startStremioConnect() {
   if (!requireSignedInFor('connect your Stremio account')) return;
   stopStremioLinkPoll();
-  const r = await mediaAppUiCall('stremio', 'link/start', 'POST');
-  if (!r.ok || !r.data.code) {
-    showToast(mediaAppUiMessage(r, 'Could not start the Stremio link. Please try again.'), 'error');
+  const started = await mediaAppUiStremioLink('create?type=Create');
+  const link = started && started.result;
+  if (!link || !link.code) {
+    showToast('Could not reach Stremio to start the link. Please try again.', 'error');
     return;
   }
   const box = document.getElementById('stremioLinkBox');
   if (box) {
-    const safeLink = typeof r.data.link === 'string' && r.data.link.indexOf('https://link.stremio.com/') === 0 ? r.data.link : '';
+    const safeLink = typeof link.link === 'string' && link.link.indexOf('https://link.stremio.com/') === 0 ? link.link : '';
     box.innerHTML = '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Open <a href="' + escapeAttr(safeLink || 'https://link.stremio.com/') + '" target="_blank" rel="noopener" class="u-c-v_accent_2">link.stremio.com</a>, sign in to Stremio if asked, and enter this code:</p>' +
-      '<p class="u-m-6px_0 u-fw-600">' + escapeHtml(r.data.code) + '</p>' +
-      '<p class="u-m-0 u-fs-v_font_size_xs u-c-v_muted">Waiting for you to approve it in Stremio…</p>';
+      '<p class="u-m-6px_0 u-fw-600">' + escapeHtml(link.code) + '</p>' +
+      '<p class="u-m-0 u-fs-v_font_size_xs u-c-v_muted">Waiting for you to approve it in Stremio\u2026</p>';
     box.style.display = '';
   }
   let ticks = 0;
@@ -44292,15 +44323,7 @@ async function startStremioConnect() {
       showToast('The Stremio link expired. Start again to get a new code.', 'error');
       return;
     }
-    const p = await mediaAppUiCall('stremio', 'link/poll', 'POST', { code: r.data.code });
-    if (p.ok && p.data.status === 'connected') {
-      stopStremioLinkPoll();
-      showToast('Stremio connected.', 'success');
-      mediaAppUiRefresh('stremio');
-    } else if (!p.ok && p.status !== 0 && p.status !== 429 && p.status < 500) {
-      stopStremioLinkPoll();
-      showToast(mediaAppUiMessage(p, 'Could not connect Stremio. Please try again.'), 'error');
-    }
+    await mediaAppUiStremioPoll(link.code);
   }, 3000);
 }
 
@@ -44323,7 +44346,6 @@ async function submitNuvioLogin() {
     showToast(mediaAppUiMessage(r, 'Could not sign in to Nuvio. Please try again.'), 'error');
     return;
   }
-  mediaAppUiNuvioProfiles = Array.isArray(r.data.profiles) ? r.data.profiles : [];
   if (emailEl) emailEl.value = '';
   showToast(r.data.profileIndex ? 'Nuvio connected.' : 'Nuvio connected. Choose which profile to read.', 'success');
   mediaAppUiRefresh('nuvio');
@@ -115822,6 +115844,9 @@ async function removeOwnerlessChannels(env, { cursor, limit, apply } = {}) {
 // Stremio (api.strem.io): no password ever reaches us. The person approves a
 // code in their Stremio app (the Link flow, link.stremio.com) and gets back an
 // authKey, kept encrypted in provider_connections like any other token. The
+// page runs the Link flow itself (link.stremio.com answers the Worker with a 404
+// and allows the browser, like Trakt's code login, Release 23) and hands the
+// authKey over once, to /api/connections/stremio/link/complete. The
 // library (collection libraryItem) holds, per title, state.lastWatched,
 // timeOffset, duration, video_id and, for a show, state.watched: a bitfield of
 // watched episodes in the show's Cinemeta order. It keeps no date per play, so
@@ -115864,7 +115889,6 @@ async function removeOwnerlessChannels(env, { cursor, limit, apply } = {}) {
 // Module level, after the Worker's exports, like 27_ onward.
 
 const STREMIO_API_URL = "https://api.strem.io/api/";
-const STREMIO_LINK_URL = "https://link.stremio.com/api/v2/";
 const CINEMETA_URL = "https://v3-cinemeta.strem.io";
 // Nuvio's public (publishable) key: the one its own apps ship with. NUVIO_APP_ANON_KEY
 // overrides it, as it does for a self-hosted project.
@@ -115971,33 +115995,6 @@ async function stremioCall(method, body) {
   }
   if (!("result" in data)) throw mediaAppError("unreachable", "Stremio sent a reply we could not read.");
   return data.result;
-}
-
-// Step 1 of the Link flow: a short code and the address that approves it.
-async function stremioLinkStart() {
-  const res = await mediaAppFetch(`${STREMIO_LINK_URL}create?type=Create`);
-  if (!res.ok) throw mediaAppError("unreachable", `link.stremio.com answered ${res.status}.`);
-  const data = await res.json().catch(() => null);
-  const r = data && data.result;
-  if (!r || !r.code || !r.link) throw mediaAppError("unreachable", "link.stremio.com sent a reply we could not read.");
-  return { code: String(r.code), link: String(r.link), qrcode: r.qrcode ? String(r.qrcode) : "" };
-}
-
-// Step 2, asked until approved: { authKey } or { pending: true }.
-async function stremioLinkPoll(code) {
-  const c = String(code || "").trim().toUpperCase();
-  if (!/^[A-Z0-9]{3,20}$/.test(c)) throw mediaAppError("invalid", "That link code is not valid.");
-  const res = await mediaAppFetch(`${STREMIO_LINK_URL}read?type=Read&code=${encodeURIComponent(c)}`);
-  if (!res.ok) throw mediaAppError("unreachable", `link.stremio.com answered ${res.status}.`);
-  const data = await res.json().catch(() => null);
-  if (!data) throw mediaAppError("unreachable", "link.stremio.com sent a reply we could not read.");
-  if (data.error) {
-    if (Number(data.error.code) === 101) return { pending: true };
-    throw mediaAppError("invalid", "The link was not approved or has expired.");
-  }
-  const key = data.result && data.result.authKey;
-  if (!key) throw mediaAppError("invalid", "The link was not approved or has expired.");
-  return { authKey: String(key) };
 }
 
 async function stremioUser(authKey) {
@@ -116393,6 +116390,28 @@ async function ensureMediaAppSync(env, accountId, provider, profileIndex) {
   }
 }
 
+// The Nuvio profile names, kept in cursor_json beside the pull position so the
+// settings page can name them (cursor_json is otherwise { mtime, pushedId }).
+async function saveNuvioProfiles(env, accountId, profiles) {
+  const row = await loadMediaAppSync(env, accountId, "nuvio");
+  if (!row) return;
+  let cursor = {};
+  try {
+    cursor = row.cursor_json ? JSON.parse(row.cursor_json) : {};
+  } catch {}
+  await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ?, updated_at = ? WHERE account_id = ? AND provider = 'nuvio'")
+    .bind(JSON.stringify({ ...cursor, profiles }), Date.now(), accountId).run();
+}
+
+function mediaAppProfilesOf(row) {
+  try {
+    const p = row && row.cursor_json ? JSON.parse(row.cursor_json).profiles : null;
+    return Array.isArray(p) ? p : [];
+  } catch {
+    return [];
+  }
+}
+
 async function setMediaAppSyncError(env, accountId, provider, message) {
   try {
     await env.DB.prepare("UPDATE media_app_sync SET last_error = ?, updated_at = ? WHERE account_id = ? AND provider = ?")
@@ -116725,7 +116744,7 @@ function mediaAppSyncSummary(row) {
   };
 }
 
-// POST /api/connections/stremio/link/start | /link/poll, POST .../nuvio/login,
+// POST /api/connections/stremio/link/complete, POST .../nuvio/login,
 // GET|POST /api/connections/:provider/settings, POST /api/connections/:provider/sync.
 // The caller has already required a session.
 async function handleMediaAppRoute(request, env, account, provider, sub) {
@@ -116737,7 +116756,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
   if (sub === "settings" && request.method === "GET") {
     const conn = await loadProviderConnection(env, accountId, provider);
     const row = await loadMediaAppSync(env, accountId, provider);
-    return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), sync: mediaAppSyncSummary(row) });
+    return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), profiles: provider === "nuvio" ? mediaAppProfilesOf(row) : undefined, sync: mediaAppSyncSummary(row) });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -116752,15 +116771,12 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
   if (!body || typeof body !== "object") body = {};
 
   try {
-    if (provider === "stremio" && sub === "link/start") {
-      return json({ ok: true, ...(await stremioLinkStart()) });
-    }
-    if (provider === "stremio" && sub === "link/poll") {
-      const polled = await stremioLinkPoll(body.code);
-      if (polled.pending) return json({ ok: true, status: "pending" });
-      const user = await stremioUser(polled.authKey);
+    if (provider === "stremio" && sub === "link/complete") {
+      const authKey = typeof body.authKey === "string" ? body.authKey.trim() : "";
+      if (!/^[\x21-\x7e]{8,200}$/.test(authKey)) return json({ ok: false, error: "Stremio did not give a sign-in. Please start again." }, 400);
+      const user = await stremioUser(authKey);
       if (!(await ensureMediaAppSync(env, accountId, provider, null))) return unavailable("migration 0023 has not been applied");
-      const stored = await storeProviderConnection(env, account, provider, { accessToken: polled.authKey, externalUser: { username: user.name, id: user.id } });
+      const stored = await storeProviderConnection(env, account, provider, { accessToken: authKey, externalUser: { username: user.name, id: user.id } });
       if (!stored) return unavailable("the connection could not be stored");
       await startMediaAppSync(env, accountId, provider);
       return json({ ok: true, status: "connected", username: user.name });
@@ -116778,6 +116794,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         externalUser: { username: session.email || email, id: session.userId },
       });
       if (!stored) return unavailable("the connection could not be stored");
+      await saveNuvioProfiles(env, accountId, profiles);
       const row = await loadMediaAppSync(env, accountId, provider);
       if (row && row.profile_index) await startMediaAppSync(env, accountId, provider);
       return json({ ok: true, status: "connected", username: session.email || email, profiles, profileIndex: row ? row.profile_index : only });
@@ -116799,8 +116816,10 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (body.profileIndex != null) {
         const idx = mediaAppInt(body.profileIndex);
         if (idx == null || idx < 1 || idx > 6) return json({ ok: false, error: "Choose one of your profiles." }, 400);
-        sets.push("profile_index = ?", "cursor_json = NULL", "last_pull_at = NULL");
-        binds.push(idx);
+        // A new profile starts its pull over; the profile names are kept.
+        const names = mediaAppProfilesOf(row);
+        sets.push("profile_index = ?", "cursor_json = ?", "last_pull_at = NULL");
+        binds.push(idx, names.length ? JSON.stringify({ profiles: names }) : null);
       }
       if (sets.length) {
         await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)

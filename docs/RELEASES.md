@@ -2061,7 +2061,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: connect Stremio and Nuvio accounts, pull their watch history, optional two-way sync
 
-**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build 7aa76f48a6.
+**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build efef935bf8.
 
 ### What it changes
 
@@ -2088,4 +2088,6 @@ Neither service documents its API. The calls follow stremio-core's library item 
 
 **Second follow-up (same day):** connecting answered only "isn't available right now" or "That service didn't answer", which hid the cause. The server now sends a `detail` and the page shows it in brackets: `TOKEN_ENCRYPTION_KEY is not set`, `migration 0023 has not been applied`, `link.stremio.com answered 403`, `link.stremio.com request failed (TypeError)`. No secret is ever in it.
 
-**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 7aa76f48a6)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
+**Third follow-up (same day):** (1) Stremio's Link service answers the Worker with a 404, so the page now starts and checks the link itself (as Trakt's code login does) and hands the authKey to `POST /api/connections/stremio/link/complete`, which checks it with Stremio before storing it; `link/start` and `link/poll` are gone. (2) *Disconnect* on Nuvio said "not found": the page called `/api/connections/nuvio/` with a trailing slash. (3) The Nuvio profile list showed *Profile 1* to *6* after a reload: the names are now kept on the server (`media_app_sync.cursor_json`) and the list shows only the profiles Nuvio named.
+
+**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build efef935bf8)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.

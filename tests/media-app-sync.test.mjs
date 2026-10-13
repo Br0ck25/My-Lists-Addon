@@ -31,16 +31,10 @@ function fakeServices(state) {
     const href = typeof input === "string" ? input : input.url;
     const url = new URL(href);
     const body = init.body ? JSON.parse(init.body) : {};
-    if (url.hostname === "link.stremio.com") {
-      if (url.pathname.endsWith("/create")) return json({ result: { code: "ABCD1234", link: "https://link.stremio.com/?code=ABCD1234", qrcode: "data:image/png;base64,AA" } });
-      if (url.pathname.endsWith("/read")) {
-        seen.stremio.push("read:" + url.searchParams.get("code"));
-        return state.approved ? json({ result: { authKey: "AUTHKEY-SECRET" } }) : json({ error: { code: 101, message: "pending" } });
-      }
-    }
     if (url.hostname === "api.strem.io") {
       const method = url.pathname.replace("/api/", "");
       seen.stremio.push(method);
+      if (state.stremioDown) return new Response("down", { status: state.stremioDown });
       if (body.authKey !== "AUTHKEY-SECRET") return json({ error: { message: "Session does not exist" } });
       if (method === "getUser") return json({ result: { _id: "u1", email: "viewer@example.test" } });
       if (method === "logout") return json({ result: { success: true } });
@@ -144,24 +138,22 @@ const events = (env, accountId) => {
 const progressRows = (env, accountId) => env.DB_ACTIVITY._db.prepare("SELECT media_id, last_season, last_episode, last_watched_at, companion_json FROM show_progress WHERE account_id = ?").all(accountId);
 
 async function connectStremio(ctx, state) {
-  state.approved = true;
-  const r = await call(ctx.env, "/api/connections/stremio/link/poll", { method: "POST", cookie: ctx.cookie, json: { code: "abcd1234" } });
+  // The page runs the Link flow in the browser and hands over the authKey it got.
+  const r = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", cookie: ctx.cookie, json: { authKey: "AUTHKEY-SECRET" } });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   return r;
 }
 
 describe("Stremio: connecting with the Link flow", () => {
-  it("starts a link, waits while it is not approved, then stores the authKey encrypted", async () => {
-    const state = { approved: false, library: [], episodes: {} };
+  it("checks the authKey with Stremio, then stores it encrypted", async () => {
+    const state = { library: [], episodes: {} };
     const seen = fakeServices(state);
     const ctx = await setup("stremconn");
-    const started = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", cookie: ctx.cookie, json: {} });
-    assert.equal(started.body.code, "ABCD1234");
-    assert.match(started.body.link, /^https:\/\/link\.stremio\.com\//);
-
-    const waiting = await call(ctx.env, "/api/connections/stremio/link/poll", { method: "POST", cookie: ctx.cookie, json: { code: "abcd1234" } });
-    assert.equal(waiting.body.status, "pending");
-    assert.equal(ctx.env.DB._db.prepare("SELECT count(*) AS n FROM provider_connections").get().n, 0, "nothing is stored before the person approves");
+    const bad = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", cookie: ctx.cookie, json: { authKey: "NOT-A-KEY" } });
+    assert.equal(bad.status, 400);
+    assert.equal(ctx.env.DB._db.prepare("SELECT count(*) AS n FROM provider_connections").get().n, 0, "nothing is stored for a key Stremio refuses");
+    const none = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", cookie: ctx.cookie, json: {} });
+    assert.equal(none.status, 400);
 
     const done = await connectStremio(ctx, state);
     assert.equal(done.body.status, "connected");
@@ -169,7 +161,8 @@ describe("Stremio: connecting with the Link flow", () => {
     const row = ctx.env.DB._db.prepare("SELECT access_token_enc, status FROM provider_connections WHERE provider = 'stremio'").get();
     assert.equal(row.status, "ok");
     assert.ok(row.access_token_enc && !row.access_token_enc.includes("AUTHKEY-SECRET"), "the authKey is encrypted at rest");
-    assert.ok(seen.stremio.includes("read:ABCD1234"), "the code is sent upper case");
+    assert.ok(seen.stremio.includes("getUser"));
+    assert.ok(!JSON.stringify(done.body).includes("AUTHKEY-SECRET"), "and not echoed back");
   });
 
   it("never hands the authKey back to the browser, and refuses a signed-out caller", async () => {
@@ -182,7 +175,7 @@ describe("Stremio: connecting with the Link flow", () => {
     assert.ok(!JSON.stringify(bridge.body).includes("AUTHKEY-SECRET"));
     const listed = await call(ctx.env, "/api/connections", { cookie: ctx.cookie });
     assert.ok(!JSON.stringify(listed.body).includes("AUTHKEY-SECRET"));
-    const anon = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", json: {} });
+    const anon = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", json: { authKey: "AUTHKEY-SECRET" } });
     assert.equal(anon.status, 401);
   });
 
@@ -750,28 +743,40 @@ describe("saying why a connection could not be made", () => {
   it("names the missing encryption key", async () => {
     fakeServices({});
     const ctx = await setup("nodetail2", { TOKEN_ENCRYPTION_KEY: undefined });
-    const r = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", cookie: ctx.cookie, json: {} });
+    const r = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", cookie: ctx.cookie, json: { authKey: "AUTHKEY-SECRET" } });
     assert.equal(r.status, 503);
     assert.match(r.body.detail, /TOKEN_ENCRYPTION_KEY/);
   });
 
-  it("says what Stremio answered when the link cannot be started", async () => {
-    const real = globalThis.fetch;
-    globalThis.fetch = async (input, init) => (String(input.url || input).includes("link.stremio.com") ? new Response("blocked", { status: 403 }) : real(input, init));
-    restore = () => { globalThis.fetch = real; };
+  it("says what Stremio answered when it cannot be asked", async () => {
+    fakeServices({ stremioDown: 500 });
     const ctx = await setup("nodetail3");
-    const r = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", cookie: ctx.cookie, json: {} });
+    const r = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", cookie: ctx.cookie, json: { authKey: "AUTHKEY-SECRET" } });
     assert.equal(r.status, 502);
-    assert.match(r.body.detail, /link\.stremio\.com answered 403/);
+    assert.match(r.body.detail, /Stremio answered 500/);
   });
 
   it("says when the request itself failed", async () => {
     const real = globalThis.fetch;
-    globalThis.fetch = async (input, init) => { if (String(input.url || input).includes("link.stremio.com")) throw new TypeError("network lost"); return real(input, init); };
+    globalThis.fetch = async (input, init) => { if (String(input.url || input).includes("api.strem.io")) throw new TypeError("network lost"); return real(input, init); };
     restore = () => { globalThis.fetch = real; };
     const ctx = await setup("nodetail4");
-    const r = await call(ctx.env, "/api/connections/stremio/link/start", { method: "POST", cookie: ctx.cookie, json: {} });
+    const r = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", cookie: ctx.cookie, json: { authKey: "AUTHKEY-SECRET" } });
     assert.equal(r.status, 502);
-    assert.match(r.body.detail, /TypeError/);
+    assert.match(r.body.detail, /api\.strem\.io request failed \(TypeError\)/);
+  });
+
+  it("keeps the Nuvio profile names, and keeps them when the profile is changed", async () => {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Me" }, { profile_index: 3, name: "Kids" }] };
+    fakeServices(state);
+    const ctx = await setup("profnames");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const names = async () => (await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.profiles;
+    assert.deepEqual(await names(), [{ index: 1, name: "Me" }, { index: 3, name: "Kids" }], "a later page load still has them");
+    await pull(ctx.env, 1);
+    await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { profileIndex: 3 } });
+    assert.deepEqual(await names(), [{ index: 1, name: "Me" }, { index: 3, name: "Kids" }], "choosing a profile does not lose them");
+    await pull(ctx.env);
+    assert.deepEqual(await names(), [{ index: 1, name: "Me" }, { index: 3, name: "Kids" }], "nor does a pull");
   });
 });
