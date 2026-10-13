@@ -9,7 +9,7 @@
 // with its IMDb id, which is all these tests need.
 import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 
 import { call, createUser, makeD1, makeEnv, makeQueue, runScheduledTick } from "./harness.mjs";
 
@@ -25,7 +25,7 @@ afterEach(() => { if (restore) restore(); restore = null; });
 // --- The fakes ---------------------------------------------------------------
 
 function fakeServices(state) {
-  const seen = { stremio: [], nuvio: [], nuvioRefresh: [], nuvioSignIns: [], cinemeta: [] };
+  const seen = { stremio: [], nuvio: [], nuvioRefresh: [], nuvioSignIns: [], cinemeta: [], puts: [], pushed: [] };
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
     const href = typeof input === "string" ? input : input.url;
@@ -45,6 +45,15 @@ function fakeServices(state) {
       if (method === "getUser") return json({ result: { _id: "u1", email: "viewer@example.test" } });
       if (method === "logout") return json({ result: { success: true } });
       if (method === "datastoreGet") return json({ result: state.library });
+      if (method === "datastorePut") {
+        seen.puts.push(body.changes);
+        if (state.putFails) return json({ result: { success: false } });
+        for (const c of body.changes) {
+          const i = state.library.findIndex((x) => x._id === c._id);
+          if (i >= 0) state.library[i] = c;
+        }
+        return json({ result: { success: true } });
+      }
     }
     if (url.hostname === "v3-cinemeta.strem.io") {
       const id = url.pathname.split("/").pop().replace(".json", "");
@@ -78,6 +87,11 @@ function fakeServices(state) {
         if (fn === "sync_pull_profiles") return json(state.profiles || [{ profile_index: 1, name: "Main" }]);
         if (fn === "sync_pull_watched_items") return json(body.p_page === 1 ? state.watched || [] : []);
         if (fn === "sync_pull_watch_progress") return json(state.progress || []);
+        if (fn === "sync_push_watched_items") {
+          if (state.pushFails) return json({ message: "boom" }, 500);
+          seen.pushed.push(...body.p_items);
+          return new Response(null, { status: 204 });
+        }
       }
     }
     return new Response("{}", { status: 404 });
@@ -491,5 +505,231 @@ describe("the hourly sweep", () => {
     ctx.env.DB._db.exec("UPDATE jobs SET run_after = 1 WHERE dedupe_key = 'periodic:mediaapp.sync'");
     await runScheduledTick(ctx.env);
     assert.notEqual(ctx.env.DB._db.prepare("SELECT status FROM jobs WHERE type = 'mediaapp.sync-account'").get().status, "done", "two hours ago: started again");
+  });
+});
+
+
+// --- Two-way sync -----------------------------------------------------------------
+
+// Node's own reading of the documented bitfield, so the test does not lean on the code under test.
+function decodeBits(str, eps) {
+  const last = str.lastIndexOf(":");
+  const mid = str.lastIndexOf(":", last - 1);
+  const anchor = eps.findIndex((e) => e.id === str.slice(0, mid));
+  const length = Number(str.slice(mid + 1, last));
+  const data = inflateSync(Buffer.from(str.slice(last + 1), "base64"));
+  const out = [];
+  for (let p = 0; p < length; p++) if (data[p >> 3] & (1 << (p & 7))) out.push(eps[p + anchor + 1 - length].episode);
+  return out;
+}
+
+function addEvent(ctx, imdb, kind, season, episode, at, source = "ping") {
+  const db = ctx.env.DB._db;
+  let m = db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(imdb);
+  if (!m) m = { id: Number(db.prepare("INSERT INTO media (kind, imdb_id, title, created_at, updated_at) VALUES (?, ?, ?, 1, 1)").run(kind, imdb, "Title " + imdb).lastInsertRowid) };
+  ctx.env.DB_ACTIVITY._db.prepare("INSERT INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(ctx.accountId, m.id, season, episode, at, source, `${ctx.accountId}:${imdb}:${season}:${episode}:${at}:${source}`);
+}
+
+const runAgain = async (ctx, provider) => {
+  await call(ctx.env, `/api/connections/${provider}/sync`, { method: "POST", cookie: ctx.cookie, json: {} });
+  await pull(ctx.env);
+};
+const cursorOf = (ctx) => JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync").get().cursor_json || "{}");
+
+describe("two-way sync: Stremio", () => {
+  const movieItem = () => ({ _id: "tt1111111", type: "movie", name: "Movie A", poster: "https://img.test/a.jpg", behaviorHints: { defaultVideoId: "tt1111111" }, _mtime: new Date(NOW - 50 * HOUR).toISOString(),
+    state: { lastWatched: new Date(NOW - 50 * HOUR).toISOString(), timesWatched: 0, flaggedWatched: 0, duration: 0, timeOffset: 0 } });
+  const showItem = (watchedIdx) => ({ _id: SHOW, type: "series", name: "Show S", _mtime: new Date(NOW - 50 * HOUR).toISOString(),
+    state: { video_id: `${SHOW}:1:1`, lastWatched: new Date(NOW - 50 * HOUR).toISOString(), watched: bitfield(SHOW_EPS, watchedIdx), duration: 0, timeOffset: 0 } });
+
+  async function ready(name, library, extra = {}) {
+    const state = { approved: true, library, episodes: { [SHOW]: SHOW_EPS }, ...extra };
+    const seen = fakeServices(state);
+    const ctx = await setup(name, { FF_MEDIA_APP_PUSH: "1" });
+    await connectStremio(ctx, state);
+    await pull(ctx.env);
+    const on = await call(ctx.env, "/api/connections/stremio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } });
+    assert.equal(on.body.sync.push, true);
+    await pull(ctx.env);
+    return { state, seen, ctx };
+  }
+
+  it("is refused unless the server switched it on", async () => {
+    const state = { approved: true, library: [movieItem()], episodes: {} };
+    const seen = fakeServices(state);
+    const ctx = await setup("pushoff");
+    await connectStremio(ctx, state);
+    const r = await call(ctx.env, "/api/connections/stremio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } });
+    assert.equal(r.status, 409);
+    addEvent(ctx, "tt1111111", "movie", null, null, NOW - HOUR);
+    ctx.env.DB._db.exec("UPDATE media_app_sync SET push_enabled = 1");
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 0, "even with the row set by hand, nothing is written while the flag is off");
+    const settings = await call(ctx.env, "/api/connections/stremio/settings", { cookie: ctx.cookie });
+    assert.equal(settings.body.pushAvailable, false);
+  });
+
+  it("marks a movie watched in the library, keeping everything else on the item", async () => {
+    const { seen, state, ctx } = await ready("pushmovie", [movieItem()]);
+    const at = NOW - 3 * HOUR;
+    addEvent(ctx, "tt1111111", "movie", null, null, at);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 1);
+    const sent = seen.puts[0][0];
+    assert.equal(sent._id, "tt1111111");
+    assert.equal(sent.state.flaggedWatched, 1);
+    assert.equal(sent.state.timesWatched, 1);
+    assert.equal(sent.state.lastWatched, new Date(at).toISOString());
+    assert.deepEqual([sent.name, sent.poster, sent.behaviorHints], ["Movie A", "https://img.test/a.jpg", { defaultVideoId: "tt1111111" }], "the item as it was read, plus the watched state");
+    assert.ok(Date.parse(sent._mtime) > Date.parse(movieItem()._mtime), "a newer _mtime, so Stremio takes the change");
+    assert.equal(state.library[0].state.timesWatched, 1);
+  });
+
+  it("adds episodes to a show's bitfield without losing the ones already marked", async () => {
+    const { seen, ctx } = await ready("pushshow", [showItem([0])]);
+    addEvent(ctx, SHOW, "series", 1, 2, NOW - 4 * HOUR);
+    addEvent(ctx, SHOW, "series", 1, 3, NOW - 3 * HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 1);
+    assert.deepEqual(decodeBits(seen.puts[0][0].state.watched, SHOW_EPS), [1, 2, 3], "E1 was there; E2 and E3 are added");
+    assert.equal(seen.puts[0][0].state.video_id, `${SHOW}:1:1`, "where Stremio thinks you are is left alone");
+  });
+
+  it("leaves titles that are not in the library alone, and never writes a play Stremio already has", async () => {
+    const watchedMovie = movieItem();
+    watchedMovie.state = { ...watchedMovie.state, timesWatched: 2 };
+    const { seen, ctx } = await ready("pushskip", [watchedMovie]);
+    addEvent(ctx, "tt1111111", "movie", null, null, NOW - HOUR);
+    addEvent(ctx, "tt9999999", "movie", null, null, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 0);
+  });
+
+  it("does not send a play back to Stremio that came from Stremio, and sends each play once", async () => {
+    const lib = [movieItem()];
+    lib[0].state = { ...lib[0].state, timesWatched: 1, lastWatched: new Date(NOW - 8 * HOUR).toISOString() };
+    const { seen, ctx } = await ready("pushecho", lib);
+    assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events WHERE source = 'stremio'").get().n, 1, "the pull brought the play in");
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 0, "echo: its own play is not sent back");
+    addEvent(ctx, SHOW, "series", 1, 1, NOW - HOUR);
+    seen.puts.length = 0;
+    await runAgain(ctx, "stremio");
+    await runAgain(ctx, "stremio");
+    assert.ok(cursorOf(ctx).pushedId > 0, "the position is kept");
+    assert.equal(seen.puts.length, 0, "a show that is not in the library is skipped, and not retried forever");
+  });
+
+  it("keeps its place after a failed write and sends again next time", async () => {
+    const { seen, state, ctx } = await ready("pushfail", [movieItem()]);
+    addEvent(ctx, "tt1111111", "movie", null, null, NOW - HOUR);
+    state.putFails = true;
+    await runAgain(ctx, "stremio");
+    assert.match(ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error, /Could not send/);
+    assert.equal(cursorOf(ctx).pushedId || 0, 0, "not moved past a play that was not sent");
+    state.putFails = false;
+    await runAgain(ctx, "stremio");
+    assert.equal(state.library[0].state.timesWatched, 1);
+    assert.equal(ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error, null);
+  });
+
+  it("round-trips the bitfield it writes with the one it reads", async () => {
+    const { seen, ctx } = await ready("pushbits", [showItem([1])]);
+    for (const e of [1, 3, 5]) addEvent(ctx, SHOW, "series", 1, e, NOW - (6 - e) * HOUR);
+    await runAgain(ctx, "stremio");
+    assert.deepEqual(decodeBits(seen.puts[0][0].state.watched, SHOW_EPS), [1, 2, 3, 5]);
+    // And the pull reads what was written as the furthest episode.
+    await runAgain(ctx, "stremio");
+    const show = progressRows(ctx.env, ctx.accountId).find((p) => p.last_season === 1);
+    assert.equal(show.last_episode, 5);
+  });
+});
+
+describe("two-way sync: Nuvio", () => {
+  const rows = (style) => style === "camel"
+    ? [{ contentId: "tt1111111", contentType: "movie", title: "Movie A", watchedAt: NOW - 30 * HOUR }]
+    : [{ content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: Math.round((NOW - 30 * HOUR) / 1000) }];
+
+  async function ready(name, watched) {
+    const state = { watched, progress: [] };
+    const seen = fakeServices(state);
+    const ctx = await setup(name, { FF_MEDIA_APP_PUSH: "1" });
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } });
+    await pull(ctx.env);
+    return { state, seen, ctx };
+  }
+
+  it("sends plays from elsewhere in the shape Nuvio's own rows have, and not the ones it already has", async () => {
+    const { seen, ctx } = await ready("nuvpush", rows("snake"));
+    assert.equal(seen.pushed.length, 0, "nothing of Nuvio's own is sent back");
+    addEvent(ctx, "tt1111111", "movie", null, null, NOW - 29 * HOUR);
+    addEvent(ctx, "tt5555555", "movie", null, null, NOW - 2 * HOUR);
+    addEvent(ctx, SHOW, "series", 1, 2, NOW - HOUR);
+    await runAgain(ctx, "nuvio");
+    assert.deepEqual(seen.pushed.map((p) => [p.content_id, p.content_type, p.season, p.episode]), [["tt5555555", "movie", undefined, undefined], [SHOW, "series", 1, 2]], "the movie Nuvio has is skipped");
+    assert.equal(seen.pushed[0].watched_at, Math.round((NOW - 2 * HOUR) / 1000), "seconds, as in its own rows");
+    assert.equal(seen.pushed[0].title, "Title tt5555555");
+    seen.pushed.length = 0;
+    await runAgain(ctx, "nuvio");
+    assert.equal(seen.pushed.length, 0, "each play is sent once");
+  });
+
+  it("follows camelCase rows with camelCase, and milliseconds with milliseconds", async () => {
+    const { seen, ctx } = await ready("nuvcamel", rows("camel"));
+    addEvent(ctx, "tt5555555", "movie", null, null, NOW - 2 * HOUR);
+    await runAgain(ctx, "nuvio");
+    assert.deepEqual(Object.keys(seen.pushed[0]).sort(), ["contentId", "contentType", "title", "watchedAt"]);
+    assert.equal(seen.pushed[0].watchedAt, NOW - 2 * HOUR);
+  });
+
+  it("carries plays between the two apps, and not back to where they came from", async () => {
+    const { seen, ctx } = await ready("nuvfrom", rows("snake"));
+    // A play that came in from Stremio is Nuvio's to receive.
+    addEvent(ctx, "tt6666666", "movie", null, null, NOW - HOUR, "stremio");
+    await runAgain(ctx, "nuvio");
+    assert.deepEqual(seen.pushed.map((p) => p.content_id), ["tt6666666"]);
+    // And Nuvio's own play is not sent to Nuvio again, however often it runs.
+    await runAgain(ctx, "nuvio");
+    assert.equal(seen.pushed.length, 1);
+  });
+
+  it("does not bring back a play the person deleted in Nuvio", async () => {
+    const two = [...rows("snake"), { content_id: "tt7777777", content_type: "movie", title: "Movie B", watched_at: Math.round((NOW - 20 * HOUR) / 1000) }];
+    const state = { watched: two, progress: [] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvdeleted", { FF_MEDIA_APP_PUSH: "1" });
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events WHERE source = 'nuvio'").get().n, 2);
+    // Movie B is removed from the Nuvio profile before two-way sync is ever on. Our copy of the
+    // play stays (we never delete), but it is Nuvio's own play: sending it back would undo the deletion.
+    state.watched = rows("snake");
+    await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } });
+    await pull(ctx.env);
+    assert.equal(seen.pushed.length, 0);
+    assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events WHERE source = 'nuvio'").get().n, 2, "nothing deleted here either");
+  });
+
+  it("waits, and says so, when Nuvio has no row to copy the format from", async () => {
+    const { seen, ctx } = await ready("nuvempty", []);
+    addEvent(ctx, "tt5555555", "movie", null, null, NOW - HOUR);
+    await runAgain(ctx, "nuvio");
+    assert.equal(seen.pushed.length, 0);
+    assert.match(ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error, /something watched in Nuvio/);
+    assert.equal(cursorOf(ctx).pushedId || 0, 0, "not moved: it will send once it can");
+  });
+
+  it("records a failed send and tries again from the same place", async () => {
+    const { seen, state, ctx } = await ready("nuvfail", rows("snake"));
+    addEvent(ctx, "tt5555555", "movie", null, null, NOW - HOUR);
+    state.pushFails = true;
+    await runAgain(ctx, "nuvio");
+    assert.match(ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error, /Could not send/);
+    state.pushFails = false;
+    await runAgain(ctx, "nuvio");
+    assert.deepEqual(seen.pushed.map((p) => p.content_id), ["tt5555555"]);
   });
 });

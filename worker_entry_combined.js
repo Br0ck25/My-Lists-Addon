@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "06e1f2df33";
+const WORKER_BUILD = "f29a8510f1";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -37525,6 +37525,101 @@ if ('serviceWorker' in navigator) {
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" class="u-c-v_accent_2">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
+
+      <!-- Stremio Section -->
+      <div class="provider-card" id="stremioSection">
+        <div class="provider-card-header">
+          <div>
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
+              <span class="provider-card-title">Stremio</span>
+              <span id="stremioConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Bring in what you have watched in Stremio and where you stopped. You approve the connection inside Stremio, so your Stremio password never comes here.</p>
+          </div>
+        </div>
+        <div class="provider-card-actions">
+          <button type="button" class="secondary lc-btn u-fw-600" id="stremioConnectBtn" data-act="startStremioConnect">Connect Stremio account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="stremioDisconnectBtn" style="display:none;" data-act="disconnectMediaApp" data-act-args="[&quot;stremio&quot;]">Disconnect</button>
+        </div>
+        <div id="stremioLinkBox" class="u-m-10px_0" style="display:none;" role="status" aria-live="polite"></div>
+        <div id="stremioSyncWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="display:none;">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Bring in my Stremio history</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Add what you watch in Stremio, and where you stopped, to your Watch History and Continue Watching. Checked every hour.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Bring in my Stremio history">
+              <input type="checkbox" id="stremioPullCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;stremio&quot;,&quot;pull&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="stremioPushRow" style="display:none;">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Two-way sync</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Also send what you watch elsewhere to Stremio. Nothing is ever deleted on either side.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Two-way sync with Stremio">
+              <input type="checkbox" id="stremioPushCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;stremio&quot;,&quot;push&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <p id="stremioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
+          <div class="u-mt-8px">
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="stremioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;stremio&quot;,&quot;@self&quot;]">Sync now</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nuvio Section -->
+      <div class="provider-card" id="nuvioSection">
+        <div class="provider-card-header">
+          <div>
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
+              <span class="provider-card-title">Nuvio</span>
+              <span id="nuvioConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Bring in what you have watched in Nuvio and where you stopped. Your email and password are used once to sign in. The password is not kept.</p>
+          </div>
+        </div>
+        <div id="nuvioLoginForm" class="u-m-10px_0">
+          <input type="email" id="nuvioEmailInput" autocomplete="username" aria-label="Nuvio email" placeholder="Nuvio email" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+          <input type="password" id="nuvioPasswordInput" autocomplete="current-password" aria-label="Nuvio password" placeholder="Nuvio password" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box u-mt-10px" style="width:100%;" data-act="submitNuvioLogin" data-act-keys="Enter">
+        </div>
+        <div class="provider-card-actions">
+          <button type="button" class="secondary lc-btn u-fw-600" id="nuvioConnectBtn" data-act="submitNuvioLogin">Sign in to Nuvio</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="nuvioDisconnectBtn" style="display:none;" data-act="disconnectMediaApp" data-act-args="[&quot;nuvio&quot;]">Disconnect</button>
+        </div>
+        <div id="nuvioSyncWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="display:none;">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Bring in my Nuvio history</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Add what you watch in Nuvio, and where you stopped, to your Watch History and Continue Watching. Checked every hour.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Bring in my Nuvio history">
+              <input type="checkbox" id="nuvioPullCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;pull&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="nuvioPushRow" style="display:none;">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Two-way sync</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Also send what you watch elsewhere to Nuvio. Nothing is ever deleted on either side.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Two-way sync with Nuvio">
+              <input type="checkbox" id="nuvioPushCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;push&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="u-p-0_0_10px" id="nuvioProfileRow">
+            <label for="nuvioProfileSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Nuvio profile to read</label>
+            <select id="nuvioProfileSelect" aria-label="Nuvio profile" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;profileIndex&quot;,&quot;@value&quot;]" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;"></select>
+          </div>
+          <p id="nuvioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
+          <div class="u-mt-8px">
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
 
@@ -43933,7 +44028,7 @@ async function warnAboutLapsedConnections() {
   } catch (e) {
     return;
   }
-  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB' };
+  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB', stremio: 'Stremio', nuvio: 'Nuvio' };
   const lapsed = ((data && data.connections) || [])
     .filter(function (c) { return c && c.status && c.status !== 'ok'; })
     .map(function (c) { return names[c.provider] || c.provider; });
@@ -44068,6 +44163,204 @@ function renderSimklConnectStatus() {
     const box = document.getElementById('mySimklListsResult');
     if (box) box.innerHTML = '';
   }
+}
+
+// --- Stremio and Nuvio accounts (61_media-app-sync.js) --------------------------
+//
+// The sign-in stays on the server: Stremio is approved inside Stremio (the Link
+// flow) and Nuvio's password is sent once and not kept. This page only shows the
+// connection and its settings, over the signed-in session. It holds no token.
+const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
+let mediaAppUiPoll = null;
+let mediaAppUiNuvioProfiles = [];
+
+async function mediaAppUiCall(provider, sub, method, body) {
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/' + provider + '/' + sub, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'GET' ? undefined : JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(function () { return {}; });
+    return { ok: res.ok && data.ok !== false, status: res.status, data: data };
+  } catch (e) {
+    return { ok: false, status: 0, data: { error: 'Could not reach the server.' } };
+  }
+}
+
+function mediaAppUiSyncLine(sync) {
+  if (!sync) return '';
+  if (sync.error) return sync.error;
+  if (sync.lastPullAt) return 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
+  return 'Waiting for the first check…';
+}
+
+// info: the settings answer, or null when signed out or unavailable.
+function renderMediaAppStatus(provider, info) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  const connected = !!(info && info.connected);
+  const lapsed = connected && !!info.status && info.status !== 'ok';
+  const live = connected && !lapsed;
+  const statusEl = document.getElementById(provider + 'ConnectStatus');
+  if (statusEl) {
+    if (live) statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected' + (info.username ? ' as ' + escapeHtml(info.username) : '') + '</span>';
+    else if (lapsed) statusEl.innerHTML = '<span class="u-c-v_color_warn_text u-fw-600">Sign in again</span>';
+    else statusEl.innerHTML = '<span class="u-c-v_muted">Not connected</span>';
+  }
+  const connectBtn = document.getElementById(provider + 'ConnectBtn');
+  if (connectBtn) {
+    connectBtn.style.display = live ? 'none' : '';
+    connectBtn.textContent = lapsed ? 'Reconnect ' + name : (provider === 'nuvio' ? 'Sign in to Nuvio' : 'Connect Stremio account');
+  }
+  const disconnectBtn = document.getElementById(provider + 'DisconnectBtn');
+  if (disconnectBtn) disconnectBtn.style.display = connected ? '' : 'none';
+  const form = document.getElementById('nuvioLoginForm');
+  if (form && provider === 'nuvio') form.style.display = live ? 'none' : '';
+  const wrap = document.getElementById(provider + 'SyncWrap');
+  if (wrap) wrap.style.display = live ? '' : 'none';
+  if (!live) return;
+  const sync = info.sync || {};
+  const pull = document.getElementById(provider + 'PullCheckbox');
+  if (pull) pull.checked = !!sync.pull;
+  const push = document.getElementById(provider + 'PushCheckbox');
+  if (push) push.checked = !!sync.push;
+  const pushRow = document.getElementById(provider + 'PushRow');
+  if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
+  const statusLine = document.getElementById(provider + 'SyncStatus');
+  if (statusLine) statusLine.textContent = mediaAppUiSyncLine(sync);
+  if (provider === 'nuvio') {
+    const sel = document.getElementById('nuvioProfileSelect');
+    if (sel) {
+      let html = sync.profileIndex ? '' : '<option value="">Choose a profile</option>';
+      for (let i = 1; i <= 6; i++) {
+        const known = mediaAppUiNuvioProfiles.filter(function (p) { return p.index === i; })[0];
+        html += '<option value="' + i + '"' + (sync.profileIndex === i ? ' selected' : '') + '>' + escapeHtml(known ? known.name : 'Profile ' + i) + '</option>';
+      }
+      sel.innerHTML = html;
+    }
+  }
+}
+
+async function mediaAppUiRefresh(provider) {
+  if (typeof isSignedIn === 'function' && !isSignedIn()) {
+    renderMediaAppStatus(provider, null);
+    return;
+  }
+  const r = await mediaAppUiCall(provider, 'settings', 'GET');
+  renderMediaAppStatus(provider, r.ok ? r.data : null);
+}
+
+function refreshMediaAppConnections() {
+  mediaAppUiRefresh('stremio');
+  mediaAppUiRefresh('nuvio');
+}
+
+function stopStremioLinkPoll() {
+  if (mediaAppUiPoll) clearInterval(mediaAppUiPoll);
+  mediaAppUiPoll = null;
+  const box = document.getElementById('stremioLinkBox');
+  if (box) box.style.display = 'none';
+}
+
+async function startStremioConnect() {
+  if (!requireSignedInFor('connect your Stremio account')) return;
+  stopStremioLinkPoll();
+  const r = await mediaAppUiCall('stremio', 'link/start', 'POST');
+  if (!r.ok || !r.data.code) {
+    showToast(r.data.error || 'Could not start the Stremio link. Please try again.', 'error');
+    return;
+  }
+  const box = document.getElementById('stremioLinkBox');
+  if (box) {
+    const safeLink = typeof r.data.link === 'string' && r.data.link.indexOf('https://link.stremio.com/') === 0 ? r.data.link : '';
+    box.innerHTML = '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Open <a href="' + escapeAttr(safeLink || 'https://link.stremio.com/') + '" target="_blank" rel="noopener" class="u-c-v_accent_2">link.stremio.com</a>, sign in to Stremio if asked, and enter this code:</p>' +
+      '<p class="u-m-6px_0 u-fw-600">' + escapeHtml(r.data.code) + '</p>' +
+      '<p class="u-m-0 u-fs-v_font_size_xs u-c-v_muted">Waiting for you to approve it in Stremio…</p>';
+    box.style.display = '';
+  }
+  let ticks = 0;
+  mediaAppUiPoll = setInterval(async function () {
+    ticks++;
+    if (ticks > 200) {
+      stopStremioLinkPoll();
+      showToast('The Stremio link expired. Start again to get a new code.', 'error');
+      return;
+    }
+    const p = await mediaAppUiCall('stremio', 'link/poll', 'POST', { code: r.data.code });
+    if (p.ok && p.data.status === 'connected') {
+      stopStremioLinkPoll();
+      showToast('Stremio connected.', 'success');
+      mediaAppUiRefresh('stremio');
+    } else if (!p.ok && p.status !== 0 && p.status !== 429 && p.status < 500) {
+      stopStremioLinkPoll();
+      showToast(p.data.error || 'Could not connect Stremio. Please try again.', 'error');
+    }
+  }, 3000);
+}
+
+async function submitNuvioLogin() {
+  if (!requireSignedInFor('connect your Nuvio account')) return;
+  const emailEl = document.getElementById('nuvioEmailInput');
+  const passEl = document.getElementById('nuvioPasswordInput');
+  const email = emailEl ? emailEl.value.trim() : '';
+  const password = passEl ? passEl.value : '';
+  if (!email || !password) {
+    showToast('Enter your Nuvio email and password.', 'error');
+    return;
+  }
+  const btn = document.getElementById('nuvioConnectBtn');
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall('nuvio', 'login', 'POST', { email: email, password: password });
+  if (btn) btn.disabled = false;
+  if (passEl) passEl.value = '';
+  if (!r.ok) {
+    showToast(r.data.error || 'Could not sign in to Nuvio. Please try again.', 'error');
+    return;
+  }
+  mediaAppUiNuvioProfiles = Array.isArray(r.data.profiles) ? r.data.profiles : [];
+  if (emailEl) emailEl.value = '';
+  showToast(r.data.profileIndex ? 'Nuvio connected.' : 'Nuvio connected. Choose which profile to read.', 'success');
+  mediaAppUiRefresh('nuvio');
+}
+
+async function setMediaAppSyncOption(provider, key, value) {
+  const body = {};
+  if (key === 'profileIndex') {
+    if (!value) return;
+    body.profileIndex = Number(value);
+  } else {
+    body[key] = !!value;
+  }
+  const r = await mediaAppUiCall(provider, 'settings', 'POST', body);
+  if (!r.ok) showToast(r.data.error || 'Could not save that setting. Please try again.', 'error');
+  mediaAppUiRefresh(provider);
+}
+
+async function syncMediaAppNow(provider, btn) {
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall(provider, 'sync', 'POST');
+  if (btn) btn.disabled = false;
+  if (!r.ok) {
+    showToast(r.data.error || 'Could not start the sync. Please try again.', 'error');
+    return;
+  }
+  showToast(r.data.started ? MEDIA_APP_UI_NAMES[provider] + ' is syncing. It can take a few minutes.' : MEDIA_APP_UI_NAMES[provider] + ' is already syncing.', 'info');
+}
+
+function disconnectMediaApp(provider) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  showAppConfirm(
+    'Disconnect ' + name + '?',
+    'Syncing stops. What was already brought in stays in your Watch History and Continue Watching.',
+    'Disconnect',
+    async function () {
+      stopStremioLinkPoll();
+      const r = await mediaAppUiCall(provider, '', 'DELETE');
+      if (!r.ok) showToast(r.data.error || 'Could not disconnect ' + name + '. Please try again.', 'error');
+      else showToast(name + ' disconnected.', 'success');
+      mediaAppUiRefresh(provider);
+    }
+  );
 }
 
 let mySimklListsTimer = null;
@@ -71842,6 +72135,7 @@ function clearLocalAccountData() {
   if (typeof renderTraktConnectStatus === 'function') renderTraktConnectStatus();
   if (typeof renderTmdbConnectStatus === 'function') renderTmdbConnectStatus();
   if (typeof renderSimklConnectStatus === 'function') renderSimklConnectStatus();
+  if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
   if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
   if (typeof updateConnectionStatusBadges === 'function') updateConnectionStatusBadges();
   if (typeof renderChannelsList === 'function') renderChannelsList();
@@ -83490,6 +83784,7 @@ if (typeof scheduleMyTmdbListsRefresh === 'function') scheduleMyTmdbListsRefresh
 if (typeof pickUpSimklTokenFromUrl === 'function') pickUpSimklTokenFromUrl();
 if (typeof renderSimklConnectStatus === 'function') renderSimklConnectStatus();
 if (typeof scheduleMySimklListsRefresh === 'function') scheduleMySimklListsRefresh();
+if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
 if (typeof populateImportTargetLists === 'function') populateImportTargetLists();
 document.querySelectorAll('details.panel.collapsible').forEach((d) => {
   d.addEventListener('toggle', scheduleCreatorSyncSave);
@@ -115546,6 +115841,16 @@ async function removeOwnerlessChannels(env, { cursor, limit, apply } = {}) {
 // title and episode is skipped, whatever its source: the subtitles ping (38_)
 // records a play when it starts and the app's library when it ends.
 //
+// Two-way sync (off unless FF_MEDIA_APP_PUSH is on AND the person turned it on
+// for that app): plays recorded here from any other source are sent to the app,
+// merging only, never deleting. The app's own plays are never sent back to it
+// (source = that app is skipped), a play the app already has is not sent again,
+// and the position in watch_events.id is kept in media_app_sync.cursor_json, so
+// nothing is sent twice. Stremio: only titles already in the person's library
+// are touched, and only state.watched (a show) or timesWatched, flaggedWatched
+// and lastWatched (a movie) change, on the library item as it was just read.
+// Nuvio: watched items only, in the shape its own rows have.
+//
 // Settings and the pull position are in media_app_sync (migration 0023). The
 // hourly job mediaapp.sync starts a mediaapp.sync-account job for each account
 // that is due, and that job works through the library in bounded steps.
@@ -116154,22 +116459,211 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
-  ).bind(JSON.stringify({ mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
-  return { done: true, total: fetched.total, applied };
+  ).bind(JSON.stringify({ ...cursor, mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
+  return { done: true, total: fetched.total, applied, pullDone: true };
 }
 
-// The job. Each run is one bounded step; the first step of a pull fixes the
+// The job. Each run is one bounded step: a slice of the pull, then (when
+// two-way sync is on) slices of the push. The first step of a pull fixes the
 // "changed since" mark so later steps see the same list.
 async function runMediaAppSyncJob(env, payload, job = {}) {
   const accountId = Number(payload && payload.accountId);
   const provider = String((payload && payload.provider) || "");
   if (!Number.isInteger(accountId) || !MEDIA_APP_PROVIDERS.includes(provider)) return { progress: {} };
   const prev = job.progress || {};
-  const offset = Number(prev.offset) || 0;
-  const out = await pullMediaAppStep(env, accountId, provider, offset, offset > 0 && prev.since != null ? Number(prev.since) : null);
-  const totals = { plays: (Number(prev.plays) || 0) + (out.applied ? out.applied.plays : 0), progress: (Number(prev.progress) || 0) + (out.applied ? out.applied.progress : 0) };
-  if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
-  return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
+  const totals = { plays: Number(prev.plays) || 0, progress: Number(prev.progress) || 0, pushed: Number(prev.pushed) || 0 };
+  if (prev.phase !== "push") {
+    const offset = Number(prev.offset) || 0;
+    const out = await pullMediaAppStep(env, accountId, provider, offset, offset > 0 && prev.since != null ? Number(prev.since) : null);
+    if (out.applied) {
+      totals.plays += out.applied.plays;
+      totals.progress += out.applied.progress;
+    }
+    if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
+    if (!out.pullDone) return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
+  }
+  const pushed = await pushMediaAppStep(env, accountId, provider);
+  totals.pushed += pushed.sent || 0;
+  if (pushed.more) return { progress: { phase: "push", ...totals }, again: true };
+  return { progress: { finishedAt: Date.now(), skipped: pushed.skipped || null, ...totals } };
+}
+
+// --- Two-way sync: sending plays to the app ---------------------------------------------------
+
+const MEDIA_APP_PUSH_EVENTS = 200;
+const MEDIA_APP_PUSH_CHUNK = 500;
+
+function mediaAppPushFlag(env) {
+  const v = env ? env.FF_MEDIA_APP_PUSH : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// The bitfield for `episodes` (the show's list, in Stremio's order) with the
+// episodes in `watchedKeys` ("season:episode") set. The inverse of
+// stremioWatchedEpisodes: the anchor is the last watched episode.
+async function stremioEncodeWatched(episodes, watchedKeys) {
+  let last = 0;
+  episodes.forEach((e, i) => { if (watchedKeys.has(`${e.season}:${e.episode}`)) last = i; });
+  const length = last + 1;
+  const bytes = new Uint8Array(Math.ceil(length / 8));
+  for (let i = 0; i <= last; i++) {
+    if (watchedKeys.has(`${episodes[i].season}:${episodes[i].episode}`)) bytes[i >> 3] |= 1 << (i & 7);
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate"));
+  const zipped = new Uint8Array(await new Response(stream).arrayBuffer());
+  let bin = "";
+  for (const b of zipped) bin += String.fromCharCode(b);
+  return `${episodes[last].id}:${length}:${btoa(bin)}`;
+}
+
+// The library items to write for `groups` (imdb id -> { kind, plays }), each
+// the item as just read with only its watched state changed. Titles that are
+// not in the library, and shows Cinemeta cannot list, are skipped.
+async function stremioPushChanges(library, groups, nowIso) {
+  const byId = new Map(library.map((it) => [String(it._id), it]));
+  const changes = [];
+  let skipped = 0;
+  let cinemeta = MEDIA_APP_CINEMETA_PER_STEP;
+  for (const [imdb, g] of groups) {
+    const item = byId.get(imdb);
+    if (!item) {
+      skipped++;
+      continue;
+    }
+    const st = item.state && typeof item.state === "object" ? item.state : {};
+    if (g.kind === "movie") {
+      if (Number(st.timesWatched) > 0 || Number(st.flaggedWatched) > 0) continue;
+      const at = Math.max(...g.plays.map((p) => p.watchedAt));
+      const later = !mediaAppTime(st.lastWatched) || mediaAppTime(st.lastWatched) < at;
+      changes.push({ ...item, _mtime: nowIso, state: { ...st, flaggedWatched: 1, timesWatched: Math.max(1, Number(st.timesWatched) || 0), lastWatched: later ? new Date(at).toISOString() : st.lastWatched } });
+      continue;
+    }
+    if (cinemeta <= 0) {
+      skipped++;
+      continue;
+    }
+    cinemeta--;
+    const eps = await stremioEpisodes(imdb);
+    if (!eps) {
+      skipped++;
+      continue;
+    }
+    const have = new Set((st.watched ? await stremioWatchedEpisodes(st.watched, eps) : []).map((e) => `${e.season}:${e.episode}`));
+    const listed = new Set(eps.map((e) => `${e.season}:${e.episode}`));
+    let added = 0;
+    for (const p of g.plays) {
+      const key = `${p.season}:${p.episode}`;
+      if (listed.has(key) && !have.has(key)) {
+        have.add(key);
+        added++;
+      }
+    }
+    if (!added) continue;
+    changes.push({ ...item, _mtime: nowIso, state: { ...st, watched: await stremioEncodeWatched(eps, have) } });
+  }
+  return { changes, skipped };
+}
+
+// A watched item in the shape Nuvio's own rows have. `sample` is one of the
+// account's rows, which tells snake_case from camelCase and how time is written.
+function nuvioWatchedItem(sample, rec) {
+  const snake = sample && Object.prototype.hasOwnProperty.call(sample, "content_id");
+  const k = (a, b) => (snake ? a : b);
+  const raw = mediaAppPick(sample, "watched_at", "watchedAt");
+  const at = typeof raw === "string" && !/^\d+(\.\d+)?$/.test(raw) ? new Date(rec.watchedAt).toISOString()
+    : (mediaAppTime(raw) && Number(raw) < 1e11 ? Math.round(rec.watchedAt / 1000) : rec.watchedAt);
+  const item = { [k("content_id", "contentId")]: rec.contentId, [k("content_type", "contentType")]: rec.kind, title: rec.title || "", [k("watched_at", "watchedAt")]: at };
+  if (rec.kind === "series") {
+    item.season = rec.season;
+    item.episode = rec.episode;
+  }
+  return item;
+}
+
+// One slice of plays for the app. { sent, more, skipped }; never throws: a
+// failure is written on the settings row and the next run tries again from the
+// same place.
+async function pushMediaAppStep(env, accountId, provider) {
+  const none = (skipped) => ({ sent: 0, more: false, skipped });
+  try {
+    if (!mediaAppPushFlag(env)) return none("off");
+    const sync = await loadMediaAppSync(env, accountId, provider);
+    if (!sync || !sync.push_enabled || (provider === "nuvio" && !sync.profile_index)) return none("off");
+    const actDb = activityDb(env, accountId);
+    if (!actDb || !(await activitySchemaReady(actDb))) return none("no activity database");
+    let conn = await loadProviderConnection(env, accountId, provider);
+    if (!conn || conn.status !== "ok") return none("not connected");
+    if (provider === "nuvio") {
+      conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+      if (!conn || !conn.accessToken) return none("reauth");
+    }
+    let cursor = {};
+    try {
+      cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
+    } catch {}
+    const after = Number(cursor.pushedId) || 0;
+    const { results: rows } = await actDb.prepare(
+      "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? ORDER BY id LIMIT ?"
+    ).bind(accountId, after, provider, MEDIA_APP_PUSH_EVENTS).all();
+    const events = rows || [];
+    if (!events.length) return none(null);
+    const ids = [...new Set(events.map((e) => e.media_id))];
+    const { results: media } = await env.DB.prepare(
+      "SELECT id, kind, imdb_id, title FROM media WHERE id IN (SELECT value FROM json_each(?))"
+    ).bind(JSON.stringify(ids)).all();
+    const titleOf = new Map((media || []).filter((m) => m.imdb_id).map((m) => [m.id, m]));
+    const plays = events.filter((e) => titleOf.has(e.media_id)).map((e) => {
+      const m = titleOf.get(e.media_id);
+      const isEpisode = e.season != null && e.episode != null;
+      return { contentId: m.imdb_id, title: m.title || "", kind: isEpisode ? "series" : "movie", season: e.season, episode: e.episode, watchedAt: Number(e.watched_at) };
+    });
+
+    let sent = 0;
+    if (plays.length) {
+      if (provider === "stremio") {
+        const library = await stremioFetchLibrary(conn.accessToken);
+        const groups = new Map();
+        for (const p of plays) {
+          const g = groups.get(p.contentId) || { kind: p.kind, plays: [] };
+          g.plays.push(p);
+          groups.set(p.contentId, g);
+        }
+        const { changes } = await stremioPushChanges(library, groups, new Date().toISOString());
+        for (let i = 0; i < changes.length; i += 50) {
+          const res = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: changes.slice(i, i + 50) });
+          if (!res || res.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
+        }
+        sent = changes.length;
+      } else {
+        const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
+        const sample = profile.watched.find((w) => mediaAppPick(w, "content_id", "contentId")) || profile.progress.find((w) => mediaAppPick(w, "content_id", "contentId"));
+        const present = new Set(profile.watched.map((w) => `${String(mediaAppPick(w, "content_id", "contentId") || "").toLowerCase()}:${mediaAppInt(w.season) == null ? "" : mediaAppInt(w.season)}:${mediaAppInt(w.episode) == null ? "" : mediaAppInt(w.episode)}`));
+        const fresh = plays.filter((p) => !present.has(`${p.contentId}:${p.season == null ? "" : p.season}:${p.episode == null ? "" : p.episode}`));
+        if (fresh.length && !sample) {
+          // Nothing of the account's own to copy the format from.
+          await setMediaAppSyncError(env, accountId, provider, "Two-way sync starts once there is something watched in Nuvio to match.");
+          return none("no sample");
+        }
+        for (let i = 0; i < fresh.length; i += MEDIA_APP_PUSH_CHUNK) {
+          await nuvioRpc(env, conn.accessToken, "sync_push_watched_items", { p_profile_id: sync.profile_index, p_items: fresh.slice(i, i + MEDIA_APP_PUSH_CHUNK).map((p) => nuvioWatchedItem(sample, p)) });
+        }
+        sent = fresh.length;
+      }
+    }
+    const nowMs = Date.now();
+    await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ?, last_push_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?")
+      .bind(JSON.stringify({ ...cursor, pushedId: events[events.length - 1].id }), nowMs, nowMs, accountId, provider).run();
+    return { sent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
+  } catch (e) {
+    if (e && e.kind === "invalid") {
+      await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
+      await setMediaAppSyncError(env, accountId, provider, "Sign in again to keep syncing.");
+      return none("reauth");
+    }
+    console.error(`mediaapp: push to ${provider} failed`, e);
+    await setMediaAppSyncError(env, accountId, provider, "Could not send your plays just now. It will try again.");
+    return none("error");
+  }
 }
 
 // Starts a pull for one account's app (what connecting and "Sync now" do).
@@ -116228,7 +116722,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
   if (sub === "settings" && request.method === "GET") {
     const conn = await loadProviderConnection(env, accountId, provider);
     const row = await loadMediaAppSync(env, accountId, provider);
-    return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, sync: mediaAppSyncSummary(row) });
+    return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), sync: mediaAppSyncSummary(row) });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -116283,6 +116777,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         binds.push(body.pull ? 1 : 0);
       }
       if (body.push != null) {
+        if (body.push && !mediaAppPushFlag(env)) return json({ ok: false, error: "Two-way sync isn't switched on yet." }, 409);
         sets.push("push_enabled = ?");
         binds.push(body.push ? 1 : 0);
       }
@@ -116295,7 +116790,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (sets.length) {
         await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)
           .bind(...binds, Date.now(), accountId, provider).run();
-        if (body.profileIndex != null || body.pull) await startMediaAppSync(env, accountId, provider);
+        if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
       }
       return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
     }

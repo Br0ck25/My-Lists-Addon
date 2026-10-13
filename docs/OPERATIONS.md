@@ -74,6 +74,7 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 
 - `NEW_ON_STREAMING_ENGINE` (optional; default `justwatch`).
 - `NUVIO_API_URL`, `NUVIO_APP_ANON_KEY` (optional): where the Nuvio account sync (Settings → External Accounts) reaches Nuvio. They default to `https://api.nuvio.tv` and the publishable key Nuvio's own apps ship with. Set them only if Nuvio changes its key, or to point at a self-hosted Nuvio project. The sync needs migration `0023_media_app_sync.sql` and `TOKEN_ENCRYPTION_KEY`.
+- `FF_MEDIA_APP_PUSH` (optional): `1` lets people turn on two-way sync for a connected Stremio or Nuvio account, which writes watched plays into their Stremio library or Nuvio profile. **Leave unset** until you have tried it once on your own accounts (it writes into a person's real library, in formats read from the apps' own clients and not yet checked against live accounts). Pulling history needs no flag.
 - `FF_SESSIONS` (optional): `1` turns on session sign-in for the `/api/creator/*` routes (P3a-6). **Leave unset** until the new sign-in screens ship.
 - `FF_NEW_UI`: **no longer read** (Release 21). The new interface is the only page; the variable can be deleted (§20).
 - `FF_INSTALLS` (optional): `1` turns on `/api/installs`, where a signed-in account creates, renames, rotates and removes `/i/{token}` install links (P3a-8). **Leave unset** until the screens for it ship. Links that already exist are served either way.

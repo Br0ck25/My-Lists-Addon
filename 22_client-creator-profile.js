@@ -1681,6 +1681,7 @@ function clearLocalAccountData() {
   if (typeof renderTraktConnectStatus === 'function') renderTraktConnectStatus();
   if (typeof renderTmdbConnectStatus === 'function') renderTmdbConnectStatus();
   if (typeof renderSimklConnectStatus === 'function') renderSimklConnectStatus();
+  if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
   if (typeof renderMdblistConnectStatus === 'function') renderMdblistConnectStatus();
   if (typeof updateConnectionStatusBadges === 'function') updateConnectionStatusBadges();
   if (typeof renderChannelsList === 'function') renderChannelsList();

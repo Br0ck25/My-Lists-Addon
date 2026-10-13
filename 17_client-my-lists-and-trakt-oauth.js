@@ -1936,7 +1936,7 @@ async function warnAboutLapsedConnections() {
   } catch (e) {
     return;
   }
-  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB' };
+  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB', stremio: 'Stremio', nuvio: 'Nuvio' };
   const lapsed = ((data && data.connections) || [])
     .filter(function (c) { return c && c.status && c.status !== 'ok'; })
     .map(function (c) { return names[c.provider] || c.provider; });
@@ -2071,6 +2071,204 @@ function renderSimklConnectStatus() {
     const box = document.getElementById('mySimklListsResult');
     if (box) box.innerHTML = '';
   }
+}
+
+// --- Stremio and Nuvio accounts (61_media-app-sync.js) --------------------------
+//
+// The sign-in stays on the server: Stremio is approved inside Stremio (the Link
+// flow) and Nuvio's password is sent once and not kept. This page only shows the
+// connection and its settings, over the signed-in session. It holds no token.
+const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
+let mediaAppUiPoll = null;
+let mediaAppUiNuvioProfiles = [];
+
+async function mediaAppUiCall(provider, sub, method, body) {
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/' + provider + '/' + sub, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'GET' ? undefined : JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(function () { return {}; });
+    return { ok: res.ok && data.ok !== false, status: res.status, data: data };
+  } catch (e) {
+    return { ok: false, status: 0, data: { error: 'Could not reach the server.' } };
+  }
+}
+
+function mediaAppUiSyncLine(sync) {
+  if (!sync) return '';
+  if (sync.error) return sync.error;
+  if (sync.lastPullAt) return 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
+  return 'Waiting for the first check…';
+}
+
+// info: the settings answer, or null when signed out or unavailable.
+function renderMediaAppStatus(provider, info) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  const connected = !!(info && info.connected);
+  const lapsed = connected && !!info.status && info.status !== 'ok';
+  const live = connected && !lapsed;
+  const statusEl = document.getElementById(provider + 'ConnectStatus');
+  if (statusEl) {
+    if (live) statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected' + (info.username ? ' as ' + escapeHtml(info.username) : '') + '</span>';
+    else if (lapsed) statusEl.innerHTML = '<span class="u-c-v_color_warn_text u-fw-600">Sign in again</span>';
+    else statusEl.innerHTML = '<span class="u-c-v_muted">Not connected</span>';
+  }
+  const connectBtn = document.getElementById(provider + 'ConnectBtn');
+  if (connectBtn) {
+    connectBtn.style.display = live ? 'none' : '';
+    connectBtn.textContent = lapsed ? 'Reconnect ' + name : (provider === 'nuvio' ? 'Sign in to Nuvio' : 'Connect Stremio account');
+  }
+  const disconnectBtn = document.getElementById(provider + 'DisconnectBtn');
+  if (disconnectBtn) disconnectBtn.style.display = connected ? '' : 'none';
+  const form = document.getElementById('nuvioLoginForm');
+  if (form && provider === 'nuvio') form.style.display = live ? 'none' : '';
+  const wrap = document.getElementById(provider + 'SyncWrap');
+  if (wrap) wrap.style.display = live ? '' : 'none';
+  if (!live) return;
+  const sync = info.sync || {};
+  const pull = document.getElementById(provider + 'PullCheckbox');
+  if (pull) pull.checked = !!sync.pull;
+  const push = document.getElementById(provider + 'PushCheckbox');
+  if (push) push.checked = !!sync.push;
+  const pushRow = document.getElementById(provider + 'PushRow');
+  if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
+  const statusLine = document.getElementById(provider + 'SyncStatus');
+  if (statusLine) statusLine.textContent = mediaAppUiSyncLine(sync);
+  if (provider === 'nuvio') {
+    const sel = document.getElementById('nuvioProfileSelect');
+    if (sel) {
+      let html = sync.profileIndex ? '' : '<option value="">Choose a profile</option>';
+      for (let i = 1; i <= 6; i++) {
+        const known = mediaAppUiNuvioProfiles.filter(function (p) { return p.index === i; })[0];
+        html += '<option value="' + i + '"' + (sync.profileIndex === i ? ' selected' : '') + '>' + escapeHtml(known ? known.name : 'Profile ' + i) + '</option>';
+      }
+      sel.innerHTML = html;
+    }
+  }
+}
+
+async function mediaAppUiRefresh(provider) {
+  if (typeof isSignedIn === 'function' && !isSignedIn()) {
+    renderMediaAppStatus(provider, null);
+    return;
+  }
+  const r = await mediaAppUiCall(provider, 'settings', 'GET');
+  renderMediaAppStatus(provider, r.ok ? r.data : null);
+}
+
+function refreshMediaAppConnections() {
+  mediaAppUiRefresh('stremio');
+  mediaAppUiRefresh('nuvio');
+}
+
+function stopStremioLinkPoll() {
+  if (mediaAppUiPoll) clearInterval(mediaAppUiPoll);
+  mediaAppUiPoll = null;
+  const box = document.getElementById('stremioLinkBox');
+  if (box) box.style.display = 'none';
+}
+
+async function startStremioConnect() {
+  if (!requireSignedInFor('connect your Stremio account')) return;
+  stopStremioLinkPoll();
+  const r = await mediaAppUiCall('stremio', 'link/start', 'POST');
+  if (!r.ok || !r.data.code) {
+    showToast(r.data.error || 'Could not start the Stremio link. Please try again.', 'error');
+    return;
+  }
+  const box = document.getElementById('stremioLinkBox');
+  if (box) {
+    const safeLink = typeof r.data.link === 'string' && r.data.link.indexOf('https://link.stremio.com/') === 0 ? r.data.link : '';
+    box.innerHTML = '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Open <a href="' + escapeAttr(safeLink || 'https://link.stremio.com/') + '" target="_blank" rel="noopener" class="u-c-v_accent_2">link.stremio.com</a>, sign in to Stremio if asked, and enter this code:</p>' +
+      '<p class="u-m-6px_0 u-fw-600">' + escapeHtml(r.data.code) + '</p>' +
+      '<p class="u-m-0 u-fs-v_font_size_xs u-c-v_muted">Waiting for you to approve it in Stremio…</p>';
+    box.style.display = '';
+  }
+  let ticks = 0;
+  mediaAppUiPoll = setInterval(async function () {
+    ticks++;
+    if (ticks > 200) {
+      stopStremioLinkPoll();
+      showToast('The Stremio link expired. Start again to get a new code.', 'error');
+      return;
+    }
+    const p = await mediaAppUiCall('stremio', 'link/poll', 'POST', { code: r.data.code });
+    if (p.ok && p.data.status === 'connected') {
+      stopStremioLinkPoll();
+      showToast('Stremio connected.', 'success');
+      mediaAppUiRefresh('stremio');
+    } else if (!p.ok && p.status !== 0 && p.status !== 429 && p.status < 500) {
+      stopStremioLinkPoll();
+      showToast(p.data.error || 'Could not connect Stremio. Please try again.', 'error');
+    }
+  }, 3000);
+}
+
+async function submitNuvioLogin() {
+  if (!requireSignedInFor('connect your Nuvio account')) return;
+  const emailEl = document.getElementById('nuvioEmailInput');
+  const passEl = document.getElementById('nuvioPasswordInput');
+  const email = emailEl ? emailEl.value.trim() : '';
+  const password = passEl ? passEl.value : '';
+  if (!email || !password) {
+    showToast('Enter your Nuvio email and password.', 'error');
+    return;
+  }
+  const btn = document.getElementById('nuvioConnectBtn');
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall('nuvio', 'login', 'POST', { email: email, password: password });
+  if (btn) btn.disabled = false;
+  if (passEl) passEl.value = '';
+  if (!r.ok) {
+    showToast(r.data.error || 'Could not sign in to Nuvio. Please try again.', 'error');
+    return;
+  }
+  mediaAppUiNuvioProfiles = Array.isArray(r.data.profiles) ? r.data.profiles : [];
+  if (emailEl) emailEl.value = '';
+  showToast(r.data.profileIndex ? 'Nuvio connected.' : 'Nuvio connected. Choose which profile to read.', 'success');
+  mediaAppUiRefresh('nuvio');
+}
+
+async function setMediaAppSyncOption(provider, key, value) {
+  const body = {};
+  if (key === 'profileIndex') {
+    if (!value) return;
+    body.profileIndex = Number(value);
+  } else {
+    body[key] = !!value;
+  }
+  const r = await mediaAppUiCall(provider, 'settings', 'POST', body);
+  if (!r.ok) showToast(r.data.error || 'Could not save that setting. Please try again.', 'error');
+  mediaAppUiRefresh(provider);
+}
+
+async function syncMediaAppNow(provider, btn) {
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall(provider, 'sync', 'POST');
+  if (btn) btn.disabled = false;
+  if (!r.ok) {
+    showToast(r.data.error || 'Could not start the sync. Please try again.', 'error');
+    return;
+  }
+  showToast(r.data.started ? MEDIA_APP_UI_NAMES[provider] + ' is syncing. It can take a few minutes.' : MEDIA_APP_UI_NAMES[provider] + ' is already syncing.', 'info');
+}
+
+function disconnectMediaApp(provider) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  showAppConfirm(
+    'Disconnect ' + name + '?',
+    'Syncing stops. What was already brought in stays in your Watch History and Continue Watching.',
+    'Disconnect',
+    async function () {
+      stopStremioLinkPoll();
+      const r = await mediaAppUiCall(provider, '', 'DELETE');
+      if (!r.ok) showToast(r.data.error || 'Could not disconnect ' + name + '. Please try again.', 'error');
+      else showToast(name + ' disconnected.', 'success');
+      mediaAppUiRefresh(provider);
+    }
+  );
 }
 
 let mySimklListsTimer = null;

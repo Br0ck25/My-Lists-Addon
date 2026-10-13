@@ -2323,6 +2323,7 @@ if (typeof scheduleMyTmdbListsRefresh === 'function') scheduleMyTmdbListsRefresh
 if (typeof pickUpSimklTokenFromUrl === 'function') pickUpSimklTokenFromUrl();
 if (typeof renderSimklConnectStatus === 'function') renderSimklConnectStatus();
 if (typeof scheduleMySimklListsRefresh === 'function') scheduleMySimklListsRefresh();
+if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
 if (typeof populateImportTargetLists === 'function') populateImportTargetLists();
 document.querySelectorAll('details.panel.collapsible').forEach((d) => {
   d.addEventListener('toggle', scheduleCreatorSyncSave);

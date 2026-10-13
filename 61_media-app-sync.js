@@ -36,6 +36,16 @@
 // title and episode is skipped, whatever its source: the subtitles ping (38_)
 // records a play when it starts and the app's library when it ends.
 //
+// Two-way sync (off unless FF_MEDIA_APP_PUSH is on AND the person turned it on
+// for that app): plays recorded here from any other source are sent to the app,
+// merging only, never deleting. The app's own plays are never sent back to it
+// (source = that app is skipped), a play the app already has is not sent again,
+// and the position in watch_events.id is kept in media_app_sync.cursor_json, so
+// nothing is sent twice. Stremio: only titles already in the person's library
+// are touched, and only state.watched (a show) or timesWatched, flaggedWatched
+// and lastWatched (a movie) change, on the library item as it was just read.
+// Nuvio: watched items only, in the shape its own rows have.
+//
 // Settings and the pull position are in media_app_sync (migration 0023). The
 // hourly job mediaapp.sync starts a mediaapp.sync-account job for each account
 // that is due, and that job works through the library in bounded steps.
@@ -644,22 +654,211 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
-  ).bind(JSON.stringify({ mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
-  return { done: true, total: fetched.total, applied };
+  ).bind(JSON.stringify({ ...cursor, mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
+  return { done: true, total: fetched.total, applied, pullDone: true };
 }
 
-// The job. Each run is one bounded step; the first step of a pull fixes the
+// The job. Each run is one bounded step: a slice of the pull, then (when
+// two-way sync is on) slices of the push. The first step of a pull fixes the
 // "changed since" mark so later steps see the same list.
 async function runMediaAppSyncJob(env, payload, job = {}) {
   const accountId = Number(payload && payload.accountId);
   const provider = String((payload && payload.provider) || "");
   if (!Number.isInteger(accountId) || !MEDIA_APP_PROVIDERS.includes(provider)) return { progress: {} };
   const prev = job.progress || {};
-  const offset = Number(prev.offset) || 0;
-  const out = await pullMediaAppStep(env, accountId, provider, offset, offset > 0 && prev.since != null ? Number(prev.since) : null);
-  const totals = { plays: (Number(prev.plays) || 0) + (out.applied ? out.applied.plays : 0), progress: (Number(prev.progress) || 0) + (out.applied ? out.applied.progress : 0) };
-  if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
-  return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
+  const totals = { plays: Number(prev.plays) || 0, progress: Number(prev.progress) || 0, pushed: Number(prev.pushed) || 0 };
+  if (prev.phase !== "push") {
+    const offset = Number(prev.offset) || 0;
+    const out = await pullMediaAppStep(env, accountId, provider, offset, offset > 0 && prev.since != null ? Number(prev.since) : null);
+    if (out.applied) {
+      totals.plays += out.applied.plays;
+      totals.progress += out.applied.progress;
+    }
+    if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
+    if (!out.pullDone) return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
+  }
+  const pushed = await pushMediaAppStep(env, accountId, provider);
+  totals.pushed += pushed.sent || 0;
+  if (pushed.more) return { progress: { phase: "push", ...totals }, again: true };
+  return { progress: { finishedAt: Date.now(), skipped: pushed.skipped || null, ...totals } };
+}
+
+// --- Two-way sync: sending plays to the app ---------------------------------------------------
+
+const MEDIA_APP_PUSH_EVENTS = 200;
+const MEDIA_APP_PUSH_CHUNK = 500;
+
+function mediaAppPushFlag(env) {
+  const v = env ? env.FF_MEDIA_APP_PUSH : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// The bitfield for `episodes` (the show's list, in Stremio's order) with the
+// episodes in `watchedKeys` ("season:episode") set. The inverse of
+// stremioWatchedEpisodes: the anchor is the last watched episode.
+async function stremioEncodeWatched(episodes, watchedKeys) {
+  let last = 0;
+  episodes.forEach((e, i) => { if (watchedKeys.has(`${e.season}:${e.episode}`)) last = i; });
+  const length = last + 1;
+  const bytes = new Uint8Array(Math.ceil(length / 8));
+  for (let i = 0; i <= last; i++) {
+    if (watchedKeys.has(`${episodes[i].season}:${episodes[i].episode}`)) bytes[i >> 3] |= 1 << (i & 7);
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate"));
+  const zipped = new Uint8Array(await new Response(stream).arrayBuffer());
+  let bin = "";
+  for (const b of zipped) bin += String.fromCharCode(b);
+  return `${episodes[last].id}:${length}:${btoa(bin)}`;
+}
+
+// The library items to write for `groups` (imdb id -> { kind, plays }), each
+// the item as just read with only its watched state changed. Titles that are
+// not in the library, and shows Cinemeta cannot list, are skipped.
+async function stremioPushChanges(library, groups, nowIso) {
+  const byId = new Map(library.map((it) => [String(it._id), it]));
+  const changes = [];
+  let skipped = 0;
+  let cinemeta = MEDIA_APP_CINEMETA_PER_STEP;
+  for (const [imdb, g] of groups) {
+    const item = byId.get(imdb);
+    if (!item) {
+      skipped++;
+      continue;
+    }
+    const st = item.state && typeof item.state === "object" ? item.state : {};
+    if (g.kind === "movie") {
+      if (Number(st.timesWatched) > 0 || Number(st.flaggedWatched) > 0) continue;
+      const at = Math.max(...g.plays.map((p) => p.watchedAt));
+      const later = !mediaAppTime(st.lastWatched) || mediaAppTime(st.lastWatched) < at;
+      changes.push({ ...item, _mtime: nowIso, state: { ...st, flaggedWatched: 1, timesWatched: Math.max(1, Number(st.timesWatched) || 0), lastWatched: later ? new Date(at).toISOString() : st.lastWatched } });
+      continue;
+    }
+    if (cinemeta <= 0) {
+      skipped++;
+      continue;
+    }
+    cinemeta--;
+    const eps = await stremioEpisodes(imdb);
+    if (!eps) {
+      skipped++;
+      continue;
+    }
+    const have = new Set((st.watched ? await stremioWatchedEpisodes(st.watched, eps) : []).map((e) => `${e.season}:${e.episode}`));
+    const listed = new Set(eps.map((e) => `${e.season}:${e.episode}`));
+    let added = 0;
+    for (const p of g.plays) {
+      const key = `${p.season}:${p.episode}`;
+      if (listed.has(key) && !have.has(key)) {
+        have.add(key);
+        added++;
+      }
+    }
+    if (!added) continue;
+    changes.push({ ...item, _mtime: nowIso, state: { ...st, watched: await stremioEncodeWatched(eps, have) } });
+  }
+  return { changes, skipped };
+}
+
+// A watched item in the shape Nuvio's own rows have. `sample` is one of the
+// account's rows, which tells snake_case from camelCase and how time is written.
+function nuvioWatchedItem(sample, rec) {
+  const snake = sample && Object.prototype.hasOwnProperty.call(sample, "content_id");
+  const k = (a, b) => (snake ? a : b);
+  const raw = mediaAppPick(sample, "watched_at", "watchedAt");
+  const at = typeof raw === "string" && !/^\d+(\.\d+)?$/.test(raw) ? new Date(rec.watchedAt).toISOString()
+    : (mediaAppTime(raw) && Number(raw) < 1e11 ? Math.round(rec.watchedAt / 1000) : rec.watchedAt);
+  const item = { [k("content_id", "contentId")]: rec.contentId, [k("content_type", "contentType")]: rec.kind, title: rec.title || "", [k("watched_at", "watchedAt")]: at };
+  if (rec.kind === "series") {
+    item.season = rec.season;
+    item.episode = rec.episode;
+  }
+  return item;
+}
+
+// One slice of plays for the app. { sent, more, skipped }; never throws: a
+// failure is written on the settings row and the next run tries again from the
+// same place.
+async function pushMediaAppStep(env, accountId, provider) {
+  const none = (skipped) => ({ sent: 0, more: false, skipped });
+  try {
+    if (!mediaAppPushFlag(env)) return none("off");
+    const sync = await loadMediaAppSync(env, accountId, provider);
+    if (!sync || !sync.push_enabled || (provider === "nuvio" && !sync.profile_index)) return none("off");
+    const actDb = activityDb(env, accountId);
+    if (!actDb || !(await activitySchemaReady(actDb))) return none("no activity database");
+    let conn = await loadProviderConnection(env, accountId, provider);
+    if (!conn || conn.status !== "ok") return none("not connected");
+    if (provider === "nuvio") {
+      conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+      if (!conn || !conn.accessToken) return none("reauth");
+    }
+    let cursor = {};
+    try {
+      cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
+    } catch {}
+    const after = Number(cursor.pushedId) || 0;
+    const { results: rows } = await actDb.prepare(
+      "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? ORDER BY id LIMIT ?"
+    ).bind(accountId, after, provider, MEDIA_APP_PUSH_EVENTS).all();
+    const events = rows || [];
+    if (!events.length) return none(null);
+    const ids = [...new Set(events.map((e) => e.media_id))];
+    const { results: media } = await env.DB.prepare(
+      "SELECT id, kind, imdb_id, title FROM media WHERE id IN (SELECT value FROM json_each(?))"
+    ).bind(JSON.stringify(ids)).all();
+    const titleOf = new Map((media || []).filter((m) => m.imdb_id).map((m) => [m.id, m]));
+    const plays = events.filter((e) => titleOf.has(e.media_id)).map((e) => {
+      const m = titleOf.get(e.media_id);
+      const isEpisode = e.season != null && e.episode != null;
+      return { contentId: m.imdb_id, title: m.title || "", kind: isEpisode ? "series" : "movie", season: e.season, episode: e.episode, watchedAt: Number(e.watched_at) };
+    });
+
+    let sent = 0;
+    if (plays.length) {
+      if (provider === "stremio") {
+        const library = await stremioFetchLibrary(conn.accessToken);
+        const groups = new Map();
+        for (const p of plays) {
+          const g = groups.get(p.contentId) || { kind: p.kind, plays: [] };
+          g.plays.push(p);
+          groups.set(p.contentId, g);
+        }
+        const { changes } = await stremioPushChanges(library, groups, new Date().toISOString());
+        for (let i = 0; i < changes.length; i += 50) {
+          const res = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: changes.slice(i, i + 50) });
+          if (!res || res.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
+        }
+        sent = changes.length;
+      } else {
+        const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
+        const sample = profile.watched.find((w) => mediaAppPick(w, "content_id", "contentId")) || profile.progress.find((w) => mediaAppPick(w, "content_id", "contentId"));
+        const present = new Set(profile.watched.map((w) => `${String(mediaAppPick(w, "content_id", "contentId") || "").toLowerCase()}:${mediaAppInt(w.season) == null ? "" : mediaAppInt(w.season)}:${mediaAppInt(w.episode) == null ? "" : mediaAppInt(w.episode)}`));
+        const fresh = plays.filter((p) => !present.has(`${p.contentId}:${p.season == null ? "" : p.season}:${p.episode == null ? "" : p.episode}`));
+        if (fresh.length && !sample) {
+          // Nothing of the account's own to copy the format from.
+          await setMediaAppSyncError(env, accountId, provider, "Two-way sync starts once there is something watched in Nuvio to match.");
+          return none("no sample");
+        }
+        for (let i = 0; i < fresh.length; i += MEDIA_APP_PUSH_CHUNK) {
+          await nuvioRpc(env, conn.accessToken, "sync_push_watched_items", { p_profile_id: sync.profile_index, p_items: fresh.slice(i, i + MEDIA_APP_PUSH_CHUNK).map((p) => nuvioWatchedItem(sample, p)) });
+        }
+        sent = fresh.length;
+      }
+    }
+    const nowMs = Date.now();
+    await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ?, last_push_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?")
+      .bind(JSON.stringify({ ...cursor, pushedId: events[events.length - 1].id }), nowMs, nowMs, accountId, provider).run();
+    return { sent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
+  } catch (e) {
+    if (e && e.kind === "invalid") {
+      await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
+      await setMediaAppSyncError(env, accountId, provider, "Sign in again to keep syncing.");
+      return none("reauth");
+    }
+    console.error(`mediaapp: push to ${provider} failed`, e);
+    await setMediaAppSyncError(env, accountId, provider, "Could not send your plays just now. It will try again.");
+    return none("error");
+  }
 }
 
 // Starts a pull for one account's app (what connecting and "Sync now" do).
@@ -718,7 +917,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
   if (sub === "settings" && request.method === "GET") {
     const conn = await loadProviderConnection(env, accountId, provider);
     const row = await loadMediaAppSync(env, accountId, provider);
-    return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, sync: mediaAppSyncSummary(row) });
+    return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), sync: mediaAppSyncSummary(row) });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -773,6 +972,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         binds.push(body.pull ? 1 : 0);
       }
       if (body.push != null) {
+        if (body.push && !mediaAppPushFlag(env)) return json({ ok: false, error: "Two-way sync isn't switched on yet." }, 409);
         sets.push("push_enabled = ?");
         binds.push(body.push ? 1 : 0);
       }
@@ -785,7 +985,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (sets.length) {
         await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)
           .bind(...binds, Date.now(), accountId, provider).run();
-        if (body.profileIndex != null || body.pull) await startMediaAppSync(env, accountId, provider);
+        if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
       }
       return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
     }
