@@ -229,6 +229,25 @@ describe("Nuvio and Stremio under Lists, My Lists", () => {
     assert.deepEqual(opened, [["Stremio Watch History", "mixed", "autotrack:stremio-watch-history:mixed:alice"]]);
   });
 
+  it("asks for the list's items as the signed-in account, not as the label on the page", async () => {
+    const c = loadClient({
+      signedIn: "alice",
+      routes: { "/api/preview": () => ({ json: { ok: true, count: 0, sample: [], maybeMore: false } }) },
+    });
+    c.call("openListDetailsPage", "Nuvio Watch History", "mixed", "autotrack:nuvio-watch-history:mixed:alice");
+    await new Promise((r) => setTimeout(r, 20));
+    const asked = requestsTo(c, "/api/preview");
+    assert.ok(asked.length > 0, "the details page asked for its items");
+    assert.ok(asked.every((r) => r.body.creatorName === "alice"), "creatorName is the account: " + JSON.stringify(asked.map((r) => r.body.creatorName)));
+  });
+
+  it("keeps a Continue Watching list's movies, not only its shows", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/preview": () => ({ json: { ok: true, count: 0, sample: [], maybeMore: false } }) } });
+    c.call("openListDetailsPage", "Nuvio Continue Watching", "mixed", "autotrack:nuvio-continue-watching:mixed:alice");
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(requestsTo(c, "/api/preview")[0].body.type, "mixed");
+  });
+
   it("adds a movie row and a show row, each reading the account's own list", () => {
     const c = loadClient({ signedIn: "alice" });
     const rows = [];

@@ -2465,6 +2465,9 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   const parts = rawUrl.split(":");
   let slug = parts[1] || "";
   let targetType = parts[2] || entry.type || "movie";
+  // A "mixed" row asked for as movies, or as shows, answers only those: a card
+  // that fetches both halves and merges them would list every title twice.
+  if (targetType === "mixed" && (entry.type === "movie" || entry.type === "series")) targetType = entry.type;
   let username = parts[3] || (keys && (keys.trackCreatorName || keys.username || keys.creatorName)) || "";
 
   if (rawUrl.startsWith("custom:")) {

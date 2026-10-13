@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ab0e451091";
+const WORKER_BUILD = "85d8082d06";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -20653,6 +20653,9 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   const parts = rawUrl.split(":");
   let slug = parts[1] || "";
   let targetType = parts[2] || entry.type || "movie";
+  // A "mixed" row asked for as movies, or as shows, answers only those: a card
+  // that fetches both halves and merges them would list every title twice.
+  if (targetType === "mixed" && (entry.type === "movie" || entry.type === "series")) targetType = entry.type;
   let username = parts[3] || (keys && (keys.trackCreatorName || keys.username || keys.creatorName)) || "";
 
   if (rawUrl.startsWith("custom:")) {
@@ -81006,7 +81009,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     isDualTypeChart = true;
   }
 
-  const isContinueWatching = (name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching')));
+  // The Nuvio and Stremio lists hold movies as well as shows (61_media-app-sync.js).
+  const isMediaAppList = /^autotrack:(nuvio|stremio)-/.test(String(listUrl || ''));
+  const isContinueWatching = !isMediaAppList && ((name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching'))));
   if (isContinueWatching) {
     type = 'series';
     isDualTypeChart = false;
@@ -81479,7 +81484,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     // Same reason as in appendItems: while On Today is the open tab the status
     // line is its, so a page loading behind it says nothing.
     const quiet = window._currentListDetailsFilter === 'lineup';
-    if (!listUrl || listUrl.startsWith('custom:') || listUrl.startsWith('autotrack:')) {
+    // An autotrack: list is the account's own, shown from its local copy -- except
+    // the Nuvio and Stremio ones, which only the server has.
+    if (!listUrl || listUrl.startsWith('custom:') || (listUrl.startsWith('autotrack:') && !isMediaAppList)) {
       done = true;
       if (!quiet) statusEl.innerHTML = loadedCount ? '' : '<small>No items found.</small>';
       return;
@@ -81499,6 +81506,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklKey) body.simklKey = keys.simklKey;
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
+      // creatorName above is the label shown under the title ("My Lists Addon").
+      // A private list needs the account that is asking.
+      if (isMediaAppList && typeof previewCreatorAuth === 'function') Object.assign(body, previewCreatorAuth());
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
       const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',

@@ -3334,7 +3334,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     isDualTypeChart = true;
   }
 
-  const isContinueWatching = (name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching')));
+  // The Nuvio and Stremio lists hold movies as well as shows (61_media-app-sync.js).
+  const isMediaAppList = /^autotrack:(nuvio|stremio)-/.test(String(listUrl || ''));
+  const isContinueWatching = !isMediaAppList && ((name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching'))));
   if (isContinueWatching) {
     type = 'series';
     isDualTypeChart = false;
@@ -3807,7 +3809,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     // Same reason as in appendItems: while On Today is the open tab the status
     // line is its, so a page loading behind it says nothing.
     const quiet = window._currentListDetailsFilter === 'lineup';
-    if (!listUrl || listUrl.startsWith('custom:') || listUrl.startsWith('autotrack:')) {
+    // An autotrack: list is the account's own, shown from its local copy -- except
+    // the Nuvio and Stremio ones, which only the server has.
+    if (!listUrl || listUrl.startsWith('custom:') || (listUrl.startsWith('autotrack:') && !isMediaAppList)) {
       done = true;
       if (!quiet) statusEl.innerHTML = loadedCount ? '' : '<small>No items found.</small>';
       return;
@@ -3827,6 +3831,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklKey) body.simklKey = keys.simklKey;
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
+      // creatorName above is the label shown under the title ("My Lists Addon").
+      // A private list needs the account that is asking.
+      if (isMediaAppList && typeof previewCreatorAuth === 'function') Object.assign(body, previewCreatorAuth());
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
       const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',

@@ -849,6 +849,15 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     assert.equal(denied.body.count, 0, "another account's key reads nothing");
   });
 
+  it("answers a movies request with movies only and a shows request with shows only, so a card does not list each title twice", async () => {
+    const ctx = await connected("lsonce");
+    const url = `autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`;
+    const ask = (type) => call(ctx.env, "/api/preview", { method: "POST", json: { url, type, sample: 20, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    assert.deepEqual((await ask("movie")).body.sample.map((m) => m.id), ["tt1111111"]);
+    assert.deepEqual((await ask("series")).body.sample.map((m) => m.id), [SHOW]);
+    assert.equal((await ask("mixed")).body.sample.length, 2, "and a mixed request still answers both");
+  });
+
   it("previews for a signed-in page that holds a session and no Creator Key", async () => {
     const ctx = await connected("lssess", { FF_EVENT_TRACKING: "1", FF_SESSIONS: "1" });
     const url = `autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`;

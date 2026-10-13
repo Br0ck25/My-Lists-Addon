@@ -2061,7 +2061,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: connect Stremio and Nuvio accounts, pull their watch history, optional two-way sync
 
-**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build ab0e451091.
+**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build 85d8082d06.
 
 ### What it changes
 
@@ -2096,4 +2096,6 @@ Neither service documents its API. The calls follow stremio-core's library item 
 
 **Sixth follow-up (same day):** the list cards still said *No items found in this list.* `/api/preview` only checked who was asking when the page sent both a Creator Name and a Creator Key, and a page signed in with a session sends only the name, so a private `autotrack:` shelf previewed empty for exactly the people it belongs to. It now proves the caller by the session too (`authenticateCreator` already did when no key is given); another account's session or no session still reads nothing. Settings also says what the last check found (*Found 12 titles.*, and how many could not be matched), kept with the pull position in `media_app_sync.cursor_json`, so an empty list can be told from an empty app.
 
-**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build ab0e451091)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
+**Seventh follow-up (same day):** (1) Each title showed twice in a card: a mixed card asks for movies and for shows separately and merges them, but the list's own `mixed` in its URL overrode the requested type, so both calls returned everything. A `mixed` row asked for as `movie` or `series` now answers only that (`fetchAutoTrackedCatalog`, 05_). (2) *See all* said "No items found.": the details page never loaded an `autotrack:` list from the server (those were local copies) and sent the label under the title, "My Lists Addon", as the account name. The Nuvio and Stremio lists now load from the server as the signed-in account. (3) Their Continue Watching page is no longer forced to shows only, so part-way movies appear.
+
+**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 85d8082d06)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
