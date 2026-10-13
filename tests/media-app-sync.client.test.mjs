@@ -3,7 +3,7 @@
 // reads and changes the server's settings row.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { loadClient, requestsTo } from "./client-harness.mjs";
+import { loadClient, renderPage, requestsTo } from "./client-harness.mjs";
 
 const el = (c, id) => c.document.getElementById(id);
 
@@ -105,5 +105,22 @@ describe("Stremio and Nuvio cards", () => {
     assert.ok(!html.includes("javascript:"));
     assert.match(html, /href="https:\/\/link\.stremio\.com\/"/);
     assert.match(html, /ABCD1234/);
+  });
+});
+
+describe("Stremio and Nuvio cards in the page", () => {
+  // They once sat inside the Simkl card (a missing </div>), narrower than the rest with a card inside the card.
+  it("sit beside the other provider cards, not inside one", () => {
+    const html = renderPage();
+    const depthAt = (needle) => {
+      const at = html.indexOf(needle);
+      assert.ok(at > 0, needle + " is not in the page");
+      let depth = 0;
+      for (const m of html.slice(0, at).matchAll(/<(\/?)div\b[^>]*>/g)) depth += m[1] ? -1 : 1;
+      return depth;
+    };
+    const ids = ["tmdbSection", "traktSection", "mdblistSection", "simklSection", "stremioSection", "nuvioSection"];
+    const depths = ids.map((id) => depthAt(`<div class="provider-card" id="${id}"`));
+    assert.deepEqual(new Set(depths).size, 1, "provider cards at different depths: " + ids.map((id, i) => `${id}=${depths[i]}`).join(", "));
   });
 });

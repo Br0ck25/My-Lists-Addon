@@ -571,6 +571,7 @@
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" class="u-c-v_accent_2">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
+      </div>
 
       <!-- Stremio Section -->
       <div class="provider-card" id="stremioSection">
@@ -665,7 +666,6 @@
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
           </div>
         </div>
-      </div>
       </div>
     </div>
 

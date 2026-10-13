@@ -2061,7 +2061,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: connect Stremio and Nuvio accounts, pull their watch history, optional two-way sync
 
-**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build f29a8510f1.
+**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build 0df308f4f5.
 
 ### What it changes
 
@@ -2084,4 +2084,6 @@ Neither service documents its API. The calls follow stremio-core's library item 
 - `tests/jobs.test.mjs`, `tests/worker.test.mjs`: the new periodic job, migration 0023 in the schema manifest, the new variables documented.
 - `bash verify.sh -q` passes.
 
-**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build f29a8510f1)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
+**Follow-up (same day):** the first build put the Stremio and Nuvio cards inside the Simkl card (a misplaced `</div>`), so they showed narrower, with a card inside a card. They now sit beside the other provider cards; `tests/media-app-sync.client.test.mjs` checks that every provider card is at the same depth in the page.
+
+**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 0df308f4f5)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.

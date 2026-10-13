@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f29a8510f1";
+const WORKER_BUILD = "0df308f4f5";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -37525,6 +37525,7 @@ if ('serviceWorker' in navigator) {
             <p class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted">Create a free Simkl Client ID at <a href="https://simkl.com/settings/developer/" target="_blank" class="u-c-v_accent_2">simkl.com/settings/developer/</a>.</p>
           </div>
         </details>
+      </div>
 
       <!-- Stremio Section -->
       <div class="provider-card" id="stremioSection">
@@ -37619,7 +37620,6 @@ if ('serviceWorker' in navigator) {
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
           </div>
         </div>
-      </div>
       </div>
     </div>
 
