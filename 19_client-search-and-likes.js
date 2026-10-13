@@ -3872,8 +3872,9 @@ async function openItemDetailsModal(id, type, opts) {
         (d.poster ? '<img class="item-head-poster" src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
         '<div class="item-head-main">' +
           '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
-          (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
-          (watchProgress.label ? '<div class="item-pills"><span class="item-pill" id="itemWatchProgress">' + escapeHtml(watchProgress.label) + '</span></div>' : '') +
+          (infoHtml || watchProgress.label ? '<div class="item-pills">' + infoHtml +
+            (watchProgress.label ? (infoHtml ? '<span class="item-pill-sep" aria-hidden="true">\u2022</span>' : '') + '<span class="item-pill" id="itemWatchProgress">' + escapeHtml(watchProgress.label) + '</span>' : '') +
+          '</div>' : '') +
         '</div>' +
       '</div>' +
       '<div class="item-actions">' +

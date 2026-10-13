@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "3d5dc3a938";
+const WORKER_BUILD = "1240efb878";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -50276,8 +50276,9 @@ async function openItemDetailsModal(id, type, opts) {
         (d.poster ? '<img class="item-head-poster" src="' + escapeAttr(resolveClientPoster(d, d.poster)) + '" alt="">' : '') +
         '<div class="item-head-main">' +
           '<h1 class="item-title">' + escapeHtml(d.title) + '</h1>' +
-          (infoHtml ? '<div class="item-pills">' + infoHtml + '</div>' : '') +
-          (watchProgress.label ? '<div class="item-pills"><span class="item-pill" id="itemWatchProgress">' + escapeHtml(watchProgress.label) + '</span></div>' : '') +
+          (infoHtml || watchProgress.label ? '<div class="item-pills">' + infoHtml +
+            (watchProgress.label ? (infoHtml ? '<span class="item-pill-sep" aria-hidden="true">\u2022</span>' : '') + '<span class="item-pill" id="itemWatchProgress">' + escapeHtml(watchProgress.label) + '</span>' : '') +
+          '</div>' : '') +
         '</div>' +
       '</div>' +
       '<div class="item-actions">' +

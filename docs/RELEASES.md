@@ -2041,7 +2041,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: a show's page shows percent watched and time left
 
-**Branch point:** the "deleted account's support threads" entry above (build 2747c901d9). Built 2026-10-13, build 3d5dc3a938.
+**Branch point:** the "deleted account's support threads" entry above (build 2747c901d9). Built 2026-10-13, build 1240efb878.
 
 ### What it changes
 
@@ -2053,4 +2053,4 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 - 5 new tests in `tests/client.test.mjs` (the 10 one-hour episodes example, a 45-minute show, finished, no runtime, specials ignored).
 - `bash verify.sh -q` passes.
 
-**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 3d5dc3a938)**. No migration.
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 1240efb878)**. No migration.
