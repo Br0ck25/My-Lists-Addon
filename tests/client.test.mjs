@@ -8772,6 +8772,42 @@ describe("client: a show's page reads percent watched and time left", () => {
     assert.equal(el.textContent, "50% watched \u2022 5h 0m left");
   });
 
+  it("adds up each unwatched episode's own length when the show has no typical one", () => {
+    const show = { ...SHOW, runtime: null };
+    const client = seeded(show, 2);
+    // Episodes 1-2 watched; 3 is 40 min, 4 is 50 min, the other six have no length.
+    client.set("_seasonEpisodesMap", {
+      1: Array.from({ length: 10 }, (_, i) => ({
+        episode_number: i + 1, air_date: "2021-01-01", runtime: i === 2 ? 40 : i === 3 ? 50 : (i < 2 ? 100 : null),
+      })),
+    });
+    // Unknown episodes count at the average of those with a length: (100+100+40+50)/4 = 72.5
+    // 40 + 50 + 6 x 72.5 = 525 minutes = 8h 45m
+    assert.equal(client.call("showWatchProgressState", show).label, "20% watched \u2022 8h 45m left");
+  });
+
+  it("loads every season in the background and shows the time from them", async () => {
+    const show = {
+      id: "tt_progress", tmdbId: "9", title: "Progress Show", overview: "x", poster: "", runtime: null, seasons: 1,
+      seasonsData: [{ season_number: 1, name: "Season 1", episode_count: 3, air_date: "2021-01-01" }],
+    };
+    const client = loadClient({
+      routes: {
+        "/api/details": () => ({ json: { ok: true, details: show } }),
+        "/api/season": () => ({ json: { ok: true, season: { episodes: [1, 2, 3].map((n) => ({ episode_number: n, air_date: "2021-01-01", runtime: 30 })) } } }),
+      },
+    });
+    client.set("_fullyWatchedShowIds", new Set());
+    client.call("saveLocalCustomListsMap", {
+      "watch-history": { slug: "watch-history", items: [{
+        id: "tt_progress:1:1", type: "episode", showId: "tt_progress", showTitle: "Progress Show", seasonNum: 1, episodeNum: 1,
+      }] },
+    });
+    await client.call("openItemDetailsModal", "tt_progress", "series");
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(client.get("document").getElementById("itemWatchProgress").textContent, "33% watched \u2022 1h 0m left");
+  });
+
   it("ignores specials", () => {
     assert.equal(seeded(SHOW, 0).call("showWatchProgressState", SHOW).total, 10);
   });

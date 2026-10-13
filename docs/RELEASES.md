@@ -2041,7 +2041,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: a show's page shows percent watched and time left
 
-**Branch point:** the "deleted account's support threads" entry above (build 2747c901d9). Built 2026-10-13, build bc6de57199.
+**Branch point:** the "deleted account's support threads" entry above (build 2747c901d9). Built 2026-10-13, build 6b5d3e4ac0.
 
 ### What it changes
 
@@ -2053,6 +2053,8 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 - 5 new tests in `tests/client.test.mjs` (the 10 one-hour episodes example, a 45-minute show, finished, no runtime, specials ignored).
 - `bash verify.sh -q` passes.
 
-**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build bc6de57199)**. No migration.
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 6b5d3e4ac0)**. No migration.
 
 **Follow-up (same day):** the line did not move when a whole season or the whole show was marked, because only the season counts were repainted on those paths; `updateSeasonEpisodeCounts` now repaints it too. Some shows showed a percentage with no time left because TMDB's `episode_run_time` is empty for them; the details now fall back to the latest (or next) episode's own runtime (07_). A show where TMDB has neither still shows only the percentage.
+
+**Second follow-up (same day):** Silo and others still showed no time because TMDB has no typical episode length for them at all. Time left is now added up from each unwatched episode's own runtime: opening a show loads every aired season's episode list in the background (`preloadShowSeasonRuntimes`, four at a time, 19_), and `showWatchProgressState` sums them. An episode with no length of its own counts at the show's typical length, else the average of the episodes that have one. The same lists make the aired counts exact, so the season buttons and counts are refreshed as each batch arrives. The time appears a moment after the page opens, once the lists are in.
