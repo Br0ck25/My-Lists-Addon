@@ -228,6 +228,8 @@ async function saveTrackingRecord(env, username, accountId, record) {
       await saveEpisodeTitles(env, rows);
     }
   }
+  // A new play is sent on to the apps with two-way sync on (61_media-app-sync.js).
+  if (fresh.length && typeof nudgeMediaAppPush === "function") await nudgeMediaAppPush(env, accountId);
   if (intentional) {
     // Only plays the website knows by id can be removed by leaving them out:
     // a play with no legacy id came from somewhere the website never listed.

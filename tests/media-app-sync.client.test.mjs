@@ -415,6 +415,102 @@ describe("progress and time left on Continue Watching items", () => {
   });
 });
 
+describe("removing an item from Nuvio or Stremio", () => {
+  const button = (over = {}) => {
+    const card = { parentNode: null, removed: false };
+    const grid = { removeChild(n) { n.removed = true; }, querySelectorAll: () => [] };
+    card.parentNode = grid;
+    return { card, dataset: { removeType: "external", provider: "nuvio", target: "history", removeId: "tt2222222", mediaType: "series", name: "Show S", ...over }, closest: () => card };
+  };
+
+  it("puts a remove button on each tile of the app lists, and none on other lists", async () => {
+    const sample = { id: "tt3333333", type: "movie", name: "Movie Half", poster: "https://img.test/p.jpg" };
+    const c = loadClient({ signedIn: "alice", routes: { "/api/preview": () => ({ json: { ok: true, count: 1, sample: [sample], maybeMore: false } }) } });
+    const slotFor = (url) => ({ dataset: { url, type: "mixed", name: "x" }, closest: () => null, className: "", innerHTML: "" });
+    const mine = slotFor("autotrack:nuvio-continue-watching:mixed:alice");
+    await c.call("loadPosterSlot", mine);
+    assert.match(mine.innerHTML, /data-remove-type="external" data-provider="nuvio" data-target="continue-watching" data-remove-id="tt3333333" data-media-type="movie" data-name="Movie Half"/);
+    assert.match(mine.innerHTML, /aria-label="Remove from Nuvio"/);
+    const other = slotFor("autotrack:watch-history:mixed:alice");
+    await c.call("loadPosterSlot", other);
+    assert.ok(!/cw-remove-btn/.test(other.innerHTML), "the account's own Watch History row is not changed by this");
+  });
+
+  it("asks first, says what will go, and does not call the server until confirmed", () => {
+    const c = loadClient({ signedIn: "alice", routes: {} });
+    const asked = [];
+    c.set("showAppConfirm", (title, msg, label, onConfirm) => asked.push({ title, msg, label }));
+    c.call("removeListItemFromDetails", button());
+    assert.equal(asked.length, 1);
+    assert.equal(asked[0].title, "Remove from Nuvio?");
+    assert.match(asked[0].msg, /"Show S" and all its watched episodes will be removed from your Watch History in Nuvio, and from Nuvio itself\./);
+    assert.equal(c.requests.length, 0);
+    c.call("removeListItemFromDetails", button({ target: "continue-watching", mediaType: "movie", name: "Movie Half" }));
+    assert.match(asked[1].msg, /"Movie Half" will be removed from Continue Watching in Nuvio\. Your Watch History is not changed\./);
+    assert.ok(!/episodes/.test(asked[1].msg), "a movie is not an episode or a show");
+  });
+
+  it("removes in the app through the server, then takes the tile away", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/connections/nuvio/remove": () => ({ json: { ok: true } }) } });
+    const toasts = [];
+    c.set("showToast", (m, k) => toasts.push([m, k]));
+    c.set("showAppConfirm", (t, m, l, onConfirm) => onConfirm());
+    const b = button();
+    await c.call("removeListItemFromDetails", b);
+    await new Promise((r) => setTimeout(r, 10));
+    const sent = requestsTo(c, "/api/connections/nuvio/remove");
+    assert.deepEqual(sent[0].body, { target: "history", id: "tt2222222", mediaType: "series" });
+    assert.equal(b.card.removed, true);
+    assert.deepEqual(toasts, [['Removed "Show S" from Nuvio.', "success"]]);
+    assert.equal(requestsTo(c, "/api/external-list/item-mutate").length, 0, "not sent as a Trakt-style removal with tokens");
+  });
+
+  it("keeps the tile and says why when the app refuses", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/connections/stremio/remove": () => ({ status: 502, json: { ok: false, error: "That service didn't answer. Please try again in a minute.", detail: "Stremio answered 500" } }) } });
+    const toasts = [];
+    c.set("showToast", (m, k) => toasts.push([m, k]));
+    c.set("showAppConfirm", (t, m, l, onConfirm) => onConfirm());
+    const b = button({ provider: "stremio" });
+    await c.call("removeListItemFromDetails", b);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(b.card.removed, false);
+    assert.deepEqual(toasts, [["That service didn't answer. Please try again in a minute. (Stremio answered 500)", "error"]]);
+  });
+
+  it("forgets the cached previews of that app's lists, so the next look is fresh", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/connections/nuvio/remove": () => ({ json: { ok: true } }) } });
+    c.set("showToast", () => {});
+    c.set("showAppConfirm", (t, m, l, onConfirm) => onConfirm());
+    c.window._listPreviewCache = new Map([["autotrack:nuvio-watch-history:mixed:alice|movie|12", {}], ["autotrack:stremio-watch-history:mixed:alice|movie|12", {}], ["tmdb:chart:popular|movie|12", {}]]);
+    await c.call("removeListItemFromDetails", button());
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual([...c.window._listPreviewCache.keys()].sort(), ["autotrack:stremio-watch-history:mixed:alice|movie|12", "tmdb:chart:popular|movie|12"]);
+  });
+
+  it("marks the tiles of a See all page of these lists as removable from the app", async () => {
+    const c = loadClient({
+      signedIn: "alice",
+      routes: { "/api/preview": () => ({ json: { ok: true, count: 1, sample: [{ id: "tt3333333", type: "movie", name: "Movie Half", poster: "https://img.test/p.jpg" }], maybeMore: false } }) },
+    });
+    const tiles = [];
+    const grid = c.document.getElementById("detailGrid");
+    grid.isConnected = true;
+    grid.insertAdjacentHTML = (where, html) => tiles.push(html);
+    c.window.requestAnimationFrame = (fn) => fn();
+    c.call("openListDetailsPage", "Nuvio Continue Watching", "mixed", "autotrack:nuvio-continue-watching:mixed:alice");
+    await new Promise((r) => setTimeout(r, 30));
+    assert.match(tiles.join(""), /data-provider="nuvio" data-target="continue-watching"/);
+    assert.match(tiles.join(""), /data-remove-id="tt3333333"/);
+  });
+
+  it("puts the same button on a See all tile", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const html = c.call("livePreviewPosterHtml", { id: "tt2222222", type: "series", name: "Show S", poster: "https://img.test/p.jpg", removeExternalProvider: "stremio", removeExternalTarget: "continue-watching", removeExternalListId: "continue-watching" });
+    assert.match(html, /data-provider="stremio" data-target="continue-watching"[^>]*data-remove-id="tt2222222"/);
+    assert.match(html, /data-name="Show S"/);
+  });
+});
+
 describe("Stremio and Nuvio cards in the page", () => {
   // They once sat inside the Simkl card (a missing </div>), narrower than the rest with a card inside the card.
   it("sit beside the other provider cards, not inside one", () => {

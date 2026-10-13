@@ -1978,7 +1978,7 @@ function livePreviewPosterHtml(m) {
   let removeBtn = '';
   if (!m.isLivePreviewShelf && !m.hideRemoveBtn) {
     if (m.removeExternalProvider) {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-name="' + escapeAttr(m.showTitle || m.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
     } else {
       const cwRemoveTarget = m.removeShowId || (isCwItem ? (m.showId || m.id || m.imdbId) : null);
       if (cwRemoveTarget) {
@@ -2119,6 +2119,11 @@ function livePreviewPosterHtml(m) {
 
 function removeListItemFromDetails(btn) {
   if (!btn) return;
+  // Nuvio and Stremio hold their own sign-in: the server removes the item in the app (17_).
+  if (btn.dataset.removeType === 'external' && (btn.dataset.provider === 'nuvio' || btn.dataset.provider === 'stremio')) {
+    removeMediaAppItem(btn);
+    return;
+  }
   const type = btn.dataset.removeType || '';
   const id = btn.dataset.removeId || '';
   const extra = btn.dataset.removeSlug || '';
@@ -3666,8 +3671,18 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const isMdbUserList = !!(listUrl && mdbUser && !isMdbWatchlist && !isMdbHistory && !listUrl.toLowerCase().includes('mdblist.com/lists/official/') && (listUrl.toLowerCase().includes('mdblist.com/lists/' + mdbUser.toLowerCase() + '/') || listUrl.startsWith('mdblist:list:')));
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
+  // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl || ''));
+
   function annotatePersonalItem(it) {
     if (!it) return it;
+    if (mediaAppList) {
+      return Object.assign({}, it, {
+        removeExternalProvider: mediaAppList[1],
+        removeExternalTarget: mediaAppList[2],
+        removeExternalListId: mediaAppList[2],
+      });
+    }
     if (isSimklUserList) {
       return Object.assign({}, it, {
         removeExternalProvider: 'simkl',

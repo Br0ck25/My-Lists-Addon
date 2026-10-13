@@ -2402,6 +2402,43 @@ async function syncMediaAppNow(provider, btn) {
   mediaAppUiRefresh(provider);
 }
 
+// The tile's remove button on the Nuvio and Stremio lists: removes the item in the app itself,
+// then here (61_media-app-sync.js). Asks first; the tile only goes once the app has accepted.
+function removeMediaAppItem(btn) {
+  const provider = btn.dataset.provider;
+  const target = btn.dataset.target;
+  const id = btn.dataset.removeId;
+  const mediaType = btn.dataset.mediaType || 'movie';
+  const itemName = btn.dataset.name || 'This title';
+  const app = MEDIA_APP_UI_NAMES[provider];
+  if (!app || !id || (target !== 'history' && target !== 'continue-watching')) return;
+  const isShow = mediaType === 'series' || mediaType === 'episode';
+  const message = target === 'history'
+    ? '"' + itemName + '"' + (isShow ? ' and all its watched episodes' : '') + ' will be removed from your Watch History in ' + app + ', and from ' + app + ' itself.'
+    : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
+  showAppConfirm('Remove from ' + app + '?', message, 'Remove', async function () {
+    const r = await mediaAppUiCall(provider, 'remove', 'POST', { target: target, id: id, mediaType: mediaType });
+    if (!r.ok) {
+      showToast(mediaAppUiMessage(r, 'Could not remove "' + itemName + '" from ' + app + '. Please try again.'), 'error');
+      return;
+    }
+    const card = btn.closest('.live-preview-poster-card, .list-card-mini-poster-tile');
+    if (card && card.parentNode) {
+      const grid = card.parentNode;
+      grid.removeChild(card);
+      const remaining = grid.querySelectorAll ? grid.querySelectorAll('.live-preview-poster-card').length : 0;
+      if (typeof window._updateListDetailsItemCount === 'function' && document.getElementById('detailGrid') === grid) window._updateListDetailsItemCount(remaining);
+    }
+    // Previews of this app's lists are out of date now.
+    if (window._listPreviewCache && typeof window._listPreviewCache.forEach === 'function') {
+      const stale = [];
+      window._listPreviewCache.forEach(function (v, k) { if (String(k).indexOf('autotrack:' + provider + '-') === 0) stale.push(k); });
+      stale.forEach(function (k) { window._listPreviewCache.delete(k); });
+    }
+    showToast('Removed "' + itemName + '" from ' + app + '.', 'success');
+  }, true);
+}
+
 function disconnectMediaApp(provider) {
   const name = MEDIA_APP_UI_NAMES[provider];
   showAppConfirm(

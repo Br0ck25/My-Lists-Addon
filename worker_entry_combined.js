@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4eccbb5cbf";
+const WORKER_BUILD = "e746dbcd9f";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -44550,6 +44550,43 @@ async function syncMediaAppNow(provider, btn) {
   mediaAppUiRefresh(provider);
 }
 
+// The tile's remove button on the Nuvio and Stremio lists: removes the item in the app itself,
+// then here (61_media-app-sync.js). Asks first; the tile only goes once the app has accepted.
+function removeMediaAppItem(btn) {
+  const provider = btn.dataset.provider;
+  const target = btn.dataset.target;
+  const id = btn.dataset.removeId;
+  const mediaType = btn.dataset.mediaType || 'movie';
+  const itemName = btn.dataset.name || 'This title';
+  const app = MEDIA_APP_UI_NAMES[provider];
+  if (!app || !id || (target !== 'history' && target !== 'continue-watching')) return;
+  const isShow = mediaType === 'series' || mediaType === 'episode';
+  const message = target === 'history'
+    ? '"' + itemName + '"' + (isShow ? ' and all its watched episodes' : '') + ' will be removed from your Watch History in ' + app + ', and from ' + app + ' itself.'
+    : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
+  showAppConfirm('Remove from ' + app + '?', message, 'Remove', async function () {
+    const r = await mediaAppUiCall(provider, 'remove', 'POST', { target: target, id: id, mediaType: mediaType });
+    if (!r.ok) {
+      showToast(mediaAppUiMessage(r, 'Could not remove "' + itemName + '" from ' + app + '. Please try again.'), 'error');
+      return;
+    }
+    const card = btn.closest('.live-preview-poster-card, .list-card-mini-poster-tile');
+    if (card && card.parentNode) {
+      const grid = card.parentNode;
+      grid.removeChild(card);
+      const remaining = grid.querySelectorAll ? grid.querySelectorAll('.live-preview-poster-card').length : 0;
+      if (typeof window._updateListDetailsItemCount === 'function' && document.getElementById('detailGrid') === grid) window._updateListDetailsItemCount(remaining);
+    }
+    // Previews of this app's lists are out of date now.
+    if (window._listPreviewCache && typeof window._listPreviewCache.forEach === 'function') {
+      const stale = [];
+      window._listPreviewCache.forEach(function (v, k) { if (String(k).indexOf('autotrack:' + provider + '-') === 0) stale.push(k); });
+      stale.forEach(function (k) { window._listPreviewCache.delete(k); });
+    }
+    showToast('Removed "' + itemName + '" from ' + app + '.', 'success');
+  }, true);
+}
+
 function disconnectMediaApp(provider) {
   const name = MEDIA_APP_UI_NAMES[provider];
   showAppConfirm(
@@ -48293,6 +48330,10 @@ async function loadPosterSlot(slot) {
               const slugMatch = listUrl.match(new RegExp('lists/([^/?#]+)'));
               const traktListId = traktTarget === 'custom' ? (slugMatch ? slugMatch[1] : listUrl) : traktTarget;
               removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
+            } else if (/^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.test(String(listUrl || ''))) {
+              const appHit = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl));
+              const appName = appHit[1] === 'nuvio' ? 'Nuvio' : 'Stremio';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + appHit[1] + '" data-target="' + appHit[2] + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || '') + '" data-name="' + escapeAttr(s.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + appName + '" aria-label="Remove from ' + appName + '">\u2715</button>';
             } else if (isMdblistSlot) {
               const isMdbHist = listUrl === 'mdblist:history' || String(listUrl || '').includes('mdblist.com/history') || (String(listUrl || '').includes('mdblist.com/lists/') && String(listUrl || '').includes('/history'));
               const mdbTarget = listUrl === 'mdblist:watchlist' ? 'watchlist' : (isMdbHist ? 'history' : 'custom');
@@ -79729,7 +79770,7 @@ function livePreviewPosterHtml(m) {
   let removeBtn = '';
   if (!m.isLivePreviewShelf && !m.hideRemoveBtn) {
     if (m.removeExternalProvider) {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-name="' + escapeAttr(m.showTitle || m.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
     } else {
       const cwRemoveTarget = m.removeShowId || (isCwItem ? (m.showId || m.id || m.imdbId) : null);
       if (cwRemoveTarget) {
@@ -79870,6 +79911,11 @@ function livePreviewPosterHtml(m) {
 
 function removeListItemFromDetails(btn) {
   if (!btn) return;
+  // Nuvio and Stremio hold their own sign-in: the server removes the item in the app (17_).
+  if (btn.dataset.removeType === 'external' && (btn.dataset.provider === 'nuvio' || btn.dataset.provider === 'stremio')) {
+    removeMediaAppItem(btn);
+    return;
+  }
   const type = btn.dataset.removeType || '';
   const id = btn.dataset.removeId || '';
   const extra = btn.dataset.removeSlug || '';
@@ -81417,8 +81463,18 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const isMdbUserList = !!(listUrl && mdbUser && !isMdbWatchlist && !isMdbHistory && !listUrl.toLowerCase().includes('mdblist.com/lists/official/') && (listUrl.toLowerCase().includes('mdblist.com/lists/' + mdbUser.toLowerCase() + '/') || listUrl.startsWith('mdblist:list:')));
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
+  // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl || ''));
+
   function annotatePersonalItem(it) {
     if (!it) return it;
+    if (mediaAppList) {
+      return Object.assign({}, it, {
+        removeExternalProvider: mediaAppList[1],
+        removeExternalTarget: mediaAppList[2],
+        removeExternalListId: mediaAppList[2],
+      });
+    }
     if (isSimklUserList) {
       return Object.assign({}, it, {
         removeExternalProvider: 'simkl',
@@ -110640,6 +110696,8 @@ async function saveTrackingRecord(env, username, accountId, record) {
       await saveEpisodeTitles(env, rows);
     }
   }
+  // A new play is sent on to the apps with two-way sync on (61_media-app-sync.js).
+  if (fresh.length && typeof nudgeMediaAppPush === "function") await nudgeMediaAppPush(env, accountId);
   if (intentional) {
     // Only plays the website knows by id can be removed by leaving them out:
     // a play with no legacy id came from somewhere the website never listed.
@@ -117009,6 +117067,98 @@ async function pushMediaAppStep(env, accountId, provider) {
   }
 }
 
+// --- Removing an item from the app, from the website -------------------------------------------
+//
+// The tile's remove button on the Nuvio and Stremio lists. It removes the item in the app
+// itself (so it is gone there too, and a later pull does not bring it back), then here.
+// Behind the same switch as two-way sync (FF_MEDIA_APP_PUSH): it writes into the person's
+// account, in formats not checked against a live one. If the app refuses, nothing is changed
+// here either.
+//   history            Stremio: marked unwatched, position cleared. Nuvio: its watched rows deleted.
+//   continue-watching  Stremio: position cleared. Nuvio: its progress rows set to position 0.
+// A show means all of its episodes. Nothing of any other title is touched.
+
+const MEDIA_APP_REMOVE_TARGETS = ["history", "continue-watching"];
+
+async function stremioRemoveTitle(conn, imdbId, target) {
+  const library = await stremioFetchLibrary(conn.accessToken);
+  const item = library.find((it) => String(it._id) === imdbId);
+  if (!item) return false;
+  const st = item.state && typeof item.state === "object" ? item.state : {};
+  const state = target === "continue-watching" ? { ...st, timeOffset: 0 } : { ...st, timesWatched: 0, flaggedWatched: 0, timeOffset: 0 };
+  if (target === "history") delete state.watched;
+  const res = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: [{ ...item, _mtime: new Date().toISOString(), state }] });
+  if (!res || res.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the change.");
+  return true;
+}
+
+async function nuvioRemoveTitle(env, conn, profileIndex, imdbId, target) {
+  const profile = await nuvioFetchProfile(env, conn.accessToken, profileIndex);
+  const mine = (row) => String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase() === imdbId;
+  if (target === "history") {
+    const rows = profile.watched.filter(mine);
+    // The key of a row is its own title and episode, spelt as the row spells them.
+    const keys = rows.map((r) => {
+      const snake = Object.prototype.hasOwnProperty.call(r, "content_id");
+      return { [snake ? "content_id" : "contentId"]: mediaAppPick(r, "content_id", "contentId"), season: r.season == null ? null : r.season, episode: r.episode == null ? null : r.episode };
+    });
+    for (let i = 0; i < keys.length; i += MEDIA_APP_PUSH_CHUNK) {
+      await nuvioRpc(env, conn.accessToken, "sync_delete_watched_items", { p_profile_id: profileIndex, p_keys: keys.slice(i, i + MEDIA_APP_PUSH_CHUNK) });
+    }
+    return rows.length > 0;
+  }
+  const rows = profile.progress.filter(mine);
+  const entries = rows.map((r) => ({ ...r, position: 0 }));
+  for (let i = 0; i < entries.length; i += MEDIA_APP_PUSH_CHUNK) {
+    await nuvioRpc(env, conn.accessToken, "sync_push_watch_progress", { p_profile_id: profileIndex, p_entries: entries.slice(i, i + MEDIA_APP_PUSH_CHUNK) });
+  }
+  return rows.length > 0;
+}
+
+// The same removal here: the app's own plays of the title (history), its resume numbers, and
+// for Continue Watching the kept movie entry or, for a show, a dismissal at the furthest episode
+// watched (the way the website's own Continue Watching removal works). Returns the plays removed.
+async function removeMediaAppItemLocally(env, accountId, provider, imdbId, target) {
+  const actDb = activityDb(env, accountId);
+  const media = await env.DB.prepare("SELECT id FROM media WHERE imdb_id = ?").bind(imdbId).first();
+  let removed = 0;
+  if (actDb && media && (await activitySchemaReady(actDb))) {
+    if (target === "history") {
+      const out = await actDb.prepare("DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ?").bind(accountId, media.id, provider).run();
+      removed = Number(out && out.meta && out.meta.changes) || 0;
+    } else {
+      await actDb.batch([
+        actDb.prepare("UPDATE show_progress SET companion_json = NULL WHERE account_id = ? AND media_id = ? AND last_season IS NULL").bind(accountId, media.id),
+        actDb.prepare("UPDATE show_progress SET dismissed_at_season = last_season, dismissed_at_episode = COALESCE(last_episode, 0) WHERE account_id = ? AND media_id = ? AND last_season IS NOT NULL").bind(accountId, media.id),
+      ]);
+    }
+  }
+  const row = await loadMediaAppSync(env, accountId, provider);
+  if (row) {
+    let cursor = {};
+    try {
+      cursor = row.cursor_json ? JSON.parse(row.cursor_json) : {};
+    } catch {}
+    if (cursor.resumes && cursor.resumes[imdbId]) {
+      cursor.resumes = mergeMediaAppResumes(cursor.resumes, [[imdbId, null]]);
+      await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
+    }
+  }
+  return { removed, found: Boolean(media) };
+}
+
+// A play the website has just recorded is sent to each app with two-way sync on, soon,
+// rather than at the next hourly job.
+async function nudgeMediaAppPush(env, accountId) {
+  try {
+    if (!mediaAppPushFlag(env)) return;
+    const { results } = await env.DB.prepare("SELECT provider FROM media_app_sync WHERE account_id = ? AND push_enabled = 1").bind(accountId).all();
+    for (const r of results || []) await startMediaAppSync(env, accountId, r.provider);
+  } catch (e) {
+    if (!/no such table/i.test(String((e && e.message) || e))) console.error("mediaapp: could not start a push", e);
+  }
+}
+
 // Starts a pull for one account's app (what connecting and "Sync now" do).
 async function startMediaAppSync(env, accountId, provider, from) {
   const payload = { accountId, provider };
@@ -117197,6 +117347,28 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
       }
       return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
+    }
+    if (sub === "remove") {
+      const name = provider === "nuvio" ? "Nuvio" : "Stremio";
+      if (!mediaAppPushFlag(env)) return json({ ok: false, error: `Removing from ${name} isn't switched on yet.` }, 409);
+      const target = String(body.target || "");
+      const id = mediaAppTitleId(body.id);
+      if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id || !id.imdbId) return json({ ok: false, error: "Choose an item to remove." }, 400);
+      let conn = await loadProviderConnection(env, accountId, provider);
+      const row = await loadMediaAppSync(env, accountId, provider);
+      if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "That account isn't connected." }, 404);
+      if (provider === "nuvio") {
+        conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+        if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+        if (!row.profile_index) return json({ ok: false, error: "Choose a Nuvio profile first." }, 400);
+      }
+      // In the app first: if it refuses, nothing here changes either.
+      const inApp = provider === "stremio"
+        ? await stremioRemoveTitle(conn, id.imdbId, target)
+        : await nuvioRemoveTitle(env, conn, row.profile_index, id.imdbId, target);
+      const here = await removeMediaAppItemLocally(env, accountId, provider, id.imdbId, target);
+      if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);
+      return json({ ok: true, removedInApp: inApp, removedPlays: here.removed });
     }
     if (sub === "sync") {
       const row = await loadMediaAppSync(env, accountId, provider);
