@@ -835,6 +835,20 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     assert.deepEqual(await row(ctx.env, "lscwcfg", "stremio", "continue-watching", "series"), []);
   });
 
+  it("previews a list as movies and shows together, each with its own type", async () => {
+    const ctx = await connected("lsprev");
+    const ask = (url, creator = ctx.owner) => call(ctx.env, "/api/preview", { method: "POST", json: { url, type: "mixed", sample: 20, creatorName: creator.creatorName, creatorKey: creator.creatorKey } });
+    const r = await ask(`autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(r.body.sample.map((m) => [m.id, m.type]).sort(), [["tt1111111", "movie"], [SHOW, "series"]].sort(), "a show once, not once per episode");
+    assert.equal(r.body.count, 2);
+    const none = await ask(`autotrack:stremio-watch-history:mixed:${ctx.owner.creatorName}`);
+    assert.equal(none.body.count, 0, "only that app's plays");
+    const other = await createUser(ctx.env, "lsprevother");
+    const denied = await ask(`autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`, other);
+    assert.equal(denied.body.count, 0, "another account's key reads nothing");
+  });
+
   it("belongs to its owner alone", async () => {
     const ctx = await connected("lsown");
     const other = await createUser(ctx.env, "lsother");

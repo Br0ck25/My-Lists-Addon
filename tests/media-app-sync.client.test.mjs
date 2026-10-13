@@ -196,6 +196,26 @@ describe("Nuvio and Stremio under Lists, My Lists", () => {
     assert.ok(!/Watch History/.test(el(c, "myStremioListsResult").innerHTML));
   });
 
+  it("gives each card a poster preview and a way to open the list, like the other services", () => {
+    const c = loadClient({ signedIn: "alice" });
+    let populated = 0;
+    c.set("populateSearchResultPosters", () => { populated++; });
+    c.call("renderMediaAppStatus", "nuvio", live);
+    const html = el(c, "myNuvioListsResult").innerHTML;
+    assert.match(html, /class="list-card-posters poster-preview-slot"[^>]*data-url="autotrack:nuvio-watch-history:mixed:alice"[^>]*data-type="mixed"/);
+    assert.match(html, /data-url="autotrack:nuvio-continue-watching:mixed:alice"/);
+    assert.match(html, /data-act="openMediaAppListDetails"/);
+    assert.equal(populated, 1, "the slots are filled once the cards are in the page");
+  });
+
+  it("opens a list's details page for the mixed list", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const opened = [];
+    c.set("openListDetailsPage", (...args) => opened.push(args.slice(0, 3)));
+    c.call("openMediaAppListDetails", "stremio", "watch-history");
+    assert.deepEqual(opened, [["Stremio Watch History", "mixed", "autotrack:stremio-watch-history:mixed:alice"]]);
+  });
+
   it("adds a movie row and a show row, each reading the account's own list", () => {
     const c = loadClient({ signedIn: "alice" });
     const rows = [];

@@ -2795,6 +2795,8 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       // Filter out types we don't want in this catalog
       if (targetType === 'movie' && !isMovie) return;
       if (targetType === 'series' && isMovie) return;
+      // A "mixed" row (a list card's preview) keeps each item's own type.
+      const mappedType = targetType === 'mixed' ? (isMovie ? 'movie' : 'series') : targetType;
       
       const showId = isMovie ? null : (it.showId || it.imdbId || it.id);
       const showPoster = isMovie
@@ -2866,7 +2868,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
         showTitle: isMovie ? undefined : (it.showTitle || it.title || it.name),
         seasonNum: it.seasonNum != null ? it.seasonNum : undefined,
         episodeNum: it.episodeNum != null ? it.episodeNum : undefined,
-        type: targetType,
+        type: mappedType,
         name: isMovie ? (it.title || it.name) : (it.showTitle || it.title || it.name),
         poster: showPoster,
         releaseInfo: it.year || undefined,
@@ -2890,7 +2892,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       
       if (!mapped.id) return;
       
-      if (targetType === 'series') {
+      if (mappedType === 'series') {
         if (!mappedItems.some(s => s.id === mapped.id)) {
           mappedItems.push(mapped);
         }

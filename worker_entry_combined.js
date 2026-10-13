@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-13";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "32044a2d17";
+const WORKER_BUILD = "9a72ea2e17";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -20983,6 +20983,8 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       // Filter out types we don't want in this catalog
       if (targetType === 'movie' && !isMovie) return;
       if (targetType === 'series' && isMovie) return;
+      // A "mixed" row (a list card's preview) keeps each item's own type.
+      const mappedType = targetType === 'mixed' ? (isMovie ? 'movie' : 'series') : targetType;
       
       const showId = isMovie ? null : (it.showId || it.imdbId || it.id);
       const showPoster = isMovie
@@ -21054,7 +21056,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
         showTitle: isMovie ? undefined : (it.showTitle || it.title || it.name),
         seasonNum: it.seasonNum != null ? it.seasonNum : undefined,
         episodeNum: it.episodeNum != null ? it.episodeNum : undefined,
-        type: targetType,
+        type: mappedType,
         name: isMovie ? (it.title || it.name) : (it.showTitle || it.title || it.name),
         poster: showPoster,
         releaseInfo: it.year || undefined,
@@ -21078,7 +21080,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       
       if (!mapped.id) return;
       
-      if (targetType === 'series') {
+      if (mappedType === 'series') {
         if (!mappedItems.some(s => s.id === mapped.id)) {
           mappedItems.push(mapped);
         }
@@ -44242,7 +44244,7 @@ function mediaAppListUrls(provider, slug) {
   const user = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
   if (!user) return null;
   const base = 'autotrack:' + provider + '-' + slug + ':';
-  return { movie: base + 'movie:' + user, series: base + 'series:' + user };
+  return { movie: base + 'movie:' + user, series: base + 'series:' + user, mixed: base + 'mixed:' + user };
 }
 
 // The cards under Lists, My Lists. Shown once the app is connected.
@@ -44258,10 +44260,10 @@ function renderMediaAppLists(provider) {
     const urls = mediaAppListUrls(provider, l.slug);
     const added = !!urls && typeof isListAddedToConfig === 'function' && isListAddedToConfig(urls.movie, 'movie') && isListAddedToConfig(urls.series, 'series');
     const listName = name + ' ' + l.title;
-    return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '">' +
+    return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '"' + (urls ? ' data-url="' + escapeAttr(urls.mixed) + '"' : '') + '>' +
       '<div class="list-card-header">' +
         '<div class="list-card-body">' +
-          '<div class="list-card-title">' + escapeHtml(listName) + '</div>' +
+          '<div class="list-card-title u-cur-pointer" data-act="openMediaAppListDetails" data-act-args="' + appActArgs([provider, l.slug]) + '">' + escapeHtml(listName) + '</div>' +
           '<div class="list-card-meta"><span>' + escapeHtml(l.blurb) + '</span></div>' +
         '</div>' +
         '<div class="list-card-actions">' +
@@ -44269,8 +44271,19 @@ function renderMediaAppLists(provider) {
             ' data-act="toggleMediaAppListAdd" data-act-args="' + appActArgs([provider, l.slug, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
         '</div>' +
       '</div>' +
+      (urls ? '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(urls.mixed) + '" data-type="mixed" data-creator="" data-items="" data-likes="0"></div>' : '') +
     '</div>';
   }).join('');
+  // Fills each card's posters, like the other services' cards.
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+// Opens the list's details page: its movies and shows together.
+function openMediaAppListDetails(provider, slug) {
+  const urls = mediaAppListUrls(provider, slug);
+  const meta = MEDIA_APP_LISTS.filter(function (l) { return l.slug === slug; })[0];
+  if (!urls || !meta) return;
+  openListDetailsPage(MEDIA_APP_UI_NAMES[provider] + ' ' + meta.title, 'mixed', urls.mixed);
 }
 
 // Adds or removes the list's two catalog rows, one for movies and one for shows.

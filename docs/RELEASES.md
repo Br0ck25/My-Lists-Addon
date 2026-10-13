@@ -2061,7 +2061,7 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 
 ## 2026-10-13: connect Stremio and Nuvio accounts, pull their watch history, optional two-way sync
 
-**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build 32044a2d17.
+**Branch point:** the "a show's page shows percent watched and time left" entry above (build 6b5d3e4ac0). Built 2026-10-13, build 9a72ea2e17.
 
 ### What it changes
 
@@ -2092,4 +2092,6 @@ Neither service documents its API. The calls follow stremio-core's library item 
 
 **Fourth follow-up (same day):** Lists → My Lists has a *Your Nuvio Lists* and a *Your Stremio Lists* panel, like the other services, once the app is connected. Each offers *Watch History* and *Continue Watching* with **+ Add**, which adds a movie row and a show row to the catalogs. They are `autotrack:nuvio-watch-history:<movie|series>:<username>` (and `-continue-watching`, `stremio-…`) rows, read by `fetchAutoTrackedCatalog` from the activity database and kept to plays whose source is that app (`watchEventRows` takes a `source`; `appContinueWatching` in 39_ keeps the shows the app has plays of and the part-way movies it tagged). They are owner-only like the other private shelves, and empty (never the whole history) when the account is not served from the activity database (`FF_EVENT_TRACKING` and a finished history copy). A play already recorded by the subtitles ping, a media server or the website is not recorded again under the app, so it is not in the app's list.
 
-**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 32044a2d17)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
+**Fifth follow-up (same day):** the new Nuvio and Stremio cards under My Lists showed only a title and an Add button. Each card now has the poster preview the other services' cards have (a `poster-preview-slot` reading `autotrack:<app>-<list>:mixed:<username>` through `/api/preview` with the account's own key), and its title opens the list's details page. For that, an `autotrack:` row ending in `mixed` now answers movies and shows together, each with its own type and a show once (`fetchAutoTrackedCatalog`, 05_); Add still creates one movie row and one show row.
+
+**Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build 9a72ea2e17)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
