@@ -120,6 +120,12 @@ Also confirmed by the owner on 2026-09-27: the Cloudflare dashboard offers **Que
 - Install links that already exist keep serving exactly what they carry, personal rows included.
 - A signed-out builder that still holds rows from before D-8 shows them as they were. To make a new link, the visitor signs in or removes those rows.
 
+## 2026-10-26: The public site is closing, and self-hosting is supported again
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-9 | **The public site shuts down on 2026-11-08 unless donations cover its costs** (over $100 a month, about 1,100 users). **This replaces D-1:** running your own copy on Cloudflare is now the supported way to keep your data. The Workers Free plan is still not supported; a copy needs Workers Paid. | Every visit to mylistsaddon.com shows a notice (`openShutdownNotice`, `16_client-row-core.js`) with a Ko-fi donate button and a Back up my data button (the existing full backup). It shows only on `mylistsaddon.com`, so a self-hosted copy never shows the owner's message. The steps are in `SELF-HOSTING.md`, with `wrangler.selfhost.toml` for the terminal route. When the site is saved or closed, remove the notice and say so here. |
+
 ## Open questions
 
 None.

@@ -2058,3 +2058,14 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 **Follow-up (same day):** the line did not move when a whole season or the whole show was marked, because only the season counts were repainted on those paths; `updateSeasonEpisodeCounts` now repaints it too. Some shows showed a percentage with no time left because TMDB's `episode_run_time` is empty for them; the details now fall back to the latest (or next) episode's own runtime (07_). A show where TMDB has neither still shows only the percentage.
 
 **Second follow-up (same day):** Silo and others still showed no time because TMDB has no typical episode length for them at all. Time left is now added up from each unwatched episode's own runtime: opening a show loads every aired season's episode list in the background (`preloadShowSeasonRuntimes`, four at a time, 19_), and `showWatchProgressState` sums them. An episode with no length of its own counts at the show's typical length, else the average of the episodes that have one. The same lists make the aired counts exact, so the season buttons and counts are refreshed as each batch arrives. The time appears a moment after the page opens, once the lists are in.
+
+## Release 34: shutdown notice and self-hosting guide
+
+**Branch point:** Release 33 (build 125fc325b2), live. Built 2026-10-26, build 099881f472.
+
+### What it changes
+
+- **A notice on every visit to mylistsaddon.com**, signed in or out (`openShutdownNotice`, `initShutdownNotice`, 16_): the owner's message that the public site shuts down on **November 8, 2026** unless donations cover its costs. Two buttons: **Donate on Ko-fi** and **Back up my data** (the existing `downloadConfigJson` full backup). It shows once per browser session, and only on `mylistsaddon.com` / `www.mylistsaddon.com`, so a self-hosted copy never shows it. Removing it later means deleting that block and its test (`tests/shutdown-notice.client.test.mjs`).
+- **Self-hosting is documented.** New `SELF-HOSTING.md` (dashboard steps with the whole of `schema.sql`, `schema_activity.sql` and `worker_entry_combined.js` copied and pasted, plus a terminal route), new `wrangler.selfhost.toml` (placeholder ids; `wrangler.toml` still names the public site's own), a README section, and the two FAQ answers. `docs/DECISIONS.md` D-9 replaces D-1. A copy needs Workers Paid; the Free plan is still unsupported.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-26 (build 099881f472)**. No migration.

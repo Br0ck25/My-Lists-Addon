@@ -2436,6 +2436,60 @@ if (typeof document !== 'undefined') {
   else initSupportStrip();
 }
 
+// --- The shutdown notice ---------------------------------------------------------
+//
+// The public site closes on 2026-11-08 unless donations cover its running costs.
+// Every visitor, signed in or not, sees this once per browser session (a new tab
+// or a later visit shows it again), until the notice is removed from the code.
+// Its two buttons are the donation page and the existing full backup download
+// (downloadConfigJson), so a visitor can leave with their data in one click.
+// Self-hosting steps for the data live in SELF-HOSTING.md. It is the public
+// site's message, so a self-hosted copy (any other hostname) never shows it.
+const SHUTDOWN_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
+const SHUTDOWN_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
+const SHUTDOWN_NOTICE_DONATE_URL = 'https://ko-fi.com/mylistsaddon';
+const SHUTDOWN_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
+
+function openShutdownNotice() {
+  const html =
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px u-gap-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">A Message About the Future of My Lists Addon</h3>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">✕</button>' +
+    '</div>' +
+    '<div class="u-c-v_text u-fs-v_font_size_sm u-lh-1_4 u-fd-column u-gap-10px" style="display:flex;">' +
+      '<p class="u-m-0">First, I want to say thank you to everyone who has used and supported My Lists Addon. We now have around 1,100 users, and I really appreciate everyone who has given the project a chance.</p>' +
+      '<p class="u-m-0">Unfortunately, running My Lists Addon is getting too expensive for me to keep paying for out of my own pocket. This month’s costs will likely be over $100, and I personally can’t afford to keep funding the project on my own.</p>' +
+      '<p class="u-m-0"><b>Unless we can get enough support through donations to cover the running costs, the public My Lists Addon website will shut down on November 8, 2026.</b></p>' +
+      '<p class="u-m-0">I don’t want to shut it down, but I also can’t keep covering these costs myself. If you’ve enjoyed using My Lists Addon and would like to help keep it running for everyone, donations would make a real difference.</p>' +
+      '<h4 class="u-m-6px_0_0 u-fs-v_font_size_base">What happens to your lists?</h4>' +
+      '<p class="u-m-0">Even if the public website shuts down, you’ll still be able to self-host My Lists Addon through Cloudflare at minimal cost. You can back up your lists and data and move to your own instance rather than lose everything you’ve created.</p>' +
+      '<p class="u-m-0">I’ll make sure information about backing up your data and setting up your own instance is available before the shutdown. <a href="' + escapeAttr(SHUTDOWN_NOTICE_GUIDE_URL) + '" target="_blank" rel="noopener noreferrer">Read the self-hosting guide</a>.</p>' +
+      '<p class="u-m-0">I’m just one person behind this project, and I’ve put a lot of time and effort into building it. Seeing around 1,100 people using something I’ve created means a lot to me.</p>' +
+      '<p class="u-m-0">Thank you for being part of My Lists Addon. I’d love to keep it going, but I need a little help to make that possible.</p>' +
+      '<p class="u-m-0">If you’d like to help keep My Lists Addon online, please consider donating. Every contribution helps.</p>' +
+    '</div>' +
+    '<div class="u-gap-8px u-mt-14px u-fw2-wrap" style="display:flex;">' +
+      '<a href="' + escapeAttr(SHUTDOWN_NOTICE_DONATE_URL) + '" target="_blank" rel="noopener noreferrer" class="btn-primary u-td-none">Donate on Ko-fi</a>' +
+      '<button type="button" class="btn-secondary" data-act="downloadConfigJson">Back up my data</button>' +
+    '</div>';
+  showModal(html);
+}
+
+function initShutdownNotice() {
+  if (typeof document === 'undefined' || !document.body) return;
+  if (typeof location === 'undefined' || SHUTDOWN_NOTICE_HOSTS.indexOf(location.hostname) === -1) return;
+  try {
+    if (sessionStorage.getItem(SHUTDOWN_NOTICE_SEEN_KEY) === '1') return;
+    sessionStorage.setItem(SHUTDOWN_NOTICE_SEEN_KEY, '1');
+  } catch (e) { /* storage blocked: show it every load rather than never */ }
+  openShutdownNotice();
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initShutdownNotice);
+  else initShutdownNotice();
+}
+
 function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
   const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';

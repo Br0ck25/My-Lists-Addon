@@ -1,12 +1,14 @@
 # My Lists Addon
 
+> **Important notice:** the public site, mylistsaddon.com, will **shut down on November 8, 2026** unless donations cover its running costs. [**Donate on Ko-fi**](https://ko-fi.com/mylistsaddon) to help keep it online, and [**back up your data and run your own copy**](#self-hosting-on-cloudflare) if it closes.
+
 > **Official Hosted Platform**: [**mylistsaddon.com**](https://mylistsaddon.com)  
 > **Source Code**: [**github.com/Br0ck25/My-Lists-Addon**](https://github.com/Br0ck25/My-Lists-Addon)  
 > **Compatible Players**: [Stremio](https://stremio.com) (Desktop, Web, Mobile, Android TV, Fire TV), [Wako](https://wako.app), [Nuvio](https://nuvio.to), and any player supporting the Stremio Addon Protocol.
 
 A high-performance, full-featured catalog and list management add-on for media players. It transforms your **MDBList**, **Trakt**, **TMDB**, and **Simkl** lists into dynamic catalog rows on your home screen — featuring a full **Custom List Builder**, **Letterboxd CSV Import**, **Virtual TV Channels**, **Airing Next Calendars**, **Continue Watching & Watch History Sync**, **Media Server Scrobbling (Plex / Jellyfin / Emby)**, and **BetterPosters** artwork integration.
 
-This repository is the source code of the hosted service at [**mylistsaddon.com**](https://mylistsaddon.com). It is free to use with no advertisements or subscriptions. It is not meant to be self-hosted.
+This repository is the source code of the hosted service at [**mylistsaddon.com**](https://mylistsaddon.com). It is free to use with no advertisements or subscriptions. You can also run your own copy on Cloudflare: see [Self-hosting on Cloudflare](#self-hosting-on-cloudflare).
 
 ---
 
@@ -118,6 +120,28 @@ Install links never expire. When you update your lists or settings at [mylistsad
 
 ---
 
+## Self-hosting on Cloudflare
+
+You can run your own copy of My Lists Addon on your own Cloudflare account and move your lists into it. No programming is needed: it is clicks, and copying and pasting. **The full walkthrough, with every step, is [`SELF-HOSTING.md`](SELF-HOSTING.md).** The short version:
+
+**Cost:** Cloudflare's **Workers Paid** plan, $5 a month at the time of writing (the Free plan is not supported). One person's use normally stays inside what that includes.
+
+**1. Back up your data** on the public site while it is still up: **Settings → Presets & Backup → Download Backup File** (or the **Back up my data** button in the notice). Keep `my-lists-full-backup.json` private.
+
+**2. Create the database, paste the migration file.** In the Cloudflare dashboard, **Storage & Databases → D1 → Create database** named `my-lists-db`. Open its **Console** tab, copy the **whole** of [`schema.sql`](schema.sql) (on GitHub: open the file, **Raw**, select all, copy), paste it and press **Execute**. Do the same for a second database, `mylists-activity`, with the whole of [`schema_activity.sql`](schema_activity.sql). Both files are safe to run twice: nothing is deleted.
+
+**3. Create the rest:** a KV namespace `my-lists-configs`, an R2 bucket `mylists-blobs`, and queues `mylists-jobs-dlq` and `mylists-jobs`.
+
+**4. Create the Worker** `my-lists-addon`, and paste the whole of [`worker_entry_combined.js`](worker_entry_combined.js) into its code editor. Deploy.
+
+**5. Connect and configure** (Worker → Settings): add the five bindings (`DB`, `DB_ACTIVITY`, `CONFIGS`, `BLOBS`, `JOBS`), the secrets (`ADMIN_KEY`, `TMDB_API_KEY`, `TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER`), the settings and a cron trigger of `*/5 * * * *`. The exact names and values are in [`SELF-HOSTING.md`](SELF-HOSTING.md), Steps 8 to 11, including a line to paste in your browser that makes the two random secrets.
+
+**6. Move in:** open your Worker's address, create an account, then **Settings → Presets & Backup → Upload & Restore File** and choose your backup. Install the add-on again from your own site (your install link contains the site's address, so it changes).
+
+Comfortable in a terminal? [`wrangler.selfhost.toml`](wrangler.selfhost.toml) plus the commands in `SELF-HOSTING.md` (Method B) do the same in a few lines. Operator reference: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+
+---
+
 ## Development
 
 This project is developed as a modular JavaScript application running on Cloudflare Workers, compiled into a single production bundle without external build tooling.
@@ -172,7 +196,7 @@ Anyone (human or AI) changing buttons, colours, spacing, text or wording follows
 
 ## Support This Project
 
-My Lists Addon is a free community service with no ads or subscriptions. If you enjoy using the platform and want to help cover hosting and infrastructure costs or support ongoing development:
+My Lists Addon is a free community service with no ads or subscriptions, run and paid for by one person. Hosting now costs over $100 a month, and **the public site will shut down on November 8, 2026 unless donations cover it.** If you enjoy using the platform and want to help keep it online for everyone:
 
 - **Ko-fi**: [ko-fi.com/mylistsaddon](https://ko-fi.com/mylistsaddon)
 - **TorBox Debrid (Referral)**: [torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1](https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1)
@@ -181,4 +205,4 @@ My Lists Addon is a free community service with no ads or subscriptions. If you 
 
 ## License
 
-This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use only. The project is not intended for self-hosting and comes with no support.
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use only. Self-hosting for yourself and friends is welcome ([`SELF-HOSTING.md`](SELF-HOSTING.md)); it comes with no support.
