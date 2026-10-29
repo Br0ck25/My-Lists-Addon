@@ -7934,7 +7934,9 @@ describe("client: Simkl removal, Up Next / Trakt CW badges, Trakt attribution, H
           {
             id: "12345",
             name: "Test Show",
-            airDate: "2026-10-20",
+            // A week from now, so the episode is still to come whenever this
+            // runs (a fixed "2026-10-20" turned it into an aired one).
+            airDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
             status: "watching",
             isUnaired: true
           }
@@ -7965,7 +7967,7 @@ describe("client: Simkl removal, Up Next / Trakt CW badges, Trakt attribution, H
             name: "Test Show",
             seasonNum: 2,
             episodeNum: 1,
-            airDate: "2026-11-01",
+            airDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), // still to come whenever this runs
             isSeasonPremiere: true,
             isUnaired: true
           }
@@ -7994,7 +7996,7 @@ describe("client: Simkl removal, Up Next / Trakt CW badges, Trakt attribution, H
             name: "Trakt Show",
             seasonNum: 3,
             episodeNum: 1,
-            airDate: "2026-12-01",
+            airDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), // still to come whenever this runs
             isSeasonPremiere: true,
             isUnaired: true,
             progress: 45
