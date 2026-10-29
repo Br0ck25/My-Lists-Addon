@@ -2157,3 +2157,20 @@ Found by counting the KV operations of each request in a test run (the "KV Write
 - **Ko-fi donations that do not count now say why.** `/api/kofi-webhook` keeps its last delivery and what became of it (`kofi:lastdelivery:v1`), shown on Support Goal as *Last message from Ko-fi*: counted; ignored (not US dollars, or not a donation or membership); refused because this Worker has no `KOFI_VERIFICATION_TOKEN`; or refused because the token does not match. A refused delivery is written at most once per ten minutes.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 52e549596f)**. No migration. To undo, paste the Release 36 file.
+
+## 2026-10-29: the page no longer jumps while it is drawn
+
+**Branch point:** the live build f603487eaf (`claude/dazzling-wright-ed46h8`: `main` with the Stremio and Nuvio sync). Built 2026-10-29, build cf7a27cac2.
+
+### What it changes
+
+- **Cloudflare's Web Vitals** showed layout shift (CLS) "needs improvement" or "poor" on 20% of visits. The top element was the Daily Randomizer box on Catalogs (`div.panel>div.u-bd-1px_solid…`). In Chromium at phone width, signed out: **/catalogs 0.337, /lists 0.25**. The HTML paints first, then the app scripts draw the catalog rows and the provider cards into it, and everything below moves.
+- The head script (09_) now sets `data-app-pending` on the page, and `html[data-app-pending] .tab-panel { visibility: hidden; }` keeps the view's space but hides it. The attribute is removed in the frame after DOMContentLoaded, which waits for the app scripts, or after 5 s whatever happens. The header and nav show at once, as before. Measured after: **/catalogs 0.006, /lists 0, /settings 0, /discover 0.024** (it was 0.022).
+- **Not done:** a preconnect to the poster hosts for the slow first poster (LCP). P7-1 keeps the page from opening another origin before it needs to (`tests/worker.test.mjs`), so it stays out. The first posters' 4–10 s is mostly `images.metahub.space` itself.
+
+### Checked
+
+- `tests/page-stability.test.mjs`: the CSS rule; the head script keeps the view hidden through DOMContentLoaded and shows it in the next frame; and it shows after 5 s with no app script.
+- `bash verify.sh`, `node tests/ui-contract.mjs`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,633 tests each). Also fixed: three client tests had fixed "upcoming" air dates that have now passed (PR #43, tests only).
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build cf7a27cac2)**. No migration. To undo, paste the f603487eaf file.

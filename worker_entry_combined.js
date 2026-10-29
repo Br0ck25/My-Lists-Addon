@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-29";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f603487eaf";
+const WORKER_BUILD = "cf7a27cac2";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -30749,6 +30749,18 @@ ${seoHeadHtml}
       } catch (e) {}
     }
     document.documentElement.setAttribute('data-initial-tab', tab);
+    // The view's own content (catalog rows, provider cards) is drawn by the
+    // app scripts, which run after this HTML has painted, so the page jumped
+    // as they filled it in (Cloudflare's Web Vitals: CLS "poor" on /catalogs
+    // and /lists). The view stays invisible until those scripts have drawn
+    // it (the frame after DOMContentLoaded, which waits for them), and is
+    // shown at once if they never get there.
+    document.documentElement.setAttribute('data-app-pending', '1');
+    var showApp = function() { document.documentElement.removeAttribute('data-app-pending'); };
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.requestAnimationFrame) requestAnimationFrame(showApp); else showApp();
+    });
+    setTimeout(showApp, 5000);
     var shellSub = (shellRoute && shellRoute.sub) || '';
 
     try {
@@ -31080,6 +31092,9 @@ ${UTILITY_CSS}
   .tab-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
   .tab-panel { display: grid; gap: var(--space-3-5); width: 100%; max-width: 100%; min-width: 0; }
   .tab-panel[hidden] { display: none; }
+  /* Until the app scripts have drawn the view (data-app-pending, the head
+     script above), it takes its space but is not seen, so nothing jumps. */
+  html[data-app-pending] .tab-panel { visibility: hidden; }
   /* Prevent FOUC: Show initial active tab and hide inactive ones before script execution */
   html[data-initial-tab] .tab-panel {
     display: none !important;
