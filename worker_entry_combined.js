@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-29";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5eb5545044";
+const WORKER_BUILD = "52e549596f";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -12943,6 +12943,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/migrate-day-counts": "admin.migrate.day-counts",
   "/admin/api/backfill-trending": "admin.backfill.trending",
   "/admin/api/support-goal": "admin.support-goal.set",
+  "/admin/api/site-notice": "admin.site-notice.set",
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
@@ -13280,6 +13281,119 @@ function supportGoalMonth(now = new Date()) {
     }
   }
   return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+// --- The site notice -----------------------------------------------------------
+//
+// The message every visitor to mylistsaddon.com sees once per browser session
+// (openShutdownNotice, 16_client-row-core.js). The admin turns it off, edits
+// its words and picks its buttons under Management & Tools -> Site Notice.
+// Nothing stored means the original shutdown message, on, with both buttons:
+// a self-hosted copy never shows it either way (the page only shows it on
+// mylistsaddon.com). The page asks /api/site-notice once per session.
+const SITE_NOTICE_KEY = "site:notice:v1";
+const SITE_NOTICE_TITLE_MAX = 120;
+const SITE_NOTICE_BODY_MAX = 4000;
+const DEFAULT_SITE_NOTICE = {
+  enabled: true,
+  title: "A Message About the Future of My Lists Addon",
+  body: [
+    "First, I want to say thank you to everyone who has used and supported My Lists Addon. We now have around 1,100 users, and I really appreciate everyone who has given the project a chance.",
+    "Unfortunately, running My Lists Addon is getting too expensive for me to keep paying for out of my own pocket. This month\u2019s costs will likely be over $100, and I personally can\u2019t afford to keep funding the project on my own.",
+    "**Unless we can get enough support through donations to cover the running costs, the public My Lists Addon website will shut down on November 8, 2026.**",
+    "I don\u2019t want to shut it down, but I also can\u2019t keep covering these costs myself. If you\u2019ve enjoyed using My Lists Addon and would like to help keep it running for everyone, donations would make a real difference.",
+    "**What happens to your lists?**",
+    "Even if the public website shuts down, you\u2019ll still be able to self-host My Lists Addon through Cloudflare at minimal cost. You can back up your lists and data and move to your own instance rather than lose everything you\u2019ve created.",
+    "I\u2019ll make sure information about backing up your data and setting up your own instance is available before the shutdown.",
+    "I\u2019m just one person behind this project, and I\u2019ve put a lot of time and effort into building it. Seeing around 1,100 people using something I\u2019ve created means a lot to me.",
+    "Thank you for being part of My Lists Addon. I\u2019d love to keep it going, but I need a little help to make that possible.",
+    "If you\u2019d like to help keep My Lists Addon online, please consider donating. Every contribution helps.",
+  ].join("\n\n"),
+  showDonate: true,
+  showBackup: true,
+  showGuide: true,
+};
+
+// What is stored, as it is read: always complete. `custom` says whether the
+// admin has saved anything yet.
+async function readSiteNotice(env) {
+  let stored = null;
+  try {
+    const raw = env && env.CONFIGS ? await env.CONFIGS.get(SITE_NOTICE_KEY) : null;
+    stored = raw ? JSON.parse(raw) : null;
+  } catch {
+    stored = null;
+  }
+  if (!stored || typeof stored !== "object") return { ...DEFAULT_SITE_NOTICE, custom: false };
+  return {
+    enabled: stored.enabled !== false,
+    title: typeof stored.title === "string" ? stored.title.slice(0, SITE_NOTICE_TITLE_MAX) : DEFAULT_SITE_NOTICE.title,
+    body: typeof stored.body === "string" ? stored.body.slice(0, SITE_NOTICE_BODY_MAX) : DEFAULT_SITE_NOTICE.body,
+    showDonate: stored.showDonate !== false,
+    showBackup: stored.showBackup !== false,
+    showGuide: stored.showGuide !== false,
+    custom: true,
+  };
+}
+
+// The admin's save. Only what is sent changes. A notice that is on needs a
+// title and some text; one that is off may be left empty.
+function applySiteNoticeUpdate(stored, body) {
+  const b = body && typeof body === "object" ? body : {};
+  const out = {
+    enabled: stored.enabled, title: stored.title, body: stored.body,
+    showDonate: stored.showDonate, showBackup: stored.showBackup, showGuide: stored.showGuide,
+  };
+  for (const flag of ["enabled", "showDonate", "showBackup", "showGuide"]) {
+    if (typeof b[flag] === "boolean") out[flag] = b[flag];
+  }
+  if (b.title !== undefined) {
+    if (typeof b.title !== "string" || b.title.length > SITE_NOTICE_TITLE_MAX) return { error: "The title has to be text of up to " + SITE_NOTICE_TITLE_MAX + " characters." };
+    out.title = b.title.trim();
+  }
+  if (b.body !== undefined) {
+    if (typeof b.body !== "string" || b.body.length > SITE_NOTICE_BODY_MAX) return { error: "The message has to be text of up to " + SITE_NOTICE_BODY_MAX + " characters." };
+    out.body = b.body.replace(/\r\n/g, "\n").trim();
+  }
+  if (out.enabled && (!out.title || !out.body)) return { error: "Give the notice a title and a message before turning it on." };
+  return { value: out };
+}
+
+// Ko-fi's webhook is the only way a donation reaches the total by itself, and
+// it fails quietly: no token on the Worker, a token that does not match, a
+// payment in another currency. The last delivery and what became of it are
+// kept for the admin page (Support Goal), so the reason is on the screen.
+const KOFI_LAST_DELIVERY_KEY = "kofi:lastdelivery:v1";
+const KOFI_FAILURE_RECORD_EVERY_MS = 10 * 60 * 1000;
+async function recordKofiDelivery(env, outcome, detail = {}, now = Date.now()) {
+  if (!env || !env.CONFIGS) return;
+  try {
+    // A refused delivery comes from anyone who can reach the URL, so it is
+    // written at most once per ten minutes per outcome; a delivery with the
+    // right token is Ko-fi's own and is always written.
+    if (detail.authed !== true) {
+      const raw = await env.CONFIGS.get(KOFI_LAST_DELIVERY_KEY);
+      const last = raw ? JSON.parse(raw) : null;
+      if (last && last.outcome === outcome && now - Number(last.at) < KOFI_FAILURE_RECORD_EVERY_MS) return;
+    }
+    await env.CONFIGS.put(KOFI_LAST_DELIVERY_KEY, JSON.stringify({
+      at: now, outcome,
+      type: typeof detail.type === "string" ? detail.type.slice(0, 40) : "",
+      currency: typeof detail.currency === "string" ? detail.currency.slice(0, 8) : "",
+    }));
+  } catch {
+    // A note about a payment must never fail the payment.
+  }
+}
+
+async function readKofiLastDelivery(env) {
+  try {
+    const raw = env && env.CONFIGS ? await env.CONFIGS.get(KOFI_LAST_DELIVERY_KEY) : null;
+    const v = raw ? JSON.parse(raw) : null;
+    return v && Number.isFinite(v.at) ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 // What is stored, as it is read: always complete, whatever was written.
@@ -13700,6 +13814,7 @@ ${UTILITY_CSS}
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
     <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
     <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support Goal</button>
+    <button type="button" class="subnav-pill" data-sub-tab="sitenotice" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sitenotice'])}">Site Notice</button>
     <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
@@ -14059,7 +14174,38 @@ ${UTILITY_CSS}
       </ol>
       <div class="u-fs-v_font_size_sm">Token: <span id="supportGoalTokenState" style="color:var(--muted);">checking&hellip;</span></div>
       <div class="u-fs-v_font_size_sm u-mt-4px">Last payment counted: <span id="supportGoalLastPayment" class="u-c-v_muted">none yet</span></div>
+      <div class="u-fs-v_font_size_sm u-mt-4px">Last message from Ko-fi: <span id="supportGoalLastDelivery" class="u-c-v_muted">none yet</span></div>
       <div class="u-fs-v_font_size_xs u-c-v_muted u-mt-10px">Counts donations and membership payments made in US dollars. Other currencies, shop orders and commissions are skipped; type those in above if you want them counted. Who gave is never shown.</div>
+    </div>
+  </div>
+
+  <div class="admin-tab-panel" data-admin-panel="sitenotice">
+    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">The <strong>site notice</strong>: a message every visitor to mylistsaddon.com sees once per browser session, signed in or not. Turn it off here when it is no longer needed, or change what it says. A self-hosted copy never shows it. The site picks up a change within a minute.</p>
+    <div class="panel u-m-0_0_18px u-p-14px_16px u-maxw-520px">
+      <label class="u-ai-center u-gap-8px u-fw-600 u-fs-v_font_size_base u-mb-14px" style="display:flex;">
+        <input type="checkbox" id="siteNoticeEnabled"> Show the notice to visitors
+      </label>
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-12px" style="display:block;">Title
+        <input type="text" id="siteNoticeTitle" class="admin-select u-m-4px_0_0" maxlength="120" style="display:block; width:100%;">
+      </label>
+      <label class="u-fs-v_font_size_sm u-c-v_muted u-mb-6px" style="display:block;">Message
+        <textarea id="siteNoticeBody" class="admin-select u-m-4px_0_0" rows="14" maxlength="4000" style="display:block; width:100%;"></textarea>
+      </label>
+      <div class="u-fs-v_font_size_xs u-c-v_muted u-mb-14px">A blank line starts a new paragraph. Put **two asterisks** around words to make them bold.</div>
+      <label class="u-ai-center u-gap-8px u-fs-v_font_size_sm u-mb-6px" style="display:flex;">
+        <input type="checkbox" id="siteNoticeDonate"> Show the Donate on Ko-fi button
+      </label>
+      <label class="u-ai-center u-gap-8px u-fs-v_font_size_sm u-mb-6px" style="display:flex;">
+        <input type="checkbox" id="siteNoticeBackup"> Show the Back up my data button
+      </label>
+      <label class="u-ai-center u-gap-8px u-fs-v_font_size_sm u-mb-14px" style="display:flex;">
+        <input type="checkbox" id="siteNoticeGuide"> Show the self-hosting guide link
+      </label>
+      <div class="u-gap-10px u-ai-center u-fw2-wrap" style="display:flex;">
+        <button type="button" class="primary lc-btn" data-act="saveSiteNotice">Save</button>
+        <button type="button" class="secondary lc-btn" data-act="resetSiteNotice">Restore the original message</button>
+        <span id="siteNoticeStatus" class="u-fs-v_font_size_sm" style="color:var(--muted);"></span>
+      </div>
     </div>
   </div>
 
@@ -14319,6 +14465,7 @@ ${UTILITY_CSS}
       newonstreaming: 'management',
       channelpresets: 'management',
       supportgoal: 'management',
+      sitenotice: 'management',
       maintenance: 'management',
     };
 
@@ -14370,6 +14517,7 @@ ${UTILITY_CSS}
       if (tabId === 'newonstreaming' && !window._newOnStreamingLoadedOnce) { window._newOnStreamingLoadedOnce = true; loadNewOnStreaming(); }
       if (tabId === 'channelpresets' && !window._channelPresetsLoadedOnce) { window._channelPresetsLoadedOnce = true; loadChannelPresets(); }
       if (tabId === 'supportgoal' && !window._supportGoalLoadedOnce) { window._supportGoalLoadedOnce = true; loadSupportGoal(); }
+      if (tabId === 'sitenotice' && !window._siteNoticeLoadedOnce) { window._siteNoticeLoadedOnce = true; loadSiteNotice(); }
     }
 
     async function loadSupportGoal() {
@@ -14389,6 +14537,17 @@ ${UTILITY_CSS}
         if (t) { t.textContent = data.kofiTokenSet ? 'set' : 'not set yet'; t.style.color = data.kofiTokenSet ? '#30d158' : '#ff9f0a'; }
         const l = document.getElementById('supportGoalLastPayment');
         if (l && data.lastPayment) l.textContent = '$' + data.lastPayment.amount + ' on ' + new Date(data.lastPayment.at).toLocaleString();
+        const d = document.getElementById('supportGoalLastDelivery');
+        if (d && data.lastDelivery) {
+          const why = {
+            'counted': 'a payment, counted',
+            'not-counted': 'ignored: only US-dollar donations and memberships are counted (it was ' + (data.lastDelivery.type || 'a payment') + ' in ' + (data.lastDelivery.currency || 'another currency') + ')',
+            'bad-message-id': 'ignored: no usable payment id',
+            'wrong-token': 'REFUSED: its token does not match KOFI_VERIFICATION_TOKEN on this Worker',
+            'no-token-on-worker': 'REFUSED: this Worker has no KOFI_VERIFICATION_TOKEN secret'
+          }[data.lastDelivery.outcome] || data.lastDelivery.outcome;
+          d.textContent = new Date(data.lastDelivery.at).toLocaleString() + ' \u2014 ' + why;
+        }
       } catch (e) {
         if (status) status.textContent = 'Could not load.';
       }
@@ -14416,6 +14575,68 @@ ${UTILITY_CSS}
         loadSupportGoal();
       } catch (e) {
         say('Could not save.', '#ff453a');
+      }
+    }
+
+    async function loadSiteNotice() {
+      const status = document.getElementById('siteNoticeStatus');
+      try {
+        const res = await fetch('/admin/api/site-notice', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data || !data.ok) { if (status) status.textContent = (data && data.error) || 'Could not load.'; return; }
+        document.getElementById('siteNoticeEnabled').checked = !!data.enabled;
+        document.getElementById('siteNoticeTitle').value = data.title || '';
+        document.getElementById('siteNoticeBody').value = data.body || '';
+        document.getElementById('siteNoticeDonate').checked = !!data.showDonate;
+        document.getElementById('siteNoticeBackup').checked = !!data.showBackup;
+        document.getElementById('siteNoticeGuide').checked = !!data.showGuide;
+      } catch (e) {
+        if (status) status.textContent = 'Could not load.';
+      }
+    }
+
+    async function saveSiteNotice() {
+      const status = document.getElementById('siteNoticeStatus');
+      const say = (text, color) => { if (status) { status.textContent = text; status.style.color = color || '#8E8E93'; } };
+      say('Saving...');
+      try {
+        const res = await fetch('/admin/api/site-notice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: document.getElementById('siteNoticeEnabled').checked,
+            title: document.getElementById('siteNoticeTitle').value,
+            body: document.getElementById('siteNoticeBody').value,
+            showDonate: document.getElementById('siteNoticeDonate').checked,
+            showBackup: document.getElementById('siteNoticeBackup').checked,
+            showGuide: document.getElementById('siteNoticeGuide').checked,
+          }),
+        });
+        const data = await res.json();
+        if (!data || !data.ok) { say((data && data.error) || 'Could not save.', '#ff453a'); return; }
+        say('Saved. The site shows it within a minute.', '#30d158');
+      } catch (e) {
+        say('Could not save.', '#ff453a');
+      }
+    }
+
+    async function resetSiteNotice() {
+      const status = document.getElementById('siteNoticeStatus');
+      const say = (text, color) => { if (status) { status.textContent = text; status.style.color = color || '#8E8E93'; } };
+      if (!window.confirm('Put back the original message? Your changes to the notice will be lost.')) return;
+      say('Restoring...');
+      try {
+        const res = await fetch('/admin/api/site-notice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reset: true }),
+        });
+        const data = await res.json();
+        if (!data || !data.ok) { say((data && data.error) || 'Could not restore.', '#ff453a'); return; }
+        say('Restored.', '#30d158');
+        loadSiteNotice();
+      } catch (e) {
+        say('Could not restore.', '#ff453a');
       }
     }
 
@@ -40176,58 +40397,68 @@ if (typeof document !== 'undefined') {
   else initSupportStrip();
 }
 
-// --- The shutdown notice ---------------------------------------------------------
+// --- The site notice ---------------------------------------------------------------
 //
-// The public site closes on 2026-11-08 unless donations cover its running costs.
-// Every visitor, signed in or not, sees this once per browser session (a new tab
-// or a later visit shows it again), until the notice is removed from the code.
-// Its two buttons are the donation page and the existing full backup download
+// A message from the owner, shown once per browser session to every visitor to
+// the public site, signed in or not (a new tab or a later visit shows it
+// again). What it says, which buttons it has and whether it shows at all come
+// from /api/site-notice, which the admin edits under Management & Tools ->
+// Site Notice (readSiteNotice, 03_admin.js). Today it is the shutdown message:
+// the public site closes on 2026-11-08 unless donations cover its costs. Its
+// buttons are the donation page and the existing full backup download
 // (downloadConfigJson), so a visitor can leave with their data in one click.
 // Self-hosting steps for the data live in SELF-HOSTING.md. It is the public
 // site's message, so a self-hosted copy (any other hostname) never shows it.
-const SHUTDOWN_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
-const SHUTDOWN_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
-const SHUTDOWN_NOTICE_DONATE_URL = 'https://ko-fi.com/mylistsaddon';
-const SHUTDOWN_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
+const SITE_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
+const SITE_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
+const SITE_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
 
-function openShutdownNotice() {
+// The admin's plain text as markup: every character escaped first, then a blank
+// line is a paragraph, a single newline a line break and **words** bold.
+function siteNoticeBodyHtml(body) {
+  return String(body || '').split(/\\n{2,}/).map(function(para) {
+    const text = para.trim();
+    if (!text) return '';
+    const safe = escapeHtml(text).replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>').replace(/\\n/g, '<br>');
+    return '<p class="u-m-0">' + safe + '</p>';
+  }).join('');
+}
+
+function openSiteNotice(notice) {
+  const n = notice || {};
+  const buttons =
+    (n.showDonate ? '<a href="' + escapeAttr(n.donateUrl || 'https://ko-fi.com/mylistsaddon') + '" target="_blank" rel="noopener noreferrer" class="btn-primary u-td-none">Donate on Ko-fi</a>' : '') +
+    (n.showBackup ? '<button type="button" class="btn-secondary" data-act="downloadConfigJson">Back up my data</button>' : '');
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px u-gap-12px" style="display:flex;">' +
-      '<h3 class="u-m-0 u-fs-v_font_size_lg">A Message About the Future of My Lists Addon</h3>' +
-      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">✕</button>' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">' + escapeHtml(n.title || '') + '</h3>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '</div>' +
     '<div class="u-c-v_text u-fs-v_font_size_sm u-lh-1_4 u-fd-column u-gap-10px" style="display:flex;">' +
-      '<p class="u-m-0">First, I want to say thank you to everyone who has used and supported My Lists Addon. We now have around 1,100 users, and I really appreciate everyone who has given the project a chance.</p>' +
-      '<p class="u-m-0">Unfortunately, running My Lists Addon is getting too expensive for me to keep paying for out of my own pocket. This month’s costs will likely be over $100, and I personally can’t afford to keep funding the project on my own.</p>' +
-      '<p class="u-m-0"><b>Unless we can get enough support through donations to cover the running costs, the public My Lists Addon website will shut down on November 8, 2026.</b></p>' +
-      '<p class="u-m-0">I don’t want to shut it down, but I also can’t keep covering these costs myself. If you’ve enjoyed using My Lists Addon and would like to help keep it running for everyone, donations would make a real difference.</p>' +
-      '<h4 class="u-m-6px_0_0 u-fs-v_font_size_base">What happens to your lists?</h4>' +
-      '<p class="u-m-0">Even if the public website shuts down, you’ll still be able to self-host My Lists Addon through Cloudflare at minimal cost. You can back up your lists and data and move to your own instance rather than lose everything you’ve created.</p>' +
-      '<p class="u-m-0">I’ll make sure information about backing up your data and setting up your own instance is available before the shutdown. <a href="' + escapeAttr(SHUTDOWN_NOTICE_GUIDE_URL) + '" target="_blank" rel="noopener noreferrer">Read the self-hosting guide</a>.</p>' +
-      '<p class="u-m-0">I’m just one person behind this project, and I’ve put a lot of time and effort into building it. Seeing around 1,100 people using something I’ve created means a lot to me.</p>' +
-      '<p class="u-m-0">Thank you for being part of My Lists Addon. I’d love to keep it going, but I need a little help to make that possible.</p>' +
-      '<p class="u-m-0">If you’d like to help keep My Lists Addon online, please consider donating. Every contribution helps.</p>' +
+      siteNoticeBodyHtml(n.body) +
+      (n.showGuide ? '<p class="u-m-0"><a href="' + escapeAttr(SITE_NOTICE_GUIDE_URL) + '" target="_blank" rel="noopener noreferrer">Read the self-hosting guide</a></p>' : '') +
     '</div>' +
-    '<div class="u-gap-8px u-mt-14px u-fw2-wrap" style="display:flex;">' +
-      '<a href="' + escapeAttr(SHUTDOWN_NOTICE_DONATE_URL) + '" target="_blank" rel="noopener noreferrer" class="btn-primary u-td-none">Donate on Ko-fi</a>' +
-      '<button type="button" class="btn-secondary" data-act="downloadConfigJson">Back up my data</button>' +
-    '</div>';
+    (buttons ? '<div class="u-gap-8px u-mt-14px u-fw2-wrap" style="display:flex;">' + buttons + '</div>' : '');
   showModal(html);
 }
 
-function initShutdownNotice() {
+async function initSiteNotice() {
   if (typeof document === 'undefined' || !document.body) return;
-  if (typeof location === 'undefined' || SHUTDOWN_NOTICE_HOSTS.indexOf(location.hostname) === -1) return;
+  if (typeof location === 'undefined' || SITE_NOTICE_HOSTS.indexOf(location.hostname) === -1) return;
   try {
-    if (sessionStorage.getItem(SHUTDOWN_NOTICE_SEEN_KEY) === '1') return;
-    sessionStorage.setItem(SHUTDOWN_NOTICE_SEEN_KEY, '1');
-  } catch (e) { /* storage blocked: show it every load rather than never */ }
-  openShutdownNotice();
+    if (sessionStorage.getItem(SITE_NOTICE_SEEN_KEY) === '1') return;
+    sessionStorage.setItem(SITE_NOTICE_SEEN_KEY, '1');
+  } catch (e) { /* storage blocked: ask every load rather than never */ }
+  try {
+    const res = await fetch(ORIGIN + '/api/site-notice');
+    const data = await res.json();
+    if (data && data.ok && data.enabled && data.title && data.body) openSiteNotice(data);
+  } catch (e) { /* no notice is better than a broken page */ }
 }
 
 if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initShutdownNotice);
-  else initShutdownNotice();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSiteNotice);
+  else initSiteNotice();
 }
 
 function showAppAlert(title, message, isSuccess = false) {
@@ -86732,6 +86963,24 @@ async function handleFetch(request, env, ctx) {
       return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
     }
 
+    // /api/site-notice -> the message shown to every visitor once per session
+    // (openShutdownNotice, 16_), or enabled:false once the admin has turned it
+    // off. See readSiteNotice (03_admin.js). A minute of caching, so turning it
+    // off takes effect quickly.
+    if (path === "/api/site-notice" && request.method === "GET") {
+      const notice = await readSiteNotice(env);
+      return jsonPublic({
+        ok: true,
+        enabled: notice.enabled,
+        title: notice.title,
+        body: notice.body,
+        showDonate: notice.showDonate,
+        showBackup: notice.showBackup,
+        showGuide: notice.showGuide,
+        donateUrl: SUPPORT_GOAL_URL,
+      }, 200, { "Cache-Control": "public, max-age=60" });
+    }
+
     // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
     // payment to the support strip's total. Ko-fi posts form data whose `data`
     // field is a JSON string; the verification token inside it has to match the
@@ -86739,6 +86988,7 @@ async function handleFetch(request, env, ctx) {
     // message_id already counted is answered 200 and not counted twice.
     if (path === "/api/kofi-webhook" && request.method === "POST") {
       if (!env || !env.KOFI_VERIFICATION_TOKEN || !env.CONFIGS) {
+        await recordKofiDelivery(env, "no-token-on-worker");
         return json({ ok: false, error: "Not set up." }, 503, { "Cache-Control": "no-store" });
       }
       const kofiIp = clientIpKey(request);
@@ -86759,11 +87009,13 @@ async function handleFetch(request, env, ctx) {
         return json({ ok: false, error: "Bad request." }, 400, { "Cache-Control": "no-store" });
       }
       if (!data || typeof data !== "object" || !(await timingSafeEqualSecret(data.verification_token, env.KOFI_VERIFICATION_TOKEN))) {
+        await recordKofiDelivery(env, "wrong-token");
         return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
       }
       const amount = kofiAmountToCount(data);
       const messageId = String(data.message_id || "");
       if (amount === null || !KOFI_MESSAGE_ID_RE.test(messageId)) {
+        await recordKofiDelivery(env, amount === null ? "not-counted" : "bad-message-id", { authed: true, type: data.type, currency: data.currency });
         return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
       }
       const seenKey = `kofi:msg:${messageId}`;
@@ -86771,6 +87023,7 @@ async function handleFetch(request, env, ctx) {
       const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
       await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
       await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      await recordKofiDelivery(env, "counted", { authed: true, type: data.type, currency: data.currency });
       return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -101514,7 +101767,31 @@ function generateSearchVariations(query) {
         webhookUrl: `${url.origin}/api/kofi-webhook`,
         kofiTokenSet: !!(env && env.KOFI_VERIFICATION_TOKEN),
         lastPayment: stored.lastPayment,
+        lastDelivery: await readKofiLastDelivery(env),
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /admin/api/site-notice -> the message every visitor sees once per
+    // session: its text, buttons and on/off switch (GET), and the save (POST).
+    // See readSiteNotice (03_admin.js). reset:true goes back to the original.
+    if (path === "/admin/api/site-notice" && (request.method === "GET" || request.method === "POST")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
+      const stored = await readSiteNotice(env);
+      if (request.method === "POST") {
+        let body = {};
+        try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+        if (body && body.reset === true) {
+          await env.CONFIGS.delete(SITE_NOTICE_KEY);
+          return json({ ok: true, ...(await readSiteNotice(env)), defaults: DEFAULT_SITE_NOTICE }, 200, { "Cache-Control": "no-store" });
+        }
+        const next = applySiteNoticeUpdate(stored, body);
+        if (next.error) return json({ ok: false, error: next.error }, 400);
+        await env.CONFIGS.put(SITE_NOTICE_KEY, JSON.stringify(next.value));
+        return json({ ok: true, ...(await readSiteNotice(env)) }, 200, { "Cache-Control": "no-store" });
+      }
+      return json({ ok: true, ...stored }, 200, { "Cache-Control": "no-store" });
     }
 
     if (path === "/admin/api/new-on-streaming" && request.method === "GET") {

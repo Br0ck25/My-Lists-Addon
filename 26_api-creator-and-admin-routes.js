@@ -7113,7 +7113,31 @@
         webhookUrl: `${url.origin}/api/kofi-webhook`,
         kofiTokenSet: !!(env && env.KOFI_VERIFICATION_TOKEN),
         lastPayment: stored.lastPayment,
+        lastDelivery: await readKofiLastDelivery(env),
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    // /admin/api/site-notice -> the message every visitor sees once per
+    // session: its text, buttons and on/off switch (GET), and the save (POST).
+    // See readSiteNotice (03_admin.js). reset:true goes back to the original.
+    if (path === "/admin/api/site-notice" && (request.method === "GET" || request.method === "POST")) {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
+      const stored = await readSiteNotice(env);
+      if (request.method === "POST") {
+        let body = {};
+        try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+        if (body && body.reset === true) {
+          await env.CONFIGS.delete(SITE_NOTICE_KEY);
+          return json({ ok: true, ...(await readSiteNotice(env)), defaults: DEFAULT_SITE_NOTICE }, 200, { "Cache-Control": "no-store" });
+        }
+        const next = applySiteNoticeUpdate(stored, body);
+        if (next.error) return json({ ok: false, error: next.error }, 400);
+        await env.CONFIGS.put(SITE_NOTICE_KEY, JSON.stringify(next.value));
+        return json({ ok: true, ...(await readSiteNotice(env)) }, 200, { "Cache-Control": "no-store" });
+      }
+      return json({ ok: true, ...stored }, 200, { "Cache-Control": "no-store" });
     }
 
     if (path === "/admin/api/new-on-streaming" && request.method === "GET") {

@@ -2436,58 +2436,68 @@ if (typeof document !== 'undefined') {
   else initSupportStrip();
 }
 
-// --- The shutdown notice ---------------------------------------------------------
+// --- The site notice ---------------------------------------------------------------
 //
-// The public site closes on 2026-11-08 unless donations cover its running costs.
-// Every visitor, signed in or not, sees this once per browser session (a new tab
-// or a later visit shows it again), until the notice is removed from the code.
-// Its two buttons are the donation page and the existing full backup download
+// A message from the owner, shown once per browser session to every visitor to
+// the public site, signed in or not (a new tab or a later visit shows it
+// again). What it says, which buttons it has and whether it shows at all come
+// from /api/site-notice, which the admin edits under Management & Tools ->
+// Site Notice (readSiteNotice, 03_admin.js). Today it is the shutdown message:
+// the public site closes on 2026-11-08 unless donations cover its costs. Its
+// buttons are the donation page and the existing full backup download
 // (downloadConfigJson), so a visitor can leave with their data in one click.
 // Self-hosting steps for the data live in SELF-HOSTING.md. It is the public
 // site's message, so a self-hosted copy (any other hostname) never shows it.
-const SHUTDOWN_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
-const SHUTDOWN_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
-const SHUTDOWN_NOTICE_DONATE_URL = 'https://ko-fi.com/mylistsaddon';
-const SHUTDOWN_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
+const SITE_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
+const SITE_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
+const SITE_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
 
-function openShutdownNotice() {
+// The admin's plain text as markup: every character escaped first, then a blank
+// line is a paragraph, a single newline a line break and **words** bold.
+function siteNoticeBodyHtml(body) {
+  return String(body || '').split(/\\n{2,}/).map(function(para) {
+    const text = para.trim();
+    if (!text) return '';
+    const safe = escapeHtml(text).replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>').replace(/\\n/g, '<br>');
+    return '<p class="u-m-0">' + safe + '</p>';
+  }).join('');
+}
+
+function openSiteNotice(notice) {
+  const n = notice || {};
+  const buttons =
+    (n.showDonate ? '<a href="' + escapeAttr(n.donateUrl || 'https://ko-fi.com/mylistsaddon') + '" target="_blank" rel="noopener noreferrer" class="btn-primary u-td-none">Donate on Ko-fi</a>' : '') +
+    (n.showBackup ? '<button type="button" class="btn-secondary" data-act="downloadConfigJson">Back up my data</button>' : '');
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px u-gap-12px" style="display:flex;">' +
-      '<h3 class="u-m-0 u-fs-v_font_size_lg">A Message About the Future of My Lists Addon</h3>' +
-      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">✕</button>' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">' + escapeHtml(n.title || '') + '</h3>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
     '</div>' +
     '<div class="u-c-v_text u-fs-v_font_size_sm u-lh-1_4 u-fd-column u-gap-10px" style="display:flex;">' +
-      '<p class="u-m-0">First, I want to say thank you to everyone who has used and supported My Lists Addon. We now have around 1,100 users, and I really appreciate everyone who has given the project a chance.</p>' +
-      '<p class="u-m-0">Unfortunately, running My Lists Addon is getting too expensive for me to keep paying for out of my own pocket. This month’s costs will likely be over $100, and I personally can’t afford to keep funding the project on my own.</p>' +
-      '<p class="u-m-0"><b>Unless we can get enough support through donations to cover the running costs, the public My Lists Addon website will shut down on November 8, 2026.</b></p>' +
-      '<p class="u-m-0">I don’t want to shut it down, but I also can’t keep covering these costs myself. If you’ve enjoyed using My Lists Addon and would like to help keep it running for everyone, donations would make a real difference.</p>' +
-      '<h4 class="u-m-6px_0_0 u-fs-v_font_size_base">What happens to your lists?</h4>' +
-      '<p class="u-m-0">Even if the public website shuts down, you’ll still be able to self-host My Lists Addon through Cloudflare at minimal cost. You can back up your lists and data and move to your own instance rather than lose everything you’ve created.</p>' +
-      '<p class="u-m-0">I’ll make sure information about backing up your data and setting up your own instance is available before the shutdown. <a href="' + escapeAttr(SHUTDOWN_NOTICE_GUIDE_URL) + '" target="_blank" rel="noopener noreferrer">Read the self-hosting guide</a>.</p>' +
-      '<p class="u-m-0">I’m just one person behind this project, and I’ve put a lot of time and effort into building it. Seeing around 1,100 people using something I’ve created means a lot to me.</p>' +
-      '<p class="u-m-0">Thank you for being part of My Lists Addon. I’d love to keep it going, but I need a little help to make that possible.</p>' +
-      '<p class="u-m-0">If you’d like to help keep My Lists Addon online, please consider donating. Every contribution helps.</p>' +
+      siteNoticeBodyHtml(n.body) +
+      (n.showGuide ? '<p class="u-m-0"><a href="' + escapeAttr(SITE_NOTICE_GUIDE_URL) + '" target="_blank" rel="noopener noreferrer">Read the self-hosting guide</a></p>' : '') +
     '</div>' +
-    '<div class="u-gap-8px u-mt-14px u-fw2-wrap" style="display:flex;">' +
-      '<a href="' + escapeAttr(SHUTDOWN_NOTICE_DONATE_URL) + '" target="_blank" rel="noopener noreferrer" class="btn-primary u-td-none">Donate on Ko-fi</a>' +
-      '<button type="button" class="btn-secondary" data-act="downloadConfigJson">Back up my data</button>' +
-    '</div>';
+    (buttons ? '<div class="u-gap-8px u-mt-14px u-fw2-wrap" style="display:flex;">' + buttons + '</div>' : '');
   showModal(html);
 }
 
-function initShutdownNotice() {
+async function initSiteNotice() {
   if (typeof document === 'undefined' || !document.body) return;
-  if (typeof location === 'undefined' || SHUTDOWN_NOTICE_HOSTS.indexOf(location.hostname) === -1) return;
+  if (typeof location === 'undefined' || SITE_NOTICE_HOSTS.indexOf(location.hostname) === -1) return;
   try {
-    if (sessionStorage.getItem(SHUTDOWN_NOTICE_SEEN_KEY) === '1') return;
-    sessionStorage.setItem(SHUTDOWN_NOTICE_SEEN_KEY, '1');
-  } catch (e) { /* storage blocked: show it every load rather than never */ }
-  openShutdownNotice();
+    if (sessionStorage.getItem(SITE_NOTICE_SEEN_KEY) === '1') return;
+    sessionStorage.setItem(SITE_NOTICE_SEEN_KEY, '1');
+  } catch (e) { /* storage blocked: ask every load rather than never */ }
+  try {
+    const res = await fetch(ORIGIN + '/api/site-notice');
+    const data = await res.json();
+    if (data && data.ok && data.enabled && data.title && data.body) openSiteNotice(data);
+  } catch (e) { /* no notice is better than a broken page */ }
 }
 
 if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initShutdownNotice);
-  else initShutdownNotice();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSiteNotice);
+  else initSiteNotice();
 }
 
 function showAppAlert(title, message, isSuccess = false) {

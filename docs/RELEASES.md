@@ -2098,3 +2098,15 @@ Found by counting the KV operations of each request in a test run (the "KV Write
 - **A key read twice in one request is now read once.** A catalog request read a shared list's record twice and an account's tracking record up to three times. For GET and HEAD requests only, the second read is answered from the first, within that request (`instrumentEnv`, 02_). Save requests are left alone: they read a key again on purpose to see what a concurrent request wrote. The wrapper now runs on every request, not only when Analytics Engine is bound; the data point is still written only when it is.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 5eb5545044)**. No migration. To undo, paste the Release 35 file.
+
+## Release 37: the site notice is editable and can be turned off; Ko-fi explains itself
+
+**Branch point:** Release 36 (build 5eb5545044). Built 2026-10-29, build 52e549596f.
+
+### What it changes
+
+- **Site Notice tab** under `/admin` → Management & Tools: turn the notice every visitor sees on or off, edit its title and message (a blank line is a new paragraph, `**words**` are bold), and choose whether it shows the Donate button, the Back up my data button and the self-hosting guide link. **Restore the original message** puts the shutdown text back. A change reaches visitors within a minute, with no deploy. The text is escaped on the page: it is shown as text, never as markup. Nothing saved means the original message, on, so nothing changes until the owner edits it.
+- The page now asks `/api/site-notice` once per browser session (it no longer carries the text itself): `initSiteNotice` / `openSiteNotice` replace `initShutdownNotice` / `openShutdownNotice` (16_). It still never shows on a self-hosted copy. The server side is `readSiteNotice`, `applySiteNoticeUpdate` and `DEFAULT_SITE_NOTICE` (03_), the routes `/api/site-notice` and `/admin/api/site-notice` (25_, 26_).
+- **Ko-fi donations that do not count now say why.** `/api/kofi-webhook` keeps its last delivery and what became of it (`kofi:lastdelivery:v1`), shown on Support Goal as *Last message from Ko-fi*: counted; ignored (not US dollars, or not a donation or membership); refused because this Worker has no `KOFI_VERIFICATION_TOKEN`; or refused because the token does not match. A refused delivery is written at most once per ten minutes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 52e549596f)**. No migration. To undo, paste the Release 36 file.
