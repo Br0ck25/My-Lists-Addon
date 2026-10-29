@@ -21,6 +21,17 @@
 // page) used to take jsonPublic's one-hour default, so a short outage, or a
 // link not yet visible where the app asked, lasted an hour in the apps.
 const CATALOG_NO_CACHE = { "Cache-Control": "no-store" };
+// How long an app may reuse a row before asking again (Workers requests are
+// billed per call, and a home screen asks once per row). Shared rows (charts,
+// streaming shelves, public lists) change slowly; a Creator list row is the
+// account's own and is re-read on every request, so it gets a short window: an
+// edit made on the website shows in the apps within this many seconds. The
+// same number goes in the body as Stremio's own cacheMaxAge, which Stremio
+// honours and plain Cache-Control it largely ignores. Personal shelves
+// (watch history, Continue Watching and the like) stay no-store.
+const CATALOG_SHARED_MAX_AGE = 1800;
+const CATALOG_LIVE_LIST_MAX_AGE = 90;
+const CATALOG_STALE_REVALIDATE = 86400;
 
 // What /api/save refuses to store, so a bad row cannot become a manifest the
 // apps reject. The id is a catalog id in a URL path (/catalog/<type>/<id>.json),
@@ -585,6 +596,24 @@ async function handleFetch(request, env, ctx) {
       return jsonPublic({ ok: true, ...view }, 200, { "Cache-Control": "public, max-age=300" });
     }
 
+    // /api/site-notice -> the message shown to every visitor once per session
+    // (openShutdownNotice, 16_), or enabled:false once the admin has turned it
+    // off. See readSiteNotice (03_admin.js). A minute of caching, so turning it
+    // off takes effect quickly.
+    if (path === "/api/site-notice" && request.method === "GET") {
+      const notice = await readSiteNotice(env);
+      return jsonPublic({
+        ok: true,
+        enabled: notice.enabled,
+        title: notice.title,
+        body: notice.body,
+        showDonate: notice.showDonate,
+        showBackup: notice.showBackup,
+        showGuide: notice.showGuide,
+        donateUrl: SUPPORT_GOAL_URL,
+      }, 200, { "Cache-Control": "public, max-age=60" });
+    }
+
     // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
     // payment to the support strip's total. Ko-fi posts form data whose `data`
     // field is a JSON string; the verification token inside it has to match the
@@ -592,6 +621,7 @@ async function handleFetch(request, env, ctx) {
     // message_id already counted is answered 200 and not counted twice.
     if (path === "/api/kofi-webhook" && request.method === "POST") {
       if (!env || !env.KOFI_VERIFICATION_TOKEN || !env.CONFIGS) {
+        await recordKofiDelivery(env, "no-token-on-worker");
         return json({ ok: false, error: "Not set up." }, 503, { "Cache-Control": "no-store" });
       }
       const kofiIp = clientIpKey(request);
@@ -612,11 +642,13 @@ async function handleFetch(request, env, ctx) {
         return json({ ok: false, error: "Bad request." }, 400, { "Cache-Control": "no-store" });
       }
       if (!data || typeof data !== "object" || !(await timingSafeEqualSecret(data.verification_token, env.KOFI_VERIFICATION_TOKEN))) {
+        await recordKofiDelivery(env, "wrong-token");
         return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
       }
       const amount = kofiAmountToCount(data);
       const messageId = String(data.message_id || "");
       if (amount === null || !KOFI_MESSAGE_ID_RE.test(messageId)) {
+        await recordKofiDelivery(env, amount === null ? "not-counted" : "bad-message-id", { authed: true, type: data.type, currency: data.currency });
         return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
       }
       const seenKey = `kofi:msg:${messageId}`;
@@ -624,6 +656,7 @@ async function handleFetch(request, env, ctx) {
       const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
       await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
       await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      await recordKofiDelivery(env, "counted", { authed: true, type: data.type, currency: data.currency });
       return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -1625,16 +1658,22 @@ Sitemap: ${url.origin}/sitemap.xml`;
             // No Cache API available: the fallback just has nothing to serve.
           }
         }
-        if (isUserPersonal || isLiveCustomList) {
+        if (isUserPersonal) {
           return jsonPublic({ metas }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
         }
-        // Five minutes, not a day: every shared row -- charts, New on
-        // Streaming, Most Watched, public/provider lists -- is re-read live
-        // (or from a short worker-side TTL) on each origin hit, so a day-long
-        // max-age was the only thing standing between a website-side change
-        // and Stremio/Nuvio showing it. Upstream rate limits are still guarded
-        // by the fetchers' own freshTtlSec windows, not by this header.
-        return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=300, s-maxage=300" });
+        // An account's own list: re-read on every request, so only a short
+        // window (CATALOG_LIVE_LIST_MAX_AGE) -- not a day, and not none.
+        if (isLiveCustomList) {
+          return jsonPublic({ metas, cacheMaxAge: CATALOG_LIVE_LIST_MAX_AGE, staleRevalidate: CATALOG_LIVE_LIST_MAX_AGE },
+            200, { "Cache-Control": `public, max-age=${CATALOG_LIVE_LIST_MAX_AGE}` });
+        }
+        // Thirty minutes for every shared row -- charts, New on Streaming, Most
+        // Watched, public/provider lists. It was five minutes, and a day before
+        // that; the apps ask once per row per home screen, so this is the
+        // number that sets the Workers request count. Upstream rate limits are
+        // still guarded by the fetchers' own freshTtlSec windows.
+        return jsonPublic({ metas, cacheMaxAge: CATALOG_SHARED_MAX_AGE, staleRevalidate: CATALOG_STALE_REVALIDATE },
+          200, { "Cache-Control": `public, max-age=${CATALOG_SHARED_MAX_AGE}, s-maxage=${CATALOG_SHARED_MAX_AGE}` });
       } catch (err) {
         const errMsg = safeErrorMessage(err);
         if (isUserPersonal || isLiveCustomList) {

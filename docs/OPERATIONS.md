@@ -4,6 +4,8 @@ How the hosted Worker is deployed, configured and recovered. The Worker is deplo
 
 ---
 
+> **Running your own copy?** Start with [`SELF-HOSTING.md`](../SELF-HOSTING.md) (plain steps, copy and paste). This file is the operator reference for the public site, and its bindings, secrets and migrations apply to a self-hosted copy too.
+
 ## 1. Release checklist
 
 The comprehensive release procedure is documented in **[`docs/DEPLOY_CHECKLIST.md`](DEPLOY_CHECKLIST.md)** and the staging setup in **[`docs/STAGING.md`](STAGING.md)**. Summary of gates:

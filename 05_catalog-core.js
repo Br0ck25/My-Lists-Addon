@@ -1071,9 +1071,10 @@ function betterPosterImageResponse(bytes, contentType) {
     status: 200,
     headers: {
       "Content-Type": contentType || "image/jpeg",
-      // Six hours in the browser and at the edge -- btttr.cc's own lifetime
-      // for the same image -- and a day more while a newer copy is fetched.
-      "Cache-Control": "public, max-age=21600, stale-while-revalidate=86400",
+      // A week in the app and a month more while a newer copy is fetched: each
+      // poster tile is one Worker request, and the artwork (a title's ratings
+      // and tags) changes slowly, so the apps need not ask again for days.
+      "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
       "Access-Control-Allow-Origin": "*",
       "X-Content-Type-Options": "nosniff",
     },
@@ -1553,7 +1554,7 @@ function rpdbImageResponse(bytes, contentType) {
     status: 200,
     headers: {
       "Content-Type": contentType || "image/jpeg",
-      "Cache-Control": "public, max-age=21600, stale-while-revalidate=86400",
+      "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
       "Access-Control-Allow-Origin": "*",
       "X-Content-Type-Options": "nosniff",
     },

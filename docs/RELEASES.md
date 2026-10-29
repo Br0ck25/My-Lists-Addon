@@ -2105,3 +2105,55 @@ Neither service documents its API. The calls follow stremio-core's library item 
 **Tenth follow-up (same day):** items can be removed from Nuvio and Stremio from the website. Each tile of the Nuvio and Stremio *Watch History* and *Continue Watching* lists (cards and See all) has a remove button; it asks first, then `POST /api/connections/:provider/remove` (`{ target, id, mediaType }`) removes the item in the app, and only when the app accepts it here. *Watch History*: Stremio library item marked unwatched with its position cleared (a show's watched bits cleared); Nuvio's watched rows for the title deleted (`sync_delete_watched_items`); a show means every episode; our copy of that app's plays is deleted (plays from other sources are kept) so a later pull does not bring it back. *Continue Watching*: Stremio position cleared; Nuvio progress rows sent back with position 0 (`sync_push_watch_progress`); here the kept movie entry is cleared, a show is dismissed at its furthest episode, and its bar numbers are dropped; Watch History is untouched. It needs `FF_MEDIA_APP_PUSH` (409 *Removing from Nuvio isn't switched on yet.* without it): it writes into the person's account in formats not checked against a live one (the key shape of Nuvio's delete is a guess from the row it deletes). Marking something watched on the website now also starts a push for each app with two-way sync on (`nudgeMediaAppPush`, from the history shim in 40_), so it reaches the app in minutes rather than at the next hourly job. Not done: un-marking a play in the website's own Watch History does not remove it in the app.
 
 **Steps:** 1. Run `npx wrangler d1 execute my-lists-db --remote --file=./migrations/0023_media_app_sync.sql` (or paste it into the D1 Console). Safe to run twice. 2. Deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-13 (build e746dbcd9f)**. 3. Connect your own Stremio and Nuvio accounts in Settings and check the points above. `TOKEN_ENCRYPTION_KEY` must be set, and pulled history shows once `FF_EVENT_TRACKING` serves the account from the activity database.
+
+## Release 34: shutdown notice and self-hosting guide
+
+**Branch point:** Release 33 (build 125fc325b2), live. Built 2026-10-26, build 099881f472.
+
+### What it changes
+
+- **A notice on every visit to mylistsaddon.com**, signed in or out (`openShutdownNotice`, `initShutdownNotice`, 16_): the owner's message that the public site shuts down on **November 8, 2026** unless donations cover its costs. Two buttons: **Donate on Ko-fi** and **Back up my data** (the existing `downloadConfigJson` full backup). It shows once per browser session, and only on `mylistsaddon.com` / `www.mylistsaddon.com`, so a self-hosted copy never shows it. Removing it later means deleting that block and its test (`tests/shutdown-notice.client.test.mjs`).
+- **Self-hosting is documented.** New `SELF-HOSTING.md` (dashboard steps with the whole of `schema.sql`, `schema_activity.sql` and `worker_entry_combined.js` copied and pasted, plus a terminal route), new `wrangler.selfhost.toml` (placeholder ids; `wrangler.toml` still names the public site's own), a README section, and the two FAQ answers. `docs/DECISIONS.md` D-9 replaces D-1. A copy needs Workers Paid; the Free plan is still unsupported.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-26 (build 099881f472)**. No migration.
+
+## Release 35: fewer Workers requests from the apps
+
+**Branch point:** Release 34 (build 099881f472). Built 2026-10-29, build 6be2ab7478.
+
+### What it changes
+
+The bill's "Workers Standard Requests" line (about 58 million requests in 21 days) is mostly Stremio, Nuvio and Wako asking for rows and poster images. Nothing is removed; the apps are told to ask less often.
+
+- **Shared rows** (charts, streaming shelves, public lists): reusable for **30 minutes**, was 5 (`CATALOG_SHARED_MAX_AGE`, 25_). The body also carries `cacheMaxAge` and `staleRevalidate`, Stremio's own cache fields, which Stremio honours and plain Cache-Control it largely ignores. A change made on the website can take up to 30 minutes to reach these rows in the apps.
+- **A Creator list row** (the account's own custom lists): reusable for **90 seconds**, was never (`no-store`). An edit on the website reaches the apps within 90 seconds, no longer on the next fetch. The tests that said "never cached" now pin 90.
+- **Personal shelves** (watchlist, history, Continue Watching, Airing Next): unchanged, still `no-store`.
+- **Better Posters and RPDB images** (`/bp/`, `/rpdb/`): an app may keep one for **7 days** (was 6 hours) and show it for 30 days more while a new copy is fetched. A poster's ratings and tags can take up to a week to update in the apps.
+- **Not done:** serving posters from a public R2 address so they skip the Worker altogether. It needs a public bucket or custom domain set up by the owner, and poster URLs that depend on it; check `/admin` and the per-route request counts (Analytics Engine, see docs/OPERATIONS.md section 30) first to see whether poster requests are the big share.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 6be2ab7478)**. No migration. To undo, paste the Release 34 file.
+
+## Release 36: two sources of needless KV operations
+
+**Branch point:** Release 35 (build 6be2ab7478). Built 2026-10-29, build 5eb5545044.
+
+### What it changes
+
+Found by counting the KV operations of each request in a test run (the "KV Write Operations" and "KV Read Operations" lines on the bill).
+
+- **An account's KV copy was rewritten on every read.** `getCreator` (02_) reads an account from D1 and keeps a copy in KV for the day D1 errors, and wrote that copy every time: one billed KV write for each catalog request on a signed-in install and for each `/api/creator/*` call, of a record that had not changed (`creator:{name}` in the counts). It now writes when the record differs from what this isolate last wrote, and otherwise once an hour per account (`mirrorCreatorToKv`). The KV copy is only read when D1 fails, so nothing a visitor sees changes.
+- **A key read twice in one request is now read once.** A catalog request read a shared list's record twice and an account's tracking record up to three times. For GET and HEAD requests only, the second read is answered from the first, within that request (`instrumentEnv`, 02_). Save requests are left alone: they read a key again on purpose to see what a concurrent request wrote. The wrapper now runs on every request, not only when Analytics Engine is bound; the data point is still written only when it is.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 5eb5545044)**. No migration. To undo, paste the Release 35 file.
+
+## Release 37: the site notice is editable and can be turned off; Ko-fi explains itself
+
+**Branch point:** Release 36 (build 5eb5545044). Built 2026-10-29, build 52e549596f.
+
+### What it changes
+
+- **Site Notice tab** under `/admin` → Management & Tools: turn the notice every visitor sees on or off, edit its title and message (a blank line is a new paragraph, `**words**` are bold), and choose whether it shows the Donate button, the Back up my data button and the self-hosting guide link. **Restore the original message** puts the shutdown text back. A change reaches visitors within a minute, with no deploy. The text is escaped on the page: it is shown as text, never as markup. Nothing saved means the original message, on, so nothing changes until the owner edits it.
+- The page now asks `/api/site-notice` once per browser session (it no longer carries the text itself): `initSiteNotice` / `openSiteNotice` replace `initShutdownNotice` / `openShutdownNotice` (16_). It still never shows on a self-hosted copy. The server side is `readSiteNotice`, `applySiteNoticeUpdate` and `DEFAULT_SITE_NOTICE` (03_), the routes `/api/site-notice` and `/admin/api/site-notice` (25_, 26_).
+- **Ko-fi donations that do not count now say why.** `/api/kofi-webhook` keeps its last delivery and what became of it (`kofi:lastdelivery:v1`), shown on Support Goal as *Last message from Ko-fi*: counted; ignored (not US dollars, or not a donation or membership); refused because this Worker has no `KOFI_VERIFICATION_TOKEN`; or refused because the token does not match. A refused delivery is written at most once per ten minutes.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 52e549596f)**. No migration. To undo, paste the Release 36 file.

@@ -4017,7 +4017,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Yes, 100% free with no subscriptions, ads, or paywalls. Use the hosted instance at mylistsaddon.com -- optional support is available on Ko-fi.",
+            "Yes, with no subscriptions, ads, or paywalls. The public site at mylistsaddon.com will shut down on November 8, 2026 unless donations on Ko-fi cover its costs; you can also self-host (SELF-HOSTING.md).",
         },
       },
     ],
@@ -4832,7 +4832,7 @@ ${UTILITY_CSS}
 
     <div class="faq-item">
       <div class="faq-q">Is My Lists Addon completely free?</div>
-      <div class="faq-a">Yes! It runs on your own free Cloudflare Workers account, which comfortably covers normal personal use at no cost. There's no subscription, no ads, and no paid tier. Optional support is available on Ko-fi.</div>
+      <div class="faq-a">Yes, it has no subscription, no ads, and no paid tier. Running it costs the owner real money, though, and the public site will shut down on November 8, 2026 unless donations cover its costs (Ko-fi). You can also run your own copy on Cloudflare (a Workers Paid plan, about $5 a month): see <a href="https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md" target="_blank" rel="noopener">SELF-HOSTING.md</a>.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Do I need to sign up or create an account?</div>

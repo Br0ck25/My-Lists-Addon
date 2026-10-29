@@ -1,0 +1,66 @@
+# ============================================================================
+# Your own My Lists Addon on Cloudflare (terminal method)
+# ============================================================================
+# Step by step: SELF-HOSTING.md ("Method B"). Deploy with:
+#   npx wrangler deploy -c wrangler.selfhost.toml
+#
+# The only edit this file needs is the three PASTE-...-HERE values below: the
+# ids that `wrangler d1 create` and `wrangler kv namespace create` printed.
+# Do NOT use wrangler.toml: it names the public site's own databases.
+name = "my-lists-addon"
+main = "worker_entry_combined.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "CONFIGS"
+id = "PASTE-KV-NAMESPACE-ID-HERE"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "my-lists-db"
+database_id = "PASTE-MY-LISTS-DB-ID-HERE"
+
+[[d1_databases]]
+binding = "DB_ACTIVITY"
+database_name = "mylists-activity"
+database_id = "PASTE-MYLISTS-ACTIVITY-ID-HERE"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "mylists-blobs"
+
+[[queues.producers]]
+binding = "JOBS"
+queue = "mylists-jobs"
+
+[[queues.consumers]]
+queue = "mylists-jobs"
+max_batch_size = 25
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "mylists-jobs-dlq"
+
+# Every five minutes: new episodes into Continue Watching, charts kept fresh.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# The settings the public site runs with. Set them now, on an empty database,
+# and leave them set (FF_V2_LISTS_ONLY and FF_EVENT_TRACKING are one-way).
+[vars]
+FF_SESSIONS = "1"
+FF_INSTALLS = "1"
+FF_V2_LISTS_READ = "1"
+FF_V2_LISTS_API = "1"
+FF_V2_LISTS_ONLY = "1"
+FF_EVENT_TRACKING = "1"
+FF_PROVIDER_BREAKER = "1"
+FF_CHART_SNAPSHOTS = "1"
+FF_CANONICAL_IDS = "1"
+FF_MATERIALIZER = "1"
+FF_SCROBBLE_ST_ONLY = "1"
+INSTALL_MIGRATION_PERCENT = "100"
+
+# Secrets are never written here. Set them with `wrangler secret put`:
+#   ADMIN_KEY, TMDB_API_KEY, TOKEN_ENCRYPTION_KEY, LOOKUP_PEPPER
+# and, if you use them, TRAKT_CLIENT_ID, TRAKT_CLIENT_SECRET, MDBLIST_API_KEY,
+# SIMKL_CLIENT_ID, SIMKL_CLIENT_SECRET.

@@ -2436,6 +2436,70 @@ if (typeof document !== 'undefined') {
   else initSupportStrip();
 }
 
+// --- The site notice ---------------------------------------------------------------
+//
+// A message from the owner, shown once per browser session to every visitor to
+// the public site, signed in or not (a new tab or a later visit shows it
+// again). What it says, which buttons it has and whether it shows at all come
+// from /api/site-notice, which the admin edits under Management & Tools ->
+// Site Notice (readSiteNotice, 03_admin.js). Today it is the shutdown message:
+// the public site closes on 2026-11-08 unless donations cover its costs. Its
+// buttons are the donation page and the existing full backup download
+// (downloadConfigJson), so a visitor can leave with their data in one click.
+// Self-hosting steps for the data live in SELF-HOSTING.md. It is the public
+// site's message, so a self-hosted copy (any other hostname) never shows it.
+const SITE_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
+const SITE_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
+const SITE_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
+
+// The admin's plain text as markup: every character escaped first, then a blank
+// line is a paragraph, a single newline a line break and **words** bold.
+function siteNoticeBodyHtml(body) {
+  return String(body || '').split(/\\n{2,}/).map(function(para) {
+    const text = para.trim();
+    if (!text) return '';
+    const safe = escapeHtml(text).replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>').replace(/\\n/g, '<br>');
+    return '<p class="u-m-0">' + safe + '</p>';
+  }).join('');
+}
+
+function openSiteNotice(notice) {
+  const n = notice || {};
+  const buttons =
+    (n.showDonate ? '<a href="' + escapeAttr(n.donateUrl || 'https://ko-fi.com/mylistsaddon') + '" target="_blank" rel="noopener noreferrer" class="btn-primary u-td-none">Donate on Ko-fi</a>' : '') +
+    (n.showBackup ? '<button type="button" class="btn-secondary" data-act="downloadConfigJson">Back up my data</button>' : '');
+  const html =
+    '<div class="u-jc-space_between u-ai-flex_start u-mb-12px u-gap-12px" style="display:flex;">' +
+      '<h3 class="u-m-0 u-fs-v_font_size_lg">' + escapeHtml(n.title || '') + '</h3>' +
+      '<button type="button" class="modal-close-x" aria-label="Close" data-act="closeModal">\u2715</button>' +
+    '</div>' +
+    '<div class="u-c-v_text u-fs-v_font_size_sm u-lh-1_4 u-fd-column u-gap-10px" style="display:flex;">' +
+      siteNoticeBodyHtml(n.body) +
+      (n.showGuide ? '<p class="u-m-0"><a href="' + escapeAttr(SITE_NOTICE_GUIDE_URL) + '" target="_blank" rel="noopener noreferrer">Read the self-hosting guide</a></p>' : '') +
+    '</div>' +
+    (buttons ? '<div class="u-gap-8px u-mt-14px u-fw2-wrap" style="display:flex;">' + buttons + '</div>' : '');
+  showModal(html);
+}
+
+async function initSiteNotice() {
+  if (typeof document === 'undefined' || !document.body) return;
+  if (typeof location === 'undefined' || SITE_NOTICE_HOSTS.indexOf(location.hostname) === -1) return;
+  try {
+    if (sessionStorage.getItem(SITE_NOTICE_SEEN_KEY) === '1') return;
+    sessionStorage.setItem(SITE_NOTICE_SEEN_KEY, '1');
+  } catch (e) { /* storage blocked: ask every load rather than never */ }
+  try {
+    const res = await fetch(ORIGIN + '/api/site-notice');
+    const data = await res.json();
+    if (data && data.ok && data.enabled && data.title && data.body) openSiteNotice(data);
+  } catch (e) { /* no notice is better than a broken page */ }
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSiteNotice);
+  else initSiteNotice();
+}
+
 function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
   const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
