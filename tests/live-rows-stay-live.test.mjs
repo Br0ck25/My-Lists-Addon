@@ -157,21 +157,28 @@ describe("catalog cache lifetimes", () => {
     return { env, config: "cache1" };
   }
 
-  it("shared rows revalidate within minutes, not a day", async () => {
+  it("shared rows may be reused for thirty minutes, and tell Stremio so", async () => {
     const { env, config } = await setup();
     const res = await call(env, `/${config}/catalog/movie/shared.json`);
     assert.equal(res.status, 200);
-    assert.equal(res.headers.get("cache-control"), "public, max-age=300, s-maxage=300");
+    assert.equal(res.headers.get("cache-control"), "public, max-age=1800, s-maxage=1800");
+    // Stremio reads its own field, not Cache-Control: without it every home
+    // screen asks again for every row.
+    assert.equal(res.body.cacheMaxAge, 1800);
+    assert.equal(res.body.staleRevalidate, 86400);
   });
 
-  it("a Creator list row is live state, so it is never cached", async () => {
+  it("a Creator list row is re-read every time but may be reused for 90 seconds", async () => {
     const { env, config } = await setup();
     const res = await call(env, `/${config}/catalog/movie/snap.json`);
     assert.equal(res.status, 200);
     // The server re-reads this list on every request (fetchCustomListCatalog),
-    // so a cached copy is a copy that can disagree with what the account just
-    // did -- the same reason the autotrack shelves below are no-store.
-    assert.equal(res.headers.get("cache-control"), "no-cache, no-store, must-revalidate, max-age=0");
+    // so the window is short: an edit made on the website reaches the apps
+    // within it. Release 35 moved it from never (no-store) to 90 seconds on
+    // the owner's say-so, to cut Workers requests; personal shelves below
+    // stay no-store, because watching something has to show at once.
+    assert.equal(res.headers.get("cache-control"), "public, max-age=90");
+    assert.equal(res.body.cacheMaxAge, 90);
   });
 
   it("personal shelves are still never cached", async () => {

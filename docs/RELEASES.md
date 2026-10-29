@@ -2069,3 +2069,19 @@ Build stamp unchanged (b598fce9b6): nothing to deploy for this.
 - **Self-hosting is documented.** New `SELF-HOSTING.md` (dashboard steps with the whole of `schema.sql`, `schema_activity.sql` and `worker_entry_combined.js` copied and pasted, plus a terminal route), new `wrangler.selfhost.toml` (placeholder ids; `wrangler.toml` still names the public site's own), a README section, and the two FAQ answers. `docs/DECISIONS.md` D-9 replaces D-1. A copy needs Workers Paid; the Free plan is still unsupported.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-26 (build 099881f472)**. No migration.
+
+## Release 35: fewer Workers requests from the apps
+
+**Branch point:** Release 34 (build 099881f472). Built 2026-10-29, build 6be2ab7478.
+
+### What it changes
+
+The bill's "Workers Standard Requests" line (about 58 million requests in 21 days) is mostly Stremio, Nuvio and Wako asking for rows and poster images. Nothing is removed; the apps are told to ask less often.
+
+- **Shared rows** (charts, streaming shelves, public lists): reusable for **30 minutes**, was 5 (`CATALOG_SHARED_MAX_AGE`, 25_). The body also carries `cacheMaxAge` and `staleRevalidate`, Stremio's own cache fields, which Stremio honours and plain Cache-Control it largely ignores. A change made on the website can take up to 30 minutes to reach these rows in the apps.
+- **A Creator list row** (the account's own custom lists): reusable for **90 seconds**, was never (`no-store`). An edit on the website reaches the apps within 90 seconds, no longer on the next fetch. The tests that said "never cached" now pin 90.
+- **Personal shelves** (watchlist, history, Continue Watching, Airing Next): unchanged, still `no-store`.
+- **Better Posters and RPDB images** (`/bp/`, `/rpdb/`): an app may keep one for **7 days** (was 6 hours) and show it for 30 days more while a new copy is fetched. A poster's ratings and tags can take up to a week to update in the apps.
+- **Not done:** serving posters from a public R2 address so they skip the Worker altogether. It needs a public bucket or custom domain set up by the owner, and poster URLs that depend on it; check `/admin` and the per-route request counts (Analytics Engine, see docs/OPERATIONS.md section 30) first to see whether poster requests are the big share.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 6be2ab7478)**. No migration. To undo, paste the Release 34 file.

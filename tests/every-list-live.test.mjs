@@ -87,13 +87,13 @@ describe("a local Custom List row is live in the apps", () => {
       "a row with no server-side list behind it must not go empty");
   });
 
-  it("is served no-store, like the other live rows", async () => {
+  it("is re-read live but reusable for 90 seconds (Release 35); personal shelves stay no-store", async () => {
     const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
     const user = await createUser(env, "livelocal3");
     const config = await signedInConfig(env, "livelocal3", user, localRow("faves", [item(1)]));
     await accountList(env, user, [item(1)], "public");
     const res = await call(env, `/${config}/catalog/movie/faves.json`);
-    assert.equal(res.headers.get("cache-control"), "no-cache, no-store, must-revalidate, max-age=0");
+    assert.equal(res.headers.get("cache-control"), "public, max-age=90");
   });
 });
 

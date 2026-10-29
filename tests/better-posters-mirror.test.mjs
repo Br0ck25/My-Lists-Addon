@@ -48,7 +48,7 @@ describe("/bp/ serves BetterPosters artwork from the Worker's own copy", () => {
     const first = await getBytes(env, "/bp/poster/tt1745960.jpg");
     assert.equal(first.status, 200);
     assert.equal(first.type, "image/webp");
-    assert.match(first.cache, /max-age=21600/);
+    assert.match(first.cache, /max-age=604800/);
     assert.deepEqual(upstream, ["https://btttr.cc/poster/imdb/poster-default/tt1745960.jpg"]);
 
     // btttr.cc now failing: the stored copy is served regardless.

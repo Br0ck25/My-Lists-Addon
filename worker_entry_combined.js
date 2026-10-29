@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-10-26";
+const WORKER_BUILD_DATE = "2026-10-29";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "099881f472";
+const WORKER_BUILD = "6be2ab7478";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -19255,9 +19255,10 @@ function betterPosterImageResponse(bytes, contentType) {
     status: 200,
     headers: {
       "Content-Type": contentType || "image/jpeg",
-      // Six hours in the browser and at the edge -- btttr.cc's own lifetime
-      // for the same image -- and a day more while a newer copy is fetched.
-      "Cache-Control": "public, max-age=21600, stale-while-revalidate=86400",
+      // A week in the app and a month more while a newer copy is fetched: each
+      // poster tile is one Worker request, and the artwork (a title's ratings
+      // and tags) changes slowly, so the apps need not ask again for days.
+      "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
       "Access-Control-Allow-Origin": "*",
       "X-Content-Type-Options": "nosniff",
     },
@@ -19737,7 +19738,7 @@ function rpdbImageResponse(bytes, contentType) {
     status: 200,
     headers: {
       "Content-Type": contentType || "image/jpeg",
-      "Cache-Control": "public, max-age=21600, stale-while-revalidate=86400",
+      "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
       "Access-Control-Allow-Origin": "*",
       "X-Content-Type-Options": "nosniff",
     },
@@ -86112,6 +86113,17 @@ ${UTILITY_CSS}
 // page) used to take jsonPublic's one-hour default, so a short outage, or a
 // link not yet visible where the app asked, lasted an hour in the apps.
 const CATALOG_NO_CACHE = { "Cache-Control": "no-store" };
+// How long an app may reuse a row before asking again (Workers requests are
+// billed per call, and a home screen asks once per row). Shared rows (charts,
+// streaming shelves, public lists) change slowly; a Creator list row is the
+// account's own and is re-read on every request, so it gets a short window: an
+// edit made on the website shows in the apps within this many seconds. The
+// same number goes in the body as Stremio's own cacheMaxAge, which Stremio
+// honours and plain Cache-Control it largely ignores. Personal shelves
+// (watch history, Continue Watching and the like) stay no-store.
+const CATALOG_SHARED_MAX_AGE = 1800;
+const CATALOG_LIVE_LIST_MAX_AGE = 90;
+const CATALOG_STALE_REVALIDATE = 86400;
 
 // What /api/save refuses to store, so a bad row cannot become a manifest the
 // apps reject. The id is a catalog id in a URL path (/catalog/<type>/<id>.json),
@@ -87716,16 +87728,22 @@ Sitemap: ${url.origin}/sitemap.xml`;
             // No Cache API available: the fallback just has nothing to serve.
           }
         }
-        if (isUserPersonal || isLiveCustomList) {
+        if (isUserPersonal) {
           return jsonPublic({ metas }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
         }
-        // Five minutes, not a day: every shared row -- charts, New on
-        // Streaming, Most Watched, public/provider lists -- is re-read live
-        // (or from a short worker-side TTL) on each origin hit, so a day-long
-        // max-age was the only thing standing between a website-side change
-        // and Stremio/Nuvio showing it. Upstream rate limits are still guarded
-        // by the fetchers' own freshTtlSec windows, not by this header.
-        return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=300, s-maxage=300" });
+        // An account's own list: re-read on every request, so only a short
+        // window (CATALOG_LIVE_LIST_MAX_AGE) -- not a day, and not none.
+        if (isLiveCustomList) {
+          return jsonPublic({ metas, cacheMaxAge: CATALOG_LIVE_LIST_MAX_AGE, staleRevalidate: CATALOG_LIVE_LIST_MAX_AGE },
+            200, { "Cache-Control": `public, max-age=${CATALOG_LIVE_LIST_MAX_AGE}` });
+        }
+        // Thirty minutes for every shared row -- charts, New on Streaming, Most
+        // Watched, public/provider lists. It was five minutes, and a day before
+        // that; the apps ask once per row per home screen, so this is the
+        // number that sets the Workers request count. Upstream rate limits are
+        // still guarded by the fetchers' own freshTtlSec windows.
+        return jsonPublic({ metas, cacheMaxAge: CATALOG_SHARED_MAX_AGE, staleRevalidate: CATALOG_STALE_REVALIDATE },
+          200, { "Cache-Control": `public, max-age=${CATALOG_SHARED_MAX_AGE}, s-maxage=${CATALOG_SHARED_MAX_AGE}` });
       } catch (err) {
         const errMsg = safeErrorMessage(err);
         if (isUserPersonal || isLiveCustomList) {
