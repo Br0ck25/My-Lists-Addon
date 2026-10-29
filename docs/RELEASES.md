@@ -2085,3 +2085,16 @@ The bill's "Workers Standard Requests" line (about 58 million requests in 21 day
 - **Not done:** serving posters from a public R2 address so they skip the Worker altogether. It needs a public bucket or custom domain set up by the owner, and poster URLs that depend on it; check `/admin` and the per-route request counts (Analytics Engine, see docs/OPERATIONS.md section 30) first to see whether poster requests are the big share.
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 6be2ab7478)**. No migration. To undo, paste the Release 34 file.
+
+## Release 36: two sources of needless KV operations
+
+**Branch point:** Release 35 (build 6be2ab7478). Built 2026-10-29, build 5eb5545044.
+
+### What it changes
+
+Found by counting the KV operations of each request in a test run (the "KV Write Operations" and "KV Read Operations" lines on the bill).
+
+- **An account's KV copy was rewritten on every read.** `getCreator` (02_) reads an account from D1 and keeps a copy in KV for the day D1 errors, and wrote that copy every time: one billed KV write for each catalog request on a signed-in install and for each `/api/creator/*` call, of a record that had not changed (`creator:{name}` in the counts). It now writes when the record differs from what this isolate last wrote, and otherwise once an hour per account (`mirrorCreatorToKv`). The KV copy is only read when D1 fails, so nothing a visitor sees changes.
+- **A key read twice in one request is now read once.** A catalog request read a shared list's record twice and an account's tracking record up to three times. For GET and HEAD requests only, the second read is answered from the first, within that request (`instrumentEnv`, 02_). Save requests are left alone: they read a key again on purpose to see what a concurrent request wrote. The wrapper now runs on every request, not only when Analytics Engine is bound; the data point is still written only when it is.
+
+**Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build 5eb5545044)**. No migration. To undo, paste the Release 35 file.

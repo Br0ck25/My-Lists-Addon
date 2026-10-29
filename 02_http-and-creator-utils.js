@@ -542,15 +542,41 @@ function routeFamily(pathname) {
 function instrumentEnv(env, counters) {
   const kv = env.CONFIGS;
   const db = env.DB;
+  // A key read twice in one request is one billed read: a repeat is answered
+  // from the first. Only plain text reads (get(key) or get(key, "text")) are
+  // shared, since a string cannot be changed by whoever receives it; the memo
+  // lives for this request alone, and any write to the key clears it. Only
+  // for GET and HEAD (counters.shareReads): the save paths read a key AGAIN on
+  // purpose, to see what a concurrent request wrote since, and must get KV's
+  // answer.
+  const readMemo = new Map();
   const kvProxy = kv ? {
-    get: (...a) => { counters.kvReads++; return kv.get(...a); },
+    get: (...a) => {
+      const shareable = counters.shareReads === true && typeof a[0] === "string" && (a.length === 1 || (a.length === 2 && a[1] === "text"));
+      if (shareable) {
+        const hit = readMemo.get(a[0]);
+        if (hit) return hit;
+      }
+      counters.kvReads++;
+      const pending = kv.get(...a);
+      if (shareable) {
+        readMemo.set(a[0], pending);
+        Promise.resolve(pending).catch(() => { if (readMemo.get(a[0]) === pending) readMemo.delete(a[0]); });
+      }
+      return pending;
+    },
     getWithMetadata: (...a) => { counters.kvReads++; return kv.getWithMetadata(...a); },
     put: (...a) => {
       counters.kvWrites++;
+      readMemo.delete(a[0]);
       if (isLegacyListKvKey(a[0])) counters.kvLegacyListPuts = (counters.kvLegacyListPuts || 0) + 1;
-      return kv.put(...a);
+      return Promise.resolve(kv.put(...a)).finally(() => readMemo.delete(a[0]));
     },
-    delete: (...a) => { counters.kvWrites++; return kv.delete(...a); },
+    delete: (...a) => {
+      counters.kvWrites++;
+      readMemo.delete(a[0]);
+      return Promise.resolve(kv.delete(...a)).finally(() => readMemo.delete(a[0]));
+    },
     list: (...a) => { counters.kvLists++; return kv.list(...a); },
   } : kv;
   function wrapDbSession(targetDb) {
@@ -5209,6 +5235,24 @@ async function readCreatorResetAt(env, username) {
 //
 // D1 is the authoritative store for creator identities when bound.
 // KV serves as a read-through cache and fallback for unmigrated accounts.
+// The KV copy of an account getCreator keeps for the day D1 errors. It used to
+// be written on every read -- one billed KV write per catalog request for a
+// signed-in install and per /api/creator/* call, of a record that had not
+// changed. Now: written when the record differs from what this isolate last
+// wrote, and otherwise once an hour. A cold isolate writes once, then not
+// again. The map is bounded so it cannot grow without limit.
+const CREATOR_KV_MIRROR = new Map();
+const CREATOR_KV_MIRROR_MAX = 2000;
+const CREATOR_KV_MIRROR_REFRESH_MS = 60 * 60 * 1000;
+async function mirrorCreatorToKv(env, username, raw) {
+  const last = CREATOR_KV_MIRROR.get(username);
+  const now = Date.now();
+  if (last && last.raw === raw && now - last.at < CREATOR_KV_MIRROR_REFRESH_MS) return;
+  await env.CONFIGS.put(`creator:${username}`, raw);
+  if (CREATOR_KV_MIRROR.size >= CREATOR_KV_MIRROR_MAX) CREATOR_KV_MIRROR.clear();
+  CREATOR_KV_MIRROR.set(username, { raw, at: now });
+}
+
 async function getCreator(env, username) {
   if (env && env.DB) {
     try {
@@ -5232,8 +5276,8 @@ async function getCreator(env, username) {
         };
         const raw = JSON.stringify(payload);
         try {
-          if (env.CONFIGS) await env.CONFIGS.put(`creator:${row.username}`, raw);
-          if (row.username !== username && env.CONFIGS) await env.CONFIGS.put(`creator:${username}`, raw);
+          if (env.CONFIGS) await mirrorCreatorToKv(env, row.username, raw);
+          if (row.username !== username && env.CONFIGS) await mirrorCreatorToKv(env, username, raw);
         } catch (kvErr) {
           console.error("KV cache write error (getCreator):", kvErr);
         }

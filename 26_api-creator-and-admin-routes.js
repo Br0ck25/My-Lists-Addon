@@ -7655,9 +7655,14 @@ export default {
   async fetch(request, env, ctx) {
     let response;
     const startedAt = Date.now();
-    const counters = (env && env.ANALYTICS)
-      ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0, kvLegacyListPuts: 0 }
+    // The wrapper always runs (it also answers a key read twice in one request
+    // from its first read, see instrumentEnv); the data point is written only
+    // when Analytics Engine is bound.
+    const counters = env
+      ? { kvReads: 0, kvWrites: 0, kvLists: 0, d1Statements: 0, d1Batches: 0, kvLegacyListPuts: 0,
+        shareReads: !!request && (request.method === "GET" || request.method === "HEAD") }
       : null;
+    const recordMetrics = !!(env && env.ANALYTICS);
     // FF_EVENT_TRACKING: tracking records of accounts served from the
     // activity database are read and written there (40_event-tracking.js).
     const runEnv = eventTrackingEnv(counters ? instrumentEnv(env, counters) : env);
@@ -7705,7 +7710,7 @@ export default {
     } catch {
       // An unparseable URL cannot have reached a private route anyway.
     }
-    if (counters) writeRequestMetrics(env, request, response, startedAt, counters);
+    if (recordMetrics) writeRequestMetrics(env, request, response, startedAt, counters);
     // A breaker this request opened is shared with other isolates, and the
     // provider metrics are written when due. No I/O when there is nothing to do.
     try {
