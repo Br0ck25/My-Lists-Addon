@@ -572,6 +572,101 @@
           </div>
         </details>
       </div>
+
+      <!-- Stremio Section -->
+      <div class="provider-card" id="stremioSection">
+        <div class="provider-card-header">
+          <div>
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
+              <span class="provider-card-title">Stremio</span>
+              <span id="stremioConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Bring in what you have watched in Stremio and where you stopped. You approve the connection inside Stremio, so your Stremio password never comes here.</p>
+          </div>
+        </div>
+        <div class="provider-card-actions">
+          <button type="button" class="secondary lc-btn u-fw-600" id="stremioConnectBtn" data-act="startStremioConnect">Connect Stremio account</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="stremioDisconnectBtn" style="display:none;" data-act="disconnectMediaApp" data-act-args="[&quot;stremio&quot;]">Disconnect</button>
+        </div>
+        <div id="stremioLinkBox" class="u-m-10px_0" style="display:none;" role="status" aria-live="polite"></div>
+        <div id="stremioSyncWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="display:none;">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Bring in my Stremio history</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Add what you watch in Stremio, and where you stopped, to your Watch History and Continue Watching. Checked every hour.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Bring in my Stremio history">
+              <input type="checkbox" id="stremioPullCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;stremio&quot;,&quot;pull&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="stremioPushRow" style="display:none;">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Two-way sync</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Also send what you watch elsewhere to Stremio. Nothing is ever deleted on either side.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Two-way sync with Stremio">
+              <input type="checkbox" id="stremioPushCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;stremio&quot;,&quot;push&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <p id="stremioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
+          <div class="u-mt-8px">
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="stremioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;stremio&quot;,&quot;@self&quot;]">Sync now</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nuvio Section -->
+      <div class="provider-card" id="nuvioSection">
+        <div class="provider-card-header">
+          <div>
+            <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
+              <span class="provider-card-title">Nuvio</span>
+              <span id="nuvioConnectStatus" class="provider-status-badge"><span class="u-c-v_muted">Not connected</span></span>
+            </div>
+            <p class="provider-card-desc">Bring in what you have watched in Nuvio and where you stopped. Your email and password are used once to sign in. The password is not kept.</p>
+          </div>
+        </div>
+        <div id="nuvioLoginForm" class="u-m-10px_0">
+          <input type="email" id="nuvioEmailInput" autocomplete="username" aria-label="Nuvio email" placeholder="Nuvio email" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box" style="width:100%;">
+          <input type="password" id="nuvioPasswordInput" autocomplete="current-password" aria-label="Nuvio password" placeholder="Nuvio password" class="u-p-9px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-bs-border_box u-mt-10px" style="width:100%;" data-act="submitNuvioLogin" data-act-keys="Enter">
+        </div>
+        <div class="provider-card-actions">
+          <button type="button" class="secondary lc-btn u-fw-600" id="nuvioConnectBtn" data-act="submitNuvioLogin">Sign in to Nuvio</button>
+          <button type="button" class="secondary lc-btn btn-danger" id="nuvioDisconnectBtn" style="display:none;" data-act="disconnectMediaApp" data-act-args="[&quot;nuvio&quot;]">Disconnect</button>
+        </div>
+        <div id="nuvioSyncWrap" class="u-m-10px_0 u-p-12px_14px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="display:none;">
+          <div class="settings-toggle-row u-p-0_0_10px">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Bring in my Nuvio history</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Add what you watch in Nuvio, and where you stopped, to your Watch History and Continue Watching. Checked every hour.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Bring in my Nuvio history">
+              <input type="checkbox" id="nuvioPullCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;pull&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="nuvioPushRow" style="display:none;">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Two-way sync</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Also send what you watch elsewhere to Nuvio. Nothing is ever deleted on either side.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Two-way sync with Nuvio">
+              <input type="checkbox" id="nuvioPushCheckbox" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;push&quot;,&quot;@checked&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="u-p-0_0_10px" id="nuvioProfileRow">
+            <label for="nuvioProfileSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Nuvio profile to read</label>
+            <select id="nuvioProfileSelect" aria-label="Nuvio profile" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;profileIndex&quot;,&quot;@value&quot;]" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;"></select>
+          </div>
+          <p id="nuvioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
+          <div class="u-mt-8px">
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Unified Import List Panel -->

@@ -1247,6 +1247,22 @@ function retryPosterSlot(btn) {
   loadPosterSlot(slot);
 }
 
+// The bar and the label for a Continue Watching item that has progress (the Nuvio and Stremio
+// lists): how much is watched, and "1h 15m left". Nothing for an item with none.
+function resumeProgressParts(it) {
+  const pct = Number(it && it.progress);
+  const min = Math.round(Number(it && it.timeLeftMin));
+  if (!(pct > 0)) return { barHtml: '', label: '' };
+  const barHtml = '<div class="resume-progress" aria-hidden="true"><div class="resume-progress-fill" style="width:' + Math.min(100, Math.round(pct)) + '%"></div></div>';
+  let label = '';
+  if (min > 0) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    label = (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '') + ' left';
+  }
+  return { barHtml: barHtml, label: label };
+}
+
 async function fetchPreviewForSlot(listUrl, type) {
   if (type !== 'mixed') {
     const res = await fetchListPreviewWithRetry(listUrl, type);
@@ -1369,6 +1385,10 @@ async function loadPosterSlot(slot) {
               const slugMatch = listUrl.match(new RegExp('lists/([^/?#]+)'));
               const traktListId = traktTarget === 'custom' ? (slugMatch ? slugMatch[1] : listUrl) : traktTarget;
               removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
+            } else if (/^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.test(String(listUrl || ''))) {
+              const appHit = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl));
+              const appName = appHit[1] === 'nuvio' ? 'Nuvio' : 'Stremio';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + appHit[1] + '" data-target="' + appHit[2] + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || '') + '" data-name="' + escapeAttr(s.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + appName + '" aria-label="Remove from ' + appName + '">\u2715</button>';
             } else if (isMdblistSlot) {
               const isMdbHist = listUrl === 'mdblist:history' || String(listUrl || '').includes('mdblist.com/history') || (String(listUrl || '').includes('mdblist.com/lists/') && String(listUrl || '').includes('/history'));
               const mdbTarget = listUrl === 'mdblist:watchlist' ? 'watchlist' : (isMdbHist ? 'history' : 'custom');
@@ -1379,15 +1399,18 @@ async function loadPosterSlot(slot) {
 
             const itemPoster = resolveClientPoster(Object.assign({}, s, { listName, listUrl }), s.poster);
             const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
+            const resume = resumeProgressParts(s);
+            const resumeText = resume.label ? ((s.seasonNum != null && s.episodeNum != null ? 'S' + s.seasonNum + 'E' + s.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
             inner += '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' +
               '<div class="list-card-mini-poster-img-wrap clickable-poster" data-id="' + escapeAttr(s.id || '') + '" data-type="' + escapeAttr(s.type || type || '') + '" data-title="' + escapeAttr(s.name || '') + '" data-poster="' + escapeAttr(itemPoster || '') + '">' +
                 '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' +
                 removeBtn +
                 '<div class="poster-add-overlay">+</div>' +
+                resume.barHtml +
                 overlays +
               '</div>' +
               '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              ((resumeText || s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(resumeText || s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';

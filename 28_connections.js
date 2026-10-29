@@ -21,9 +21,13 @@
 // an account's connections (P3a-10)" below.
 
 const CONNECTION_PROVIDERS = ["trakt", "mdblist", "simkl", "tmdb"];
+// Stremio and Nuvio accounts (61_media-app-sync.js). Kept apart from the list
+// above: they are not OAuth sign-ins the page holds a copy of, so they stay out
+// of import-local and out of the token bridge, and never supply catalog keys.
+const MEDIA_APP_PROVIDERS = ["stremio", "nuvio"];
 
 function isConnectionProvider(p) {
-  return CONNECTION_PROVIDERS.includes(p);
+  return CONNECTION_PROVIDERS.includes(p) || MEDIA_APP_PROVIDERS.includes(p);
 }
 
 function connectionContext(accountId, provider) {
@@ -191,6 +195,10 @@ async function revokeAtProvider(env, provider, conn) {
       });
       return true;
     }
+    if (provider === "stremio" && conn.accessToken) {
+      await stremioLogout(conn.accessToken);
+      return true;
+    }
     if (provider === "tmdb" && conn.accessToken) {
       const apiKey = conn.apiKey || TMDB_API_KEY;
       if (!apiKey) return false;
@@ -307,6 +315,12 @@ async function handleConnectionsApiRoutes(request, env, url, path) {
     return json({ ok: true, results: outcome });
   }
 
+  // Stremio and Nuvio: their own sign-in and settings routes (61_media-app-sync.js).
+  // Any other path under them, /token included, is a 404 there: their sign-in is
+  // used on the server only and is never handed to the page.
+  const mediaApp = /^\/api\/connections\/(stremio|nuvio)\/([a-z/-]+)$/.exec(path);
+  if (mediaApp) return handleMediaAppRoute(request, env, request.account, mediaApp[1], mediaApp[2]);
+
   const m = /^\/api\/connections\/([a-z]+)(\/token)?$/.exec(path);
   if (!m || !isConnectionProvider(m[1])) return json({ ok: false, error: "Not found." }, 404);
   const provider = m[1];
@@ -324,6 +338,14 @@ async function handleConnectionsApiRoutes(request, env, url, path) {
     const conn = await loadProviderConnection(env, accountId, provider);
     const revoked = conn ? await revokeAtProvider(env, provider, conn) : false;
     await env.DB.prepare("DELETE FROM provider_connections WHERE account_id = ? AND provider = ?").bind(accountId, provider).run();
+    if (MEDIA_APP_PROVIDERS.includes(provider)) {
+      // Disconnecting stops the sync. What it already brought in stays.
+      try {
+        await env.DB.prepare("DELETE FROM media_app_sync WHERE account_id = ? AND provider = ?").bind(accountId, provider).run();
+      } catch (e) {
+        if (!/no such table/i.test(String((e && e.message) || e))) throw e;
+      }
+    }
     forgetAccountConnectionsCache(accountId);
     return json({ ok: true, removed: Boolean(conn), revokedAtProvider: revoked });
   }
@@ -490,6 +512,16 @@ async function exchangeRefreshToken(env, provider, conn) {
       }
     }
     return rejected ? { rejected: true } : null;
+  }
+  if (provider === "nuvio") {
+    // Single-use: the new refresh token replaces this one, and is stored by the
+    // caller straight away. Only a refusal means the person must sign in again.
+    try {
+      const t = await nuvioToken(env, "refresh_token", { refresh_token: conn.refreshToken });
+      return { accessToken: t.accessToken, refreshToken: t.refreshToken, expiresAt: t.expiresAt };
+    } catch (e) {
+      return e && e.kind === "invalid" ? { rejected: true } : null;
+    }
   }
   if (provider === "mdblist") {
     const clientId = MDBLIST_CLIENT_ID || (env && env.MDBLIST_CLIENT_ID) || "";

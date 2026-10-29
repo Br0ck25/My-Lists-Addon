@@ -1875,8 +1875,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
       // A caller that sends nothing, or the wrong key, is not refused: it simply
       // proves nothing, and mayReadTrackedShelf then falls back to whatever the
       // owner has explicitly shared. Every other source type is unaffected.
+      // A page signed in with a session holds no Creator Key and sends only the
+      // name: authenticateCreator then proves it by the session, as on every
+      // other creator route.
       let previewVerifiedOwner = "";
-      if (creatorName && creatorKey) {
+      if (creatorName && (creatorKey || request.account)) {
         const previewAuth = await authenticateCreator(creatorName, creatorKey);
         if (previewAuth.ok) previewVerifiedOwner = previewAuth.username;
       }
@@ -1940,6 +1943,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
             score: m.score != null ? m.score : undefined,
             isAdult: isAdultOrNsfw(m),
             isAdultPosterFiltered: !!m.isAdultPosterFiltered,
+            progress: typeof m.progress === "number" ? m.progress : undefined,
+            timeLeftMin: typeof m.timeLeftMin === "number" ? m.timeLeftMin : undefined,
           })),
         };
       } catch (err) {

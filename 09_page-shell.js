@@ -2976,6 +2976,22 @@ ${UTILITY_CSS}
     word-break: break-word;
     min-height: 2.5em;
   }
+  /* How far through a Continue Watching item is: a bar along the foot of its poster. */
+  .resume-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--space-1);
+    background: var(--color-bg-sunken);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    overflow: hidden;
+    z-index: 2;
+  }
+  .resume-progress-fill {
+    height: 100%;
+    background: var(--color-brand-fill);
+  }
   .list-card-mini-poster-subtitle {
     font-size: var(--font-size-3xs);
     color: var(--muted);

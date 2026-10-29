@@ -1936,7 +1936,7 @@ async function warnAboutLapsedConnections() {
   } catch (e) {
     return;
   }
-  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB' };
+  const names = { trakt: 'Trakt', mdblist: 'MDBList', simkl: 'Simkl', tmdb: 'TMDB', stremio: 'Stremio', nuvio: 'Nuvio' };
   const lapsed = ((data && data.connections) || [])
     .filter(function (c) { return c && c.status && c.status !== 'ok'; })
     .map(function (c) { return names[c.provider] || c.provider; });
@@ -2071,6 +2071,388 @@ function renderSimklConnectStatus() {
     const box = document.getElementById('mySimklListsResult');
     if (box) box.innerHTML = '';
   }
+}
+
+// --- Stremio and Nuvio accounts (61_media-app-sync.js) --------------------------
+//
+// The sign-in stays on the server: Stremio is approved inside Stremio (the Link
+// flow) and Nuvio's password is sent once and not kept. This page only shows the
+// connection and its settings, over the signed-in session. It holds no token.
+const MEDIA_APP_UI_NAMES = { stremio: 'Stremio', nuvio: 'Nuvio' };
+let mediaAppUiPoll = null;
+// Whether each app is connected and working, from its settings answer.
+const mediaAppListsLive = { stremio: false, nuvio: false };
+// An update is under way / when the page last asked for one, per app. A copy older than
+// this is brought up to date when Lists is looked at (61_media-app-sync.js, refreshMediaAppNow).
+const mediaAppListsBusy = { stremio: false, nuvio: false };
+const mediaAppUpdateTried = { stremio: 0, nuvio: 0 };
+const MEDIA_APP_UI_FRESH_MS = 2 * 60 * 1000;
+// The lists each app offers under Lists, My Lists. The server serves them as
+// autotrack:<app>-<slug>:<movie|series>:<username> rows (fetchAutoTrackedCatalog, 05_).
+const MEDIA_APP_LISTS = [
+  { slug: 'watch-history', title: 'Watch History', blurb: 'Movies and shows you watched there.' },
+  { slug: 'continue-watching', title: 'Continue Watching', blurb: 'Where you stopped there: movies part way through and the next episode of your shows.' },
+];
+
+async function mediaAppUiCall(provider, sub, method, body) {
+  try {
+    const res = await fetch(ORIGIN + '/api/connections/' + provider + (sub ? '/' + sub : ''), {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'GET' ? undefined : JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(function () { return {}; });
+    return { ok: res.ok && data.ok !== false, status: res.status, data: data };
+  } catch (e) {
+    return { ok: false, status: 0, data: { error: 'Could not reach the server.' } };
+  }
+}
+
+// The server's message, with the reason it gives (what is missing, what the service answered) after it.
+function mediaAppUiMessage(r, fallback) {
+  const d = r && r.data ? r.data : {};
+  return (d.error || fallback) + (d.detail ? ' (' + d.detail + ')' : '');
+}
+
+// Brings the copy up to date, in the request, when it is older than two minutes, and
+// then shows what it found. Once per two minutes at most, so a pull that cannot be done
+// does not repeat every time the lists are drawn.
+function mediaAppUiMaybeUpdate(provider, sync) {
+  if (mediaAppListsBusy[provider]) return;
+  const now = Date.now();
+  if (sync.lastPullAt && now - sync.lastPullAt < MEDIA_APP_UI_FRESH_MS) return;
+  if (now - mediaAppUpdateTried[provider] < MEDIA_APP_UI_FRESH_MS) return;
+  mediaAppUpdateTried[provider] = now;
+  mediaAppListsBusy[provider] = true;
+  mediaAppUiCall(provider, 'sync', 'POST', { wait: true }).then(function () {
+    mediaAppListsBusy[provider] = false;
+    mediaAppUiRefresh(provider);
+  });
+}
+
+function mediaAppUiSyncLine(sync) {
+  if (!sync) return '';
+  if (sync.error) return sync.error;
+  if (sync.lastPullAt) {
+    let line = 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
+    const r = sync.lastResult;
+    if (r) {
+      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.');
+      if (r.unresolved) line += ' ' + r.unresolved + ' could not be matched.';
+    }
+    return line;
+  }
+  return 'Waiting for the first check…';
+}
+
+function mediaAppListUrls(provider, slug) {
+  const user = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
+  if (!user) return null;
+  const base = 'autotrack:' + provider + '-' + slug + ':';
+  return { movie: base + 'movie:' + user, series: base + 'series:' + user, mixed: base + 'mixed:' + user };
+}
+
+// The cards under Lists, My Lists. Shown once the app is connected.
+function renderMediaAppLists(provider) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  const box = document.getElementById('my' + name + 'ListsResult');
+  if (!box) return;
+  if (!mediaAppListsLive[provider]) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Connect ' + name + ' in Settings, under External Accounts, to see its lists here.</small></p>';
+    return;
+  }
+  if (mediaAppListsBusy[provider]) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted" role="status"><small>Updating from ' + name + '\u2026</small></p>';
+    return;
+  }
+  box.innerHTML = MEDIA_APP_LISTS.map(function (l) {
+    const urls = mediaAppListUrls(provider, l.slug);
+    const added = !!urls && typeof isListAddedToConfig === 'function' && isListAddedToConfig(urls.movie, 'movie') && isListAddedToConfig(urls.series, 'series');
+    const listName = name + ' ' + l.title;
+    return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '"' + (urls ? ' data-url="' + escapeAttr(urls.mixed) + '"' : '') + '>' +
+      '<div class="list-card-header">' +
+        '<div class="list-card-body">' +
+          '<div class="list-card-title u-cur-pointer" data-act="openMediaAppListDetails" data-act-args="' + appActArgs([provider, l.slug]) + '">' + escapeHtml(listName) + '</div>' +
+          '<div class="list-card-meta"><span>' + escapeHtml(l.blurb) + '</span></div>' +
+        '</div>' +
+        '<div class="list-card-actions">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleMediaAppListAdd" data-act-args="' + appActArgs([provider, l.slug, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+        '</div>' +
+      '</div>' +
+      (urls ? '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(urls.mixed) + '" data-type="mixed" data-creator="" data-items="" data-likes="0"></div>' : '') +
+    '</div>';
+  }).join('');
+  // Fills each card's posters, like the other services' cards.
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+// Opens the list's details page: its movies and shows together.
+function openMediaAppListDetails(provider, slug) {
+  const urls = mediaAppListUrls(provider, slug);
+  const meta = MEDIA_APP_LISTS.filter(function (l) { return l.slug === slug; })[0];
+  if (!urls || !meta) return;
+  openListDetailsPage(MEDIA_APP_UI_NAMES[provider] + ' ' + meta.title, 'mixed', urls.mixed);
+}
+
+// Adds or removes the list's two catalog rows, one for movies and one for shows.
+function toggleMediaAppListAdd(provider, slug, isAdded) {
+  if (!requireSignedInFor('add your ' + MEDIA_APP_UI_NAMES[provider] + ' lists')) return;
+  const urls = mediaAppListUrls(provider, slug);
+  const meta = MEDIA_APP_LISTS.filter(function (l) { return l.slug === slug; })[0];
+  if (!urls || !meta) return;
+  const name = MEDIA_APP_UI_NAMES[provider] + ' ' + meta.title;
+  if (isAdded) {
+    removeListFromConfig(urls.movie, 'movie');
+    removeListFromConfig(urls.series, 'series');
+    if (typeof showAddedToast === 'function') showAddedToast('Removed "' + name + '" from your Catalogs.');
+  } else {
+    addRow(name + ' (Movies)', urls.movie, 'movie', true, 'My Lists');
+    addRow(name + ' (Shows)', urls.series, 'series', true, 'My Lists');
+    if (typeof showAddedToast === 'function') showAddedToast('Added "' + name + '" to your Catalogs.');
+  }
+  renderMediaAppLists(provider);
+}
+
+// info: the settings answer, or null when signed out or unavailable.
+function renderMediaAppStatus(provider, info) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  const connected = !!(info && info.connected);
+  const lapsed = connected && !!info.status && info.status !== 'ok';
+  const live = connected && !lapsed;
+  mediaAppListsLive[provider] = live;
+  if (live) mediaAppUiMaybeUpdate(provider, info.sync || {});
+  renderMediaAppLists(provider);
+  const statusEl = document.getElementById(provider + 'ConnectStatus');
+  if (statusEl) {
+    if (live) statusEl.innerHTML = '<span class="u-c-v_color_success_text u-fw-600">✓ Connected' + (info.username ? ' as ' + escapeHtml(info.username) : '') + '</span>';
+    else if (lapsed) statusEl.innerHTML = '<span class="u-c-v_color_warn_text u-fw-600">Sign in again</span>';
+    else statusEl.innerHTML = '<span class="u-c-v_muted">Not connected</span>';
+  }
+  const connectBtn = document.getElementById(provider + 'ConnectBtn');
+  if (connectBtn) {
+    connectBtn.style.display = live ? 'none' : '';
+    connectBtn.textContent = lapsed ? 'Reconnect ' + name : (provider === 'nuvio' ? 'Sign in to Nuvio' : 'Connect Stremio account');
+  }
+  const disconnectBtn = document.getElementById(provider + 'DisconnectBtn');
+  if (disconnectBtn) disconnectBtn.style.display = connected ? '' : 'none';
+  const form = document.getElementById('nuvioLoginForm');
+  if (form && provider === 'nuvio') form.style.display = live ? 'none' : '';
+  const wrap = document.getElementById(provider + 'SyncWrap');
+  if (wrap) wrap.style.display = live ? '' : 'none';
+  if (!live) return;
+  const sync = info.sync || {};
+  const pull = document.getElementById(provider + 'PullCheckbox');
+  if (pull) pull.checked = !!sync.pull;
+  const push = document.getElementById(provider + 'PushCheckbox');
+  if (push) push.checked = !!sync.push;
+  const pushRow = document.getElementById(provider + 'PushRow');
+  if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
+  const statusLine = document.getElementById(provider + 'SyncStatus');
+  if (statusLine) statusLine.textContent = mediaAppUiSyncLine(sync);
+  if (provider === 'nuvio') {
+    const sel = document.getElementById('nuvioProfileSelect');
+    if (sel) {
+      // The profiles Nuvio named; Profile 1 to 6 only when none came back.
+      let profiles = Array.isArray(info.profiles) ? info.profiles : [];
+      if (!profiles.length) profiles = [1, 2, 3, 4, 5, 6].map(function (i) { return { index: i, name: 'Profile ' + i }; });
+      let html = sync.profileIndex ? '' : '<option value="">Choose a profile</option>';
+      for (let i = 0; i < profiles.length; i++) {
+        html += '<option value="' + profiles[i].index + '"' + (sync.profileIndex === profiles[i].index ? ' selected' : '') + '>' + escapeHtml(profiles[i].name) + '</option>';
+      }
+      sel.innerHTML = html;
+    }
+  }
+}
+
+async function mediaAppUiRefresh(provider) {
+  if (typeof isSignedIn === 'function' && !isSignedIn()) {
+    renderMediaAppStatus(provider, null);
+    return;
+  }
+  const r = await mediaAppUiCall(provider, 'settings', 'GET');
+  renderMediaAppStatus(provider, r.ok ? r.data : null);
+}
+
+function refreshMediaAppConnections() {
+  mediaAppUiRefresh('stremio');
+  mediaAppUiRefresh('nuvio');
+}
+
+function stopStremioLinkPoll() {
+  if (mediaAppUiPoll) clearInterval(mediaAppUiPoll);
+  mediaAppUiPoll = null;
+  const box = document.getElementById('stremioLinkBox');
+  if (box) box.style.display = 'none';
+}
+
+// Stremio's Link service answers the browser (and not our Worker), so the page
+// runs the flow and hands the finished authKey to the server once.
+async function mediaAppUiStremioLink(path) {
+  try {
+    const res = await fetch('https://link.stremio.com/api/v2/' + path);
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+// One check of the code. True once the server has the connection; false while
+// Stremio waits for the person to approve it.
+async function mediaAppUiStremioPoll(code) {
+  const data = await mediaAppUiStremioLink('read?type=Read&code=' + encodeURIComponent(code));
+  const key = data && data.result && data.result.authKey;
+  if (!key) return false;
+  const done = await mediaAppUiCall('stremio', 'link/complete', 'POST', { authKey: key });
+  if (!done.ok) {
+    stopStremioLinkPoll();
+    showToast(mediaAppUiMessage(done, 'Could not connect Stremio. Please try again.'), 'error');
+    return false;
+  }
+  stopStremioLinkPoll();
+  showToast('Stremio connected.', 'success');
+  mediaAppUiRefresh('stremio');
+  return true;
+}
+
+async function startStremioConnect() {
+  if (!requireSignedInFor('connect your Stremio account')) return;
+  stopStremioLinkPoll();
+  const started = await mediaAppUiStremioLink('create?type=Create');
+  const link = started && started.result;
+  if (!link || !link.code) {
+    showToast('Could not reach Stremio to start the link. Please try again.', 'error');
+    return;
+  }
+  const box = document.getElementById('stremioLinkBox');
+  if (box) {
+    const safeLink = typeof link.link === 'string' && link.link.indexOf('https://link.stremio.com/') === 0 ? link.link : '';
+    box.innerHTML = '<p class="u-m-0 u-fs-v_font_size_sm u-c-v_text">Open <a href="' + escapeAttr(safeLink || 'https://link.stremio.com/') + '" target="_blank" rel="noopener" class="u-c-v_accent_2">link.stremio.com</a>, sign in to Stremio if asked, and enter this code:</p>' +
+      '<p class="u-m-6px_0 u-fw-600">' + escapeHtml(link.code) + '</p>' +
+      '<p class="u-m-0 u-fs-v_font_size_xs u-c-v_muted">Waiting for you to approve it in Stremio\u2026</p>';
+    box.style.display = '';
+  }
+  let ticks = 0;
+  mediaAppUiPoll = setInterval(async function () {
+    ticks++;
+    if (ticks > 200) {
+      stopStremioLinkPoll();
+      showToast('The Stremio link expired. Start again to get a new code.', 'error');
+      return;
+    }
+    await mediaAppUiStremioPoll(link.code);
+  }, 3000);
+}
+
+async function submitNuvioLogin() {
+  if (!requireSignedInFor('connect your Nuvio account')) return;
+  const emailEl = document.getElementById('nuvioEmailInput');
+  const passEl = document.getElementById('nuvioPasswordInput');
+  const email = emailEl ? emailEl.value.trim() : '';
+  const password = passEl ? passEl.value : '';
+  if (!email || !password) {
+    showToast('Enter your Nuvio email and password.', 'error');
+    return;
+  }
+  const btn = document.getElementById('nuvioConnectBtn');
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall('nuvio', 'login', 'POST', { email: email, password: password });
+  if (btn) btn.disabled = false;
+  if (passEl) passEl.value = '';
+  if (!r.ok) {
+    showToast(mediaAppUiMessage(r, 'Could not sign in to Nuvio. Please try again.'), 'error');
+    return;
+  }
+  if (emailEl) emailEl.value = '';
+  showToast(r.data.profileIndex ? 'Nuvio connected.' : 'Nuvio connected. Choose which profile to read.', 'success');
+  mediaAppUiRefresh('nuvio');
+}
+
+async function setMediaAppSyncOption(provider, key, value) {
+  const body = {};
+  if (key === 'profileIndex') {
+    if (!value) return;
+    body.profileIndex = Number(value);
+  } else {
+    body[key] = !!value;
+  }
+  const r = await mediaAppUiCall(provider, 'settings', 'POST', body);
+  if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not save that setting. Please try again.'), 'error');
+  mediaAppUiRefresh(provider);
+}
+
+// Pulls now and waits, so the answer is what the app holds.
+async function syncMediaAppNow(provider, btn) {
+  if (btn) btn.disabled = true;
+  mediaAppUpdateTried[provider] = Date.now();
+  mediaAppListsBusy[provider] = true;
+  renderMediaAppLists(provider);
+  const r = await mediaAppUiCall(provider, 'sync', 'POST', { wait: true, force: true });
+  mediaAppListsBusy[provider] = false;
+  if (btn) btn.disabled = false;
+  if (!r.ok) {
+    showToast(mediaAppUiMessage(r, 'Could not sync ' + MEDIA_APP_UI_NAMES[provider] + '. Please try again.'), 'error');
+  } else if (r.data.skipped === 'busy') {
+    showToast(MEDIA_APP_UI_NAMES[provider] + ' is already syncing. It can take a few minutes.', 'info');
+  } else {
+    const last = r.data.sync && r.data.sync.lastResult;
+    const line = !r.data.done ? ' is syncing. The rest will follow in a few minutes.' : ' is up to date.' + (last ? ' Found ' + last.found + (last.found === 1 ? ' title.' : ' titles.') : '');
+    showToast(MEDIA_APP_UI_NAMES[provider] + line, r.data.done ? 'success' : 'info');
+  }
+  mediaAppUiRefresh(provider);
+}
+
+// The tile's remove button on the Nuvio and Stremio lists: removes the item in the app itself,
+// then here (61_media-app-sync.js). Asks first; the tile only goes once the app has accepted.
+function removeMediaAppItem(btn) {
+  const provider = btn.dataset.provider;
+  const target = btn.dataset.target;
+  const id = btn.dataset.removeId;
+  const mediaType = btn.dataset.mediaType || 'movie';
+  const itemName = btn.dataset.name || 'This title';
+  const app = MEDIA_APP_UI_NAMES[provider];
+  if (!app || !id || (target !== 'history' && target !== 'continue-watching')) return;
+  const isShow = mediaType === 'series' || mediaType === 'episode';
+  const message = target === 'history'
+    ? '"' + itemName + '"' + (isShow ? ' and all its watched episodes' : '') + ' will be removed from your Watch History in ' + app + ', and from ' + app + ' itself.'
+    : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
+  showAppConfirm('Remove from ' + app + '?', message, 'Remove', async function () {
+    const r = await mediaAppUiCall(provider, 'remove', 'POST', { target: target, id: id, mediaType: mediaType });
+    if (!r.ok) {
+      showToast(mediaAppUiMessage(r, 'Could not remove "' + itemName + '" from ' + app + '. Please try again.'), 'error');
+      return;
+    }
+    const card = btn.closest('.live-preview-poster-card, .list-card-mini-poster-tile');
+    if (card && card.parentNode) {
+      const grid = card.parentNode;
+      grid.removeChild(card);
+      const remaining = grid.querySelectorAll ? grid.querySelectorAll('.live-preview-poster-card').length : 0;
+      if (typeof window._updateListDetailsItemCount === 'function' && document.getElementById('detailGrid') === grid) window._updateListDetailsItemCount(remaining);
+    }
+    // Previews of this app's lists are out of date now.
+    if (window._listPreviewCache && typeof window._listPreviewCache.forEach === 'function') {
+      const stale = [];
+      window._listPreviewCache.forEach(function (v, k) { if (String(k).indexOf('autotrack:' + provider + '-') === 0) stale.push(k); });
+      stale.forEach(function (k) { window._listPreviewCache.delete(k); });
+    }
+    showToast('Removed "' + itemName + '" from ' + app + '.', 'success');
+  }, true);
+}
+
+function disconnectMediaApp(provider) {
+  const name = MEDIA_APP_UI_NAMES[provider];
+  showAppConfirm(
+    'Disconnect ' + name + '?',
+    'Syncing stops. What was already brought in stays in your Watch History and Continue Watching.',
+    'Disconnect',
+    async function () {
+      stopStremioLinkPoll();
+      const r = await mediaAppUiCall(provider, '', 'DELETE');
+      if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not disconnect ' + name + '. Please try again.'), 'error');
+      else showToast(name + ' disconnected.', 'success');
+      mediaAppUiRefresh(provider);
+    }
+  );
 }
 
 let mySimklListsTimer = null;

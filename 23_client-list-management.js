@@ -1978,7 +1978,7 @@ function livePreviewPosterHtml(m) {
   let removeBtn = '';
   if (!m.isLivePreviewShelf && !m.hideRemoveBtn) {
     if (m.removeExternalProvider) {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-name="' + escapeAttr(m.showTitle || m.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
     } else {
       const cwRemoveTarget = m.removeShowId || (isCwItem ? (m.showId || m.id || m.imdbId) : null);
       if (cwRemoveTarget) {
@@ -2085,9 +2085,12 @@ function livePreviewPosterHtml(m) {
     : (m.name || '');
   const ratingSpan = (!m.isLivePreviewShelf && typeof formatRatingSpanHtml === 'function') ? formatRatingSpanHtml(m) : '';
   let subtitleHtml = '';
-  const subText = (m.isLivePreviewShelf && (isCwItem || isAiringItem))
+  // A Nuvio or Stremio item part way through: how long is left, in place of the year.
+  const resume = typeof resumeProgressParts === 'function' ? resumeProgressParts(m) : { barHtml: '', label: '' };
+  const resumeText = resume.label ? ((m.seasonNum != null && m.episodeNum != null ? 'S' + m.seasonNum + 'E' + m.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
+  const subText = resumeText || ((m.isLivePreviewShelf && (isCwItem || isAiringItem))
     ? ''
-    : (m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : '')));
+    : (m.isLivePreviewShelf ? (m.subtitle || '') : (m.subtitle || (m.year ? String(m.year) : ''))));
   if (subText && ratingSpan) {
     subtitleHtml = '<div class="live-preview-poster-subtitle u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(subText) + '</span>' + ratingSpan + '</div>';
   } else if (subText) {
@@ -2107,6 +2110,7 @@ function livePreviewPosterHtml(m) {
       dateBadge +
       bottomBadge +
       removeBtn +
+      resume.barHtml +
     '</div>' +
     '<div class="live-preview-poster-name">' + escapeHtml(displayName) + '</div>' +
     subtitleHtml +
@@ -2115,6 +2119,11 @@ function livePreviewPosterHtml(m) {
 
 function removeListItemFromDetails(btn) {
   if (!btn) return;
+  // Nuvio and Stremio hold their own sign-in: the server removes the item in the app (17_).
+  if (btn.dataset.removeType === 'external' && (btn.dataset.provider === 'nuvio' || btn.dataset.provider === 'stremio')) {
+    removeMediaAppItem(btn);
+    return;
+  }
   const type = btn.dataset.removeType || '';
   const id = btn.dataset.removeId || '';
   const extra = btn.dataset.removeSlug || '';
@@ -3334,7 +3343,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     isDualTypeChart = true;
   }
 
-  const isContinueWatching = (name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching')));
+  // The Nuvio and Stremio lists hold movies as well as shows (61_media-app-sync.js).
+  const isMediaAppList = /^autotrack:(nuvio|stremio)-/.test(String(listUrl || ''));
+  const isContinueWatching = !isMediaAppList && ((name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching'))));
   if (isContinueWatching) {
     type = 'series';
     isDualTypeChart = false;
@@ -3660,8 +3671,18 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const isMdbUserList = !!(listUrl && mdbUser && !isMdbWatchlist && !isMdbHistory && !listUrl.toLowerCase().includes('mdblist.com/lists/official/') && (listUrl.toLowerCase().includes('mdblist.com/lists/' + mdbUser.toLowerCase() + '/') || listUrl.startsWith('mdblist:list:')));
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
+  // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl || ''));
+
   function annotatePersonalItem(it) {
     if (!it) return it;
+    if (mediaAppList) {
+      return Object.assign({}, it, {
+        removeExternalProvider: mediaAppList[1],
+        removeExternalTarget: mediaAppList[2],
+        removeExternalListId: mediaAppList[2],
+      });
+    }
     if (isSimklUserList) {
       return Object.assign({}, it, {
         removeExternalProvider: 'simkl',
@@ -3807,7 +3828,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     // Same reason as in appendItems: while On Today is the open tab the status
     // line is its, so a page loading behind it says nothing.
     const quiet = window._currentListDetailsFilter === 'lineup';
-    if (!listUrl || listUrl.startsWith('custom:') || listUrl.startsWith('autotrack:')) {
+    // An autotrack: list is the account's own, shown from its local copy -- except
+    // the Nuvio and Stremio ones, which only the server has.
+    if (!listUrl || listUrl.startsWith('custom:') || (listUrl.startsWith('autotrack:') && !isMediaAppList)) {
       done = true;
       if (!quiet) statusEl.innerHTML = loadedCount ? '' : '<small>No items found.</small>';
       return;
@@ -3827,6 +3850,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (keys.simklKey) body.simklKey = keys.simklKey;
       if (keys.simklAccessToken) body.simklAccessToken = keys.simklAccessToken;
       if (creatorName) body.creatorName = creatorName;
+      // creatorName above is the label shown under the title ("My Lists Addon").
+      // A private list needs the account that is asking.
+      if (isMediaAppList && typeof previewCreatorAuth === 'function') Object.assign(body, previewCreatorAuth());
       if (keys.adultContentFilter || (typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled())) body.adultContentFilter = true;
       const res = await creatorApiFetch(ORIGIN + '/api/preview', {
         method: 'POST',

@@ -2466,6 +2466,9 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   const parts = rawUrl.split(":");
   let slug = parts[1] || "";
   let targetType = parts[2] || entry.type || "movie";
+  // A "mixed" row asked for as movies, or as shows, answers only those: a card
+  // that fetches both halves and merges them would list every title twice.
+  if (targetType === "mixed" && (entry.type === "movie" || entry.type === "series")) targetType = entry.type;
   let username = parts[3] || (keys && (keys.trackCreatorName || keys.username || keys.creatorName)) || "";
 
   if (rawUrl.startsWith("custom:")) {
@@ -2511,11 +2514,25 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   try {
     let items;
     let airingItems;
+    // The Nuvio and Stremio lists (Lists, My Lists): the account's Watch
+    // History or Continue Watching kept to what came from that app, read from
+    // the activity database. Owner only (the gate above), and nothing when the
+    // account is not served from it: the legacy records know no source, so
+    // falling back to them would show everything under the app's name.
+    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching)$/.exec(slug);
+    if (appShelf) {
+      const accountId = await eventTrackingOwns(env, username);
+      if (accountId == null) return [];
+      const read = appShelf[2] === 'watch-history'
+        ? (await watchHistoryPage(env, accountId, { limit: 100, source: appShelf[1] })).items
+        : await appContinueWatching(env, accountId, appShelf[1]);
+      items = read.map(({ mediaId, ...it }) => it);
+    }
     // D1 is the cheap read, but only while it is current: a tracking write
     // that failed leaves the rows as they were, and these rows used to keep
     // serving them regardless. The KV record below is the newer copy then.
     // See isTrackingD1Behind.
-    const d1Current = !!(env && env.DB) && slug !== 'watchlist' && !(await isTrackingD1Behind(env, username));
+    const d1Current = !appShelf && !!(env && env.DB) && slug !== 'watchlist' && !(await isTrackingD1Behind(env, username));
     if (d1Current) {
       if (slug === 'watch-history') {
         const rows = await env.DB.prepare(
@@ -2782,6 +2799,8 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       // Filter out types we don't want in this catalog
       if (targetType === 'movie' && !isMovie) return;
       if (targetType === 'series' && isMovie) return;
+      // A "mixed" row (a list card's preview) keeps each item's own type.
+      const mappedType = targetType === 'mixed' ? (isMovie ? 'movie' : 'series') : targetType;
       
       const showId = isMovie ? null : (it.showId || it.imdbId || it.id);
       const showPoster = isMovie
@@ -2853,7 +2872,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
         showTitle: isMovie ? undefined : (it.showTitle || it.title || it.name),
         seasonNum: it.seasonNum != null ? it.seasonNum : undefined,
         episodeNum: it.episodeNum != null ? it.episodeNum : undefined,
-        type: targetType,
+        type: mappedType,
         name: isMovie ? (it.title || it.name) : (it.showTitle || it.title || it.name),
         poster: showPoster,
         releaseInfo: it.year || undefined,
@@ -2873,11 +2892,14 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
         isAdult: it.isAdult,
         certification: it.certification || it.ageRating || it.contentRating,
         genres: it.genres,
+        // How far through, and how long is left (the Nuvio and Stremio lists).
+        progress: typeof it.progress === 'number' ? it.progress : undefined,
+        timeLeftMin: typeof it.timeLeftMin === 'number' ? it.timeLeftMin : undefined,
       };
       
       if (!mapped.id) return;
       
-      if (targetType === 'series') {
+      if (mappedType === 'series') {
         if (!mappedItems.some(s => s.id === mapped.id)) {
           mappedItems.push(mapped);
         }
