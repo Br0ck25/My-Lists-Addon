@@ -96,6 +96,10 @@ function fakeServices(state) {
           }
           return new Response(null, { status: 204 });
         }
+        if (fn === "sync_push_collections") {
+          seen.collectionsPushed = (seen.collectionsPushed || []).concat([body.p_collections_json]);
+          return new Response(null, { status: 204 });
+        }
         if (fn === "sync_push_watched_items") {
           if (state.pushFails) return json({ message: "boom" }, 500);
           seen.pushed.push(...body.p_items);
@@ -1290,5 +1294,61 @@ describe("marking something watched on the website reaches the app soon", () => 
       json: { creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey, watchHistory: [{ id: "tt5555555", type: "movie", name: "Movie Site", title: "Movie Site", watchedAt: Date.now() - 1000 }], updatedAt: Date.now() },
     });
     assert.equal(ctx.env.DB._db.prepare("SELECT status FROM jobs WHERE type = 'mediaapp.sync-account'").all().filter((j) => j.status !== "done").length, 0);
+  });
+});
+
+
+// --- Pushing collections to Nuvio ------------------------------------------------
+
+describe("Nuvio collections push: install modes", () => {
+  const STREAMING = { id: "community-streaming", title: "Streaming", folders: [{ id: "f_netflix", title: "Netflix", catalogSources: [{ addonId: "other", catalogId: "nf", type: "movie" }] }] };
+  const OTHER = { id: "community-other", title: "Other Provider", folders: [{ id: "f_o", title: "Other", catalogSources: [{ addonId: "other", catalogId: "o", type: "movie" }] }] };
+  const incoming = () => [{ id: "my-lists-collections", title: "My Lists Collections", folders: [{ id: "f_mine", title: "Mine", catalogSources: [{ addonId: "app.my-list", catalogId: "mine", name: "Mine (Movies)", type: "movie" }] }] }];
+
+  async function push(mode, extra = {}) {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING, OTHER] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcol" + mode + Math.random().toString(36).slice(2, 6));
+    const login = await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    assert.equal(login.status, 200, JSON.stringify(login.body));
+    const r = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: mode, collections: incoming(), manifestUrl: "https://x.test/manifest.json", ...extra } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    return { pushed: seen.collectionsPushed[0], body: r.body };
+  }
+
+  it("new: adds a separately named collection and keeps every existing one", async () => {
+    const { pushed } = await push("new", { collectionName: "Weekend Picks" });
+    assert.deepEqual(pushed.map((c) => c.title), ["Streaming", "Other Provider", "Weekend Picks"]);
+    assert.deepEqual(pushed[0], STREAMING, "another provider's collection is untouched");
+    assert.notEqual(pushed[2].id, "community-streaming");
+  });
+
+  it("every collection My Lists writes carries the My Lists logo as its backdrop", async () => {
+    const { pushed } = await push("new");
+    assert.match(pushed[2].backdropImageUrl, /\/icon\.png$/);
+  });
+
+  it("merge: folders go only into the collection that was picked", async () => {
+    const { pushed } = await push("merge", { targetCollectionId: "community-other" });
+    assert.deepEqual(pushed[0], STREAMING);
+    assert.deepEqual(pushed[1].folders.map((f) => f.id), ["f_o", "f_mine"]);
+    assert.equal(pushed[1].title, "Other Provider", "the picked collection is not renamed");
+    assert.equal(pushed[1].folders[1].catalogSources[0].name, "Mine");
+  });
+
+  it("merge: a collection that is no longer in Nuvio is refused, nothing is pushed", async () => {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcolgone");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const r = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: "merge", targetCollectionId: "gone", collections: incoming() } });
+    assert.equal(r.status, 400);
+    assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("replace: only the pushed collection is left", async () => {
+    const { pushed } = await push("replace");
+    assert.equal(pushed.length, 1);
+    assert.equal(pushed[0].folders[0].id, "f_mine");
   });
 });

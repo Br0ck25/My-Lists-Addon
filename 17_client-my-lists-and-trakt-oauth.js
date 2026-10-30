@@ -4262,6 +4262,7 @@ function buildNuvioCollectionsPayload(collections) {
       showAllTab: false,
       pinToTop: false,
       focusGlowEnabled: true,
+      backdropImageUrl: getNuvioBackdropUrl(),
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -4296,6 +4297,10 @@ function buildNuvioCollectionsPayload(collections) {
       })
     }
   ];
+}
+
+function getNuvioBackdropUrl() {
+  return (window.location && window.location.origin ? window.location.origin : 'https://mylistsaddon.com') + '/icon.png';
 }
 
 function getNuvioManifestUrl() {
@@ -4335,6 +4340,17 @@ async function openSyncNuvioModal(targetColId) {
   if (modeSel) {
     modeSel.value = 'new';
   }
+  const nameInput = document.getElementById('syncNuvioCollectionName');
+  if (nameInput) {
+    let defaultName = 'My Lists Collections';
+    if (targetColId) {
+      const all = loadCustomCollections().concat((typeof getPremadeCollections === 'function') ? getPremadeCollections() : []);
+      const one = all.find(function (c) { return c.id === targetColId; });
+      if (one && one.name) defaultName = one.name;
+    }
+    nameInput.value = defaultName;
+  }
+  window._syncNuvioRemote = [];
   handleSyncNuvioModeChange();
 
   modal.style.display = 'flex';
@@ -4352,6 +4368,28 @@ async function openSyncNuvioModal(targetColId) {
       }
     }
   } catch (e) {}
+  loadSyncNuvioTargets();
+}
+
+async function loadSyncNuvioTargets() {
+  const sel = document.getElementById('syncNuvioTargetSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Loading collections\u2026</option>';
+  let cols = [];
+  try {
+    const res = await mediaAppUiCall('nuvio', 'collections', 'GET');
+    if (res && res.ok && res.data) cols = extractNuvioCollections(res.data.collections);
+  } catch (e) {}
+  window._syncNuvioRemote = cols;
+  if (!cols.length) {
+    sel.innerHTML = '<option value="">No collections found in Nuvio</option>';
+    return;
+  }
+  sel.innerHTML = cols.map(function (c) {
+    const label = String(c.title || c.name || c.id || 'Untitled');
+    const n = Array.isArray(c.folders) ? c.folders.length : 0;
+    return '<option value="' + escapeAttr(String(c.id || '')) + '">' + escapeHtml(label) + ' (' + n + ' folder' + (n === 1 ? '' : 's') + ')</option>';
+  }).join('');
 }
 
 function closeSyncNuvioModal() {
@@ -4366,18 +4404,22 @@ function handleSyncNuvioModeChange() {
   const hintEl = document.getElementById('syncNuvioModeHint');
   const btn = document.getElementById('syncNuvioSubmitBtn');
   const mode = modeSel ? modeSel.value : 'new';
+  const nameRow = document.getElementById('syncNuvioNameRow');
+  const targetRow = document.getElementById('syncNuvioTargetRow');
+  if (nameRow) nameRow.style.display = mode === 'new' ? '' : 'none';
+  if (targetRow) targetRow.style.display = mode === 'merge' ? '' : 'none';
 
   if (hintEl) {
     if (mode === 'new') {
-      hintEl.textContent = 'This will create a separate collection and leave existing collections untouched.';
+      hintEl.textContent = 'This will create a new collection with the name below and leave every existing collection untouched.';
     } else if (mode === 'merge') {
-      hintEl.textContent = 'This will update folders inside My Lists Collections and leave other collections untouched.';
+      hintEl.textContent = 'This will add these folders to the collection you pick and leave all other collections untouched.';
     } else {
-      hintEl.textContent = 'This will replace all collections on this profile with My Lists collections.';
+      hintEl.textContent = 'This will REMOVE every collection on this Nuvio profile (including ones from other providers) and keep only this one.';
     }
   }
   if (btn) {
-    btn.textContent = mode === 'new' ? 'Add collection' : 'Sync collection';
+    btn.textContent = mode === 'new' ? 'Add collection' : (mode === 'merge' ? 'Merge into collection' : 'Replace all collections');
   }
 }
 
@@ -4387,9 +4429,21 @@ async function confirmSyncToNuvio() {
   const profileId = profileSel ? profileSel.value : '1';
   const installMode = modeSel ? modeSel.value : 'new';
   const targetColId = window._syncNuvioTarget;
+  const nameInput = document.getElementById('syncNuvioCollectionName');
+  const targetSel = document.getElementById('syncNuvioTargetSelect');
+  const collectionName = nameInput ? nameInput.value.trim() : '';
+  const mergeTargetId = targetSel ? targetSel.value : '';
+
+  if (installMode === 'merge' && !mergeTargetId) {
+    showToast('Pick which Nuvio collection to merge into.', 'info');
+    return;
+  }
+  if (installMode === 'replace' && !window.confirm('This removes ALL collections on this Nuvio profile, including ones from other providers. Continue?')) {
+    return;
+  }
 
   closeSyncNuvioModal();
-  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId });
+  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId, collectionName: collectionName, mergeTargetId: mergeTargetId });
 }
 
 function syncCollectionsToNuvio() {
@@ -4427,9 +4481,7 @@ async function executeNuvioCollectionsPush(opts) {
     const single = current.find(function (c) { return c.id === targetColId; });
     if (single) {
       pushName = single.name || 'folder';
-      if (installMode === 'new') {
-        collectionsToPush = [single];
-      }
+      collectionsToPush = [single];
     }
   }
 
@@ -4464,7 +4516,8 @@ async function executeNuvioCollectionsPush(opts) {
   const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
     profileId: profileId,
     installMode: installMode,
-    collectionName: (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) ? collectionsToPush[0].name : 'My Lists Collections',
+    collectionName: options.collectionName || (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) || 'My Lists Collections',
+    targetCollectionId: options.mergeTargetId || '',
     collections: payload,
     knownCollections: cachedRemote,
     manifestUrl: manifestUrl,
@@ -4475,7 +4528,7 @@ async function executeNuvioCollectionsPush(opts) {
     if (res.data && res.data.collections) {
       try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(res.data.collections)); } catch (e) {}
     }
-    const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged' : 'updated');
+    const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged into the chosen collection' : 'replaced all collections');
     let msg = 'Pushed "' + pushName + '" to Nuvio (' + modeDesc + ').';
     if (res.data && res.data.addonInstalled) {
       msg += ' My Lists Addon was auto-installed in Nuvio!';

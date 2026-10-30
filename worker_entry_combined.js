@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-30";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2c7ffc4e81";
+const WORKER_BUILD = "fccc1d4e51";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -36264,15 +36264,16 @@ ${appShellMobileNavHtml}
 
       <div id="syncNuvioModeHint" class="u-p-10px_12px u-br-v_radius_sm u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-fs-v_font_size_xs u-mb-14px">This will create a separate collection and leave existing collections untouched.</div>
 
-      <div class="u-mb-16px">
-        <div class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Addon preflight</div>
-        <div class="u-p-12px_14px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_surface" style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text" id="syncNuvioPreflightName">Streaming Catalogs</div>
-            <div class="u-fs-v_font_size_xs" id="syncNuvioPreflightStatus">Ready</div>
-          </div>
-          <span class="badge" id="syncNuvioPreflightBadge" style="background:var(--color-brand-fill); color:var(--color-on-brand); padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700;">READY</span>
-        </div>
+      <div id="syncNuvioNameRow" class="u-mb-14px">
+        <label for="syncNuvioCollectionName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Collection name</label>
+        <input type="text" id="syncNuvioCollectionName" maxlength="80" placeholder="My Lists Collections" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+      </div>
+
+      <div id="syncNuvioTargetRow" class="u-mb-14px" style="display:none;">
+        <label for="syncNuvioTargetSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Merge into</label>
+        <select id="syncNuvioTargetSelect" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+          <option value="">Loading collections&hellip;</option>
+        </select>
       </div>
 
       <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
@@ -47174,6 +47175,7 @@ function buildNuvioCollectionsPayload(collections) {
       showAllTab: false,
       pinToTop: false,
       focusGlowEnabled: true,
+      backdropImageUrl: getNuvioBackdropUrl(),
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -47208,6 +47210,10 @@ function buildNuvioCollectionsPayload(collections) {
       })
     }
   ];
+}
+
+function getNuvioBackdropUrl() {
+  return (window.location && window.location.origin ? window.location.origin : 'https://mylistsaddon.com') + '/icon.png';
 }
 
 function getNuvioManifestUrl() {
@@ -47247,6 +47253,17 @@ async function openSyncNuvioModal(targetColId) {
   if (modeSel) {
     modeSel.value = 'new';
   }
+  const nameInput = document.getElementById('syncNuvioCollectionName');
+  if (nameInput) {
+    let defaultName = 'My Lists Collections';
+    if (targetColId) {
+      const all = loadCustomCollections().concat((typeof getPremadeCollections === 'function') ? getPremadeCollections() : []);
+      const one = all.find(function (c) { return c.id === targetColId; });
+      if (one && one.name) defaultName = one.name;
+    }
+    nameInput.value = defaultName;
+  }
+  window._syncNuvioRemote = [];
   handleSyncNuvioModeChange();
 
   modal.style.display = 'flex';
@@ -47264,6 +47281,28 @@ async function openSyncNuvioModal(targetColId) {
       }
     }
   } catch (e) {}
+  loadSyncNuvioTargets();
+}
+
+async function loadSyncNuvioTargets() {
+  const sel = document.getElementById('syncNuvioTargetSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Loading collections\u2026</option>';
+  let cols = [];
+  try {
+    const res = await mediaAppUiCall('nuvio', 'collections', 'GET');
+    if (res && res.ok && res.data) cols = extractNuvioCollections(res.data.collections);
+  } catch (e) {}
+  window._syncNuvioRemote = cols;
+  if (!cols.length) {
+    sel.innerHTML = '<option value="">No collections found in Nuvio</option>';
+    return;
+  }
+  sel.innerHTML = cols.map(function (c) {
+    const label = String(c.title || c.name || c.id || 'Untitled');
+    const n = Array.isArray(c.folders) ? c.folders.length : 0;
+    return '<option value="' + escapeAttr(String(c.id || '')) + '">' + escapeHtml(label) + ' (' + n + ' folder' + (n === 1 ? '' : 's') + ')</option>';
+  }).join('');
 }
 
 function closeSyncNuvioModal() {
@@ -47278,18 +47317,22 @@ function handleSyncNuvioModeChange() {
   const hintEl = document.getElementById('syncNuvioModeHint');
   const btn = document.getElementById('syncNuvioSubmitBtn');
   const mode = modeSel ? modeSel.value : 'new';
+  const nameRow = document.getElementById('syncNuvioNameRow');
+  const targetRow = document.getElementById('syncNuvioTargetRow');
+  if (nameRow) nameRow.style.display = mode === 'new' ? '' : 'none';
+  if (targetRow) targetRow.style.display = mode === 'merge' ? '' : 'none';
 
   if (hintEl) {
     if (mode === 'new') {
-      hintEl.textContent = 'This will create a separate collection and leave existing collections untouched.';
+      hintEl.textContent = 'This will create a new collection with the name below and leave every existing collection untouched.';
     } else if (mode === 'merge') {
-      hintEl.textContent = 'This will update folders inside My Lists Collections and leave other collections untouched.';
+      hintEl.textContent = 'This will add these folders to the collection you pick and leave all other collections untouched.';
     } else {
-      hintEl.textContent = 'This will replace all collections on this profile with My Lists collections.';
+      hintEl.textContent = 'This will REMOVE every collection on this Nuvio profile (including ones from other providers) and keep only this one.';
     }
   }
   if (btn) {
-    btn.textContent = mode === 'new' ? 'Add collection' : 'Sync collection';
+    btn.textContent = mode === 'new' ? 'Add collection' : (mode === 'merge' ? 'Merge into collection' : 'Replace all collections');
   }
 }
 
@@ -47299,9 +47342,21 @@ async function confirmSyncToNuvio() {
   const profileId = profileSel ? profileSel.value : '1';
   const installMode = modeSel ? modeSel.value : 'new';
   const targetColId = window._syncNuvioTarget;
+  const nameInput = document.getElementById('syncNuvioCollectionName');
+  const targetSel = document.getElementById('syncNuvioTargetSelect');
+  const collectionName = nameInput ? nameInput.value.trim() : '';
+  const mergeTargetId = targetSel ? targetSel.value : '';
+
+  if (installMode === 'merge' && !mergeTargetId) {
+    showToast('Pick which Nuvio collection to merge into.', 'info');
+    return;
+  }
+  if (installMode === 'replace' && !window.confirm('This removes ALL collections on this Nuvio profile, including ones from other providers. Continue?')) {
+    return;
+  }
 
   closeSyncNuvioModal();
-  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId });
+  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId, collectionName: collectionName, mergeTargetId: mergeTargetId });
 }
 
 function syncCollectionsToNuvio() {
@@ -47339,9 +47394,7 @@ async function executeNuvioCollectionsPush(opts) {
     const single = current.find(function (c) { return c.id === targetColId; });
     if (single) {
       pushName = single.name || 'folder';
-      if (installMode === 'new') {
-        collectionsToPush = [single];
-      }
+      collectionsToPush = [single];
     }
   }
 
@@ -47376,7 +47429,8 @@ async function executeNuvioCollectionsPush(opts) {
   const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
     profileId: profileId,
     installMode: installMode,
-    collectionName: (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) ? collectionsToPush[0].name : 'My Lists Collections',
+    collectionName: options.collectionName || (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) || 'My Lists Collections',
+    targetCollectionId: options.mergeTargetId || '',
     collections: payload,
     knownCollections: cachedRemote,
     manifestUrl: manifestUrl,
@@ -47387,7 +47441,7 @@ async function executeNuvioCollectionsPush(opts) {
     if (res.data && res.data.collections) {
       try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(res.data.collections)); } catch (e) {}
     }
-    const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged' : 'updated');
+    const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged into the chosen collection' : 'replaced all collections');
     let msg = 'Pushed "' + pushName + '" to Nuvio (' + modeDesc + ').';
     if (res.data && res.data.addonInstalled) {
       msg += ' My Lists Addon was auto-installed in Nuvio!';
@@ -120090,6 +120144,7 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
       showAllTab: false,
       pinToTop: false,
       focusGlowEnabled: true,
+      backdropImageUrl: inCol.backdropImageUrl || options.backdropImageUrl || "",
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -120098,6 +120153,36 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
   });
 
   return [...cleanedExisting, ...newCols];
+}
+
+// Add the incoming folders to ONE existing collection (the one the person picked);
+// every other collection is returned untouched, in its original position.
+function mergeIntoNuvioCollection(existing, incoming, targetId) {
+  const existingArr = extractNuvioCollections(existing);
+  const idx = existingArr.findIndex((c) => c && String(c.id) === String(targetId));
+  if (idx === -1) return null;
+  const target = JSON.parse(JSON.stringify(existingArr[idx]));
+  if (!Array.isArray(target.folders)) target.folders = [];
+  for (const inCol of extractNuvioCollections(incoming)) {
+    if (!inCol) continue;
+    for (const inF of Array.isArray(inCol.folders) ? inCol.folders : [inCol]) {
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = { ...inF, hidden: false, isVisible: true, enabled: true };
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map((cs) => {
+          const cName = String(cs.name || cs.title || cs.catalogId || "").trim().replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return { ...cs, name: cName, title: cName };
+        });
+      }
+      const fIdx = target.folders.findIndex((f) =>
+        (f.id && inF.id && f.id === inF.id) ||
+        (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase())
+      );
+      if (fIdx !== -1) target.folders[fIdx] = { ...target.folders[fIdx], ...cleanFolder };
+      else target.folders.push(cleanFolder);
+    }
+  }
+  return existingArr.map((c, i) => (i === idx ? target : c));
 }
 
 function mergeNuvioCollections(existing, incoming) {
@@ -120577,10 +120662,16 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         existing = body.knownCollections;
       }
 
+      const existingCount = (existing || []).length;
+      const backdropImageUrl = `${new URL(request.url).origin}/icon.png`;
       if (installMode === "new") {
-        collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName });
+        collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName, backdropImageUrl });
       } else if (installMode === "replace") {
-        collections = extractNuvioCollections(collections);
+        collections = extractNuvioCollections(collections).map((c) => ({ ...c, backdropImageUrl: c.backdropImageUrl || backdropImageUrl }));
+      } else if (body.targetCollectionId) {
+        const merged = mergeIntoNuvioCollection(existing || [], collections, body.targetCollectionId);
+        if (!merged) return json({ ok: false, error: "That Nuvio collection wasn't found. Reopen the dialog and pick it again." }, 400);
+        collections = merged;
       } else {
         collections = mergeNuvioCollections(existing || [], collections);
       }
@@ -120630,7 +120721,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
       }
 
-      return json({ ok: true, profileId, collections, addonInstalled });
+      return json({ ok: true, profileId, collections, addonInstalled, existingCount });
     }
   } catch (e) {
     if (e && e.kind) {

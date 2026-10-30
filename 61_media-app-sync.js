@@ -1218,6 +1218,7 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
       showAllTab: false,
       pinToTop: false,
       focusGlowEnabled: true,
+      backdropImageUrl: inCol.backdropImageUrl || options.backdropImageUrl || "",
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -1226,6 +1227,36 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
   });
 
   return [...cleanedExisting, ...newCols];
+}
+
+// Add the incoming folders to ONE existing collection (the one the person picked);
+// every other collection is returned untouched, in its original position.
+function mergeIntoNuvioCollection(existing, incoming, targetId) {
+  const existingArr = extractNuvioCollections(existing);
+  const idx = existingArr.findIndex((c) => c && String(c.id) === String(targetId));
+  if (idx === -1) return null;
+  const target = JSON.parse(JSON.stringify(existingArr[idx]));
+  if (!Array.isArray(target.folders)) target.folders = [];
+  for (const inCol of extractNuvioCollections(incoming)) {
+    if (!inCol) continue;
+    for (const inF of Array.isArray(inCol.folders) ? inCol.folders : [inCol]) {
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = { ...inF, hidden: false, isVisible: true, enabled: true };
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map((cs) => {
+          const cName = String(cs.name || cs.title || cs.catalogId || "").trim().replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return { ...cs, name: cName, title: cName };
+        });
+      }
+      const fIdx = target.folders.findIndex((f) =>
+        (f.id && inF.id && f.id === inF.id) ||
+        (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase())
+      );
+      if (fIdx !== -1) target.folders[fIdx] = { ...target.folders[fIdx], ...cleanFolder };
+      else target.folders.push(cleanFolder);
+    }
+  }
+  return existingArr.map((c, i) => (i === idx ? target : c));
 }
 
 function mergeNuvioCollections(existing, incoming) {
@@ -1705,10 +1736,16 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         existing = body.knownCollections;
       }
 
+      const existingCount = (existing || []).length;
+      const backdropImageUrl = `${new URL(request.url).origin}/icon.png`;
       if (installMode === "new") {
-        collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName });
+        collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName, backdropImageUrl });
       } else if (installMode === "replace") {
-        collections = extractNuvioCollections(collections);
+        collections = extractNuvioCollections(collections).map((c) => ({ ...c, backdropImageUrl: c.backdropImageUrl || backdropImageUrl }));
+      } else if (body.targetCollectionId) {
+        const merged = mergeIntoNuvioCollection(existing || [], collections, body.targetCollectionId);
+        if (!merged) return json({ ok: false, error: "That Nuvio collection wasn't found. Reopen the dialog and pick it again." }, 400);
+        collections = merged;
       } else {
         collections = mergeNuvioCollections(existing || [], collections);
       }
@@ -1758,7 +1795,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
       }
 
-      return json({ ok: true, profileId, collections, addonInstalled });
+      return json({ ok: true, profileId, collections, addonInstalled, existingCount });
     }
   } catch (e) {
     if (e && e.kind) {

@@ -2174,3 +2174,21 @@ Found by counting the KV operations of each request in a test run (the "KV Write
 - `bash verify.sh`, `node tests/ui-contract.mjs`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,633 tests each). Also fixed: three client tests had fixed "upcoming" air dates that have now passed (PR #43, tests only).
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build cf7a27cac2)**. No migration. To undo, paste the f603487eaf file.
+
+## 2026-10-30: pushing a collection to Nuvio respects the install mode
+
+### What it changes
+
+- **Add as new collection** now has a name box and adds a separate collection; every existing collection (other providers included) is sent back to Nuvio untouched.
+- **Merge into existing collection** shows a list of the collections found in Nuvio; the folders go only into the one picked (it is not renamed). If that collection is gone, nothing is pushed.
+- **Replace all collections** asks for confirmation, then leaves only what was pushed.
+- Pushing one collection with Merge or Replace used to push *every* My Lists folder; it now pushes just that one.
+- Collections My Lists writes carry the My Lists logo (`/icon.png`) as `backdropImageUrl`. The field name comes from Nuvio's open-source collection format; nuvio.tv/docs did not load for the assistant, so check it shows in the app.
+- The push reply includes `existingCount` (collections Nuvio had before the push).
+- Removed the "Addon preflight / Streaming Catalogs / READY" box in the dialog: it was fixed text and checked nothing.
+
+### Checked
+
+- `tests/media-app-sync.test.mjs` "Nuvio collections push: install modes" (new, merge, merge to a missing collection, replace, backdrop).
+
+**Steps:** deploy the new `worker_entry_combined.js`. No migration.

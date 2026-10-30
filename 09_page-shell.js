@@ -5569,15 +5569,16 @@ ${appShellMobileNavHtml}
 
       <div id="syncNuvioModeHint" class="u-p-10px_12px u-br-v_radius_sm u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-fs-v_font_size_xs u-mb-14px">This will create a separate collection and leave existing collections untouched.</div>
 
-      <div class="u-mb-16px">
-        <div class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Addon preflight</div>
-        <div class="u-p-12px_14px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_surface" style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text" id="syncNuvioPreflightName">Streaming Catalogs</div>
-            <div class="u-fs-v_font_size_xs" id="syncNuvioPreflightStatus">Ready</div>
-          </div>
-          <span class="badge" id="syncNuvioPreflightBadge" style="background:var(--color-brand-fill); color:var(--color-on-brand); padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700;">READY</span>
-        </div>
+      <div id="syncNuvioNameRow" class="u-mb-14px">
+        <label for="syncNuvioCollectionName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Collection name</label>
+        <input type="text" id="syncNuvioCollectionName" maxlength="80" placeholder="My Lists Collections" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+      </div>
+
+      <div id="syncNuvioTargetRow" class="u-mb-14px" style="display:none;">
+        <label for="syncNuvioTargetSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Merge into</label>
+        <select id="syncNuvioTargetSelect" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+          <option value="">Loading collections&hellip;</option>
+        </select>
       </div>
 
       <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
