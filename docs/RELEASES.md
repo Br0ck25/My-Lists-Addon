@@ -2192,3 +2192,7 @@ Found by counting the KV operations of each request in a test run (the "KV Write
 - `tests/media-app-sync.test.mjs` "Nuvio collections push: install modes" (new, merge, merge to a missing collection, replace, backdrop).
 
 **Steps:** deploy the new `worker_entry_combined.js`. No migration.
+
+### Follow-up: why Add and Merge wiped Nuvio
+
+Nuvio's `sync_pull_profiles` returns profile rows, not collections (per its docs). The old read took the profile row as a collection, so Nuvio looked empty, and `sync_push_collections` (a full replace) then wrote only the new one. Collections are now read with the documented `sync_pull_collections`, and Add/Merge refuse to push if that read fails. The old KV/browser-cached fallbacks that could resurrect deleted collections are gone from the push path.

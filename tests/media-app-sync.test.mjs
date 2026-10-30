@@ -78,7 +78,13 @@ function fakeServices(state) {
         const auth = new Headers(init.headers || {}).get("authorization");
         seen.nuvio.push({ fn, auth, body });
         if (state.nuvioRejects || auth !== "Bearer " + state.nuvioToken) return json({ message: "JWT expired" }, 401);
-        if (fn === "sync_pull_profiles") return json(state.profiles || [{ profile_index: 1, name: "Main" }]);
+        // The documented shape: profile rows carry no collections; those come from sync_pull_collections.
+        if (fn === "sync_pull_profiles") return json((state.profiles || [{ profile_index: 1, name: "Main" }]).map(({ collections_json, ...profile }) => profile));
+        if (fn === "sync_pull_collections") {
+          if (state.collectionsPullFails) return json({ message: "boom" }, 500);
+          const p = (state.profiles || []).find((r) => r.profile_index === body.p_profile_id);
+          return json(p && p.collections_json ? [{ profile_id: p.profile_index, collections_json: p.collections_json, updated_at: "2026-01-01T00:00:00Z" }] : []);
+        }
         if (fn === "sync_pull_watched_items") return state.pullFails ? json({ message: "boom" }, 500) : json(body.p_page === 1 ? state.watched || [] : []);
         if (fn === "sync_pull_watch_progress") return json(state.progress || []);
         if (fn === "sync_delete_watched_items") {
@@ -1343,6 +1349,18 @@ describe("Nuvio collections push: install modes", () => {
     await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
     const r = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: "merge", targetCollectionId: "gone", collections: incoming() } });
     assert.equal(r.status, 400);
+    assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("a failed read of Nuvio's collections stops the push, so nothing is wiped", async () => {
+    const state = { watched: [], progress: [], collectionsPullFails: true, profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcolfail");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    for (const mode of ["new", "merge"]) {
+      const r = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: mode, targetCollectionId: "community-streaming", collections: incoming() } });
+      assert.equal(r.status, 502, mode);
+    }
     assert.equal(seen.collectionsPushed, undefined);
   });
 

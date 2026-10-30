@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-30";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "fccc1d4e51";
+const WORKER_BUILD = "552afe316a";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -120297,94 +120297,20 @@ function mergeNuvioCollections(existing, incoming) {
   return [...otherCollections, myListsCol];
 }
 
+// Nuvio's documented read: sync_pull_collections returns [{ profile_id, collections_json, updated_at }].
+// sync_pull_profiles has no collections in it (its rows are the profiles themselves), so it is not used
+// here: a profile row read as a collection made the profile look empty. Errors are thrown, never turned
+// into "no collections": sync_push_collections replaces the whole blob, so a failed read must stop a push.
 async function nuvioPullCollections(env, accessToken, profileId) {
-  // 1. Try sync_pull_profiles RPC (the reliable Nuvio RPC returning profile objects with collections_json)
-  try {
-    const profRows = await nuvioRpc(env, accessToken, "sync_pull_profiles", {});
-    if (Array.isArray(profRows) && profRows.length > 0) {
-      const targetProf = profRows.find((r) =>
-        (r.profile_index != null && Number(r.profile_index) === Number(profileId)) ||
-        (r.id != null && String(r.id) === String(profileId))
-      ) || profRows[0];
-      if (targetProf) {
-        const extracted = extractNuvioCollections(targetProf.collections_json || targetProf.collections || targetProf);
-        if (extracted && extracted.length > 0) return extracted;
-      }
-      const allExtracted = extractNuvioCollections(profRows);
-      if (allExtracted && allExtracted.length > 0) return allExtracted;
-    }
-  } catch (profRpcErr) {}
-
-  // 2. Try sync_pull_collections RPC with p_profile_id only
-  try {
-    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId });
-    const extracted = extractNuvioCollections(rpcData);
-    if (extracted && extracted.length > 0) return extracted;
-  } catch (rpcErr1) {}
-
-  // 2b. Try sync_pull_collections RPC with p_origin_client_id
-  try {
-    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId, p_origin_client_id: "my-lists-addon" });
-    const extracted = extractNuvioCollections(rpcData);
-    if (extracted && extracted.length > 0) return extracted;
-  } catch (rpcErr2) {}
-
-  // 2c. Try sync_pull_collections RPC with empty object
-  try {
-    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", {});
-    const extracted = extractNuvioCollections(rpcData);
-    if (extracted && extracted.length > 0) return extracted;
-  } catch (rpcErr3) {}
-
-  // 3. Query profiles table where collections are stored
-  try {
-    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/profiles?profile_index=eq.${profileId}&select=*`, {
-      method: "GET",
-      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
-    });
-    if (res.ok) {
-      const text = await res.text();
-      if (text) {
-        const parsed = JSON.parse(text);
-        const extracted = extractNuvioCollections(parsed);
-        if (extracted && extracted.length > 0) return extracted;
-      }
-    }
-  } catch (profErr) {}
-
-  // 2b. Query profiles table by id
-  try {
-    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/profiles?id=eq.${profileId}&select=*`, {
-      method: "GET",
-      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
-    });
-    if (res.ok) {
-      const text = await res.text();
-      if (text) {
-        const parsed = JSON.parse(text);
-        const extracted = extractNuvioCollections(parsed);
-        if (extracted && extracted.length > 0) return extracted;
-      }
-    }
-  } catch (profErr2) {}
-
-  // 3. Fallback to direct REST query on collections table
-  try {
-    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/collections?profile_id=eq.${profileId}&select=*`, {
-      method: "GET",
-      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
-    });
-    if (res.ok) {
-      const text = await res.text();
-      if (text) {
-        const parsed = JSON.parse(text);
-        const extracted = extractNuvioCollections(parsed);
-        if (extracted && extracted.length > 0) return extracted;
-      }
-    }
-  } catch (tableErr) {}
-
-  return [];
+  const rows = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId });
+  const list = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+  const row = list.find((r) => r && r.profile_id != null && Number(r.profile_id) === Number(profileId)) || (list.length === 1 ? list[0] : null);
+  if (!row) return [];
+  let blob = row.collections_json;
+  if (typeof blob === "string") {
+    try { blob = JSON.parse(blob); } catch { throw new Error("Nuvio returned collections that could not be read."); }
+  }
+  return Array.isArray(blob) ? blob.filter((c) => c && typeof c === "object") : [];
 }
 
 async function nuvioGetAddons(env, accessToken, profileId) {
@@ -120520,7 +120446,12 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
     if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
     const profileId = Number(row.profile_index) || 1;
-    const data = await nuvioPullCollections(env, conn.accessToken, profileId);
+    let data;
+    try {
+      data = await nuvioPullCollections(env, conn.accessToken, profileId);
+    } catch {
+      return json({ ok: false, error: "Couldn't read your collections from Nuvio. Please try again." }, 502);
+    }
     return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [] });
   }
 
@@ -120642,24 +120573,14 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
 
       let existing = [];
-      try {
-        existing = await nuvioPullCollections(env, conn.accessToken, profileId);
-        if (existing && existing.length > 0 && env && env.CONFIGS) {
-          await env.CONFIGS.put(`nuvio_remote_cols:${accountId}:${profileId}`, JSON.stringify(existing), { expirationTtl: 86400 * 30 });
+      if (installMode !== "replace") {
+        // The push replaces everything Nuvio holds, so it only goes ahead on a successful read.
+        try {
+          existing = await nuvioPullCollections(env, conn.accessToken, profileId);
+        } catch (pullErr) {
+          if (pullErr && pullErr.kind === "invalid") throw pullErr;
+          return json({ ok: false, error: "Couldn't read your existing Nuvio collections, so nothing was changed. Please try again." }, 502);
         }
-      } catch (pullErr) {
-        console.warn("Could not pull existing collections before pushing:", pullErr);
-      }
-      if (!existing || !existing.length) {
-        if (env && env.CONFIGS) {
-          try {
-            const kvSaved = await env.CONFIGS.get(`nuvio_remote_cols:${accountId}:${profileId}`, "json");
-            if (Array.isArray(kvSaved) && kvSaved.length > 0) existing = kvSaved;
-          } catch {}
-        }
-      }
-      if ((!existing || !existing.length) && Array.isArray(body.knownCollections) && body.knownCollections.length > 0) {
-        existing = body.knownCollections;
       }
 
       const existingCount = (existing || []).length;
