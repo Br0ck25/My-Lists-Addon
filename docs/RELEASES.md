@@ -2196,3 +2196,18 @@ Found by counting the KV operations of each request in a test run (the "KV Write
 ### Follow-up: why Add and Merge wiped Nuvio
 
 Nuvio's `sync_pull_profiles` returns profile rows, not collections (per its docs). The old read took the profile row as a collection, so Nuvio looked empty, and `sync_push_collections` (a full replace) then wrote only the new one. Collections are now read with the documented `sync_pull_collections`, and Add/Merge refuse to push if that read fails. The old KV/browser-cached fallbacks that could resurrect deleted collections are gone from the push path.
+
+## 2026-10-30: streaming service rows in the premade collections; Stremio collection buttons removed
+
+### What it changes
+
+- **Removed** the Stremio-only collection controls (Stremio has no collections): "+ Add All to Stremio", the per-folder "+ Add to Catalogs" / "Remove" button, the Stremio hint, and Stremio from the Collections tab's synced-collections panel (Stremio's Watch History lists stay under Settings).
+- **New rows** on Netflix, Hulu, Paramount+, Disney+, HBO Max, Prime Video, Peacock and Apple TV+ (about 18 to 26 per service, e.g. Netflix "Hooked from the First Episode", Hulu "Stream & Scream", Paramount+ "NickRewind"). Defined in `STREAMING_ROWS` (08_), built from TMDB discover with `with_watch_providers` + flatrate, so a row holds only titles included with that service. They follow each service's Top 10 and full catalog in its premade collection.
+- These are our own approximations: the services' real rows are editorial and have no public feed. Genre, rating, year, network, studio and a few TMDB keyword ids stand in for them. The ids are listed at the top of the table.
+- The ~250 new catalogs are in the manifest only when the link has `?collections=1`. Pushing to Nuvio now installs/updates the addon with that link, so Stremio's home screen is not flooded. An existing Nuvio install is updated the next time you push.
+
+### Checked
+
+- `tests/streaming-rows.test.mjs`: every row filters to its own service, one `sort_by`, unique ids, shows-only rows have no movie catalog, the manifest gate, and the app gives each collection its own service's rows.
+
+**Steps:** deploy the new `worker_entry_combined.js`. No migration. Push a premade collection to Nuvio again to pick up the rows.

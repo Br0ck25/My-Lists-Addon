@@ -5446,7 +5446,7 @@ ${appShellMobileNavHtml}
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create Collection</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
       </div>
-      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Stremio and Nuvio.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Nuvio.</p>
 
       <div class="u-mb-12px">
         <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Collection Name *</label>
@@ -5763,6 +5763,7 @@ window._CHARTS_SIMKL = ${jsonForScript(SIMKL_CHART_LISTS)};
 window._CHARTS_SIMKL_ANIME = ${jsonForScript(SIMKL_ANIME_LIST)};
 window._CHARTS_STREAMING_TOP10 = ${jsonForScript(STREAMING_TOP10)};
 window._CHARTS_STREAMING_ALL = ${jsonForScript(STREAMING_ALL)};
+window._STREAMING_ROW_CATALOGS = ${jsonForScript(STREAMING_ROW_CATALOGS.map((r) => ({ service: r.service, collection: r.collection, key: r.key, name: r.name, chartKey: r.chartKey, catalogId: r.catalogId, movie: !!r.kinds.movie, series: !!r.kinds.series })))};
 window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};

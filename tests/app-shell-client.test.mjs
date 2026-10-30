@@ -325,7 +325,8 @@ describe("collections subnav and website lists picker", () => {
     assert.ok(box);
     assert.ok(box.innerHTML.includes("Sci-Fi Favorites"));
     assert.ok(box.innerHTML.includes("2 lists"));
-    assert.ok(box.innerHTML.includes("+ Add to Catalogs"));
+    assert.ok(!box.innerHTML.includes("Add to Catalogs"), "Stremio has no collections, so no per-folder Stremio catalog button");
+    assert.ok(box.innerHTML.includes("Push to Nuvio"));
     assert.ok(box.innerHTML.includes("Cyberpunk Gems"));
   });
 
@@ -617,28 +618,6 @@ describe("collections subnav and website lists picker", () => {
     assert.ok(preservedMyLists, "My Lists Collections must be present");
     assert.strictEqual(preservedMyLists.folders.length, 1, "My Lists Collections must contain only its own folder");
     assert.strictEqual(preservedMyLists.folders[0].title, "Apple TV+");
-  });
-
-  it("addAllCollectionsToStremio adds collection folders into the catalogs configuration for Stremio", () => {
-    const client = loadClient();
-    let rowAdded = null;
-    client.set("addRow", (name, url, type, enabled, group) => {
-      rowAdded = { name, url, type, enabled, group };
-    });
-    client.call("saveCustomCollections", [
-      {
-        id: "col_stream_stremio",
-        name: "Popular Movies",
-        lists: [
-          { name: "Popular", url: "tmdb:chart:popular", type: "movie" }
-        ]
-      }
-    ]);
-    client.call("addAllCollectionsToStremio");
-    assert.ok(rowAdded);
-    assert.strictEqual(rowAdded.name, "Popular Movies");
-    assert.strictEqual(rowAdded.url, "tmdb:chart:popular");
-    assert.strictEqual(rowAdded.type, "movie");
   });
 
   it("determines the manifest URL to auto-install My Lists Addon in Nuvio", () => {

@@ -3054,7 +3054,7 @@ const FEATURED_TMDB_COLLECTIONS = [
 
 const CUSTOM_COLLECTIONS_STORAGE_KEY = 'myListAddon:customCollections';
 
-function getPremadeCollections() {
+function getPremadeCollectionsBase() {
   return [
     {
       id: 'col_appletv',
@@ -3209,6 +3209,23 @@ function getPremadeCollections() {
       ]
     }
   ];
+}
+
+// The streaming services' own browse rows (Hooked from the First Episode, Stream & Scream ...)
+// come from STREAMING_ROWS (08_): added after each service's Top 10 and full-catalog lists.
+function getPremadeCollections() {
+  const cols = getPremadeCollectionsBase();
+  const rows = (typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const col = cols.find(function (c) { return c.id === row.collection; });
+    if (!col) continue;
+    ['movie', 'series'].forEach(function (type) {
+      if (!row[type === 'movie' ? 'movie' : 'series']) return;
+      col.lists.push({ name: row.name, url: 'tmdb:chart:' + row.chartKey, type: type, addonId: 'app.my-list', catalogId: row.catalogId });
+    });
+  }
+  return cols;
 }
 
 function loadCustomCollections() {
@@ -3691,13 +3708,6 @@ function renderCustomCollections() {
     const listCount = (col.lists && col.lists.length) || 0;
     const isExpanded = window._expandedCollectionFolders && window._expandedCollectionFolders.has(col.id);
 
-    const nl = String.fromCharCode(10);
-    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
-    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
-    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
-
     let listsPreviewHtml = '';
     if (listCount > 0) {
       listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="colFolderContent_' + escapeAttr(col.id) + '">' +
@@ -3746,8 +3756,6 @@ function renderCustomCollections() {
           (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
-          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
-            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
           '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
@@ -3787,13 +3795,6 @@ function renderPremadeCollections() {
     const listCount = (col.lists && col.lists.length) || 0;
     const isExpanded = window._expandedPremadeFolders && window._expandedPremadeFolders.has(col.id);
     const inFolders = customNames.has((col.name || '').toLowerCase());
-
-    const nl = String.fromCharCode(10);
-    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
-    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
-    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
 
     let listsPreviewHtml = '';
     if (listCount > 0) {
@@ -3841,8 +3842,6 @@ function renderPremadeCollections() {
             ? '<button type="button" class="lc-btn secondary" disabled style="opacity:0.6; cursor:default;">&#x2713; In Your Folders</button>'
             : '<button type="button" class="lc-btn primary" data-act="addPremadeToCustomCollections" data-act-args="' + appActArgs([col.id]) + '">+ Add to Your Folders</button>'
           ) +
-          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
-            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="pushSinglePremadeToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
           '<button type="button" class="lc-btn secondary" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
         '</div>' +
@@ -3946,85 +3945,6 @@ function deleteCustomCollection(id) {
     renderCustomCollections();
   }
 }
-
-function toggleCustomCollectionCatalog(id, isAdded) {
-  const collections = loadCustomCollections();
-  const col = collections.find(function (c) { return c.id === id; });
-  if (!col) return;
-  if (!col.lists || !col.lists.length) {
-    showToast('Add at least one list to "' + col.name + '" before installing to Catalogs.', 'error');
-    return;
-  }
-
-  const nl = String.fromCharCode(10);
-  const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-  const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-  const primaryUrl = movieUrls.length ? movieUrls.join(nl) : col.lists.map(function (l) { return l.url; }).join(nl);
-  const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
-
-  if (isAdded) {
-    if (movieUrls.length) removeListFromConfig(movieUrls.join(nl), 'movie');
-    if (seriesUrls.length) removeListFromConfig(seriesUrls.join(nl), 'series');
-    removeListFromConfig(primaryUrl, primaryType);
-    if (typeof showAddedToast === 'function') {
-      showAddedToast('Removed "' + col.name + '" from your Catalogs.');
-    }
-  } else {
-    if (movieUrls.length && seriesUrls.length) {
-      addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
-      addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
-    } else if (seriesUrls.length) {
-      addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
-    } else {
-      addRow(col.name, primaryUrl, 'movie', true, col.name);
-    }
-    if (typeof showAddedToast === 'function') {
-      showAddedToast('Added "' + col.name + '" to your Catalogs.');
-    }
-  }
-  renderCustomCollections();
-}
-
-function addAllCollectionsToStremio() {
-  const collections = loadCustomCollections();
-  if (!collections.length) {
-    showToast('No collection folders to add.', 'info');
-    return;
-  }
-  let addedCount = 0;
-  const nl = String.fromCharCode(10);
-  for (let i = 0; i < collections.length; i++) {
-    const col = collections[i];
-    if (!col || !col.lists || !col.lists.length) continue;
-    const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    if (movieUrls.length && seriesUrls.length) {
-      if (typeof addRow === 'function') {
-        addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
-        addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
-        addedCount++;
-      }
-    } else if (movieUrls.length) {
-      if (typeof addRow === 'function') {
-        addRow(col.name, movieUrls.join(nl), 'movie', true, col.name);
-        addedCount++;
-      }
-    } else if (seriesUrls.length) {
-      if (typeof addRow === 'function') {
-        addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
-        addedCount++;
-      }
-    }
-  }
-  if (typeof saveConfig === 'function') saveConfig();
-  if (typeof renderCustomCollections === 'function') renderCustomCollections();
-  if (typeof showAddedToast === 'function') {
-    showAddedToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!');
-  } else {
-    showToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!', 'success');
-  }
-}
-window.addAllCollectionsToStremio = addAllCollectionsToStremio;
 
 function extractNuvioCollections(raw) {
   let val = raw;
@@ -4750,7 +4670,7 @@ function renderCollectionsCurated() {
 function renderCollectionsMediaApps() {
   const box = document.getElementById('collectionsMediaAppsResult');
   if (!box) return;
-  const providers = ['stremio', 'nuvio'];
+  const providers = ['nuvio'];
   box.innerHTML = providers.map(function (provider) {
     const name = MEDIA_APP_UI_NAMES[provider];
     const live = !!mediaAppListsLive[provider];

@@ -6,7 +6,7 @@
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -92,7 +92,7 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         extraRequired: ["search"],
       });
       if (typeof getPremadeCollectionManifestCatalogs === "function") {
-        for (const c of getPremadeCollectionManifestCatalogs()) {
+        for (const c of getPremadeCollectionManifestCatalogs(includeStreamingRows)) {
           addC(c);
         }
       }

@@ -108,7 +108,7 @@
       <div class="shelf-header u-mb-8px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">Collections</h2>
-          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Stremio and Nuvio.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Nuvio.</p>
         </div>
         <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           ${refreshButtonHtml('refreshCollectionsView', 'Refresh collections')}
@@ -121,11 +121,10 @@
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
           <h2 class="panel-title u-mb-0">Your Collection Folders</h2>
-          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Stremio and Nuvio home screen layouts.</p>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Nuvio home screen layouts.</p>
         </div>
         <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
           <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
-          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="addAllCollectionsToStremio" title="Add all collection folders as shelves into your Stremio catalogs">+ Add All to Stremio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull collections from your connected Nuvio account">Pull from Nuvio</button>
@@ -134,7 +133,6 @@
         </div>
       </div>
       <div class="u-p-10px_14px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-12px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; flex-direction:column; gap:6px;">
-        <span><strong>Stremio:</strong> Stremio displays collections directly as home screen rows. Click <strong>+ Add to Catalogs</strong> or <strong>+ Add All to Stremio</strong> to add folders to your catalogs, then update in Stremio.</span>
         <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection folder and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
       </div>
       <div id="myCustomCollectionsResult"></div>
@@ -154,12 +152,12 @@
       <div id="premadeCollectionsResult"></div>
     </div>
 
-    <!-- Connected Media Apps Collections (Stremio & Nuvio) -->
+    <!-- Connected Media Apps Collections (Nuvio) -->
     <div class="panel u-mt-12px" id="collectionsMediaAppsPanel">
       <div class="shelf-header u-mb-10px">
-        <h2 class="panel-title u-mb-0">Stremio &amp; Nuvio Collections</h2>
+        <h2 class="panel-title u-mb-0">Nuvio Collections</h2>
       </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Stremio and Nuvio accounts.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Nuvio account.</p>
       <div id="collectionsMediaAppsResult"></div>
     </div>
   </div>

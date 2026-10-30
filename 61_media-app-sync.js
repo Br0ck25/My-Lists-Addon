@@ -1423,6 +1423,13 @@ async function nuvioGetAddons(env, accessToken, profileId) {
 async function nuvioEnsureAddonInstalled(env, accessToken, profileId, manifestUrl) {
   if (!manifestUrl) return false;
   try {
+    // ?collections=1 makes the manifest list the premade service rows (see getPremadeCollectionManifestCatalogs);
+    // a plain link is left for Stremio so those ~250 rows don't land on its home screen.
+    try {
+      const u = new URL(String(manifestUrl));
+      u.searchParams.set("collections", "1");
+      manifestUrl = u.toString();
+    } catch {}
     const addons = await nuvioGetAddons(env, accessToken, profileId);
     const mLower = String(manifestUrl).trim().toLowerCase();
     let foundIndex = -1;

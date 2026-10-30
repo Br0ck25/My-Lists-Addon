@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-30";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "552afe316a";
+const WORKER_BUILD = "62e29973d1";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -18459,7 +18459,7 @@ async function searchTraktLists(query, traktKeyOverride) {
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -18545,7 +18545,7 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         extraRequired: ["search"],
       });
       if (typeof getPremadeCollectionManifestCatalogs === "function") {
-        for (const c of getPremadeCollectionManifestCatalogs()) {
+        for (const c of getPremadeCollectionManifestCatalogs(includeStreamingRows)) {
           addC(c);
         }
       }
@@ -30398,6 +30398,340 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
+// --- Streaming service rows (the premade collections' "browse the service" rows) --
+//
+// Netflix shows "Hooked from the First Episode", Hulu "Stream & Scream", Paramount+
+// "NickRewind" and so on. These are our own rows with the same flavour, built from
+// TMDB discover. Every row is filtered by with_watch_providers + flatrate (see
+// tmdbProviderChartPaths in 07_), so it only holds titles included with THAT service.
+//
+// A row is [key, label, recipe]. `recipe` is a name in STREAMING_ROW_RECIPES or an
+// inline { tv, movie } object. A kind a recipe leaves out simply has no catalog (a row
+// like "Anime" has both; "Hooked from the First Episode" is shows only). Tokens in a
+// recipe: {vc} = the service's vote floor (its catalog is smaller or bigger, and movies
+// get 3x), {net} = the service's own TMDB network id (its originals).
+// TMDB ids used here: networks 13 Nickelodeon, 49 HBO, 54 Disney Channel, 80 Adult Swim,
+// 6 NBC, 74 Bravo, 16 CBS; companies 420 Marvel Studios, 1 Lucasfilm, 3 Pixar,
+// 6125 Walt Disney Animation, 25 20th Century, 174 Warner Bros., 9993 DC, 33 Universal,
+// 4 Paramount Pictures; keywords 818 based on novel or book, 9715 superhero,
+// 4344 musical, 6075 sport.
+const STREAMING_ROW_SERVICES = {
+  netflix: { name: "Netflix", provider: 8, network: 213, minVotes: 300, collection: "col_netflix" },
+  hulu: { name: "Hulu", provider: 15, network: 453, minVotes: 150, collection: "col_hulu" },
+  paramount: { name: "Paramount+", provider: 2303, network: 4330, minVotes: 100, collection: "col_paramount" },
+  disney: { name: "Disney+", provider: 337, network: 2739, minVotes: 150, collection: "col_disney" },
+  hbomax: { name: "HBO Max", provider: 1899, network: 49, minVotes: 150, collection: "col_hbomax" },
+  primevideo: { name: "Prime Video", provider: 9, network: 1024, minVotes: 150, collection: "col_primevideo" },
+  peacock: { name: "Peacock", provider: 387, network: 3353, minVotes: 60, collection: "col_peacock" },
+  appletv: { name: "Apple TV+", provider: 350, network: 2552, minVotes: 40, collection: "col_appletv" },
+};
+
+const STREAMING_ROW_RECIPES = {
+  originals: { tv: "with_networks={net}" },
+  hooked: { tv: "with_genres=18|9648|80&vote_average.gte=7.5&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  action: { tv: "with_genres=10759", movie: "with_genres=28" },
+  actionTv: { tv: "with_genres=10759" },
+  actionMovies: { movie: "with_genres=28" },
+  comedy: { tv: "with_genres=35", movie: "with_genres=35" },
+  comedyTv: { tv: "with_genres=35" },
+  comedyMovies: { movie: "with_genres=35" },
+  feelGood: { tv: "with_genres=35|10751&vote_average.gte=7&vote_count.gte={vc}&sort_by=vote_average.desc", movie: "with_genres=35|10751|10749&vote_average.gte=6.8&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  feelGoodTv: { tv: "with_genres=35|10751&vote_average.gte=7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  casual: { tv: "with_genres=35|10764" },
+  drama: { tv: "with_genres=18", movie: "with_genres=18" },
+  dramaTv: { tv: "with_genres=18" },
+  crime: { tv: "with_genres=80", movie: "with_genres=80" },
+  crimeTv: { tv: "with_genres=80" },
+  mystery: { tv: "with_genres=9648", movie: "with_genres=9648" },
+  mysteryTv: { tv: "with_genres=9648" },
+  thriller: { tv: "with_genres=9648,18", movie: "with_genres=53" },
+  psychThriller: { tv: "with_genres=9648,18&vote_average.gte=7&vote_count.gte={vc}", movie: "with_genres=53,18&vote_average.gte=6.5&vote_count.gte={vc}" },
+  horror: { tv: "with_genres=9648,10765", movie: "with_genres=27" },
+  horrorMovies: { movie: "with_genres=27" },
+  darkTv: { tv: "with_genres=9648,10765" },
+  scifi: { tv: "with_genres=10765", movie: "with_genres=878" },
+  scifiTv: { tv: "with_genres=10765" },
+  scifiFantasy: { tv: "with_genres=10765", movie: "with_genres=878|14" },
+  fantasy: { tv: "with_genres=10765", movie: "with_genres=14" },
+  animation: { tv: "with_genres=16", movie: "with_genres=16" },
+  adultAnimation: { tv: "with_genres=16&without_genres=10762,10751", movie: "with_genres=16&without_genres=10751" },
+  anime: { tv: "with_genres=16&with_original_language=ja", movie: "with_genres=16&with_original_language=ja" },
+  reality: { tv: "with_genres=10764" },
+  docs: { tv: "with_genres=99", movie: "with_genres=99" },
+  trueCrime: { tv: "with_genres=80,99", movie: "with_genres=80,99" },
+  travelLifestyle: { tv: "with_genres=10764|99" },
+  family: { tv: "with_genres=10751", movie: "with_genres=10751" },
+  familyMovies: { movie: "with_genres=10751&certification_country=US&certification.lte=PG" },
+  kids: { tv: "with_genres=10762" },
+  kidsFamily: { tv: "with_genres=10762", movie: "with_genres=16|10751&certification_country=US&certification.lte=PG" },
+  romance: { movie: "with_genres=10749" },
+  romcom: { movie: "with_genres=10749,35" },
+  western: { tv: "with_genres=37", movie: "with_genres=37" },
+  warHistory: { tv: "with_genres=10768", movie: "with_genres=10752|36" },
+  musicals: { tv: "with_keywords=4344", movie: "with_keywords=4344" },
+  superhero: { tv: "with_keywords=9715", movie: "with_keywords=9715" },
+  basedOnBooks: { tv: "with_keywords=818", movie: "with_keywords=818" },
+  sports: { tv: "with_keywords=6075", movie: "with_keywords=6075" },
+  awardTv: { tv: "vote_average.gte=8&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  awardMovies: { movie: "vote_average.gte=7.7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  award: { tv: "vote_average.gte=8&vote_count.gte={vc}&sort_by=vote_average.desc", movie: "vote_average.gte=7.7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  bingeable: { tv: "with_status=3&vote_average.gte=7&vote_count.gte={vc}" },
+  completeSeries: { tv: "with_status=3" },
+  completeComedies: { tv: "with_status=3&with_genres=35" },
+  popularTv: { tv: "" },
+  popularMovies: { movie: "" },
+  blockbuster: { movie: "sort_by=revenue.desc" },
+  nineties: { tv: "first_air_date.gte=1990-01-01&first_air_date.lte=1999-12-31", movie: "primary_release_date.gte=1990-01-01&primary_release_date.lte=1999-12-31&vote_count.gte={vc}" },
+  classics: { tv: "first_air_date.lte=1989-12-31", movie: "primary_release_date.lte=1989-12-31&vote_count.gte={vc}" },
+  korean: { tv: "with_original_language=ko", movie: "with_original_language=ko" },
+  spanish: { tv: "with_original_language=es", movie: "with_original_language=es" },
+  british: { tv: "with_origin_country=GB", movie: "with_origin_country=GB" },
+  talk: { tv: "with_genres=10767" },
+};
+
+const STREAMING_ROWS = {
+  netflix: [
+    ["originals", "Netflix Originals", "originals"],
+    ["hooked", "Hooked from the First Episode", "hooked"],
+    ["action-tv", "Action TV", "actionTv"],
+    ["award-tv", "Award-Winning TV Shows", "awardTv"],
+    ["watch-a-while", "Watch for a While", "bingeable"],
+    ["feel-good-tv", "Feel-Good TV Shows", "feelGoodTv"],
+    ["get-in-on-the-action", "Get in on the Action", "actionMovies"],
+    ["casual", "Casual Viewing", "casual"],
+    ["anime", "Anime", "anime"],
+    ["dark-tv-horror", "Dark TV Horror", "darkTv"],
+    ["goofy-tv", "Goofy TV Shows", "comedyTv"],
+    ["reality", "Reality TV", "reality"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["crime-tv", "Crime TV", "crimeTv"],
+    ["docs", "Documentaries", "docs"],
+    ["k-drama", "Korean Titles", "korean"],
+    ["british", "British Titles", "british"],
+    ["romance", "Romantic Movies", "romance"],
+    ["comedy-movies", "Comedy Movies", "comedyMovies"],
+    ["thriller-movies", "Thrillers", "thriller"],
+    ["horror-movies", "Horror Movies", "horrorMovies"],
+    ["scifi-fantasy", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["award-movies", "Award-Winning Movies", "awardMovies"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+  ],
+  hulu: [
+    ["originals", "Hulu Originals", "originals"],
+    ["bingeable-tv", "Bingeable TV", "bingeable"],
+    ["travel-lifestyle", "Travel & Lifestyle", "travelLifestyle"],
+    ["stream-and-scream", "Stream & Scream", "horror"],
+    ["kids", "Kids", "kidsFamily"],
+    ["full-series-comedies", "Full Series Comedies", "completeComedies"],
+    ["popular-tv", "Popular TV", "popularTv"],
+    ["blockbuster-movies", "Blockbuster Movies", "blockbuster"],
+    ["easy-to-watch-tv", "Easy-to-Watch TV", "casual"],
+    ["complete-series", "Complete Series", "completeSeries"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["family-movies", "Family Movies", "familyMovies"],
+    ["comedy-movies", "Comedy Movies", "comedyMovies"],
+    ["mystery-tv", "Mystery TV Shows", "mysteryTv"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["anime", "Anime", "anime"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["action", "Action & Adventure", "action"],
+    ["drama", "Drama", "drama"],
+    ["romance", "Romance", "romance"],
+    ["reality", "Reality TV", "reality"],
+    ["docs", "Documentaries", "docs"],
+    ["award-tv", "Award-Winning TV", "awardTv"],
+    ["nineties", "Best of the 90s", "nineties"],
+  ],
+  paramount: [
+    ["originals", "Paramount+ Originals", "originals"],
+    ["unmissable-action", "Unmissable Action", "action"],
+    ["psychological-thrillers", "Psychological Thrillers", "psychThriller"],
+    ["reality", "Reality Shows", "reality"],
+    ["movie-night", "Movie Night", "popularMovies"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["scifi-series", "Sci-Fi Series", "scifiTv"],
+    ["romantic-comedies", "Romantic Comedies", "romcom"],
+    ["nickrewind", "NickRewind", { tv: "with_networks=13&first_air_date.lte=2009-12-31" }],
+    ["nick-jr", "Nick Jr. Shows", { tv: "with_networks=13&with_genres=10762" }],
+    ["based-on-books", "Movies Based on Books", { movie: "with_keywords=818" }],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["looking-for-a-laugh", "Looking for a Laugh?", "comedy"],
+    ["crime-procedurals", "Crime & Procedurals", "crimeTv"],
+    ["cbs", "CBS Favorites", { tv: "with_networks=16" }],
+    ["horror", "Horror", "horror"],
+    ["westerns", "Westerns", "western"],
+    ["docs", "Documentaries", "docs"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["award", "Award-Winning", "award"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["paramount-pictures", "Paramount Pictures", { movie: "with_companies=4" }],
+    ["mystery", "Mystery", "mystery"],
+  ],
+  disney: [
+    ["originals", "Disney+ Originals", "originals"],
+    ["marvel", "Marvel", { tv: "with_companies=420", movie: "with_companies=420" }],
+    ["star-wars", "Star Wars", { tv: "with_companies=1", movie: "with_companies=1" }],
+    ["pixar", "Pixar", { movie: "with_companies=3" }],
+    ["disney-animation", "Disney Animation", { movie: "with_companies=6125" }],
+    ["disney-classics", "Disney Classics", { movie: "with_companies=2|6125&primary_release_date.lte=1999-12-31" }],
+    ["disney-channel", "Disney Channel", { tv: "with_networks=54" }],
+    ["20th-century", "20th Century Studios", { movie: "with_companies=25" }],
+    ["family-movies", "Family Movies", "familyMovies"],
+    ["kids", "Kids Shows", "kids"],
+    ["animated-series", "Animated Series", "animation"],
+    ["action", "Action & Adventure", "action"],
+    ["scifi-fantasy", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["superheroes", "Superheroes", "superhero"],
+    ["musicals", "Musicals", "musicals"],
+    ["comedy", "Comedy", "comedy"],
+    ["docs", "Documentaries & Nature", "docs"],
+    ["drama", "Drama", "drama"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["award", "Award-Winning", "award"],
+    ["mystery", "Mystery & Thrillers", "thriller"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["reality", "Reality", "reality"],
+  ],
+  hbomax: [
+    ["hbo-originals", "HBO Originals", { tv: "with_networks=49" }],
+    ["max-originals", "Max Originals", "originals"],
+    ["prestige-drama", "Prestige Drama", "hooked"],
+    ["award", "Award-Winning", "award"],
+    ["dc", "DC", { tv: "with_companies=9993", movie: "with_companies=9993" }],
+    ["warner-bros", "Warner Bros. Movies", { movie: "with_companies=174" }],
+    ["superheroes", "Superheroes", "superhero"],
+    ["comedy", "Comedy", "comedy"],
+    ["adult-animation", "Adult Swim & Adult Animation", "adultAnimation"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["docs", "Documentaries", "docs"],
+    ["crime", "Crime", "crime"],
+    ["scifi", "Sci-Fi", "scifi"],
+    ["fantasy", "Fantasy", "fantasy"],
+    ["horror", "Horror", "horror"],
+    ["reality", "Reality", "reality"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["romance", "Romance", "romance"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["action", "Action", "action"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["anime", "Anime", "anime"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+  ],
+  primevideo: [
+    ["originals", "Prime Originals", "originals"],
+    ["action", "Action & Adventure", "action"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["comedy", "Comedy", "comedy"],
+    ["drama", "Drama", "drama"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["crime", "Crime", "crime"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["mystery", "Mystery", "mystery"],
+    ["horror", "Horror", "horror"],
+    ["romance", "Romance", "romance"],
+    ["reality", "Reality TV", "reality"],
+    ["docs", "Documentaries", "docs"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["anime", "Anime", "anime"],
+    ["superheroes", "Superheroes", "superhero"],
+    ["award", "Award-Winning", "award"],
+    ["blockbuster", "Blockbuster Movies", "blockbuster"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+    ["westerns", "Westerns", "western"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["sports", "Sports", "sports"],
+  ],
+  peacock: [
+    ["originals", "Peacock Originals", "originals"],
+    ["nbc", "NBC Favorites", { tv: "with_networks=6" }],
+    ["bravo", "Bravo & Reality", { tv: "with_networks=74" }],
+    ["sitcoms", "Sitcoms", "completeComedies"],
+    ["comedy", "Comedy", "comedy"],
+    ["crime", "Crime", "crime"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["drama", "Drama", "drama"],
+    ["horror", "Horror", "horror"],
+    ["action", "Action", "action"],
+    ["universal", "Universal Movies", { movie: "with_companies=33" }],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["docs", "Documentaries", "docs"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["romance", "Romance", "romance"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["mystery", "Mystery", "mystery"],
+    ["award", "Award-Winning", "award"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["animation", "Animation", "animation"],
+    ["westerns", "Westerns", "western"],
+    ["sports", "Sports", "sports"],
+  ],
+  appletv: [
+    ["originals", "Apple Originals", "originals"],
+    ["award", "Award-Winning", "award"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["comedy", "Comedy", "comedy"],
+    ["feel-good", "Feel-Good", "feelGood"],
+    ["drama", "Drama", "drama"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["mystery", "Mystery", "mystery"],
+    ["crime", "Crime", "crime"],
+    ["action", "Action & Adventure", "action"],
+    ["docs", "Documentaries", "docs"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["animation", "Animation", "animation"],
+    ["war-history", "War & History", "warHistory"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+    ["sports", "Sports", "sports"],
+    ["musicals", "Music & Musicals", "musicals"],
+    ["romance", "Romance", "romance"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["popular", "Popular on Apple TV+", "popularTv"],
+  ],
+};
+
+// One entry per row and kind, in a flat list the page, the manifest and the chart
+// fetcher all read: { service, key, name, chartKey, catalogId, kinds: { movie?, series? } }.
+function getStreamingRowCatalogs() {
+  const out = [];
+  for (const svc of Object.keys(STREAMING_ROWS)) {
+    const cfg = STREAMING_ROW_SERVICES[svc];
+    for (const [key, label, recipe] of STREAMING_ROWS[svc]) {
+      const r = typeof recipe === "string" ? STREAMING_ROW_RECIPES[recipe] : recipe;
+      if (!r) continue;
+      const chartKey = `${svc}-${key}`;
+      const build = (kind, params) => {
+        const vc = kind === "movie" ? cfg.minVotes * 3 : cfg.minVotes;
+        const q = String(params).replace(/\{vc\}/g, String(vc)).replace(/\{net\}/g, String(cfg.network));
+        const base = `with_watch_providers=${cfg.provider}&watch_region=US&with_watch_monetization_types=flatrate`;
+        const sorted = /(^|&)sort_by=/.test(q) ? "" : "&sort_by=popularity.desc";
+        return `discover/${kind}?${base}${sorted}${q ? "&" + q : ""}`;
+      };
+      const kinds = {};
+      if (r.movie != null) kinds.movie = build("movie", r.movie);
+      if (r.tv != null) kinds.series = build("tv", r.tv);
+      out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds });
+    }
+  }
+  return out;
+}
+
+const STREAMING_ROW_CATALOGS = getStreamingRowCatalogs();
+const STREAMING_ROW_BY_CHART_KEY = Object.fromEntries(STREAMING_ROW_CATALOGS.map((r) => [r.chartKey, r]));
+
+// Registers each row as a chart key, so `tmdb:chart:netflix-hooked` is served by the
+// same fetcher (and cache) as `tmdb:chart:netflix`.
+for (const row of STREAMING_ROW_CATALOGS) {
+  TMDB_CHART_PATHS[row.chartKey] = { movie: row.kinds.movie, tv: row.kinds.series };
+}
+
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -30477,7 +30811,8 @@ function findChartOrCollectionEntry(id, type) {
     const net = cleanId.replace(/^tmdb-chart-/, "");
     const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
                      (typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === net.replace(/[^a-z0-9]+/g, "")) : null);
-    const name = provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
+    const row = STREAMING_ROW_BY_CHART_KEY[net];
+    const name = row ? `${row.serviceName}: ${row.name}` : provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
     return { id: cleanId, name, type: reqType, url: `tmdb:chart:${net}`, enabled: true };
   }
   if (cleanId.startsWith("tmdb-kids-")) {
@@ -30608,7 +30943,7 @@ function resolveCuratedSlug(slug) {
 
 // Catalogs declared in manifest.catalogs so Nuvio and Stremio recognize that
 // app.my-list provides the sources used by collections folders and premade collections.
-function getPremadeCollectionManifestCatalogs() {
+function getPremadeCollectionManifestCatalogs(includeStreamingRows = false) {
   const list = [];
   const seen = new Set();
   function add(type, id, name) {
@@ -30686,6 +31021,15 @@ function getPremadeCollectionManifestCatalogs() {
         add("movie", catId, item.name);
         add("series", catId, item.name);
       }
+    }
+  }
+
+  // The service rows are ~250 catalogs: only the Nuvio install link (?collections=1) lists them,
+  // so they do not become 250 shelves on a Stremio home screen.
+  if (includeStreamingRows) {
+    for (const row of STREAMING_ROW_CATALOGS) {
+      if (row.kinds.movie) add("movie", row.catalogId, row.name);
+      if (row.kinds.series) add("series", row.catalogId, row.name);
     }
   }
 
@@ -36141,7 +36485,7 @@ ${appShellMobileNavHtml}
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create Collection</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
       </div>
-      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Stremio and Nuvio.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Nuvio.</p>
 
       <div class="u-mb-12px">
         <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Collection Name *</label>
@@ -36458,6 +36802,7 @@ window._CHARTS_SIMKL = ${jsonForScript(SIMKL_CHART_LISTS)};
 window._CHARTS_SIMKL_ANIME = ${jsonForScript(SIMKL_ANIME_LIST)};
 window._CHARTS_STREAMING_TOP10 = ${jsonForScript(STREAMING_TOP10)};
 window._CHARTS_STREAMING_ALL = ${jsonForScript(STREAMING_ALL)};
+window._STREAMING_ROW_CATALOGS = ${jsonForScript(STREAMING_ROW_CATALOGS.map((r) => ({ service: r.service, collection: r.collection, key: r.key, name: r.name, chartKey: r.chartKey, catalogId: r.catalogId, movie: !!r.kinds.movie, series: !!r.kinds.series })))};
 window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
@@ -36886,7 +37231,7 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header u-mb-8px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">Collections</h2>
-          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Stremio and Nuvio.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Nuvio.</p>
         </div>
         <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           ${refreshButtonHtml('refreshCollectionsView', 'Refresh collections')}
@@ -36899,11 +37244,10 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
           <h2 class="panel-title u-mb-0">Your Collection Folders</h2>
-          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Stremio and Nuvio home screen layouts.</p>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Nuvio home screen layouts.</p>
         </div>
         <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
           <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
-          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="addAllCollectionsToStremio" title="Add all collection folders as shelves into your Stremio catalogs">+ Add All to Stremio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull collections from your connected Nuvio account">Pull from Nuvio</button>
@@ -36912,7 +37256,6 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
       <div class="u-p-10px_14px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-12px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; flex-direction:column; gap:6px;">
-        <span><strong>Stremio:</strong> Stremio displays collections directly as home screen rows. Click <strong>+ Add to Catalogs</strong> or <strong>+ Add All to Stremio</strong> to add folders to your catalogs, then update in Stremio.</span>
         <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection folder and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
       </div>
       <div id="myCustomCollectionsResult"></div>
@@ -36932,12 +37275,12 @@ if ('serviceWorker' in navigator) {
       <div id="premadeCollectionsResult"></div>
     </div>
 
-    <!-- Connected Media Apps Collections (Stremio & Nuvio) -->
+    <!-- Connected Media Apps Collections (Nuvio) -->
     <div class="panel u-mt-12px" id="collectionsMediaAppsPanel">
       <div class="shelf-header u-mb-10px">
-        <h2 class="panel-title u-mb-0">Stremio &amp; Nuvio Collections</h2>
+        <h2 class="panel-title u-mb-0">Nuvio Collections</h2>
       </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Stremio and Nuvio accounts.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Nuvio account.</p>
       <div id="collectionsMediaAppsResult"></div>
     </div>
   </div>
@@ -45967,7 +46310,7 @@ const FEATURED_TMDB_COLLECTIONS = [
 
 const CUSTOM_COLLECTIONS_STORAGE_KEY = 'myListAddon:customCollections';
 
-function getPremadeCollections() {
+function getPremadeCollectionsBase() {
   return [
     {
       id: 'col_appletv',
@@ -46122,6 +46465,23 @@ function getPremadeCollections() {
       ]
     }
   ];
+}
+
+// The streaming services' own browse rows (Hooked from the First Episode, Stream & Scream ...)
+// come from STREAMING_ROWS (08_): added after each service's Top 10 and full-catalog lists.
+function getPremadeCollections() {
+  const cols = getPremadeCollectionsBase();
+  const rows = (typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const col = cols.find(function (c) { return c.id === row.collection; });
+    if (!col) continue;
+    ['movie', 'series'].forEach(function (type) {
+      if (!row[type === 'movie' ? 'movie' : 'series']) return;
+      col.lists.push({ name: row.name, url: 'tmdb:chart:' + row.chartKey, type: type, addonId: 'app.my-list', catalogId: row.catalogId });
+    });
+  }
+  return cols;
 }
 
 function loadCustomCollections() {
@@ -46604,13 +46964,6 @@ function renderCustomCollections() {
     const listCount = (col.lists && col.lists.length) || 0;
     const isExpanded = window._expandedCollectionFolders && window._expandedCollectionFolders.has(col.id);
 
-    const nl = String.fromCharCode(10);
-    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
-    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
-    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
-
     let listsPreviewHtml = '';
     if (listCount > 0) {
       listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="colFolderContent_' + escapeAttr(col.id) + '">' +
@@ -46659,8 +47012,6 @@ function renderCustomCollections() {
           (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
-          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
-            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
           '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
@@ -46700,13 +47051,6 @@ function renderPremadeCollections() {
     const listCount = (col.lists && col.lists.length) || 0;
     const isExpanded = window._expandedPremadeFolders && window._expandedPremadeFolders.has(col.id);
     const inFolders = customNames.has((col.name || '').toLowerCase());
-
-    const nl = String.fromCharCode(10);
-    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
-    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
-    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
 
     let listsPreviewHtml = '';
     if (listCount > 0) {
@@ -46754,8 +47098,6 @@ function renderPremadeCollections() {
             ? '<button type="button" class="lc-btn secondary" disabled style="opacity:0.6; cursor:default;">&#x2713; In Your Folders</button>'
             : '<button type="button" class="lc-btn primary" data-act="addPremadeToCustomCollections" data-act-args="' + appActArgs([col.id]) + '">+ Add to Your Folders</button>'
           ) +
-          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
-            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="pushSinglePremadeToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
           '<button type="button" class="lc-btn secondary" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
         '</div>' +
@@ -46859,85 +47201,6 @@ function deleteCustomCollection(id) {
     renderCustomCollections();
   }
 }
-
-function toggleCustomCollectionCatalog(id, isAdded) {
-  const collections = loadCustomCollections();
-  const col = collections.find(function (c) { return c.id === id; });
-  if (!col) return;
-  if (!col.lists || !col.lists.length) {
-    showToast('Add at least one list to "' + col.name + '" before installing to Catalogs.', 'error');
-    return;
-  }
-
-  const nl = String.fromCharCode(10);
-  const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-  const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-  const primaryUrl = movieUrls.length ? movieUrls.join(nl) : col.lists.map(function (l) { return l.url; }).join(nl);
-  const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
-
-  if (isAdded) {
-    if (movieUrls.length) removeListFromConfig(movieUrls.join(nl), 'movie');
-    if (seriesUrls.length) removeListFromConfig(seriesUrls.join(nl), 'series');
-    removeListFromConfig(primaryUrl, primaryType);
-    if (typeof showAddedToast === 'function') {
-      showAddedToast('Removed "' + col.name + '" from your Catalogs.');
-    }
-  } else {
-    if (movieUrls.length && seriesUrls.length) {
-      addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
-      addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
-    } else if (seriesUrls.length) {
-      addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
-    } else {
-      addRow(col.name, primaryUrl, 'movie', true, col.name);
-    }
-    if (typeof showAddedToast === 'function') {
-      showAddedToast('Added "' + col.name + '" to your Catalogs.');
-    }
-  }
-  renderCustomCollections();
-}
-
-function addAllCollectionsToStremio() {
-  const collections = loadCustomCollections();
-  if (!collections.length) {
-    showToast('No collection folders to add.', 'info');
-    return;
-  }
-  let addedCount = 0;
-  const nl = String.fromCharCode(10);
-  for (let i = 0; i < collections.length; i++) {
-    const col = collections[i];
-    if (!col || !col.lists || !col.lists.length) continue;
-    const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
-    if (movieUrls.length && seriesUrls.length) {
-      if (typeof addRow === 'function') {
-        addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
-        addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
-        addedCount++;
-      }
-    } else if (movieUrls.length) {
-      if (typeof addRow === 'function') {
-        addRow(col.name, movieUrls.join(nl), 'movie', true, col.name);
-        addedCount++;
-      }
-    } else if (seriesUrls.length) {
-      if (typeof addRow === 'function') {
-        addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
-        addedCount++;
-      }
-    }
-  }
-  if (typeof saveConfig === 'function') saveConfig();
-  if (typeof renderCustomCollections === 'function') renderCustomCollections();
-  if (typeof showAddedToast === 'function') {
-    showAddedToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!');
-  } else {
-    showToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!', 'success');
-  }
-}
-window.addAllCollectionsToStremio = addAllCollectionsToStremio;
 
 function extractNuvioCollections(raw) {
   let val = raw;
@@ -47663,7 +47926,7 @@ function renderCollectionsCurated() {
 function renderCollectionsMediaApps() {
   const box = document.getElementById('collectionsMediaAppsResult');
   if (!box) return;
-  const providers = ['stremio', 'nuvio'];
+  const providers = ['nuvio'];
   box.innerHTML = providers.map(function (provider) {
     const name = MEDIA_APP_UI_NAMES[provider];
     const live = !!mediaAppListsLive[provider];
@@ -90560,7 +90823,7 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1"),
         200,
         hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
@@ -120349,6 +120612,13 @@ async function nuvioGetAddons(env, accessToken, profileId) {
 async function nuvioEnsureAddonInstalled(env, accessToken, profileId, manifestUrl) {
   if (!manifestUrl) return false;
   try {
+    // ?collections=1 makes the manifest list the premade service rows (see getPremadeCollectionManifestCatalogs);
+    // a plain link is left for Stremio so those ~250 rows don't land on its home screen.
+    try {
+      const u = new URL(String(manifestUrl));
+      u.searchParams.set("collections", "1");
+      manifestUrl = u.toString();
+    } catch {}
     const addons = await nuvioGetAddons(env, accessToken, profileId);
     const mLower = String(manifestUrl).trim().toLowerCase();
     let foundIndex = -1;
