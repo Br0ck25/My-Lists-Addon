@@ -2212,6 +2212,7 @@ function toggleMediaAppListAdd(provider, slug, isAdded) {
     if (typeof showAddedToast === 'function') showAddedToast('Added "' + name + '" to your Catalogs.');
   }
   renderMediaAppLists(provider);
+  if (typeof renderCollectionsMediaApps === 'function') renderCollectionsMediaApps();
 }
 
 // info: the settings answer, or null when signed out or unavailable.
@@ -2387,6 +2388,7 @@ async function syncMediaAppNow(provider, btn) {
   mediaAppUpdateTried[provider] = Date.now();
   mediaAppListsBusy[provider] = true;
   renderMediaAppLists(provider);
+  if (typeof renderCollectionsMediaApps === 'function') renderCollectionsMediaApps();
   const r = await mediaAppUiCall(provider, 'sync', 'POST', { wait: true, force: true });
   mediaAppListsBusy[provider] = false;
   if (btn) btn.disabled = false;
@@ -3028,6 +3030,1855 @@ async function syncSingleItemToConnectedProviders(item, action) {
     }
   }
 }
+
+// --- Collections Option: Sagas, Franchises & Stremio/Nuvio Synced Catalogs -----
+
+const FEATURED_TMDB_COLLECTIONS = [
+  { id: 86311, name: "The Avengers Collection", url: "https://www.themoviedb.org/collection/86311" },
+  { id: 10, name: "Star Wars Collection", url: "https://www.themoviedb.org/collection/10" },
+  { id: 1241, name: "Harry Potter Collection", url: "https://www.themoviedb.org/collection/1241" },
+  { id: 119, name: "The Lord of the Rings Collection", url: "https://www.themoviedb.org/collection/119" },
+  { id: 263, name: "The Dark Knight Collection", url: "https://www.themoviedb.org/collection/263" },
+  { id: 645, name: "James Bond Collection", url: "https://www.themoviedb.org/collection/645" },
+  { id: 558216, name: "Spider-Man (The Movie) Collection", url: "https://www.themoviedb.org/collection/558216" },
+  { id: 9485, name: "Fast & Furious Collection", url: "https://www.themoviedb.org/collection/9485" },
+  { id: 328, name: "Jurassic Park Collection", url: "https://www.themoviedb.org/collection/328" },
+  { id: 87359, name: "Mission: Impossible Collection", url: "https://www.themoviedb.org/collection/87359" },
+  { id: 8091, name: "Alien Collection", url: "https://www.themoviedb.org/collection/8091" },
+  { id: 556, name: "Pixar Animation Collection", url: "https://www.themoviedb.org/collection/556" },
+  { id: 2150, name: "Shrek Collection", url: "https://www.themoviedb.org/collection/2150" },
+  { id: 295, name: "Pirates of the Caribbean Collection", url: "https://www.themoviedb.org/collection/295" },
+  { id: 2344, name: "The Matrix Collection", url: "https://www.themoviedb.org/collection/2344" },
+  { id: 645043, name: "John Wick Collection", url: "https://www.themoviedb.org/collection/645043" },
+];
+
+const CUSTOM_COLLECTIONS_STORAGE_KEY = 'myListAddon:customCollections';
+
+function getPremadeCollections() {
+  return [
+    {
+      id: 'col_appletv',
+      name: 'Apple TV+',
+      description: 'Apple TV+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://i.ytimg.com/vi/6sX_BfDnyrg/maxresdefault.jpg',
+      lists: [
+        { name: 'Apple TV+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today' },
+        { name: 'Apple TV+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-apple-tv-top-10-tv-shows-today' },
+        { name: 'Apple TV+', url: 'tmdb:chart:appletv', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-appletv' },
+        { name: 'Apple TV+', url: 'tmdb:chart:appletv', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-appletv' }
+      ]
+    },
+    {
+      id: 'col_disney',
+      name: 'Disney+',
+      description: 'Disney+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://static-www.adweek.com/wp-content/uploads/2024/03/disney-logo.jpeg?w=1200',
+      lists: [
+        { name: 'Disney+ Top 10', url: 'https://mdblist.com/lists/andykai/disney-top-10-no-hulu', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-andykai-disney-top-10-no-hulu' },
+        { name: 'Disney+ Top 10', url: 'https://mdblist.com/lists/andykai/disney-trending-no-hulu', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-andykai-disney-trending-no-hulu' },
+        { name: 'Disney+', url: 'tmdb:chart:disney', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-disney' },
+        { name: 'Disney+', url: 'tmdb:chart:disney', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-disney' }
+      ]
+    },
+    {
+      id: 'col_hbomax',
+      name: 'HBO Max',
+      description: 'HBO Max Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRInZVxLCd8CpYk_A80vU10wjypKNN_b1JUmTdhDj19ZlVJ2Ecz3nauXpN&s=10',
+      lists: [
+        { name: 'HBO Max Top 10', url: 'https://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q' },
+        { name: 'HBO Max Top 10', url: 'https://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-harmes7-hbo-max-top-10-series-cp45l27nhd' },
+        { name: 'HBO Max', url: 'tmdb:chart:hbomax', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-hbomax' },
+        { name: 'HBO Max', url: 'tmdb:chart:hbomax', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-hbomax' }
+      ]
+    },
+    {
+      id: 'col_hulu',
+      name: 'Hulu',
+      description: 'Hulu Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://www.thisishulu.com/app/uploads/2023/10/logo-gradient-3up.svg',
+      lists: [
+        { name: 'Hulu Top 10', url: 'https://mdblist.com/lists/hulupiv/hulu-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hulupiv-hulu-top-10-movies' },
+        { name: 'Hulu Top 10', url: 'https://mdblist.com/lists/hulupiv/hulu-top-10-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hulupiv-hulu-top-10-shows' },
+        { name: 'Hulu', url: 'tmdb:chart:hulu', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-hulu' },
+        { name: 'Hulu', url: 'tmdb:chart:hulu', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-hulu' }
+      ]
+    },
+    {
+      id: 'col_netflix',
+      name: 'Netflix',
+      description: 'Netflix Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://m.media-amazon.com/images/I/616QXs8yg0L.png',
+      lists: [
+        { name: 'Netflix Top 10', url: 'https://mdblist.com/lists/hdlists/netflix-top-10-trending-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hdlists-netflix-top-10-trending-movies' },
+        { name: 'Netflix Top 10', url: 'https://mdblist.com/lists/hdlists/netflix-top-10-trending-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hdlists-netflix-top-10-trending-shows' },
+        { name: 'Netflix', url: 'tmdb:chart:netflix', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflix' },
+        { name: 'Netflix', url: 'tmdb:chart:netflix', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflix' }
+      ]
+    },
+    {
+      id: 'col_netflixkids',
+      name: 'Netflix Kids',
+      description: 'Netflix Kids movies and shows catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://static1.squarespace.com/static/545ad6c5e4b09bbf6a29c5ee/t/5e69c67b1ce5f056432139df/1583990409924/Netflix.jpg?format=1500w',
+      lists: [
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' }
+      ]
+    },
+    {
+      id: 'col_paramount',
+      name: 'Paramount+',
+      description: 'Paramount+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://cdn.mos.cms.futurecdn.net/UFo74BuGo7FYxhAE3DrWUP.jpg',
+      lists: [
+        { name: 'Paramount+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-paramount-top-10-movies-today' },
+        { name: 'Paramount+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-paramount-top-10-tv-shows-today' },
+        { name: 'Paramount+', url: 'tmdb:chart:paramount', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-paramount' },
+        { name: 'Paramount+', url: 'tmdb:chart:paramount', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-paramount' }
+      ]
+    },
+    {
+      id: 'col_primevideo',
+      name: 'Prime Video',
+      description: 'Prime Video Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://oyster.ignimgs.com/mediawiki/apis.ign.com/prime-video/3/3b/Primevideo-seo-logo_s586.png',
+      lists: [
+        { name: 'Prime Video Top 10', url: 'https://mdblist.com/lists/diimaan/amazon-prime-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-amazon-prime-top-10-movies' },
+        { name: 'Prime Video Top 10', url: 'https://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-amazon-prime-top-10-tv-shows' },
+        { name: 'Prime Video', url: 'tmdb:chart:primevideo', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-primevideo' },
+        { name: 'Prime Video', url: 'tmdb:chart:primevideo', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-primevideo' }
+      ]
+    },
+    {
+      id: 'col_peacock',
+      name: 'Peacock',
+      description: 'Peacock Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://www.newscaststudio.com/wp-content/uploads/2026/05/original-peacock-logo.jpg',
+      lists: [
+        { name: 'Peacock Top 10', url: 'https://mdblist.com/lists/diimaan/peacock-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-peacock-top-10-movies' },
+        { name: 'Peacock Top 10', url: 'https://mdblist.com/lists/peacockpiv/peacock-top-10-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-peacockpiv-peacock-top-10-shows' },
+        { name: 'Peacock', url: 'tmdb:chart:peacock', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-peacock' },
+        { name: 'Peacock', url: 'tmdb:chart:peacock', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-peacock' }
+      ]
+    },
+    {
+      id: 'col_kids',
+      name: 'Kids',
+      description: 'Rated G, PG, PG-13 & Under and Netflix Kids',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://t3.ftcdn.net/jpg/01/83/26/74/360_F_183267411_05WWsOOcByAaAjnfzklSLS530axmLTJB.jpg',
+      lists: [
+        { name: 'Rated G & Under', url: 'tmdb:kids:g', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-g' },
+        { name: 'Rated G & Under', url: 'tmdb:kids:g', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-g' },
+        { name: 'Rated PG & Under', url: 'tmdb:kids:pg', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg' },
+        { name: 'Rated PG & Under', url: 'tmdb:kids:pg', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg' },
+        { name: 'Rated PG-13 & Under', url: 'tmdb:kids:pg13', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg13' },
+        { name: 'Rated PG-13 & Under', url: 'tmdb:kids:pg13', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg13' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' }
+      ]
+    }
+  ];
+}
+
+function loadCustomCollections() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_COLLECTIONS_STORAGE_KEY);
+    if (!raw) {
+      const premade = getPremadeCollections();
+      saveCustomCollections(premade);
+      return premade;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const premade = getPremadeCollections();
+    const premadeMap = {};
+    premade.forEach(function (p) { premadeMap[p.id] = p.coverImageUrl; });
+    let updated = false;
+    for (let i = 0; i < parsed.length; i++) {
+      const item = parsed[i];
+      if (!item) continue;
+      if (item.id === 'col_hbomax') {
+        const hboImg = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRInZVxLCd8CpYk_A80vU10wjypKNN_b1JUmTdhDj19ZlVJ2Ecz3nauXpN&s=10';
+        if (item.coverImageUrl !== hboImg) {
+          item.coverImageUrl = hboImg;
+          updated = true;
+        }
+      } else if (item.id && premadeMap[item.id] && (!item.coverImageUrl || item.coverImageUrl.indexOf('assets.nflxext.com') !== -1 || item.coverImageUrl.indexOf('images.ctfassets.net') !== -1 || item.coverImageUrl.indexOf('kXfqcdQKsToO0OUXHcrrNCHDBzO') !== -1 || (item.id === 'col_peacock' && item.coverImageUrl.indexOf('tmdb.org') !== -1))) {
+        item.coverImageUrl = premadeMap[item.id];
+        updated = true;
+      }
+      if (Array.isArray(item.lists)) {
+        for (let j = 0; j < item.lists.length; j++) {
+          const l = item.lists[j];
+          if (l && l.name) {
+            const clean = l.name.replace(/\s*\((?:movies|shows|series)\)\s*$/i, '').trim();
+            if (clean && clean !== l.name) {
+              l.name = clean;
+              updated = true;
+            }
+          }
+        }
+      }
+    }
+    if (updated) saveCustomCollections(parsed);
+    return parsed;
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomCollections(collections) {
+  try {
+    localStorage.setItem(CUSTOM_COLLECTIONS_STORAGE_KEY, JSON.stringify(collections || []));
+  } catch (e) {}
+}
+
+function loadPremadeCollectionsBtn() {
+  const current = loadCustomCollections();
+  const premade = getPremadeCollections();
+  if (!current.length) {
+    saveCustomCollections(premade);
+    renderCustomCollections();
+    renderPremadeCollections();
+    showToast('Loaded ' + premade.length + ' premade collections.', 'success');
+    return;
+  }
+  if (typeof showAppConfirm === 'function') {
+    showAppConfirm(
+      'Replace collections?',
+      'Replace your collection folders with the 10 premade collections (Apple TV+, Disney+, HBO Max, Hulu, Netflix, Netflix Kids, Paramount+, Prime Video, Peacock, Kids)? Click Replace to overwrite, or Cancel to keep your folders.',
+      'Replace',
+      function () {
+        saveCustomCollections(premade);
+        renderCustomCollections();
+        renderPremadeCollections();
+        showToast('Replaced with ' + premade.length + ' premade collections.', 'success');
+      }
+    );
+  } else {
+    addAllPremadeCollections();
+  }
+}
+
+window._collectionDraft = { id: null, name: '', description: '', lists: [] };
+window._expandedCollectionFolders = new Set();
+
+function openCreateCollectionModal(editId) {
+  const modal = document.getElementById('createCollectionModal');
+  if (!modal) return;
+
+  const existingCollections = loadCustomCollections();
+  const existing = editId ? existingCollections.find(function (c) { return c.id === editId; }) : null;
+
+  if (existing) {
+    window._collectionDraft = {
+      id: existing.id,
+      name: existing.name || '',
+      description: existing.description || '',
+      tileShape: existing.tileShape || 'LANDSCAPE',
+      hideTitle: !!existing.hideTitle,
+      addonId: existing.addonId || 'app.my-list',
+      coverImageUrl: existing.coverImageUrl || '',
+      lists: Array.isArray(existing.lists) ? JSON.parse(JSON.stringify(existing.lists)) : []
+    };
+    const titleEl = document.getElementById('createCollectionModalTitle');
+    if (titleEl) titleEl.textContent = 'Edit Collection';
+    const btnEl = document.getElementById('createCollectionModalBtn');
+    if (btnEl) btnEl.textContent = 'Save Changes';
+  } else {
+    window._collectionDraft = {
+      id: 'col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name: '',
+      description: '',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: '',
+      lists: []
+    };
+    const titleEl = document.getElementById('createCollectionModalTitle');
+    if (titleEl) titleEl.textContent = 'Create Collection';
+    const btnEl = document.getElementById('createCollectionModalBtn');
+    if (btnEl) btnEl.textContent = 'Create Collection';
+  }
+
+  const nameInput = document.getElementById('createCollectionModalName');
+  if (nameInput) nameInput.value = window._collectionDraft.name;
+  const descInput = document.getElementById('createCollectionModalDesc');
+  if (descInput) descInput.value = window._collectionDraft.description;
+  const addonInput = document.getElementById('createCollectionAddonId');
+  if (addonInput) addonInput.value = window._collectionDraft.addonId || 'app.my-list';
+  const coverInput = document.getElementById('createCollectionCoverImageUrl');
+  if (coverInput) coverInput.value = window._collectionDraft.coverImageUrl || '';
+  const tileShapeInput = document.getElementById('createCollectionTileShape');
+  if (tileShapeInput) tileShapeInput.value = window._collectionDraft.tileShape || 'LANDSCAPE';
+  const hideTitleInput = document.getElementById('createCollectionHideTitle');
+  if (hideTitleInput) hideTitleInput.checked = !!window._collectionDraft.hideTitle;
+  const urlInput = document.getElementById('createCollectionCustomListUrl');
+  if (urlInput) urlInput.value = '';
+
+  populateCollectionListPicker();
+  renderCollectionDraftLists();
+  validateCollectionModal();
+
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  if (nameInput) nameInput.focus();
+}
+
+function closeCreateCollectionModal() {
+  const modal = document.getElementById('createCollectionModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+
+function getAllWebsiteListsGrouped() {
+  const groups = {};
+
+  function addToList(groupName, name, url, type) {
+    if (!name || !url) return;
+    if (!groups[groupName]) groups[groupName] = [];
+    if (!groups[groupName].some(function (item) { return item.name === name && item.url === url && item.type === type; })) {
+      groups[groupName].push({ name: name, url: url, type: type || 'movie' });
+    }
+  }
+
+  // 1. Configured Catalogs
+  const entries = (typeof collectEntries === 'function') ? collectEntries() : [];
+  if (entries.length) {
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (e && e.name && e.url) {
+        addToList('Your Catalogs', e.name, e.url, e.type || 'movie');
+      }
+    }
+  }
+
+  // 2. Custom Lists
+  const localCustom = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
+  const customSlugs = Object.keys(localCustom);
+  if (customSlugs.length) {
+    for (let i = 0; i < customSlugs.length; i++) {
+      const slug = customSlugs[i];
+      const cl = localCustom[slug];
+      if (cl && cl.name) {
+        const url = 'customlist:v1:' + JSON.stringify({ listId: cl.listId || slug, type: cl.type || 'movie', items: cl.items || [] });
+        addToList('Your Custom Lists', cl.name, url, cl.type || 'movie');
+      }
+    }
+  }
+
+  // 3. Curated Recommendations
+  if (typeof CURATED_LIST_ENTRIES !== 'undefined' && Array.isArray(CURATED_LIST_ENTRIES)) {
+    for (let i = 0; i < CURATED_LIST_ENTRIES.length; i++) {
+      const c = CURATED_LIST_ENTRIES[i];
+      if (c && c.name && c.slug) {
+        addToList('Curated Recommendations', c.name, 'custom:curated:' + c.slug, c.type || 'movie');
+      }
+    }
+  }
+
+  // 4. Connected App Lists (Stremio & Nuvio)
+  const providers = ['stremio', 'nuvio'];
+  for (let p = 0; p < providers.length; p++) {
+    const prov = providers[p];
+    const provName = (typeof MEDIA_APP_UI_NAMES !== 'undefined' && MEDIA_APP_UI_NAMES[prov]) || (prov === 'stremio' ? 'Stremio' : 'Nuvio');
+    if (typeof mediaAppListsLive !== 'undefined' && mediaAppListsLive[prov]) {
+      if (typeof MEDIA_APP_LISTS !== 'undefined' && Array.isArray(MEDIA_APP_LISTS)) {
+        for (let m = 0; m < MEDIA_APP_LISTS.length; m++) {
+          const l = MEDIA_APP_LISTS[m];
+          if (typeof mediaAppListUrls === 'function') {
+            const urls = mediaAppListUrls(prov, l.slug);
+            if (urls) {
+              addToList('Connected Apps (' + provName + ')', provName + ' ' + l.title + ' (Movies)', urls.movie, 'movie');
+              addToList('Connected Apps (' + provName + ')', provName + ' ' + l.title + ' (Shows)', urls.series, 'series');
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 5. Official Charts & Provider Lists (CHART_SLUG_ENTRIES)
+  if (typeof CHART_SLUG_ENTRIES !== 'undefined' && Array.isArray(CHART_SLUG_ENTRIES)) {
+    for (let i = 0; i < CHART_SLUG_ENTRIES.length; i++) {
+      const e = CHART_SLUG_ENTRIES[i];
+      if (!e || !e.name) continue;
+
+      let groupName = 'Official Charts';
+      const n = e.name;
+      const mUrl = e.movieUrl || e.url || '';
+      const sUrl = e.showUrl || e.url || '';
+
+      if (n.indexOf('Most Watched') !== -1 || n === 'New on Streaming') {
+        groupName = 'My Lists Addon Charts';
+      } else if (n === 'Popular' || n === 'Trending' || n.indexOf('All Services') !== -1) {
+        groupName = 'Combined Charts';
+      } else if (n.indexOf('TMDB') !== -1 || n === 'New Releases') {
+        groupName = 'TMDB Official Charts';
+      } else if (n.indexOf('Trakt') !== -1) {
+        groupName = 'Trakt Official Charts';
+      } else if (n.indexOf('MDBList') !== -1 || n.indexOf('MovieMeter') !== -1 || n.indexOf('Streaming Charts') !== -1) {
+        groupName = 'MDBList Official Charts';
+      } else if (n.indexOf('Simkl') !== -1) {
+        groupName = 'Simkl Charts';
+      } else if (mUrl.indexOf('top-10') !== -1 || sUrl.indexOf('top-10') !== -1) {
+        groupName = 'Streaming Top 10';
+      } else if (mUrl.indexOf('tmdb:chart:') !== -1) {
+        groupName = 'Streaming Catalogs';
+      } else if (mUrl.indexOf('tmdb:genre:') !== -1) {
+        groupName = 'Genre Catalogs';
+      } else if (mUrl.indexOf('tmdb:kids:') !== -1) {
+        groupName = 'Kids & Family';
+      } else if (mUrl.indexOf('tmdb:holiday:') !== -1) {
+        groupName = 'Holiday Specials';
+      } else if (n.indexOf('Hidden Gems') !== -1) {
+        groupName = 'Curated Recommendations';
+      }
+
+      if (mUrl && sUrl && mUrl !== sUrl) {
+        addToList(groupName, n + ' (Movies)', mUrl, 'movie');
+        addToList(groupName, n + ' (Shows)', sUrl, 'series');
+      } else if (mUrl && sUrl && mUrl === sUrl) {
+        if (mUrl.indexOf('movie') !== -1) {
+          addToList(groupName, n, mUrl, 'movie');
+        } else if (mUrl.indexOf('show') !== -1 || mUrl.indexOf('series') !== -1 || mUrl.indexOf('anime') !== -1) {
+          addToList(groupName, n, sUrl, 'series');
+        } else {
+          addToList(groupName, n + ' (Movies)', mUrl, 'movie');
+          addToList(groupName, n + ' (Shows)', sUrl, 'series');
+        }
+      } else if (mUrl) {
+        addToList(groupName, n, mUrl, 'movie');
+      } else if (sUrl) {
+        addToList(groupName, n, sUrl, 'series');
+      }
+    }
+  }
+
+  return groups;
+}
+
+function populateCollectionListPicker() {
+  const sel = document.getElementById('createCollectionListPicker');
+  if (!sel) return;
+  let html = '<option value="">-- Pick from website lists --</option>';
+
+  const grouped = getAllWebsiteListsGrouped();
+  const groupOrder = [
+    'Your Catalogs',
+    'Your Custom Lists',
+    'Curated Recommendations',
+    'My Lists Addon Charts',
+    'Combined Charts',
+    'TMDB Official Charts',
+    'Trakt Official Charts',
+    'MDBList Official Charts',
+    'Simkl Charts',
+    'Streaming Top 10',
+    'Streaming Catalogs',
+    'Genre Catalogs',
+    'Kids & Family',
+    'Holiday Specials',
+    'Connected Apps (Stremio)',
+    'Connected Apps (Nuvio)'
+  ];
+
+  const renderedGroups = new Set();
+  for (let g = 0; g < groupOrder.length; g++) {
+    const gName = groupOrder[g];
+    if (grouped[gName] && grouped[gName].length) {
+      renderedGroups.add(gName);
+      html += '<optgroup label="' + escapeAttr(gName) + '">';
+      for (let i = 0; i < grouped[gName].length; i++) {
+        const item = grouped[gName][i];
+        html += '<option value="' + escapeAttr(JSON.stringify(item)) + '">' + escapeHtml(item.name) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+  }
+
+  const allGroupNames = Object.keys(grouped);
+  for (let k = 0; k < allGroupNames.length; k++) {
+    const gName = allGroupNames[k];
+    if (!renderedGroups.has(gName) && grouped[gName].length) {
+      html += '<optgroup label="' + escapeAttr(gName) + '">';
+      for (let i = 0; i < grouped[gName].length; i++) {
+        const item = grouped[gName][i];
+        html += '<option value="' + escapeAttr(JSON.stringify(item)) + '">' + escapeHtml(item.name) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+  }
+
+  sel.innerHTML = html;
+}
+
+function addPickerListToCollectionDraft() {
+  const sel = document.getElementById('createCollectionListPicker');
+  if (!sel || !sel.value) return;
+  try {
+    const item = JSON.parse(sel.value);
+    if (!item || !item.url) return;
+    if (!window._collectionDraft.lists) window._collectionDraft.lists = [];
+    const exists = window._collectionDraft.lists.some(function (l) { return l.url === item.url; });
+    if (exists) {
+      showToast('This list is already in the collection.', 'info');
+      return;
+    }
+    window._collectionDraft.lists.push(item);
+    renderCollectionDraftLists();
+    validateCollectionModal();
+  } catch (e) {}
+}
+
+function addUrlListToCollectionDraft() {
+  const input = document.getElementById('createCollectionCustomListUrl');
+  if (!input) return;
+  const rawUrl = input.value.trim();
+  if (!rawUrl) {
+    showToast('Enter a list URL first.', 'error');
+    return;
+  }
+  const name = (typeof guessNameFromUrl === 'function' ? guessNameFromUrl(rawUrl) : '') || 'Imported List';
+  const type = (rawUrl.indexOf('series') !== -1 || rawUrl.indexOf('shows') !== -1) ? 'series' : 'movie';
+  if (!window._collectionDraft.lists) window._collectionDraft.lists = [];
+  const exists = window._collectionDraft.lists.some(function (l) { return l.url === rawUrl; });
+  if (exists) {
+    showToast('This list is already in the collection.', 'info');
+    return;
+  }
+  window._collectionDraft.lists.push({ name: name, url: rawUrl, type: type });
+  input.value = '';
+  renderCollectionDraftLists();
+  validateCollectionModal();
+}
+
+function removeListFromCollectionDraft(index) {
+  if (!window._collectionDraft || !window._collectionDraft.lists) return;
+  window._collectionDraft.lists.splice(index, 1);
+  renderCollectionDraftLists();
+  validateCollectionModal();
+}
+
+function renderCollectionDraftLists() {
+  const container = document.getElementById('collectionDraftListsContainer');
+  const countEl = document.getElementById('collectionDraftCount');
+  if (!container) return;
+  const lists = (window._collectionDraft && window._collectionDraft.lists) || [];
+  if (countEl) countEl.textContent = String(lists.length);
+
+  if (!lists.length) {
+    container.innerHTML = '<p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this collection folder yet.</p>';
+    return;
+  }
+
+  container.innerHTML = lists.map(function (item, idx) {
+    return '<div class="u-ai-center u-jc-space_between u-gap-8px u-p-4px_8px u-mb-4px u-br-v_radius_xs u-bg-v_surface u-bd-1px_solid_v_border" style="display:flex;">' +
+      '<div class="u-minw-0 u-flex-1">' +
+        '<div class="u-fw-600 u-fs-v_font_size_xs u-c-v_text u-to-ellipsis u-ws-nowrap u-ov-hidden">' + escapeHtml(item.name || 'Unnamed List') + '</div>' +
+        '<div class="u-fs-v_font_size_xxs u-c-v_muted u-to-ellipsis u-ws-nowrap u-ov-hidden">' + escapeHtml(item.url || '') + '</div>' +
+      '</div>' +
+      '<button type="button" class="lc-btn btn-ghost u-p-2px_6px u-fs-v_font_size_xs" aria-label="Remove ' + escapeAttr(item.name) + '" data-act="removeListFromCollectionDraft" data-act-args="' + appActArgs([idx]) + '">&#x2715;</button>' +
+    '</div>';
+  }).join('');
+}
+
+function validateCollectionModal() {
+  const nameInput = document.getElementById('createCollectionModalName');
+  const btn = document.getElementById('createCollectionModalBtn');
+  if (!btn) return;
+  const name = nameInput ? nameInput.value.trim() : '';
+  const valid = !!name;
+  btn.disabled = !valid;
+  btn.style.opacity = valid ? '1' : '0.5';
+}
+
+function submitCreateCollectionModal() {
+  const nameInput = document.getElementById('createCollectionModalName');
+  const descInput = document.getElementById('createCollectionModalDesc');
+  const coverInput = document.getElementById('createCollectionCoverImageUrl');
+  const tileShapeInput = document.getElementById('createCollectionTileShape');
+  const hideTitleInput = document.getElementById('createCollectionHideTitle');
+
+  const name = nameInput ? nameInput.value.trim() : '';
+  if (!name) {
+    showToast('Name this collection first.', 'error');
+    return;
+  }
+  const desc = descInput ? descInput.value.trim() : '';
+  const addonInput = document.getElementById('createCollectionAddonId');
+  const addonId = (addonInput ? addonInput.value.trim() : '') || 'app.my-list';
+  const coverImageUrl = coverInput ? coverInput.value.trim() : '';
+  const tileShape = tileShapeInput ? tileShapeInput.value : 'LANDSCAPE';
+  const hideTitle = hideTitleInput ? hideTitleInput.checked : false;
+
+  const collections = loadCustomCollections();
+  const id = window._collectionDraft.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7));
+
+  const existingIdx = collections.findIndex(function (c) { return c.id === id; });
+  const entry = {
+    id: id,
+    name: name,
+    description: desc,
+    addonId: addonId,
+    tileShape: tileShape,
+    hideTitle: hideTitle,
+    coverImageUrl: coverImageUrl,
+    lists: window._collectionDraft.lists || [],
+    updatedAt: Date.now()
+  };
+
+  if (existingIdx !== -1) {
+    collections[existingIdx] = entry;
+  } else {
+    entry.createdAt = Date.now();
+    collections.unshift(entry);
+  }
+
+  saveCustomCollections(collections);
+  closeCreateCollectionModal();
+  showToast('Collection "' + name + '" saved.', 'success');
+  renderCustomCollections();
+}
+
+function renderCustomCollections() {
+  const box = document.getElementById('myCustomCollectionsResult');
+  if (!box) return;
+  const collections = loadCustomCollections();
+
+  if (!collections.length) {
+    box.innerHTML = '<div class="u-p-16px u-ta-center u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">No collection folders created yet. Create folders with multiple lists inside to easily manage and install them together in Stremio and Nuvio.</p>' +
+      '<button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Your First Collection</button>' +
+    '</div>';
+    return;
+  }
+
+  box.innerHTML = collections.map(function (col) {
+    const listCount = (col.lists && col.lists.length) || 0;
+    const isExpanded = window._expandedCollectionFolders && window._expandedCollectionFolders.has(col.id);
+
+    const nl = String.fromCharCode(10);
+    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
+    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
+    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
+
+    let listsPreviewHtml = '';
+    if (listCount > 0) {
+      listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="colFolderContent_' + escapeAttr(col.id) + '">' +
+        '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-8px u-tt-uppercase">Lists inside this folder:</div>' +
+        col.lists.map(function (l, lidx) {
+          const lType = l.type || 'movie';
+          const listName = l.name || 'Unnamed List';
+          return '<div class="list-card u-mb-8px" data-url="' + escapeAttr(l.url || '') + '">' +
+            '<div class="list-card-header">' +
+              '<div class="list-card-body">' +
+                '<div class="u-ai-center u-gap-8px" style="display:flex; flex-wrap:wrap;">' +
+                  '<span class="list-card-title">' + escapeHtml(listName) + '</span>' +
+                  '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(lType) + '</span>' +
+                '</div>' +
+                '<div class="list-card-meta">' +
+                  '<span class="u-fs-v_font_size_xs u-c-v_muted">' + escapeHtml(l.url || '') + '</span>' +
+                '</div>' +
+              '</div>' +
+              '<div class="list-card-actions">' +
+                '<button type="button" class="lc-btn btn-ghost u-p-4px_8px u-fs-v_font_size_xs" title="Remove from collection" aria-label="Remove ' + escapeAttr(listName) + '" data-act="removeListFromSavedCollection" data-act-args="' + appActArgs([col.id, lidx]) + '">&#x2715;</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(lType) + '"></div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    const shapeLabel = col.tileShape || 'LANDSCAPE';
+    const hasCover = !!col.coverImageUrl;
+    const coverHtml = hasCover
+      ? '<img src="' + escapeAttr(col.coverImageUrl) + '" alt="' + escapeAttr(col.name) + '" style="width:100px; height:56px; object-fit:cover; border-radius:var(--radius-xs); border:1px solid var(--border); flex-shrink:0;">'
+      : '';
+
+    return '<div class="list-card" data-collection-id="' + escapeAttr(col.id) + '" style="flex-direction:column; align-items:stretch;">' +
+      '<div class="list-card-header">' +
+        (coverHtml ? '<div class="u-mr-10px">' + coverHtml + '</div>' : '') +
+        '<div class="list-card-body">' +
+          '<div class="u-ai-center u-gap-8px u-mb-4px" style="display:flex; flex-wrap:wrap;">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px; color:var(--accent); flex-shrink:0;" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>' +
+            '<span class="list-card-title u-cur-pointer" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + escapeHtml(col.name) + '</span>' +
+            '<span class="u-fs-v_font_size_xs u-p-2px_8px u-br-v_radius_pill u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-bd-1px_solid_v_border">' + listCount + (listCount === 1 ? ' list' : ' lists') + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(shapeLabel) + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border" title="Target Add-on ID in Nuvio">Addon: ' + escapeHtml(col.addonId || 'app.my-list') + '</span>' +
+          '</div>' +
+          (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
+        '</div>' +
+        '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn btn-danger secondary" data-act="deleteCustomCollection" data-act-args="' + appActArgs([col.id]) + '">Delete</button>' +
+        '</div>' +
+      '</div>' +
+      listsPreviewHtml +
+    '</div>';
+  }).join('');
+
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function toggleCustomCollectionFolder(id) {
+  if (!window._expandedCollectionFolders) window._expandedCollectionFolders = new Set();
+  if (window._expandedCollectionFolders.has(id)) {
+    window._expandedCollectionFolders.delete(id);
+  } else {
+    window._expandedCollectionFolders.add(id);
+  }
+  renderCustomCollections();
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function renderPremadeCollections() {
+  const box = document.getElementById('premadeCollectionsResult');
+  if (!box) return;
+  const premade = getPremadeCollections();
+  const custom = loadCustomCollections();
+  const customNames = new Set(custom.map(function (c) { return (c.name || '').toLowerCase(); }));
+
+  box.innerHTML = premade.map(function (col) {
+    const listCount = (col.lists && col.lists.length) || 0;
+    const isExpanded = window._expandedPremadeFolders && window._expandedPremadeFolders.has(col.id);
+    const inFolders = customNames.has((col.name || '').toLowerCase());
+
+    const nl = String.fromCharCode(10);
+    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
+    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
+    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
+
+    let listsPreviewHtml = '';
+    if (listCount > 0) {
+      listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="premadeFolderContent_' + escapeAttr(col.id) + '">' +
+        '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-8px u-tt-uppercase">Lists inside this folder:</div>' +
+        col.lists.map(function (l) {
+          const lType = l.type || 'movie';
+          const listName = l.name || 'Unnamed List';
+          return '<div class="list-card u-mb-8px" data-url="' + escapeAttr(l.url || '') + '">' +
+            '<div class="list-card-header">' +
+              '<div class="list-card-body">' +
+                '<div class="u-ai-center u-gap-8px" style="display:flex; flex-wrap:wrap;">' +
+                  '<span class="list-card-title">' + escapeHtml(listName) + '</span>' +
+                  '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(lType) + '</span>' +
+                '</div>' +
+                '<div class="list-card-meta">' +
+                  '<span class="u-fs-v_font_size_xs u-c-v_muted">' + escapeHtml(l.url || '') + '</span>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(lType) + '"></div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    const hasCover = !!col.coverImageUrl;
+    const coverHtml = hasCover
+      ? '<img src="' + escapeAttr(col.coverImageUrl) + '" alt="' + escapeAttr(col.name) + '" style="width:100px; height:56px; object-fit:cover; border-radius:var(--radius-xs); border:1px solid var(--border); flex-shrink:0;">'
+      : '';
+
+    return '<div class="list-card" data-premade-id="' + escapeAttr(col.id) + '" style="flex-direction:column; align-items:stretch;">' +
+      '<div class="list-card-header">' +
+        (coverHtml ? '<div class="u-mr-10px">' + coverHtml + '</div>' : '') +
+        '<div class="list-card-body">' +
+          '<div class="u-ai-center u-gap-8px u-mb-4px" style="display:flex; flex-wrap:wrap;">' +
+            '<span class="list-card-title u-cur-pointer" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + escapeHtml(col.name) + '</span>' +
+            '<span class="u-fs-v_font_size_xs u-p-2px_8px u-br-v_radius_pill u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-bd-1px_solid_v_border">' + listCount + (listCount === 1 ? ' list' : ' lists') + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(col.tileShape || 'LANDSCAPE') + '</span>' +
+          '</div>' +
+          (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
+        '</div>' +
+        '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
+          (inFolders
+            ? '<button type="button" class="lc-btn secondary" disabled style="opacity:0.6; cursor:default;">&#x2713; In Your Folders</button>'
+            : '<button type="button" class="lc-btn primary" data-act="addPremadeToCustomCollections" data-act-args="' + appActArgs([col.id]) + '">+ Add to Your Folders</button>'
+          ) +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="pushSinglePremadeToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
+        '</div>' +
+      '</div>' +
+      listsPreviewHtml +
+    '</div>';
+  }).join('');
+
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function togglePremadeFolder(id) {
+  if (!window._expandedPremadeFolders) window._expandedPremadeFolders = new Set();
+  if (window._expandedPremadeFolders.has(id)) {
+    window._expandedPremadeFolders.delete(id);
+  } else {
+    window._expandedPremadeFolders.add(id);
+  }
+  renderPremadeCollections();
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function addPremadeToCustomCollections(premadeId) {
+  const premade = getPremadeCollections();
+  const target = premade.find(function (p) { return p.id === premadeId; });
+  if (!target) return;
+  const current = loadCustomCollections();
+  const exists = current.some(function (c) { return (c.name || '').toLowerCase() === target.name.toLowerCase(); });
+  if (exists) {
+    showToast('"' + target.name + '" is already in your collection folders.', 'info');
+    return;
+  }
+  current.push(JSON.parse(JSON.stringify(target)));
+  saveCustomCollections(current);
+  renderCustomCollections();
+  renderPremadeCollections();
+  showToast('Added "' + target.name + '" to your collection folders.', 'success');
+}
+
+function addAllPremadeCollections() {
+  const current = loadCustomCollections();
+  const premade = getPremadeCollections();
+  const existingNames = new Set(current.map(function (c) { return (c.name || '').toLowerCase(); }));
+  let added = 0;
+  premade.forEach(function (p) {
+    if (!existingNames.has((p.name || '').toLowerCase())) {
+      current.push(JSON.parse(JSON.stringify(p)));
+      added++;
+    }
+  });
+  if (added > 0) {
+    saveCustomCollections(current);
+    renderCustomCollections();
+    renderPremadeCollections();
+    showToast('Added ' + added + ' premade collection(s) to your folders.', 'success');
+  } else {
+    showToast('All premade collections are already in your folders.', 'info');
+  }
+}
+
+function pushSinglePremadeToNuvio(colId) {
+  openSyncNuvioModal(colId);
+}
+
+function removeListFromSavedCollection(colId, listIdx) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === colId; });
+  if (!col || !Array.isArray(col.lists)) return;
+  col.lists.splice(listIdx, 1);
+  saveCustomCollections(collections);
+  showToast('List removed from collection.', 'success');
+  renderCustomCollections();
+}
+
+function deleteCustomCollection(id) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === id; });
+  const name = col ? col.name : 'this collection';
+  if (typeof appShellDialog === 'function') {
+    appShellDialog({
+      title: 'Delete "' + name + '"?',
+      message: 'This will delete the collection folder. The underlying lists will not be affected.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep'
+    }).then(function (confirmed) {
+      if (confirmed) {
+        const next = collections.filter(function (c) { return c.id !== id; });
+        saveCustomCollections(next);
+        showToast('Deleted "' + name + '".', 'success');
+        renderCustomCollections();
+      }
+    });
+  } else {
+    const next = collections.filter(function (c) { return c.id !== id; });
+    saveCustomCollections(next);
+    showToast('Deleted "' + name + '".', 'success');
+    renderCustomCollections();
+  }
+}
+
+function toggleCustomCollectionCatalog(id, isAdded) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === id; });
+  if (!col) return;
+  if (!col.lists || !col.lists.length) {
+    showToast('Add at least one list to "' + col.name + '" before installing to Catalogs.', 'error');
+    return;
+  }
+
+  const nl = String.fromCharCode(10);
+  const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+  const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+  const primaryUrl = movieUrls.length ? movieUrls.join(nl) : col.lists.map(function (l) { return l.url; }).join(nl);
+  const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
+
+  if (isAdded) {
+    if (movieUrls.length) removeListFromConfig(movieUrls.join(nl), 'movie');
+    if (seriesUrls.length) removeListFromConfig(seriesUrls.join(nl), 'series');
+    removeListFromConfig(primaryUrl, primaryType);
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Removed "' + col.name + '" from your Catalogs.');
+    }
+  } else {
+    if (movieUrls.length && seriesUrls.length) {
+      addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
+      addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
+    } else if (seriesUrls.length) {
+      addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
+    } else {
+      addRow(col.name, primaryUrl, 'movie', true, col.name);
+    }
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Added "' + col.name + '" to your Catalogs.');
+    }
+  }
+  renderCustomCollections();
+}
+
+function addAllCollectionsToStremio() {
+  const collections = loadCustomCollections();
+  if (!collections.length) {
+    showToast('No collection folders to add.', 'info');
+    return;
+  }
+  let addedCount = 0;
+  const nl = String.fromCharCode(10);
+  for (let i = 0; i < collections.length; i++) {
+    const col = collections[i];
+    if (!col || !col.lists || !col.lists.length) continue;
+    const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    if (movieUrls.length && seriesUrls.length) {
+      if (typeof addRow === 'function') {
+        addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
+        addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
+        addedCount++;
+      }
+    } else if (movieUrls.length) {
+      if (typeof addRow === 'function') {
+        addRow(col.name, movieUrls.join(nl), 'movie', true, col.name);
+        addedCount++;
+      }
+    } else if (seriesUrls.length) {
+      if (typeof addRow === 'function') {
+        addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
+        addedCount++;
+      }
+    }
+  }
+  if (typeof saveConfig === 'function') saveConfig();
+  if (typeof renderCustomCollections === 'function') renderCustomCollections();
+  if (typeof showAddedToast === 'function') {
+    showAddedToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!');
+  } else {
+    showToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!', 'success');
+  }
+}
+window.addAllCollectionsToStremio = addAllCollectionsToStremio;
+
+function extractNuvioCollections(raw) {
+  let val = raw;
+  if (typeof val === 'string') {
+    try { val = JSON.parse(val); } catch (e) { return []; }
+  }
+  if (!val) return [];
+  if (val.collections_json != null) return extractNuvioCollections(val.collections_json);
+  if (val.p_collections_json != null) return extractNuvioCollections(val.p_collections_json);
+  if (val.collections != null) return extractNuvioCollections(val.collections);
+  if (val.p_collections != null) return extractNuvioCollections(val.p_collections);
+  if (val.data != null) return extractNuvioCollections(val.data);
+  if (Array.isArray(val)) {
+    const out = [];
+    for (let i = 0; i < val.length; i++) {
+      const item = val[i];
+      if (!item) continue;
+      if (item.collections_json != null) {
+        out.push.apply(out, extractNuvioCollections(item.collections_json));
+      } else if (item.p_collections_json != null) {
+        out.push.apply(out, extractNuvioCollections(item.p_collections_json));
+      } else if (item.collections != null) {
+        out.push.apply(out, extractNuvioCollections(item.collections));
+      } else if (item.p_collections != null) {
+        out.push.apply(out, extractNuvioCollections(item.p_collections));
+      } else if (item.data != null) {
+        out.push.apply(out, extractNuvioCollections(item.data));
+      } else {
+        const itemTitle = String(item.title || item.name || '').trim();
+        const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
+        const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
+        if (itemTitle || hasFolders || hasSources) {
+          out.push(item);
+        }
+      }
+    }
+    return out;
+  }
+  if (typeof val === 'object') {
+    const valTitle = String(val.title || val.name || '').trim();
+    const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
+    const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
+    if (valTitle || hasFolders || hasSources) {
+      return [val];
+    }
+  }
+  return [];
+}
+
+function stripMediaSuffix(str) {
+  if (!str) return '';
+  const re = /[ \t]*[(](?:movies?|shows?|series|tv)[)][ \t]*$/ig;
+  return String(str).replace(re, '').replace(re, '').trim();
+}
+
+function addNewNuvioCollection(existing, incoming, options) {
+  const opts = options || {};
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  // Clean existing collections: filter out empty stubs (0 folders & 0 sources)
+  const cleanedExisting = existingArr.filter(function (c) {
+    if (!c) return false;
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    return cFolders.length > 0 || cSources.length > 0;
+  });
+
+  if (!incomingArr.length) return cleanedExisting;
+
+  const newCols = incomingArr.map(function (inCol) {
+    const rawName = opts.collectionName || inCol.title || inCol.name || 'My Lists Collections';
+    const colName = stripMediaSuffix(rawName) || 'My Lists Collections';
+    const colId = inCol.id && !cleanedExisting.some(function (e) { return e.id === inCol.id; })
+      ? inCol.id
+      : 'col_mylists_' + Math.random().toString(36).slice(2, 8);
+
+    const cleanFolders = (Array.isArray(inCol.folders) ? inCol.folders : [inCol]).map(function (inF) {
+      const cleanF = Object.assign({}, inF, {
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      });
+      if (Array.isArray(cleanF.catalogSources)) {
+        cleanF.catalogSources = cleanF.catalogSources.map(function (cs) {
+          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
+          cName = stripMediaSuffix(cName);
+          return Object.assign({}, cs, {
+            name: cName,
+            title: cName
+          });
+        });
+      }
+      return cleanF;
+    });
+
+    return Object.assign({}, inCol, {
+      id: colId,
+      title: colName,
+      name: colName,
+      viewMode: inCol.viewMode || 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cleanFolders
+    });
+  });
+
+  return cleanedExisting.concat(newCols);
+}
+
+function mergeNuvioCollections(existing, incoming) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  if (!existingArr.length) return incomingArr;
+  if (!incomingArr.length) return existingArr;
+
+  // Preserve all collections from other providers / community templates 100% untouched
+  const otherCollections = [];
+  let myListsCol = null;
+
+  for (let i = 0; i < existingArr.length; i++) {
+    const c = existingArr[i];
+    if (!c) continue;
+    const cTitle = String(c.title || c.name || '').trim();
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    if (cFolders.length === 0 && cSources.length === 0) {
+      // Discard empty/corrupted DB stubs (e.g. 8467ec44-2731-4b0f-a8b5-48e42d215150 with 0 folders)
+      continue;
+    }
+
+    const isMyLists = (c.id && (c.id === 'my-lists-collections' || c.id === 'my-lists-addon')) ||
+                      (cTitle && (cTitle.toLowerCase() === 'my lists collections' || cTitle.toLowerCase() === 'my lists addon' || cTitle.toLowerCase() === 'my lists'));
+    if (isMyLists) {
+      if (!myListsCol) {
+        myListsCol = JSON.parse(JSON.stringify(c));
+      } else if (cFolders.length > 0) {
+        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+        myListsCol.folders.push.apply(myListsCol.folders, JSON.parse(JSON.stringify(cFolders)));
+      }
+    } else {
+      otherCollections.push(JSON.parse(JSON.stringify(c)));
+    }
+  }
+
+  if (!myListsCol) {
+    myListsCol = {
+      id: 'my-lists-collections',
+      title: 'My Lists Collections',
+      name: 'My Lists Collections',
+      viewMode: 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: []
+    };
+  } else {
+    myListsCol.id = 'my-lists-collections';
+    myListsCol.title = 'My Lists Collections';
+    myListsCol.name = 'My Lists Collections';
+    myListsCol.hidden = false;
+    myListsCol.isVisible = true;
+    myListsCol.enabled = true;
+    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+  }
+
+  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
+  for (let i = 0; i < incomingArr.length; i++) {
+    const inCol = incomingArr[i];
+    if (!inCol) continue;
+    const inTitle = String(inCol.title || inCol.name || '').trim();
+    const isIncomingMyLists = (inCol.id && (inCol.id === 'my-lists-collections' || inCol.id === 'my-lists-addon')) ||
+                             (inTitle && (inTitle.toLowerCase() === 'my lists collections' || inTitle.toLowerCase() === 'my lists addon' || inTitle.toLowerCase() === 'my lists'));
+
+    if (inCol.id && !isIncomingMyLists) {
+      const existingOtherIdx = otherCollections.findIndex(function (oc) { return oc.id === inCol.id; });
+      if (existingOtherIdx !== -1) {
+        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
+        continue;
+      }
+    }
+
+    // Folders intended for My Lists Collections
+    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
+    for (let j = 0; j < foldersToMerge.length; j++) {
+      const inF = foldersToMerge[j];
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = Object.assign({}, inF, {
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      });
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map(function (cs) {
+          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
+          cName = stripMediaSuffix(cName);
+          return Object.assign({}, cs, {
+            name: cName,
+            title: cName
+          });
+        });
+      }
+      const fIdx = myListsCol.folders.findIndex(function (f) {
+        return (f.id && inF.id && f.id === inF.id) ||
+               (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
+               (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase());
+      });
+      if (fIdx !== -1) {
+        myListsCol.folders[fIdx] = Object.assign({}, myListsCol.folders[fIdx], cleanFolder);
+      } else {
+        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
+      }
+    }
+  }
+
+  return otherCollections.concat([myListsCol]);
+}
+
+function buildNuvioCollectionsPayload(collections) {
+  const cols = collections || loadCustomCollections();
+  return [
+    {
+      id: 'my-lists-collections',
+      title: 'My Lists Collections',
+      name: 'My Lists Collections',
+      viewMode: 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cols.map(function (col) {
+        return {
+          id: col.id || ('folder_' + Math.random().toString(36).slice(2, 8)),
+          title: col.name || 'Untitled Folder',
+          name: col.name || 'Untitled Folder',
+          tileShape: col.tileShape || 'LANDSCAPE',
+          hideTitle: !!col.hideTitle,
+          coverImageUrl: col.coverImageUrl || '',
+          hidden: false,
+          isVisible: true,
+          enabled: true,
+          catalogSources: (col.lists || []).map(function (l) {
+            let catId = l.catalogId;
+            if (!catId) {
+              if (l.url && typeof slugify === 'function') catId = slugify(l.url);
+              else if (l.name && typeof slugify === 'function') catId = slugify(l.name);
+              else catId = l.name || 'catalog';
+            }
+            let cleanName = stripMediaSuffix(l.name || catId);
+            return {
+              addonId: l.addonId || col.addonId || 'app.my-list',
+              catalogId: catId,
+              name: cleanName || catId,
+              title: cleanName || catId,
+              type: l.type || 'movie'
+            };
+          })
+        };
+      })
+    }
+  ];
+}
+
+function getNuvioManifestUrl() {
+  const display = document.getElementById('manifestLinkDisplay');
+  const txt = (display && display.innerText) ? display.innerText.trim() : '';
+  if (txt && (txt.startsWith('http://') || txt.startsWith('https://'))) return txt;
+  try {
+    const saved = localStorage.getItem('myListAddon:lastInstallUrl');
+    if (saved && (saved.startsWith('http://') || saved.startsWith('https://'))) return saved;
+  } catch (e) {}
+  if (window.myListAddonManifestUrl && (window.myListAddonManifestUrl.startsWith('http://') || window.myListAddonManifestUrl.startsWith('https://'))) {
+    return window.myListAddonManifestUrl;
+  }
+  return (window.location && window.location.origin ? window.location.origin : 'https://mylistsaddon.com') + '/manifest.json';
+}
+window.getNuvioManifestUrl = getNuvioManifestUrl;
+
+async function openSyncNuvioModal(targetColId) {
+  window._syncNuvioTarget = targetColId || null;
+  const modal = document.getElementById('syncNuvioModal');
+  if (!modal) {
+    executeNuvioCollectionsPush({ targetColId: targetColId });
+    return;
+  }
+
+  const titleEl = document.getElementById('syncNuvioModalTitle');
+  if (titleEl) {
+    titleEl.textContent = 'Add to Profile';
+  }
+
+  const sel = document.getElementById('syncNuvioProfileSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="1">James</option>';
+  }
+
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  if (modeSel) {
+    modeSel.value = 'new';
+  }
+  handleSyncNuvioModeChange();
+
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
+
+  try {
+    const res = await mediaAppUiCall('nuvio', 'settings', 'GET');
+    if (res && res.ok && res.data && Array.isArray(res.data.profiles) && res.data.profiles.length > 0) {
+      if (sel) {
+        sel.innerHTML = res.data.profiles.map(function (p) {
+          const idx = p.index != null ? p.index : (p.profile_index != null ? p.profile_index : 1);
+          const name = p.name || ('Profile ' + idx);
+          return '<option value="' + escapeAttr(String(idx)) + '">' + escapeHtml(name) + '</option>';
+        }).join('');
+      }
+    }
+  } catch (e) {}
+}
+
+function closeSyncNuvioModal() {
+  const modal = document.getElementById('syncNuvioModal');
+  if (modal) modal.style.display = 'none';
+  if (typeof unlockBackgroundScroll === 'function') unlockBackgroundScroll();
+  window._syncNuvioTarget = null;
+}
+
+function handleSyncNuvioModeChange() {
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  const hintEl = document.getElementById('syncNuvioModeHint');
+  const btn = document.getElementById('syncNuvioSubmitBtn');
+  const mode = modeSel ? modeSel.value : 'new';
+
+  if (hintEl) {
+    if (mode === 'new') {
+      hintEl.textContent = 'This will create a separate collection and leave existing collections untouched.';
+    } else if (mode === 'merge') {
+      hintEl.textContent = 'This will update folders inside My Lists Collections and leave other collections untouched.';
+    } else {
+      hintEl.textContent = 'This will replace all collections on this profile with My Lists collections.';
+    }
+  }
+  if (btn) {
+    btn.textContent = mode === 'new' ? 'Add collection' : 'Sync collection';
+  }
+}
+
+async function confirmSyncToNuvio() {
+  const profileSel = document.getElementById('syncNuvioProfileSelect');
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  const profileId = profileSel ? profileSel.value : '1';
+  const installMode = modeSel ? modeSel.value : 'new';
+  const targetColId = window._syncNuvioTarget;
+
+  closeSyncNuvioModal();
+  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId });
+}
+
+function syncCollectionsToNuvio() {
+  openSyncNuvioModal();
+}
+
+function pushSingleCollectionToNuvio(colId) {
+  openSyncNuvioModal(colId);
+}
+
+async function executeNuvioCollectionsPush(opts) {
+  const options = opts || {};
+  const profileId = options.profileId || 1;
+  const installMode = options.installMode || 'new';
+  const targetColId = options.targetColId;
+
+  const current = loadCustomCollections();
+  let collectionsToPush = current;
+  let pushName = 'collections';
+
+  if (targetColId) {
+    const premade = (typeof getPremadeCollections === 'function') ? getPremadeCollections() : [];
+    const premadeCol = premade.find(function (c) { return c.id === targetColId; });
+    if (premadeCol) {
+      const idx = current.findIndex(function (c) { return c.id === premadeCol.id || (c.name && premadeCol.name && c.name.toLowerCase() === premadeCol.name.toLowerCase()); });
+      if (idx !== -1) {
+        current[idx] = Object.assign({}, current[idx], premadeCol);
+      } else {
+        current.push(JSON.parse(JSON.stringify(premadeCol)));
+      }
+      saveCustomCollections(current);
+      renderCustomCollections();
+    }
+
+    const single = current.find(function (c) { return c.id === targetColId; });
+    if (single) {
+      pushName = single.name || 'folder';
+      if (installMode === 'new') {
+        collectionsToPush = [single];
+      }
+    }
+  }
+
+  if (!collectionsToPush.length) {
+    showToast('No collections to push.', 'info');
+    return;
+  }
+
+  const payload = buildNuvioCollectionsPayload(collectionsToPush);
+  const manifestUrl = getNuvioManifestUrl();
+  const allLists = collectionsToPush.reduce(function (acc, c) { return acc.concat(c.lists || []); }, []);
+
+  showToast('Pushing to Nuvio\u2026', 'info');
+
+  let cachedRemote = [];
+  try {
+    const raw = localStorage.getItem('myListAddon:nuvioRemoteCollections');
+    if (raw) cachedRemote = extractNuvioCollections(raw);
+  } catch (e) {}
+
+  try {
+    const pullRes = await mediaAppUiCall('nuvio', 'collections', 'GET');
+    if (pullRes && pullRes.ok && pullRes.data && pullRes.data.collections) {
+      const extracted = extractNuvioCollections(pullRes.data.collections);
+      if (extracted && extracted.length > 0) {
+        cachedRemote = extracted;
+        try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
+    profileId: profileId,
+    installMode: installMode,
+    collectionName: (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) ? collectionsToPush[0].name : 'My Lists Collections',
+    collections: payload,
+    knownCollections: cachedRemote,
+    manifestUrl: manifestUrl,
+    collectionLists: allLists
+  });
+
+  if (res && res.ok) {
+    if (res.data && res.data.collections) {
+      try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(res.data.collections)); } catch (e) {}
+    }
+    const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged' : 'updated');
+    let msg = 'Pushed "' + pushName + '" to Nuvio (' + modeDesc + ').';
+    if (res.data && res.data.addonInstalled) {
+      msg += ' My Lists Addon was auto-installed in Nuvio!';
+    }
+    showToast(msg, 'success');
+  } else {
+    showToast(mediaAppUiMessage(res, 'Could not push to Nuvio. Check your connection in Settings.'), 'error');
+  }
+}
+
+async function pullCollectionsFromNuvio() {
+  showToast('Pulling collections from Nuvio\u2026', 'info');
+  const res = await mediaAppUiCall('nuvio', 'collections', 'GET');
+  if (res && res.ok && res.data && res.data.collections) {
+    const extracted = extractNuvioCollections(res.data.collections);
+    if (extracted && extracted.length > 0) {
+      try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
+    }
+    const imported = parseNuvioCollectionsJson(res.data.collections);
+    if (!imported.length) {
+      showToast('Nuvio has no collection folders saved for this profile.', 'info');
+      return;
+    }
+    const current = loadCustomCollections();
+    const merged = current.slice();
+    let count = 0;
+    for (let i = 0; i < imported.length; i++) {
+      const imp = imported[i];
+      const idx = merged.findIndex(function (c) { return c.id === imp.id; });
+      if (idx !== -1) {
+        merged[idx] = imp;
+      } else {
+        merged.push(imp);
+        count++;
+      }
+    }
+    saveCustomCollections(merged);
+    renderCustomCollections();
+    showToast('Pulled ' + imported.length + ' collection folder(s) from Nuvio (' + count + ' new).', 'success');
+  } else {
+    showToast(mediaAppUiMessage(res, 'Could not pull collections from Nuvio. Check your connection in Settings.'), 'error');
+  }
+}
+
+function exportNuvioCollectionsJson() {
+  const collections = loadCustomCollections();
+  if (!collections.length) {
+    showToast('No collection folders to export yet.', 'info');
+    return;
+  }
+  const payload = buildNuvioCollectionsPayload(collections);
+  const jsonStr = JSON.stringify(payload, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'collections.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Exported collections.json for Nuvio.', 'success');
+}
+
+function parseNuvioCollectionsJson(raw) {
+  let data = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!data) return [];
+  let folders = [];
+  if (Array.isArray(data)) {
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      if (item && Array.isArray(item.folders)) {
+        folders = folders.concat(item.folders);
+      } else if (item && (item.catalogSources || item.title || item.name)) {
+        folders.push(item);
+      }
+    }
+  } else if (typeof data === 'object') {
+    if (Array.isArray(data.folders)) {
+      folders = data.folders;
+    } else if (data.catalogSources) {
+      folders = [data];
+    }
+  }
+
+  return folders.filter(Boolean).map(function (f) {
+    const lists = Array.isArray(f.catalogSources) ? f.catalogSources.map(function (cs) {
+      const catId = cs.catalogId || cs.name || '';
+      let url = cs.url || '';
+      if (!url && catId && typeof CHART_SLUG_ENTRIES !== 'undefined') {
+        const match = CHART_SLUG_ENTRIES.find(function (c) {
+          return c.slug === catId || (typeof slugify === 'function' && (slugify(c.name) === catId || slugify(c.movieUrl || '') === catId || slugify(c.showUrl || '') === catId));
+        });
+        if (match) {
+          url = cs.type === 'series' ? (match.showUrl || match.movieUrl) : (match.movieUrl || match.showUrl);
+        }
+      }
+      return {
+        name: cs.name || cs.catalogId || 'Catalog Item',
+        url: url || ('catalog:' + (cs.addonId || 'app.my-list') + ':' + catId),
+        type: cs.type || 'movie',
+        addonId: cs.addonId || 'app.my-list',
+        catalogId: catId
+      };
+    }) : [];
+
+    return {
+      id: f.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      name: f.title || f.name || 'Imported Collection',
+      description: f.description || '',
+      tileShape: f.tileShape || 'LANDSCAPE',
+      hideTitle: !!f.hideTitle,
+      addonId: (f.catalogSources && f.catalogSources[0] && f.catalogSources[0].addonId) || 'app.my-list',
+      coverImageUrl: f.coverImageUrl || '',
+      lists: lists,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  });
+}
+
+function openImportNuvioModal() {
+  const modal = document.getElementById('importNuvioCollectionsModal');
+  if (!modal) return;
+  const fileInput = document.getElementById('importNuvioFileInput');
+  if (fileInput) fileInput.value = '';
+  const textarea = document.getElementById('importNuvioJsonTextarea');
+  if (textarea) textarea.value = '';
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+}
+
+function closeImportNuvioModal() {
+  const modal = document.getElementById('importNuvioCollectionsModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+
+function handleNuvioFileSelected(event) {
+  const input = event && event.target ? event.target : document.getElementById('importNuvioFileInput');
+  if (!input || !input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const text = e.target.result;
+    const textarea = document.getElementById('importNuvioJsonTextarea');
+    if (textarea) textarea.value = text;
+  };
+  reader.readAsText(file);
+}
+
+function submitImportNuvioModal() {
+  const textarea = document.getElementById('importNuvioJsonTextarea');
+  const raw = textarea ? textarea.value.trim() : '';
+  if (!raw) {
+    showToast('Paste JSON or choose a collections.json file first.', 'error');
+    return;
+  }
+  const parsed = parseNuvioCollectionsJson(raw);
+  if (!parsed.length) {
+    showToast('Could not find any collection folders in this JSON.', 'error');
+    return;
+  }
+  const current = loadCustomCollections();
+  const merged = current.slice();
+  let count = 0;
+  for (let i = 0; i < parsed.length; i++) {
+    const item = parsed[i];
+    const idx = merged.findIndex(function (c) { return c.id === item.id; });
+    if (idx !== -1) {
+      merged[idx] = item;
+    } else {
+      merged.push(item);
+      count++;
+    }
+  }
+  saveCustomCollections(merged);
+  closeImportNuvioModal();
+  renderCustomCollections();
+  showToast('Imported ' + parsed.length + ' collection folder(s) (' + count + ' new).', 'success');
+}
+
+function renderCollectionsView() {
+  renderCustomCollections();
+  renderPremadeCollections();
+  renderCollectionsMediaApps();
+}
+
+function renderCollectionsCurated() {
+  const box = document.getElementById('collectionsCuratedResult');
+  if (!box) return;
+  box.innerHTML = FEATURED_TMDB_COLLECTIONS.map(function (c) {
+    const added = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(c.url, 'movie') || isListAddedToConfig('tmdb:collection:' + c.id, 'movie'));
+    return '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '">' +
+      '<div class="list-card-header">' +
+        '<div class="list-card-body">' +
+          '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([c.name, c.url]) + '">' + escapeHtml(c.name) + '</div>' +
+          '<div class="list-card-meta"><span>TMDB Franchise Collection</span></div>' +
+        '</div>' +
+        '<div class="list-card-actions">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([c.name, c.url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+    '</div>';
+  }).join('');
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+function renderCollectionsMediaApps() {
+  const box = document.getElementById('collectionsMediaAppsResult');
+  if (!box) return;
+  const providers = ['stremio', 'nuvio'];
+  box.innerHTML = providers.map(function (provider) {
+    const name = MEDIA_APP_UI_NAMES[provider];
+    const live = !!mediaAppListsLive[provider];
+    const busy = !!mediaAppListsBusy[provider];
+    if (!live) {
+      return '<div class="u-p-12px u-mb-10px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">' +
+        '<div class="u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">' +
+          '<div>' +
+            '<div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(name) + ' Collections</div>' +
+            '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_xs">Connect your ' + escapeHtml(name) + ' account in Settings to sync and install your personal history and continue watching collections.</p>' +
+          '</div>' +
+          '<button type="button" class="lc-btn secondary" data-act="goToExternalSettings">Connect ' + escapeHtml(name) + '</button>' +
+        '</div>' +
+      '</div>';
+    }
+    const listsHtml = MEDIA_APP_LISTS.map(function (l) {
+      const urls = mediaAppListUrls(provider, l.slug);
+      const added = !!urls && typeof isListAddedToConfig === 'function' && isListAddedToConfig(urls.movie, 'movie') && isListAddedToConfig(urls.series, 'series');
+      const listName = name + ' ' + l.title;
+      return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '"' + (urls ? ' data-url="' + escapeAttr(urls.mixed) + '"' : '') + '>' +
+        '<div class="list-card-header">' +
+          '<div class="list-card-body">' +
+            '<div class="list-card-title u-cur-pointer" data-act="openMediaAppListDetails" data-act-args="' + appActArgs([provider, l.slug]) + '">' + escapeHtml(listName) + '</div>' +
+            '<div class="list-card-meta"><span>' + escapeHtml(l.blurb) + '</span></div>' +
+          '</div>' +
+          '<div class="list-card-actions">' +
+            '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+              ' data-act="toggleMediaAppListAdd" data-act-args="' + appActArgs([provider, l.slug, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+          '</div>' +
+        '</div>' +
+        (urls ? '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(urls.mixed) + '" data-type="mixed" data-creator="" data-items="" data-likes="0"></div>' : '') +
+      '</div>';
+    }).join('');
+
+    return '<div class="u-mb-12px">' +
+      '<div class="u-ai-center u-jc-space_between u-gap-12px u-mb-8px" style="display:flex;">' +
+        '<div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(name) + ' Synced Collections</div>' +
+        '<button type="button" class="lc-btn secondary u-fs-v_font_size_xs" data-act="syncMediaAppNow" data-act-args="' + appActArgs([provider, '@self']) + '"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Syncing\u2026' : 'Sync now') + '</button>' +
+      '</div>' +
+      listsHtml +
+    '</div>';
+  }).join('');
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+async function searchCollections() {
+  const input = document.getElementById('collectionsSearchInput');
+  const box = document.getElementById('collectionsSearchResults');
+  if (!input || !box) return;
+  const rawQuery = (input.value || '').trim();
+  if (!rawQuery) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<p class="u-mt-10px u-c-v_muted" role="status"><small>Searching collections\u2026</small></p>';
+
+  const tmdbCollMatch = rawQuery.match(new RegExp('(?:themoviedb[.]org/collection/|tmdb:collection:)([0-9]+)', 'i')) || (rawQuery.match(/^[0-9]+$/) ? [null, rawQuery] : null);
+  if (tmdbCollMatch && tmdbCollMatch[1]) {
+    const id = tmdbCollMatch[1];
+    const url = 'https://www.themoviedb.org/collection/' + id;
+    const name = 'TMDB Collection ' + id;
+    const added = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(url, 'movie') || isListAddedToConfig('tmdb:collection:' + id, 'movie'));
+    box.innerHTML = '<div class="shelf-header u-mb-10px"><h3 class="panel-title u-mb-0 u-fs-v_font_size_sm">Matching Collection</h3></div>' +
+      '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(name) + '" data-url="' + escapeAttr(url) + '">' +
+        '<div class="list-card-header">' +
+          '<div class="list-card-body">' +
+            '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([name, url]) + '">' + escapeHtml(name) + '</div>' +
+            '<div class="list-card-meta"><span>TMDB Franchise Collection #' + escapeHtml(id) + '</span></div>' +
+          '</div>' +
+          '<div class="list-card-actions">' +
+            '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+              ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([name, url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(name) + '" data-url="' + escapeAttr(url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+      '</div>';
+    if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+    return;
+  }
+
+  try {
+    const res = await fetch(ORIGIN + '/api/tmdb-search-lists?q=' + encodeURIComponent(rawQuery));
+    const data = await res.json().catch(function () { return {}; });
+    const lists = (data && Array.isArray(data.lists)) ? data.lists : [];
+    const collections = lists.filter(function (item) {
+      return item.isCollection || (item.url && item.url.indexOf('/collection/') !== -1);
+    });
+
+    if (!collections.length) {
+      box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No collections found for "' + escapeHtml(rawQuery) + '". Try another franchise name or paste a collection URL.</small></p>';
+      return;
+    }
+
+    box.innerHTML = '<div class="shelf-header u-mb-10px"><h3 class="panel-title u-mb-0 u-fs-v_font_size_sm">Search Results (' + collections.length + ')</h3></div>' +
+      collections.map(function (c) {
+        const added = typeof isListAddedToConfig === 'function' && isListAddedToConfig(c.url, 'movie');
+        return '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '">' +
+          '<div class="list-card-header">' +
+            '<div class="list-card-body">' +
+              '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([c.name, c.url]) + '">' + escapeHtml(c.name) + '</div>' +
+              '<div class="list-card-meta"><span>TMDB Franchise Collection</span></div>' +
+            '</div>' +
+            '<div class="list-card-actions">' +
+              '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+                ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([c.name, c.url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+        '</div>';
+      }).join('');
+    if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+  } catch (err) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Could not search collections. Please try again.</small></p>';
+  }
+}
+
+function onCollectionsSearchKey() {
+  searchCollections();
+}
+
+function toggleCollectionAdd(name, url, isAdded) {
+  if (isAdded) {
+    removeListFromConfig(url, 'movie');
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Removed "' + name + '" from your Catalogs.');
+    }
+  } else {
+    addRow(name, url, 'movie', true, 'Collections');
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Added "' + name + '" to your Catalogs.');
+    }
+  }
+  renderCollectionsCurated();
+  const searchBox = document.getElementById('collectionsSearchResults');
+  if (searchBox && searchBox.style.display !== 'none') {
+    searchCollections();
+  }
+}
+
+function openCollectionDetails(name, url) {
+  if (typeof openListDetailsPage === 'function') {
+    openListDetailsPage(name, 'movie', url);
+  }
+}
+
+function refreshCollectionsView() {
+  renderCollectionsView();
+  if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
+  showToast('Collections refreshed.', 'success');
+}
+
+function goToExternalSettings() {
+  if (typeof switchTab === 'function') switchTab('settings');
+  const externalPill = document.querySelector('#settingsSubnavBar button[data-sub="external"]');
+  if (typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu('external', externalPill);
+}
+
+window.renderPremadeCollections = renderPremadeCollections;
+window.togglePremadeFolder = togglePremadeFolder;
+window.addPremadeToCustomCollections = addPremadeToCustomCollections;
+window.addAllPremadeCollections = addAllPremadeCollections;
+window.pushSinglePremadeToNuvio = pushSinglePremadeToNuvio;
+window.renderCollectionsView = renderCollectionsView;
+window.refreshCollectionsView = refreshCollectionsView;
+window.toggleCustomCollectionFolder = toggleCustomCollectionFolder;
+window.pushSingleCollectionToNuvio = pushSingleCollectionToNuvio;
+window.syncCollectionsToNuvio = syncCollectionsToNuvio;
+window.openCreateCollectionModal = openCreateCollectionModal;
+window.closeCreateCollectionModal = closeCreateCollectionModal;
+window.submitCreateCollectionModal = submitCreateCollectionModal;
+window.deleteCustomCollection = deleteCustomCollection;
+window.removeListFromSavedCollection = removeListFromSavedCollection;
+window.openSyncNuvioModal = openSyncNuvioModal;
+window.closeSyncNuvioModal = closeSyncNuvioModal;
+window.handleSyncNuvioModeChange = handleSyncNuvioModeChange;
+window.confirmSyncToNuvio = confirmSyncToNuvio;
+window.addNewNuvioCollection = addNewNuvioCollection;
+
 
 
 

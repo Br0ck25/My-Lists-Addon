@@ -51,21 +51,25 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
     resources,
     types: ["movie", "series"],
     idPrefixes,
-    catalogs: [
-      ...active.map((e) => ({
-        type: e.type,
-        id: e.id,
-        name: (liveNames && liveNames[e.id]) || e.name,
-        // Lets wako/Stremio page through lists longer than one screen by
-        // re-requesting the catalog with an increasing `skip`.
-        extra: [{ name: "skip", isRequired: false }],
-      })),
-      // Dedicated search catalogs for movies and series.
-      // With isRequired: true / extraRequired: ["search"], Stremio and Nuvio
-      // recognize that this add-on provides catalog search resources (fixing the
-      // "Missing search interface" error when this is the sole metadata source),
-      // while preventing these catalogs from cluttering the home or discover shelves.
-      {
+    catalogs: (function () {
+      const list = [];
+      const seen = new Set();
+      function addC(c) {
+        if (!c || !c.id || !c.type) return;
+        const key = `${c.type}:${c.id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        list.push(c);
+      }
+      for (const e of active) {
+        addC({
+          type: e.type,
+          id: e.id,
+          name: (liveNames && liveNames[e.id]) || e.name,
+          extra: [{ name: "skip", isRequired: false }],
+        });
+      }
+      addC({
         type: "movie",
         id: "search_movies",
         name: "Movies",
@@ -75,8 +79,8 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         ],
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
-      },
-      {
+      });
+      addC({
         type: "series",
         id: "search_series",
         name: "Series",
@@ -86,8 +90,14 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         ],
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
-      },
-    ],
+      });
+      if (typeof getPremadeCollectionManifestCatalogs === "function") {
+        for (const c of getPremadeCollectionManifestCatalogs()) {
+          addC(c);
+        }
+      }
+      return list;
+    })(),
     behaviorHints: {
       configurable: true,
       configurationRequired: active.length === 0,

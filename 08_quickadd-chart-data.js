@@ -557,6 +557,102 @@ function resolveChartSlug(slug) {
   return CHART_SLUG_REGISTRY[slug] || CHART_SLUG_REGISTRY[LEGACY_CHART_SLUGS[slug]] || null;
 }
 
+function findChartOrCollectionEntry(id, type) {
+  if (!id) return null;
+  const cleanId = String(id).trim();
+  const reqType = type === "series" ? "series" : "movie";
+
+  // 1. Direct TMDB chart / kids / holiday / genre slug prefixes
+  if (cleanId.startsWith("tmdb-chart-")) {
+    const net = cleanId.replace(/^tmdb-chart-/, "");
+    const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
+                     (typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === net.replace(/[^a-z0-9]+/g, "")) : null);
+    const name = provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:chart:${net}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-kids-")) {
+    const rating = cleanId.replace(/^tmdb-kids-/, "");
+    const match = typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS.find((k) => k.movieUrl === `tmdb:kids:${rating}`) : null;
+    const name = match ? match.name : `Rated ${rating.toUpperCase()} & Under`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:kids:${rating}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-holiday-")) {
+    const hol = cleanId.replace(/^tmdb-holiday-/, "");
+    const match = typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS.find((h) => h.movieUrl === `tmdb:holiday:${hol}`) : null;
+    const name = match ? match.name : `Holiday ${hol}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:holiday:${hol}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-genre-")) {
+    const gen = cleanId.replace(/^tmdb-genre-/, "");
+    const match = typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS.find((g) => g.movieUrl === `tmdb:genre:${gen}`) : null;
+    const name = match ? match.name : `Genre ${gen}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:genre:${gen}`, enabled: true };
+  }
+
+  // 2. Search against all known tables:
+  const tables = [
+    typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10 : [],
+    typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL : [],
+    typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS : [],
+    typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS : [],
+    typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [],
+    typeof MDBLIST_OFFICIAL_CHARTS !== "undefined" ? MDBLIST_OFFICIAL_CHARTS : [],
+    typeof TMDB_CHART_LISTS !== "undefined" ? TMDB_CHART_LISTS : [],
+    typeof TRAKT_CHART_LISTS !== "undefined" ? TRAKT_CHART_LISTS : [],
+    typeof SIMKL_CHART_LISTS !== "undefined" ? SIMKL_CHART_LISTS : [],
+    typeof HIDDEN_GEMS_LIST !== "undefined" ? HIDDEN_GEMS_LIST : [],
+    typeof MY_LISTS_ADDON_CHARTS !== "undefined" ? MY_LISTS_ADDON_CHARTS : []
+  ];
+
+  for (const table of tables) {
+    if (!Array.isArray(table)) continue;
+    for (const item of table) {
+      if (!item) continue;
+      const mUrl = item.movieUrl || item.url || "";
+      const sUrl = item.showUrl || item.url || "";
+      const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
+
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(mUrl) : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(sUrl) : "";
+      const uSlug = typeof slugifyServer === "function" ? slugifyServer(chosenUrl) : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(item.name) : "";
+      const cSlug = item.slug ? String(item.slug).toLowerCase() : "";
+
+      if (cleanId === mSlug || cleanId === sSlug || cleanId === uSlug || cleanId === nSlug || cleanId === cSlug) {
+        return {
+          id: cleanId,
+          name: item.name || cleanId,
+          type: reqType,
+          url: chosenUrl,
+          enabled: true
+        };
+      }
+    }
+  }
+
+  // 3. Fallback: Check CHART_SLUG_ENTRIES
+  if (typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const found = CHART_SLUG_ENTRIES.find((c) => {
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+      const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+      return cleanId === mSlug || cleanId === sSlug || cleanId === nSlug || cleanId === cSlug;
+    });
+    if (found) {
+      return {
+        id: cleanId,
+        name: found.name,
+        type: reqType,
+        url: reqType === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+        enabled: true
+      };
+    }
+  }
+
+  return null;
+}
+
 // --- The curated shelves, in one place ---------------------------------------
 //
 // These twelve used to exist only as a literal inside buildQuickAddPresets
@@ -599,4 +695,91 @@ const CURATED_LIST_REGISTRY = Object.fromEntries(CURATED_LIST_ENTRIES.map((e) =>
 function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
+
+// Catalogs declared in manifest.catalogs so Nuvio and Stremio recognize that
+// app.my-list provides the sources used by collections folders and premade collections.
+function getPremadeCollectionManifestCatalogs() {
+  const list = [];
+  const seen = new Set();
+  function add(type, id, name) {
+    if (!id || !type) return;
+    const key = `${type}:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push({
+      type,
+      id,
+      name: name || id,
+      extra: [{ name: "skip", isRequired: false }],
+    });
+  }
+
+  const explicitCatalogs = [
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today", name: "Apple TV+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-tv-shows-today", name: "Apple TV+ Top 10" },
+    { type: "movie", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "series", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "movie", id: "https-mdblist-com-lists-andykai-disney-top-10-no-hulu", name: "Disney+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-andykai-disney-trending-no-hulu", name: "Disney+ Top 10" },
+    { type: "movie", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "series", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "movie", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q", name: "HBO Max Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-series-cp45l27nhd", name: "HBO Max Top 10" },
+    { type: "movie", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "series", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "movie", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-movies", name: "Hulu Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-shows", name: "Hulu Top 10" },
+    { type: "movie", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "series", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "movie", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-movies", name: "Netflix Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-shows", name: "Netflix Top 10" },
+    { type: "movie", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "series", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "movie", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "series", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-movies-today", name: "Paramount+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-tv-shows-today", name: "Paramount+ Top 10" },
+    { type: "movie", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "series", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-movies", name: "Prime Video Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-tv-shows", name: "Prime Video Top 10" },
+    { type: "movie", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "series", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-peacock-top-10-movies", name: "Peacock Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-peacockpiv-peacock-top-10-shows", name: "Peacock Top 10" },
+    { type: "movie", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "series", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "movie", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "series", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "movie", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "series", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "movie", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+    { type: "series", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+  ];
+
+  for (const exp of explicitCatalogs) {
+    add(exp.type, exp.id, exp.name);
+  }
+
+  // Also include any dynamically defined streaming providers
+  if (typeof STREAMING_TOP10 !== "undefined" && Array.isArray(STREAMING_TOP10)) {
+    for (const item of STREAMING_TOP10) {
+      if (item.movieUrl) add("movie", typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl, `${item.name} Top 10`);
+      if (item.showUrl) add("series", typeof slugifyServer === "function" ? slugifyServer(item.showUrl) : item.showUrl, `${item.name} Top 10`);
+    }
+  }
+  if (typeof STREAMING_ALL !== "undefined" && Array.isArray(STREAMING_ALL)) {
+    for (const item of STREAMING_ALL) {
+      const net = item.movieUrl && item.movieUrl.startsWith("tmdb:chart:") ? item.movieUrl.replace(/^tmdb:chart:/, "") : "";
+      const catId = net ? `tmdb-chart-${net}` : (typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl);
+      if (catId) {
+        add("movie", catId, item.name);
+        add("series", catId, item.name);
+      }
+    }
+  }
+
+  return list;
+}
+
 

@@ -269,7 +269,7 @@ ${seoHeadHtml}
       // above hides every Lists panel and then un-hides the one this attribute
       // names, so a stale value naming a panel that no longer exists leaves the
       // tab blank from first paint.
-      if (['my-lists', 'liked', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
+      if (['my-lists', 'liked', 'collections', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
       var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
@@ -673,6 +673,7 @@ ${UTILITY_CSS}
   /* Lists */
   html[data-initial-lists-sub] #listsSubMyLists,
   html[data-initial-lists-sub] #listsSubLiked,
+  html[data-initial-lists-sub] #listsSubCollections,
   html[data-initial-lists-sub] #listsSubImport,
   html[data-initial-lists-sub] #listsSubCreateList {
     display: none !important;
@@ -681,6 +682,9 @@ ${UTILITY_CSS}
     display: block !important;
   }
   html[data-initial-lists-sub="liked"] #listsSubLiked {
+    display: block !important;
+  }
+  html[data-initial-lists-sub="collections"] #listsSubCollections {
     display: block !important;
   }
   html[data-initial-lists-sub="import"] #listsSubImport {
@@ -700,6 +704,7 @@ ${UTILITY_CSS}
   }
   html[data-initial-lists-sub="my-lists"] #listsSubnavBar .subnav-pill[data-sub="my-lists"],
   html[data-initial-lists-sub="liked"] #listsSubnavBar .subnav-pill[data-sub="liked"],
+  html[data-initial-lists-sub="collections"] #listsSubnavBar .subnav-pill[data-sub="collections"],
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
@@ -5430,6 +5435,154 @@ ${appShellMobileNavHtml}
       <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
         <button type="button" class="lc-btn primary u-minw-80px" id="createListModalBtn" style="opacity:0.5;" disabled data-act="submitCreateListModal">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Collection Folder Modal -->
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a collection" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create Collection</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
+      </div>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Stremio and Nuvio.</p>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Collection Name *</label>
+        <input type="text" id="createCollectionModalName" placeholder="e.g. Superhero Sagas, Halloween Nights" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="validateCollectionModal">
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this collection groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionAddonId" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Add-on ID (Nuvio)</label>
+        <input type="text" id="createCollectionAddonId" value="app.my-list" placeholder="app.my-list" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+        <span class="u-fs-v_font_size_xs u-c-v_muted u-mt-4px" style="display:block;">Target add-on installed in Nuvio (default: <code class="u-fs-v_font_size_xs">app.my-list</code>).</span>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionCoverImageUrl" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Cover Image URL (Nuvio Backdrop)</label>
+        <input type="text" id="createCollectionCoverImageUrl" placeholder="https://image.tmdb.org/... or any backdrop URL" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+      </div>
+
+      <div class="u-gap-12px u-ai-center u-mb-12px" style="display:flex; flex-wrap:wrap;">
+        <div class="u-flex-1 u-minw-160px">
+          <label for="createCollectionTileShape" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Tile Shape (Nuvio)</label>
+          <select id="createCollectionTileShape" class="u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm" style="width:100%;">
+            <option value="LANDSCAPE">Landscape (Recommended)</option>
+            <option value="POSTER">Poster</option>
+            <option value="SQUARE">Square</option>
+          </select>
+        </div>
+        <div class="u-flex-1 u-minw-160px u-pt-18px">
+          <label class="u-ai-center u-gap-8px u-cur-pointer" style="display:flex;">
+            <input type="checkbox" id="createCollectionHideTitle">
+            <span class="u-fs-v_font_size_sm u-c-v_text">Hide title text over cover</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Add Lists to Collection -->
+      <div class="u-mb-12px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Add Lists into this Folder</label>
+        <div class="u-gap-8px u-ai-center u-mb-8px" style="display:flex;">
+          <select id="createCollectionListPicker" aria-label="Choose existing list" class="u-flex-1 u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm">
+            <option value="">-- Pick from your lists --</option>
+          </select>
+          <button type="button" class="lc-btn secondary" data-act="addPickerListToCollectionDraft">+ Add</button>
+        </div>
+        <div class="u-gap-8px u-ai-center" style="display:flex;">
+          <input type="text" id="createCollectionCustomListUrl" placeholder="Or paste list URL (Trakt, MDBList, TMDB)" class="u-flex-1 u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm">
+          <button type="button" class="lc-btn secondary" data-act="addUrlListToCollectionDraft">+ Add URL</button>
+        </div>
+      </div>
+
+      <!-- Lists in Draft -->
+      <div class="u-mb-14px">
+        <div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Lists in this Collection (<span id="collectionDraftCount">0</span>)</div>
+        <div id="collectionDraftListsContainer" class="u-p-8px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="max-height:160px; overflow-y:auto;">
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this collection folder yet.</p>
+        </div>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn secondary" data-act="closeCreateCollectionModal">Cancel</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="createCollectionModalBtn" style="opacity:0.5;" disabled data-act="submitCreateCollectionModal">Save Collection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Nuvio Collections Modal -->
+  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Nuvio Collections</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportNuvioModal">&#x2715;</button>
+      </div>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Import collection folders from a Nuvio <code class="u-fs-v_font_size_xs">collections.json</code> file or paste JSON code directly.</p>
+
+      <div class="u-mb-12px">
+        <label for="importNuvioFileInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Upload collections.json file</label>
+        <input type="file" id="importNuvioFileInput" accept=".json,application/json" class="u-p-8px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_surface u-c-v_text u-fs-v_font_size_sm" style="width:100%;" data-act-on="change" data-act="handleNuvioFileSelected">
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="importNuvioJsonTextarea" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Or Paste JSON</label>
+        <textarea id="importNuvioJsonTextarea" placeholder="[ { &quot;id&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;folders&quot;: [ ... ] } ]" rows="6" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_xs u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn secondary" data-act="closeImportNuvioModal">Cancel</button>
+        <button type="button" class="lc-btn primary" data-act="submitImportNuvioModal">Import Collections</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync to Nuvio / Add to Profile Modal -->
+  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="syncNuvioModalTitle">Add to Profile</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeSyncNuvioModal">&#x2715;</button>
+      </div>
+
+      <div class="u-gap-12px u-mb-14px" style="display:flex; flex-wrap:wrap;">
+        <div style="flex:1; min-width:140px;">
+          <label for="syncNuvioProfileSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Profile</label>
+          <select id="syncNuvioProfileSelect" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+            <option value="1">James</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:140px;">
+          <label for="syncNuvioInstallMode" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Install mode</label>
+          <select id="syncNuvioInstallMode" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="change" data-act="handleSyncNuvioModeChange">
+            <option value="new" selected>Add as new collection</option>
+            <option value="merge">Merge into existing collection</option>
+            <option value="replace">Replace all collections</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="syncNuvioModeHint" class="u-p-10px_12px u-br-v_radius_sm u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-fs-v_font_size_xs u-mb-14px">This will create a separate collection and leave existing collections untouched.</div>
+
+      <div class="u-mb-16px">
+        <div class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Addon preflight</div>
+        <div class="u-p-12px_14px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_surface" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text" id="syncNuvioPreflightName">Streaming Catalogs</div>
+            <div class="u-fs-v_font_size_xs" id="syncNuvioPreflightStatus">Ready</div>
+          </div>
+          <span class="badge" id="syncNuvioPreflightBadge" style="background:var(--color-brand-fill); color:var(--color-on-brand); padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700;">READY</span>
+        </div>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn primary" id="syncNuvioSubmitBtn" data-act="confirmSyncToNuvio">Add collection</button>
+        <button type="button" class="lc-btn secondary" data-act="closeSyncNuvioModal">Cancel</button>
       </div>
     </div>
   </div>

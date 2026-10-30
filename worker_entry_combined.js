@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-10-29";
+const WORKER_BUILD_DATE = "2026-10-30";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cf7a27cac2";
+const WORKER_BUILD = "2c7ffc4e81";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -1713,7 +1713,7 @@ const NEW_UI_COOKIE = "FF_NEW_UI";
 
 const APP_SHELL_TABS = [
   { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
-  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "collections", "create-list", "import"] },
   { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { id: "search", label: "Search", path: "/search", subs: [] },
@@ -18504,21 +18504,25 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
     resources,
     types: ["movie", "series"],
     idPrefixes,
-    catalogs: [
-      ...active.map((e) => ({
-        type: e.type,
-        id: e.id,
-        name: (liveNames && liveNames[e.id]) || e.name,
-        // Lets wako/Stremio page through lists longer than one screen by
-        // re-requesting the catalog with an increasing `skip`.
-        extra: [{ name: "skip", isRequired: false }],
-      })),
-      // Dedicated search catalogs for movies and series.
-      // With isRequired: true / extraRequired: ["search"], Stremio and Nuvio
-      // recognize that this add-on provides catalog search resources (fixing the
-      // "Missing search interface" error when this is the sole metadata source),
-      // while preventing these catalogs from cluttering the home or discover shelves.
-      {
+    catalogs: (function () {
+      const list = [];
+      const seen = new Set();
+      function addC(c) {
+        if (!c || !c.id || !c.type) return;
+        const key = `${c.type}:${c.id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        list.push(c);
+      }
+      for (const e of active) {
+        addC({
+          type: e.type,
+          id: e.id,
+          name: (liveNames && liveNames[e.id]) || e.name,
+          extra: [{ name: "skip", isRequired: false }],
+        });
+      }
+      addC({
         type: "movie",
         id: "search_movies",
         name: "Movies",
@@ -18528,8 +18532,8 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         ],
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
-      },
-      {
+      });
+      addC({
         type: "series",
         id: "search_series",
         name: "Series",
@@ -18539,8 +18543,14 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         ],
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
-      },
-    ],
+      });
+      if (typeof getPremadeCollectionManifestCatalogs === "function") {
+        for (const c of getPremadeCollectionManifestCatalogs()) {
+          addC(c);
+        }
+      }
+      return list;
+    })(),
     behaviorHints: {
       configurable: true,
       configurationRequired: active.length === 0,
@@ -30457,6 +30467,102 @@ function resolveChartSlug(slug) {
   return CHART_SLUG_REGISTRY[slug] || CHART_SLUG_REGISTRY[LEGACY_CHART_SLUGS[slug]] || null;
 }
 
+function findChartOrCollectionEntry(id, type) {
+  if (!id) return null;
+  const cleanId = String(id).trim();
+  const reqType = type === "series" ? "series" : "movie";
+
+  // 1. Direct TMDB chart / kids / holiday / genre slug prefixes
+  if (cleanId.startsWith("tmdb-chart-")) {
+    const net = cleanId.replace(/^tmdb-chart-/, "");
+    const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
+                     (typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === net.replace(/[^a-z0-9]+/g, "")) : null);
+    const name = provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:chart:${net}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-kids-")) {
+    const rating = cleanId.replace(/^tmdb-kids-/, "");
+    const match = typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS.find((k) => k.movieUrl === `tmdb:kids:${rating}`) : null;
+    const name = match ? match.name : `Rated ${rating.toUpperCase()} & Under`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:kids:${rating}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-holiday-")) {
+    const hol = cleanId.replace(/^tmdb-holiday-/, "");
+    const match = typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS.find((h) => h.movieUrl === `tmdb:holiday:${hol}`) : null;
+    const name = match ? match.name : `Holiday ${hol}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:holiday:${hol}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-genre-")) {
+    const gen = cleanId.replace(/^tmdb-genre-/, "");
+    const match = typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS.find((g) => g.movieUrl === `tmdb:genre:${gen}`) : null;
+    const name = match ? match.name : `Genre ${gen}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:genre:${gen}`, enabled: true };
+  }
+
+  // 2. Search against all known tables:
+  const tables = [
+    typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10 : [],
+    typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL : [],
+    typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS : [],
+    typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS : [],
+    typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [],
+    typeof MDBLIST_OFFICIAL_CHARTS !== "undefined" ? MDBLIST_OFFICIAL_CHARTS : [],
+    typeof TMDB_CHART_LISTS !== "undefined" ? TMDB_CHART_LISTS : [],
+    typeof TRAKT_CHART_LISTS !== "undefined" ? TRAKT_CHART_LISTS : [],
+    typeof SIMKL_CHART_LISTS !== "undefined" ? SIMKL_CHART_LISTS : [],
+    typeof HIDDEN_GEMS_LIST !== "undefined" ? HIDDEN_GEMS_LIST : [],
+    typeof MY_LISTS_ADDON_CHARTS !== "undefined" ? MY_LISTS_ADDON_CHARTS : []
+  ];
+
+  for (const table of tables) {
+    if (!Array.isArray(table)) continue;
+    for (const item of table) {
+      if (!item) continue;
+      const mUrl = item.movieUrl || item.url || "";
+      const sUrl = item.showUrl || item.url || "";
+      const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
+
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(mUrl) : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(sUrl) : "";
+      const uSlug = typeof slugifyServer === "function" ? slugifyServer(chosenUrl) : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(item.name) : "";
+      const cSlug = item.slug ? String(item.slug).toLowerCase() : "";
+
+      if (cleanId === mSlug || cleanId === sSlug || cleanId === uSlug || cleanId === nSlug || cleanId === cSlug) {
+        return {
+          id: cleanId,
+          name: item.name || cleanId,
+          type: reqType,
+          url: chosenUrl,
+          enabled: true
+        };
+      }
+    }
+  }
+
+  // 3. Fallback: Check CHART_SLUG_ENTRIES
+  if (typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const found = CHART_SLUG_ENTRIES.find((c) => {
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+      const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+      return cleanId === mSlug || cleanId === sSlug || cleanId === nSlug || cleanId === cSlug;
+    });
+    if (found) {
+      return {
+        id: cleanId,
+        name: found.name,
+        type: reqType,
+        url: reqType === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+        enabled: true
+      };
+    }
+  }
+
+  return null;
+}
+
 // --- The curated shelves, in one place ---------------------------------------
 //
 // These twelve used to exist only as a literal inside buildQuickAddPresets
@@ -30499,6 +30605,93 @@ const CURATED_LIST_REGISTRY = Object.fromEntries(CURATED_LIST_ENTRIES.map((e) =>
 function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
+
+// Catalogs declared in manifest.catalogs so Nuvio and Stremio recognize that
+// app.my-list provides the sources used by collections folders and premade collections.
+function getPremadeCollectionManifestCatalogs() {
+  const list = [];
+  const seen = new Set();
+  function add(type, id, name) {
+    if (!id || !type) return;
+    const key = `${type}:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push({
+      type,
+      id,
+      name: name || id,
+      extra: [{ name: "skip", isRequired: false }],
+    });
+  }
+
+  const explicitCatalogs = [
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today", name: "Apple TV+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-tv-shows-today", name: "Apple TV+ Top 10" },
+    { type: "movie", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "series", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "movie", id: "https-mdblist-com-lists-andykai-disney-top-10-no-hulu", name: "Disney+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-andykai-disney-trending-no-hulu", name: "Disney+ Top 10" },
+    { type: "movie", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "series", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "movie", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q", name: "HBO Max Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-series-cp45l27nhd", name: "HBO Max Top 10" },
+    { type: "movie", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "series", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "movie", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-movies", name: "Hulu Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-shows", name: "Hulu Top 10" },
+    { type: "movie", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "series", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "movie", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-movies", name: "Netflix Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-shows", name: "Netflix Top 10" },
+    { type: "movie", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "series", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "movie", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "series", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-movies-today", name: "Paramount+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-tv-shows-today", name: "Paramount+ Top 10" },
+    { type: "movie", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "series", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-movies", name: "Prime Video Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-tv-shows", name: "Prime Video Top 10" },
+    { type: "movie", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "series", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-peacock-top-10-movies", name: "Peacock Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-peacockpiv-peacock-top-10-shows", name: "Peacock Top 10" },
+    { type: "movie", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "series", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "movie", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "series", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "movie", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "series", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "movie", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+    { type: "series", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+  ];
+
+  for (const exp of explicitCatalogs) {
+    add(exp.type, exp.id, exp.name);
+  }
+
+  // Also include any dynamically defined streaming providers
+  if (typeof STREAMING_TOP10 !== "undefined" && Array.isArray(STREAMING_TOP10)) {
+    for (const item of STREAMING_TOP10) {
+      if (item.movieUrl) add("movie", typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl, `${item.name} Top 10`);
+      if (item.showUrl) add("series", typeof slugifyServer === "function" ? slugifyServer(item.showUrl) : item.showUrl, `${item.name} Top 10`);
+    }
+  }
+  if (typeof STREAMING_ALL !== "undefined" && Array.isArray(STREAMING_ALL)) {
+    for (const item of STREAMING_ALL) {
+      const net = item.movieUrl && item.movieUrl.startsWith("tmdb:chart:") ? item.movieUrl.replace(/^tmdb:chart:/, "") : "";
+      const catId = net ? `tmdb-chart-${net}` : (typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl);
+      if (catId) {
+        add("movie", catId, item.name);
+        add("series", catId, item.name);
+      }
+    }
+  }
+
+  return list;
+}
+
 
 // --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
 //
@@ -30771,7 +30964,7 @@ ${seoHeadHtml}
       // above hides every Lists panel and then un-hides the one this attribute
       // names, so a stale value naming a panel that no longer exists leaves the
       // tab blank from first paint.
-      if (['my-lists', 'liked', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
+      if (['my-lists', 'liked', 'collections', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
       var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
@@ -31175,6 +31368,7 @@ ${UTILITY_CSS}
   /* Lists */
   html[data-initial-lists-sub] #listsSubMyLists,
   html[data-initial-lists-sub] #listsSubLiked,
+  html[data-initial-lists-sub] #listsSubCollections,
   html[data-initial-lists-sub] #listsSubImport,
   html[data-initial-lists-sub] #listsSubCreateList {
     display: none !important;
@@ -31183,6 +31377,9 @@ ${UTILITY_CSS}
     display: block !important;
   }
   html[data-initial-lists-sub="liked"] #listsSubLiked {
+    display: block !important;
+  }
+  html[data-initial-lists-sub="collections"] #listsSubCollections {
     display: block !important;
   }
   html[data-initial-lists-sub="import"] #listsSubImport {
@@ -31202,6 +31399,7 @@ ${UTILITY_CSS}
   }
   html[data-initial-lists-sub="my-lists"] #listsSubnavBar .subnav-pill[data-sub="my-lists"],
   html[data-initial-lists-sub="liked"] #listsSubnavBar .subnav-pill[data-sub="liked"],
+  html[data-initial-lists-sub="collections"] #listsSubnavBar .subnav-pill[data-sub="collections"],
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
@@ -35936,6 +36134,154 @@ ${appShellMobileNavHtml}
     </div>
   </div>
 
+  <!-- Create Collection Folder Modal -->
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a collection" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create Collection</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
+      </div>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Stremio and Nuvio.</p>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Collection Name *</label>
+        <input type="text" id="createCollectionModalName" placeholder="e.g. Superhero Sagas, Halloween Nights" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="validateCollectionModal">
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this collection groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionAddonId" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Add-on ID (Nuvio)</label>
+        <input type="text" id="createCollectionAddonId" value="app.my-list" placeholder="app.my-list" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+        <span class="u-fs-v_font_size_xs u-c-v_muted u-mt-4px" style="display:block;">Target add-on installed in Nuvio (default: <code class="u-fs-v_font_size_xs">app.my-list</code>).</span>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionCoverImageUrl" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Cover Image URL (Nuvio Backdrop)</label>
+        <input type="text" id="createCollectionCoverImageUrl" placeholder="https://image.tmdb.org/... or any backdrop URL" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+      </div>
+
+      <div class="u-gap-12px u-ai-center u-mb-12px" style="display:flex; flex-wrap:wrap;">
+        <div class="u-flex-1 u-minw-160px">
+          <label for="createCollectionTileShape" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Tile Shape (Nuvio)</label>
+          <select id="createCollectionTileShape" class="u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm" style="width:100%;">
+            <option value="LANDSCAPE">Landscape (Recommended)</option>
+            <option value="POSTER">Poster</option>
+            <option value="SQUARE">Square</option>
+          </select>
+        </div>
+        <div class="u-flex-1 u-minw-160px u-pt-18px">
+          <label class="u-ai-center u-gap-8px u-cur-pointer" style="display:flex;">
+            <input type="checkbox" id="createCollectionHideTitle">
+            <span class="u-fs-v_font_size_sm u-c-v_text">Hide title text over cover</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Add Lists to Collection -->
+      <div class="u-mb-12px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Add Lists into this Folder</label>
+        <div class="u-gap-8px u-ai-center u-mb-8px" style="display:flex;">
+          <select id="createCollectionListPicker" aria-label="Choose existing list" class="u-flex-1 u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm">
+            <option value="">-- Pick from your lists --</option>
+          </select>
+          <button type="button" class="lc-btn secondary" data-act="addPickerListToCollectionDraft">+ Add</button>
+        </div>
+        <div class="u-gap-8px u-ai-center" style="display:flex;">
+          <input type="text" id="createCollectionCustomListUrl" placeholder="Or paste list URL (Trakt, MDBList, TMDB)" class="u-flex-1 u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm">
+          <button type="button" class="lc-btn secondary" data-act="addUrlListToCollectionDraft">+ Add URL</button>
+        </div>
+      </div>
+
+      <!-- Lists in Draft -->
+      <div class="u-mb-14px">
+        <div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Lists in this Collection (<span id="collectionDraftCount">0</span>)</div>
+        <div id="collectionDraftListsContainer" class="u-p-8px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="max-height:160px; overflow-y:auto;">
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this collection folder yet.</p>
+        </div>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn secondary" data-act="closeCreateCollectionModal">Cancel</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="createCollectionModalBtn" style="opacity:0.5;" disabled data-act="submitCreateCollectionModal">Save Collection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Nuvio Collections Modal -->
+  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Nuvio Collections</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportNuvioModal">&#x2715;</button>
+      </div>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Import collection folders from a Nuvio <code class="u-fs-v_font_size_xs">collections.json</code> file or paste JSON code directly.</p>
+
+      <div class="u-mb-12px">
+        <label for="importNuvioFileInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Upload collections.json file</label>
+        <input type="file" id="importNuvioFileInput" accept=".json,application/json" class="u-p-8px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_surface u-c-v_text u-fs-v_font_size_sm" style="width:100%;" data-act-on="change" data-act="handleNuvioFileSelected">
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="importNuvioJsonTextarea" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Or Paste JSON</label>
+        <textarea id="importNuvioJsonTextarea" placeholder="[ { &quot;id&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;folders&quot;: [ ... ] } ]" rows="6" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_xs u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn secondary" data-act="closeImportNuvioModal">Cancel</button>
+        <button type="button" class="lc-btn primary" data-act="submitImportNuvioModal">Import Collections</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync to Nuvio / Add to Profile Modal -->
+  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="syncNuvioModalTitle">Add to Profile</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeSyncNuvioModal">&#x2715;</button>
+      </div>
+
+      <div class="u-gap-12px u-mb-14px" style="display:flex; flex-wrap:wrap;">
+        <div style="flex:1; min-width:140px;">
+          <label for="syncNuvioProfileSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Profile</label>
+          <select id="syncNuvioProfileSelect" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+            <option value="1">James</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:140px;">
+          <label for="syncNuvioInstallMode" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Install mode</label>
+          <select id="syncNuvioInstallMode" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="change" data-act="handleSyncNuvioModeChange">
+            <option value="new" selected>Add as new collection</option>
+            <option value="merge">Merge into existing collection</option>
+            <option value="replace">Replace all collections</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="syncNuvioModeHint" class="u-p-10px_12px u-br-v_radius_sm u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-fs-v_font_size_xs u-mb-14px">This will create a separate collection and leave existing collections untouched.</div>
+
+      <div class="u-mb-16px">
+        <div class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Addon preflight</div>
+        <div class="u-p-12px_14px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_surface" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text" id="syncNuvioPreflightName">Streaming Catalogs</div>
+            <div class="u-fs-v_font_size_xs" id="syncNuvioPreflightStatus">Ready</div>
+          </div>
+          <span class="badge" id="syncNuvioPreflightBadge" style="background:var(--color-brand-fill); color:var(--color-on-brand); padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700;">READY</span>
+        </div>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn primary" id="syncNuvioSubmitBtn" data-act="confirmSyncToNuvio">Add collection</button>
+        <button type="button" class="lc-btn secondary" data-act="closeSyncNuvioModal">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Add Catalog Modal -->
   <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index:10001; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
@@ -36434,6 +36780,7 @@ if ('serviceWorker' in navigator) {
   <div class="subnav-pills-bar" id="listsSubnavBar">
     <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
     <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
+    <button type="button" class="subnav-pill" data-sub="collections" data-act="switchListsSubmenu" data-act-args="[&quot;collections&quot;,&quot;@self&quot;]">Collections</button>
     <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
@@ -36529,6 +36876,68 @@ if ('serviceWorker' in navigator) {
            the empty case -- nothing may read this element's children to decide
            whether the feed has loaded. See switchListsSubmenu. -->
       <div id="likedListsFeed"><p class="u-c-v_muted u-fs-v_font_size_sm">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p></div>
+    </div>
+  </div>
+
+  <!-- Submenu 3: Collections (Custom Folders, Premade Bundles & Nuvio Sync) -->
+  <div class="lists-subpanel" id="listsSubCollections" style="display:none;">
+    <div class="panel">
+      <div class="shelf-header u-mb-8px u-ai-center u-jc-space_between u-gap-12px">
+        <div>
+          <h2 class="shelf-title sr-only">Collections</h2>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Stremio and Nuvio.</p>
+        </div>
+        <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
+          ${refreshButtonHtml('refreshCollectionsView', 'Refresh collections')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Your Custom Collection Folders -->
+    <div class="panel u-mt-12px" id="myCustomCollectionsPanel">
+      <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
+        <div>
+          <h2 class="panel-title u-mb-0">Your Collection Folders</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Stremio and Nuvio home screen layouts.</p>
+        </div>
+        <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
+          <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="addAllCollectionsToStremio" title="Add all collection folders as shelves into your Stremio catalogs">+ Add All to Stremio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull collections from your connected Nuvio account">Pull from Nuvio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="exportNuvioCollectionsJson" title="Export Nuvio collections.json">Export JSON</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="openImportNuvioModal" title="Import Nuvio collections.json">Import JSON</button>
+        </div>
+      </div>
+      <div class="u-p-10px_14px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-12px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; flex-direction:column; gap:6px;">
+        <span><strong>Stremio:</strong> Stremio displays collections directly as home screen rows. Click <strong>+ Add to Catalogs</strong> or <strong>+ Add All to Stremio</strong> to add folders to your catalogs, then update in Stremio.</span>
+        <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection folder and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
+      </div>
+      <div id="myCustomCollectionsResult"></div>
+    </div>
+
+    <!-- Premade Collections (below Your Collection Folders) -->
+    <div class="panel u-mt-16px" id="premadeCollectionsPanel">
+      <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
+        <div>
+          <h2 class="panel-title u-mb-0">Premade Collections</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Ready-to-use streaming catalogs &amp; kids bundles with Top 10 charts and full catalogs to install or customize.</p>
+        </div>
+        <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="addAllPremadeCollections" title="Add all premade collections to your collection folders">+ Add All to Your Folders</button>
+        </div>
+      </div>
+      <div id="premadeCollectionsResult"></div>
+    </div>
+
+    <!-- Connected Media Apps Collections (Stremio & Nuvio) -->
+    <div class="panel u-mt-12px" id="collectionsMediaAppsPanel">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Stremio &amp; Nuvio Collections</h2>
+      </div>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Stremio and Nuvio accounts.</p>
+      <div id="collectionsMediaAppsResult"></div>
     </div>
   </div>
 
@@ -38311,7 +38720,7 @@ const APP_SHELL_TAB_LIST = ${jsonForScript(APP_SHELL_TABS)};
 //
 // Validated against the panels that actually exist rather than trusted.
 function normalizeListsSubmenu(raw) {
-  const known = { 'my-lists': 1, 'liked': 1, 'import': 1, 'create-list': 1 };
+  const known = { 'my-lists': 1, 'liked': 1, 'collections': 1, 'import': 1, 'create-list': 1 };
   const v = String(raw || '');
   return known[v] ? v : 'my-lists';
 }
@@ -38357,10 +38766,12 @@ function normalizeListsSubmenu(raw) {
     }
     var subMyLists = document.getElementById('listsSubMyLists');
     var subLiked = document.getElementById('listsSubLiked');
+    var subCollections = document.getElementById('listsSubCollections');
     var subListImport = document.getElementById('listsSubImport');
     var subCreate = document.getElementById('listsSubCreateList');
     if (subMyLists) subMyLists.style.display = (listSub === 'my-lists') ? 'block' : 'none';
     if (subLiked) subLiked.style.display = (listSub === 'liked') ? 'block' : 'none';
+    if (subCollections) subCollections.style.display = (listSub === 'collections') ? 'block' : 'none';
     if (subListImport) subListImport.style.display = (listSub === 'import') ? 'block' : 'none';
     if (subCreate) subCreate.style.display = (listSub === 'create-list') ? 'block' : 'none';
 
@@ -39559,6 +39970,7 @@ function switchTab(name, opts) {
       let current = '';
       try { current = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu')); } catch (e) {}
       if (current === 'liked' && typeof renderLikedListsFeed === 'function') renderLikedListsFeed();
+      if (current === 'collections' && typeof renderCollectionsView === 'function') renderCollectionsView();
     }
   }
   if (name === 'settings') {
@@ -40914,6 +41326,7 @@ function switchListsSubmenu(name, btn) {
   const subpanels = {
     'my-lists': 'listsSubMyLists',
     'liked': 'listsSubLiked',
+    'collections': 'listsSubCollections',
     'create-list': 'listsSubCreateList',
     'import': 'listsSubImport'
   };
@@ -40973,6 +41386,12 @@ function switchListsSubmenu(name, btn) {
     if (typeof renderLikedListsFeed === 'function') {
       renderLikedListsFeed();
     }
+  }
+  if (name === 'collections') {
+    if (typeof renderCollectionsView === 'function') {
+      renderCollectionsView();
+    }
+    if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
   }
   if (name === 'create-list') {
     if (typeof initCustomListSearch === 'function') {
@@ -44705,6 +45124,7 @@ function toggleMediaAppListAdd(provider, slug, isAdded) {
     if (typeof showAddedToast === 'function') showAddedToast('Added "' + name + '" to your Catalogs.');
   }
   renderMediaAppLists(provider);
+  if (typeof renderCollectionsMediaApps === 'function') renderCollectionsMediaApps();
 }
 
 // info: the settings answer, or null when signed out or unavailable.
@@ -44880,6 +45300,7 @@ async function syncMediaAppNow(provider, btn) {
   mediaAppUpdateTried[provider] = Date.now();
   mediaAppListsBusy[provider] = true;
   renderMediaAppLists(provider);
+  if (typeof renderCollectionsMediaApps === 'function') renderCollectionsMediaApps();
   const r = await mediaAppUiCall(provider, 'sync', 'POST', { wait: true, force: true });
   mediaAppListsBusy[provider] = false;
   if (btn) btn.disabled = false;
@@ -45521,6 +45942,1855 @@ async function syncSingleItemToConnectedProviders(item, action) {
     }
   }
 }
+
+// --- Collections Option: Sagas, Franchises & Stremio/Nuvio Synced Catalogs -----
+
+const FEATURED_TMDB_COLLECTIONS = [
+  { id: 86311, name: "The Avengers Collection", url: "https://www.themoviedb.org/collection/86311" },
+  { id: 10, name: "Star Wars Collection", url: "https://www.themoviedb.org/collection/10" },
+  { id: 1241, name: "Harry Potter Collection", url: "https://www.themoviedb.org/collection/1241" },
+  { id: 119, name: "The Lord of the Rings Collection", url: "https://www.themoviedb.org/collection/119" },
+  { id: 263, name: "The Dark Knight Collection", url: "https://www.themoviedb.org/collection/263" },
+  { id: 645, name: "James Bond Collection", url: "https://www.themoviedb.org/collection/645" },
+  { id: 558216, name: "Spider-Man (The Movie) Collection", url: "https://www.themoviedb.org/collection/558216" },
+  { id: 9485, name: "Fast & Furious Collection", url: "https://www.themoviedb.org/collection/9485" },
+  { id: 328, name: "Jurassic Park Collection", url: "https://www.themoviedb.org/collection/328" },
+  { id: 87359, name: "Mission: Impossible Collection", url: "https://www.themoviedb.org/collection/87359" },
+  { id: 8091, name: "Alien Collection", url: "https://www.themoviedb.org/collection/8091" },
+  { id: 556, name: "Pixar Animation Collection", url: "https://www.themoviedb.org/collection/556" },
+  { id: 2150, name: "Shrek Collection", url: "https://www.themoviedb.org/collection/2150" },
+  { id: 295, name: "Pirates of the Caribbean Collection", url: "https://www.themoviedb.org/collection/295" },
+  { id: 2344, name: "The Matrix Collection", url: "https://www.themoviedb.org/collection/2344" },
+  { id: 645043, name: "John Wick Collection", url: "https://www.themoviedb.org/collection/645043" },
+];
+
+const CUSTOM_COLLECTIONS_STORAGE_KEY = 'myListAddon:customCollections';
+
+function getPremadeCollections() {
+  return [
+    {
+      id: 'col_appletv',
+      name: 'Apple TV+',
+      description: 'Apple TV+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://i.ytimg.com/vi/6sX_BfDnyrg/maxresdefault.jpg',
+      lists: [
+        { name: 'Apple TV+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today' },
+        { name: 'Apple TV+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-apple-tv-top-10-tv-shows-today' },
+        { name: 'Apple TV+', url: 'tmdb:chart:appletv', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-appletv' },
+        { name: 'Apple TV+', url: 'tmdb:chart:appletv', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-appletv' }
+      ]
+    },
+    {
+      id: 'col_disney',
+      name: 'Disney+',
+      description: 'Disney+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://static-www.adweek.com/wp-content/uploads/2024/03/disney-logo.jpeg?w=1200',
+      lists: [
+        { name: 'Disney+ Top 10', url: 'https://mdblist.com/lists/andykai/disney-top-10-no-hulu', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-andykai-disney-top-10-no-hulu' },
+        { name: 'Disney+ Top 10', url: 'https://mdblist.com/lists/andykai/disney-trending-no-hulu', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-andykai-disney-trending-no-hulu' },
+        { name: 'Disney+', url: 'tmdb:chart:disney', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-disney' },
+        { name: 'Disney+', url: 'tmdb:chart:disney', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-disney' }
+      ]
+    },
+    {
+      id: 'col_hbomax',
+      name: 'HBO Max',
+      description: 'HBO Max Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRInZVxLCd8CpYk_A80vU10wjypKNN_b1JUmTdhDj19ZlVJ2Ecz3nauXpN&s=10',
+      lists: [
+        { name: 'HBO Max Top 10', url: 'https://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q' },
+        { name: 'HBO Max Top 10', url: 'https://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-harmes7-hbo-max-top-10-series-cp45l27nhd' },
+        { name: 'HBO Max', url: 'tmdb:chart:hbomax', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-hbomax' },
+        { name: 'HBO Max', url: 'tmdb:chart:hbomax', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-hbomax' }
+      ]
+    },
+    {
+      id: 'col_hulu',
+      name: 'Hulu',
+      description: 'Hulu Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://www.thisishulu.com/app/uploads/2023/10/logo-gradient-3up.svg',
+      lists: [
+        { name: 'Hulu Top 10', url: 'https://mdblist.com/lists/hulupiv/hulu-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hulupiv-hulu-top-10-movies' },
+        { name: 'Hulu Top 10', url: 'https://mdblist.com/lists/hulupiv/hulu-top-10-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hulupiv-hulu-top-10-shows' },
+        { name: 'Hulu', url: 'tmdb:chart:hulu', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-hulu' },
+        { name: 'Hulu', url: 'tmdb:chart:hulu', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-hulu' }
+      ]
+    },
+    {
+      id: 'col_netflix',
+      name: 'Netflix',
+      description: 'Netflix Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://m.media-amazon.com/images/I/616QXs8yg0L.png',
+      lists: [
+        { name: 'Netflix Top 10', url: 'https://mdblist.com/lists/hdlists/netflix-top-10-trending-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hdlists-netflix-top-10-trending-movies' },
+        { name: 'Netflix Top 10', url: 'https://mdblist.com/lists/hdlists/netflix-top-10-trending-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hdlists-netflix-top-10-trending-shows' },
+        { name: 'Netflix', url: 'tmdb:chart:netflix', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflix' },
+        { name: 'Netflix', url: 'tmdb:chart:netflix', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflix' }
+      ]
+    },
+    {
+      id: 'col_netflixkids',
+      name: 'Netflix Kids',
+      description: 'Netflix Kids movies and shows catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://static1.squarespace.com/static/545ad6c5e4b09bbf6a29c5ee/t/5e69c67b1ce5f056432139df/1583990409924/Netflix.jpg?format=1500w',
+      lists: [
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' }
+      ]
+    },
+    {
+      id: 'col_paramount',
+      name: 'Paramount+',
+      description: 'Paramount+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://cdn.mos.cms.futurecdn.net/UFo74BuGo7FYxhAE3DrWUP.jpg',
+      lists: [
+        { name: 'Paramount+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-paramount-top-10-movies-today' },
+        { name: 'Paramount+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-paramount-top-10-tv-shows-today' },
+        { name: 'Paramount+', url: 'tmdb:chart:paramount', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-paramount' },
+        { name: 'Paramount+', url: 'tmdb:chart:paramount', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-paramount' }
+      ]
+    },
+    {
+      id: 'col_primevideo',
+      name: 'Prime Video',
+      description: 'Prime Video Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://oyster.ignimgs.com/mediawiki/apis.ign.com/prime-video/3/3b/Primevideo-seo-logo_s586.png',
+      lists: [
+        { name: 'Prime Video Top 10', url: 'https://mdblist.com/lists/diimaan/amazon-prime-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-amazon-prime-top-10-movies' },
+        { name: 'Prime Video Top 10', url: 'https://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-amazon-prime-top-10-tv-shows' },
+        { name: 'Prime Video', url: 'tmdb:chart:primevideo', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-primevideo' },
+        { name: 'Prime Video', url: 'tmdb:chart:primevideo', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-primevideo' }
+      ]
+    },
+    {
+      id: 'col_peacock',
+      name: 'Peacock',
+      description: 'Peacock Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://www.newscaststudio.com/wp-content/uploads/2026/05/original-peacock-logo.jpg',
+      lists: [
+        { name: 'Peacock Top 10', url: 'https://mdblist.com/lists/diimaan/peacock-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-peacock-top-10-movies' },
+        { name: 'Peacock Top 10', url: 'https://mdblist.com/lists/peacockpiv/peacock-top-10-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-peacockpiv-peacock-top-10-shows' },
+        { name: 'Peacock', url: 'tmdb:chart:peacock', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-peacock' },
+        { name: 'Peacock', url: 'tmdb:chart:peacock', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-peacock' }
+      ]
+    },
+    {
+      id: 'col_kids',
+      name: 'Kids',
+      description: 'Rated G, PG, PG-13 & Under and Netflix Kids',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://t3.ftcdn.net/jpg/01/83/26/74/360_F_183267411_05WWsOOcByAaAjnfzklSLS530axmLTJB.jpg',
+      lists: [
+        { name: 'Rated G & Under', url: 'tmdb:kids:g', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-g' },
+        { name: 'Rated G & Under', url: 'tmdb:kids:g', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-g' },
+        { name: 'Rated PG & Under', url: 'tmdb:kids:pg', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg' },
+        { name: 'Rated PG & Under', url: 'tmdb:kids:pg', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg' },
+        { name: 'Rated PG-13 & Under', url: 'tmdb:kids:pg13', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg13' },
+        { name: 'Rated PG-13 & Under', url: 'tmdb:kids:pg13', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg13' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' }
+      ]
+    }
+  ];
+}
+
+function loadCustomCollections() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_COLLECTIONS_STORAGE_KEY);
+    if (!raw) {
+      const premade = getPremadeCollections();
+      saveCustomCollections(premade);
+      return premade;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const premade = getPremadeCollections();
+    const premadeMap = {};
+    premade.forEach(function (p) { premadeMap[p.id] = p.coverImageUrl; });
+    let updated = false;
+    for (let i = 0; i < parsed.length; i++) {
+      const item = parsed[i];
+      if (!item) continue;
+      if (item.id === 'col_hbomax') {
+        const hboImg = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRInZVxLCd8CpYk_A80vU10wjypKNN_b1JUmTdhDj19ZlVJ2Ecz3nauXpN&s=10';
+        if (item.coverImageUrl !== hboImg) {
+          item.coverImageUrl = hboImg;
+          updated = true;
+        }
+      } else if (item.id && premadeMap[item.id] && (!item.coverImageUrl || item.coverImageUrl.indexOf('assets.nflxext.com') !== -1 || item.coverImageUrl.indexOf('images.ctfassets.net') !== -1 || item.coverImageUrl.indexOf('kXfqcdQKsToO0OUXHcrrNCHDBzO') !== -1 || (item.id === 'col_peacock' && item.coverImageUrl.indexOf('tmdb.org') !== -1))) {
+        item.coverImageUrl = premadeMap[item.id];
+        updated = true;
+      }
+      if (Array.isArray(item.lists)) {
+        for (let j = 0; j < item.lists.length; j++) {
+          const l = item.lists[j];
+          if (l && l.name) {
+            const clean = l.name.replace(/\s*\((?:movies|shows|series)\)\s*$/i, '').trim();
+            if (clean && clean !== l.name) {
+              l.name = clean;
+              updated = true;
+            }
+          }
+        }
+      }
+    }
+    if (updated) saveCustomCollections(parsed);
+    return parsed;
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomCollections(collections) {
+  try {
+    localStorage.setItem(CUSTOM_COLLECTIONS_STORAGE_KEY, JSON.stringify(collections || []));
+  } catch (e) {}
+}
+
+function loadPremadeCollectionsBtn() {
+  const current = loadCustomCollections();
+  const premade = getPremadeCollections();
+  if (!current.length) {
+    saveCustomCollections(premade);
+    renderCustomCollections();
+    renderPremadeCollections();
+    showToast('Loaded ' + premade.length + ' premade collections.', 'success');
+    return;
+  }
+  if (typeof showAppConfirm === 'function') {
+    showAppConfirm(
+      'Replace collections?',
+      'Replace your collection folders with the 10 premade collections (Apple TV+, Disney+, HBO Max, Hulu, Netflix, Netflix Kids, Paramount+, Prime Video, Peacock, Kids)? Click Replace to overwrite, or Cancel to keep your folders.',
+      'Replace',
+      function () {
+        saveCustomCollections(premade);
+        renderCustomCollections();
+        renderPremadeCollections();
+        showToast('Replaced with ' + premade.length + ' premade collections.', 'success');
+      }
+    );
+  } else {
+    addAllPremadeCollections();
+  }
+}
+
+window._collectionDraft = { id: null, name: '', description: '', lists: [] };
+window._expandedCollectionFolders = new Set();
+
+function openCreateCollectionModal(editId) {
+  const modal = document.getElementById('createCollectionModal');
+  if (!modal) return;
+
+  const existingCollections = loadCustomCollections();
+  const existing = editId ? existingCollections.find(function (c) { return c.id === editId; }) : null;
+
+  if (existing) {
+    window._collectionDraft = {
+      id: existing.id,
+      name: existing.name || '',
+      description: existing.description || '',
+      tileShape: existing.tileShape || 'LANDSCAPE',
+      hideTitle: !!existing.hideTitle,
+      addonId: existing.addonId || 'app.my-list',
+      coverImageUrl: existing.coverImageUrl || '',
+      lists: Array.isArray(existing.lists) ? JSON.parse(JSON.stringify(existing.lists)) : []
+    };
+    const titleEl = document.getElementById('createCollectionModalTitle');
+    if (titleEl) titleEl.textContent = 'Edit Collection';
+    const btnEl = document.getElementById('createCollectionModalBtn');
+    if (btnEl) btnEl.textContent = 'Save Changes';
+  } else {
+    window._collectionDraft = {
+      id: 'col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name: '',
+      description: '',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: '',
+      lists: []
+    };
+    const titleEl = document.getElementById('createCollectionModalTitle');
+    if (titleEl) titleEl.textContent = 'Create Collection';
+    const btnEl = document.getElementById('createCollectionModalBtn');
+    if (btnEl) btnEl.textContent = 'Create Collection';
+  }
+
+  const nameInput = document.getElementById('createCollectionModalName');
+  if (nameInput) nameInput.value = window._collectionDraft.name;
+  const descInput = document.getElementById('createCollectionModalDesc');
+  if (descInput) descInput.value = window._collectionDraft.description;
+  const addonInput = document.getElementById('createCollectionAddonId');
+  if (addonInput) addonInput.value = window._collectionDraft.addonId || 'app.my-list';
+  const coverInput = document.getElementById('createCollectionCoverImageUrl');
+  if (coverInput) coverInput.value = window._collectionDraft.coverImageUrl || '';
+  const tileShapeInput = document.getElementById('createCollectionTileShape');
+  if (tileShapeInput) tileShapeInput.value = window._collectionDraft.tileShape || 'LANDSCAPE';
+  const hideTitleInput = document.getElementById('createCollectionHideTitle');
+  if (hideTitleInput) hideTitleInput.checked = !!window._collectionDraft.hideTitle;
+  const urlInput = document.getElementById('createCollectionCustomListUrl');
+  if (urlInput) urlInput.value = '';
+
+  populateCollectionListPicker();
+  renderCollectionDraftLists();
+  validateCollectionModal();
+
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  if (nameInput) nameInput.focus();
+}
+
+function closeCreateCollectionModal() {
+  const modal = document.getElementById('createCollectionModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+
+function getAllWebsiteListsGrouped() {
+  const groups = {};
+
+  function addToList(groupName, name, url, type) {
+    if (!name || !url) return;
+    if (!groups[groupName]) groups[groupName] = [];
+    if (!groups[groupName].some(function (item) { return item.name === name && item.url === url && item.type === type; })) {
+      groups[groupName].push({ name: name, url: url, type: type || 'movie' });
+    }
+  }
+
+  // 1. Configured Catalogs
+  const entries = (typeof collectEntries === 'function') ? collectEntries() : [];
+  if (entries.length) {
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (e && e.name && e.url) {
+        addToList('Your Catalogs', e.name, e.url, e.type || 'movie');
+      }
+    }
+  }
+
+  // 2. Custom Lists
+  const localCustom = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
+  const customSlugs = Object.keys(localCustom);
+  if (customSlugs.length) {
+    for (let i = 0; i < customSlugs.length; i++) {
+      const slug = customSlugs[i];
+      const cl = localCustom[slug];
+      if (cl && cl.name) {
+        const url = 'customlist:v1:' + JSON.stringify({ listId: cl.listId || slug, type: cl.type || 'movie', items: cl.items || [] });
+        addToList('Your Custom Lists', cl.name, url, cl.type || 'movie');
+      }
+    }
+  }
+
+  // 3. Curated Recommendations
+  if (typeof CURATED_LIST_ENTRIES !== 'undefined' && Array.isArray(CURATED_LIST_ENTRIES)) {
+    for (let i = 0; i < CURATED_LIST_ENTRIES.length; i++) {
+      const c = CURATED_LIST_ENTRIES[i];
+      if (c && c.name && c.slug) {
+        addToList('Curated Recommendations', c.name, 'custom:curated:' + c.slug, c.type || 'movie');
+      }
+    }
+  }
+
+  // 4. Connected App Lists (Stremio & Nuvio)
+  const providers = ['stremio', 'nuvio'];
+  for (let p = 0; p < providers.length; p++) {
+    const prov = providers[p];
+    const provName = (typeof MEDIA_APP_UI_NAMES !== 'undefined' && MEDIA_APP_UI_NAMES[prov]) || (prov === 'stremio' ? 'Stremio' : 'Nuvio');
+    if (typeof mediaAppListsLive !== 'undefined' && mediaAppListsLive[prov]) {
+      if (typeof MEDIA_APP_LISTS !== 'undefined' && Array.isArray(MEDIA_APP_LISTS)) {
+        for (let m = 0; m < MEDIA_APP_LISTS.length; m++) {
+          const l = MEDIA_APP_LISTS[m];
+          if (typeof mediaAppListUrls === 'function') {
+            const urls = mediaAppListUrls(prov, l.slug);
+            if (urls) {
+              addToList('Connected Apps (' + provName + ')', provName + ' ' + l.title + ' (Movies)', urls.movie, 'movie');
+              addToList('Connected Apps (' + provName + ')', provName + ' ' + l.title + ' (Shows)', urls.series, 'series');
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 5. Official Charts & Provider Lists (CHART_SLUG_ENTRIES)
+  if (typeof CHART_SLUG_ENTRIES !== 'undefined' && Array.isArray(CHART_SLUG_ENTRIES)) {
+    for (let i = 0; i < CHART_SLUG_ENTRIES.length; i++) {
+      const e = CHART_SLUG_ENTRIES[i];
+      if (!e || !e.name) continue;
+
+      let groupName = 'Official Charts';
+      const n = e.name;
+      const mUrl = e.movieUrl || e.url || '';
+      const sUrl = e.showUrl || e.url || '';
+
+      if (n.indexOf('Most Watched') !== -1 || n === 'New on Streaming') {
+        groupName = 'My Lists Addon Charts';
+      } else if (n === 'Popular' || n === 'Trending' || n.indexOf('All Services') !== -1) {
+        groupName = 'Combined Charts';
+      } else if (n.indexOf('TMDB') !== -1 || n === 'New Releases') {
+        groupName = 'TMDB Official Charts';
+      } else if (n.indexOf('Trakt') !== -1) {
+        groupName = 'Trakt Official Charts';
+      } else if (n.indexOf('MDBList') !== -1 || n.indexOf('MovieMeter') !== -1 || n.indexOf('Streaming Charts') !== -1) {
+        groupName = 'MDBList Official Charts';
+      } else if (n.indexOf('Simkl') !== -1) {
+        groupName = 'Simkl Charts';
+      } else if (mUrl.indexOf('top-10') !== -1 || sUrl.indexOf('top-10') !== -1) {
+        groupName = 'Streaming Top 10';
+      } else if (mUrl.indexOf('tmdb:chart:') !== -1) {
+        groupName = 'Streaming Catalogs';
+      } else if (mUrl.indexOf('tmdb:genre:') !== -1) {
+        groupName = 'Genre Catalogs';
+      } else if (mUrl.indexOf('tmdb:kids:') !== -1) {
+        groupName = 'Kids & Family';
+      } else if (mUrl.indexOf('tmdb:holiday:') !== -1) {
+        groupName = 'Holiday Specials';
+      } else if (n.indexOf('Hidden Gems') !== -1) {
+        groupName = 'Curated Recommendations';
+      }
+
+      if (mUrl && sUrl && mUrl !== sUrl) {
+        addToList(groupName, n + ' (Movies)', mUrl, 'movie');
+        addToList(groupName, n + ' (Shows)', sUrl, 'series');
+      } else if (mUrl && sUrl && mUrl === sUrl) {
+        if (mUrl.indexOf('movie') !== -1) {
+          addToList(groupName, n, mUrl, 'movie');
+        } else if (mUrl.indexOf('show') !== -1 || mUrl.indexOf('series') !== -1 || mUrl.indexOf('anime') !== -1) {
+          addToList(groupName, n, sUrl, 'series');
+        } else {
+          addToList(groupName, n + ' (Movies)', mUrl, 'movie');
+          addToList(groupName, n + ' (Shows)', sUrl, 'series');
+        }
+      } else if (mUrl) {
+        addToList(groupName, n, mUrl, 'movie');
+      } else if (sUrl) {
+        addToList(groupName, n, sUrl, 'series');
+      }
+    }
+  }
+
+  return groups;
+}
+
+function populateCollectionListPicker() {
+  const sel = document.getElementById('createCollectionListPicker');
+  if (!sel) return;
+  let html = '<option value="">-- Pick from website lists --</option>';
+
+  const grouped = getAllWebsiteListsGrouped();
+  const groupOrder = [
+    'Your Catalogs',
+    'Your Custom Lists',
+    'Curated Recommendations',
+    'My Lists Addon Charts',
+    'Combined Charts',
+    'TMDB Official Charts',
+    'Trakt Official Charts',
+    'MDBList Official Charts',
+    'Simkl Charts',
+    'Streaming Top 10',
+    'Streaming Catalogs',
+    'Genre Catalogs',
+    'Kids & Family',
+    'Holiday Specials',
+    'Connected Apps (Stremio)',
+    'Connected Apps (Nuvio)'
+  ];
+
+  const renderedGroups = new Set();
+  for (let g = 0; g < groupOrder.length; g++) {
+    const gName = groupOrder[g];
+    if (grouped[gName] && grouped[gName].length) {
+      renderedGroups.add(gName);
+      html += '<optgroup label="' + escapeAttr(gName) + '">';
+      for (let i = 0; i < grouped[gName].length; i++) {
+        const item = grouped[gName][i];
+        html += '<option value="' + escapeAttr(JSON.stringify(item)) + '">' + escapeHtml(item.name) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+  }
+
+  const allGroupNames = Object.keys(grouped);
+  for (let k = 0; k < allGroupNames.length; k++) {
+    const gName = allGroupNames[k];
+    if (!renderedGroups.has(gName) && grouped[gName].length) {
+      html += '<optgroup label="' + escapeAttr(gName) + '">';
+      for (let i = 0; i < grouped[gName].length; i++) {
+        const item = grouped[gName][i];
+        html += '<option value="' + escapeAttr(JSON.stringify(item)) + '">' + escapeHtml(item.name) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+  }
+
+  sel.innerHTML = html;
+}
+
+function addPickerListToCollectionDraft() {
+  const sel = document.getElementById('createCollectionListPicker');
+  if (!sel || !sel.value) return;
+  try {
+    const item = JSON.parse(sel.value);
+    if (!item || !item.url) return;
+    if (!window._collectionDraft.lists) window._collectionDraft.lists = [];
+    const exists = window._collectionDraft.lists.some(function (l) { return l.url === item.url; });
+    if (exists) {
+      showToast('This list is already in the collection.', 'info');
+      return;
+    }
+    window._collectionDraft.lists.push(item);
+    renderCollectionDraftLists();
+    validateCollectionModal();
+  } catch (e) {}
+}
+
+function addUrlListToCollectionDraft() {
+  const input = document.getElementById('createCollectionCustomListUrl');
+  if (!input) return;
+  const rawUrl = input.value.trim();
+  if (!rawUrl) {
+    showToast('Enter a list URL first.', 'error');
+    return;
+  }
+  const name = (typeof guessNameFromUrl === 'function' ? guessNameFromUrl(rawUrl) : '') || 'Imported List';
+  const type = (rawUrl.indexOf('series') !== -1 || rawUrl.indexOf('shows') !== -1) ? 'series' : 'movie';
+  if (!window._collectionDraft.lists) window._collectionDraft.lists = [];
+  const exists = window._collectionDraft.lists.some(function (l) { return l.url === rawUrl; });
+  if (exists) {
+    showToast('This list is already in the collection.', 'info');
+    return;
+  }
+  window._collectionDraft.lists.push({ name: name, url: rawUrl, type: type });
+  input.value = '';
+  renderCollectionDraftLists();
+  validateCollectionModal();
+}
+
+function removeListFromCollectionDraft(index) {
+  if (!window._collectionDraft || !window._collectionDraft.lists) return;
+  window._collectionDraft.lists.splice(index, 1);
+  renderCollectionDraftLists();
+  validateCollectionModal();
+}
+
+function renderCollectionDraftLists() {
+  const container = document.getElementById('collectionDraftListsContainer');
+  const countEl = document.getElementById('collectionDraftCount');
+  if (!container) return;
+  const lists = (window._collectionDraft && window._collectionDraft.lists) || [];
+  if (countEl) countEl.textContent = String(lists.length);
+
+  if (!lists.length) {
+    container.innerHTML = '<p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this collection folder yet.</p>';
+    return;
+  }
+
+  container.innerHTML = lists.map(function (item, idx) {
+    return '<div class="u-ai-center u-jc-space_between u-gap-8px u-p-4px_8px u-mb-4px u-br-v_radius_xs u-bg-v_surface u-bd-1px_solid_v_border" style="display:flex;">' +
+      '<div class="u-minw-0 u-flex-1">' +
+        '<div class="u-fw-600 u-fs-v_font_size_xs u-c-v_text u-to-ellipsis u-ws-nowrap u-ov-hidden">' + escapeHtml(item.name || 'Unnamed List') + '</div>' +
+        '<div class="u-fs-v_font_size_xxs u-c-v_muted u-to-ellipsis u-ws-nowrap u-ov-hidden">' + escapeHtml(item.url || '') + '</div>' +
+      '</div>' +
+      '<button type="button" class="lc-btn btn-ghost u-p-2px_6px u-fs-v_font_size_xs" aria-label="Remove ' + escapeAttr(item.name) + '" data-act="removeListFromCollectionDraft" data-act-args="' + appActArgs([idx]) + '">&#x2715;</button>' +
+    '</div>';
+  }).join('');
+}
+
+function validateCollectionModal() {
+  const nameInput = document.getElementById('createCollectionModalName');
+  const btn = document.getElementById('createCollectionModalBtn');
+  if (!btn) return;
+  const name = nameInput ? nameInput.value.trim() : '';
+  const valid = !!name;
+  btn.disabled = !valid;
+  btn.style.opacity = valid ? '1' : '0.5';
+}
+
+function submitCreateCollectionModal() {
+  const nameInput = document.getElementById('createCollectionModalName');
+  const descInput = document.getElementById('createCollectionModalDesc');
+  const coverInput = document.getElementById('createCollectionCoverImageUrl');
+  const tileShapeInput = document.getElementById('createCollectionTileShape');
+  const hideTitleInput = document.getElementById('createCollectionHideTitle');
+
+  const name = nameInput ? nameInput.value.trim() : '';
+  if (!name) {
+    showToast('Name this collection first.', 'error');
+    return;
+  }
+  const desc = descInput ? descInput.value.trim() : '';
+  const addonInput = document.getElementById('createCollectionAddonId');
+  const addonId = (addonInput ? addonInput.value.trim() : '') || 'app.my-list';
+  const coverImageUrl = coverInput ? coverInput.value.trim() : '';
+  const tileShape = tileShapeInput ? tileShapeInput.value : 'LANDSCAPE';
+  const hideTitle = hideTitleInput ? hideTitleInput.checked : false;
+
+  const collections = loadCustomCollections();
+  const id = window._collectionDraft.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7));
+
+  const existingIdx = collections.findIndex(function (c) { return c.id === id; });
+  const entry = {
+    id: id,
+    name: name,
+    description: desc,
+    addonId: addonId,
+    tileShape: tileShape,
+    hideTitle: hideTitle,
+    coverImageUrl: coverImageUrl,
+    lists: window._collectionDraft.lists || [],
+    updatedAt: Date.now()
+  };
+
+  if (existingIdx !== -1) {
+    collections[existingIdx] = entry;
+  } else {
+    entry.createdAt = Date.now();
+    collections.unshift(entry);
+  }
+
+  saveCustomCollections(collections);
+  closeCreateCollectionModal();
+  showToast('Collection "' + name + '" saved.', 'success');
+  renderCustomCollections();
+}
+
+function renderCustomCollections() {
+  const box = document.getElementById('myCustomCollectionsResult');
+  if (!box) return;
+  const collections = loadCustomCollections();
+
+  if (!collections.length) {
+    box.innerHTML = '<div class="u-p-16px u-ta-center u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">No collection folders created yet. Create folders with multiple lists inside to easily manage and install them together in Stremio and Nuvio.</p>' +
+      '<button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Your First Collection</button>' +
+    '</div>';
+    return;
+  }
+
+  box.innerHTML = collections.map(function (col) {
+    const listCount = (col.lists && col.lists.length) || 0;
+    const isExpanded = window._expandedCollectionFolders && window._expandedCollectionFolders.has(col.id);
+
+    const nl = String.fromCharCode(10);
+    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
+    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
+    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
+
+    let listsPreviewHtml = '';
+    if (listCount > 0) {
+      listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="colFolderContent_' + escapeAttr(col.id) + '">' +
+        '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-8px u-tt-uppercase">Lists inside this folder:</div>' +
+        col.lists.map(function (l, lidx) {
+          const lType = l.type || 'movie';
+          const listName = l.name || 'Unnamed List';
+          return '<div class="list-card u-mb-8px" data-url="' + escapeAttr(l.url || '') + '">' +
+            '<div class="list-card-header">' +
+              '<div class="list-card-body">' +
+                '<div class="u-ai-center u-gap-8px" style="display:flex; flex-wrap:wrap;">' +
+                  '<span class="list-card-title">' + escapeHtml(listName) + '</span>' +
+                  '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(lType) + '</span>' +
+                '</div>' +
+                '<div class="list-card-meta">' +
+                  '<span class="u-fs-v_font_size_xs u-c-v_muted">' + escapeHtml(l.url || '') + '</span>' +
+                '</div>' +
+              '</div>' +
+              '<div class="list-card-actions">' +
+                '<button type="button" class="lc-btn btn-ghost u-p-4px_8px u-fs-v_font_size_xs" title="Remove from collection" aria-label="Remove ' + escapeAttr(listName) + '" data-act="removeListFromSavedCollection" data-act-args="' + appActArgs([col.id, lidx]) + '">&#x2715;</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(lType) + '"></div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    const shapeLabel = col.tileShape || 'LANDSCAPE';
+    const hasCover = !!col.coverImageUrl;
+    const coverHtml = hasCover
+      ? '<img src="' + escapeAttr(col.coverImageUrl) + '" alt="' + escapeAttr(col.name) + '" style="width:100px; height:56px; object-fit:cover; border-radius:var(--radius-xs); border:1px solid var(--border); flex-shrink:0;">'
+      : '';
+
+    return '<div class="list-card" data-collection-id="' + escapeAttr(col.id) + '" style="flex-direction:column; align-items:stretch;">' +
+      '<div class="list-card-header">' +
+        (coverHtml ? '<div class="u-mr-10px">' + coverHtml + '</div>' : '') +
+        '<div class="list-card-body">' +
+          '<div class="u-ai-center u-gap-8px u-mb-4px" style="display:flex; flex-wrap:wrap;">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px; color:var(--accent); flex-shrink:0;" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>' +
+            '<span class="list-card-title u-cur-pointer" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + escapeHtml(col.name) + '</span>' +
+            '<span class="u-fs-v_font_size_xs u-p-2px_8px u-br-v_radius_pill u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-bd-1px_solid_v_border">' + listCount + (listCount === 1 ? ' list' : ' lists') + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(shapeLabel) + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border" title="Target Add-on ID in Nuvio">Addon: ' + escapeHtml(col.addonId || 'app.my-list') + '</span>' +
+          '</div>' +
+          (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
+        '</div>' +
+        '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn btn-danger secondary" data-act="deleteCustomCollection" data-act-args="' + appActArgs([col.id]) + '">Delete</button>' +
+        '</div>' +
+      '</div>' +
+      listsPreviewHtml +
+    '</div>';
+  }).join('');
+
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function toggleCustomCollectionFolder(id) {
+  if (!window._expandedCollectionFolders) window._expandedCollectionFolders = new Set();
+  if (window._expandedCollectionFolders.has(id)) {
+    window._expandedCollectionFolders.delete(id);
+  } else {
+    window._expandedCollectionFolders.add(id);
+  }
+  renderCustomCollections();
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function renderPremadeCollections() {
+  const box = document.getElementById('premadeCollectionsResult');
+  if (!box) return;
+  const premade = getPremadeCollections();
+  const custom = loadCustomCollections();
+  const customNames = new Set(custom.map(function (c) { return (c.name || '').toLowerCase(); }));
+
+  box.innerHTML = premade.map(function (col) {
+    const listCount = (col.lists && col.lists.length) || 0;
+    const isExpanded = window._expandedPremadeFolders && window._expandedPremadeFolders.has(col.id);
+    const inFolders = customNames.has((col.name || '').toLowerCase());
+
+    const nl = String.fromCharCode(10);
+    const movieUrls = (col.lists || []).filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const seriesUrls = (col.lists || []).filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const primaryUrl = movieUrls.length ? movieUrls.join(nl) : (col.lists || []).map(function (l) { return l.url; }).join(nl);
+    const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
+    const isAdded = !!primaryUrl && typeof isListAddedToConfig === 'function' && isListAddedToConfig(primaryUrl, primaryType);
+
+    let listsPreviewHtml = '';
+    if (listCount > 0) {
+      listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="premadeFolderContent_' + escapeAttr(col.id) + '">' +
+        '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-8px u-tt-uppercase">Lists inside this folder:</div>' +
+        col.lists.map(function (l) {
+          const lType = l.type || 'movie';
+          const listName = l.name || 'Unnamed List';
+          return '<div class="list-card u-mb-8px" data-url="' + escapeAttr(l.url || '') + '">' +
+            '<div class="list-card-header">' +
+              '<div class="list-card-body">' +
+                '<div class="u-ai-center u-gap-8px" style="display:flex; flex-wrap:wrap;">' +
+                  '<span class="list-card-title">' + escapeHtml(listName) + '</span>' +
+                  '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(lType) + '</span>' +
+                '</div>' +
+                '<div class="list-card-meta">' +
+                  '<span class="u-fs-v_font_size_xs u-c-v_muted">' + escapeHtml(l.url || '') + '</span>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(lType) + '"></div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    const hasCover = !!col.coverImageUrl;
+    const coverHtml = hasCover
+      ? '<img src="' + escapeAttr(col.coverImageUrl) + '" alt="' + escapeAttr(col.name) + '" style="width:100px; height:56px; object-fit:cover; border-radius:var(--radius-xs); border:1px solid var(--border); flex-shrink:0;">'
+      : '';
+
+    return '<div class="list-card" data-premade-id="' + escapeAttr(col.id) + '" style="flex-direction:column; align-items:stretch;">' +
+      '<div class="list-card-header">' +
+        (coverHtml ? '<div class="u-mr-10px">' + coverHtml + '</div>' : '') +
+        '<div class="list-card-body">' +
+          '<div class="u-ai-center u-gap-8px u-mb-4px" style="display:flex; flex-wrap:wrap;">' +
+            '<span class="list-card-title u-cur-pointer" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + escapeHtml(col.name) + '</span>' +
+            '<span class="u-fs-v_font_size_xs u-p-2px_8px u-br-v_radius_pill u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-bd-1px_solid_v_border">' + listCount + (listCount === 1 ? ' list' : ' lists') + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(col.tileShape || 'LANDSCAPE') + '</span>' +
+          '</div>' +
+          (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
+        '</div>' +
+        '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
+          (inFolders
+            ? '<button type="button" class="lc-btn secondary" disabled style="opacity:0.6; cursor:default;">&#x2713; In Your Folders</button>'
+            : '<button type="button" class="lc-btn primary" data-act="addPremadeToCustomCollections" data-act-args="' + appActArgs([col.id]) + '">+ Add to Your Folders</button>'
+          ) +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (isAdded ? ' is-added' : '') + '"' + (isAdded ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleCustomCollectionCatalog" data-act-args="' + appActArgs([col.id, isAdded]) + '" title="Add or remove this folder from your Stremio &amp; Addon catalogs">' + (isAdded ? 'Remove' : '+ Add to Catalogs') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="pushSinglePremadeToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
+        '</div>' +
+      '</div>' +
+      listsPreviewHtml +
+    '</div>';
+  }).join('');
+
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function togglePremadeFolder(id) {
+  if (!window._expandedPremadeFolders) window._expandedPremadeFolders = new Set();
+  if (window._expandedPremadeFolders.has(id)) {
+    window._expandedPremadeFolders.delete(id);
+  } else {
+    window._expandedPremadeFolders.add(id);
+  }
+  renderPremadeCollections();
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function addPremadeToCustomCollections(premadeId) {
+  const premade = getPremadeCollections();
+  const target = premade.find(function (p) { return p.id === premadeId; });
+  if (!target) return;
+  const current = loadCustomCollections();
+  const exists = current.some(function (c) { return (c.name || '').toLowerCase() === target.name.toLowerCase(); });
+  if (exists) {
+    showToast('"' + target.name + '" is already in your collection folders.', 'info');
+    return;
+  }
+  current.push(JSON.parse(JSON.stringify(target)));
+  saveCustomCollections(current);
+  renderCustomCollections();
+  renderPremadeCollections();
+  showToast('Added "' + target.name + '" to your collection folders.', 'success');
+}
+
+function addAllPremadeCollections() {
+  const current = loadCustomCollections();
+  const premade = getPremadeCollections();
+  const existingNames = new Set(current.map(function (c) { return (c.name || '').toLowerCase(); }));
+  let added = 0;
+  premade.forEach(function (p) {
+    if (!existingNames.has((p.name || '').toLowerCase())) {
+      current.push(JSON.parse(JSON.stringify(p)));
+      added++;
+    }
+  });
+  if (added > 0) {
+    saveCustomCollections(current);
+    renderCustomCollections();
+    renderPremadeCollections();
+    showToast('Added ' + added + ' premade collection(s) to your folders.', 'success');
+  } else {
+    showToast('All premade collections are already in your folders.', 'info');
+  }
+}
+
+function pushSinglePremadeToNuvio(colId) {
+  openSyncNuvioModal(colId);
+}
+
+function removeListFromSavedCollection(colId, listIdx) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === colId; });
+  if (!col || !Array.isArray(col.lists)) return;
+  col.lists.splice(listIdx, 1);
+  saveCustomCollections(collections);
+  showToast('List removed from collection.', 'success');
+  renderCustomCollections();
+}
+
+function deleteCustomCollection(id) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === id; });
+  const name = col ? col.name : 'this collection';
+  if (typeof appShellDialog === 'function') {
+    appShellDialog({
+      title: 'Delete "' + name + '"?',
+      message: 'This will delete the collection folder. The underlying lists will not be affected.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep'
+    }).then(function (confirmed) {
+      if (confirmed) {
+        const next = collections.filter(function (c) { return c.id !== id; });
+        saveCustomCollections(next);
+        showToast('Deleted "' + name + '".', 'success');
+        renderCustomCollections();
+      }
+    });
+  } else {
+    const next = collections.filter(function (c) { return c.id !== id; });
+    saveCustomCollections(next);
+    showToast('Deleted "' + name + '".', 'success');
+    renderCustomCollections();
+  }
+}
+
+function toggleCustomCollectionCatalog(id, isAdded) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === id; });
+  if (!col) return;
+  if (!col.lists || !col.lists.length) {
+    showToast('Add at least one list to "' + col.name + '" before installing to Catalogs.', 'error');
+    return;
+  }
+
+  const nl = String.fromCharCode(10);
+  const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+  const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+  const primaryUrl = movieUrls.length ? movieUrls.join(nl) : col.lists.map(function (l) { return l.url; }).join(nl);
+  const primaryType = seriesUrls.length && !movieUrls.length ? 'series' : 'movie';
+
+  if (isAdded) {
+    if (movieUrls.length) removeListFromConfig(movieUrls.join(nl), 'movie');
+    if (seriesUrls.length) removeListFromConfig(seriesUrls.join(nl), 'series');
+    removeListFromConfig(primaryUrl, primaryType);
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Removed "' + col.name + '" from your Catalogs.');
+    }
+  } else {
+    if (movieUrls.length && seriesUrls.length) {
+      addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
+      addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
+    } else if (seriesUrls.length) {
+      addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
+    } else {
+      addRow(col.name, primaryUrl, 'movie', true, col.name);
+    }
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Added "' + col.name + '" to your Catalogs.');
+    }
+  }
+  renderCustomCollections();
+}
+
+function addAllCollectionsToStremio() {
+  const collections = loadCustomCollections();
+  if (!collections.length) {
+    showToast('No collection folders to add.', 'info');
+    return;
+  }
+  let addedCount = 0;
+  const nl = String.fromCharCode(10);
+  for (let i = 0; i < collections.length; i++) {
+    const col = collections[i];
+    if (!col || !col.lists || !col.lists.length) continue;
+    const movieUrls = col.lists.filter(function (l) { return l.type !== 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    const seriesUrls = col.lists.filter(function (l) { return l.type === 'series'; }).map(function (l) { return l.url; }).filter(Boolean);
+    if (movieUrls.length && seriesUrls.length) {
+      if (typeof addRow === 'function') {
+        addRow(col.name + ' (Movies)', movieUrls.join(nl), 'movie', true, col.name);
+        addRow(col.name + ' (Shows)', seriesUrls.join(nl), 'series', true, col.name);
+        addedCount++;
+      }
+    } else if (movieUrls.length) {
+      if (typeof addRow === 'function') {
+        addRow(col.name, movieUrls.join(nl), 'movie', true, col.name);
+        addedCount++;
+      }
+    } else if (seriesUrls.length) {
+      if (typeof addRow === 'function') {
+        addRow(col.name, seriesUrls.join(nl), 'series', true, col.name);
+        addedCount++;
+      }
+    }
+  }
+  if (typeof saveConfig === 'function') saveConfig();
+  if (typeof renderCustomCollections === 'function') renderCustomCollections();
+  if (typeof showAddedToast === 'function') {
+    showAddedToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!');
+  } else {
+    showToast('Added ' + addedCount + ' collection folder(s) to your Stremio catalogs!', 'success');
+  }
+}
+window.addAllCollectionsToStremio = addAllCollectionsToStremio;
+
+function extractNuvioCollections(raw) {
+  let val = raw;
+  if (typeof val === 'string') {
+    try { val = JSON.parse(val); } catch (e) { return []; }
+  }
+  if (!val) return [];
+  if (val.collections_json != null) return extractNuvioCollections(val.collections_json);
+  if (val.p_collections_json != null) return extractNuvioCollections(val.p_collections_json);
+  if (val.collections != null) return extractNuvioCollections(val.collections);
+  if (val.p_collections != null) return extractNuvioCollections(val.p_collections);
+  if (val.data != null) return extractNuvioCollections(val.data);
+  if (Array.isArray(val)) {
+    const out = [];
+    for (let i = 0; i < val.length; i++) {
+      const item = val[i];
+      if (!item) continue;
+      if (item.collections_json != null) {
+        out.push.apply(out, extractNuvioCollections(item.collections_json));
+      } else if (item.p_collections_json != null) {
+        out.push.apply(out, extractNuvioCollections(item.p_collections_json));
+      } else if (item.collections != null) {
+        out.push.apply(out, extractNuvioCollections(item.collections));
+      } else if (item.p_collections != null) {
+        out.push.apply(out, extractNuvioCollections(item.p_collections));
+      } else if (item.data != null) {
+        out.push.apply(out, extractNuvioCollections(item.data));
+      } else {
+        const itemTitle = String(item.title || item.name || '').trim();
+        const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
+        const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
+        if (itemTitle || hasFolders || hasSources) {
+          out.push(item);
+        }
+      }
+    }
+    return out;
+  }
+  if (typeof val === 'object') {
+    const valTitle = String(val.title || val.name || '').trim();
+    const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
+    const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
+    if (valTitle || hasFolders || hasSources) {
+      return [val];
+    }
+  }
+  return [];
+}
+
+function stripMediaSuffix(str) {
+  if (!str) return '';
+  const re = /[ \t]*[(](?:movies?|shows?|series|tv)[)][ \t]*$/ig;
+  return String(str).replace(re, '').replace(re, '').trim();
+}
+
+function addNewNuvioCollection(existing, incoming, options) {
+  const opts = options || {};
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  // Clean existing collections: filter out empty stubs (0 folders & 0 sources)
+  const cleanedExisting = existingArr.filter(function (c) {
+    if (!c) return false;
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    return cFolders.length > 0 || cSources.length > 0;
+  });
+
+  if (!incomingArr.length) return cleanedExisting;
+
+  const newCols = incomingArr.map(function (inCol) {
+    const rawName = opts.collectionName || inCol.title || inCol.name || 'My Lists Collections';
+    const colName = stripMediaSuffix(rawName) || 'My Lists Collections';
+    const colId = inCol.id && !cleanedExisting.some(function (e) { return e.id === inCol.id; })
+      ? inCol.id
+      : 'col_mylists_' + Math.random().toString(36).slice(2, 8);
+
+    const cleanFolders = (Array.isArray(inCol.folders) ? inCol.folders : [inCol]).map(function (inF) {
+      const cleanF = Object.assign({}, inF, {
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      });
+      if (Array.isArray(cleanF.catalogSources)) {
+        cleanF.catalogSources = cleanF.catalogSources.map(function (cs) {
+          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
+          cName = stripMediaSuffix(cName);
+          return Object.assign({}, cs, {
+            name: cName,
+            title: cName
+          });
+        });
+      }
+      return cleanF;
+    });
+
+    return Object.assign({}, inCol, {
+      id: colId,
+      title: colName,
+      name: colName,
+      viewMode: inCol.viewMode || 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cleanFolders
+    });
+  });
+
+  return cleanedExisting.concat(newCols);
+}
+
+function mergeNuvioCollections(existing, incoming) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  if (!existingArr.length) return incomingArr;
+  if (!incomingArr.length) return existingArr;
+
+  // Preserve all collections from other providers / community templates 100% untouched
+  const otherCollections = [];
+  let myListsCol = null;
+
+  for (let i = 0; i < existingArr.length; i++) {
+    const c = existingArr[i];
+    if (!c) continue;
+    const cTitle = String(c.title || c.name || '').trim();
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    if (cFolders.length === 0 && cSources.length === 0) {
+      // Discard empty/corrupted DB stubs (e.g. 8467ec44-2731-4b0f-a8b5-48e42d215150 with 0 folders)
+      continue;
+    }
+
+    const isMyLists = (c.id && (c.id === 'my-lists-collections' || c.id === 'my-lists-addon')) ||
+                      (cTitle && (cTitle.toLowerCase() === 'my lists collections' || cTitle.toLowerCase() === 'my lists addon' || cTitle.toLowerCase() === 'my lists'));
+    if (isMyLists) {
+      if (!myListsCol) {
+        myListsCol = JSON.parse(JSON.stringify(c));
+      } else if (cFolders.length > 0) {
+        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+        myListsCol.folders.push.apply(myListsCol.folders, JSON.parse(JSON.stringify(cFolders)));
+      }
+    } else {
+      otherCollections.push(JSON.parse(JSON.stringify(c)));
+    }
+  }
+
+  if (!myListsCol) {
+    myListsCol = {
+      id: 'my-lists-collections',
+      title: 'My Lists Collections',
+      name: 'My Lists Collections',
+      viewMode: 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: []
+    };
+  } else {
+    myListsCol.id = 'my-lists-collections';
+    myListsCol.title = 'My Lists Collections';
+    myListsCol.name = 'My Lists Collections';
+    myListsCol.hidden = false;
+    myListsCol.isVisible = true;
+    myListsCol.enabled = true;
+    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+  }
+
+  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
+  for (let i = 0; i < incomingArr.length; i++) {
+    const inCol = incomingArr[i];
+    if (!inCol) continue;
+    const inTitle = String(inCol.title || inCol.name || '').trim();
+    const isIncomingMyLists = (inCol.id && (inCol.id === 'my-lists-collections' || inCol.id === 'my-lists-addon')) ||
+                             (inTitle && (inTitle.toLowerCase() === 'my lists collections' || inTitle.toLowerCase() === 'my lists addon' || inTitle.toLowerCase() === 'my lists'));
+
+    if (inCol.id && !isIncomingMyLists) {
+      const existingOtherIdx = otherCollections.findIndex(function (oc) { return oc.id === inCol.id; });
+      if (existingOtherIdx !== -1) {
+        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
+        continue;
+      }
+    }
+
+    // Folders intended for My Lists Collections
+    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
+    for (let j = 0; j < foldersToMerge.length; j++) {
+      const inF = foldersToMerge[j];
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = Object.assign({}, inF, {
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      });
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map(function (cs) {
+          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
+          cName = stripMediaSuffix(cName);
+          return Object.assign({}, cs, {
+            name: cName,
+            title: cName
+          });
+        });
+      }
+      const fIdx = myListsCol.folders.findIndex(function (f) {
+        return (f.id && inF.id && f.id === inF.id) ||
+               (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
+               (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase());
+      });
+      if (fIdx !== -1) {
+        myListsCol.folders[fIdx] = Object.assign({}, myListsCol.folders[fIdx], cleanFolder);
+      } else {
+        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
+      }
+    }
+  }
+
+  return otherCollections.concat([myListsCol]);
+}
+
+function buildNuvioCollectionsPayload(collections) {
+  const cols = collections || loadCustomCollections();
+  return [
+    {
+      id: 'my-lists-collections',
+      title: 'My Lists Collections',
+      name: 'My Lists Collections',
+      viewMode: 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cols.map(function (col) {
+        return {
+          id: col.id || ('folder_' + Math.random().toString(36).slice(2, 8)),
+          title: col.name || 'Untitled Folder',
+          name: col.name || 'Untitled Folder',
+          tileShape: col.tileShape || 'LANDSCAPE',
+          hideTitle: !!col.hideTitle,
+          coverImageUrl: col.coverImageUrl || '',
+          hidden: false,
+          isVisible: true,
+          enabled: true,
+          catalogSources: (col.lists || []).map(function (l) {
+            let catId = l.catalogId;
+            if (!catId) {
+              if (l.url && typeof slugify === 'function') catId = slugify(l.url);
+              else if (l.name && typeof slugify === 'function') catId = slugify(l.name);
+              else catId = l.name || 'catalog';
+            }
+            let cleanName = stripMediaSuffix(l.name || catId);
+            return {
+              addonId: l.addonId || col.addonId || 'app.my-list',
+              catalogId: catId,
+              name: cleanName || catId,
+              title: cleanName || catId,
+              type: l.type || 'movie'
+            };
+          })
+        };
+      })
+    }
+  ];
+}
+
+function getNuvioManifestUrl() {
+  const display = document.getElementById('manifestLinkDisplay');
+  const txt = (display && display.innerText) ? display.innerText.trim() : '';
+  if (txt && (txt.startsWith('http://') || txt.startsWith('https://'))) return txt;
+  try {
+    const saved = localStorage.getItem('myListAddon:lastInstallUrl');
+    if (saved && (saved.startsWith('http://') || saved.startsWith('https://'))) return saved;
+  } catch (e) {}
+  if (window.myListAddonManifestUrl && (window.myListAddonManifestUrl.startsWith('http://') || window.myListAddonManifestUrl.startsWith('https://'))) {
+    return window.myListAddonManifestUrl;
+  }
+  return (window.location && window.location.origin ? window.location.origin : 'https://mylistsaddon.com') + '/manifest.json';
+}
+window.getNuvioManifestUrl = getNuvioManifestUrl;
+
+async function openSyncNuvioModal(targetColId) {
+  window._syncNuvioTarget = targetColId || null;
+  const modal = document.getElementById('syncNuvioModal');
+  if (!modal) {
+    executeNuvioCollectionsPush({ targetColId: targetColId });
+    return;
+  }
+
+  const titleEl = document.getElementById('syncNuvioModalTitle');
+  if (titleEl) {
+    titleEl.textContent = 'Add to Profile';
+  }
+
+  const sel = document.getElementById('syncNuvioProfileSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="1">James</option>';
+  }
+
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  if (modeSel) {
+    modeSel.value = 'new';
+  }
+  handleSyncNuvioModeChange();
+
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
+
+  try {
+    const res = await mediaAppUiCall('nuvio', 'settings', 'GET');
+    if (res && res.ok && res.data && Array.isArray(res.data.profiles) && res.data.profiles.length > 0) {
+      if (sel) {
+        sel.innerHTML = res.data.profiles.map(function (p) {
+          const idx = p.index != null ? p.index : (p.profile_index != null ? p.profile_index : 1);
+          const name = p.name || ('Profile ' + idx);
+          return '<option value="' + escapeAttr(String(idx)) + '">' + escapeHtml(name) + '</option>';
+        }).join('');
+      }
+    }
+  } catch (e) {}
+}
+
+function closeSyncNuvioModal() {
+  const modal = document.getElementById('syncNuvioModal');
+  if (modal) modal.style.display = 'none';
+  if (typeof unlockBackgroundScroll === 'function') unlockBackgroundScroll();
+  window._syncNuvioTarget = null;
+}
+
+function handleSyncNuvioModeChange() {
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  const hintEl = document.getElementById('syncNuvioModeHint');
+  const btn = document.getElementById('syncNuvioSubmitBtn');
+  const mode = modeSel ? modeSel.value : 'new';
+
+  if (hintEl) {
+    if (mode === 'new') {
+      hintEl.textContent = 'This will create a separate collection and leave existing collections untouched.';
+    } else if (mode === 'merge') {
+      hintEl.textContent = 'This will update folders inside My Lists Collections and leave other collections untouched.';
+    } else {
+      hintEl.textContent = 'This will replace all collections on this profile with My Lists collections.';
+    }
+  }
+  if (btn) {
+    btn.textContent = mode === 'new' ? 'Add collection' : 'Sync collection';
+  }
+}
+
+async function confirmSyncToNuvio() {
+  const profileSel = document.getElementById('syncNuvioProfileSelect');
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  const profileId = profileSel ? profileSel.value : '1';
+  const installMode = modeSel ? modeSel.value : 'new';
+  const targetColId = window._syncNuvioTarget;
+
+  closeSyncNuvioModal();
+  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId });
+}
+
+function syncCollectionsToNuvio() {
+  openSyncNuvioModal();
+}
+
+function pushSingleCollectionToNuvio(colId) {
+  openSyncNuvioModal(colId);
+}
+
+async function executeNuvioCollectionsPush(opts) {
+  const options = opts || {};
+  const profileId = options.profileId || 1;
+  const installMode = options.installMode || 'new';
+  const targetColId = options.targetColId;
+
+  const current = loadCustomCollections();
+  let collectionsToPush = current;
+  let pushName = 'collections';
+
+  if (targetColId) {
+    const premade = (typeof getPremadeCollections === 'function') ? getPremadeCollections() : [];
+    const premadeCol = premade.find(function (c) { return c.id === targetColId; });
+    if (premadeCol) {
+      const idx = current.findIndex(function (c) { return c.id === premadeCol.id || (c.name && premadeCol.name && c.name.toLowerCase() === premadeCol.name.toLowerCase()); });
+      if (idx !== -1) {
+        current[idx] = Object.assign({}, current[idx], premadeCol);
+      } else {
+        current.push(JSON.parse(JSON.stringify(premadeCol)));
+      }
+      saveCustomCollections(current);
+      renderCustomCollections();
+    }
+
+    const single = current.find(function (c) { return c.id === targetColId; });
+    if (single) {
+      pushName = single.name || 'folder';
+      if (installMode === 'new') {
+        collectionsToPush = [single];
+      }
+    }
+  }
+
+  if (!collectionsToPush.length) {
+    showToast('No collections to push.', 'info');
+    return;
+  }
+
+  const payload = buildNuvioCollectionsPayload(collectionsToPush);
+  const manifestUrl = getNuvioManifestUrl();
+  const allLists = collectionsToPush.reduce(function (acc, c) { return acc.concat(c.lists || []); }, []);
+
+  showToast('Pushing to Nuvio\u2026', 'info');
+
+  let cachedRemote = [];
+  try {
+    const raw = localStorage.getItem('myListAddon:nuvioRemoteCollections');
+    if (raw) cachedRemote = extractNuvioCollections(raw);
+  } catch (e) {}
+
+  try {
+    const pullRes = await mediaAppUiCall('nuvio', 'collections', 'GET');
+    if (pullRes && pullRes.ok && pullRes.data && pullRes.data.collections) {
+      const extracted = extractNuvioCollections(pullRes.data.collections);
+      if (extracted && extracted.length > 0) {
+        cachedRemote = extracted;
+        try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
+    profileId: profileId,
+    installMode: installMode,
+    collectionName: (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) ? collectionsToPush[0].name : 'My Lists Collections',
+    collections: payload,
+    knownCollections: cachedRemote,
+    manifestUrl: manifestUrl,
+    collectionLists: allLists
+  });
+
+  if (res && res.ok) {
+    if (res.data && res.data.collections) {
+      try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(res.data.collections)); } catch (e) {}
+    }
+    const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged' : 'updated');
+    let msg = 'Pushed "' + pushName + '" to Nuvio (' + modeDesc + ').';
+    if (res.data && res.data.addonInstalled) {
+      msg += ' My Lists Addon was auto-installed in Nuvio!';
+    }
+    showToast(msg, 'success');
+  } else {
+    showToast(mediaAppUiMessage(res, 'Could not push to Nuvio. Check your connection in Settings.'), 'error');
+  }
+}
+
+async function pullCollectionsFromNuvio() {
+  showToast('Pulling collections from Nuvio\u2026', 'info');
+  const res = await mediaAppUiCall('nuvio', 'collections', 'GET');
+  if (res && res.ok && res.data && res.data.collections) {
+    const extracted = extractNuvioCollections(res.data.collections);
+    if (extracted && extracted.length > 0) {
+      try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
+    }
+    const imported = parseNuvioCollectionsJson(res.data.collections);
+    if (!imported.length) {
+      showToast('Nuvio has no collection folders saved for this profile.', 'info');
+      return;
+    }
+    const current = loadCustomCollections();
+    const merged = current.slice();
+    let count = 0;
+    for (let i = 0; i < imported.length; i++) {
+      const imp = imported[i];
+      const idx = merged.findIndex(function (c) { return c.id === imp.id; });
+      if (idx !== -1) {
+        merged[idx] = imp;
+      } else {
+        merged.push(imp);
+        count++;
+      }
+    }
+    saveCustomCollections(merged);
+    renderCustomCollections();
+    showToast('Pulled ' + imported.length + ' collection folder(s) from Nuvio (' + count + ' new).', 'success');
+  } else {
+    showToast(mediaAppUiMessage(res, 'Could not pull collections from Nuvio. Check your connection in Settings.'), 'error');
+  }
+}
+
+function exportNuvioCollectionsJson() {
+  const collections = loadCustomCollections();
+  if (!collections.length) {
+    showToast('No collection folders to export yet.', 'info');
+    return;
+  }
+  const payload = buildNuvioCollectionsPayload(collections);
+  const jsonStr = JSON.stringify(payload, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'collections.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Exported collections.json for Nuvio.', 'success');
+}
+
+function parseNuvioCollectionsJson(raw) {
+  let data = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!data) return [];
+  let folders = [];
+  if (Array.isArray(data)) {
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      if (item && Array.isArray(item.folders)) {
+        folders = folders.concat(item.folders);
+      } else if (item && (item.catalogSources || item.title || item.name)) {
+        folders.push(item);
+      }
+    }
+  } else if (typeof data === 'object') {
+    if (Array.isArray(data.folders)) {
+      folders = data.folders;
+    } else if (data.catalogSources) {
+      folders = [data];
+    }
+  }
+
+  return folders.filter(Boolean).map(function (f) {
+    const lists = Array.isArray(f.catalogSources) ? f.catalogSources.map(function (cs) {
+      const catId = cs.catalogId || cs.name || '';
+      let url = cs.url || '';
+      if (!url && catId && typeof CHART_SLUG_ENTRIES !== 'undefined') {
+        const match = CHART_SLUG_ENTRIES.find(function (c) {
+          return c.slug === catId || (typeof slugify === 'function' && (slugify(c.name) === catId || slugify(c.movieUrl || '') === catId || slugify(c.showUrl || '') === catId));
+        });
+        if (match) {
+          url = cs.type === 'series' ? (match.showUrl || match.movieUrl) : (match.movieUrl || match.showUrl);
+        }
+      }
+      return {
+        name: cs.name || cs.catalogId || 'Catalog Item',
+        url: url || ('catalog:' + (cs.addonId || 'app.my-list') + ':' + catId),
+        type: cs.type || 'movie',
+        addonId: cs.addonId || 'app.my-list',
+        catalogId: catId
+      };
+    }) : [];
+
+    return {
+      id: f.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      name: f.title || f.name || 'Imported Collection',
+      description: f.description || '',
+      tileShape: f.tileShape || 'LANDSCAPE',
+      hideTitle: !!f.hideTitle,
+      addonId: (f.catalogSources && f.catalogSources[0] && f.catalogSources[0].addonId) || 'app.my-list',
+      coverImageUrl: f.coverImageUrl || '',
+      lists: lists,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  });
+}
+
+function openImportNuvioModal() {
+  const modal = document.getElementById('importNuvioCollectionsModal');
+  if (!modal) return;
+  const fileInput = document.getElementById('importNuvioFileInput');
+  if (fileInput) fileInput.value = '';
+  const textarea = document.getElementById('importNuvioJsonTextarea');
+  if (textarea) textarea.value = '';
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+}
+
+function closeImportNuvioModal() {
+  const modal = document.getElementById('importNuvioCollectionsModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+
+function handleNuvioFileSelected(event) {
+  const input = event && event.target ? event.target : document.getElementById('importNuvioFileInput');
+  if (!input || !input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const text = e.target.result;
+    const textarea = document.getElementById('importNuvioJsonTextarea');
+    if (textarea) textarea.value = text;
+  };
+  reader.readAsText(file);
+}
+
+function submitImportNuvioModal() {
+  const textarea = document.getElementById('importNuvioJsonTextarea');
+  const raw = textarea ? textarea.value.trim() : '';
+  if (!raw) {
+    showToast('Paste JSON or choose a collections.json file first.', 'error');
+    return;
+  }
+  const parsed = parseNuvioCollectionsJson(raw);
+  if (!parsed.length) {
+    showToast('Could not find any collection folders in this JSON.', 'error');
+    return;
+  }
+  const current = loadCustomCollections();
+  const merged = current.slice();
+  let count = 0;
+  for (let i = 0; i < parsed.length; i++) {
+    const item = parsed[i];
+    const idx = merged.findIndex(function (c) { return c.id === item.id; });
+    if (idx !== -1) {
+      merged[idx] = item;
+    } else {
+      merged.push(item);
+      count++;
+    }
+  }
+  saveCustomCollections(merged);
+  closeImportNuvioModal();
+  renderCustomCollections();
+  showToast('Imported ' + parsed.length + ' collection folder(s) (' + count + ' new).', 'success');
+}
+
+function renderCollectionsView() {
+  renderCustomCollections();
+  renderPremadeCollections();
+  renderCollectionsMediaApps();
+}
+
+function renderCollectionsCurated() {
+  const box = document.getElementById('collectionsCuratedResult');
+  if (!box) return;
+  box.innerHTML = FEATURED_TMDB_COLLECTIONS.map(function (c) {
+    const added = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(c.url, 'movie') || isListAddedToConfig('tmdb:collection:' + c.id, 'movie'));
+    return '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '">' +
+      '<div class="list-card-header">' +
+        '<div class="list-card-body">' +
+          '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([c.name, c.url]) + '">' + escapeHtml(c.name) + '</div>' +
+          '<div class="list-card-meta"><span>TMDB Franchise Collection</span></div>' +
+        '</div>' +
+        '<div class="list-card-actions">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([c.name, c.url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+    '</div>';
+  }).join('');
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+function renderCollectionsMediaApps() {
+  const box = document.getElementById('collectionsMediaAppsResult');
+  if (!box) return;
+  const providers = ['stremio', 'nuvio'];
+  box.innerHTML = providers.map(function (provider) {
+    const name = MEDIA_APP_UI_NAMES[provider];
+    const live = !!mediaAppListsLive[provider];
+    const busy = !!mediaAppListsBusy[provider];
+    if (!live) {
+      return '<div class="u-p-12px u-mb-10px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">' +
+        '<div class="u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">' +
+          '<div>' +
+            '<div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(name) + ' Collections</div>' +
+            '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_xs">Connect your ' + escapeHtml(name) + ' account in Settings to sync and install your personal history and continue watching collections.</p>' +
+          '</div>' +
+          '<button type="button" class="lc-btn secondary" data-act="goToExternalSettings">Connect ' + escapeHtml(name) + '</button>' +
+        '</div>' +
+      '</div>';
+    }
+    const listsHtml = MEDIA_APP_LISTS.map(function (l) {
+      const urls = mediaAppListUrls(provider, l.slug);
+      const added = !!urls && typeof isListAddedToConfig === 'function' && isListAddedToConfig(urls.movie, 'movie') && isListAddedToConfig(urls.series, 'series');
+      const listName = name + ' ' + l.title;
+      return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '"' + (urls ? ' data-url="' + escapeAttr(urls.mixed) + '"' : '') + '>' +
+        '<div class="list-card-header">' +
+          '<div class="list-card-body">' +
+            '<div class="list-card-title u-cur-pointer" data-act="openMediaAppListDetails" data-act-args="' + appActArgs([provider, l.slug]) + '">' + escapeHtml(listName) + '</div>' +
+            '<div class="list-card-meta"><span>' + escapeHtml(l.blurb) + '</span></div>' +
+          '</div>' +
+          '<div class="list-card-actions">' +
+            '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+              ' data-act="toggleMediaAppListAdd" data-act-args="' + appActArgs([provider, l.slug, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+          '</div>' +
+        '</div>' +
+        (urls ? '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(urls.mixed) + '" data-type="mixed" data-creator="" data-items="" data-likes="0"></div>' : '') +
+      '</div>';
+    }).join('');
+
+    return '<div class="u-mb-12px">' +
+      '<div class="u-ai-center u-jc-space_between u-gap-12px u-mb-8px" style="display:flex;">' +
+        '<div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(name) + ' Synced Collections</div>' +
+        '<button type="button" class="lc-btn secondary u-fs-v_font_size_xs" data-act="syncMediaAppNow" data-act-args="' + appActArgs([provider, '@self']) + '"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Syncing\u2026' : 'Sync now') + '</button>' +
+      '</div>' +
+      listsHtml +
+    '</div>';
+  }).join('');
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+async function searchCollections() {
+  const input = document.getElementById('collectionsSearchInput');
+  const box = document.getElementById('collectionsSearchResults');
+  if (!input || !box) return;
+  const rawQuery = (input.value || '').trim();
+  if (!rawQuery) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<p class="u-mt-10px u-c-v_muted" role="status"><small>Searching collections\u2026</small></p>';
+
+  const tmdbCollMatch = rawQuery.match(new RegExp('(?:themoviedb[.]org/collection/|tmdb:collection:)([0-9]+)', 'i')) || (rawQuery.match(/^[0-9]+$/) ? [null, rawQuery] : null);
+  if (tmdbCollMatch && tmdbCollMatch[1]) {
+    const id = tmdbCollMatch[1];
+    const url = 'https://www.themoviedb.org/collection/' + id;
+    const name = 'TMDB Collection ' + id;
+    const added = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(url, 'movie') || isListAddedToConfig('tmdb:collection:' + id, 'movie'));
+    box.innerHTML = '<div class="shelf-header u-mb-10px"><h3 class="panel-title u-mb-0 u-fs-v_font_size_sm">Matching Collection</h3></div>' +
+      '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(name) + '" data-url="' + escapeAttr(url) + '">' +
+        '<div class="list-card-header">' +
+          '<div class="list-card-body">' +
+            '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([name, url]) + '">' + escapeHtml(name) + '</div>' +
+            '<div class="list-card-meta"><span>TMDB Franchise Collection #' + escapeHtml(id) + '</span></div>' +
+          '</div>' +
+          '<div class="list-card-actions">' +
+            '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+              ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([name, url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(name) + '" data-url="' + escapeAttr(url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+      '</div>';
+    if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+    return;
+  }
+
+  try {
+    const res = await fetch(ORIGIN + '/api/tmdb-search-lists?q=' + encodeURIComponent(rawQuery));
+    const data = await res.json().catch(function () { return {}; });
+    const lists = (data && Array.isArray(data.lists)) ? data.lists : [];
+    const collections = lists.filter(function (item) {
+      return item.isCollection || (item.url && item.url.indexOf('/collection/') !== -1);
+    });
+
+    if (!collections.length) {
+      box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No collections found for "' + escapeHtml(rawQuery) + '". Try another franchise name or paste a collection URL.</small></p>';
+      return;
+    }
+
+    box.innerHTML = '<div class="shelf-header u-mb-10px"><h3 class="panel-title u-mb-0 u-fs-v_font_size_sm">Search Results (' + collections.length + ')</h3></div>' +
+      collections.map(function (c) {
+        const added = typeof isListAddedToConfig === 'function' && isListAddedToConfig(c.url, 'movie');
+        return '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '">' +
+          '<div class="list-card-header">' +
+            '<div class="list-card-body">' +
+              '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([c.name, c.url]) + '">' + escapeHtml(c.name) + '</div>' +
+              '<div class="list-card-meta"><span>TMDB Franchise Collection</span></div>' +
+            '</div>' +
+            '<div class="list-card-actions">' +
+              '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+                ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([c.name, c.url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+        '</div>';
+      }).join('');
+    if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+  } catch (err) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Could not search collections. Please try again.</small></p>';
+  }
+}
+
+function onCollectionsSearchKey() {
+  searchCollections();
+}
+
+function toggleCollectionAdd(name, url, isAdded) {
+  if (isAdded) {
+    removeListFromConfig(url, 'movie');
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Removed "' + name + '" from your Catalogs.');
+    }
+  } else {
+    addRow(name, url, 'movie', true, 'Collections');
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Added "' + name + '" to your Catalogs.');
+    }
+  }
+  renderCollectionsCurated();
+  const searchBox = document.getElementById('collectionsSearchResults');
+  if (searchBox && searchBox.style.display !== 'none') {
+    searchCollections();
+  }
+}
+
+function openCollectionDetails(name, url) {
+  if (typeof openListDetailsPage === 'function') {
+    openListDetailsPage(name, 'movie', url);
+  }
+}
+
+function refreshCollectionsView() {
+  renderCollectionsView();
+  if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
+  showToast('Collections refreshed.', 'success');
+}
+
+function goToExternalSettings() {
+  if (typeof switchTab === 'function') switchTab('settings');
+  const externalPill = document.querySelector('#settingsSubnavBar button[data-sub="external"]');
+  if (typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu('external', externalPill);
+}
+
+window.renderPremadeCollections = renderPremadeCollections;
+window.togglePremadeFolder = togglePremadeFolder;
+window.addPremadeToCustomCollections = addPremadeToCustomCollections;
+window.addAllPremadeCollections = addAllPremadeCollections;
+window.pushSinglePremadeToNuvio = pushSinglePremadeToNuvio;
+window.renderCollectionsView = renderCollectionsView;
+window.refreshCollectionsView = refreshCollectionsView;
+window.toggleCustomCollectionFolder = toggleCustomCollectionFolder;
+window.pushSingleCollectionToNuvio = pushSingleCollectionToNuvio;
+window.syncCollectionsToNuvio = syncCollectionsToNuvio;
+window.openCreateCollectionModal = openCreateCollectionModal;
+window.closeCreateCollectionModal = closeCreateCollectionModal;
+window.submitCreateCollectionModal = submitCreateCollectionModal;
+window.deleteCustomCollection = deleteCustomCollection;
+window.removeListFromSavedCollection = removeListFromSavedCollection;
+window.openSyncNuvioModal = openSyncNuvioModal;
+window.closeSyncNuvioModal = closeSyncNuvioModal;
+window.handleSyncNuvioModeChange = handleSyncNuvioModeChange;
+window.confirmSyncToNuvio = confirmSyncToNuvio;
+window.addNewNuvioCollection = addNewNuvioCollection;
+
 
 
 
@@ -82245,6 +84515,7 @@ function buildFullBackupPayload() {
     channels: channels,
     mergedChannels: mergedChannels,
     presets: dereferencePresetsMap(presets, map, channels),
+    customCollections: (function() { try { return JSON.parse(localStorage.getItem('myListAddon:customCollections') || '[]'); } catch(e) { return []; } })(),
     settings: {
       trackPlayback: localStorage.getItem('myListAddon:trackPlayback') === '1',
       removeWatchedFromWatchlist: localStorage.getItem('myListAddon:removeWatchedFromWatchlist') !== '0',
@@ -82558,6 +84829,10 @@ function applyImportedConfig(data) {
   if (entries.length) {
     document.getElementById('lists').innerHTML = '';
     restoreRows(entries);
+  }
+
+  if (data && Array.isArray(data.customCollections)) {
+    try { localStorage.setItem('myListAddon:customCollections', JSON.stringify(data.customCollections)); } catch (e) {}
   }
 
   // Restore API keys and connected accounts
@@ -84099,6 +86374,8 @@ async function generate() {
   }
 
   const installUrl = ORIGIN + '/' + config + '/manifest.json';
+  try { window.myListAddonManifestUrl = installUrl; } catch (e) {}
+  try { localStorage.setItem('myListAddon:lastInstallUrl', installUrl); } catch (e) {}
   const stremioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'stremio://');
   const nuvioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'nuvio://');
   const stremioWebUrl = 'https://web.stremio.com/#/addons?addon=' + encodeURIComponent(installUrl);
@@ -88524,16 +90801,56 @@ Sitemap: ${url.origin}/sitemap.xml`;
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
       }
 
-      if (!config) return jsonPublic({ metas: [] });
+      let unconfiguredEntry = null;
+      if (typeof findChartOrCollectionEntry === "function") {
+        unconfiguredEntry = findChartOrCollectionEntry(id, type);
+      }
+      if (!unconfiguredEntry && env && env.CONFIGS) {
+        try {
+          unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!config && !unconfiguredEntry) return jsonPublic({ metas: [] });
 
       // Kept as a whole object as well as destructured: the betterPosters*
       // style keys are passed through wholesale rather than one at a time.
-      const resolvedConfig = await resolveConfig(config, env);
+      const resolvedConfig = config
+        ? await resolveConfig(config, env)
+        : { entries: [unconfiguredEntry], tmdbKey: null, mdblistKey: null, mdblistAccessToken: null, traktKey: null, traktAccessToken: null, simklKey: null, simklAccessToken: null, shuffleItems: false, trackCreatorName: null, trackOwner: null, region: null, hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: null, showBadgesStremio: false, showBadgesStremioAiringNext: false, showBadgesStremioContinueWatching: false, showBadgesStremioCatalogs: false, showBadgesStremioWatchlist: false };
+
       // As in the manifest route: most installs ask for catalogs far more often.
-      ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      if (config) {
+        ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      }
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
-      const entry = entryIndex >= 0 ? entries[entryIndex] : null;
+      let entry = entryIndex >= 0 ? entries[entryIndex] : unconfiguredEntry;
+      if (!entry && typeof findChartOrCollectionEntry === "function") {
+        entry = findChartOrCollectionEntry(id, type);
+      }
+      if (!entry && env && env.CONFIGS) {
+        try {
+          entry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!entry && typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+        const found = CHART_SLUG_ENTRIES.find((c) => {
+          const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+          const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+          const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+          const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+          return id === mSlug || id === sSlug || id === nSlug || id === cSlug;
+        });
+        if (found) {
+          entry = {
+            id,
+            name: found.name,
+            type: type,
+            url: type === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+            enabled: true
+          };
+        }
+      }
       if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its
@@ -117673,6 +119990,428 @@ function mediaAppSyncSummary(row) {
   };
 }
 
+function extractNuvioCollections(raw) {
+  let val = raw;
+  if (typeof val === "string") {
+    try { val = JSON.parse(val); } catch { return []; }
+  }
+  if (!val) return [];
+  if (val.collections_json != null) return extractNuvioCollections(val.collections_json);
+  if (val.p_collections_json != null) return extractNuvioCollections(val.p_collections_json);
+  if (val.collections != null) return extractNuvioCollections(val.collections);
+  if (val.p_collections != null) return extractNuvioCollections(val.p_collections);
+  if (val.data != null) return extractNuvioCollections(val.data);
+  if (Array.isArray(val)) {
+    const out = [];
+    for (const item of val) {
+      if (!item) continue;
+      if (item.collections_json != null) {
+        out.push(...extractNuvioCollections(item.collections_json));
+      } else if (item.p_collections_json != null) {
+        out.push(...extractNuvioCollections(item.p_collections_json));
+      } else if (item.collections != null) {
+        out.push(...extractNuvioCollections(item.collections));
+      } else if (item.p_collections != null) {
+        out.push(...extractNuvioCollections(item.p_collections));
+      } else if (item.data != null) {
+        out.push(...extractNuvioCollections(item.data));
+      } else {
+        const itemTitle = String(item.title || item.name || "").trim();
+        const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
+        const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
+        if (itemTitle || hasFolders || hasSources) {
+          out.push(item);
+        }
+      }
+    }
+    return out;
+  }
+  if (typeof val === "object") {
+    const valTitle = String(val.title || val.name || "").trim();
+    const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
+    const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
+    if (valTitle || hasFolders || hasSources) {
+      return [val];
+    }
+  }
+  return [];
+}
+
+function addNewNuvioCollection(existing, incoming, options = {}) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  // Clean existing collections: discard empty stubs (0 folders & 0 sources)
+  const cleanedExisting = existingArr.filter((c) => {
+    if (!c) return false;
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    return cFolders.length > 0 || cSources.length > 0;
+  });
+
+  if (!incomingArr.length) return cleanedExisting;
+
+  // Build the incoming collections with unique IDs and clean titles
+  const newCols = incomingArr.map((inCol) => {
+    const rawName = options.collectionName || inCol.title || inCol.name || "My Lists Collections";
+    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+    const colId = inCol.id && !cleanedExisting.some((e) => e.id === inCol.id)
+      ? inCol.id
+      : "col_mylists_" + Math.random().toString(36).slice(2, 8);
+
+    const cleanFolders = (Array.isArray(inCol.folders) ? inCol.folders : [inCol]).map((inF) => {
+      const cleanF = {
+        ...inF,
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      };
+      if (Array.isArray(cleanF.catalogSources)) {
+        cleanF.catalogSources = cleanF.catalogSources.map((cs) => {
+          let cName = String(cs.name || cs.title || cs.catalogId || "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return {
+            ...cs,
+            name: cName,
+            title: cName
+          };
+        });
+      }
+      return cleanF;
+    });
+
+    return {
+      ...inCol,
+      id: colId,
+      title: colName,
+      name: colName,
+      viewMode: inCol.viewMode || "FOLLOW_LAYOUT",
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cleanFolders
+    };
+  });
+
+  return [...cleanedExisting, ...newCols];
+}
+
+function mergeNuvioCollections(existing, incoming) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  if (!existingArr.length) return incomingArr;
+  if (!incomingArr.length) return existingArr;
+
+  // Preserve all collections from other providers / community templates 100% untouched
+  const otherCollections = [];
+  let myListsCol = null;
+
+  for (const c of existingArr) {
+    if (!c) continue;
+    const cTitle = String(c.title || c.name || "").trim();
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    if (cFolders.length === 0 && cSources.length === 0) {
+      // Discard empty/corrupted DB stubs (e.g. 8467ec44-2731-4b0f-a8b5-48e42d215150 with 0 folders)
+      continue;
+    }
+
+    const isMyLists = (c.id && (c.id === "my-lists-collections" || c.id === "my-lists-addon")) ||
+                      (cTitle && (cTitle.toLowerCase() === "my lists collections" || cTitle.toLowerCase() === "my lists addon" || cTitle.toLowerCase() === "my lists"));
+    if (isMyLists) {
+      if (!myListsCol) {
+        myListsCol = JSON.parse(JSON.stringify(c));
+      } else if (cFolders.length > 0) {
+        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+        myListsCol.folders.push(...JSON.parse(JSON.stringify(cFolders)));
+      }
+    } else {
+      otherCollections.push(JSON.parse(JSON.stringify(c)));
+    }
+  }
+
+  if (!myListsCol) {
+    myListsCol = {
+      id: "my-lists-collections",
+      title: "My Lists Collections",
+      name: "My Lists Collections",
+      viewMode: "FOLLOW_LAYOUT",
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: []
+    };
+  } else {
+    myListsCol.id = "my-lists-collections";
+    myListsCol.title = "My Lists Collections";
+    myListsCol.name = "My Lists Collections";
+    myListsCol.hidden = false;
+    myListsCol.isVisible = true;
+    myListsCol.enabled = true;
+    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+  }
+
+  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
+  for (const inCol of incomingArr) {
+    if (!inCol) continue;
+    const inTitle = String(inCol.title || inCol.name || "").trim();
+    const isIncomingMyLists = (inCol.id && (inCol.id === "my-lists-collections" || inCol.id === "my-lists-addon")) ||
+                             (inTitle && (inTitle.toLowerCase() === "my lists collections" || inTitle.toLowerCase() === "my lists addon" || inTitle.toLowerCase() === "my lists"));
+
+    if (inCol.id && !isIncomingMyLists) {
+      const existingOtherIdx = otherCollections.findIndex((oc) => oc.id === inCol.id);
+      if (existingOtherIdx !== -1) {
+        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
+        continue;
+      }
+    }
+
+    // Folders intended for My Lists Collections
+    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
+    for (const inF of foldersToMerge) {
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = {
+        ...inF,
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      };
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map((cs) => {
+          let cName = String(cs.name || cs.title || cs.catalogId || "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return {
+            ...cs,
+            name: cName,
+            title: cName
+          };
+        });
+      }
+      const fIdx = myListsCol.folders.findIndex((f) =>
+        (f.id && inF.id && f.id === inF.id) ||
+        (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
+        (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase())
+      );
+      if (fIdx !== -1) {
+        myListsCol.folders[fIdx] = { ...myListsCol.folders[fIdx], ...cleanFolder };
+      } else {
+        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
+      }
+    }
+  }
+
+  return [...otherCollections, myListsCol];
+}
+
+async function nuvioPullCollections(env, accessToken, profileId) {
+  // 1. Try sync_pull_profiles RPC (the reliable Nuvio RPC returning profile objects with collections_json)
+  try {
+    const profRows = await nuvioRpc(env, accessToken, "sync_pull_profiles", {});
+    if (Array.isArray(profRows) && profRows.length > 0) {
+      const targetProf = profRows.find((r) =>
+        (r.profile_index != null && Number(r.profile_index) === Number(profileId)) ||
+        (r.id != null && String(r.id) === String(profileId))
+      ) || profRows[0];
+      if (targetProf) {
+        const extracted = extractNuvioCollections(targetProf.collections_json || targetProf.collections || targetProf);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+      const allExtracted = extractNuvioCollections(profRows);
+      if (allExtracted && allExtracted.length > 0) return allExtracted;
+    }
+  } catch (profRpcErr) {}
+
+  // 2. Try sync_pull_collections RPC with p_profile_id only
+  try {
+    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId });
+    const extracted = extractNuvioCollections(rpcData);
+    if (extracted && extracted.length > 0) return extracted;
+  } catch (rpcErr1) {}
+
+  // 2b. Try sync_pull_collections RPC with p_origin_client_id
+  try {
+    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId, p_origin_client_id: "my-lists-addon" });
+    const extracted = extractNuvioCollections(rpcData);
+    if (extracted && extracted.length > 0) return extracted;
+  } catch (rpcErr2) {}
+
+  // 2c. Try sync_pull_collections RPC with empty object
+  try {
+    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", {});
+    const extracted = extractNuvioCollections(rpcData);
+    if (extracted && extracted.length > 0) return extracted;
+  } catch (rpcErr3) {}
+
+  // 3. Query profiles table where collections are stored
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/profiles?profile_index=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const parsed = JSON.parse(text);
+        const extracted = extractNuvioCollections(parsed);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+    }
+  } catch (profErr) {}
+
+  // 2b. Query profiles table by id
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/profiles?id=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const parsed = JSON.parse(text);
+        const extracted = extractNuvioCollections(parsed);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+    }
+  } catch (profErr2) {}
+
+  // 3. Fallback to direct REST query on collections table
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/collections?profile_id=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const parsed = JSON.parse(text);
+        const extracted = extractNuvioCollections(parsed);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+    }
+  } catch (tableErr) {}
+
+  return [];
+}
+
+async function nuvioGetAddons(env, accessToken, profileId) {
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/addons?profile_id=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const data = JSON.parse(text);
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    }
+  } catch {}
+
+  try {
+    const profRows = await nuvioRpc(env, accessToken, "sync_pull_profiles", {});
+    if (Array.isArray(profRows)) {
+      const targetProf = profRows.find((r) =>
+        (r.profile_index != null && Number(r.profile_index) === Number(profileId)) ||
+        (r.id != null && String(r.id) === String(profileId))
+      ) || profRows[0];
+      if (targetProf && targetProf.addons_json) {
+        const arr = typeof targetProf.addons_json === "string" ? JSON.parse(targetProf.addons_json) : targetProf.addons_json;
+        if (Array.isArray(arr)) return arr;
+      }
+      if (targetProf && Array.isArray(targetProf.addons)) return targetProf.addons;
+    }
+  } catch {}
+
+  return [];
+}
+
+async function nuvioEnsureAddonInstalled(env, accessToken, profileId, manifestUrl) {
+  if (!manifestUrl) return false;
+  try {
+    const addons = await nuvioGetAddons(env, accessToken, profileId);
+    const mLower = String(manifestUrl).trim().toLowerCase();
+    let foundIndex = -1;
+    for (let i = 0; i < addons.length; i++) {
+      const a = addons[i];
+      if (!a) continue;
+      const u = String(a.url || "").trim().toLowerCase();
+      if (u === mLower) {
+        foundIndex = i;
+        break;
+      }
+      try {
+        const uHost = new URL(u).hostname;
+        const mHost = new URL(manifestUrl).hostname;
+        if (uHost && mHost && uHost === mHost && u.endsWith("/manifest.json")) {
+          foundIndex = i;
+          break;
+        }
+      } catch {}
+    }
+
+    const updatedAddons = addons.map((a, idx) => ({
+      url: a.url,
+      name: a.name || `Addon ${idx + 1}`,
+      enabled: a.enabled !== false,
+      sort_order: a.sort_order != null ? a.sort_order : idx,
+    }));
+
+    if (foundIndex !== -1) {
+      updatedAddons[foundIndex] = {
+        ...updatedAddons[foundIndex],
+        url: manifestUrl,
+        name: ADDON_NAME || "My Lists",
+        enabled: true
+      };
+    } else {
+      updatedAddons.push({
+        url: manifestUrl,
+        name: ADDON_NAME || "My Lists",
+        enabled: true,
+        sort_order: updatedAddons.length,
+      });
+    }
+
+    await nuvioRpc(env, accessToken, "sync_push_addons", {
+      p_profile_id: profileId,
+      p_addons: updatedAddons,
+      p_origin_client_id: "my-lists-addon",
+    });
+    return true;
+  } catch (err) {
+    console.warn("Could not auto-install addon in Nuvio:", err);
+    return false;
+  }
+}
+
+async function resolveAccountManifestUrl(env, accountId, request) {
+  let origin = "https://mylistsaddon.com";
+  try {
+    const u = new URL(request.url);
+    if (u && u.origin) origin = u.origin;
+  } catch {}
+  if (!env || !env.DB || accountId == null) return `${origin}/manifest.json`;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
+    ).bind(accountId).first();
+    if (row && row.legacy_cfg_id) {
+      return `${origin}/${row.legacy_cfg_id}/manifest.json`;
+    }
+  } catch {}
+  return `${origin}/manifest.json`;
+}
+
 // POST /api/connections/stremio/link/complete, POST .../nuvio/login,
 // GET|POST /api/connections/:provider/settings, POST /api/connections/:provider/sync.
 // The caller has already required a session.
@@ -117686,6 +120425,18 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     const conn = await loadProviderConnection(env, accountId, provider);
     const row = await loadMediaAppSync(env, accountId, provider);
     return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), profiles: provider === "nuvio" ? mediaAppProfilesOf(row) : undefined, sync: mediaAppSyncSummary(row) });
+  }
+
+  if (sub === "collections" && request.method === "GET") {
+    if (provider !== "nuvio") return json({ ok: false, error: "Collections sync is only supported for Nuvio." }, 400);
+    let conn = await loadProviderConnection(env, accountId, provider);
+    const row = await loadMediaAppSync(env, accountId, provider);
+    if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "Your Nuvio account isn't connected." }, 404);
+    conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+    if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+    const profileId = Number(row.profile_index) || 1;
+    const data = await nuvioPullCollections(env, conn.accessToken, profileId);
+    return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [] });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -117793,6 +120544,93 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       const made = await startMediaAppSync(env, accountId, provider);
       return json({ ok: Boolean(made && made.ok), started: Boolean(made && made.created) }, made && made.ok ? 202 : 503);
+    }
+    if (provider === "nuvio" && sub === "collections") {
+      let conn = await loadProviderConnection(env, accountId, provider);
+      const row = await loadMediaAppSync(env, accountId, provider);
+      if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "Your Nuvio account isn't connected." }, 404);
+      conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+      if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+      const profileId = (body && body.profileId != null) ? Number(body.profileId) : (Number(row.profile_index) || 1);
+      const installMode = String(body.installMode || (body.merge === false ? "replace" : "new")).toLowerCase();
+      let collections = body.collections != null ? body.collections : (body.p_collections_json != null ? body.p_collections_json : null);
+      if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
+
+      let existing = [];
+      try {
+        existing = await nuvioPullCollections(env, conn.accessToken, profileId);
+        if (existing && existing.length > 0 && env && env.CONFIGS) {
+          await env.CONFIGS.put(`nuvio_remote_cols:${accountId}:${profileId}`, JSON.stringify(existing), { expirationTtl: 86400 * 30 });
+        }
+      } catch (pullErr) {
+        console.warn("Could not pull existing collections before pushing:", pullErr);
+      }
+      if (!existing || !existing.length) {
+        if (env && env.CONFIGS) {
+          try {
+            const kvSaved = await env.CONFIGS.get(`nuvio_remote_cols:${accountId}:${profileId}`, "json");
+            if (Array.isArray(kvSaved) && kvSaved.length > 0) existing = kvSaved;
+          } catch {}
+        }
+      }
+      if ((!existing || !existing.length) && Array.isArray(body.knownCollections) && body.knownCollections.length > 0) {
+        existing = body.knownCollections;
+      }
+
+      if (installMode === "new") {
+        collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName });
+      } else if (installMode === "replace") {
+        collections = extractNuvioCollections(collections);
+      } else {
+        collections = mergeNuvioCollections(existing || [], collections);
+      }
+
+      await nuvioRpc(env, conn.accessToken, "sync_push_collections", {
+        p_profile_id: profileId,
+        p_collections_json: collections,
+        p_origin_client_id: "my-lists-addon"
+      });
+
+      // Save collection catalog mappings in KV so catalog routes resolve any custom/premade list
+      if (env && env.CONFIGS) {
+        try {
+          const listsToStore = Array.isArray(body.collectionLists) ? body.collectionLists.slice() : [];
+          const extractedCols = extractNuvioCollections(collections);
+          for (const col of extractedCols) {
+            if (Array.isArray(col.folders)) {
+              for (const folder of col.folders) {
+                if (Array.isArray(folder.catalogSources)) {
+                  for (const cs of folder.catalogSources) {
+                    if (cs && cs.catalogId && cs.url) {
+                      listsToStore.push({ catalogId: cs.catalogId, url: cs.url, name: cs.name || folder.title, type: cs.type || "movie" });
+                    }
+                  }
+                }
+              }
+            }
+          }
+          for (const item of listsToStore) {
+            if (item && item.catalogId && item.url) {
+              const catType = item.type === "series" ? "series" : "movie";
+              await env.CONFIGS.put(
+                `col_cat:${item.catalogId}:${catType}`,
+                JSON.stringify({ id: item.catalogId, url: item.url, name: item.name || item.catalogId, type: catType, enabled: true }),
+                { expirationTtl: 2592000 }
+              );
+            }
+          }
+        } catch (storeErr) {
+          console.warn("Could not persist collection catalog entries:", storeErr);
+        }
+      }
+
+      let addonInstalled = false;
+      const manifestUrl = (body && body.manifestUrl) || await resolveAccountManifestUrl(env, accountId, request);
+      if (manifestUrl) {
+        addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
+      }
+
+      return json({ ok: true, profileId, collections, addonInstalled });
     }
   } catch (e) {
     if (e && e.kind) {

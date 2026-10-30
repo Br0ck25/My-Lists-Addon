@@ -182,7 +182,7 @@ const APP_SHELL_TAB_LIST = ${jsonForScript(APP_SHELL_TABS)};
 //
 // Validated against the panels that actually exist rather than trusted.
 function normalizeListsSubmenu(raw) {
-  const known = { 'my-lists': 1, 'liked': 1, 'import': 1, 'create-list': 1 };
+  const known = { 'my-lists': 1, 'liked': 1, 'collections': 1, 'import': 1, 'create-list': 1 };
   const v = String(raw || '');
   return known[v] ? v : 'my-lists';
 }
@@ -228,10 +228,12 @@ function normalizeListsSubmenu(raw) {
     }
     var subMyLists = document.getElementById('listsSubMyLists');
     var subLiked = document.getElementById('listsSubLiked');
+    var subCollections = document.getElementById('listsSubCollections');
     var subListImport = document.getElementById('listsSubImport');
     var subCreate = document.getElementById('listsSubCreateList');
     if (subMyLists) subMyLists.style.display = (listSub === 'my-lists') ? 'block' : 'none';
     if (subLiked) subLiked.style.display = (listSub === 'liked') ? 'block' : 'none';
+    if (subCollections) subCollections.style.display = (listSub === 'collections') ? 'block' : 'none';
     if (subListImport) subListImport.style.display = (listSub === 'import') ? 'block' : 'none';
     if (subCreate) subCreate.style.display = (listSub === 'create-list') ? 'block' : 'none';
 
@@ -1430,6 +1432,7 @@ function switchTab(name, opts) {
       let current = '';
       try { current = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu')); } catch (e) {}
       if (current === 'liked' && typeof renderLikedListsFeed === 'function') renderLikedListsFeed();
+      if (current === 'collections' && typeof renderCollectionsView === 'function') renderCollectionsView();
     }
   }
   if (name === 'settings') {
@@ -2785,6 +2788,7 @@ function switchListsSubmenu(name, btn) {
   const subpanels = {
     'my-lists': 'listsSubMyLists',
     'liked': 'listsSubLiked',
+    'collections': 'listsSubCollections',
     'create-list': 'listsSubCreateList',
     'import': 'listsSubImport'
   };
@@ -2844,6 +2848,12 @@ function switchListsSubmenu(name, btn) {
     if (typeof renderLikedListsFeed === 'function') {
       renderLikedListsFeed();
     }
+  }
+  if (name === 'collections') {
+    if (typeof renderCollectionsView === 'function') {
+      renderCollectionsView();
+    }
+    if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
   }
   if (name === 'create-list') {
     if (typeof initCustomListSearch === 'function') {

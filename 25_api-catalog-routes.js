@@ -1554,16 +1554,56 @@ Sitemap: ${url.origin}/sitemap.xml`;
         return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
       }
 
-      if (!config) return jsonPublic({ metas: [] });
+      let unconfiguredEntry = null;
+      if (typeof findChartOrCollectionEntry === "function") {
+        unconfiguredEntry = findChartOrCollectionEntry(id, type);
+      }
+      if (!unconfiguredEntry && env && env.CONFIGS) {
+        try {
+          unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!config && !unconfiguredEntry) return jsonPublic({ metas: [] });
 
       // Kept as a whole object as well as destructured: the betterPosters*
       // style keys are passed through wholesale rather than one at a time.
-      const resolvedConfig = await resolveConfig(config, env);
+      const resolvedConfig = config
+        ? await resolveConfig(config, env)
+        : { entries: [unconfiguredEntry], tmdbKey: null, mdblistKey: null, mdblistAccessToken: null, traktKey: null, traktAccessToken: null, simklKey: null, simklAccessToken: null, shuffleItems: false, trackCreatorName: null, trackOwner: null, region: null, hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: null, showBadgesStremio: false, showBadgesStremioAiringNext: false, showBadgesStremioContinueWatching: false, showBadgesStremioCatalogs: false, showBadgesStremioWatchlist: false };
+
       // As in the manifest route: most installs ask for catalogs far more often.
-      ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      if (config) {
+        ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      }
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
-      const entry = entryIndex >= 0 ? entries[entryIndex] : null;
+      let entry = entryIndex >= 0 ? entries[entryIndex] : unconfiguredEntry;
+      if (!entry && typeof findChartOrCollectionEntry === "function") {
+        entry = findChartOrCollectionEntry(id, type);
+      }
+      if (!entry && env && env.CONFIGS) {
+        try {
+          entry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!entry && typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+        const found = CHART_SLUG_ENTRIES.find((c) => {
+          const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+          const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+          const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+          const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+          return id === mSlug || id === sSlug || id === nSlug || id === cSlug;
+        });
+        if (found) {
+          entry = {
+            id,
+            name: found.name,
+            type: type,
+            url: type === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+            enabled: true
+          };
+        }
+      }
       if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its

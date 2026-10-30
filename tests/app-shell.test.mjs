@@ -12,7 +12,7 @@ import { call, makeEnv } from "./harness.mjs";
 // what the server must answer and what the nav must link to.
 const VIEWS = [
   { path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
-  { path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { path: "/lists", subs: ["my-lists", "liked", "collections", "create-list", "import"] },
   { path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { path: "/search", subs: [] },

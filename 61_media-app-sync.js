@@ -1118,6 +1118,428 @@ function mediaAppSyncSummary(row) {
   };
 }
 
+function extractNuvioCollections(raw) {
+  let val = raw;
+  if (typeof val === "string") {
+    try { val = JSON.parse(val); } catch { return []; }
+  }
+  if (!val) return [];
+  if (val.collections_json != null) return extractNuvioCollections(val.collections_json);
+  if (val.p_collections_json != null) return extractNuvioCollections(val.p_collections_json);
+  if (val.collections != null) return extractNuvioCollections(val.collections);
+  if (val.p_collections != null) return extractNuvioCollections(val.p_collections);
+  if (val.data != null) return extractNuvioCollections(val.data);
+  if (Array.isArray(val)) {
+    const out = [];
+    for (const item of val) {
+      if (!item) continue;
+      if (item.collections_json != null) {
+        out.push(...extractNuvioCollections(item.collections_json));
+      } else if (item.p_collections_json != null) {
+        out.push(...extractNuvioCollections(item.p_collections_json));
+      } else if (item.collections != null) {
+        out.push(...extractNuvioCollections(item.collections));
+      } else if (item.p_collections != null) {
+        out.push(...extractNuvioCollections(item.p_collections));
+      } else if (item.data != null) {
+        out.push(...extractNuvioCollections(item.data));
+      } else {
+        const itemTitle = String(item.title || item.name || "").trim();
+        const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
+        const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
+        if (itemTitle || hasFolders || hasSources) {
+          out.push(item);
+        }
+      }
+    }
+    return out;
+  }
+  if (typeof val === "object") {
+    const valTitle = String(val.title || val.name || "").trim();
+    const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
+    const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
+    if (valTitle || hasFolders || hasSources) {
+      return [val];
+    }
+  }
+  return [];
+}
+
+function addNewNuvioCollection(existing, incoming, options = {}) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  // Clean existing collections: discard empty stubs (0 folders & 0 sources)
+  const cleanedExisting = existingArr.filter((c) => {
+    if (!c) return false;
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    return cFolders.length > 0 || cSources.length > 0;
+  });
+
+  if (!incomingArr.length) return cleanedExisting;
+
+  // Build the incoming collections with unique IDs and clean titles
+  const newCols = incomingArr.map((inCol) => {
+    const rawName = options.collectionName || inCol.title || inCol.name || "My Lists Collections";
+    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+    const colId = inCol.id && !cleanedExisting.some((e) => e.id === inCol.id)
+      ? inCol.id
+      : "col_mylists_" + Math.random().toString(36).slice(2, 8);
+
+    const cleanFolders = (Array.isArray(inCol.folders) ? inCol.folders : [inCol]).map((inF) => {
+      const cleanF = {
+        ...inF,
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      };
+      if (Array.isArray(cleanF.catalogSources)) {
+        cleanF.catalogSources = cleanF.catalogSources.map((cs) => {
+          let cName = String(cs.name || cs.title || cs.catalogId || "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return {
+            ...cs,
+            name: cName,
+            title: cName
+          };
+        });
+      }
+      return cleanF;
+    });
+
+    return {
+      ...inCol,
+      id: colId,
+      title: colName,
+      name: colName,
+      viewMode: inCol.viewMode || "FOLLOW_LAYOUT",
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cleanFolders
+    };
+  });
+
+  return [...cleanedExisting, ...newCols];
+}
+
+function mergeNuvioCollections(existing, incoming) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  if (!existingArr.length) return incomingArr;
+  if (!incomingArr.length) return existingArr;
+
+  // Preserve all collections from other providers / community templates 100% untouched
+  const otherCollections = [];
+  let myListsCol = null;
+
+  for (const c of existingArr) {
+    if (!c) continue;
+    const cTitle = String(c.title || c.name || "").trim();
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
+    if (cFolders.length === 0 && cSources.length === 0) {
+      // Discard empty/corrupted DB stubs (e.g. 8467ec44-2731-4b0f-a8b5-48e42d215150 with 0 folders)
+      continue;
+    }
+
+    const isMyLists = (c.id && (c.id === "my-lists-collections" || c.id === "my-lists-addon")) ||
+                      (cTitle && (cTitle.toLowerCase() === "my lists collections" || cTitle.toLowerCase() === "my lists addon" || cTitle.toLowerCase() === "my lists"));
+    if (isMyLists) {
+      if (!myListsCol) {
+        myListsCol = JSON.parse(JSON.stringify(c));
+      } else if (cFolders.length > 0) {
+        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+        myListsCol.folders.push(...JSON.parse(JSON.stringify(cFolders)));
+      }
+    } else {
+      otherCollections.push(JSON.parse(JSON.stringify(c)));
+    }
+  }
+
+  if (!myListsCol) {
+    myListsCol = {
+      id: "my-lists-collections",
+      title: "My Lists Collections",
+      name: "My Lists Collections",
+      viewMode: "FOLLOW_LAYOUT",
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: []
+    };
+  } else {
+    myListsCol.id = "my-lists-collections";
+    myListsCol.title = "My Lists Collections";
+    myListsCol.name = "My Lists Collections";
+    myListsCol.hidden = false;
+    myListsCol.isVisible = true;
+    myListsCol.enabled = true;
+    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+  }
+
+  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
+  for (const inCol of incomingArr) {
+    if (!inCol) continue;
+    const inTitle = String(inCol.title || inCol.name || "").trim();
+    const isIncomingMyLists = (inCol.id && (inCol.id === "my-lists-collections" || inCol.id === "my-lists-addon")) ||
+                             (inTitle && (inTitle.toLowerCase() === "my lists collections" || inTitle.toLowerCase() === "my lists addon" || inTitle.toLowerCase() === "my lists"));
+
+    if (inCol.id && !isIncomingMyLists) {
+      const existingOtherIdx = otherCollections.findIndex((oc) => oc.id === inCol.id);
+      if (existingOtherIdx !== -1) {
+        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
+        continue;
+      }
+    }
+
+    // Folders intended for My Lists Collections
+    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
+    for (const inF of foldersToMerge) {
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = {
+        ...inF,
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      };
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map((cs) => {
+          let cName = String(cs.name || cs.title || cs.catalogId || "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return {
+            ...cs,
+            name: cName,
+            title: cName
+          };
+        });
+      }
+      const fIdx = myListsCol.folders.findIndex((f) =>
+        (f.id && inF.id && f.id === inF.id) ||
+        (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
+        (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase())
+      );
+      if (fIdx !== -1) {
+        myListsCol.folders[fIdx] = { ...myListsCol.folders[fIdx], ...cleanFolder };
+      } else {
+        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
+      }
+    }
+  }
+
+  return [...otherCollections, myListsCol];
+}
+
+async function nuvioPullCollections(env, accessToken, profileId) {
+  // 1. Try sync_pull_profiles RPC (the reliable Nuvio RPC returning profile objects with collections_json)
+  try {
+    const profRows = await nuvioRpc(env, accessToken, "sync_pull_profiles", {});
+    if (Array.isArray(profRows) && profRows.length > 0) {
+      const targetProf = profRows.find((r) =>
+        (r.profile_index != null && Number(r.profile_index) === Number(profileId)) ||
+        (r.id != null && String(r.id) === String(profileId))
+      ) || profRows[0];
+      if (targetProf) {
+        const extracted = extractNuvioCollections(targetProf.collections_json || targetProf.collections || targetProf);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+      const allExtracted = extractNuvioCollections(profRows);
+      if (allExtracted && allExtracted.length > 0) return allExtracted;
+    }
+  } catch (profRpcErr) {}
+
+  // 2. Try sync_pull_collections RPC with p_profile_id only
+  try {
+    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId });
+    const extracted = extractNuvioCollections(rpcData);
+    if (extracted && extracted.length > 0) return extracted;
+  } catch (rpcErr1) {}
+
+  // 2b. Try sync_pull_collections RPC with p_origin_client_id
+  try {
+    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId, p_origin_client_id: "my-lists-addon" });
+    const extracted = extractNuvioCollections(rpcData);
+    if (extracted && extracted.length > 0) return extracted;
+  } catch (rpcErr2) {}
+
+  // 2c. Try sync_pull_collections RPC with empty object
+  try {
+    const rpcData = await nuvioRpc(env, accessToken, "sync_pull_collections", {});
+    const extracted = extractNuvioCollections(rpcData);
+    if (extracted && extracted.length > 0) return extracted;
+  } catch (rpcErr3) {}
+
+  // 3. Query profiles table where collections are stored
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/profiles?profile_index=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const parsed = JSON.parse(text);
+        const extracted = extractNuvioCollections(parsed);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+    }
+  } catch (profErr) {}
+
+  // 2b. Query profiles table by id
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/profiles?id=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const parsed = JSON.parse(text);
+        const extracted = extractNuvioCollections(parsed);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+    }
+  } catch (profErr2) {}
+
+  // 3. Fallback to direct REST query on collections table
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/collections?profile_id=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const parsed = JSON.parse(text);
+        const extracted = extractNuvioCollections(parsed);
+        if (extracted && extracted.length > 0) return extracted;
+      }
+    }
+  } catch (tableErr) {}
+
+  return [];
+}
+
+async function nuvioGetAddons(env, accessToken, profileId) {
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/addons?profile_id=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const data = JSON.parse(text);
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    }
+  } catch {}
+
+  try {
+    const profRows = await nuvioRpc(env, accessToken, "sync_pull_profiles", {});
+    if (Array.isArray(profRows)) {
+      const targetProf = profRows.find((r) =>
+        (r.profile_index != null && Number(r.profile_index) === Number(profileId)) ||
+        (r.id != null && String(r.id) === String(profileId))
+      ) || profRows[0];
+      if (targetProf && targetProf.addons_json) {
+        const arr = typeof targetProf.addons_json === "string" ? JSON.parse(targetProf.addons_json) : targetProf.addons_json;
+        if (Array.isArray(arr)) return arr;
+      }
+      if (targetProf && Array.isArray(targetProf.addons)) return targetProf.addons;
+    }
+  } catch {}
+
+  return [];
+}
+
+async function nuvioEnsureAddonInstalled(env, accessToken, profileId, manifestUrl) {
+  if (!manifestUrl) return false;
+  try {
+    const addons = await nuvioGetAddons(env, accessToken, profileId);
+    const mLower = String(manifestUrl).trim().toLowerCase();
+    let foundIndex = -1;
+    for (let i = 0; i < addons.length; i++) {
+      const a = addons[i];
+      if (!a) continue;
+      const u = String(a.url || "").trim().toLowerCase();
+      if (u === mLower) {
+        foundIndex = i;
+        break;
+      }
+      try {
+        const uHost = new URL(u).hostname;
+        const mHost = new URL(manifestUrl).hostname;
+        if (uHost && mHost && uHost === mHost && u.endsWith("/manifest.json")) {
+          foundIndex = i;
+          break;
+        }
+      } catch {}
+    }
+
+    const updatedAddons = addons.map((a, idx) => ({
+      url: a.url,
+      name: a.name || `Addon ${idx + 1}`,
+      enabled: a.enabled !== false,
+      sort_order: a.sort_order != null ? a.sort_order : idx,
+    }));
+
+    if (foundIndex !== -1) {
+      updatedAddons[foundIndex] = {
+        ...updatedAddons[foundIndex],
+        url: manifestUrl,
+        name: ADDON_NAME || "My Lists",
+        enabled: true
+      };
+    } else {
+      updatedAddons.push({
+        url: manifestUrl,
+        name: ADDON_NAME || "My Lists",
+        enabled: true,
+        sort_order: updatedAddons.length,
+      });
+    }
+
+    await nuvioRpc(env, accessToken, "sync_push_addons", {
+      p_profile_id: profileId,
+      p_addons: updatedAddons,
+      p_origin_client_id: "my-lists-addon",
+    });
+    return true;
+  } catch (err) {
+    console.warn("Could not auto-install addon in Nuvio:", err);
+    return false;
+  }
+}
+
+async function resolveAccountManifestUrl(env, accountId, request) {
+  let origin = "https://mylistsaddon.com";
+  try {
+    const u = new URL(request.url);
+    if (u && u.origin) origin = u.origin;
+  } catch {}
+  if (!env || !env.DB || accountId == null) return `${origin}/manifest.json`;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
+    ).bind(accountId).first();
+    if (row && row.legacy_cfg_id) {
+      return `${origin}/${row.legacy_cfg_id}/manifest.json`;
+    }
+  } catch {}
+  return `${origin}/manifest.json`;
+}
+
 // POST /api/connections/stremio/link/complete, POST .../nuvio/login,
 // GET|POST /api/connections/:provider/settings, POST /api/connections/:provider/sync.
 // The caller has already required a session.
@@ -1131,6 +1553,18 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     const conn = await loadProviderConnection(env, accountId, provider);
     const row = await loadMediaAppSync(env, accountId, provider);
     return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), profiles: provider === "nuvio" ? mediaAppProfilesOf(row) : undefined, sync: mediaAppSyncSummary(row) });
+  }
+
+  if (sub === "collections" && request.method === "GET") {
+    if (provider !== "nuvio") return json({ ok: false, error: "Collections sync is only supported for Nuvio." }, 400);
+    let conn = await loadProviderConnection(env, accountId, provider);
+    const row = await loadMediaAppSync(env, accountId, provider);
+    if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "Your Nuvio account isn't connected." }, 404);
+    conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+    if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+    const profileId = Number(row.profile_index) || 1;
+    const data = await nuvioPullCollections(env, conn.accessToken, profileId);
+    return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [] });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -1238,6 +1672,93 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       const made = await startMediaAppSync(env, accountId, provider);
       return json({ ok: Boolean(made && made.ok), started: Boolean(made && made.created) }, made && made.ok ? 202 : 503);
+    }
+    if (provider === "nuvio" && sub === "collections") {
+      let conn = await loadProviderConnection(env, accountId, provider);
+      const row = await loadMediaAppSync(env, accountId, provider);
+      if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "Your Nuvio account isn't connected." }, 404);
+      conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+      if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+      const profileId = (body && body.profileId != null) ? Number(body.profileId) : (Number(row.profile_index) || 1);
+      const installMode = String(body.installMode || (body.merge === false ? "replace" : "new")).toLowerCase();
+      let collections = body.collections != null ? body.collections : (body.p_collections_json != null ? body.p_collections_json : null);
+      if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
+
+      let existing = [];
+      try {
+        existing = await nuvioPullCollections(env, conn.accessToken, profileId);
+        if (existing && existing.length > 0 && env && env.CONFIGS) {
+          await env.CONFIGS.put(`nuvio_remote_cols:${accountId}:${profileId}`, JSON.stringify(existing), { expirationTtl: 86400 * 30 });
+        }
+      } catch (pullErr) {
+        console.warn("Could not pull existing collections before pushing:", pullErr);
+      }
+      if (!existing || !existing.length) {
+        if (env && env.CONFIGS) {
+          try {
+            const kvSaved = await env.CONFIGS.get(`nuvio_remote_cols:${accountId}:${profileId}`, "json");
+            if (Array.isArray(kvSaved) && kvSaved.length > 0) existing = kvSaved;
+          } catch {}
+        }
+      }
+      if ((!existing || !existing.length) && Array.isArray(body.knownCollections) && body.knownCollections.length > 0) {
+        existing = body.knownCollections;
+      }
+
+      if (installMode === "new") {
+        collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName });
+      } else if (installMode === "replace") {
+        collections = extractNuvioCollections(collections);
+      } else {
+        collections = mergeNuvioCollections(existing || [], collections);
+      }
+
+      await nuvioRpc(env, conn.accessToken, "sync_push_collections", {
+        p_profile_id: profileId,
+        p_collections_json: collections,
+        p_origin_client_id: "my-lists-addon"
+      });
+
+      // Save collection catalog mappings in KV so catalog routes resolve any custom/premade list
+      if (env && env.CONFIGS) {
+        try {
+          const listsToStore = Array.isArray(body.collectionLists) ? body.collectionLists.slice() : [];
+          const extractedCols = extractNuvioCollections(collections);
+          for (const col of extractedCols) {
+            if (Array.isArray(col.folders)) {
+              for (const folder of col.folders) {
+                if (Array.isArray(folder.catalogSources)) {
+                  for (const cs of folder.catalogSources) {
+                    if (cs && cs.catalogId && cs.url) {
+                      listsToStore.push({ catalogId: cs.catalogId, url: cs.url, name: cs.name || folder.title, type: cs.type || "movie" });
+                    }
+                  }
+                }
+              }
+            }
+          }
+          for (const item of listsToStore) {
+            if (item && item.catalogId && item.url) {
+              const catType = item.type === "series" ? "series" : "movie";
+              await env.CONFIGS.put(
+                `col_cat:${item.catalogId}:${catType}`,
+                JSON.stringify({ id: item.catalogId, url: item.url, name: item.name || item.catalogId, type: catType, enabled: true }),
+                { expirationTtl: 2592000 }
+              );
+            }
+          }
+        } catch (storeErr) {
+          console.warn("Could not persist collection catalog entries:", storeErr);
+        }
+      }
+
+      let addonInstalled = false;
+      const manifestUrl = (body && body.manifestUrl) || await resolveAccountManifestUrl(env, accountId, request);
+      if (manifestUrl) {
+        addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
+      }
+
+      return json({ ok: true, profileId, collections, addonInstalled });
     }
   } catch (e) {
     if (e && e.kind) {
