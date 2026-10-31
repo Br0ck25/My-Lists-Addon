@@ -533,11 +533,11 @@ describe("collections subnav and website lists picker", () => {
     assert.equal(plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink).name, "Original");
   });
 
-  it("provides 10 premade collections with corresponding Streaming Top 10, Catalogs, and Kids", () => {
+  it("provides premade collections with corresponding Streaming Top 10, Catalogs, and Kids", () => {
     const client = loadClient();
     const premade = client.call("getPremadeCollections");
     assert.ok(Array.isArray(premade));
-    assert.strictEqual(premade.length, 10);
+    assert.strictEqual(premade.length, 11);
 
     const names = premade.map((c) => c.name);
     assert.deepEqual(plain(names), [
@@ -550,7 +550,8 @@ describe("collections subnav and website lists picker", () => {
       "Paramount+",
       "Prime Video",
       "Peacock",
-      "Kids"
+      "Kids",
+      "Discovery+"
     ]);
 
     // Check Apple TV+ has Top 10 and Catalogs
@@ -585,7 +586,7 @@ describe("collections subnav and website lists picker", () => {
     // Default loadCustomCollections initializes with premade collections
     client.localStorage.removeItem("myListAddon:customCollections");
     const loaded = client.call("loadCustomCollections");
-    assert.strictEqual(loaded.length, 10);
+    assert.strictEqual(loaded.length, 11);
   });
 
   it("renders collection folders with poster preview slots inside expanded lists", () => {
@@ -628,7 +629,7 @@ describe("collections subnav and website lists picker", () => {
     // Add all premade collections
     client.call("addAllPremadeCollections");
     current = client.call("loadCustomCollections");
-    assert.strictEqual(current.length, 10);
+    assert.strictEqual(current.length, 11);
   });
 
   it("mergeNuvioCollections preserves existing Nuvio collections when pushing new folders", () => {

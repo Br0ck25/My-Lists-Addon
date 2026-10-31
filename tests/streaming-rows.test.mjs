@@ -54,6 +54,80 @@ describe("streaming service rows", () => {
     }
   });
 
+  it("adds narrowly defined Discovery+ and Netflix Kids rows with service and content-type restrictions", () => {
+    const discovery = rows.filter((r) => r.service === "discovery");
+    const kids = rows.filter((r) => r.service === "netflixkids");
+    assert.deepEqual(Array.from(discovery, (r) => r.name), ["Reality TV", "Documentary Series"]);
+    assert.deepEqual(Array.from(kids, (r) => r.name), ["Kids TV Shows", "Animated TV Shows", "Animated Movies", "Family Movies"]);
+    for (const r of discovery) {
+      assert.ok(r.kinds.series && !r.kinds.movie);
+      assert.equal(new URL("https://x/" + r.kinds.series).searchParams.get("with_watch_providers"), "520");
+    }
+    for (const r of kids) {
+      const url = r.kinds.movie || r.kinds.series;
+      const q = new URL("https://x/" + url).searchParams;
+      assert.equal(q.get("with_watch_providers"), "175");
+      if (r.kinds.movie) {
+        assert.equal(q.get("certification_country"), "US");
+        assert.equal(q.get("certification.lte"), "PG");
+      } else assert.ok(q.get("with_genres").split(",").includes("10762"));
+    }
+    const client = loadClient();
+    const cols = client.call("getPremadeCollections");
+    const kidFolder = cols.find((c) => c.id === "col_netflixkids");
+    assert.equal(kidFolder.lists[0].url, "tmdb:chart:netflixkids");
+    assert.equal(kidFolder.lists[1].url, "tmdb:chart:netflixkids");
+    assert.equal(kidFolder.lists.length, 6);
+    assert.equal(cols.find((c) => c.id === "col_discovery").lists.length, 2);
+    const manifest = sandbox.buildManifest([], "https://mylistsaddon.com", false, false, "", null, true, true).catalogs;
+    assert.ok(manifest.some((c) => c.id === "tmdb-chart-discovery-reality-tv" && c.type === "series"));
+    assert.ok(manifest.some((c) => c.id === "tmdb-chart-netflixkids-animated-movies" && c.type === "movie"));
+  });
+
+  it("leaves the existing premade catalogs in place and in order", () => {
+    const client = loadClient();
+    const base = client.call("getPremadeCollectionsBase");
+    const augmented = client.call("getPremadeCollections");
+    for (const old of base) {
+      const next = augmented.find((c) => c.id === old.id);
+      assert.ok(next, old.id);
+      assert.deepEqual(JSON.parse(JSON.stringify(next.lists.slice(0, old.lists.length))), JSON.parse(JSON.stringify(old.lists)), old.id);
+    }
+    // Discovery+ has an existing full catalog, but did not previously have a premade folder.
+    assert.equal(get("TMDB_CHART_PATHS.discovery.movie").includes("with_watch_providers=520"), true);
+    assert.equal(get("TMDB_CHART_PATHS.netflixkids.movie").includes("with_watch_providers=175"), true);
+  });
+
+  it("routes new rows through the existing paged, cached TMDB chart fetcher", async () => {
+    const isolated = loadServer();
+    const calls = [];
+    isolated.sandbox.capture = calls;
+    vm.runInContext(`
+      fetchWithPerUserCacheAndCircuitBreaker = async function (opts) {
+        capture.push({ cacheKey: opts.cacheKey, fresh: opts.freshTtlSec, stale: opts.staleTtlSec });
+        return opts.fetchFn();
+      };
+      fetchTmdbPagedResults = async function (path, key, skip) {
+        capture.push({ path, skip });
+        const results = [{ id: 42 }]; results.totalItems = 101; return results;
+      };
+      mapWithConcurrency = async function (arr, concurrency, fn) { return Promise.all(arr.map(fn)); };
+      fetchTmdbDetails = async function () { return { imdbId: 'tt0000042', videos: [] }; };
+      mapTmdbItem = function (item, imdb, type) { return { id: imdb, type: type }; };
+    `, isolated.sandbox);
+    const result = await isolated.sandbox.fetchTmdbChart({ type: "series" }, 100, "test-key", "discovery-documentary-series", "US", false);
+    assert.equal(result[0].id, "tt0000042");
+    assert.equal(result.totalItems, 101);
+    assert.equal(calls[0].fresh, 600);
+    assert.equal(calls[0].stale, 86400);
+    assert.match(calls[0].cacheKey, /discovery-documentary-series:tv:100:US/);
+    assert.equal(calls[1].skip, 100);
+    const query = new URL("https://x/" + calls[1].path).searchParams;
+    assert.equal(query.get("with_watch_providers"), "520");
+    assert.equal(query.get("with_genres"), "99");
+    assert.equal(query.get("with_watch_monetization_types"), "flatrate");
+  });
+
   it("no row sends sort_by twice, and chart keys / catalog ids are unique", () => {
     for (const r of rows) for (const url of Object.values(r.kinds)) assert.equal((url.match(/sort_by=/g) || []).length, 1, r.chartKey);
     assert.equal(new Set(rows.map((r) => r.chartKey)).size, rows.length);

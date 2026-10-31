@@ -1,7 +1,6 @@
 # Handoff
 
-- Nuvio collection imports resolve ID-only My Lists sources to existing configured/premade names and URLs by exact catalog ID and media type; other addons and explicitly supplied names are preserved. Linked clean folders refresh this metadata automatically. Catalog IDs remain unchanged.
-- Manual pulls and automatic refreshes only import identifiable My Lists-created collections. Previously imported third-party local copies are preserved but cannot be updated through the linked-folder endpoint.
-- Nuvio collections writes replace the whole blob without conditional updates; explicit writes warn of the remaining concurrent-write risk. Arbitrary upstream list mutations and automatic two-way sync remain unsupported; no live account verification has been performed.
-- Full suite: 2,682 passed, four previously observed account-purge/install-manifest failures, one known TODO.
-- Edit numbered split sources and rebuild/check the generated worker as described in AGENTS.md.
+- Streaming service rows task is incomplete. Added Discovery+ Reality TV and Documentary Series, and Netflix Kids Kids TV Shows, Animated TV Shows, Animated Movies and Family Movies via existing provider-filtered TMDB Discover catalogs. Discovery+ gets a new browse-only premade folder; Netflix Kids rows append after its existing two catalogs. No existing Top 10 or full catalogs were changed. Existing saved local folder copies are not automatically modified.
+- Remaining: most requested rows, reliable metadata/brand/franchise identification, empty-row suppression, duplicate detection, shared retrieval/performance improvements, and live sample verification for all rows/services. Existing eight-service rows predate this work and include approximate editorial/award labels; do not claim they satisfy the new accuracy requirements without auditing them. TMDB access and live Nuvio account were not available.
+- Existing fetcher sends separate cached, paginated TMDB Discover queries per row; no cache change was made. Full suite: 2,685 passed, four previously observed account-purge/install-manifest failures, one known TODO. Build and focused tests pass. Not deployment-ready for the complete requested task.
+- Nuvio linked folders only import identifiable My Lists-created collections. Collection writes remain full-blob and can race remote writes.

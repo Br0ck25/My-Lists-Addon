@@ -3324,6 +3324,8 @@ function getPremadeCollectionsBase() {
 // come from STREAMING_ROWS (08_): added after each service's Top 10 and full-catalog lists.
 function getPremadeCollections() {
   const cols = getPremadeCollectionsBase();
+  // Add a Discovery+ browse folder without moving any existing catalog.
+  cols.push({ id: 'col_discovery', name: 'Discovery+', description: '', tileShape: 'LANDSCAPE', hideTitle: false, addonId: 'app.my-list', coverImageUrl: '', lists: [] });
   const rows = (typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];

@@ -514,6 +514,8 @@ const STREAMING_ROW_SERVICES = {
   primevideo: { name: "Prime Video", provider: 9, network: 1024, minVotes: 150, collection: "col_primevideo" },
   peacock: { name: "Peacock", provider: 387, network: 3353, minVotes: 60, collection: "col_peacock" },
   appletv: { name: "Apple TV+", provider: 350, network: 2552, minVotes: 40, collection: "col_appletv" },
+  discovery: { name: "Discovery+", provider: 520, minVotes: 0, collection: "col_discovery" },
+  netflixkids: { name: "Netflix Kids", provider: 175, minVotes: 0, collection: "col_netflixkids" },
 };
 
 const STREAMING_ROW_RECIPES = {
@@ -580,6 +582,18 @@ const STREAMING_ROW_RECIPES = {
 };
 
 const STREAMING_ROWS = {
+  // Only categories that TMDB Discover can identify directly. Age-specific,
+  // franchise and editorial rows are not inferred from broad genres.
+  discovery: [
+    ["reality-tv", "Reality TV", { tv: "with_genres=10764" }],
+    ["documentary-series", "Documentary Series", { tv: "with_genres=99" }],
+  ],
+  netflixkids: [
+    ["kids-tv", "Kids TV Shows", { tv: "with_genres=10762" }],
+    ["animated-tv", "Animated TV Shows", { tv: "with_genres=16,10762" }],
+    ["animated-movies", "Animated Movies", { movie: "with_genres=16&certification_country=US&certification.lte=PG" }],
+    ["family-movies", "Family Movies", { movie: "with_genres=10751&certification_country=US&certification.lte=PG" }],
+  ],
   netflix: [
     ["originals", "Netflix Originals", "originals"],
     ["hooked", "Hooked from the First Episode", "hooked"],
