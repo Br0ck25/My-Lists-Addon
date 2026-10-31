@@ -2529,14 +2529,20 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
     // the activity database. Owner only (the gate above), and nothing when the
     // account is not served from it: the legacy records know no source, so
     // falling back to them would show everything under the app's name.
-    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching)$/.exec(slug);
+    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching|library)$/.exec(slug);
     if (appShelf) {
-      const accountId = await eventTrackingOwns(env, username);
-      if (accountId == null) return [];
-      const read = appShelf[2] === 'watch-history'
-        ? await watchHistoryAll(env, accountId, appShelf[1])
-        : await appContinueWatching(env, accountId, appShelf[1]);
-      items = read.map(({ mediaId, ...it }) => it);
+      if (appShelf[2] === 'library') {
+        const account = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL").bind(username).first();
+        if (!account) return [];
+        items = await mediaAppLibraryItems(env, account.id, appShelf[1]);
+      } else {
+        const accountId = await eventTrackingOwns(env, username);
+        if (accountId == null) return [];
+        const read = appShelf[2] === 'watch-history'
+          ? await watchHistoryAll(env, accountId, appShelf[1])
+          : await appContinueWatching(env, accountId, appShelf[1]);
+        items = read.map(({ mediaId, ...it }) => it);
+      }
     }
     // D1 is the cheap read, but only while it is current: a tracking write
     // that failed leaves the rows as they were, and these rows used to keep
@@ -2923,6 +2929,8 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
     }
     return mappedItems;
   } catch (e) {
+    // A failed remote library read is not an empty library.
+    if (/^(nuvio|stremio)-library$/.test(slug)) throw e;
     return [];
   }
 }

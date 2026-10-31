@@ -185,6 +185,54 @@ async function stremioFetchLibrary(authKey) {
   return items;
 }
 
+// Read a consistent Nuvio snapshot: capture the event cursor first, then
+// replay mutations that happened while the offset-paginated snapshot was read.
+async function nuvioFetchLibrary(env, token, profileIndex) {
+  let cursor = Number(await nuvioRpc(env, token, "sync_get_library_delta_cursor", { p_profile_id: profileIndex }));
+  if (!Number.isSafeInteger(cursor) || cursor < 0) throw mediaAppError("unreachable", "Nuvio sent an invalid library cursor.");
+  const items = new Map();
+  const key = (r) => `${String(r.content_type || "").toLowerCase()}:${String(r.content_id || "").toLowerCase()}`;
+  let complete = false;
+  for (let offset = 0; offset < 50000; offset += 500) {
+    const rows = await nuvioRpc(env, token, "sync_pull_library", { p_profile_id: profileIndex, p_limit: 500, p_offset: offset });
+    if (!Array.isArray(rows)) throw mediaAppError("unreachable", "Nuvio sent an invalid library page.");
+    for (const row of rows) if (row && row.content_id && row.content_type) items.set(key(row), row);
+    if (rows.length < 500) { complete = true; break; }
+  }
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's library is too large to read safely.");
+  complete = false;
+  for (let page = 0; page < 100; page++) {
+    const rows = await nuvioRpc(env, token, "sync_pull_library_delta", { p_profile_id: profileIndex, p_since_event_id: cursor, p_limit: 500 });
+    if (!Array.isArray(rows)) throw mediaAppError("unreachable", "Nuvio sent an invalid library update.");
+    for (const row of rows) {
+      const eventId = Number(row && row.event_id);
+      if (!Number.isSafeInteger(eventId) || eventId <= cursor || !row.content_id || !row.content_type || !["upsert", "delete"].includes(row.operation)) throw mediaAppError("unreachable", "Nuvio sent an invalid library update.");
+      cursor = eventId;
+      if (row.operation === "delete") items.delete(key(row)); else items.set(key(row), row);
+    }
+    if (rows.length < 500) { complete = true; break; }
+  }
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's library is changing too quickly to read safely.");
+  return [...items.values()].sort((a, b) => (Number(b.added_at) || 0) - (Number(a.added_at) || 0));
+}
+
+// Remote library rows are read directly, so changes in either app show on the
+// next read; there is no stale mirrored snapshot to reconcile or overwrite.
+async function mediaAppLibraryItems(env, accountId, provider) {
+  let conn = await loadProviderConnection(env, accountId, provider);
+  const sync = await loadMediaAppSync(env, accountId, provider);
+  if (!conn || conn.status !== "ok" || !sync) return [];
+  if (provider === "nuvio") {
+    if (!sync.profile_index) return [];
+    conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+    if (!conn || !conn.accessToken) throw mediaAppError("invalid", "Sign in to Nuvio again first.");
+    const rows = await nuvioFetchLibrary(env, conn.accessToken, sync.profile_index);
+    return rows.filter((r) => mediaAppTitleId(r.content_id) && mediaAppKind(r.content_type)).map((r) => ({ id: r.content_id, type: mediaAppKind(r.content_type), name: r.name || "", poster: r.poster || (String(r.content_id).startsWith("tt") ? `https://images.metahub.space/poster/medium/${r.content_id}/img` : ""), year: r.release_info || undefined }));
+  }
+  const rows = await stremioFetchLibrary(conn.accessToken);
+  return rows.filter((r) => !r.temp && mediaAppTitleId(r._id) && mediaAppKind(r.type)).map((r) => ({ id: r._id, type: mediaAppKind(r.type), name: r.name || "", poster: r.poster || (String(r._id).startsWith("tt") ? `https://images.metahub.space/poster/medium/${r._id}/img` : "") }));
+}
+
 // A show's episodes in the order Stremio numbers them: by season, with
 // specials (season 0) last. null when Cinemeta cannot say.
 async function stremioEpisodes(imdbId) {
@@ -1141,7 +1189,7 @@ function extractNuvioCollections(raw) {
         const itemTitle = String(item.title || item.name || "").trim();
         const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
         const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
-        if (itemTitle || hasFolders || hasSources) {
+        if (item.id || itemTitle || hasFolders || hasSources) {
           out.push(item);
         }
       }
@@ -1152,7 +1200,7 @@ function extractNuvioCollections(raw) {
     const valTitle = String(val.title || val.name || "").trim();
     const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
     const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
-    if (valTitle || hasFolders || hasSources) {
+    if (val.id || valTitle || hasFolders || hasSources) {
       return [val];
     }
   }
@@ -1163,13 +1211,8 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
 
-  // Clean existing collections: discard empty stubs (0 folders & 0 sources)
-  const cleanedExisting = existingArr.filter((c) => {
-    if (!c) return false;
-    const cFolders = Array.isArray(c.folders) ? c.folders : [];
-    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
-    return cFolders.length > 0 || cSources.length > 0;
-  });
+  // An empty collection can be intentional. Keep it, including unknown fields.
+  const cleanedExisting = existingArr.filter(Boolean);
 
   if (!incomingArr.length) return cleanedExisting;
 
@@ -1268,11 +1311,7 @@ function mergeNuvioCollections(existing, incoming) {
     if (!c) continue;
     const cTitle = String(c.title || c.name || "").trim();
     const cFolders = Array.isArray(c.folders) ? c.folders : [];
-    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
-    if (cFolders.length === 0 && cSources.length === 0) {
-      // Discard empty/corrupted DB stubs (e.g. 8467ec44-2731-4b0f-a8b5-48e42d215150 with 0 folders)
-      continue;
-    }
+
 
     const isMyLists = (c.id && (c.id === "my-lists-collections" || c.id === "my-lists-addon")) ||
                       (cTitle && (cTitle.toLowerCase() === "my lists collections" || cTitle.toLowerCase() === "my lists addon" || cTitle.toLowerCase() === "my lists"));
@@ -1378,7 +1417,10 @@ async function nuvioPullCollections(env, accessToken, profileId) {
   if (typeof blob === "string") {
     try { blob = JSON.parse(blob); } catch { throw new Error("Nuvio returned collections that could not be read."); }
   }
-  return Array.isArray(blob) ? blob.filter((c) => c && typeof c === "object") : [];
+  if (!Array.isArray(blob) || blob.some((c) => !c || typeof c !== "object" || Array.isArray(c))) {
+    throw new Error("Nuvio returned collections in an unexpected format.");
+  }
+  return blob;
 }
 
 async function nuvioGetAddons(env, accessToken, profileId) {
@@ -1602,6 +1644,41 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
       }
       return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
+    }
+    if (sub === "library-item") {
+      if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
+      const id = mediaAppTitleId(body.id);
+      const kind = mediaAppKind(body.mediaType);
+      const action = body.action;
+      if (!id || !kind || !["add", "remove"].includes(action)) return json({ ok: false, error: "Choose a movie or show." }, 400);
+      let conn = await loadProviderConnection(env, accountId, provider);
+      const sync = await loadMediaAppSync(env, accountId, provider);
+      if (!conn || conn.status !== "ok" || !sync) return json({ ok: false, error: "That account isn't connected." }, 404);
+      const contentId = id.imdbId || `tmdb:${id.tmdbId}`;
+      if (provider === "nuvio") {
+        if (!sync.profile_index) return json({ ok: false, error: "Choose a Nuvio profile first." }, 400);
+        conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+        if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+        const existing = await nuvioFetchLibrary(env, conn.accessToken, sync.profile_index);
+        const found = existing.find((r) => String(r.content_id).toLowerCase() === contentId && mediaAppKind(r.content_type) === kind);
+        if (action === "add" && !found) {
+          await nuvioRpc(env, conn.accessToken, "sync_push_library_items", { p_profile_id: sync.profile_index, p_origin_client_id: "my-lists-addon", p_items: [{ content_id: contentId, content_type: kind, name: String(body.title || "").slice(0, 200), added_at: Date.now() }] });
+        } else if (action === "remove" && found) {
+          await nuvioRpc(env, conn.accessToken, "sync_delete_library_items", { p_profile_id: sync.profile_index, p_origin_client_id: "my-lists-addon", p_keys: [{ content_id: found.content_id, content_type: found.content_type }] });
+        }
+      } else {
+        if (!id.imdbId) return json({ ok: false, error: "Stremio needs an IMDb ID for this title." }, 400);
+        const all = await stremioCall("datastoreGet", { authKey: conn.accessToken, collection: "libraryItem", ids: [], all: true });
+        if (!Array.isArray(all)) throw mediaAppError("unreachable", "Stremio sent an invalid library.");
+        const existing = all.find((r) => r && String(r._id) === id.imdbId);
+        if (existing && mediaAppKind(existing.type) !== kind) return json({ ok: false, error: "This title has a different type in Stremio." }, 409);
+        if (action === "remove" && !existing) return json({ ok: true });
+        const now = new Date().toISOString();
+        const item = existing || { _id: id.imdbId, type: kind, name: String(body.title || "").slice(0, 200), poster: null, posterShape: "poster", _ctime: now, behaviorHints: {}, state: { lastWatched: null, timeWatched: 0, timeOffset: 0, overallTimeWatched: 0, timesWatched: 0, flaggedWatched: 0, duration: 0, video_id: null, watched: null, noNotif: false } };
+        const result = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: [{ ...item, removed: action === "remove", temp: false, _mtime: now }] });
+        if (!result || result.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
+      }
+      return json({ ok: true });
     }
     if (sub === "add-history") {
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);

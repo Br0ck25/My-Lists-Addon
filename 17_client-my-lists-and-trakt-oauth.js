@@ -2092,6 +2092,7 @@ const MEDIA_APP_UI_FRESH_MS = 2 * 60 * 1000;
 const MEDIA_APP_LISTS = [
   { slug: 'watch-history', title: 'Watch History', blurb: 'Movies and shows you watched there.' },
   { slug: 'continue-watching', title: 'Continue Watching', blurb: 'Where you stopped there: movies part way through and the next episode of your shows.' },
+  { slug: 'library', title: 'Library', blurb: 'Movies and shows saved in your library.' },
 ];
 
 async function mediaAppUiCall(provider, sub, method, body) {
@@ -2222,6 +2223,8 @@ function renderMediaAppStatus(provider, info) {
   const lapsed = connected && !!info.status && info.status !== 'ok';
   const live = connected && !lapsed;
   mediaAppListsLive[provider] = live;
+  const listsBtn = document.getElementById('lists' + name + 'ConnectBtn');
+  if (listsBtn) listsBtn.textContent = live ? 'Disconnect' : (lapsed ? 'Reconnect ' + name : 'Connect ' + name);
   if (live) mediaAppUiMaybeUpdate(provider, info.sync || {});
   renderMediaAppLists(provider);
   const statusEl = document.getElementById(provider + 'ConnectStatus');
@@ -2382,6 +2385,22 @@ async function setMediaAppSyncOption(provider, key, value) {
   mediaAppUiRefresh(provider);
 }
 
+// Use the same secure connection flows as Settings; never collect credentials
+// in a second form. A connected account uses the existing confirmation dialog.
+function toggleListsMediaAppConnection(provider) {
+  if (!MEDIA_APP_UI_NAMES[provider]) return;
+  if (mediaAppListsLive[provider]) { disconnectMediaApp(provider); return; }
+  if (!requireSignedInFor('connect your ' + MEDIA_APP_UI_NAMES[provider] + ' account')) return;
+  goToExternalSettings();
+  const section = document.getElementById(provider + 'Section');
+  if (section && typeof section.scrollIntoView === 'function') section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (provider === 'stremio') startStremioConnect();
+  else {
+    const email = document.getElementById('nuvioEmailInput');
+    if (email && typeof email.focus === 'function') email.focus();
+  }
+}
+
 // Pulls now and waits, so the answer is what the app holds.
 async function syncMediaAppNow(provider, btn) {
   if (btn) btn.disabled = true;
@@ -2419,15 +2438,17 @@ async function syncWebsiteContinueWatchingRemoval(id) {
 // Search from an app-history page and add a movie or a specific episode.
 function openMediaHistoryAdd() {
   const p = window._currentListDetailsParams;
-  const match = p && /^autotrack:(nuvio|stremio)-watch-history:/.exec(String(p.listUrl || ''));
+  const match = p && /^autotrack:(nuvio|stremio)-(watch-history|library):/.exec(String(p.listUrl || ''));
   if (!match) return;
   window._mediaHistoryAddProvider = match[1];
-  showModal('<h2>Add to ' + escapeHtml(MEDIA_APP_UI_NAMES[match[1]]) + ' Watch History</h2>' +
+  window._mediaAppAddTarget = match[2];
+  const library = match[2] === 'library';
+  showModal('<h2>Add to ' + escapeHtml(MEDIA_APP_UI_NAMES[match[1]]) + (library ? ' Library' : ' Watch History') + '</h2>' +
     '<label for="mediaHistoryQuery">Title</label><input id="mediaHistoryQuery" type="search" autocomplete="off">' +
-    '<label for="mediaHistoryKind">Type</label><select id="mediaHistoryKind"><option value="movie">Movie</option><option value="series">Show episode</option></select>' +
-    '<p class="u-c-v_muted u-fs-v_font_size_sm">For a show, enter the season and episode before adding it.</p>' +
+    '<label for="mediaHistoryKind">Type</label><select id="mediaHistoryKind"><option value="movie">Movie</option><option value="series">' + (library ? 'Show' : 'Show episode') + '</option></select>' +
+    (library ? '' : '<p class="u-c-v_muted u-fs-v_font_size_sm">For a show, enter the season and episode before adding it.</p>' +
     '<label for="mediaHistorySeason">Season</label><input id="mediaHistorySeason" type="number" min="0" step="1">' +
-    '<label for="mediaHistoryEpisode">Episode</label><input id="mediaHistoryEpisode" type="number" min="1" step="1">' +
+    '<label for="mediaHistoryEpisode">Episode</label><input id="mediaHistoryEpisode" type="number" min="1" step="1">') +
     '<button type="button" class="btn-secondary btn-sm" data-act="searchMediaHistoryAdd">Search</button>' +
     '<div id="mediaHistoryResults" role="status"></div>' +
     '<button type="button" class="btn-ghost btn-sm" data-act="closeModal">Close</button>');
@@ -2447,7 +2468,7 @@ async function searchMediaHistoryAdd() {
     if (!data.ok || !Array.isArray(data.results)) throw new Error('Search failed.');
     box.innerHTML = data.results.slice(0, 12).map(function(r) {
       const id = String(r.tmdbId || r.id || '').replace(/^tmdb:/, '');
-      if (!/^\d+$/.test(id)) return '';
+      if (!/^\\d+$/.test(id)) return '';
       const title = String(r.title || r.name || 'Untitled');
       return '<p>' + escapeHtml(title) + (r.year ? ' (' + escapeHtml(String(r.year)) + ')' : '') + ' ' +
         '<button type="button" class="btn-secondary btn-sm" data-act="addMediaHistoryResult" data-act-args="' + appActArgs([id, kind.value, title, '@self']) + '">Add</button></p>';
@@ -2462,7 +2483,8 @@ async function addMediaHistoryResult(tmdbId, kind, title, btn) {
   const episodeEl = document.getElementById('mediaHistoryEpisode');
   const season = seasonEl && seasonEl.value !== '' ? Number(seasonEl.value) : null;
   const episode = episodeEl && episodeEl.value !== '' ? Number(episodeEl.value) : null;
-  if (kind === 'series' && (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1)) {
+  const library = window._mediaAppAddTarget === 'library';
+  if (!library && kind === 'series' && (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1)) {
     showToast('Enter a season and episode first.', 'error');
     return;
   }
@@ -2475,11 +2497,15 @@ async function addMediaHistoryResult(tmdbId, kind, title, btn) {
       if (data.ok && data.imdbId) id = data.imdbId;
     } catch (e) {}
   }
-  const result = await mediaAppUiCall(provider, 'add-history', 'POST', { id: id, mediaType: kind, season: season, episode: episode, title: title });
+  const body = { id: id, mediaType: kind, season: season, episode: episode, title: title };
+  if (library) body.action = 'add';
+  const result = await mediaAppUiCall(provider, library ? 'library-item' : 'add-history', 'POST', body);
   if (btn) btn.disabled = false;
   if (!result.ok) { showToast(mediaAppUiMessage(result, 'Could not add this title.'), 'error'); return; }
   closeModal();
-  showToast(result.data.mirrored ? 'Added "' + title + '" to ' + MEDIA_APP_UI_NAMES[provider] + ' Watch History.' : 'Added to ' + MEDIA_APP_UI_NAMES[provider] + ', but the website copy could not be updated.', result.data.mirrored ? 'success' : 'info');
+  if (window._listPreviewCache && typeof window._listPreviewCache.clear === 'function') window._listPreviewCache.clear();
+  if (library) showToast('Added "' + title + '" to ' + MEDIA_APP_UI_NAMES[provider] + ' Library.', 'success');
+  else showToast(result.data.mirrored ? 'Added "' + title + '" to ' + MEDIA_APP_UI_NAMES[provider] + ' Watch History.' : 'Added to ' + MEDIA_APP_UI_NAMES[provider] + ', but the website copy could not be updated.', result.data.mirrored ? 'success' : 'info');
   const p = window._currentListDetailsParams;
   if (p && typeof openListDetailsPage === 'function') openListDetailsPage(p.name, p.type, p.listUrl, null, { preserveScroll: true });
 }
@@ -2493,13 +2519,15 @@ function removeMediaAppItem(btn) {
   const mediaType = btn.dataset.mediaType || 'movie';
   const itemName = btn.dataset.name || 'This title';
   const app = MEDIA_APP_UI_NAMES[provider];
-  if (!app || !id || (target !== 'history' && target !== 'continue-watching')) return;
+  if (!app || !id || (target !== 'history' && target !== 'continue-watching' && target !== 'library')) return;
   const isShow = mediaType === 'series' || mediaType === 'episode';
   const message = target === 'history'
     ? '"' + itemName + '"' + (isShow ? ' and all its watched episodes' : '') + ' will be removed from your Watch History in ' + app + ', and from ' + app + ' itself.'
-    : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
+    : target === 'library' ? '"' + itemName + '" will be removed from your ' + app + ' Library.' : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
   showAppConfirm('Remove from ' + app + '?', message, 'Remove', async function () {
-    const r = await mediaAppUiCall(provider, 'remove', 'POST', { target: target, id: id, mediaType: mediaType });
+    const body = { target: target, id: id, mediaType: mediaType };
+    if (target === 'library') body.action = 'remove';
+    const r = await mediaAppUiCall(provider, target === 'library' ? 'library-item' : 'remove', 'POST', body);
     if (!r.ok) {
       showToast(mediaAppUiMessage(r, 'Could not remove "' + itemName + '" from ' + app + '. Please try again.'), 'error');
       return;
@@ -3339,7 +3367,7 @@ function loadCustomCollections() {
         for (let j = 0; j < item.lists.length; j++) {
           const l = item.lists[j];
           if (l && l.name) {
-            const clean = l.name.replace(/\s*\((?:movies|shows|series)\)\s*$/i, '').trim();
+            const clean = l.name.replace(/\\s*\\((?:movies|shows|series)\\)\\s*$/i, '').trim();
             if (clean && clean !== l.name) {
               l.name = clean;
               updated = true;
@@ -4056,7 +4084,7 @@ function extractNuvioCollections(raw) {
         const itemTitle = String(item.title || item.name || '').trim();
         const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
         const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
-        if (itemTitle || hasFolders || hasSources) {
+        if (item.id || itemTitle || hasFolders || hasSources) {
           out.push(item);
         }
       }
@@ -4067,7 +4095,7 @@ function extractNuvioCollections(raw) {
     const valTitle = String(val.title || val.name || '').trim();
     const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
     const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
-    if (valTitle || hasFolders || hasSources) {
+    if (val.id || valTitle || hasFolders || hasSources) {
       return [val];
     }
   }
@@ -4076,7 +4104,7 @@ function extractNuvioCollections(raw) {
 
 function stripMediaSuffix(str) {
   if (!str) return '';
-  const re = /[ \t]*[(](?:movies?|shows?|series|tv)[)][ \t]*$/ig;
+  const re = /[ \\t]*[(](?:movies?|shows?|series|tv)[)][ \\t]*$/ig;
   return String(str).replace(re, '').replace(re, '').trim();
 }
 
@@ -4085,13 +4113,8 @@ function addNewNuvioCollection(existing, incoming, options) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
 
-  // Clean existing collections: filter out empty stubs (0 folders & 0 sources)
-  const cleanedExisting = existingArr.filter(function (c) {
-    if (!c) return false;
-    const cFolders = Array.isArray(c.folders) ? c.folders : [];
-    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
-    return cFolders.length > 0 || cSources.length > 0;
-  });
+  // An empty collection can be intentional. Keep it, including unknown fields.
+  const cleanedExisting = existingArr.filter(Boolean);
 
   if (!incomingArr.length) return cleanedExisting;
 
@@ -4155,11 +4178,7 @@ function mergeNuvioCollections(existing, incoming) {
     if (!c) continue;
     const cTitle = String(c.title || c.name || '').trim();
     const cFolders = Array.isArray(c.folders) ? c.folders : [];
-    const cSources = Array.isArray(c.catalogSources) ? c.catalogSources : [];
-    if (cFolders.length === 0 && cSources.length === 0) {
-      // Discard empty/corrupted DB stubs (e.g. 8467ec44-2731-4b0f-a8b5-48e42d215150 with 0 folders)
-      continue;
-    }
+
 
     const isMyLists = (c.id && (c.id === 'my-lists-collections' || c.id === 'my-lists-addon')) ||
                       (cTitle && (cTitle.toLowerCase() === 'my lists collections' || cTitle.toLowerCase() === 'my lists addon' || cTitle.toLowerCase() === 'my lists'));
@@ -4411,9 +4430,9 @@ function handleSyncNuvioModeChange() {
 
   if (hintEl) {
     if (mode === 'new') {
-      hintEl.textContent = 'This will create a new collection with the name below and leave every existing collection untouched.';
+      hintEl.textContent = 'This adds a collection using the current Nuvio data. Changes made in Nuvio during the push may be overwritten.';
     } else if (mode === 'merge') {
-      hintEl.textContent = 'This will add these folders to the collection you pick and leave all other collections untouched.';
+      hintEl.textContent = 'This merges folders using the current Nuvio data. Changes made in Nuvio during the push may be overwritten.';
     } else {
       hintEl.textContent = 'This will REMOVE every collection on this Nuvio profile (including ones from other providers) and keep only this one.';
     }
@@ -4469,9 +4488,7 @@ async function executeNuvioCollectionsPush(opts) {
     const premadeCol = premade.find(function (c) { return c.id === targetColId; });
     if (premadeCol) {
       const idx = current.findIndex(function (c) { return c.id === premadeCol.id || (c.name && premadeCol.name && c.name.toLowerCase() === premadeCol.name.toLowerCase()); });
-      if (idx !== -1) {
-        current[idx] = Object.assign({}, current[idx], premadeCol);
-      } else {
+      if (idx === -1) {
         current.push(JSON.parse(JSON.stringify(premadeCol)));
       }
       saveCustomCollections(current);

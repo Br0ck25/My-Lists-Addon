@@ -578,14 +578,15 @@ describe("collections subnav and website lists picker", () => {
     assert.ok(folderTitles.includes("Apple TV+"), "Apple TV+ must be preserved");
     assert.ok(folderTitles.includes("Disney+"), "Disney+ must be present");
 
-    // 4. Corrupted empty collection from prior bug is filtered out
+    // 4. Empty collections are retained: they may be intentional.
     const withCorruptedEmpty = [
       { id: "corrupted_empty", folders: [] },
       ...afterDisney
     ];
     const cleaned = client.call("mergeNuvioCollections", withCorruptedEmpty, []);
-    assert.strictEqual(cleaned.length, 1);
-    assert.ok(cleaned[0].id === "my-lists-collections" || cleaned[0].id === "my-lists-streaming");
+    assert.strictEqual(cleaned.length, 2);
+    assert.ok(cleaned.some((c) => c.id === "corrupted_empty"));
+    assert.ok(cleaned.some((c) => c.id === "my-lists-collections" || c.id === "my-lists-streaming"));
 
     // 5. Community "Streaming" collection with 12 folders is preserved 100% untouched
     const communityStreaming = [
@@ -691,8 +692,8 @@ describe("collections subnav and website lists picker", () => {
 
     const result = client.call("addNewNuvioCollection", existing, incoming, { collectionName: "Apple TV+" });
     assert.ok(Array.isArray(result));
-    // Must contain 2 collections: Streaming (untouched) and Apple TV+ (new), discarding the empty stub 8467ec44
-    assert.strictEqual(result.length, 2);
+    // Keep empty collections too, as they may be intentional.
+    assert.strictEqual(result.length, 3);
 
     const streaming = result.find((c) => c.id === "collection-a33b28eb-community");
     assert.ok(streaming, "Streaming collection must be kept intact");
@@ -706,8 +707,8 @@ describe("collections subnav and website lists picker", () => {
     // Verifies trailing (Movies) is stripped
     assert.strictEqual(apple.folders[0].catalogSources[0].name, "Apple TV+ Top 10");
 
-    // Empty stub must be discarded
+    // Empty collection must be preserved
     const stub = result.find((c) => c.id === "8467ec44-2731-4b0f-a8b5-48e42d215150");
-    assert.strictEqual(stub, undefined, "Empty stub 8467ec44 must be removed");
+    assert.ok(stub, "Empty collection must be retained");
   });
 });

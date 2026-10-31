@@ -1169,7 +1169,8 @@ function previewCreatorAuth() {
 async function fetchListPreviewOnce(listUrl, type, sample) {
   const isAdultFilterOn = isAdultContentFilterEnabled();
   const cacheKey = String(listUrl) + '|' + String(type) + '|' + String(sample || 12) + (isAdultFilterOn ? '|safe' : '');
-  if (window._listPreviewCache && window._listPreviewCache.has(cacheKey)) {
+  const liveLibrary = /^autotrack:(nuvio|stremio)-library:/.test(String(listUrl || ''));
+  if (!liveLibrary && window._listPreviewCache && window._listPreviewCache.has(cacheKey)) {
     return window._listPreviewCache.get(cacheKey);
   }
 
@@ -1207,7 +1208,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('application/json')) return { ok: false };
     const data = await res.json();
-    if (data && data.ok) {
+    if (data && data.ok && !liveLibrary) {
       if (!window._listPreviewCache) window._listPreviewCache = new Map();
       window._listPreviewCache.set(cacheKey, data);
     }
@@ -1385,8 +1386,8 @@ async function loadPosterSlot(slot) {
               const slugMatch = listUrl.match(new RegExp('lists/([^/?#]+)'));
               const traktListId = traktTarget === 'custom' ? (slugMatch ? slugMatch[1] : listUrl) : traktTarget;
               removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
-            } else if (/^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.test(String(listUrl || ''))) {
-              const appHit = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl));
+            } else if (/^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.test(String(listUrl || ''))) {
+              const appHit = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.exec(String(listUrl));
               const appName = appHit[1] === 'nuvio' ? 'Nuvio' : 'Stremio';
               removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + appHit[1] + '" data-target="' + (appHit[2] === 'watch-history' ? 'history' : appHit[2]) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || '') + '" data-name="' + escapeAttr(s.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + appName + '" aria-label="Remove from ' + appName + '">\u2715</button>';
             } else if (isMdblistSlot) {

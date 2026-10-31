@@ -7,6 +7,33 @@ import { loadClient, renderPage, requestsTo } from "./client-harness.mjs";
 
 const el = (c, id) => c.document.getElementById(id);
 
+describe("connection buttons under My Lists", () => {
+  it("renders both buttons and updates their labels for connected and expired accounts", () => {
+    const html = renderPage();
+    assert.match(html, /id="listsNuvioConnectBtn"[^>]*data-act="toggleListsMediaAppConnection"/);
+    assert.match(html, /id="listsStremioConnectBtn"[^>]*data-act="toggleListsMediaAppConnection"/);
+    const c = loadClient({ signedIn: "alice" });
+    c.call("renderMediaAppStatus", "nuvio", { connected: true, status: "ok", sync: { lastPullAt: Date.now() } });
+    assert.equal(el(c, "listsNuvioConnectBtn").textContent, "Disconnect");
+    c.call("renderMediaAppStatus", "stremio", { connected: true, status: "expired", sync: {} });
+    assert.equal(el(c, "listsStremioConnectBtn").textContent, "Reconnect Stremio");
+    c.call("renderMediaAppStatus", "nuvio", null);
+    assert.equal(el(c, "listsNuvioConnectBtn").textContent, "Connect Nuvio");
+  });
+  it("opens the existing Nuvio sign-in, starts Stremio linking, and confirms disconnect", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const calls = [];
+    c.set("goToExternalSettings", () => calls.push("settings"));
+    c.set("startStremioConnect", () => calls.push("stremio"));
+    c.set("disconnectMediaApp", (p) => calls.push("disconnect:" + p));
+    c.call("toggleListsMediaAppConnection", "nuvio");
+    c.call("toggleListsMediaAppConnection", "stremio");
+    c.call("renderMediaAppStatus", "nuvio", { connected: true, status: "ok", sync: { lastPullAt: Date.now() } });
+    c.call("toggleListsMediaAppConnection", "nuvio");
+    assert.deepEqual(calls, ["settings", "settings", "stremio", "disconnect:nuvio"]);
+  });
+});
+
 describe("Stremio and Nuvio cards", () => {
   it("shows a live connection with its settings, and hides the sign-in", () => {
     const c = loadClient({ signedIn: true });
@@ -528,6 +555,44 @@ describe("removing an item from Nuvio or Stremio", () => {
     const html = c.call("livePreviewPosterHtml", { id: "tt2222222", type: "series", name: "Show S", poster: "https://img.test/p.jpg", removeExternalProvider: "stremio", removeExternalTarget: "continue-watching", removeExternalListId: "continue-watching" });
     assert.match(html, /data-provider="stremio" data-target="continue-watching"[^>]*data-remove-id="tt2222222"/);
     assert.match(html, /data-name="Show S"/);
+  });
+});
+
+describe("app libraries", () => {
+  it("offers Library alongside the app's other lists", () => {
+    const c = loadClient({ signedIn: "alice" });
+    c.call("renderMediaAppStatus", "nuvio", { connected: true, status: "ok", sync: { lastPullAt: Date.now() } });
+    assert.match(el(c, "myNuvioListsResult").innerHTML, /Nuvio Library/);
+    assert.match(el(c, "myNuvioListsResult").innerHTML, /autotrack:nuvio-library:mixed:alice/);
+  });
+  it("searches titles and renders numeric results as add buttons", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/title-search": () => ({ json: { ok: true, results: [{ tmdbId: 550, title: "Fight Club", year: "1999" }] } }) } });
+    el(c, "mediaHistoryQuery").value = "Fight Club";
+    el(c, "mediaHistoryKind").value = "movie";
+    await c.call("searchMediaHistoryAdd");
+    assert.match(el(c, "mediaHistoryResults").innerHTML, /Fight Club/);
+    assert.match(el(c, "mediaHistoryResults").innerHTML, /data-act="addMediaHistoryResult"/);
+  });
+  it("sends a library add directly to the app", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/connections/nuvio/library-item": () => ({ json: { ok: true } }) } });
+    c.window._mediaHistoryAddProvider = "nuvio";
+    c.window._mediaAppAddTarget = "library";
+    c.set("showToast", () => {});
+    c.set("closeModal", () => {});
+    await c.call("addMediaHistoryResult", "1396", "series", "Breaking Bad", null);
+    const sent = requestsTo(c, "/api/connections/nuvio/library-item");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].body.action, "add");
+    assert.equal(sent[0].body.id, "tmdb:1396");
+  });
+  it("routes a library removal to the incremental library endpoint", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/connections/nuvio/library-item": () => ({ json: { ok: true } }) } });
+    c.set("showAppConfirm", (title, msg, text, cb) => cb());
+    c.set("showToast", () => {});
+    const btn = { dataset: { provider: "nuvio", target: "library", removeId: "tmdb:550", mediaType: "movie", name: "Movie" }, closest: () => null };
+    c.call("removeMediaAppItem", btn);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(requestsTo(c, "/api/connections/nuvio/library-item")[0].body.action, "remove");
   });
 });
 

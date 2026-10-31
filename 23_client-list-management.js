@@ -3351,7 +3351,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   // The Nuvio and Stremio lists hold movies as well as shows (61_media-app-sync.js).
   const isMediaAppList = /^autotrack:(nuvio|stremio)-/.test(String(listUrl || ''));
   const addHistoryBtn = document.getElementById('detailAddMediaHistoryBtn');
-  if (addHistoryBtn) addHistoryBtn.hidden = !/^autotrack:(nuvio|stremio)-watch-history:/.test(String(listUrl || ''));
+  if (addHistoryBtn) addHistoryBtn.hidden = !/^autotrack:(nuvio|stremio)-(watch-history|library):/.test(String(listUrl || ''));
   const isContinueWatching = !isMediaAppList && ((name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching'))));
   if (isContinueWatching) {
     type = 'series';
@@ -3679,7 +3679,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
   // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
-  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl || ''));
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.exec(String(listUrl || ''));
 
   function annotatePersonalItem(it) {
     if (!it) return it;

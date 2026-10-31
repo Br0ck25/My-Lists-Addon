@@ -72,16 +72,18 @@
     <div class="panel u-mt-12px" id="myListsSectionPanel-nuvio">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Nuvio Lists</h2>
+        <button type="button" class="secondary lc-btn" id="listsNuvioConnectBtn" data-act="toggleListsMediaAppConnection" data-act-args="[&quot;nuvio&quot;]">Connect Nuvio</button>
       </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History and Continue Watching from your connected Nuvio account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History, Continue Watching, and Library from your connected Nuvio account.</p>
       <div id="myNuvioListsResult"></div>
     </div>
 
     <div class="panel u-mt-12px" id="myListsSectionPanel-stremio">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Stremio Lists</h2>
+        <button type="button" class="secondary lc-btn" id="listsStremioConnectBtn" data-act="toggleListsMediaAppConnection" data-act-args="[&quot;stremio&quot;]">Connect Stremio</button>
       </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History and Continue Watching from your connected Stremio account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History, Continue Watching, and Library from your connected Stremio account.</p>
       <div id="myStremioListsResult"></div>
     </div>
   </div>
