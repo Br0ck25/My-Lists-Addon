@@ -399,6 +399,49 @@ describe("collections subnav and website lists picker", () => {
     assert.strictEqual(parsed[0].lists[0].name, "MCU Movies");
   });
 
+  it("uses existing list names and URLs for My Lists catalog IDs without changing identity", () => {
+    const client = loadClient();
+    const parsed = plain(client.call("parseNuvioCollectionsJson", [{ id: "folder", title: "Sources", catalogSources: [
+      { addonId: "app.my-list", catalogId: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today", type: "movie" },
+      { addonId: "app.my-list", catalogId: "tmdb-chart-disney", name: "tmdb-chart-disney", type: "series" },
+      { addonId: "app.my-list", catalogId: "tmdb-chart-disney", name: "My Disney picks", type: "movie" },
+      { addonId: "other.addon", catalogId: "tmdb-chart-disney", type: "series" },
+      { addonId: "app.my-list", catalogId: "unknown", type: "movie" }
+    ] }]));
+    const lists = parsed[0].lists;
+    assert.equal(lists[0].name, "Apple TV+ Top 10");
+    assert.equal(lists[0].url, "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today");
+    assert.equal(lists[0].catalogId, "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today");
+    assert.equal(lists[1].name, "Disney+");
+    assert.equal(lists[1].url, "tmdb:chart:disney");
+    assert.equal(lists[1].type, "series");
+    assert.equal(lists[2].name, "My Disney picks", "explicit names are preserved");
+    assert.equal(lists[3].name, "tmdb-chart-disney", "do not borrow another addon's name");
+    assert.equal(lists[3].url, "catalog:other.addon:tmdb-chart-disney");
+    assert.equal(lists[4].name, "unknown");
+  });
+
+  it("repairs old ID-only linked labels on refresh without changing the remote folder", async () => {
+    const client = loadClient();
+    const folder = { id: "disney", title: "Disney", catalogSources: [{ addonId: "app.my-list", catalogId: "tmdb-chart-disney", type: "movie" }] };
+    const remote = [{ id: "my-lists-collections", folders: [folder] }];
+    const methods = [];
+    client.set("mediaAppUiCall", async (p, sub, method) => { methods.push(method); return { ok: true, data: { profileId: 1, scope: "scope", collections: remote } }; });
+    await client.call("pullCollectionsFromNuvio");
+    const collections = plain(client.call("loadCustomCollections"));
+    const linked = collections.find((c) => c.nuvioLink);
+    linked.lists[0].name = "tmdb-chart-disney";
+    linked.lists[0].url = "catalog:app.my-list:tmdb-chart-disney";
+    linked.nuvioLink.baseline = client.call("linkedNuvioFolderSignature", linked);
+    client.call("saveCustomCollections", collections);
+    await client.call("pullCollectionsFromNuvio", true);
+    const refreshed = plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink);
+    assert.equal(refreshed.lists[0].name, "Disney+");
+    assert.equal(refreshed.lists[0].url, "tmdb:chart:disney");
+    assert.deepEqual(refreshed.nuvioLink.folder, folder);
+    assert.deepEqual(methods, ["GET", "GET"]);
+  });
+
   it("links Nuvio folders, preserves local edits on pull, and updates their original parent", async () => {
     const client = loadClient();
     const source = { addonId: "community", catalogId: "list", type: "movie", name: "List", extra: "keep" };

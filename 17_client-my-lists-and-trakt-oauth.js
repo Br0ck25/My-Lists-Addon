@@ -4685,7 +4685,7 @@ async function pullCollectionsFromNuvio(automatic) {
       const idx = merged.findIndex(function (c) { return c.id === imp.id; });
       if (idx !== -1) {
         if (!merged[idx].nuvioLink || linkedNuvioFolderSignature(merged[idx]) !== merged[idx].nuvioLink.baseline) { skipped++; continue; }
-        if (JSON.stringify(merged[idx].nuvioLink.folder) !== JSON.stringify(imp.nuvioLink.folder)) { merged[idx] = imp; refreshed++; }
+        if (JSON.stringify(merged[idx].nuvioLink.folder) !== JSON.stringify(imp.nuvioLink.folder) || linkedNuvioFolderSignature(merged[idx]) !== linkedNuvioFolderSignature(imp)) { merged[idx] = imp; refreshed++; }
       } else if (!auto) {
         merged.push(imp);
         count++;
@@ -4749,11 +4749,33 @@ function parseNuvioCollectionsJson(raw) {
     }
   }
 
+  // Catalog IDs are stable identifiers, not necessarily readable names. Reuse
+  // exact type/ID matches from our configured and premade lists, never another
+  // addon's catalog with a coincidentally identical ID.
+  const known = [];
+  if (typeof collectEntries === 'function') {
+    try { known.push.apply(known, collectEntries() || []); } catch (e) {}
+  }
+  loadCustomCollections().concat(getPremadeCollections()).forEach(function (col) {
+    if (col && Array.isArray(col.lists)) known.push.apply(known, col.lists);
+  });
+  function knownSource(cs, id) {
+    if (cs.addonId && cs.addonId !== 'app.my-list') return null;
+    const type = cs.type || 'movie';
+    return known.find(function (item) {
+      if (!item || (item.addonId && item.addonId !== 'app.my-list') || (item.type || 'movie') !== type) return false;
+      const itemId = item.catalogId || item.id || (item.url && typeof slugify === 'function' ? slugify(item.url) : '');
+      return itemId === id && !!item.name && item.name !== id;
+    }) || null;
+  }
+
   return folders.filter(Boolean).map(function (f) {
     const lists = Array.isArray(f.catalogSources) ? f.catalogSources.map(function (cs) {
       const catId = cs.catalogId || cs.name || '';
-      let url = cs.url || '';
-      if (!url && catId && typeof CHART_SLUG_ENTRIES !== 'undefined') {
+      const knownItem = knownSource(cs, catId);
+      const suppliedName = cs.name || cs.title || '';
+      let url = cs.url || (knownItem && typeof knownItem.url === 'string' && knownItem.url.indexOf('catalog:') !== 0 ? knownItem.url : '') || '';
+      if (!url && catId && (!cs.addonId || cs.addonId === 'app.my-list') && typeof CHART_SLUG_ENTRIES !== 'undefined') {
         const match = CHART_SLUG_ENTRIES.find(function (c) {
           return c.slug === catId || (typeof slugify === 'function' && (slugify(c.name) === catId || slugify(c.movieUrl || '') === catId || slugify(c.showUrl || '') === catId));
         });
@@ -4762,7 +4784,7 @@ function parseNuvioCollectionsJson(raw) {
         }
       }
       return {
-        name: cs.name || cs.catalogId || 'Catalog Item',
+        name: (suppliedName && suppliedName !== catId ? suppliedName : (knownItem && knownItem.name)) || suppliedName || catId || 'Catalog Item',
         url: url || ('catalog:' + (cs.addonId || 'app.my-list') + ':' + catId),
         type: cs.type || 'movie',
         addonId: cs.addonId || 'app.my-list',
