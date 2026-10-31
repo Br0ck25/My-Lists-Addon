@@ -403,7 +403,7 @@ describe("collections subnav and website lists picker", () => {
     const client = loadClient();
     const source = { addonId: "community", catalogId: "list", type: "movie", name: "List", extra: "keep" };
     const folder = { id: "folder", title: "Remote", catalogSources: [source], custom: "keep" };
-    const remote = [{ id: "parent", title: "Parent", folders: [folder] }];
+    const remote = [{ id: "my-lists-collections", title: "Parent", folders: [folder] }];
     const calls = [];
     client.set("mediaAppUiCall", async (provider, sub, method, body) => {
       calls.push({ method, body });
@@ -413,7 +413,7 @@ describe("collections subnav and website lists picker", () => {
     await client.call("pullCollectionsFromNuvio");
     let collections = plain(client.call("loadCustomCollections"));
     let linked = collections.find((c) => c.nuvioLink);
-    assert.equal(linked.nuvioLink.collectionId, "parent");
+    assert.equal(linked.nuvioLink.collectionId, "my-lists-collections");
     assert.equal(linked.lists[0].nuvioSource.extra, "keep");
     folder.title = "Refreshed remotely";
     remote.push({ id: "new-parent", folders: [{ id: "new", title: "New", catalogSources: [] }] });
@@ -434,7 +434,7 @@ describe("collections subnav and website lists picker", () => {
     await client.call("pushLinkedNuvioFolder", linked);
     const sent = calls.at(-1).body;
     assert.equal(sent.installMode, "update-folder");
-    assert.equal(sent.targetCollectionId, "parent");
+    assert.equal(sent.targetCollectionId, "my-lists-collections");
     assert.equal(sent.expectedFolder.title, "Refreshed remotely");
     assert.equal(sent.scope, "scope-a");
     assert.equal(sent.updatedFolder.title, "Locally edited");
@@ -442,10 +442,38 @@ describe("collections subnav and website lists picker", () => {
     assert.equal(sent.updatedFolder.catalogSources[0].extra, "keep");
   });
 
+  it("pulls only collections created by My Lists, not similar third-party collections", async () => {
+    const client = loadClient();
+    const folder = (id) => ({ id, title: id, catalogSources: [{ addonId: "app.my-list", catalogId: "list", type: "movie" }] });
+    const remote = [
+      { id: "my-lists-collections", folders: [folder("mine")] },
+      { id: "col_mylists_abc123", folders: [folder("also-mine")] },
+      { id: "my-lists-addon", folders: [folder("legacy")] },
+      { id: "other-addon", title: "My Lists Collections", folders: [folder("other")] },
+      { id: "unrelated", folders: [folder("another")] }
+    ];
+    const calls = [];
+    client.set("mediaAppUiCall", async (p, sub, method) => { calls.push(method); return { ok: true, data: { profileId: 1, scope: "scope", collections: remote } }; });
+    await client.call("pullCollectionsFromNuvio");
+    const linked = plain(client.call("loadCustomCollections")).filter((c) => c.nuvioLink);
+    assert.deepEqual(linked.map((c) => c.nuvioLink.collectionId), ["my-lists-collections", "col_mylists_abc123", "my-lists-addon"]);
+    assert.ok(!linked.some((c) => c.name === "other" || c.name === "another"));
+    // Already imported third-party copies stay local, but cannot be pushed.
+    const old = { ...linked[0], id: "old", name: "Saved local copy", nuvioLink: { ...linked[0].nuvioLink, collectionId: "other-addon" } };
+    const saved = plain(client.call("loadCustomCollections"));
+    saved.push(old);
+    client.call("saveCustomCollections", saved);
+    await client.call("pushLinkedNuvioFolder", old);
+    assert.deepEqual(calls, ["GET"]);
+    await client.call("pullCollectionsFromNuvio", true);
+    assert.deepEqual(calls, ["GET", "GET"]);
+    assert.equal(plain(client.call("loadCustomCollections")).find((c) => c.id === "old").name, "Saved local copy");
+  });
+
   it("does not apply an automatic refresh while the editor is open or the account changes", async () => {
     const client = loadClient({ signedInAs: "alice" });
     const folder = { id: "f", title: "Original", catalogSources: [] };
-    const response = () => ({ ok: true, data: { profileId: 1, scope: "alice-scope", collections: [{ id: "p", folders: [folder] }] } });
+    const response = () => ({ ok: true, data: { profileId: 1, scope: "alice-scope", collections: [{ id: "my-lists-collections", folders: [folder] }] } });
     client.set("mediaAppUiCall", async () => response());
     await client.call("pullCollectionsFromNuvio");
     folder.title = "Changed in Nuvio";

@@ -129,7 +129,7 @@
           <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
-          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull collections from your connected Nuvio account">Pull from Nuvio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull My Lists collections from your connected Nuvio account">Pull from Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="exportNuvioCollectionsJson" title="Export Nuvio collections.json">Export JSON</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="openImportNuvioModal" title="Import Nuvio collections.json">Import JSON</button>
         </div>

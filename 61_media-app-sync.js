@@ -1207,6 +1207,13 @@ function extractNuvioCollections(raw) {
   return [];
 }
 
+// My Lists owns these collection IDs; catalog sources or display names alone
+// do not identify the collection creator.
+function isMyListsNuvioCollectionId(id) {
+  const value = String(id || "");
+  return value === "my-lists-collections" || value === "my-lists-addon" || value.startsWith("col_mylists_");
+}
+
 function addNewNuvioCollection(existing, incoming, options = {}) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
@@ -1795,6 +1802,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
         if (!scope || body.scope !== scope) return json({ ok: false, error: "This folder belongs to a different connection. Pull it again before editing." }, 409);
         if (profileId !== (Number(row.profile_index) || 1)) return json({ ok: false, error: "The selected Nuvio profile changed. Pull again before editing." }, 409);
+        if (!isMyListsNuvioCollectionId(body.targetCollectionId)) return json({ ok: false, error: "Only collections created by My Lists can be updated here." }, 403);
         const targets = existing.filter((c) => c && String(c.id) === String(body.targetCollectionId));
         const target = targets.length === 1 ? targets[0] : null;
         const folders = target && Array.isArray(target.folders) ? target.folders : [];

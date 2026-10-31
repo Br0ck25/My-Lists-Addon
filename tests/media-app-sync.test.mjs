@@ -1549,7 +1549,8 @@ describe("Nuvio collections push: install modes", () => {
   });
 
   it("updates only the linked folder and rejects stale snapshots", async () => {
-    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING, OTHER] }] };
+    const mine = { ...STREAMING, id: "my-lists-collections" };
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [mine, OTHER] }] };
     const seen = fakeServices(state);
     const ctx = await setup("nuvcolupdate");
     await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
@@ -1558,13 +1559,15 @@ describe("Nuvio collections push: install modes", () => {
     assert.ok(read.body.scope);
     const original = STREAMING.folders[0];
     const updated = { ...original, title: "Edited", custom: "preserved", catalogSources: [] };
-    const body = { profileId: 1, scope: read.body.scope, installMode: "update-folder", targetCollectionId: STREAMING.id, folderId: original.id, expectedFolder: original, updatedFolder: updated, collections: [updated] };
+    const body = { profileId: 1, scope: read.body.scope, installMode: "update-folder", targetCollectionId: mine.id, folderId: original.id, expectedFolder: original, updatedFolder: updated, collections: [updated] };
     const write = (b) => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: b });
     assert.equal((await write({ ...body, scope: "another-account" })).status, 409);
     assert.equal(seen.collectionsPushed, undefined);
+    assert.equal((await write({ ...body, targetCollectionId: OTHER.id })).status, 403);
+    assert.equal(seen.collectionsPushed, undefined);
     assert.equal((await write(body)).status, 200);
-    assert.deepEqual(seen.collectionsPushed[0], [{ ...STREAMING, folders: [updated] }, OTHER]);
-    state.profiles[0].collections_json = [{ ...STREAMING, folders: [{ ...original, title: "Changed remotely" }] }, OTHER];
+    assert.deepEqual(seen.collectionsPushed[0], [{ ...mine, folders: [updated] }, OTHER]);
+    state.profiles[0].collections_json = [{ ...mine, folders: [{ ...original, title: "Changed remotely" }] }, OTHER];
     assert.equal((await write(body)).status, 409);
     assert.equal(seen.collectionsPushed.length, 1);
     assert.equal((await write({ ...body, profileId: 2 })).status, 409);

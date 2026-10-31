@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-31";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1c64b87b5e";
+const WORKER_BUILD = "fa8b1bd8e7";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -37267,7 +37267,7 @@ if ('serviceWorker' in navigator) {
           <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
-          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull collections from your connected Nuvio account">Pull from Nuvio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull My Lists collections from your connected Nuvio account">Pull from Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="exportNuvioCollectionsJson" title="Export Nuvio collections.json">Export JSON</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="openImportNuvioModal" title="Import Nuvio collections.json">Import JSON</button>
         </div>
@@ -47744,6 +47744,13 @@ function syncCollectionsToNuvio() {
   openSyncNuvioModal();
 }
 
+// These are IDs that My Lists itself uses when creating Nuvio collections.
+// Titles and catalog addon IDs are not proof of who created a collection.
+function isMyListsNuvioCollectionId(id) {
+  const value = String(id || '');
+  return value === 'my-lists-collections' || value === 'my-lists-addon' || value.indexOf('col_mylists_') === 0;
+}
+
 function pushSingleCollectionToNuvio(colId) {
   const col = loadCustomCollections().find(function (c) { return c.id === colId; });
   if (col && col.nuvioLink) { pushLinkedNuvioFolder(col); return; }
@@ -47754,6 +47761,10 @@ function pushSingleCollectionToNuvio(colId) {
 // replacing it, but warn that another client can still write after that check.
 async function pushLinkedNuvioFolder(col) {
   const link = col.nuvioLink;
+  if (!isMyListsNuvioCollectionId(link.collectionId)) {
+    showToast('Only collections created by My Lists can be updated here.', 'error');
+    return;
+  }
   const confirmed = await appShellDialog({ title: 'Update Nuvio folder?', message: 'Nuvio replaces all collections when saving. Changes made in Nuvio during this push may be overwritten.', confirmLabel: 'Update Nuvio', cancelLabel: 'Cancel' });
   if (!confirmed) return;
   if (nuvioFolderWriteBusy) { showToast('A Nuvio folder update is already in progress.', 'info'); return; }
@@ -47899,7 +47910,7 @@ function maybeRefreshLinkedNuvioFolders() {
   } catch (e) { return; }
   const modal = document.getElementById('createCollectionModal');
   if (modal && modal.style.display === 'flex') return;
-  if (!loadCustomCollections().some(function (c) { return c.nuvioLink && c.nuvioLink.scope; })) return;
+  if (!loadCustomCollections().some(function (c) { return c.nuvioLink && c.nuvioLink.scope && isMyListsNuvioCollectionId(c.nuvioLink.collectionId); })) return;
   nuvioFoldersLastRefresh = Date.now();
   pullCollectionsFromNuvio(true);
 }
@@ -47926,7 +47937,7 @@ async function pullCollectionsFromNuvio(automatic) {
     }
     const imported = [];
     extracted.forEach(function (parent) {
-      if (!parent || !parent.id || !Array.isArray(parent.folders)) return;
+      if (!parent || !isMyListsNuvioCollectionId(parent.id) || !Array.isArray(parent.folders)) return;
       parent.folders.forEach(function (folder) {
         if (!folder || !folder.id) return;
         const parsed = parseNuvioCollectionsJson([folder])[0];
@@ -47955,7 +47966,7 @@ async function pullCollectionsFromNuvio(automatic) {
     }
     if (count || refreshed) { saveCustomCollections(merged); renderCustomCollections(); }
     if (!auto) {
-      if (!imported.length) showToast('Nuvio has no identifiable collection folders saved for this profile.', 'info');
+      if (!imported.length) showToast('No My Lists collections were found in this Nuvio profile.', 'info');
       else showToast('Pulled ' + (imported.length - skipped) + ' Nuvio folder(s) (' + count + ' new).' + (skipped ? ' Kept ' + skipped + ' folder(s) with local edits. Delete a local folder and pull again to discard its edits.' : ''), 'success');
     }
   } else if (!auto) {
@@ -120629,6 +120640,13 @@ function extractNuvioCollections(raw) {
   return [];
 }
 
+// My Lists owns these collection IDs; catalog sources or display names alone
+// do not identify the collection creator.
+function isMyListsNuvioCollectionId(id) {
+  const value = String(id || "");
+  return value === "my-lists-collections" || value === "my-lists-addon" || value.startsWith("col_mylists_");
+}
+
 function addNewNuvioCollection(existing, incoming, options = {}) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
@@ -121217,6 +121235,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
         if (!scope || body.scope !== scope) return json({ ok: false, error: "This folder belongs to a different connection. Pull it again before editing." }, 409);
         if (profileId !== (Number(row.profile_index) || 1)) return json({ ok: false, error: "The selected Nuvio profile changed. Pull again before editing." }, 409);
+        if (!isMyListsNuvioCollectionId(body.targetCollectionId)) return json({ ok: false, error: "Only collections created by My Lists can be updated here." }, 403);
         const targets = existing.filter((c) => c && String(c.id) === String(body.targetCollectionId));
         const target = targets.length === 1 ? targets[0] : null;
         const folders = target && Array.isArray(target.folders) ? target.folders : [];

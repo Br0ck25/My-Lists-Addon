@@ -4471,6 +4471,13 @@ function syncCollectionsToNuvio() {
   openSyncNuvioModal();
 }
 
+// These are IDs that My Lists itself uses when creating Nuvio collections.
+// Titles and catalog addon IDs are not proof of who created a collection.
+function isMyListsNuvioCollectionId(id) {
+  const value = String(id || '');
+  return value === 'my-lists-collections' || value === 'my-lists-addon' || value.indexOf('col_mylists_') === 0;
+}
+
 function pushSingleCollectionToNuvio(colId) {
   const col = loadCustomCollections().find(function (c) { return c.id === colId; });
   if (col && col.nuvioLink) { pushLinkedNuvioFolder(col); return; }
@@ -4481,6 +4488,10 @@ function pushSingleCollectionToNuvio(colId) {
 // replacing it, but warn that another client can still write after that check.
 async function pushLinkedNuvioFolder(col) {
   const link = col.nuvioLink;
+  if (!isMyListsNuvioCollectionId(link.collectionId)) {
+    showToast('Only collections created by My Lists can be updated here.', 'error');
+    return;
+  }
   const confirmed = await appShellDialog({ title: 'Update Nuvio folder?', message: 'Nuvio replaces all collections when saving. Changes made in Nuvio during this push may be overwritten.', confirmLabel: 'Update Nuvio', cancelLabel: 'Cancel' });
   if (!confirmed) return;
   if (nuvioFolderWriteBusy) { showToast('A Nuvio folder update is already in progress.', 'info'); return; }
@@ -4626,7 +4637,7 @@ function maybeRefreshLinkedNuvioFolders() {
   } catch (e) { return; }
   const modal = document.getElementById('createCollectionModal');
   if (modal && modal.style.display === 'flex') return;
-  if (!loadCustomCollections().some(function (c) { return c.nuvioLink && c.nuvioLink.scope; })) return;
+  if (!loadCustomCollections().some(function (c) { return c.nuvioLink && c.nuvioLink.scope && isMyListsNuvioCollectionId(c.nuvioLink.collectionId); })) return;
   nuvioFoldersLastRefresh = Date.now();
   pullCollectionsFromNuvio(true);
 }
@@ -4653,7 +4664,7 @@ async function pullCollectionsFromNuvio(automatic) {
     }
     const imported = [];
     extracted.forEach(function (parent) {
-      if (!parent || !parent.id || !Array.isArray(parent.folders)) return;
+      if (!parent || !isMyListsNuvioCollectionId(parent.id) || !Array.isArray(parent.folders)) return;
       parent.folders.forEach(function (folder) {
         if (!folder || !folder.id) return;
         const parsed = parseNuvioCollectionsJson([folder])[0];
@@ -4682,7 +4693,7 @@ async function pullCollectionsFromNuvio(automatic) {
     }
     if (count || refreshed) { saveCustomCollections(merged); renderCustomCollections(); }
     if (!auto) {
-      if (!imported.length) showToast('Nuvio has no identifiable collection folders saved for this profile.', 'info');
+      if (!imported.length) showToast('No My Lists collections were found in this Nuvio profile.', 'info');
       else showToast('Pulled ' + (imported.length - skipped) + ' Nuvio folder(s) (' + count + ' new).' + (skipped ? ' Kept ' + skipped + ' folder(s) with local edits. Delete a local folder and pull again to discard its edits.' : ''), 'success');
     }
   } else if (!auto) {
