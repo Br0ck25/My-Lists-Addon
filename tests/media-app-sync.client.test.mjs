@@ -503,11 +503,76 @@ describe("removing an item from Nuvio or Stremio", () => {
     assert.match(tiles.join(""), /data-remove-id="tt3333333"/);
   });
 
+  it("loads the complete history instead of a cached poster sample and uses the history removal target", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/preview": () => ({ json: { ok: true, totalItems: 2, sample: [
+      { id: "tt3333333", type: "movie", name: "Movie" },
+      { id: "tt4444444", type: "series", name: "Show" },
+    ], maybeMore: false } }) } });
+    const tiles = [];
+    const grid = c.document.getElementById("detailGrid");
+    grid.isConnected = true;
+    grid.insertAdjacentHTML = (where, html) => tiles.push(html);
+    c.window.requestAnimationFrame = (fn) => fn();
+    await c.call("openListDetailsPage", "Nuvio Watch History", "mixed", "autotrack:nuvio-watch-history:mixed:alice", { sample: [{ id: "tt1111111" }], maybeMore: false });
+    assert.equal(requestsTo(c, "/api/preview").length, 1);
+    assert.match(tiles.join(""), /data-provider="nuvio" data-target="history"/);
+    assert.equal(c.window._currentListDetailsAllItems.length, 2);
+    c.window.switchListDetailsType('movie');
+    assert.match(c.document.getElementById('detailSubtitle').textContent, /Movies • 1 item/);
+    c.window.switchListDetailsType('series');
+    assert.match(c.document.getElementById('detailSubtitle').textContent, /Shows • 1 item/);
+  });
+
   it("puts the same button on a See all tile", () => {
     const c = loadClient({ signedIn: "alice" });
     const html = c.call("livePreviewPosterHtml", { id: "tt2222222", type: "series", name: "Show S", poster: "https://img.test/p.jpg", removeExternalProvider: "stremio", removeExternalTarget: "continue-watching", removeExternalListId: "continue-watching" });
     assert.match(html, /data-provider="stremio" data-target="continue-watching"[^>]*data-remove-id="tt2222222"/);
     assert.match(html, /data-name="Show S"/);
+  });
+});
+
+describe("adding directly to app history", () => {
+  it("adds the selected Nuvio movie and reports success", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/connections/nuvio/add-history": () => ({ json: { ok: true, mirrored: true } }) } });
+    c.window._mediaHistoryAddProvider = "nuvio";
+    const toasts = [];
+    c.set("showToast", (message, kind) => toasts.push([message, kind]));
+    c.set("closeModal", () => {});
+    await c.call("addMediaHistoryResult", "550", "movie", "Fight Club", null);
+    assert.deepEqual(requestsTo(c, "/api/connections/nuvio/add-history")[0].body, { id: "tmdb:550", mediaType: "movie", season: null, episode: null, title: "Fight Club" });
+    assert.match(toasts[0][0], /Added.*Nuvio Watch History/);
+  });
+  it("requires an episode before writing a show", async () => {
+    const c = loadClient({ signedIn: "alice" });
+    c.window._mediaHistoryAddProvider = "nuvio";
+    const toasts = [];
+    c.set("showToast", (message, kind) => toasts.push([message, kind]));
+    await c.call("addMediaHistoryResult", "1396", "series", "Breaking Bad", null);
+    assert.equal(requestsTo(c, "/api/connections/nuvio/add-history").length, 0);
+    assert.match(toasts[0][0], /season and episode/);
+  });
+});
+
+describe("website Continue Watching removal", () => {
+  it("only sends removals to connected apps with two-way sync enabled", async () => {
+    const c = loadClient({ signedIn: "alice", routes: {
+      "/api/connections/nuvio/settings": () => ({ json: { ok: true, connected: true, sync: { push: true } } }),
+      "/api/connections/stremio/settings": () => ({ json: { ok: true, connected: true, sync: { push: false } } }),
+      "/api/connections/nuvio/remove": () => ({ json: { ok: true } }),
+    } });
+    await c.call("syncWebsiteContinueWatchingRemoval", "tt3333333");
+    assert.deepEqual(requestsTo(c, "/api/connections/nuvio/remove")[0].body, { target: "continue-watching", id: "tt3333333" });
+    assert.equal(requestsTo(c, "/api/connections/stremio/remove").length, 0);
+  });
+  it("reports an app write failure", async () => {
+    const c = loadClient({ signedIn: "alice", routes: {
+      "/api/connections/nuvio/settings": () => ({ json: { ok: true, connected: true, sync: { push: true } } }),
+      "/api/connections/nuvio/remove": () => ({ status: 502, json: { ok: false, error: "Nuvio unavailable" } }),
+    } });
+    const toasts = [];
+    c.set("showToast", (message, kind) => toasts.push([message, kind]));
+    await c.call("syncWebsiteContinueWatchingRemoval", "tt3333333");
+    assert.deepEqual(toasts, [["Nuvio unavailable", "error"]]);
   });
 });
 

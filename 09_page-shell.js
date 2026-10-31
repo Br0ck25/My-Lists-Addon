@@ -5342,6 +5342,7 @@ ${appShellMobileNavHtml}
         <h1 id="detailTitle" class="u-minw-0 u-overflowwrap-anywhere">List Title</h1>
         <div class="u-gap-10px u-ai-center u-ml-auto" style="display:flex;">
           <button type="button" class="lc-btn searchLikeExternalBtn" id="detailLikeBtn" aria-label="Like this list">&#9825;</button>
+          <button type="button" class="btn-secondary btn-sm" id="detailAddMediaHistoryBtn" data-act="openMediaHistoryAdd" hidden>Add title</button>
           <button type="button" class="lc-btn list-add-btn primary" id="detailAddBtn">+ Add</button>
         </div>
       </div>

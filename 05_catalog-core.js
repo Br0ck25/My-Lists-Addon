@@ -2534,7 +2534,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       const accountId = await eventTrackingOwns(env, username);
       if (accountId == null) return [];
       const read = appShelf[2] === 'watch-history'
-        ? (await watchHistoryPage(env, accountId, { limit: 100, source: appShelf[1] })).items
+        ? await watchHistoryAll(env, accountId, appShelf[1])
         : await appContinueWatching(env, accountId, appShelf[1]);
       items = read.map(({ mediaId, ...it }) => it);
     }

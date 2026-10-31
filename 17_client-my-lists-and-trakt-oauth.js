@@ -2404,6 +2404,86 @@ async function syncMediaAppNow(provider, btn) {
   mediaAppUiRefresh(provider);
 }
 
+// A dismissal on the website also clears the matching app's resume, but only
+// for accounts whose owner explicitly enabled two-way sync. A failed app write
+// is reported rather than silently suggesting that it succeeded.
+async function syncWebsiteContinueWatchingRemoval(id) {
+  for (const provider of Object.keys(MEDIA_APP_UI_NAMES)) {
+    const settings = await mediaAppUiCall(provider, 'settings', 'GET');
+    if (!settings.ok || !settings.data.connected || !settings.data.sync || !settings.data.sync.push) continue;
+    const result = await mediaAppUiCall(provider, 'remove', 'POST', { target: 'continue-watching', id: id });
+    if (!result.ok) showToast(mediaAppUiMessage(result, 'Could not remove this title from ' + MEDIA_APP_UI_NAMES[provider] + '.'), 'error');
+  }
+}
+
+// Search from an app-history page and add a movie or a specific episode.
+function openMediaHistoryAdd() {
+  const p = window._currentListDetailsParams;
+  const match = p && /^autotrack:(nuvio|stremio)-watch-history:/.exec(String(p.listUrl || ''));
+  if (!match) return;
+  window._mediaHistoryAddProvider = match[1];
+  showModal('<h2>Add to ' + escapeHtml(MEDIA_APP_UI_NAMES[match[1]]) + ' Watch History</h2>' +
+    '<label for="mediaHistoryQuery">Title</label><input id="mediaHistoryQuery" type="search" autocomplete="off">' +
+    '<label for="mediaHistoryKind">Type</label><select id="mediaHistoryKind"><option value="movie">Movie</option><option value="series">Show episode</option></select>' +
+    '<p class="u-c-v_muted u-fs-v_font_size_sm">For a show, enter the season and episode before adding it.</p>' +
+    '<label for="mediaHistorySeason">Season</label><input id="mediaHistorySeason" type="number" min="0" step="1">' +
+    '<label for="mediaHistoryEpisode">Episode</label><input id="mediaHistoryEpisode" type="number" min="1" step="1">' +
+    '<button type="button" class="btn-secondary btn-sm" data-act="searchMediaHistoryAdd">Search</button>' +
+    '<div id="mediaHistoryResults" role="status"></div>' +
+    '<button type="button" class="btn-ghost btn-sm" data-act="closeModal">Close</button>');
+}
+
+async function searchMediaHistoryAdd() {
+  const query = document.getElementById('mediaHistoryQuery');
+  const kind = document.getElementById('mediaHistoryKind');
+  const box = document.getElementById('mediaHistoryResults');
+  if (!query || !kind || !box || !query.value.trim()) return;
+  box.textContent = 'Searching…';
+  try {
+    const type = kind.value === 'series' ? 'tv' : 'movie';
+    const adult = typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled() ? '&adultContentFilter=1' : '';
+    const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(query.value.trim()) + '&type=' + type + adult, { cache: 'no-store' });
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.results)) throw new Error('Search failed.');
+    box.innerHTML = data.results.slice(0, 12).map(function(r) {
+      const id = String(r.tmdbId || r.id || '').replace(/^tmdb:/, '');
+      if (!/^\d+$/.test(id)) return '';
+      const title = String(r.title || r.name || 'Untitled');
+      return '<p>' + escapeHtml(title) + (r.year ? ' (' + escapeHtml(String(r.year)) + ')' : '') + ' ' +
+        '<button type="button" class="btn-secondary btn-sm" data-act="addMediaHistoryResult" data-act-args="' + appActArgs([id, kind.value, title, '@self']) + '">Add</button></p>';
+    }).join('') || '<p>No titles found.</p>';
+  } catch (e) { box.textContent = 'Could not search for titles. Please try again.'; }
+}
+
+async function addMediaHistoryResult(tmdbId, kind, title, btn) {
+  const provider = window._mediaHistoryAddProvider;
+  if (!MEDIA_APP_UI_NAMES[provider]) return;
+  const seasonEl = document.getElementById('mediaHistorySeason');
+  const episodeEl = document.getElementById('mediaHistoryEpisode');
+  const season = seasonEl && seasonEl.value !== '' ? Number(seasonEl.value) : null;
+  const episode = episodeEl && episodeEl.value !== '' ? Number(episodeEl.value) : null;
+  if (kind === 'series' && (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1)) {
+    showToast('Enter a season and episode first.', 'error');
+    return;
+  }
+  if (btn) btn.disabled = true;
+  let id = 'tmdb:' + tmdbId;
+  if (provider === 'stremio') {
+    try {
+      const res = await fetch(ORIGIN + (kind === 'series' ? '/api/resolve-show?tmdbId=' : '/api/resolve-movie?tmdbId=') + encodeURIComponent(tmdbId));
+      const data = await res.json();
+      if (data.ok && data.imdbId) id = data.imdbId;
+    } catch (e) {}
+  }
+  const result = await mediaAppUiCall(provider, 'add-history', 'POST', { id: id, mediaType: kind, season: season, episode: episode, title: title });
+  if (btn) btn.disabled = false;
+  if (!result.ok) { showToast(mediaAppUiMessage(result, 'Could not add this title.'), 'error'); return; }
+  closeModal();
+  showToast(result.data.mirrored ? 'Added "' + title + '" to ' + MEDIA_APP_UI_NAMES[provider] + ' Watch History.' : 'Added to ' + MEDIA_APP_UI_NAMES[provider] + ', but the website copy could not be updated.', result.data.mirrored ? 'success' : 'info');
+  const p = window._currentListDetailsParams;
+  if (p && typeof openListDetailsPage === 'function') openListDetailsPage(p.name, p.type, p.listUrl, null, { preserveScroll: true });
+}
+
 // The tile's remove button on the Nuvio and Stremio lists: removes the item in the app itself,
 // then here (61_media-app-sync.js). Asks first; the tile only goes once the app has accepted.
 function removeMediaAppItem(btn) {

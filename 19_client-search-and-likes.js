@@ -1388,7 +1388,7 @@ async function loadPosterSlot(slot) {
             } else if (/^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.test(String(listUrl || ''))) {
               const appHit = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl));
               const appName = appHit[1] === 'nuvio' ? 'Nuvio' : 'Stremio';
-              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + appHit[1] + '" data-target="' + appHit[2] + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || '') + '" data-name="' + escapeAttr(s.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + appName + '" aria-label="Remove from ' + appName + '">\u2715</button>';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + appHit[1] + '" data-target="' + (appHit[2] === 'watch-history' ? 'history' : appHit[2]) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || '') + '" data-name="' + escapeAttr(s.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + appName + '" aria-label="Remove from ' + appName + '">\u2715</button>';
             } else if (isMdblistSlot) {
               const isMdbHist = listUrl === 'mdblist:history' || String(listUrl || '').includes('mdblist.com/history') || (String(listUrl || '').includes('mdblist.com/lists/') && String(listUrl || '').includes('/history'));
               const mdbTarget = listUrl === 'mdblist:watchlist' ? 'watchlist' : (isMdbHist ? 'history' : 'custom');

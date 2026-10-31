@@ -131,6 +131,8 @@ dead_letter_queue = "mylists-jobs-dlq"
 # read: bindings, variables, secrets and the cron trigger are set in the
 # dashboard. This file is for `wrangler dev` and CI.
 [vars]
+# Allow users to opt into media-app writes and explicitly remove app items.
+FF_MEDIA_APP_PUSH = "1"
 # Optional. "justwatch" (default, no key needed) or "rapidapi".
 # NEW_ON_STREAMING_ENGINE = "justwatch"
 # Optional feature flag for Phase 3a: session auth and dual-auth compatibility
@@ -311,6 +313,7 @@ dead_letter_queue = "mylists-jobs-staging-dlq"
 crons = ["*/15 * * * *"]
 
 [env.staging.vars]
+FF_MEDIA_APP_PUSH = "1"
 ENVIRONMENT = "staging"
 # Staging feature flags enabled ahead of production cutover:
 FF_SESSIONS = "1"

@@ -94,6 +94,16 @@ function fakeServices(state) {
           state.watched = (state.watched || []).filter((w) => !body.p_keys.some((k) => same(w, k)));
           return new Response(null, { status: 204 });
         }
+        if (fn === "sync_delete_watch_progress") {
+          if (state.deleteFails) return json({ message: "boom" }, 500);
+          seen.progressDeleted = (seen.progressDeleted || []).concat(body.p_keys);
+          state.progress = (state.progress || []).filter((p) => {
+            const id = mediaAppId(p);
+            const key = p.season != null && p.episode != null ? `${id}_s${p.season}e${p.episode}` : id;
+            return !body.p_keys.includes(key);
+          });
+          return new Response(null, { status: 204 });
+        }
         if (fn === "sync_push_watch_progress") {
           seen.progressPushed = (seen.progressPushed || []).concat(body.p_entries);
           for (const e of body.p_entries) {
@@ -682,7 +692,7 @@ describe("two-way sync: Nuvio", () => {
     return { state, seen, ctx };
   }
 
-  it("sends plays from elsewhere in the shape Nuvio's own rows have, and not the ones it already has", async () => {
+  it("sends plays using the documented Nuvio format and not ones it already has", async () => {
     const { seen, ctx } = await ready("nuvpush", rows("snake"));
     assert.equal(seen.pushed.length, 0, "nothing of Nuvio's own is sent back");
     addEvent(ctx, "tt1111111", "movie", null, null, NOW - 29 * HOUR);
@@ -690,19 +700,19 @@ describe("two-way sync: Nuvio", () => {
     addEvent(ctx, SHOW, "series", 1, 2, NOW - HOUR);
     await runAgain(ctx, "nuvio");
     assert.deepEqual(seen.pushed.map((p) => [p.content_id, p.content_type, p.season, p.episode]), [["tt5555555", "movie", undefined, undefined], [SHOW, "series", 1, 2]], "the movie Nuvio has is skipped");
-    assert.equal(seen.pushed[0].watched_at, Math.round((NOW - 2 * HOUR) / 1000), "seconds, as in its own rows");
+    assert.equal(seen.pushed[0].watched_at, NOW - 2 * HOUR, "the API uses milliseconds");
     assert.equal(seen.pushed[0].title, "Title tt5555555");
     seen.pushed.length = 0;
     await runAgain(ctx, "nuvio");
     assert.equal(seen.pushed.length, 0, "each play is sent once");
   });
 
-  it("follows camelCase rows with camelCase, and milliseconds with milliseconds", async () => {
+  it("writes the documented snake_case even when incoming rows use camelCase", async () => {
     const { seen, ctx } = await ready("nuvcamel", rows("camel"));
     addEvent(ctx, "tt5555555", "movie", null, null, NOW - 2 * HOUR);
     await runAgain(ctx, "nuvio");
-    assert.deepEqual(Object.keys(seen.pushed[0]).sort(), ["contentId", "contentType", "title", "watchedAt"]);
-    assert.equal(seen.pushed[0].watchedAt, NOW - 2 * HOUR);
+    assert.deepEqual(Object.keys(seen.pushed[0]).sort(), ["content_id", "content_type", "title", "watched_at"]);
+    assert.equal(seen.pushed[0].watched_at, NOW - 2 * HOUR);
   });
 
   it("carries plays between the two apps, and not back to where they came from", async () => {
@@ -733,13 +743,14 @@ describe("two-way sync: Nuvio", () => {
     assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events WHERE source = 'nuvio'").get().n, 2, "nothing deleted here either");
   });
 
-  it("waits, and says so, when Nuvio has no row to copy the format from", async () => {
+  it("sends a first play to an empty Nuvio history", async () => {
     const { seen, ctx } = await ready("nuvempty", []);
     addEvent(ctx, "tt5555555", "movie", null, null, NOW - HOUR);
     await runAgain(ctx, "nuvio");
-    assert.equal(seen.pushed.length, 0);
-    assert.match(ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error, /something watched in Nuvio/);
-    assert.equal(cursorOf(ctx).pushedId || 0, 0, "not moved: it will send once it can");
+    assert.equal(seen.pushed.length, 1);
+    assert.equal(seen.pushed[0].content_id, "tt5555555");
+    assert.equal(seen.pushed[0].watched_at, NOW - HOUR);
+    assert.ok(cursorOf(ctx).pushedId > 0);
   });
 
   it("records a failed send and tries again from the same place", async () => {
@@ -877,6 +888,21 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     const other = await createUser(ctx.env, "lsprevother");
     const denied = await ask(`autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`, other);
     assert.equal(denied.body.count, 0, "another account's key reads nothing");
+  });
+
+  it("pages all app history beyond the first 100 plays without repeating titles", async () => {
+    const ctx = await connected("lspages");
+    for (let i = 0; i < 120; i++) addEvent(ctx, `tt${String(2000000 + i)}`, "movie", null, null, NOW - i * 1000, "nuvio");
+    const url = `autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`;
+    const ask = (skip) => call(ctx.env, "/api/preview", { method: "POST", json: { url, type: "mixed", skip, sample: 100, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    const first = (await ask(0)).body;
+    const second = (await ask(100)).body;
+    assert.equal(first.sample.length, 100);
+    assert.equal(first.totalItems, 122);
+    assert.equal(first.maybeMore, true);
+    assert.equal(second.sample.length, 22);
+    assert.equal(second.maybeMore, false);
+    assert.equal(new Set([...first.sample, ...second.sample].map((m) => m.id)).size, 122);
   });
 
   it("answers a movies request with movies only and a shows request with shows only, so a card does not list each title twice", async () => {
@@ -1134,6 +1160,21 @@ describe("removing an item from the app, from the website", () => {
     json: { url: `autotrack:${app}-${slug}:mixed:${ctx.user.creatorName}`, type, sample: 20, creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey },
   }).then((r) => (r.body.sample || []).map((m) => m.id));
 
+  it("adds a movie directly to Nuvio history using the documented payload", async () => {
+    const ctx = await nuvio("directhist");
+    const r = await call(ctx.env, "/api/connections/nuvio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: "tt7777777", mediaType: "movie", title: "New movie" } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(ctx.seen.pushed[0].content_id, "tt7777777");
+    assert.equal(ctx.seen.pushed[0].content_type, "movie");
+    assert.ok(ctx.seen.pushed[0].watched_at > 1e12);
+    assert.equal(r.body.mirrored, true);
+    assert.deepEqual(await list(ctx, "nuvio", "watch-history", "movie"), ["tt7777777", "tt1111111"]);
+    const bad = await call(ctx.env, "/api/connections/nuvio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: SHOW, mediaType: "series" } });
+    assert.equal(bad.status, 400);
+    const anon = await call(ctx.env, "/api/connections/nuvio/add-history", { method: "POST", json: { id: "tt7777777", mediaType: "movie" } });
+    assert.equal(anon.status, 401);
+  });
+
   it("Nuvio, Watch History, a show: every watched episode is deleted there, here, and does not come back", async () => {
     const ctx = await nuvio("rmhist");
     const r = await remove(ctx, "nuvio", { target: "history", id: SHOW, mediaType: "series" });
@@ -1157,12 +1198,30 @@ describe("removing an item from the app, from the website", () => {
     assert.deepEqual(await list(ctx, "nuvio", "watch-history", "series"), [SHOW]);
   });
 
-  it("Nuvio, Continue Watching: the position is set to zero there, and the item leaves the list, keeping the history", async () => {
+  it("matches an IMDb shelf item against Nuvio's TMDB history identity", async () => {
+    const ctx = await nuvio("rmtmdb");
+    ctx.env.DB._db.prepare("UPDATE media SET tmdb_id = ? WHERE imdb_id = ?").run(550, "tt1111111");
+    ctx.state.watched[0].content_id = "tmdb:550";
+    const r = await remove(ctx, "nuvio", { target: "history", id: "tt1111111" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(ctx.seen.deleted[0].content_id, "tmdb:550");
+    assert.equal(ctx.state.watched.some((w) => w.content_id === "tmdb:550"), false);
+  });
+
+  it("deletes movie progress with null season and episode using the movie key", async () => {
+    const ctx = await nuvio("rmnullprogress");
+    ctx.state.progress[0].season = null;
+    ctx.state.progress[0].episode = null;
+    const r = await remove(ctx, "nuvio", { target: "continue-watching", id: "tt3333333" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(ctx.seen.progressDeleted, ["tt3333333"]);
+  });
+
+  it("Nuvio, Continue Watching: progress is deleted there and history is kept", async () => {
     const ctx = await nuvio("rmcw");
     await remove(ctx, "nuvio", { target: "continue-watching", id: "tt3333333", mediaType: "movie" });
     await remove(ctx, "nuvio", { target: "continue-watching", id: SHOW, mediaType: "series" });
-    assert.deepEqual(ctx.seen.progressPushed.map((e) => [mediaAppId(e), e.position]).sort(), [[SHOW, 0], ["tt3333333", 0]]);
-    assert.ok(ctx.seen.progressPushed.every((e) => e.duration > 0), "the rest of each row is sent as it was read");
+    assert.deepEqual(ctx.seen.progressDeleted.sort(), [`${SHOW}_s1e3`, "tt3333333"].sort());
     assert.deepEqual(await list(ctx, "nuvio", "continue-watching", "movie"), []);
     assert.deepEqual(await list(ctx, "nuvio", "continue-watching", "series"), []);
     const kept = JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync").get().cursor_json).resumes || {};
@@ -1216,6 +1275,17 @@ describe("removing an item from the app, from the website", () => {
       await connectStremio(ctx, state);
       return { ...ctx, state, seen };
     }
+
+    it("adds a movie to history without replacing its Stremio library metadata", async () => {
+      const ctx = await stremio("addsthist", [item({ state: { timesWatched: 0, flaggedWatched: 0 } })]);
+      const r = await call(ctx.env, "/api/connections/stremio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: "tt1111111", mediaType: "movie", title: "Movie A" } });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.equal(ctx.seen.puts[0][0].state.timesWatched, 1);
+      assert.equal(ctx.seen.puts[0][0].poster, "https://img.test/a.jpg");
+      const missing = await call(ctx.env, "/api/connections/stremio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: "tt8888888", mediaType: "movie" } });
+      assert.equal(missing.status, 400);
+      assert.match(missing.body.error, /library first/);
+    });
 
     it("History, a movie: marked unwatched and its position cleared, keeping the rest of the item, and it stays out after a pull", async () => {
       const ctx = await stremio("rmsthist", [item()]);

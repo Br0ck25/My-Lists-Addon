@@ -421,13 +421,13 @@ async function watchEventRows(actDb, accountId, cursor, limit, source) {
 // the legacy record never had.
 const WATCH_HISTORY_READ_ROWS = 5000;
 
-async function watchHistoryAll(env, accountId) {
+async function watchHistoryAll(env, accountId, source) {
   const actDb = activityDb(env, accountId);
   if (!actDb) return [];
   const rows = [];
   let cursor = null;
   for (;;) {
-    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS);
+    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS, source);
     rows.push(...part);
     if (part.length < WATCH_HISTORY_READ_ROWS) break;
     const last = part[part.length - 1];
