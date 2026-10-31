@@ -2798,6 +2798,7 @@ async function fetchWithPerUserCacheUncoalesced({
   kvKey = "",
   kvTtlSec = 86400,
   refuseEmptyOverwrite = false,
+  acceptVerifiedEmpty = null,
 }) {
   const cached = getPerUserCache(cacheKey);
   if (cached && cached.isFresh) {
@@ -2864,7 +2865,8 @@ async function fetchWithPerUserCacheUncoalesced({
       // watchlist absolutely is -- they cleared it -- and refusing that write
       // would show them items they had just deleted. So the shared chart and
       // collection call sites pass this and the per-user ones do not.
-      const refusingEmpty = refuseEmptyOverwrite && isEmptyPayload(freshData);
+      const verifiedEmpty = typeof acceptVerifiedEmpty === "function" && acceptVerifiedEmpty(freshData);
+      const refusingEmpty = refuseEmptyOverwrite && isEmptyPayload(freshData) && !verifiedEmpty;
       const lastGood = (cached && cached.data) || (kvData && kvData.data) || (edgeCacheData && edgeCacheData.data) || null;
       if (refusingEmpty && lastGood && !isEmptyPayload(lastGood)) {
         console.warn(`[CircuitBreaker] ${providerLabel} returned an empty result; keeping the last non-empty copy rather than caching the empty one.`);

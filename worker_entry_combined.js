@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-31";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4602ffd2bb";
+const WORKER_BUILD = "b173464e95";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -6633,6 +6633,7 @@ async function fetchWithPerUserCacheUncoalesced({
   kvKey = "",
   kvTtlSec = 86400,
   refuseEmptyOverwrite = false,
+  acceptVerifiedEmpty = null,
 }) {
   const cached = getPerUserCache(cacheKey);
   if (cached && cached.isFresh) {
@@ -6699,7 +6700,8 @@ async function fetchWithPerUserCacheUncoalesced({
       // watchlist absolutely is -- they cleared it -- and refusing that write
       // would show them items they had just deleted. So the shared chart and
       // collection call sites pass this and the per-user ones do not.
-      const refusingEmpty = refuseEmptyOverwrite && isEmptyPayload(freshData);
+      const verifiedEmpty = typeof acceptVerifiedEmpty === "function" && acceptVerifiedEmpty(freshData);
+      const refusingEmpty = refuseEmptyOverwrite && isEmptyPayload(freshData) && !verifiedEmpty;
       const lastGood = (cached && cached.data) || (kvData && kvData.data) || (edgeCacheData && edgeCacheData.data) || null;
       if (refusingEmpty && lastGood && !isEmptyPayload(lastGood)) {
         console.warn(`[CircuitBreaker] ${providerLabel} returned an empty result; keeping the last non-empty copy rather than caching the empty one.`);
@@ -24887,7 +24889,21 @@ async function enrichTrailers(metas, type, apiKey) {
 // (now) fetching trailer videos -- into the single per-item TMDB request
 // this add-on was already making, via append_to_response. Same hard-cached
 // cost as before; trailers just ride along for free.
+// Coalesce cold detail lookups across concurrently loaded streaming rows.
+// Include the API key in the short-lived in-flight identity so failed credentials
+// cannot borrow another request. Entries are removed on both success and failure.
+const TMDB_DETAILS_IN_FLIGHT = new Map();
 async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null) {
+  const key = JSON.stringify([String(tmdbId || ""), kind, apiKey]);
+  const existing = TMDB_DETAILS_IN_FLIGHT.get(key);
+  if (existing) return await existing;
+  const pending = fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env);
+  TMDB_DETAILS_IN_FLIGHT.set(key, pending);
+  try { return await pending; }
+  finally { TMDB_DETAILS_IN_FLIGHT.delete(key); }
+}
+
+async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null) {
   let cleanTmdbId = String(tmdbId || "").trim();
   while (cleanTmdbId.startsWith("tmdb:")) {
     cleanTmdbId = cleanTmdbId.slice(5).trim();
@@ -25298,7 +25314,7 @@ const TMDB_CHART_PATHS = {
 // for that window (callers resolve IMDB ids / shape metas themselves).
 // Shared by fetchTmdbChart and fetchTmdbHiddenGems so this math -- and its
 // "skip may not land on a TMDB page boundary" edge case -- only lives once.
-async function fetchTmdbPagedResults(pathAndQuery, apiKey, skip, pageOffset = 0) {
+async function fetchTmdbPagedResults(pathAndQuery, apiKey, skip, pageOffset = 0, strict = false) {
   const totalSkip = skip + pageOffset * 20;
   const firstTmdbPage = Math.floor(totalSkip / 20) + 1;
   const offsetWithinFirstPage = totalSkip % 20;
@@ -25310,23 +25326,34 @@ async function fetchTmdbPagedResults(pathAndQuery, apiKey, skip, pageOffset = 0)
   const pageNums = Array.from({ length: pagesNeeded }, (_, i) => firstTmdbPage + i);
   const sep = pathAndQuery.includes("?") ? "&" : "?";
 
-  const pageResults = await Promise.all(
-    pageNums.map(async (p) => {
-      const src = `https://api.themoviedb.org/3/${pathAndQuery}${sep}api_key=${encodeURIComponent(
-        apiKey
-      )}&page=${p}`;
-      const res = await fetch(src, {
-        headers: { "User-Agent": "my-list-addon/1.9" },
-        cf: { cacheTtl: 900, cacheEverything: true },
-      });
-      if (!res.ok) return { ok: false, status: res.status, items: [], totalResults: null };
-      const data = await res.json();
-      return { ok: true, items: Array.isArray(data.results) ? data.results : [], totalResults: (typeof data.total_results === 'number') ? data.total_results : null };
-    })
-  );
+  const fetchPage = async (p) => {
+    const src = `https://api.themoviedb.org/3/${pathAndQuery}${sep}api_key=${encodeURIComponent(
+      apiKey
+    )}&page=${p}`;
+    const res = await fetch(src, {
+      headers: { "User-Agent": "my-list-addon/1.9" },
+      cf: { cacheTtl: 900, cacheEverything: true },
+    });
+    if (!res.ok) return { ok: false, status: res.status, items: [], totalResults: null };
+    const data = await res.json();
+    if (strict && (!data || !Array.isArray(data.results) || !Number.isSafeInteger(data.total_results) || data.total_results < 0)) return { ok: false, status: 502, items: [], totalResults: null };
+    return { ok: true, items: Array.isArray(data.results) ? data.results : [], totalResults: (typeof data.total_results === 'number') ? data.total_results : null };
+  };
+  let pageResults;
+  if (strict) {
+    // The first page tells us how many further pages exist; small or empty
+    // rows do not need the usual five full-window requests.
+    const first = await fetchPage(pageNums[0]);
+    const lastPage = first.ok ? Math.ceil(first.totalResults / 20) : 0;
+    const rest = pageNums.slice(1).filter((p) => p <= lastPage);
+    pageResults = [first, ...await Promise.all(rest.map(fetchPage))];
+  } else {
+    pageResults = await Promise.all(pageNums.map(fetchPage));
+  }
 
-  if (!pageResults[0].ok) {
-    const status = pageResults[0].status;
+  const failed = strict ? pageResults.find((p) => !p.ok) : (!pageResults[0].ok ? pageResults[0] : null);
+  if (failed) {
+    const status = failed.status;
     const hint = status === 401 ? " Double-check the TMDB API key." : "";
     throw new Error(`TMDB request failed (HTTP ${status}).${hint}`);
   }
@@ -25361,6 +25388,7 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
   const effectiveRegion = region || "US";
   const cacheKey = `user_cache:tmdb:chart:${chartKey}:${wantKind}:${skip}:${effectiveRegion}:${hideNonDigitalReleases ? "1" : "0"}`;
   const kvKey = `tmdb:chart:${chartKey}:${wantKind}:${skip}:${effectiveRegion}:${hideNonDigitalReleases ? "1" : "0"}`;
+  const addedRow = typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" && STREAMING_ROW_BY_CHART_KEY[chartKey] && STREAMING_ROW_BY_CHART_KEY[chartKey].additional;
 
   return await fetchWithPerUserCacheAndCircuitBreaker({
     cacheKey,
@@ -25370,11 +25398,11 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
     freshTtlSec: 600,
     staleTtlSec: 86400,
     kvTtlSec: 86400,
-    // A shared, provider-owned chart is never legitimately empty, so an
-    // empty-but-successful reply is an upstream fault and must not be allowed
-    // to erase the last good copy -- see refuseEmptyOverwrite in
-    // fetchWithPerUserCacheUncoalesced (02_http-and-creator-utils.js).
+    // A narrowly filtered new browse row can legitimately become empty. Only
+    // accept an empty replacement when TMDB explicitly reports zero results;
+    // missing IDs or a partially failed page still preserve the last good data.
     refuseEmptyOverwrite: true,
+    acceptVerifiedEmpty: addedRow ? (value) => value.authoritativeEmpty === true : null,
     providerLabel: "TMDB Chart",
     fetchFn: async () => {
       let chartPath;
@@ -25389,18 +25417,33 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
       }
       chartPath = substituteWatchRegion(chartPath, region);
 
-      const windowItems = await fetchTmdbPagedResults(chartPath, apiKey, skip);
+      const windowItems = await fetchTmdbPagedResults(chartPath, apiKey, skip, 0, Boolean(addedRow));
       const applyDigitalFilter = !!hideNonDigitalReleases && wantKind === "movie" && (chartKey === "trending" || chartKey === "popular");
 
-      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+      const rawIds = new Set();
+      const uniqueItems = addedRow ? windowItems.filter((item) => {
+        if (!item || item.id == null || rawIds.has(item.id)) return false;
+        rawIds.add(item.id);
+        return true;
+      }) : windowItems;
+      const resolved = await mapWithConcurrency(uniqueItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
         const details = await fetchTmdbDetails(it.id, wantKind, apiKey, env);
         if (!details.imdbId) return null;
         if (applyDigitalFilter && details.hasDigitalRelease === false) return null;
         return mapTmdbItem(it, details.imdbId, entry.type, details.videos, details);
       });
 
-      const res = resolved.filter(Boolean);
+      const seen = new Set();
+      const res = resolved.filter((item) => {
+        if (!item) return false;
+        if (!addedRow) return true;
+        const id = `${item.type}:${item.id}`;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
       res.totalItems = windowItems.totalItems;
+      if (addedRow && windowItems.length === 0 && windowItems.totalItems === 0) res.authoritativeEmpty = true;
       return res;
     },
   });

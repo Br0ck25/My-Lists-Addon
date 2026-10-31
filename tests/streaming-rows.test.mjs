@@ -161,6 +161,106 @@ describe("streaming service rows", () => {
     assert.equal(query.get("with_watch_monetization_types"), "flatrate");
   });
 
+  it("coalesces simultaneous detail lookups and retries after failures", async () => {
+    const isolated = loadServer();
+    let calls = 0;
+    let finish;
+    isolated.sandbox.fetch = () => { calls++; return new Promise((resolve) => { finish = resolve; }); };
+    const a = isolated.sandbox.fetchTmdbDetails(42, "movie", "key");
+    const b = isolated.sandbox.fetchTmdbDetails(42, "movie", "key");
+    assert.equal(calls, 1);
+    finish(new Response(JSON.stringify({ external_ids: { imdb_id: "tt0000042" } }), { status: 200 }));
+    assert.equal((await a).imdbId, "tt0000042");
+    assert.equal((await b).imdbId, "tt0000042");
+    const waiters = [];
+    isolated.sandbox.fetch = () => new Promise((resolve) => { waiters.push(resolve); });
+    const one = isolated.sandbox.fetchTmdbDetails(44, "movie", "key-1");
+    const two = isolated.sandbox.fetchTmdbDetails(44, "movie", "key-2");
+    assert.equal(waiters.length, 2, "different credentials must not share an in-flight request");
+    waiters.forEach((resolve) => resolve(new Response(JSON.stringify({ external_ids: { imdb_id: "tt0000044" } }), { status: 200 })));
+    await Promise.all([one, two]);
+    let failures = 0;
+    isolated.sandbox.fetch = async () => { failures++; throw new Error("offline"); };
+    await assert.rejects(isolated.sandbox.fetchTmdbDetails(43, "movie", "key"), /offline/);
+    await assert.rejects(isolated.sandbox.fetchTmdbDetails(43, "movie", "key"), /offline/);
+    assert.equal(failures, 2);
+  });
+
+  it("refuses partial or malformed Discover pages for the new rows", async () => {
+    const isolated = loadServer();
+    isolated.sandbox.fetch = async (url) => {
+      const page = Number(new URL(url).searchParams.get("page"));
+      return page === 2 ? new Response("error", { status: 500 }) : new Response(JSON.stringify({ results: [], total_results: 40 }), { status: 200 });
+    };
+    await assert.rejects(isolated.sandbox.fetchTmdbPagedResults("discover/tv?with_genres=99", "key", 0, 0, true), /500/);
+    let emptyCalls = 0;
+    isolated.sandbox.fetch = async () => { emptyCalls++; return new Response(JSON.stringify({ results: [], total_results: 0 }), { status: 200 }); };
+    const empty = await isolated.sandbox.fetchTmdbPagedResults("discover/tv?with_genres=99", "key", 0, 0, true);
+    assert.equal(empty.length, 0);
+    assert.equal(empty.totalItems, 0);
+    assert.equal(emptyCalls, 1, "empty rows need one upstream page rather than five");
+    isolated.sandbox.fetch = async () => new Response(JSON.stringify({ total_results: 0 }), { status: 200 });
+    await assert.rejects(isolated.sandbox.fetchTmdbPagedResults("discover/tv?with_genres=99", "key", 0, 0, true), /502/);
+  });
+
+  it("preserves upstream ordering and pagination without fetching beyond the last page", async () => {
+    const isolated = loadServer();
+    const pages = [];
+    isolated.sandbox.fetch = async (url) => {
+      const page = Number(new URL(url).searchParams.get("page"));
+      pages.push(page);
+      const results = Array.from({ length: Math.max(0, Math.min(20, 101 - (page - 1) * 20)) }, (_, i) => ({ id: (page - 1) * 20 + i }));
+      return new Response(JSON.stringify({ results, total_results: 101 }), { status: 200 });
+    };
+    const window = await isolated.sandbox.fetchTmdbPagedResults("discover/tv?sort_by=popularity.desc", "key", 15, 0, true);
+    assert.equal(window.totalItems, 101);
+    assert.equal(window.length, 86);
+    assert.deepEqual(Array.from(window, (x) => x.id), Array.from({ length: 86 }, (_, i) => i + 15));
+    assert.deepEqual(pages, [1, 2, 3, 4, 5, 6]);
+    pages.length = 0;
+    const last = await isolated.sandbox.fetchTmdbPagedResults("discover/tv?sort_by=popularity.desc", "key", 100, 0, true);
+    assert.deepEqual(Array.from(last, (x) => x.id), [100]);
+    assert.deepEqual(pages, [6]);
+  });
+
+  it("deduplicates new-row titles before and after metadata resolution", async () => {
+    const isolated = loadServer();
+    const resolvedIds = [];
+    isolated.sandbox.resolvedIds = resolvedIds;
+    vm.runInContext(`
+      fetchWithPerUserCacheAndCircuitBreaker = async function (opts) { return opts.fetchFn(); };
+      fetchTmdbPagedResults = async function () {
+        const a = [{ id: 1 }, { id: 1 }, { id: 2 }, { id: 3 }]; a.totalItems = 4; return a;
+      };
+      fetchTmdbDetails = async function (id) { resolvedIds.push(id); return { imdbId: id === 3 ? 'tt0000003' : 'tt0000001' }; };
+      mapTmdbItem = function (it, id, type) { return { id: id, type: type }; };
+    `, isolated.sandbox);
+    const result = await isolated.sandbox.fetchTmdbChart({ type: "series" }, 0, "key", "discovery-reality-tv", "US", false);
+    assert.deepEqual([...resolvedIds], [1, 2, 3]);
+    assert.deepEqual(Array.from(result, (item) => item.id), ["tt0000001", "tt0000003"]);
+    assert.equal(result.totalItems, 4, "upstream count is not presented as a deduplicated count");
+  });
+
+  it("accepts confirmed empty new rows but keeps stale data when IDs are missing", async () => {
+    const isolated = loadServer();
+    isolated.sandbox.setTimeout = setTimeout;
+    isolated.sandbox.clearTimeout = clearTimeout;
+    const key = "user_cache:tmdb:chart:discovery-reality-tv:tv:0:US:0";
+    isolated.sandbox.setPerUserCache(key, [{ id: "ttold" }], 10, 3600);
+    isolated.get(`PER_USER_CACHE_MAP.get(${JSON.stringify(key)}).freshUntil = 0`);
+    vm.runInContext(`
+      fetchTmdbPagedResults = async function () { const a = [{ id: 1 }]; a.totalItems = 1; return a; };
+      fetchTmdbDetails = async function () { return { imdbId: null }; };
+    `, isolated.sandbox);
+    const stale = await isolated.sandbox.fetchTmdbChart({ type: "series" }, 0, "key", "discovery-reality-tv", "US", false);
+    assert.equal(stale[0].id, "ttold");
+    isolated.get(`PER_USER_CACHE_MAP.get(${JSON.stringify(key)}).freshUntil = 0`);
+    vm.runInContext(`fetchTmdbPagedResults = async function () { const a = []; a.totalItems = 0; return a; };`, isolated.sandbox);
+    const empty = await isolated.sandbox.fetchTmdbChart({ type: "series" }, 0, "key", "discovery-reality-tv", "US", false);
+    assert.equal(empty.length, 0);
+    assert.equal(isolated.sandbox.getPerUserCache(key).data.length, 0);
+  });
+
   it("no row sends sort_by twice, and chart keys / catalog ids are unique", () => {
     for (const r of rows) for (const url of Object.values(r.kinds)) assert.equal((url.match(/sort_by=/g) || []).length, 1, r.chartKey);
     assert.equal(new Set(rows.map((r) => r.chartKey)).size, rows.length);
