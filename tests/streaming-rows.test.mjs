@@ -8,6 +8,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadClient } from "./client-harness.mjs";
+import { call, makeEnv } from "./harness.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -115,6 +116,72 @@ describe("streaming service rows", () => {
     assert.equal(query("disney-marvel-animation", "movie").get("with_genres"), "16");
     assert.equal(rows.find((r) => r.chartKey === "netflix-genre-crime-movies").kinds.series, undefined);
     assert.equal(rows.find((r) => r.chartKey === "hbomax-hbo-drama").kinds.movie, undefined);
+  });
+
+  it("refuses duplicate additional queries and duplicate IDs without removing old rows", () => {
+    const isolated = loadServer();
+    const before = isolated.get("STREAMING_ROW_CATALOGS.length");
+    vm.runInContext(`
+      const duplicateQuery = ["test-duplicate", "Duplicate", { movie: "with_genres=28" }];
+      STREAMING_ADDITIONAL_ROWS.netflix.push(duplicateQuery);
+      STREAMING_ROWS.netflix.push(duplicateQuery);
+      const duplicateId = ["genre-war-movies", "Wrong duplicate", { movie: "with_genres=14" }];
+      STREAMING_ADDITIONAL_ROWS.netflix.push(duplicateId);
+      STREAMING_ROWS.netflix.push(duplicateId);
+      const oldId = ["originals", "Wrong legacy override", { movie: "with_genres=27" }];
+      STREAMING_ADDITIONAL_ROWS.netflix.push(oldId);
+      STREAMING_ROWS.netflix.push(oldId);
+    `, isolated.sandbox);
+    const result = isolated.get("getStreamingRowCatalogs()");
+    assert.equal(result.length, before);
+    assert.equal(result.filter((r) => r.chartKey === "netflix-genre-war-movies").length, 1);
+    assert.ok(!result.some((r) => r.chartKey === "netflix-test-duplicate"));
+    assert.ok(result.some((r) => r.chartKey === "netflix-get-in-on-the-action"), "legacy rows remain available");
+    assert.equal(result.find((r) => r.chartKey === "netflix-originals").additional, false, "duplicate key must not reclassify a legacy row");
+  });
+
+  it("adds the new genre rows with the correct provider and movie/series filters", () => {
+    const required = [
+      ["netflix-genre-family-tv", "series", "10751", 8],
+      ["hulu-genre-animated-series", "series", "16", 15],
+      ["hulu-genre-comedy-series", "series", "35", 15],
+      ["hulu-genre-crime-mystery", "series", "80|9648", 15],
+      ["paramount-genre-animated-movies", "movie", "16", 2303],
+      ["hbomax-hbo-crime-mystery", "series", "80|9648", 1899],
+      ["primevideo-genre-scifi-movies", "movie", "878", 9],
+      ["primevideo-genre-fantasy-movies", "movie", "14", 9],
+      ["primevideo-genre-family-movies", "movie", "10751", 9],
+      ["primevideo-genre-animated-movies", "movie", "16", 9],
+      ["primevideo-genre-war-movies", "movie", "10752", 9],
+      ["appletv-genre-scifi-movies", "movie", "878", 350],
+      ["appletv-genre-fantasy-movies", "movie", "14", 350],
+      ["peacock-genre-scifi-movies", "movie", "878", 387],
+      ["peacock-genre-family-movies", "movie", "10751", 387],
+    ];
+    for (const [key, type, genre, provider] of required) {
+      const row = rows.find((r) => r.chartKey === key);
+      assert.ok(row && row.additional, key);
+      assert.deepEqual(Object.keys(row.kinds), [type], key);
+      const q = new URL("https://x/" + row.kinds[type]).searchParams;
+      assert.equal(q.get("with_genres"), genre);
+      assert.equal(q.get("with_watch_providers"), String(provider));
+      assert.equal(q.get("with_watch_monetization_types"), "flatrate");
+    }
+    const hbo = new URL("https://x/" + rows.find((r) => r.chartKey === "hbomax-hbo-crime-mystery").kinds.series).searchParams;
+    assert.equal(hbo.get("with_networks"), "49");
+    assert.equal(hbo.get("with_genres"), "80|9648");
+  });
+
+  it("returns empty for the wrong content type, even with a configured install", async () => {
+    assert.equal(sandbox.findChartOrCollectionEntry("tmdb-chart-hulu-genre-animated-series", "movie"), null);
+    assert.equal(sandbox.findChartOrCollectionEntry("tmdb-chart-primevideo-genre-war-movies", "series"), null);
+    assert.ok(sandbox.findChartOrCollectionEntry("tmdb-chart-primevideo-genre-war-movies", "movie"));
+    const env = makeEnv();
+    for (const path of ["/catalog/movie/tmdb-chart-hulu-genre-animated-series.json", "/someconfig/catalog/series/tmdb-chart-primevideo-genre-war-movies.json"]) {
+      const result = await call(env, path);
+      assert.equal(result.status, 200);
+      assert.deepEqual(result.body, { metas: [] });
+    }
   });
 
   it("leaves the existing premade catalogs in place and in order", () => {

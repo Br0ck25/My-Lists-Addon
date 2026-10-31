@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-31";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b173464e95";
+const WORKER_BUILD = "ba4414daea";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -30785,10 +30785,17 @@ const STREAMING_ADDITIONAL_ROWS = {
     ["language-english-movies", "English-Language Movies", { movie: "with_original_language=en" }],
     ["genre-drama-tv", "Drama TV Shows", { tv: "with_genres=18" }],
     ["genre-mystery-tv", "Mystery TV Shows", { tv: "with_genres=9648" }],
+    ["genre-family-tv", "Family TV Shows", { tv: "with_genres=10751" }],
+  ],
+  hulu: [
+    ["genre-animated-series", "Animated Series", { tv: "with_genres=16" }],
+    ["genre-comedy-series", "Comedy Series", { tv: "with_genres=35" }],
+    ["genre-crime-mystery", "Crime & Mystery", { tv: "with_genres=80|9648" }],
   ],
   paramount: [
     ["cbs-dramas", "CBS Dramas", { tv: "with_networks=16&with_genres=18" }],
     ["cbs-comedies", "CBS Comedies", { tv: "with_networks=16&with_genres=35" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
   ],
   disney: [
     ["marvel-animation", "Marvel Animation", { tv: "with_companies=420&with_genres=16", movie: "with_companies=420&with_genres=16" }],
@@ -30798,11 +30805,25 @@ const STREAMING_ADDITIONAL_ROWS = {
     ["hbo-drama", "HBO Drama Series", { tv: "with_networks=49&with_genres=18" }],
     ["hbo-comedy", "HBO Comedy Series", { tv: "with_networks=49&with_genres=35" }],
     ["hbo-docs", "HBO Documentaries", { tv: "with_networks=49&with_genres=99" }],
+    ["hbo-crime-mystery", "HBO Crime & Mystery", { tv: "with_networks=49&with_genres=80|9648" }],
+  ],
+  primevideo: [
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-war-movies", "War Movies", { movie: "with_genres=10752" }],
+  ],
+  appletv: [
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
   ],
   peacock: [
     ["nbc-comedy", "NBC Comedy", { tv: "with_networks=6&with_genres=35" }],
     ["nbc-drama", "NBC Drama", { tv: "with_networks=6&with_genres=18" }],
     ["bravo-reality", "Bravo Reality", { tv: "with_networks=74&with_genres=10764" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
   ],
 };
 for (const [service, additional] of Object.entries(STREAMING_ADDITIONAL_ROWS)) {
@@ -30813,9 +30834,12 @@ for (const [service, additional] of Object.entries(STREAMING_ADDITIONAL_ROWS)) {
 // fetcher all read: { service, key, name, chartKey, catalogId, kinds: { movie?, series? } }.
 function getStreamingRowCatalogs() {
   const out = [];
+  const usedCharts = new Set();
+  const usedQueries = new Set();
   for (const svc of Object.keys(STREAMING_ROWS)) {
     const cfg = STREAMING_ROW_SERVICES[svc];
-    for (const [key, label, recipe] of STREAMING_ROWS[svc]) {
+    for (const definition of STREAMING_ROWS[svc]) {
+      const [key, label, recipe] = definition;
       const r = typeof recipe === "string" ? STREAMING_ROW_RECIPES[recipe] : recipe;
       if (!r) continue;
       const chartKey = `${svc}-${key}`;
@@ -30826,10 +30850,24 @@ function getStreamingRowCatalogs() {
         const sorted = /(^|&)sort_by=/.test(q) ? "" : "&sort_by=popularity.desc";
         return `discover/${kind}?${base}${sorted}${q ? "&" + q : ""}`;
       };
+      const additional = svc === "discovery" || svc === "netflixkids" || (STREAMING_ADDITIONAL_ROWS[svc] || []).includes(definition);
+      if (additional && usedCharts.has(chartKey)) continue;
       const kinds = {};
-      if (r.movie != null) kinds.movie = build("movie", r.movie);
-      if (r.tv != null) kinds.series = build("tv", r.tv);
-      const additional = svc === "discovery" || svc === "netflixkids" || (STREAMING_ADDITIONAL_ROWS[svc] || []).some((entry) => entry[0] === key);
+      for (const [kind, params] of [["movie", r.movie], ["series", r.tv]]) {
+        if (params == null) continue;
+        const path = build(kind === "series" ? "tv" : "movie", params);
+        // Sort parameters, so changing their order cannot hide an identical query.
+        const [endpoint, query] = path.split("?");
+        const normalized = new URLSearchParams(query);
+        normalized.delete("sort_by");
+        normalized.sort();
+        const identity = svc + ":" + endpoint + "?" + normalized.toString();
+        if (additional && usedQueries.has(identity)) continue;
+        usedQueries.add(identity);
+        kinds[kind] = path;
+      }
+      if (!Object.keys(kinds).length) continue;
+      usedCharts.add(chartKey);
       out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds, additional });
     }
   }
@@ -30925,6 +30963,7 @@ function findChartOrCollectionEntry(id, type) {
     const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
                      (typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === net.replace(/[^a-z0-9]+/g, "")) : null);
     const row = STREAMING_ROW_BY_CHART_KEY[net];
+    if (row && row.additional && !row.kinds[reqType]) return null;
     const name = row ? `${row.serviceName}: ${row.name}` : provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
     return { id: cleanId, name, type: reqType, url: `tmdb:chart:${net}`, enabled: true };
   }
@@ -91497,6 +91536,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
     if (m) {
       const [, config, type, idWithExtra] = m;
       const [id, extraStr] = idWithExtra.split("/");
+      // New browse rows have explicit kind restrictions, even when a stale or
+      // hand-edited install config tries to address the other kind.
+      const browseKey = id.startsWith("tmdb-chart-") ? id.slice("tmdb-chart-".length) : "";
+      const browseRow = browseKey && typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" ? STREAMING_ROW_BY_CHART_KEY[browseKey] : null;
+      if (browseRow && browseRow.additional && !browseRow.kinds[type]) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
       const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
       const skip = parseInt(extra.skip, 10) || 0;
       const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";

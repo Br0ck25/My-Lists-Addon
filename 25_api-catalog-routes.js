@@ -1529,6 +1529,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
     if (m) {
       const [, config, type, idWithExtra] = m;
       const [id, extraStr] = idWithExtra.split("/");
+      // New browse rows have explicit kind restrictions, even when a stale or
+      // hand-edited install config tries to address the other kind.
+      const browseKey = id.startsWith("tmdb-chart-") ? id.slice("tmdb-chart-".length) : "";
+      const browseRow = browseKey && typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" ? STREAMING_ROW_BY_CHART_KEY[browseKey] : null;
+      if (browseRow && browseRow.additional && !browseRow.kinds[type]) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
       const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
       const skip = parseInt(extra.skip, 10) || 0;
       const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
