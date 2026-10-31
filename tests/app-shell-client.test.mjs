@@ -399,6 +399,40 @@ describe("collections subnav and website lists picker", () => {
     assert.strictEqual(parsed[0].lists[0].name, "MCU Movies");
   });
 
+  it("links Nuvio folders, preserves local edits on pull, and updates their original parent", async () => {
+    const client = loadClient();
+    const source = { addonId: "community", catalogId: "list", type: "movie", name: "List", extra: "keep" };
+    const folder = { id: "folder", title: "Remote", catalogSources: [source], custom: "keep" };
+    const remote = [{ id: "parent", title: "Parent", folders: [folder] }];
+    const calls = [];
+    client.set("mediaAppUiCall", async (provider, sub, method, body) => {
+      calls.push({ method, body });
+      return method === "GET" ? { ok: true, data: { profileId: 1, collections: remote } } : { ok: true, data: {} };
+    });
+    client.set("appShellDialog", async () => true);
+    await client.call("pullCollectionsFromNuvio");
+    let collections = plain(client.call("loadCustomCollections"));
+    let linked = collections.find((c) => c.nuvioLink);
+    assert.equal(linked.nuvioLink.collectionId, "parent");
+    assert.equal(linked.lists[0].nuvioSource.extra, "keep");
+    linked.name = "Locally edited";
+    client.call("saveCustomCollections", collections);
+    folder.title = "Remotely edited";
+    await client.call("pullCollectionsFromNuvio");
+    collections = plain(client.call("loadCustomCollections"));
+    linked = collections.find((c) => c.nuvioLink);
+    assert.equal(linked.name, "Locally edited");
+    assert.equal(linked.nuvioLink.folder.title, "Remote");
+    await client.call("pushLinkedNuvioFolder", linked);
+    const sent = calls.at(-1).body;
+    assert.equal(sent.installMode, "update-folder");
+    assert.equal(sent.targetCollectionId, "parent");
+    assert.equal(sent.expectedFolder.title, "Remote");
+    assert.equal(sent.updatedFolder.title, "Locally edited");
+    assert.equal(sent.updatedFolder.custom, "keep");
+    assert.equal(sent.updatedFolder.catalogSources[0].extra, "keep");
+  });
+
   it("provides 10 premade collections with corresponding Streaming Top 10, Catalogs, and Kids", () => {
     const client = loadClient();
     const premade = client.call("getPremadeCollections");

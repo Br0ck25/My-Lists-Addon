@@ -1548,6 +1548,24 @@ describe("Nuvio collections push: install modes", () => {
     assert.equal(seen.collectionsPushed.length, 1);
   });
 
+  it("updates only the linked folder and rejects stale snapshots", async () => {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING, OTHER] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcolupdate");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const original = STREAMING.folders[0];
+    const updated = { ...original, title: "Edited", custom: "preserved", catalogSources: [] };
+    const body = { profileId: 1, installMode: "update-folder", targetCollectionId: STREAMING.id, folderId: original.id, expectedFolder: original, updatedFolder: updated, collections: [updated] };
+    const write = (b) => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: b });
+    assert.equal((await write(body)).status, 200);
+    assert.deepEqual(seen.collectionsPushed[0], [{ ...STREAMING, folders: [updated] }, OTHER]);
+    state.profiles[0].collections_json = [{ ...STREAMING, folders: [{ ...original, title: "Changed remotely" }] }, OTHER];
+    assert.equal((await write(body)).status, 409);
+    assert.equal(seen.collectionsPushed.length, 1);
+    assert.equal((await write({ ...body, profileId: 2 })).status, 409);
+    assert.equal(seen.collectionsPushed.length, 1);
+  });
+
   it("replace: only the pushed collection is left", async () => {
     const { pushed } = await push("replace");
     assert.equal(pushed.length, 1);

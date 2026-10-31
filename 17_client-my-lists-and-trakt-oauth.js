@@ -3787,6 +3787,7 @@ function submitCreateCollectionModal() {
   };
 
   if (existingIdx !== -1) {
+    if (collections[existingIdx].nuvioLink) entry.nuvioLink = collections[existingIdx].nuvioLink;
     collections[existingIdx] = entry;
   } else {
     entry.createdAt = Date.now();
@@ -3864,7 +3865,7 @@ function renderCustomCollections() {
           (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
         '</div>' +
         '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
-          '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">' + (col.nuvioLink ? 'Update Nuvio' : 'Push to Nuvio') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
           '<button type="button" class="lc-btn btn-danger secondary" data-act="deleteCustomCollection" data-act-args="' + appActArgs([col.id]) + '">Delete</button>' +
@@ -4470,7 +4471,53 @@ function syncCollectionsToNuvio() {
 }
 
 function pushSingleCollectionToNuvio(colId) {
+  const col = loadCustomCollections().find(function (c) { return c.id === colId; });
+  if (col && col.nuvioLink) { pushLinkedNuvioFolder(col); return; }
   openSyncNuvioModal(colId);
+}
+
+// Nuvio only exposes a whole-blob write. Check the imported folder before
+// replacing it, but warn that another client can still write after that check.
+async function pushLinkedNuvioFolder(col) {
+  const link = col.nuvioLink;
+  const confirmed = await appShellDialog({ title: 'Update Nuvio folder?', message: 'Nuvio replaces all collections when saving. Changes made in Nuvio during this push may be overwritten.', confirmLabel: 'Update Nuvio', cancelLabel: 'Cancel' });
+  if (!confirmed) return;
+  const folder = JSON.parse(JSON.stringify(link.folder));
+  folder.title = col.name;
+  if ('name' in folder) folder.name = col.name;
+  folder.description = col.description || '';
+  folder.tileShape = col.tileShape || 'LANDSCAPE';
+  folder.hideTitle = !!col.hideTitle;
+  folder.coverImageUrl = col.coverImageUrl || '';
+  folder.catalogSources = (col.lists || []).map(function (l) {
+    const original = l.nuvioSource ? JSON.parse(JSON.stringify(l.nuvioSource)) : {};
+    const catId = l.catalogId || (typeof slugify === 'function' ? slugify(l.url || l.name || 'catalog') : (l.name || 'catalog'));
+    original.addonId = l.addonId || col.addonId || 'app.my-list';
+    original.catalogId = catId;
+    original.type = l.type || 'movie';
+    original.name = l.name || catId;
+    if ('title' in original) original.title = l.name || catId;
+    return original;
+  });
+  const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
+    profileId: link.profileId, installMode: 'update-folder', targetCollectionId: link.collectionId,
+    folderId: link.folder.id, expectedFolder: link.folder, updatedFolder: folder,
+    collections: [folder], collectionLists: col.lists || []
+  });
+  if (!res || !res.ok) { showToast(mediaAppUiMessage(res, 'Could not update the Nuvio folder.'), 'error'); return; }
+  const current = loadCustomCollections();
+  const stored = current.find(function (c) { return c.id === col.id; });
+  // Preserve edits made while the request was in flight.
+  if (stored && stored.nuvioLink && JSON.stringify(stored.nuvioLink.folder) === JSON.stringify(link.folder)) {
+    stored.nuvioLink.folder = folder;
+    stored.nuvioLink.baseline = linkedNuvioFolderSignature(col);
+    saveCustomCollections(current);
+  }
+  showToast('Nuvio folder updated.', 'success');
+}
+
+function linkedNuvioFolderSignature(col) {
+  return JSON.stringify({ name: col.name, description: col.description, addonId: col.addonId, tileShape: col.tileShape, hideTitle: col.hideTitle, coverImageUrl: col.coverImageUrl, lists: col.lists });
 }
 
 async function executeNuvioCollectionsPush(opts) {
@@ -4564,18 +4611,32 @@ async function pullCollectionsFromNuvio() {
     if (extracted && extracted.length > 0) {
       try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
     }
-    const imported = parseNuvioCollectionsJson(res.data.collections);
+    const imported = [];
+    extracted.forEach(function (parent) {
+      if (!parent || !parent.id || !Array.isArray(parent.folders)) return;
+      parent.folders.forEach(function (folder) {
+        if (!folder || !folder.id) return;
+        const parsed = parseNuvioCollectionsJson([folder])[0];
+        if (!parsed) return;
+        parsed.id = 'nuvio:' + encodeURIComponent(String(res.data.profileId)) + ':' + encodeURIComponent(String(parent.id)) + ':' + encodeURIComponent(String(folder.id));
+        (parsed.lists || []).forEach(function (item, i) { item.nuvioSource = folder.catalogSources[i]; });
+        parsed.nuvioLink = { profileId: res.data.profileId, collectionId: parent.id, folder: folder, baseline: linkedNuvioFolderSignature(parsed) };
+        imported.push(parsed);
+      });
+    });
     if (!imported.length) {
-      showToast('Nuvio has no collection folders saved for this profile.', 'info');
+      showToast('Nuvio has no identifiable collection folders saved for this profile.', 'info');
       return;
     }
     const current = loadCustomCollections();
     const merged = current.slice();
     let count = 0;
+    let skipped = 0;
     for (let i = 0; i < imported.length; i++) {
       const imp = imported[i];
       const idx = merged.findIndex(function (c) { return c.id === imp.id; });
       if (idx !== -1) {
+        if (!merged[idx].nuvioLink || linkedNuvioFolderSignature(merged[idx]) !== merged[idx].nuvioLink.baseline) { skipped++; continue; }
         merged[idx] = imp;
       } else {
         merged.push(imp);
@@ -4584,7 +4645,7 @@ async function pullCollectionsFromNuvio() {
     }
     saveCustomCollections(merged);
     renderCustomCollections();
-    showToast('Pulled ' + imported.length + ' collection folder(s) from Nuvio (' + count + ' new).', 'success');
+    showToast('Pulled ' + (imported.length - skipped) + ' Nuvio folder(s) (' + count + ' new).' + (skipped ? ' Kept ' + skipped + ' folder(s) with local edits. Delete a local folder and pull again to discard its edits.' : ''), 'success');
   } else {
     showToast(mediaAppUiMessage(res, 'Could not pull collections from Nuvio. Check your connection in Settings.'), 'error');
   }

@@ -1789,7 +1789,22 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
 
       const existingCount = (existing || []).length;
       const backdropImageUrl = `${new URL(request.url).origin}/icon.png`;
-      if (installMode === "new") {
+      if (installMode === "update-folder") {
+        if (profileId !== (Number(row.profile_index) || 1)) return json({ ok: false, error: "The selected Nuvio profile changed. Pull again before editing." }, 409);
+        const targets = existing.filter((c) => c && String(c.id) === String(body.targetCollectionId));
+        const target = targets.length === 1 ? targets[0] : null;
+        const folders = target && Array.isArray(target.folders) ? target.folders : [];
+        const matches = folders.filter((f) => f && String(f.id) === String(body.folderId));
+        const expected = body.expectedFolder;
+        const updated = body.updatedFolder;
+        if (!body.targetCollectionId || !body.folderId || !expected || typeof expected !== "object" || !updated || typeof updated !== "object" || Array.isArray(updated) || String(updated.id) !== String(body.folderId) || !Array.isArray(updated.catalogSources)) {
+          return json({ ok: false, error: "Invalid collection folder update." }, 400);
+        }
+        if (matches.length !== 1 || JSON.stringify(matches[0]) !== JSON.stringify(expected)) {
+          return json({ ok: false, error: "This Nuvio folder changed or was removed. Your local edits are kept. To discard them, delete the local folder and pull again." }, 409);
+        }
+        collections = existing.map((c) => c === target ? { ...c, folders: c.folders.map((f) => f === matches[0] ? updated : f) } : c);
+      } else if (installMode === "new") {
         collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName, backdropImageUrl });
       } else if (installMode === "replace") {
         collections = extractNuvioCollections(collections).map((c) => ({ ...c, backdropImageUrl: c.backdropImageUrl || backdropImageUrl }));
@@ -1841,7 +1856,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
 
       let addonInstalled = false;
-      const manifestUrl = (body && body.manifestUrl) || await resolveAccountManifestUrl(env, accountId, request);
+      const manifestUrl = installMode === "update-folder" ? null : ((body && body.manifestUrl) || await resolveAccountManifestUrl(env, accountId, request));
       if (manifestUrl) {
         addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
       }
