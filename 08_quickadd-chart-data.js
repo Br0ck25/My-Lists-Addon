@@ -801,6 +801,47 @@ const STREAMING_ROWS = {
   ],
 };
 
+// Additional rows use only directly queryable metadata. Existing rows stay in
+// their original order and retain their original keys and queries. In
+// particular, high ratings are not treated as award wins and a network is not
+// treated as proof that a movie is an original production.
+const STREAMING_ADDITIONAL_ROWS = {
+  netflix: [
+    ["genre-drama-movies", "Drama Movies", { movie: "with_genres=18" }],
+    ["genre-crime-movies", "Crime Movies", { movie: "with_genres=80" }],
+    ["genre-mystery-movies", "Mystery Movies", { movie: "with_genres=9648" }],
+    ["genre-scifi-movies", "Science Fiction Movies", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy Movies", { movie: "with_genres=14" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-war-movies", "War Movies", { movie: "with_genres=10752" }],
+    ["genre-western-movies", "Western Movies", { movie: "with_genres=37" }],
+    ["language-english-movies", "English-Language Movies", { movie: "with_original_language=en" }],
+    ["genre-drama-tv", "Drama TV Shows", { tv: "with_genres=18" }],
+    ["genre-mystery-tv", "Mystery TV Shows", { tv: "with_genres=9648" }],
+  ],
+  paramount: [
+    ["cbs-dramas", "CBS Dramas", { tv: "with_networks=16&with_genres=18" }],
+    ["cbs-comedies", "CBS Comedies", { tv: "with_networks=16&with_genres=35" }],
+  ],
+  disney: [
+    ["marvel-animation", "Marvel Animation", { tv: "with_companies=420&with_genres=16", movie: "with_companies=420&with_genres=16" }],
+    ["disney-musicals", "Disney Musicals", { movie: "with_companies=2|6125&with_keywords=4344" }],
+  ],
+  hbomax: [
+    ["hbo-drama", "HBO Drama Series", { tv: "with_networks=49&with_genres=18" }],
+    ["hbo-comedy", "HBO Comedy Series", { tv: "with_networks=49&with_genres=35" }],
+    ["hbo-docs", "HBO Documentaries", { tv: "with_networks=49&with_genres=99" }],
+  ],
+  peacock: [
+    ["nbc-comedy", "NBC Comedy", { tv: "with_networks=6&with_genres=35" }],
+    ["nbc-drama", "NBC Drama", { tv: "with_networks=6&with_genres=18" }],
+    ["bravo-reality", "Bravo Reality", { tv: "with_networks=74&with_genres=10764" }],
+  ],
+};
+for (const [service, additional] of Object.entries(STREAMING_ADDITIONAL_ROWS)) {
+  STREAMING_ROWS[service].push(...additional);
+}
+
 // One entry per row and kind, in a flat list the page, the manifest and the chart
 // fetcher all read: { service, key, name, chartKey, catalogId, kinds: { movie?, series? } }.
 function getStreamingRowCatalogs() {
@@ -821,7 +862,8 @@ function getStreamingRowCatalogs() {
       const kinds = {};
       if (r.movie != null) kinds.movie = build("movie", r.movie);
       if (r.tv != null) kinds.series = build("tv", r.tv);
-      out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds });
+      const additional = svc === "discovery" || svc === "netflixkids" || (STREAMING_ADDITIONAL_ROWS[svc] || []).some((entry) => entry[0] === key);
+      out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds, additional });
     }
   }
   return out;

@@ -84,6 +84,39 @@ describe("streaming service rows", () => {
     assert.ok(manifest.some((c) => c.id === "tmdb-chart-netflixkids-animated-movies" && c.type === "movie"));
   });
 
+  it("adds exact genre, language and network intersections without duplicating existing queries", () => {
+    const extra = get("STREAMING_ADDITIONAL_ROWS");
+    const canonical = (path) => {
+      const u = new URL("https://test/" + path);
+      return u.pathname + "?" + [...u.searchParams.entries()].sort(([a, av], [b, bv]) => a.localeCompare(b) || av.localeCompare(bv)).map(([k, v]) => k + "=" + v).join("&");
+    };
+    for (const [service, definitions] of Object.entries(extra)) {
+      const addedIds = new Set(definitions.map((def) => service + "-" + def[0]));
+      const previousQueries = new Set(rows.filter((r) => r.service === service && !addedIds.has(r.chartKey)).flatMap((r) => Object.values(r.kinds).map(canonical)));
+      const seen = new Set();
+      for (const def of definitions) {
+        assert.doesNotMatch(def[1], /(?:top 10|popular|trending|recently|new releases|coming soon|leaving soon|watchlist|continue watching|recommended)/i, def[1]);
+        const row = rows.find((r) => r.chartKey === service + "-" + def[0]);
+        assert.ok(row, service + ":" + def[0]);
+        for (const path of Object.values(row.kinds)) {
+          const q = canonical(path);
+          assert.ok(!previousQueries.has(q), row.chartKey + " duplicates an existing query");
+          assert.ok(!seen.has(q), row.chartKey + " duplicates another new query");
+          seen.add(q);
+        }
+      }
+    }
+    const query = (id, kind) => new URL("https://test/" + rows.find((r) => r.chartKey === id).kinds[kind]).searchParams;
+    assert.equal(query("netflix-genre-crime-movies", "movie").get("with_genres"), "80");
+    assert.equal(query("netflix-language-english-movies", "movie").get("with_original_language"), "en");
+    assert.equal(query("paramount-cbs-dramas", "series").get("with_networks"), "16");
+    assert.equal(query("paramount-cbs-dramas", "series").get("with_genres"), "18");
+    assert.equal(query("disney-marvel-animation", "movie").get("with_companies"), "420");
+    assert.equal(query("disney-marvel-animation", "movie").get("with_genres"), "16");
+    assert.equal(rows.find((r) => r.chartKey === "netflix-genre-crime-movies").kinds.series, undefined);
+    assert.equal(rows.find((r) => r.chartKey === "hbomax-hbo-drama").kinds.movie, undefined);
+  });
+
   it("leaves the existing premade catalogs in place and in order", () => {
     const client = loadClient();
     const base = client.call("getPremadeCollectionsBase");

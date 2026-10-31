@@ -632,6 +632,30 @@ describe("collections subnav and website lists picker", () => {
     assert.strictEqual(current.length, 11);
   });
 
+  it("adds only missing new browse rows to an existing folder without replacing edits or base catalogs", async () => {
+    const client = loadClient();
+    const premade = plain(client.call("getPremadeCollections"));
+    const nf = premade.find((c) => c.id === "col_netflix");
+    const base = nf.lists.slice(0, 3); // The fourth base catalog was intentionally removed.
+    base[0].name = "My preferred name";
+    const linked = { id: "linked", name: "My Netflix", lists: base, nuvioLink: { folder: { id: "col_netflix" } } };
+    client.call("saveCustomCollections", [linked]);
+    const before = plain(client.call("missingPremadeBrowseRows", linked));
+    assert.ok(before.some((r) => r.catalogId === "tmdb-chart-netflix-genre-crime-movies"));
+    assert.ok(!before.some((r) => r.catalogId === "tmdb-chart-netflix-hooked"), "legacy rows are not silently introduced");
+    assert.ok(!before.some((r) => r.catalogId === "tmdb-chart-netflix"), "deleted base catalog is not restored");
+    client.set("appShellDialog", async () => true);
+    await client.call("addMissingPremadeBrowseRows", "linked");
+    const after = plain(client.call("loadCustomCollections"))[0];
+    assert.deepEqual(after.lists.slice(0, 3), base);
+    assert.equal(after.name, "My Netflix");
+    assert.deepEqual(after.nuvioLink, linked.nuvioLink);
+    assert.equal(after.lists.length, 3 + before.length);
+    assert.equal(plain(client.call("missingPremadeBrowseRows", after)).length, 0);
+    await client.call("addMissingPremadeBrowseRows", "linked");
+    assert.equal(plain(client.call("loadCustomCollections"))[0].lists.length, after.lists.length);
+  });
+
   it("mergeNuvioCollections preserves existing Nuvio collections when pushing new folders", () => {
     const client = loadClient();
     const existingNuvio = [

@@ -5764,7 +5764,7 @@ window._CHARTS_SIMKL = ${jsonForScript(SIMKL_CHART_LISTS)};
 window._CHARTS_SIMKL_ANIME = ${jsonForScript(SIMKL_ANIME_LIST)};
 window._CHARTS_STREAMING_TOP10 = ${jsonForScript(STREAMING_TOP10)};
 window._CHARTS_STREAMING_ALL = ${jsonForScript(STREAMING_ALL)};
-window._STREAMING_ROW_CATALOGS = ${jsonForScript(STREAMING_ROW_CATALOGS.map((r) => ({ service: r.service, collection: r.collection, key: r.key, name: r.name, chartKey: r.chartKey, catalogId: r.catalogId, movie: !!r.kinds.movie, series: !!r.kinds.series })))};
+window._STREAMING_ROW_CATALOGS = ${jsonForScript(STREAMING_ROW_CATALOGS.map((r) => ({ service: r.service, collection: r.collection, key: r.key, name: r.name, chartKey: r.chartKey, catalogId: r.catalogId, additional: !!r.additional, movie: !!r.kinds.movie, series: !!r.kinds.series })))};
 window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};

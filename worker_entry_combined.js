@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-31";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "bfc80e8721";
+const WORKER_BUILD = "4602ffd2bb";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -30725,6 +30725,47 @@ const STREAMING_ROWS = {
   ],
 };
 
+// Additional rows use only directly queryable metadata. Existing rows stay in
+// their original order and retain their original keys and queries. In
+// particular, high ratings are not treated as award wins and a network is not
+// treated as proof that a movie is an original production.
+const STREAMING_ADDITIONAL_ROWS = {
+  netflix: [
+    ["genre-drama-movies", "Drama Movies", { movie: "with_genres=18" }],
+    ["genre-crime-movies", "Crime Movies", { movie: "with_genres=80" }],
+    ["genre-mystery-movies", "Mystery Movies", { movie: "with_genres=9648" }],
+    ["genre-scifi-movies", "Science Fiction Movies", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy Movies", { movie: "with_genres=14" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-war-movies", "War Movies", { movie: "with_genres=10752" }],
+    ["genre-western-movies", "Western Movies", { movie: "with_genres=37" }],
+    ["language-english-movies", "English-Language Movies", { movie: "with_original_language=en" }],
+    ["genre-drama-tv", "Drama TV Shows", { tv: "with_genres=18" }],
+    ["genre-mystery-tv", "Mystery TV Shows", { tv: "with_genres=9648" }],
+  ],
+  paramount: [
+    ["cbs-dramas", "CBS Dramas", { tv: "with_networks=16&with_genres=18" }],
+    ["cbs-comedies", "CBS Comedies", { tv: "with_networks=16&with_genres=35" }],
+  ],
+  disney: [
+    ["marvel-animation", "Marvel Animation", { tv: "with_companies=420&with_genres=16", movie: "with_companies=420&with_genres=16" }],
+    ["disney-musicals", "Disney Musicals", { movie: "with_companies=2|6125&with_keywords=4344" }],
+  ],
+  hbomax: [
+    ["hbo-drama", "HBO Drama Series", { tv: "with_networks=49&with_genres=18" }],
+    ["hbo-comedy", "HBO Comedy Series", { tv: "with_networks=49&with_genres=35" }],
+    ["hbo-docs", "HBO Documentaries", { tv: "with_networks=49&with_genres=99" }],
+  ],
+  peacock: [
+    ["nbc-comedy", "NBC Comedy", { tv: "with_networks=6&with_genres=35" }],
+    ["nbc-drama", "NBC Drama", { tv: "with_networks=6&with_genres=18" }],
+    ["bravo-reality", "Bravo Reality", { tv: "with_networks=74&with_genres=10764" }],
+  ],
+};
+for (const [service, additional] of Object.entries(STREAMING_ADDITIONAL_ROWS)) {
+  STREAMING_ROWS[service].push(...additional);
+}
+
 // One entry per row and kind, in a flat list the page, the manifest and the chart
 // fetcher all read: { service, key, name, chartKey, catalogId, kinds: { movie?, series? } }.
 function getStreamingRowCatalogs() {
@@ -30745,7 +30786,8 @@ function getStreamingRowCatalogs() {
       const kinds = {};
       if (r.movie != null) kinds.movie = build("movie", r.movie);
       if (r.tv != null) kinds.series = build("tv", r.tv);
-      out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds });
+      const additional = svc === "discovery" || svc === "netflixkids" || (STREAMING_ADDITIONAL_ROWS[svc] || []).some((entry) => entry[0] === key);
+      out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds, additional });
     }
   }
   return out;
@@ -36831,7 +36873,7 @@ window._CHARTS_SIMKL = ${jsonForScript(SIMKL_CHART_LISTS)};
 window._CHARTS_SIMKL_ANIME = ${jsonForScript(SIMKL_ANIME_LIST)};
 window._CHARTS_STREAMING_TOP10 = ${jsonForScript(STREAMING_TOP10)};
 window._CHARTS_STREAMING_ALL = ${jsonForScript(STREAMING_ALL)};
-window._STREAMING_ROW_CATALOGS = ${jsonForScript(STREAMING_ROW_CATALOGS.map((r) => ({ service: r.service, collection: r.collection, key: r.key, name: r.name, chartKey: r.chartKey, catalogId: r.catalogId, movie: !!r.kinds.movie, series: !!r.kinds.series })))};
+window._STREAMING_ROW_CATALOGS = ${jsonForScript(STREAMING_ROW_CATALOGS.map((r) => ({ service: r.service, collection: r.collection, key: r.key, name: r.name, chartKey: r.chartKey, catalogId: r.catalogId, additional: !!r.additional, movie: !!r.kinds.movie, series: !!r.kinds.series })))};
 window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
@@ -46692,7 +46734,7 @@ function loadPremadeCollectionsBtn() {
   if (typeof showAppConfirm === 'function') {
     showAppConfirm(
       'Replace collections?',
-      'Replace your collection folders with the 10 premade collections (Apple TV+, Disney+, HBO Max, Hulu, Netflix, Netflix Kids, Paramount+, Prime Video, Peacock, Kids)? Click Replace to overwrite, or Cancel to keep your folders.',
+      'Replace your collection folders with the current premade collections? Click Replace to overwrite, or Cancel to keep your folders.',
       'Replace',
       function () {
         saveCustomCollections(premade);
@@ -47090,6 +47132,41 @@ function submitCreateCollectionModal() {
   renderCustomCollections();
 }
 
+// Only add known browse rows, never restore or replace the existing four base
+// catalogs. A linked folder is matched by its original remote folder ID.
+function missingPremadeBrowseRows(col) {
+  if (!col) return [];
+  const folderId = col.nuvioLink && col.nuvioLink.folder ? col.nuvioLink.folder.id : col.id;
+  const premade = getPremadeCollections().find(function (p) { return p.id === folderId; });
+  if (!premade) return [];
+  const browseIds = new Set(((typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || []).filter(function (r) { return r.additional; }).map(function (r) { return r.catalogId; }));
+  const current = Array.isArray(col.lists) ? col.lists : [];
+  return premade.lists.filter(function (row) {
+    return browseIds.has(row.catalogId) && !current.some(function (item) {
+      if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list')) return false;
+      return (item.catalogId && item.catalogId === row.catalogId) || (item.url && item.url === row.url);
+    });
+  });
+}
+
+async function addMissingPremadeBrowseRows(id) {
+  const col = loadCustomCollections().find(function (c) { return c.id === id; });
+  const missing = missingPremadeBrowseRows(col);
+  if (!missing.length) { showToast('No missing browse rows found.', 'info'); return; }
+  const confirmed = await appShellDialog({ title: 'Add browse rows?', message: 'Add ' + missing.length + ' missing browse rows to this local folder? Existing lists stay unchanged. Push the folder to Nuvio separately.', confirmLabel: 'Add rows', cancelLabel: 'Cancel' });
+  if (!confirmed) return;
+  const current = loadCustomCollections();
+  const target = current.find(function (c) { return c.id === id; });
+  if (!target) return;
+  const rows = missingPremadeBrowseRows(target);
+  if (!Array.isArray(target.lists)) target.lists = [];
+  rows.forEach(function (row) { target.lists.push(Object.assign({}, row)); });
+  if (!rows.length) { showToast('No missing browse rows found.', 'info'); return; }
+  saveCustomCollections(current);
+  renderCustomCollections();
+  showToast('Added ' + rows.length + ' browse rows. Push the folder to Nuvio to apply them.', 'success');
+}
+
 function renderCustomCollections() {
   const box = document.getElementById('myCustomCollectionsResult');
   if (!box) return;
@@ -47156,6 +47233,7 @@ function renderCustomCollections() {
         '</div>' +
         '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
           '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">' + (col.nuvioLink ? 'Update Nuvio' : 'Push to Nuvio') + '</button>' +
+          (missingPremadeBrowseRows(col).length ? '<button type="button" class="lc-btn secondary" data-act="addMissingPremadeBrowseRows" data-act-args="' + appActArgs([col.id]) + '">Add browse rows</button>' : '') +
           '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
           '<button type="button" class="lc-btn btn-danger secondary" data-act="deleteCustomCollection" data-act-args="' + appActArgs([col.id]) + '">Delete</button>' +
@@ -48365,6 +48443,7 @@ window.closeCreateCollectionModal = closeCreateCollectionModal;
 window.submitCreateCollectionModal = submitCreateCollectionModal;
 window.deleteCustomCollection = deleteCustomCollection;
 window.removeListFromSavedCollection = removeListFromSavedCollection;
+window.addMissingPremadeBrowseRows = addMissingPremadeBrowseRows;
 window.openSyncNuvioModal = openSyncNuvioModal;
 window.closeSyncNuvioModal = closeSyncNuvioModal;
 window.handleSyncNuvioModeChange = handleSyncNuvioModeChange;

@@ -3405,7 +3405,7 @@ function loadPremadeCollectionsBtn() {
   if (typeof showAppConfirm === 'function') {
     showAppConfirm(
       'Replace collections?',
-      'Replace your collection folders with the 10 premade collections (Apple TV+, Disney+, HBO Max, Hulu, Netflix, Netflix Kids, Paramount+, Prime Video, Peacock, Kids)? Click Replace to overwrite, or Cancel to keep your folders.',
+      'Replace your collection folders with the current premade collections? Click Replace to overwrite, or Cancel to keep your folders.',
       'Replace',
       function () {
         saveCustomCollections(premade);
@@ -3803,6 +3803,41 @@ function submitCreateCollectionModal() {
   renderCustomCollections();
 }
 
+// Only add known browse rows, never restore or replace the existing four base
+// catalogs. A linked folder is matched by its original remote folder ID.
+function missingPremadeBrowseRows(col) {
+  if (!col) return [];
+  const folderId = col.nuvioLink && col.nuvioLink.folder ? col.nuvioLink.folder.id : col.id;
+  const premade = getPremadeCollections().find(function (p) { return p.id === folderId; });
+  if (!premade) return [];
+  const browseIds = new Set(((typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || []).filter(function (r) { return r.additional; }).map(function (r) { return r.catalogId; }));
+  const current = Array.isArray(col.lists) ? col.lists : [];
+  return premade.lists.filter(function (row) {
+    return browseIds.has(row.catalogId) && !current.some(function (item) {
+      if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list')) return false;
+      return (item.catalogId && item.catalogId === row.catalogId) || (item.url && item.url === row.url);
+    });
+  });
+}
+
+async function addMissingPremadeBrowseRows(id) {
+  const col = loadCustomCollections().find(function (c) { return c.id === id; });
+  const missing = missingPremadeBrowseRows(col);
+  if (!missing.length) { showToast('No missing browse rows found.', 'info'); return; }
+  const confirmed = await appShellDialog({ title: 'Add browse rows?', message: 'Add ' + missing.length + ' missing browse rows to this local folder? Existing lists stay unchanged. Push the folder to Nuvio separately.', confirmLabel: 'Add rows', cancelLabel: 'Cancel' });
+  if (!confirmed) return;
+  const current = loadCustomCollections();
+  const target = current.find(function (c) { return c.id === id; });
+  if (!target) return;
+  const rows = missingPremadeBrowseRows(target);
+  if (!Array.isArray(target.lists)) target.lists = [];
+  rows.forEach(function (row) { target.lists.push(Object.assign({}, row)); });
+  if (!rows.length) { showToast('No missing browse rows found.', 'info'); return; }
+  saveCustomCollections(current);
+  renderCustomCollections();
+  showToast('Added ' + rows.length + ' browse rows. Push the folder to Nuvio to apply them.', 'success');
+}
+
 function renderCustomCollections() {
   const box = document.getElementById('myCustomCollectionsResult');
   if (!box) return;
@@ -3869,6 +3904,7 @@ function renderCustomCollections() {
         '</div>' +
         '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
           '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">' + (col.nuvioLink ? 'Update Nuvio' : 'Push to Nuvio') + '</button>' +
+          (missingPremadeBrowseRows(col).length ? '<button type="button" class="lc-btn secondary" data-act="addMissingPremadeBrowseRows" data-act-args="' + appActArgs([col.id]) + '">Add browse rows</button>' : '') +
           '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
           '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
           '<button type="button" class="lc-btn btn-danger secondary" data-act="deleteCustomCollection" data-act-args="' + appActArgs([col.id]) + '">Delete</button>' +
@@ -5078,6 +5114,7 @@ window.closeCreateCollectionModal = closeCreateCollectionModal;
 window.submitCreateCollectionModal = submitCreateCollectionModal;
 window.deleteCustomCollection = deleteCustomCollection;
 window.removeListFromSavedCollection = removeListFromSavedCollection;
+window.addMissingPremadeBrowseRows = addMissingPremadeBrowseRows;
 window.openSyncNuvioModal = openSyncNuvioModal;
 window.closeSyncNuvioModal = closeSyncNuvioModal;
 window.handleSyncNuvioModeChange = handleSyncNuvioModeChange;
