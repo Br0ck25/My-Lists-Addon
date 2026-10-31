@@ -79,8 +79,20 @@ describe("streaming service rows", () => {
     assert.equal(kidFolder.lists[0].url, "tmdb:chart:netflixkids");
     assert.equal(kidFolder.lists[1].url, "tmdb:chart:netflixkids");
     assert.equal(kidFolder.lists.length, 6);
-    assert.equal(cols.find((c) => c.id === "col_discovery").lists.length, 2);
+    const discoveryFolder = cols.find((c) => c.id === "col_discovery");
+    assert.deepEqual(Array.from(discoveryFolder.lists.slice(0, 2), (r) => [r.catalogId, r.type, r.url]), [
+      ["tmdb-chart-discovery", "movie", "tmdb:chart:discovery"],
+      ["tmdb-chart-discovery", "series", "tmdb:chart:discovery"],
+    ]);
+    assert.equal(discoveryFolder.lists.length, 4);
     const manifest = sandbox.buildManifest([], "https://mylistsaddon.com", false, false, "", null, true, true).catalogs;
+    for (const type of ["movie", "series"]) {
+      assert.ok(manifest.some((c) => c.id === "tmdb-chart-discovery" && c.type === type), "Discovery+ " + type + " catalog is advertised");
+      const path = get("TMDB_CHART_PATHS.discovery")[type === "movie" ? "movie" : "tv"];
+      const q = new URL("https://x/" + path).searchParams;
+      assert.equal(q.get("with_watch_providers"), "520");
+      assert.equal(q.get("with_watch_monetization_types"), "flatrate");
+    }
     assert.ok(manifest.some((c) => c.id === "tmdb-chart-discovery-reality-tv" && c.type === "series"));
     assert.ok(manifest.some((c) => c.id === "tmdb-chart-netflixkids-animated-movies" && c.type === "movie"));
   });

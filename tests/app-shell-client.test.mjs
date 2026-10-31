@@ -564,6 +564,11 @@ describe("collections subnav and website lists picker", () => {
     assert.ok(netflix.lists.some((l) => l.name.includes("Top 10")));
     assert.ok(netflix.lists.some((l) => l.url.includes("tmdb:chart:netflix")));
 
+    const discovery = premade.find((c) => c.name === "Discovery+");
+    const discoveryPayload = plain(client.call("buildNuvioCollectionsPayload", [discovery]))[0].folders[0];
+    assert.equal(discoveryPayload.coverImageUrl, discovery.coverImageUrl);
+    assert.deepEqual(discoveryPayload.catalogSources.filter((r) => r.catalogId === "tmdb-chart-discovery").map((r) => r.type), ["movie", "series"]);
+
     // Check Kids collection has Rated G, PG, PG-13, and Netflix Kids
     const kids = premade.find((c) => c.name === "Kids");
     assert.ok(kids.lists.some((l) => l.url === "tmdb:kids:g"));
@@ -572,6 +577,7 @@ describe("collections subnav and website lists picker", () => {
     assert.ok(kids.lists.some((l) => l.url === "tmdb:chart:netflixkids"));
 
     // Verify user-specified cover images
+    assert.strictEqual(premade.find((c) => c.name === "Discovery+").coverImageUrl, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10");
     assert.strictEqual(netflix.coverImageUrl, "https://m.media-amazon.com/images/I/616QXs8yg0L.png");
     assert.strictEqual(apple.coverImageUrl, "https://i.ytimg.com/vi/6sX_BfDnyrg/maxresdefault.jpg");
     assert.strictEqual(premade.find((c) => c.name === "Disney+").coverImageUrl, "https://static-www.adweek.com/wp-content/uploads/2024/03/disney-logo.jpeg?w=1200");
@@ -654,6 +660,29 @@ describe("collections subnav and website lists picker", () => {
     assert.equal(plain(client.call("missingPremadeBrowseRows", after)).length, 0);
     await client.call("addMissingPremadeBrowseRows", "linked");
     assert.equal(plain(client.call("loadCustomCollections"))[0].lists.length, after.lists.length);
+  });
+
+  it("offers the Discovery+ base catalogs once to existing linked folders without replacing edits", async () => {
+    const client = loadClient();
+    const folder = { id: "linked-discovery", name: "My Discovery", coverImageUrl: "", lists: [
+      { name: "My movie name", url: "tmdb:chart:discovery", type: "movie", addonId: "app.my-list", catalogId: "tmdb-chart-discovery" },
+      { name: "Other addon", type: "series", addonId: "foreign.addon", catalogId: "tmdb-chart-discovery" }
+    ], nuvioLink: { folder: { id: "col_discovery" } } };
+    client.call("saveCustomCollections", [folder]);
+    const loaded = plain(client.call("loadCustomCollections"))[0];
+    assert.equal(loaded.coverImageUrl, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10");
+    const missing = plain(client.call("missingPremadeBrowseRows", loaded));
+    assert.deepEqual(missing.filter((r) => r.catalogId === "tmdb-chart-discovery").map((r) => r.type), ["series"]);
+    client.set("appShellDialog", async () => true);
+    await client.call("addMissingPremadeBrowseRows", "linked-discovery");
+    const after = plain(client.call("loadCustomCollections"))[0];
+    assert.deepEqual(after.lists.slice(0, 2), folder.lists);
+    assert.equal(after.lists.filter((r) => r.catalogId === "tmdb-chart-discovery" && r.addonId === "app.my-list").length, 2);
+    await client.call("addMissingPremadeBrowseRows", "linked-discovery");
+    assert.deepEqual(plain(client.call("loadCustomCollections"))[0].lists, after.lists);
+    after.coverImageUrl = "https://example.com/custom.jpg";
+    client.call("saveCustomCollections", [after]);
+    assert.equal(plain(client.call("loadCustomCollections"))[0].coverImageUrl, "https://example.com/custom.jpg");
   });
 
   it("mergeNuvioCollections preserves existing Nuvio collections when pushing new folders", () => {

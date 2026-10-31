@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-31";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1f205887d7";
+const WORKER_BUILD = "24910ee442";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -46749,7 +46749,12 @@ function getPremadeCollectionsBase() {
 function getPremadeCollections() {
   const cols = getPremadeCollectionsBase();
   // Add a Discovery+ browse folder without moving any existing catalog.
-  cols.push({ id: 'col_discovery', name: 'Discovery+', description: '', tileShape: 'LANDSCAPE', hideTitle: false, addonId: 'app.my-list', coverImageUrl: '', lists: [] });
+  cols.push({ id: 'col_discovery', name: 'Discovery+', description: '', tileShape: 'LANDSCAPE', hideTitle: false, addonId: 'app.my-list',
+    coverImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10',
+    lists: [
+      { name: 'Discovery+', url: 'tmdb:chart:discovery', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-discovery' },
+      { name: 'Discovery+', url: 'tmdb:chart:discovery', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-discovery' }
+    ] });
   const rows = (typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -46786,6 +46791,9 @@ function loadCustomCollections() {
           item.coverImageUrl = hboImg;
           updated = true;
         }
+      } else if (!item.coverImageUrl && item.nuvioLink && item.nuvioLink.folder && item.nuvioLink.folder.id === 'col_discovery') {
+        item.coverImageUrl = premadeMap.col_discovery;
+        updated = true;
       } else if (item.id && premadeMap[item.id] && (!item.coverImageUrl || item.coverImageUrl.indexOf('assets.nflxext.com') !== -1 || item.coverImageUrl.indexOf('images.ctfassets.net') !== -1 || item.coverImageUrl.indexOf('kXfqcdQKsToO0OUXHcrrNCHDBzO') !== -1 || (item.id === 'col_peacock' && item.coverImageUrl.indexOf('tmdb.org') !== -1))) {
         item.coverImageUrl = premadeMap[item.id];
         updated = true;
@@ -47227,8 +47235,9 @@ function submitCreateCollectionModal() {
   renderCustomCollections();
 }
 
-// Only add known browse rows, never restore or replace the existing four base
-// catalogs. A linked folder is matched by its original remote folder ID.
+// Only add known browse rows; the newly introduced Discovery+ base catalogs
+// are also offered explicitly. Other services' base catalogs are never restored.
+// A linked folder is matched by its original remote folder ID.
 function missingPremadeBrowseRows(col) {
   if (!col) return [];
   const folderId = col.nuvioLink && col.nuvioLink.folder ? col.nuvioLink.folder.id : col.id;
@@ -47237,7 +47246,8 @@ function missingPremadeBrowseRows(col) {
   const browseIds = new Set(((typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || []).filter(function (r) { return r.additional; }).map(function (r) { return r.catalogId; }));
   const current = Array.isArray(col.lists) ? col.lists : [];
   return premade.lists.filter(function (row) {
-    return browseIds.has(row.catalogId) && !current.some(function (item) {
+    const isDiscoveryBase = folderId === 'col_discovery' && row.catalogId === 'tmdb-chart-discovery';
+    return (browseIds.has(row.catalogId) || isDiscoveryBase) && !current.some(function (item) {
       if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list')) return false;
       return (item.catalogId && item.catalogId === row.catalogId) || (item.url && item.url === row.url);
     });
