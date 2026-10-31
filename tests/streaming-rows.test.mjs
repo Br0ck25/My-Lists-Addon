@@ -143,6 +143,18 @@ describe("streaming service rows", () => {
   it("adds the new genre rows with the correct provider and movie/series filters", () => {
     const required = [
       ["netflix-genre-family-tv", "series", "10751", 8],
+      ["netflix-genre-family-movies", "movie", "10751", 8],
+      ["netflix-sports-docs", "movie", "99", 8],
+      ["hulu-genre-scifi-movies", "movie", "878", 15],
+      ["hulu-genre-thriller-movies", "movie", "53", 15],
+      ["paramount-genre-drama-movies", "movie", "18", 2303],
+      ["paramount-genre-thriller-movies", "movie", "53", 2303],
+      ["paramount-genre-scifi-movies", "movie", "878", 2303],
+      ["paramount-genre-family-movies", "movie", "10751", 2303],
+      ["paramount-genre-romance-movies", "movie", "10749", 2303],
+      ["disney-genre-scifi-movies", "movie", "878", 337],
+      ["disney-genre-fantasy-movies", "movie", "14", 337],
+      ["peacock-sports-docs", "movie", "99", 387],
       ["hulu-genre-animated-series", "series", "16", 15],
       ["hulu-genre-comedy-series", "series", "35", 15],
       ["hulu-genre-crime-mystery", "series", "80|9648", 15],
@@ -161,15 +173,58 @@ describe("streaming service rows", () => {
     for (const [key, type, genre, provider] of required) {
       const row = rows.find((r) => r.chartKey === key);
       assert.ok(row && row.additional, key);
-      assert.deepEqual(Object.keys(row.kinds), [type], key);
+      if (!key.endsWith("sports-docs")) assert.deepEqual(Object.keys(row.kinds), [type], key);
+      else assert.deepEqual(Object.keys(row.kinds), ["movie", "series"], key);
       const q = new URL("https://x/" + row.kinds[type]).searchParams;
       assert.equal(q.get("with_genres"), genre);
       assert.equal(q.get("with_watch_providers"), String(provider));
       assert.equal(q.get("with_watch_monetization_types"), "flatrate");
     }
+    for (const service of ["netflix", "peacock"]) {
+      for (const path of Object.values(rows.find((r) => r.chartKey === service + "-sports-docs").kinds)) {
+        const q = new URL("https://x/" + path).searchParams;
+        assert.equal(q.get("with_genres"), "99");
+        assert.equal(q.get("with_keywords"), "6075");
+      }
+    }
+    const adultSwim = new URL("https://x/" + rows.find((r) => r.chartKey === "hbomax-adult-swim-network").kinds.series).searchParams;
+    assert.equal(adultSwim.get("with_networks"), "80");
+    assert.equal(adultSwim.get("with_watch_providers"), "1899");
     const hbo = new URL("https://x/" + rows.find((r) => r.chartKey === "hbomax-hbo-crime-mystery").kinds.series).searchParams;
     assert.equal(hbo.get("with_networks"), "49");
     assert.equal(hbo.get("with_genres"), "80|9648");
+  });
+
+  it("applies provider, genre and network intersections against fixture titles", async () => {
+    const isolated = loadServer();
+    const fixtures = [
+      { id: 1, kind: "tv", providers: [1899], networks: [80], genres: [16] },
+      { id: 2, kind: "tv", providers: [8], networks: [80], genres: [16] },
+      { id: 3, kind: "tv", providers: [1899], networks: [49], genres: [16] },
+      { id: 4, kind: "movie", providers: [8], networks: [], genres: [99], keywords: [6075] },
+      { id: 5, kind: "movie", providers: [8], networks: [], genres: [18], keywords: [6075] },
+      { id: 6, kind: "movie", providers: [9], networks: [], genres: [99], keywords: [6075] },
+    ];
+    isolated.sandbox.fixtureRows = fixtures;
+    vm.runInContext(`
+      fetchWithPerUserCacheAndCircuitBreaker = async function (opts) { return opts.fetchFn(); };
+      fetchTmdbPagedResults = async function (path, key, skip) {
+        const u = new URL('https://test/' + path), q = u.searchParams;
+        const requiredGenre = q.get('with_genres'), requiredNetwork = q.get('with_networks'), requiredKeyword = q.get('with_keywords');
+        const items = fixtureRows.filter((item) => item.kind === u.pathname.split('/').pop() &&
+          item.providers.includes(Number(q.get('with_watch_providers'))) &&
+          (!requiredGenre || item.genres.includes(Number(requiredGenre))) &&
+          (!requiredNetwork || item.networks.includes(Number(requiredNetwork))) &&
+          (!requiredKeyword || (item.keywords || []).includes(Number(requiredKeyword))));
+        items.totalItems = items.length; return items.slice(skip);
+      };
+      fetchTmdbDetails = async function (id) { return { imdbId: 'tt' + String(id).padStart(7, '0') }; };
+      mapTmdbItem = function (item, imdb, type) { return { id: imdb, type: type }; };
+    `, isolated.sandbox);
+    const adult = await isolated.sandbox.fetchTmdbChart({ type: "series" }, 0, "key", "hbomax-adult-swim-network", "US", false);
+    const sports = await isolated.sandbox.fetchTmdbChart({ type: "movie" }, 0, "key", "netflix-sports-docs", "US", false);
+    assert.deepEqual(Array.from(adult, (item) => item.id), ["tt0000001"]);
+    assert.deepEqual(Array.from(sports, (item) => item.id), ["tt0000004"]);
   });
 
   it("returns empty for the wrong content type, even with a configured install", async () => {

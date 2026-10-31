@@ -819,26 +819,38 @@ const STREAMING_ADDITIONAL_ROWS = {
     ["genre-drama-tv", "Drama TV Shows", { tv: "with_genres=18" }],
     ["genre-mystery-tv", "Mystery TV Shows", { tv: "with_genres=9648" }],
     ["genre-family-tv", "Family TV Shows", { tv: "with_genres=10751" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["sports-docs", "Sports Documentaries", { tv: "with_genres=99&with_keywords=6075", movie: "with_genres=99&with_keywords=6075" }],
   ],
   hulu: [
     ["genre-animated-series", "Animated Series", { tv: "with_genres=16" }],
     ["genre-comedy-series", "Comedy Series", { tv: "with_genres=35" }],
     ["genre-crime-mystery", "Crime & Mystery", { tv: "with_genres=80|9648" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-thriller-movies", "Thriller Movies", { movie: "with_genres=53" }],
   ],
   paramount: [
     ["cbs-dramas", "CBS Dramas", { tv: "with_networks=16&with_genres=18" }],
     ["cbs-comedies", "CBS Comedies", { tv: "with_networks=16&with_genres=35" }],
     ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-drama-movies", "Drama Movies", { movie: "with_genres=18" }],
+    ["genre-thriller-movies", "Thriller Movies", { movie: "with_genres=53" }],
+    ["genre-scifi-movies", "Science Fiction Movies", { movie: "with_genres=878" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["genre-romance-movies", "Romance Movies", { movie: "with_genres=10749" }],
   ],
   disney: [
     ["marvel-animation", "Marvel Animation", { tv: "with_companies=420&with_genres=16", movie: "with_companies=420&with_genres=16" }],
     ["disney-musicals", "Disney Musicals", { movie: "with_companies=2|6125&with_keywords=4344" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
   ],
   hbomax: [
     ["hbo-drama", "HBO Drama Series", { tv: "with_networks=49&with_genres=18" }],
     ["hbo-comedy", "HBO Comedy Series", { tv: "with_networks=49&with_genres=35" }],
     ["hbo-docs", "HBO Documentaries", { tv: "with_networks=49&with_genres=99" }],
     ["hbo-crime-mystery", "HBO Crime & Mystery", { tv: "with_networks=49&with_genres=80|9648" }],
+    ["adult-swim-network", "Adult Swim", { tv: "with_networks=80" }],
   ],
   primevideo: [
     ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
@@ -857,6 +869,7 @@ const STREAMING_ADDITIONAL_ROWS = {
     ["bravo-reality", "Bravo Reality", { tv: "with_networks=74&with_genres=10764" }],
     ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
     ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["sports-docs", "Sports Documentaries", { tv: "with_genres=99&with_keywords=6075", movie: "with_genres=99&with_keywords=6075" }],
   ],
 };
 for (const [service, additional] of Object.entries(STREAMING_ADDITIONAL_ROWS)) {
