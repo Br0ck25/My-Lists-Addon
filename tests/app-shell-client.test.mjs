@@ -673,6 +673,8 @@ describe("collections subnav and website lists picker", () => {
     assert.equal(loaded.coverImageUrl, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10");
     const missing = plain(client.call("missingPremadeBrowseRows", loaded));
     assert.deepEqual(missing.filter((r) => r.catalogId === "tmdb-chart-discovery").map((r) => r.type), ["series"]);
+    assert.equal(missing.length, 18);
+    assert.ok(missing.some((r) => r.catalogId === "tmdb-chart-discovery-hgtv" && r.type === "series"));
     client.set("appShellDialog", async () => true);
     await client.call("addMissingPremadeBrowseRows", "linked-discovery");
     const after = plain(client.call("loadCustomCollections"))[0];

@@ -58,7 +58,21 @@ describe("streaming service rows", () => {
   it("adds narrowly defined Discovery+ and Netflix Kids rows with service and content-type restrictions", () => {
     const discovery = rows.filter((r) => r.service === "discovery");
     const kids = rows.filter((r) => r.service === "netflixkids");
-    assert.deepEqual(Array.from(discovery, (r) => r.name), ["Reality TV", "Documentary Series"]);
+    const networks = [
+      ["discovery-channel", "Discovery Channel", 64], ["tlc", "TLC", 84],
+      ["hgtv", "HGTV", 210], ["food-network", "Food Network", 143],
+      ["investigation-discovery", "Investigation Discovery", 244], ["animal-planet", "Animal Planet", 91],
+      ["travel-channel", "Travel Channel", 209], ["science-channel", "Science Channel", 226],
+      ["own", "OWN", 827], ["magnolia-network", "Magnolia Network", 4519],
+      ["ae", "A&E", 129], ["lifetime", "Lifetime", 34], ["cooking-channel", "Cooking Channel", 802],
+      ["motortrend", "MotorTrend", 2444], ["destination-america", "Destination America", 530],
+    ];
+    assert.deepEqual(Array.from(discovery, (r) => r.name), ["Reality TV", "Documentary Series", ...networks.map((n) => n[1])]);
+    for (const [key, name, id] of networks) {
+      const row = discovery.find((r) => r.chartKey === "discovery-" + key);
+      assert.equal(row.name, name);
+      assert.equal(new URL("https://x/" + row.kinds.series).searchParams.get("with_networks"), String(id));
+    }
     assert.deepEqual(Array.from(kids, (r) => r.name), ["Kids TV Shows", "Animated TV Shows", "Animated Movies", "Family Movies"]);
     for (const r of discovery) {
       assert.ok(r.kinds.series && !r.kinds.movie);
@@ -84,7 +98,10 @@ describe("streaming service rows", () => {
       ["tmdb-chart-discovery", "movie", "tmdb:chart:discovery"],
       ["tmdb-chart-discovery", "series", "tmdb:chart:discovery"],
     ]);
-    assert.equal(discoveryFolder.lists.length, 4);
+    assert.equal(discoveryFolder.lists.length, 19);
+    for (const [key] of networks) {
+      assert.ok(discoveryFolder.lists.some((r) => r.catalogId === "tmdb-chart-discovery-" + key && r.type === "series"));
+    }
     const manifest = sandbox.buildManifest([], "https://mylistsaddon.com", false, false, "", null, true, true).catalogs;
     for (const type of ["movie", "series"]) {
       assert.ok(manifest.some((c) => c.id === "tmdb-chart-discovery" && c.type === type), "Discovery+ " + type + " catalog is advertised");
@@ -92,6 +109,9 @@ describe("streaming service rows", () => {
       const q = new URL("https://x/" + path).searchParams;
       assert.equal(q.get("with_watch_providers"), "520");
       assert.equal(q.get("with_watch_monetization_types"), "flatrate");
+    }
+    for (const [key] of networks) {
+      assert.ok(manifest.some((c) => c.id === "tmdb-chart-discovery-" + key && c.type === "series"));
     }
     assert.ok(manifest.some((c) => c.id === "tmdb-chart-discovery-reality-tv" && c.type === "series"));
     assert.ok(manifest.some((c) => c.id === "tmdb-chart-netflixkids-animated-movies" && c.type === "movie"));
@@ -217,6 +237,16 @@ describe("streaming service rows", () => {
       { id: 5, kind: "movie", providers: [8], networks: [], genres: [18], keywords: [6075] },
       { id: 6, kind: "movie", providers: [9], networks: [], genres: [99], keywords: [6075] },
     ];
+    const discoveryNetworks = [
+      ["discovery-channel", 64], ["tlc", 84], ["hgtv", 210], ["food-network", 143],
+      ["investigation-discovery", 244], ["animal-planet", 91], ["travel-channel", 209],
+      ["science-channel", 226], ["own", 827], ["magnolia-network", 4519], ["ae", 129],
+      ["lifetime", 34], ["cooking-channel", 802], ["motortrend", 2444], ["destination-america", 530]
+    ];
+    discoveryNetworks.forEach(([, id], index) => {
+      fixtures.push({ id: 100 + index, kind: "tv", providers: [520], networks: [id], genres: [] });
+      fixtures.push({ id: 200 + index, kind: "tv", providers: [8], networks: [id], genres: [] });
+    });
     isolated.sandbox.fixtureRows = fixtures;
     vm.runInContext(`
       fetchWithPerUserCacheAndCircuitBreaker = async function (opts) { return opts.fetchFn(); };
@@ -237,6 +267,10 @@ describe("streaming service rows", () => {
     const sports = await isolated.sandbox.fetchTmdbChart({ type: "movie" }, 0, "key", "netflix-sports-docs", "US", false);
     assert.deepEqual(Array.from(adult, (item) => item.id), ["tt0000001"]);
     assert.deepEqual(Array.from(sports, (item) => item.id), ["tt0000004"]);
+    for (let i = 0; i < discoveryNetworks.length; i++) {
+      const result = await isolated.sandbox.fetchTmdbChart({ type: "series" }, 0, "key", "discovery-" + discoveryNetworks[i][0], "US", false);
+      assert.deepEqual(Array.from(result, (item) => item.id), ["tt" + String(100 + i).padStart(7, "0")]);
+    }
   });
 
   it("returns empty for the wrong content type, even with a configured install", async () => {

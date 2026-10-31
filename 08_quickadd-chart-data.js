@@ -587,6 +587,24 @@ const STREAMING_ROWS = {
   discovery: [
     ["reality-tv", "Reality TV", { tv: "with_genres=10764" }],
     ["documentary-series", "Documentary Series", { tv: "with_genres=99" }],
+    // TMDB network IDs (not watch-provider IDs). Restrict them to Discovery+
+    // flatrate availability as for every other row. Network membership is not
+    // evidence that a title is a Discovery+ original.
+    ["discovery-channel", "Discovery Channel", { tv: "with_networks=64" }],
+    ["tlc", "TLC", { tv: "with_networks=84" }],
+    ["hgtv", "HGTV", { tv: "with_networks=210" }],
+    ["food-network", "Food Network", { tv: "with_networks=143" }],
+    ["investigation-discovery", "Investigation Discovery", { tv: "with_networks=244" }],
+    ["animal-planet", "Animal Planet", { tv: "with_networks=91" }],
+    ["travel-channel", "Travel Channel", { tv: "with_networks=209" }],
+    ["science-channel", "Science Channel", { tv: "with_networks=226" }],
+    ["own", "OWN", { tv: "with_networks=827" }],
+    ["magnolia-network", "Magnolia Network", { tv: "with_networks=4519" }],
+    ["ae", "A&E", { tv: "with_networks=129" }],
+    ["lifetime", "Lifetime", { tv: "with_networks=34" }],
+    ["cooking-channel", "Cooking Channel", { tv: "with_networks=802" }],
+    ["motortrend", "MotorTrend", { tv: "with_networks=2444" }],
+    ["destination-america", "Destination America", { tv: "with_networks=530" }],
   ],
   netflixkids: [
     ["kids-tv", "Kids TV Shows", { tv: "with_genres=10762" }],
