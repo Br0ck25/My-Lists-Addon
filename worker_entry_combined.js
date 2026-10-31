@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-10-31";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c96a9b4c14";
+const WORKER_BUILD = "1c64b87b5e";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -45499,6 +45499,7 @@ function renderMediaAppStatus(provider, info) {
   const listsBtn = document.getElementById('lists' + name + 'ConnectBtn');
   if (listsBtn) listsBtn.textContent = live ? 'Disconnect' : (lapsed ? 'Reconnect ' + name : 'Connect ' + name);
   if (live) mediaAppUiMaybeUpdate(provider, info.sync || {});
+  if (provider === 'nuvio' && live && typeof maybeRefreshLinkedNuvioFolders === 'function') maybeRefreshLinkedNuvioFolders();
   renderMediaAppLists(provider);
   const statusEl = document.getElementById(provider + 'ConnectStatus');
   if (statusEl) {
@@ -47755,6 +47756,7 @@ async function pushLinkedNuvioFolder(col) {
   const link = col.nuvioLink;
   const confirmed = await appShellDialog({ title: 'Update Nuvio folder?', message: 'Nuvio replaces all collections when saving. Changes made in Nuvio during this push may be overwritten.', confirmLabel: 'Update Nuvio', cancelLabel: 'Cancel' });
   if (!confirmed) return;
+  if (nuvioFolderWriteBusy) { showToast('A Nuvio folder update is already in progress.', 'info'); return; }
   const folder = JSON.parse(JSON.stringify(link.folder));
   folder.title = col.name;
   if ('name' in folder) folder.name = col.name;
@@ -47772,11 +47774,16 @@ async function pushLinkedNuvioFolder(col) {
     if ('title' in original) original.title = l.name || catId;
     return original;
   });
-  const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
-    profileId: link.profileId, installMode: 'update-folder', targetCollectionId: link.collectionId,
-    folderId: link.folder.id, expectedFolder: link.folder, updatedFolder: folder,
-    collections: [folder], collectionLists: col.lists || []
-  });
+  nuvioFolderWriteBusy = true;
+  nuvioFoldersVersion++;
+  let res;
+  try {
+    res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
+      profileId: link.profileId, scope: link.scope, installMode: 'update-folder', targetCollectionId: link.collectionId,
+      folderId: link.folder.id, expectedFolder: link.folder, updatedFolder: folder,
+      collections: [folder], collectionLists: col.lists || []
+    });
+  } finally { nuvioFolderWriteBusy = false; }
   if (!res || !res.ok) { showToast(mediaAppUiMessage(res, 'Could not update the Nuvio folder.'), 'error'); return; }
   const current = loadCustomCollections();
   const stored = current.find(function (c) { return c.id === col.id; });
@@ -47876,12 +47883,45 @@ async function executeNuvioCollectionsPush(opts) {
   }
 }
 
-async function pullCollectionsFromNuvio() {
-  showToast('Pulling collections from Nuvio\u2026', 'info');
-  const res = await mediaAppUiCall('nuvio', 'collections', 'GET');
-  if (res && res.ok && res.data && res.data.collections) {
+let nuvioFoldersRefreshBusy = false;
+let nuvioFolderWriteBusy = false;
+let nuvioFoldersVersion = 0;
+let nuvioFoldersLastRefresh = 0;
+const NUVIO_FOLDERS_REFRESH_MS = 2 * 60 * 1000;
+
+// Only refresh existing links while this view is open. Never automatically write
+// the provider's whole collections blob or import folders the user removed here.
+function maybeRefreshLinkedNuvioFolders() {
+  if (!mediaAppListsLive.nuvio || nuvioFoldersRefreshBusy || Date.now() - nuvioFoldersLastRefresh < NUVIO_FOLDERS_REFRESH_MS) return;
+  if (typeof isSignedIn !== 'function' || !isSignedIn()) return;
+  try {
+    if (document.hidden || localStorage.getItem('myListAddon:activeTab') !== 'lists' || localStorage.getItem('myListAddon:listsSubmenu') !== 'collections') return;
+  } catch (e) { return; }
+  const modal = document.getElementById('createCollectionModal');
+  if (modal && modal.style.display === 'flex') return;
+  if (!loadCustomCollections().some(function (c) { return c.nuvioLink && c.nuvioLink.scope; })) return;
+  nuvioFoldersLastRefresh = Date.now();
+  pullCollectionsFromNuvio(true);
+}
+setInterval(maybeRefreshLinkedNuvioFolders, NUVIO_FOLDERS_REFRESH_MS);
+
+async function pullCollectionsFromNuvio(automatic) {
+  if (nuvioFoldersRefreshBusy || nuvioFolderWriteBusy) return;
+  const version = nuvioFoldersVersion;
+  const auto = automatic === true;
+  const owner = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
+  if (!auto) showToast('Pulling collections from Nuvio\u2026', 'info');
+  nuvioFoldersRefreshBusy = true;
+  let res;
+  try { res = await mediaAppUiCall('nuvio', 'collections', 'GET'); }
+  finally { nuvioFoldersRefreshBusy = false; }
+  // A sign-out or account change during the fetch must not update another user's browser state.
+  if (version !== nuvioFoldersVersion || owner !== ((typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '')) return;
+  const modal = document.getElementById('createCollectionModal');
+  if (auto && modal && modal.style.display === 'flex') return;
+  if (res && res.ok && res.data && Array.isArray(res.data.collections) && res.data.scope) {
     const extracted = extractNuvioCollections(res.data.collections);
-    if (extracted && extracted.length > 0) {
+    if (!auto) {
       try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
     }
     const imported = [];
@@ -47891,35 +47931,34 @@ async function pullCollectionsFromNuvio() {
         if (!folder || !folder.id) return;
         const parsed = parseNuvioCollectionsJson([folder])[0];
         if (!parsed) return;
-        parsed.id = 'nuvio:' + encodeURIComponent(String(res.data.profileId)) + ':' + encodeURIComponent(String(parent.id)) + ':' + encodeURIComponent(String(folder.id));
+        parsed.id = 'nuvio:' + res.data.scope + ':' + encodeURIComponent(String(res.data.profileId)) + ':' + encodeURIComponent(String(parent.id)) + ':' + encodeURIComponent(String(folder.id));
         (parsed.lists || []).forEach(function (item, i) { item.nuvioSource = folder.catalogSources[i]; });
-        parsed.nuvioLink = { profileId: res.data.profileId, collectionId: parent.id, folder: folder, baseline: linkedNuvioFolderSignature(parsed) };
+        parsed.nuvioLink = { scope: res.data.scope, profileId: res.data.profileId, collectionId: parent.id, folder: folder, baseline: linkedNuvioFolderSignature(parsed) };
         imported.push(parsed);
       });
     });
-    if (!imported.length) {
-      showToast('Nuvio has no identifiable collection folders saved for this profile.', 'info');
-      return;
-    }
     const current = loadCustomCollections();
     const merged = current.slice();
     let count = 0;
     let skipped = 0;
+    let refreshed = 0;
     for (let i = 0; i < imported.length; i++) {
       const imp = imported[i];
       const idx = merged.findIndex(function (c) { return c.id === imp.id; });
       if (idx !== -1) {
         if (!merged[idx].nuvioLink || linkedNuvioFolderSignature(merged[idx]) !== merged[idx].nuvioLink.baseline) { skipped++; continue; }
-        merged[idx] = imp;
-      } else {
+        if (JSON.stringify(merged[idx].nuvioLink.folder) !== JSON.stringify(imp.nuvioLink.folder)) { merged[idx] = imp; refreshed++; }
+      } else if (!auto) {
         merged.push(imp);
         count++;
       }
     }
-    saveCustomCollections(merged);
-    renderCustomCollections();
-    showToast('Pulled ' + (imported.length - skipped) + ' Nuvio folder(s) (' + count + ' new).' + (skipped ? ' Kept ' + skipped + ' folder(s) with local edits. Delete a local folder and pull again to discard its edits.' : ''), 'success');
-  } else {
+    if (count || refreshed) { saveCustomCollections(merged); renderCustomCollections(); }
+    if (!auto) {
+      if (!imported.length) showToast('Nuvio has no identifiable collection folders saved for this profile.', 'info');
+      else showToast('Pulled ' + (imported.length - skipped) + ' Nuvio folder(s) (' + count + ' new).' + (skipped ? ' Kept ' + skipped + ' folder(s) with local edits. Delete a local folder and pull again to discard its edits.' : ''), 'success');
+    }
+  } else if (!auto) {
     showToast(mediaAppUiMessage(res, 'Could not pull collections from Nuvio. Check your connection in Settings.'), 'error');
   }
 }
@@ -120952,7 +120991,9 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     } catch {
       return json({ ok: false, error: "Couldn't read your collections from Nuvio. Please try again." }, 502);
     }
-    return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [] });
+    // Bind browser-side links to both accounts, not just profile/folder IDs.
+    const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+    return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [], scope });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -121173,6 +121214,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const existingCount = (existing || []).length;
       const backdropImageUrl = `${new URL(request.url).origin}/icon.png`;
       if (installMode === "update-folder") {
+        const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+        if (!scope || body.scope !== scope) return json({ ok: false, error: "This folder belongs to a different connection. Pull it again before editing." }, 409);
         if (profileId !== (Number(row.profile_index) || 1)) return json({ ok: false, error: "The selected Nuvio profile changed. Pull again before editing." }, 409);
         const targets = existing.filter((c) => c && String(c.id) === String(body.targetCollectionId));
         const target = targets.length === 1 ? targets[0] : null;

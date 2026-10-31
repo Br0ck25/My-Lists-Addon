@@ -1,6 +1,6 @@
 # Handoff
 
-- Nuvio collection folders can be pulled into the Collections editor and explicitly updated in their original parent. Local edits are preserved on pull, and stale remote folder snapshots are rejected. Nuvio's whole-blob write has a remaining race with concurrent remote writes; the UI warns before updating.
-- Provider catalog references are not title lists. Arbitrary upstream provider list mutations and automatic two-way synchronization are not implemented; Stremio's arbitrary-list write API remains unverified. No live account verification has been performed.
-- Focused collection/provider/design tests passed. Full suite: 2,678 passed, four failures in account purge and install-manifest assertions (unexpected catalog rows), one known TODO; these also appeared before this change.
+- Nuvio collection folders can be manually pulled and edited; linked folders refresh automatically every two minutes while Lists → Collections is open, without replacing local edits or importing new folders. Updates to Nuvio remain explicit, with stale-folder checking and a warning about whole-blob writes. Links are scoped to the My Lists and Nuvio accounts; folders pulled before account scoping must be pulled again to create a new link, and their old local copies remain intact.
+- Nuvio's documented API has only full-replacement collections writes, without conditional updates, so a concurrent remote write can still be lost. Arbitrary addon catalog references are not writable title lists; automatic two-way sync and arbitrary upstream list mutations remain unsupported. No live account verification has been performed.
+- Focused tests passed. Full suite: 2,679 passed, four previously observed failures in account-purge and install-manifest assertions (unexpected catalog rows), one known TODO.
 - Edit numbered split sources and rebuild/check the generated worker as described in AGENTS.md.

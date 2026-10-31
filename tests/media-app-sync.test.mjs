@@ -1553,10 +1553,15 @@ describe("Nuvio collections push: install modes", () => {
     const seen = fakeServices(state);
     const ctx = await setup("nuvcolupdate");
     await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const read = await call(ctx.env, "/api/connections/nuvio/collections", { cookie: ctx.cookie });
+    assert.equal(read.status, 200);
+    assert.ok(read.body.scope);
     const original = STREAMING.folders[0];
     const updated = { ...original, title: "Edited", custom: "preserved", catalogSources: [] };
-    const body = { profileId: 1, installMode: "update-folder", targetCollectionId: STREAMING.id, folderId: original.id, expectedFolder: original, updatedFolder: updated, collections: [updated] };
+    const body = { profileId: 1, scope: read.body.scope, installMode: "update-folder", targetCollectionId: STREAMING.id, folderId: original.id, expectedFolder: original, updatedFolder: updated, collections: [updated] };
     const write = (b) => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: b });
+    assert.equal((await write({ ...body, scope: "another-account" })).status, 409);
+    assert.equal(seen.collectionsPushed, undefined);
     assert.equal((await write(body)).status, 200);
     assert.deepEqual(seen.collectionsPushed[0], [{ ...STREAMING, folders: [updated] }, OTHER]);
     state.profiles[0].collections_json = [{ ...STREAMING, folders: [{ ...original, title: "Changed remotely" }] }, OTHER];

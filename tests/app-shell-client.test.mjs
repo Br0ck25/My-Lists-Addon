@@ -407,7 +407,7 @@ describe("collections subnav and website lists picker", () => {
     const calls = [];
     client.set("mediaAppUiCall", async (provider, sub, method, body) => {
       calls.push({ method, body });
-      return method === "GET" ? { ok: true, data: { profileId: 1, collections: remote } } : { ok: true, data: {} };
+      return method === "GET" ? { ok: true, data: { profileId: 1, collections: remote, scope: "scope-a" } } : { ok: true, data: {} };
     });
     client.set("appShellDialog", async () => true);
     await client.call("pullCollectionsFromNuvio");
@@ -415,6 +415,14 @@ describe("collections subnav and website lists picker", () => {
     let linked = collections.find((c) => c.nuvioLink);
     assert.equal(linked.nuvioLink.collectionId, "parent");
     assert.equal(linked.lists[0].nuvioSource.extra, "keep");
+    folder.title = "Refreshed remotely";
+    remote.push({ id: "new-parent", folders: [{ id: "new", title: "New", catalogSources: [] }] });
+    await client.call("pullCollectionsFromNuvio", true);
+    collections = plain(client.call("loadCustomCollections"));
+    linked = collections.find((c) => c.nuvioLink);
+    assert.equal(linked.name, "Refreshed remotely");
+    assert.equal(collections.filter((c) => c.nuvioLink).length, 1, "automatic refresh does not import new folders");
+    assert.ok(calls.every((c) => c.method === "GET"), "automatic refresh must never write to Nuvio");
     linked.name = "Locally edited";
     client.call("saveCustomCollections", collections);
     folder.title = "Remotely edited";
@@ -422,15 +430,36 @@ describe("collections subnav and website lists picker", () => {
     collections = plain(client.call("loadCustomCollections"));
     linked = collections.find((c) => c.nuvioLink);
     assert.equal(linked.name, "Locally edited");
-    assert.equal(linked.nuvioLink.folder.title, "Remote");
+    assert.equal(linked.nuvioLink.folder.title, "Refreshed remotely");
     await client.call("pushLinkedNuvioFolder", linked);
     const sent = calls.at(-1).body;
     assert.equal(sent.installMode, "update-folder");
     assert.equal(sent.targetCollectionId, "parent");
-    assert.equal(sent.expectedFolder.title, "Remote");
+    assert.equal(sent.expectedFolder.title, "Refreshed remotely");
+    assert.equal(sent.scope, "scope-a");
     assert.equal(sent.updatedFolder.title, "Locally edited");
     assert.equal(sent.updatedFolder.custom, "keep");
     assert.equal(sent.updatedFolder.catalogSources[0].extra, "keep");
+  });
+
+  it("does not apply an automatic refresh while the editor is open or the account changes", async () => {
+    const client = loadClient({ signedInAs: "alice" });
+    const folder = { id: "f", title: "Original", catalogSources: [] };
+    const response = () => ({ ok: true, data: { profileId: 1, scope: "alice-scope", collections: [{ id: "p", folders: [folder] }] } });
+    client.set("mediaAppUiCall", async () => response());
+    await client.call("pullCollectionsFromNuvio");
+    folder.title = "Changed in Nuvio";
+    client.document.getElementById("createCollectionModal").style.display = "flex";
+    await client.call("pullCollectionsFromNuvio", true);
+    assert.equal(plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink).name, "Original");
+    client.document.getElementById("createCollectionModal").style.display = "none";
+    let finish;
+    client.set("mediaAppUiCall", () => new Promise((resolve) => { finish = resolve; }));
+    const pending = client.call("pullCollectionsFromNuvio", true);
+    client.set("activeCreator", { creatorName: "bob" });
+    finish(response());
+    await pending;
+    assert.equal(plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink).name, "Original");
   });
 
   it("provides 10 premade collections with corresponding Streaming Top 10, Catalogs, and Kids", () => {

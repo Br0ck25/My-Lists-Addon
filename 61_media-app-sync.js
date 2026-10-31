@@ -1569,7 +1569,9 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     } catch {
       return json({ ok: false, error: "Couldn't read your collections from Nuvio. Please try again." }, 502);
     }
-    return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [] });
+    // Bind browser-side links to both accounts, not just profile/folder IDs.
+    const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+    return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [], scope });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -1790,6 +1792,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const existingCount = (existing || []).length;
       const backdropImageUrl = `${new URL(request.url).origin}/icon.png`;
       if (installMode === "update-folder") {
+        const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+        if (!scope || body.scope !== scope) return json({ ok: false, error: "This folder belongs to a different connection. Pull it again before editing." }, 409);
         if (profileId !== (Number(row.profile_index) || 1)) return json({ ok: false, error: "The selected Nuvio profile changed. Pull again before editing." }, 409);
         const targets = existing.filter((c) => c && String(c.id) === String(body.targetCollectionId));
         const target = targets.length === 1 ? targets[0] : null;
