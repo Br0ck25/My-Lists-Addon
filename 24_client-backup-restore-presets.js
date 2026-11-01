@@ -151,6 +151,7 @@ function buildFullBackupPayload() {
     mergedChannels: mergedChannels,
     presets: dereferencePresetsMap(presets, map, channels),
     customCollections: (function() { try { return JSON.parse(localStorage.getItem('myListAddon:customCollections') || '[]'); } catch(e) { return []; } })(),
+    customCollectionGroups: (typeof loadCollectionGroups === 'function') ? loadCollectionGroups([]) : [],
     settings: {
       trackPlayback: localStorage.getItem('myListAddon:trackPlayback') === '1',
       removeWatchedFromWatchlist: localStorage.getItem('myListAddon:removeWatchedFromWatchlist') !== '0',
@@ -467,7 +468,10 @@ function applyImportedConfig(data) {
   }
 
   if (data && Array.isArray(data.customCollections)) {
-    try { localStorage.setItem('myListAddon:customCollections', JSON.stringify(data.customCollections)); } catch (e) {}
+    try {
+      localStorage.setItem('myListAddon:customCollections', JSON.stringify(data.customCollections));
+      localStorage.setItem('myListAddon:collectionGroups', JSON.stringify(Array.isArray(data.customCollectionGroups) ? data.customCollectionGroups : []));
+    } catch (e) {}
   }
 
   // Restore API keys and connected accounts

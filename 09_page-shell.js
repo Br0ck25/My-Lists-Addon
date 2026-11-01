@@ -5447,12 +5447,11 @@ ${appShellMobileNavHtml}
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create folder</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
       </div>
-      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Collections contain folders, and folders contain lists. Choose an existing collection name or enter a new one.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Add this folder inside an existing collection, then choose the lists it contains.</p>
 
       <div class="u-mb-12px">
-        <label for="createCollectionParentName" class="app-shell-muted">Collection name *</label>
-        <input type="text" id="createCollectionParentName" list="createCollectionParentOptions" placeholder="e.g. Streaming Services, Family" maxlength="120" required>
-        <datalist id="createCollectionParentOptions"></datalist>
+        <label for="createCollectionParentName" class="app-shell-muted">Collection *</label>
+        <select id="createCollectionParentName" required></select>
       </div>
 
       <div class="u-mb-12px">
@@ -5510,15 +5509,15 @@ ${appShellMobileNavHtml}
 
       <!-- Lists in Draft -->
       <div class="u-mb-14px">
-        <div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Lists in this Collection (<span id="collectionDraftCount">0</span>)</div>
+        <div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Lists in this folder (<span id="collectionDraftCount">0</span>)</div>
         <div id="collectionDraftListsContainer" class="u-p-8px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="max-height:160px; overflow-y:auto;">
-          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this collection folder yet.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this folder yet.</p>
         </div>
       </div>
 
       <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeCreateCollectionModal">Cancel</button>
-        <button type="button" class="lc-btn primary u-minw-80px" id="createCollectionModalBtn" style="opacity:0.5;" disabled data-act="submitCreateCollectionModal">Save Collection</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="createCollectionModalBtn" style="opacity:0.5;" disabled data-act="submitCreateCollectionModal">Save folder</button>
       </div>
     </div>
   </div>
@@ -5530,7 +5529,7 @@ ${appShellMobileNavHtml}
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Nuvio Collections</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportNuvioModal">&#x2715;</button>
       </div>
-      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Import collection folders from a Nuvio <code class="u-fs-v_font_size_xs">collections.json</code> file or paste JSON code directly.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Import collections and their folders from a Nuvio <code class="u-fs-v_font_size_xs">collections.json</code> file or paste JSON code directly.</p>
 
       <div class="u-mb-12px">
         <label for="importNuvioFileInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Upload collections.json file</label>

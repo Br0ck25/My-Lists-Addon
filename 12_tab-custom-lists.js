@@ -110,7 +110,7 @@
       <div class="shelf-header u-mb-8px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">Collections</h2>
-          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Organize collections into folders, add lists inside each folder, and sync them to Nuvio.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create a collection, add folders inside it, then add lists inside each folder.</p>
         </div>
         <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           ${refreshButtonHtml('refreshCollectionsView', 'Refresh collections')}
@@ -122,12 +122,11 @@
     <div class="panel u-mt-12px" id="myCustomCollectionsPanel">
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
-          <h2 class="panel-title u-mb-0">Your Collections</h2>
+          <h2 class="panel-title u-mb-0">My Collections</h2>
           <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Collections contain folders; each folder contains your lists.</p>
         </div>
         <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
-          <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create folder</button>
-          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateCollectionGroupModal">+ Create collection</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull My Lists collections from your connected Nuvio account">Pull from Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="exportNuvioCollectionsJson" title="Export Nuvio collections.json">Export JSON</button>
@@ -140,7 +139,7 @@
       <div id="myCustomCollectionsResult"></div>
     </div>
 
-    <!-- Premade Collections (below Your Collections) -->
+    <!-- Premade Collections (below My Collections) -->
     <div class="panel u-mt-16px" id="premadeCollectionsPanel">
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
@@ -148,7 +147,6 @@
           <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Ready-to-use streaming catalogs &amp; kids bundles with Top 10 charts and full catalogs to install or customize.</p>
         </div>
         <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
-          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="addAllPremadeCollections" title="Add all premade collections to your collection folders">+ Add All to Your Folders</button>
         </div>
       </div>
       <div id="premadeCollectionsResult"></div>
