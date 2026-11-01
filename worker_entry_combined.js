@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-01";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c5bf302d70";
+const WORKER_BUILD = "40488c4722";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -20958,7 +20958,7 @@ async function catalogPreviewMeta(id, type, tmdbKey) {
   const isImdb = /^tt\d{5,12}$/.test(id);
   const tmdbMatch = /^tmdb:(\d{1,12})$/.exec(id);
   if (!isImdb && (!tmdbMatch || !tmdbKey)) return null;
-  const key = `catalog-preview:v2:${type}:${id}`;
+  const key = `catalog-preview:v3:${type}:${id}`;
   const cached = getPerUserCache(key);
   if (cached) return cached.data.missing ? await tmdbPreviewForImdb(id, type, tmdbKey) : cached.data;
   // A failed personal TMDB key must never affect another key's in-flight work.
@@ -20971,7 +20971,7 @@ async function catalogPreviewMeta(id, type, tmdbKey) {
     try {
       const src = isImdb
         ? `https://v3-cinemeta.strem.io/meta/${type}/${id}.json`
-        : `https://api.themoviedb.org/3/${type === "series" ? "tv" : "movie"}/${tmdbMatch[1]}?api_key=${encodeURIComponent(tmdbKey)}&append_to_response=credits`;
+        : `https://api.themoviedb.org/3/${type === "series" ? "tv" : "movie"}/${tmdbMatch[1]}?api_key=${encodeURIComponent(tmdbKey)}&append_to_response=credits,images&include_image_language=en,null`;
       const res = await fetch(src, {
         cf: { cacheTtlByStatus: { "200-299": 86400, "400-599": 0 }, cacheEverything: true },
         signal: AbortSignal.timeout(3000),
@@ -20986,6 +20986,9 @@ async function catalogPreviewMeta(id, type, tmdbKey) {
         for (const field of ["description", "runtime", "releaseInfo", "imdbRating"]) {
           if (typeof meta[field] === "string" && meta[field].trim()) preview[field] = meta[field];
         }
+        // Discover renders a transparent title image when `logo` is present.
+        // Keep the plain name for accessibility and titles without artwork.
+        if (typeof meta.logo === "string" && /^https?:\/\/\S+$/i.test(meta.logo)) preview.logo = meta.logo;
         if (Array.isArray(meta.genres)) preview.genres = meta.genres.filter((g) => typeof g === "string" && g.trim());
         if (Array.isArray(meta.links)) preview.links = meta.links.filter((l) => l && typeof l.name === "string" && typeof l.category === "string" && typeof l.url === "string" && /^https?:\/\/|^stremio:/i.test(l.url));
       } else {
@@ -20999,7 +21002,13 @@ async function catalogPreviewMeta(id, type, tmdbKey) {
         for (const [category, people] of [["Cast", Array.isArray(credits.cast) ? credits.cast.slice(0, 8) : []], ["Directors", Array.isArray(credits.crew) ? credits.crew.filter((p) => p.job === "Director").slice(0, 4) : []]]) {
           for (const person of people) if (person && Number.isInteger(person.id) && person.id > 0 && typeof person.name === "string" && person.name.trim()) links.push({ name: person.name, category, url: `https://www.themoviedb.org/person/${person.id}` });
         }
+        // Request images alongside credits, not via another per-title call.
+        // Prefer English title art, then language-neutral art; never substitute
+        // a poster/backdrop (or a logo in an unrelated language) for the title.
+        const logos = Array.isArray(data.images && data.images.logos) ? data.images.logos.filter((l) => l && /^\/[A-Za-z0-9_-]+\.png$/i.test(l.file_path)) : [];
+        const logo = logos.find((l) => l.iso_639_1 === "en") || logos.find((l) => l.iso_639_1 == null);
         preview = {
+          logo: logo ? `https://image.tmdb.org/t/p/original${logo.file_path}` : undefined,
           description: typeof data.overview === "string" ? data.overview : undefined,
           runtime: typeof runtime === "number" && runtime > 0 ? `${runtime} min` : undefined,
           releaseInfo: String((type === "movie" ? data.release_date : data.first_air_date) || "").slice(0, 4) || undefined,

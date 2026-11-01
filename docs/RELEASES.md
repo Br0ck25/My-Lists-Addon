@@ -2211,3 +2211,12 @@ Nuvio's `sync_pull_profiles` returns profile rows, not collections (per its docs
 - `tests/streaming-rows.test.mjs`: every row filters to its own service, one `sort_by`, unique ids, shows-only rows have no movie catalog, the manifest gate, and the app gives each collection its own service's rows.
 
 **Steps:** deploy the new `worker_entry_combined.js`. No migration. Push a premade collection to Nuvio again to pick up the rows.
+
+## 2026-11-01: title-logo artwork in Stremio Discover (prepared)
+
+- The selected item's right-hand panel can now use title-logo artwork rather than plain text. Shared catalog preview enrichment copies Cinemeta's HTTP(S) `logo` for matching IMDb movie/show IDs. TMDB-only previews and the existing IMDb-to-TMDB fallback request `images` alongside `credits`, preferring English PNG logos and then language-neutral PNG logos. No additional per-title request is introduced, though TMDB response payloads grow.
+- Applies to all sources passing through final catalog enrichment, including user lists, merged/paged lists, search and personal shelves. Existing nonempty logo fields win. Names, posters, badges and list ordering are unchanged. No new setting, service or migration. Preview cache version raised to avoid reusing entries without logo fields.
+- Artwork availability is not guaranteed: no upstream logo, failed lookups, unsupported IDs, missing TMDB credentials or the existing preview deadline can leave a text title. This does not add a TMDB lookup solely because an otherwise successful Cinemeta response lacks a logo. Stremio Web's `MetaPreview` component renders `logo` and falls back to `name` when absent or an image fails (https://github.com/Stremio/stremio-web/blob/development/src/components/MetaPreview/MetaPreview.js).
+- Build/sync/syntax and nine focused preview tests pass. Full suite: 2,717 passed, five failed, one TODO. Four failures are the account-purge/install-manifest failures recorded in the prior handoff; the fifth is the existing cold-catalog performance budget (51.01 ms p95 vs 40 ms). No claim of a clean full suite or live Stremio validation.
+
+**Deploy:** deploy the rebuilt `worker_entry_combined.js`, then refresh Stremio's catalogs (existing client/HTTP cache may delay artwork). No database migration or reinstall is required for the new field. Live provider images and the user's Stremio build remain unverified.
