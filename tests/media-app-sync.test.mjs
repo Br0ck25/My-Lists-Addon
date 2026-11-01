@@ -140,12 +140,13 @@ function fakeServices(state) {
           return new Response(null, { status: 204 });
         }
         if (fn === "sync_pull_home_catalog_settings") {
-          if (state.homeReadFails) return json({ message: "boom" }, 500);
+          if (state.homeReadFails || (state.homeReadbackFails && seen.homePushed)) return json({ message: "boom" }, 500);
           return json(state.homeRows || []);
         }
         if (fn === "sync_push_home_catalog_settings") {
           if (state.homeWriteFails) return json({ message: "boom" }, 500);
           seen.homePushed = body;
+          if (!state.homeWriteIgnored) state.homeRows = [{ profile_id: body.p_profile_id, settings_json: structuredClone(body.p_settings_json) }];
           return new Response(null, { status: 204 });
         }
         if (fn === "sync_push_collections") {
@@ -1701,7 +1702,7 @@ describe("Nuvio collections push: install modes", () => {
     const { seen, response } = await homePush({}, { homeRows: [{ profile_id: 2, settings_json: settings }] });
     assert.equal(response.status, 200);
     assert.equal(response.body.homeVisibilityUpdated, true);
-    assert.deepEqual(seen.homePushed, { p_profile_id: 2, p_platform: "home_catalog_shared", p_origin_client_id: "my-lists-addon", p_settings_json: { ...settings, items: [{ ...mine, enabled: false }, otherType, otherAddon, collection] } });
+    assert.deepEqual(seen.homePushed, { p_profile_id: 2, p_platform: "home_catalog_shared", p_origin_client_id: "my-lists-addon", p_settings_json: { ...settings, items: [{ ...mine, key: "app.my-list:movie:mine", enabled: false }, otherType, otherAddon, collection] } });
     assert.deepEqual(seen.collectionsPushed[0][0], STREAMING);
     assert.equal(seen.collectionsPushed[0][1].folders[0].hidden, false);
     assert.deepEqual(seen.collectionsPushed[0][1].folders[0].catalogSources, incoming()[0].folders[0].catalogSources.map((s) => ({ ...s, name: "Mine", title: "Mine" })));
@@ -1714,7 +1715,7 @@ describe("Nuvio collections push: install modes", () => {
     cols[0].folders.push({ ...cols[0].folders[0], id: "duplicate" });
     const { seen, response } = await homePush({ collections: cols });
     assert.equal(response.status, 200);
-    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: false, order: 0, custom_title: "", is_collection: false, collection_id: "" }]);
+    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ key: "app.my-list:movie:mine", addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: false, order: 0, custom_title: "", is_collection: false, collection_id: "" }]);
   });
 
   it("turning the toggle off shows these catalogs again without touching others", async () => {
@@ -1722,7 +1723,7 @@ describe("Nuvio collections push: install modes", () => {
     const unrelated = { ...hidden, catalog_id: "unrelated" };
     const { seen, response } = await homePush({ hideHomeCatalogs: false, installMode: "replace" }, { homeRows: [{ settings_json: { items: [hidden, unrelated] } }] });
     assert.equal(response.status, 200);
-    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ ...hidden, enabled: true }, unrelated]);
+    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ ...hidden, key: "app.my-list:movie:mine", enabled: true }, unrelated]);
   });
 
   it("merge hides incoming catalogs, not other catalogs in the target collection", async () => {
@@ -1759,6 +1760,42 @@ describe("Nuvio collections push: install modes", () => {
     assert.equal(response.body.ok, true);
     assert.equal(response.body.homeVisibilityUpdated, false);
     assert.equal(seen.collectionsPushed.length, 1);
+  });
+
+  it("updates every explicit-key entry without creating an enabled duplicate on Desktop/mobile", async () => {
+    const key = "app.my-list:movie:mine";
+    const legacy = { key: "   ", addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: true, order: 1 };
+    const keyed = { key, enabled: true, order: 2, custom_title: "Keep me" };
+    // An explicit key takes precedence even when separate fields disagree.
+    const unrelated = { ...legacy, key: "other:movie:mine", custom_title: "Unrelated" };
+    for (const hidden of [true, false]) {
+      const { seen, response } = await homePush({ hideHomeCatalogs: hidden }, { homeRows: [{ settings_json: { items: [legacy, keyed, unrelated] } }] });
+      assert.equal(response.body.homeVisibilityUpdated, true);
+      const items = seen.homePushed.p_settings_json.items;
+      assert.equal(items.length, 3);
+      assert.equal(items[0].enabled, !hidden);
+      assert.equal(items[1].enabled, !hidden);
+      assert.equal(items[1].addon_id, "app.my-list");
+      assert.equal(items[1].type, "movie");
+      assert.equal(items[1].catalog_id, "mine");
+      assert.equal(items[1].custom_title, "Keep me");
+      assert.equal(items[1].order, 2);
+      assert.deepEqual(items[2], unrelated);
+      // Mirrors Desktop/mobile applyFromRemote: the last item for a key wins.
+      const byKey = new Map(items.map((i) => [i.key && i.key.trim() ? i.key : `${i.addon_id}:${i.type}:${i.catalog_id}`, i]));
+      assert.equal(byKey.get(key).enabled, !hidden);
+    }
+  });
+
+  it("does not claim success when the RPC accepts a write but read-back has no saved visibility", async () => {
+    for (const state of [{ homeWriteIgnored: true }, { homeReadbackFails: true }]) {
+      const { seen, response } = await homePush({}, state);
+      assert.equal(response.status, 200);
+      assert.equal(response.body.ok, true);
+      assert.equal(response.body.homeVisibilityUpdated, false);
+      assert.equal(seen.collectionsPushed.length, 1);
+      assert.equal(seen.nuvio.filter((c) => c.fn === "sync_pull_home_catalog_settings").length, 2);
+    }
   });
 
   it("rejects a non-boolean visibility option", async () => {

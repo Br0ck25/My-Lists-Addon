@@ -836,6 +836,18 @@ describe("collections subnav and website lists picker", () => {
     assert.equal(client.localStorage.getItem("myListAddon:nuvioHideCollectionCatalogs"), "false");
   });
 
+  it("warns instead of showing success when home visibility cannot be read back", async () => {
+    const client = loadClient({ signedIn: true, routes: {
+      "/api/connections/nuvio/collections": () => ({ json: { ok: true, collections: [], homeVisibilityUpdated: false } })
+    } });
+    client.call("saveCustomCollections", [{ id: "col_test", name: "Test", lists: [{ name: "Mine", type: "movie", catalogId: "mine", url: "tmdb:popular" }] }]);
+    const notices = [];
+    client.set("showToast", (message, kind) => notices.push({ message, kind }));
+    await client.call("executeNuvioCollectionsPush", { hideHomeCatalogs: true });
+    assert.ok(notices.some((n) => n.kind === "info" && n.message.includes("Home visibility could not be confirmed")));
+    assert.ok(!notices.some((n) => n.kind === "success"));
+  });
+
   it("determines the manifest URL to auto-install My Lists Addon in Nuvio", () => {
     const client = loadClient();
     const defaultUrl = client.call("getNuvioManifestUrl");

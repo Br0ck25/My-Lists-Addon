@@ -1493,12 +1493,14 @@ async function nuvioPullCollections(env, accessToken, profileId) {
   return blob;
 }
 
-// Nuvio TV and Smart share this namespace and the SyncHomeCatalogPayload.items
+// Nuvio TV, Smart, Desktop and mobile share this namespace and SyncHomeCatalogPayload.items
 // format (not the illustrative rows/hidden_catalogs blob in the API docs):
 // NuvioMedia/NuvioTV core/sync/HomeCatalogSettingsSyncService.kt and
-// NuvioMedia/NuvioTVSmart js/core/profile/homeCatalogSettingsSyncService.js.
+// NuvioMedia/NuvioTVSmart js/core/profile/homeCatalogSettingsSyncService.js;
+// Desktop 0.1.33-alpha features/home/HomeCatalogSettingsRepository.kt also uses
+// an explicit key, taking precedence over addon_id/type/catalog_id.
 // This RPC replaces the whole settings blob: never write after a failed read.
-async function nuvioCollectionHomeSettings(env, accessToken, profileId, collections, hidden) {
+async function nuvioPullHomeSettings(env, accessToken, profileId) {
   const rows = await nuvioRpc(env, accessToken, "sync_pull_home_catalog_settings", {
     p_profile_id: profileId, p_platform: "home_catalog_shared"
   });
@@ -1509,17 +1511,34 @@ async function nuvioCollectionHomeSettings(env, accessToken, profileId, collecti
       (settings.items != null && (!Array.isArray(settings.items) || settings.items.some((i) => !i || typeof i !== "object" || Array.isArray(i))))) {
     throw new Error("Nuvio home settings could not be read.");
   }
+  return settings;
+}
+
+// Mirrors Desktop/mobile SyncCatalogItem.preferenceKey(): a nonblank key
+// overrides the tuple, while a blank/whitespace key falls back to the tuple.
+function nuvioHomeCatalogKey(item) {
+  return typeof item.key === "string" && item.key.trim() ? item.key : `${item.addon_id}:${item.type}:${item.catalog_id}`;
+}
+
+async function nuvioCollectionHomeSettings(env, accessToken, profileId, collections, hidden) {
+  const settings = await nuvioPullHomeSettings(env, accessToken, profileId);
   const items = (settings.items || []).map((i) => ({ ...i }));
   let nextOrder = items.reduce((max, i) => Number.isFinite(i.order) ? Math.max(max, i.order + 1) : max, items.length);
   for (const collection of extractNuvioCollections(collections)) {
     for (const folder of Array.isArray(collection.folders) ? collection.folders : [collection]) {
       for (const source of folder.catalogSources || []) {
         if (!source || !source.addonId || !source.type || !source.catalogId) continue;
-        const matches = items.filter((i) => !i.is_collection && i.addon_id === source.addonId && i.type === source.type && i.catalog_id === source.catalogId);
+        // Desktop/mobile prefer an explicit key over the separate identity
+        // fields. Match key-only entries too, or a later enabled duplicate can
+        // override the disabled row when the app associates items by key.
+        const key = `${source.addonId}:${source.type}:${source.catalogId}`;
+        const matches = items.filter((i) => !i.is_collection && nuvioHomeCatalogKey(i) === key);
         if (matches.length) {
-          for (const item of matches) item.enabled = !hidden;
+          for (const item of matches) Object.assign(item, {
+            key, addon_id: source.addonId, type: source.type, catalog_id: source.catalogId, enabled: !hidden
+          });
         } else {
-          items.push({ addon_id: source.addonId, type: source.type, catalog_id: source.catalogId,
+          items.push({ key, addon_id: source.addonId, type: source.type, catalog_id: source.catalogId,
             enabled: !hidden, order: nextOrder++, custom_title: "", is_collection: false, collection_id: "" });
         }
       }
@@ -2005,7 +2024,16 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
             p_profile_id: profileId, p_platform: "home_catalog_shared",
             p_settings_json: homeSettings, p_origin_client_id: "my-lists-addon"
           });
-          homeVisibilityUpdated = true;
+          // The RPC returns no payload. Confirm the stored values rather than
+          // treating an accepted write (or a concurrent overwrite) as success.
+          const savedHome = await nuvioPullHomeSettings(env, conn.accessToken, profileId);
+          const savedItems = Array.isArray(savedHome.items) ? savedHome.items : [];
+          const targets = homeSettings.items.filter((i) => i.key && !i.is_collection &&
+            i.enabled === !body.hideHomeCatalogs);
+          homeVisibilityUpdated = targets.every((target) => {
+            const matches = savedItems.filter((i) => !i.is_collection && nuvioHomeCatalogKey(i) === target.key);
+            return matches.length > 0 && matches.every((i) => i.enabled === target.enabled);
+          });
         } catch (homeErr) {
           // Collections/addon may already be saved. Report partial success, not
           // a generic failure that makes someone unknowingly add a duplicate.

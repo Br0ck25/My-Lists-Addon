@@ -4673,7 +4673,7 @@ async function executeNuvioCollectionsPush(opts) {
       msg += ' My Lists Addon was auto-installed in Nuvio!';
     }
     if (res.data && res.data.homeVisibilityUpdated === false) {
-      showToast(msg + ' Home visibility could not be saved. Change it in Nuvio’s Catalogs & Collections settings.', 'info');
+      showToast(msg + ' Home visibility could not be confirmed. Check Nuvio’s Catalogs & Collections settings.', 'info');
     } else {
       showToast(msg, 'success');
     }
