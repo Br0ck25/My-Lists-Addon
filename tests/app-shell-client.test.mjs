@@ -363,7 +363,7 @@ describe("collections subnav and website lists picker", () => {
     assert.strictEqual(f.hideTitle, true);
     assert.strictEqual(f.coverImageUrl, "https://example.com/cover.jpg");
     assert.strictEqual(f.catalogSources.length, 2);
-    assert.strictEqual(f.catalogSources[0].addonId, "app.my-list");
+    assert.strictEqual(f.catalogSources[0].addonId, "app.my-list.collections");
     assert.strictEqual(f.catalogSources[0].type, "movie");
     assert.strictEqual(f.catalogSources[1].type, "series");
   });
@@ -483,6 +483,37 @@ describe("collections subnav and website lists picker", () => {
     assert.equal(sent.updatedFolder.title, "Locally edited");
     assert.equal(sent.updatedFolder.custom, "keep");
     assert.equal(sent.updatedFolder.catalogSources[0].extra, "keep");
+  });
+
+  it("keeps the migrated folder snapshot for subsequent linked updates", async () => {
+    const client = loadClient();
+    const remote = [{ id: "my-lists-collections", folders: [{ id: "folder", title: "Mine", catalogSources: [{ addonId: "app.my-list", catalogId: "mine", type: "movie" }] }] }];
+    const writes = [];
+    client.set("mediaAppUiCall", async (provider, sub, method, body) => {
+      if (method === "GET") return { ok: true, data: { profileId: 1, scope: "scope", collections: remote } };
+      writes.push(plain(body));
+      remote[0].folders = [{ ...body.updatedFolder, catalogSources: body.updatedFolder.catalogSources.map((s) => ({ ...s, addonId: "app.my-list.collections" })) }];
+      return { ok: true, data: { collections: remote } };
+    });
+    client.set("appShellDialog", async () => true);
+    await client.call("pullCollectionsFromNuvio");
+    let linked = plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink);
+    await client.call("pushLinkedNuvioFolder", linked);
+    linked = plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink);
+    assert.equal(linked.nuvioLink.folder.catalogSources[0].addonId, "app.my-list.collections");
+    await client.call("pushLinkedNuvioFolder", linked);
+    assert.equal(writes[1].expectedFolder.catalogSources[0].addonId, "app.my-list.collections");
+  });
+
+  it("recognizes the standalone addon when importing and checking missing premade rows", () => {
+    const client = loadClient();
+    const premade = plain(client.call("getPremadeCollections")).find((c) => c.id === "col_discovery");
+    const payload = plain(client.call("buildNuvioCollectionsPayload", [premade]));
+    assert.ok(payload[0].folders[0].catalogSources.every((s) => s.addonId === "app.my-list.collections"));
+    const imported = plain(client.call("parseNuvioCollectionsJson", payload))[0];
+    assert.equal(imported.lists[0].url, premade.lists[0].url);
+    assert.equal(imported.lists[0].name, premade.lists[0].name);
+    assert.equal(client.call("missingPremadeBrowseRows", imported).length, 0);
   });
 
   it("pulls only collections created by My Lists, not similar third-party collections", async () => {

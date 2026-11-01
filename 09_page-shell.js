@@ -5551,6 +5551,8 @@ ${appShellMobileNavHtml}
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeSyncNuvioModal">&#x2715;</button>
       </div>
 
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Collections use a separate <strong>My Lists Collections</strong> addon. Your regular My Lists install and its home catalogs are left unchanged.</p>
+
       <div class="u-gap-12px u-mb-14px" style="display:flex; flex-wrap:wrap;">
         <div style="flex:1; min-width:140px;">
           <label for="syncNuvioProfileSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Profile</label>
@@ -5573,7 +5575,7 @@ ${appShellMobileNavHtml}
       <div class="settings-toggle-row u-mb-14px">
         <div class="u-flex-1 u-minw-0 u-pr-12px">
           <label for="syncNuvioHideCatalogs" class="u-fw-600 u-fs-v_font_size_base">Hide collection catalogs on Nuvio home</label>
-          <p id="syncNuvioHideCatalogsHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Hide individual catalog rows, not the collection. Catalogs stay installed and available in Catalogs &amp; Collections. Applies to catalogs in this sync only; turn off to show them again.</p>
+          <p id="syncNuvioHideCatalogsHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Hide individual rows from My Lists Collections, not the collection itself. Catalogs stay available in Catalogs &amp; Collections. Your regular My Lists home rows are unchanged.</p>
         </div>
         <label class="ui-toggle" aria-label="Hide collection catalogs on Nuvio home">
           <input type="checkbox" id="syncNuvioHideCatalogs" aria-describedby="syncNuvioHideCatalogsHint">

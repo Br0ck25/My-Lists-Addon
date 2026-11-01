@@ -363,7 +363,11 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
   // A removed install stays what it was: an empty add-on, not a not-found.
-  if (snap && snap.revoked) return emptyResolvedInstallConfig();
+  if (snap && snap.revoked) {
+    let collectionsAddon = false;
+    try { collectionsAddon = Number.isInteger(JSON.parse(snap.config || "{}").nuvioCollectionsProfile); } catch {}
+    return { ...emptyResolvedInstallConfig(), collectionsAddon };
+  }
   if (!snap || snap.missing || typeof snap.config !== "string") return unresolvedInstallConfig();
   let cfg;
   try {
@@ -414,6 +418,7 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   const track = Boolean(cfg.track) && canTrack;
   return {
     entries: Array.isArray(cfg.entries) ? cfg.entries : [],
+    collectionsAddon: Number.isInteger(cfg.nuvioCollectionsProfile),
     watchHistory,
     continueWatching,
     watchlist,
@@ -858,7 +863,10 @@ async function handleInstallsApiRoutes(request, env, url, path) {
       if (body.track === undefined) merged.track = current.track;
       const built = buildV2InstallConfig(merged, request.account);
       if (built.error) return json({ ok: false, error: built.error }, built.status);
-      configJson = built.json;
+      // Keep a managed collections install's identity when its owner edits
+      // settings here. The client cannot stamp this marker on ordinary links.
+      if (Number.isInteger(current.nuvioCollectionsProfile)) built.config.nuvioCollectionsProfile = current.nuvioCollectionsProfile;
+      configJson = JSON.stringify(built.config);
       scopes = built.config.track ? "read,track" : "read";
     }
     let token = null;

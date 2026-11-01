@@ -459,6 +459,16 @@ describe("streaming service rows", () => {
     assert.ok(!withRows.some((c) => c.id === "tmdb-chart-netflix-hooked" && c.type === "movie"));
   });
 
+  it("the standalone collections manifest has its own identity and only its saved catalogs", () => {
+    const manifest = sandbox.buildManifest([{ id: "mine", name: "Mine", type: "movie", url: "tmdb:popular" }], "https://mylistsaddon.com", false, false, "", null, true, true, true);
+    assert.equal(manifest.id, "app.my-list.collections");
+    assert.equal(manifest.name, "My Lists Collections");
+    assert.deepEqual(Array.from(manifest.catalogs, (c) => c.id), ["mine"]);
+    assert.equal(manifest.behaviorHints.configurable, false);
+    assert.equal(manifest.behaviorHints.configurationRequired, false);
+    assert.equal(sandbox.buildManifest([], "https://mylistsaddon.com").id, "app.my-list");
+  });
+
   it("each premade collection in the app gets its service's rows, after its Top 10 and catalog", () => {
     const client = loadClient();
     const cols = client.call("getPremadeCollections");

@@ -1259,9 +1259,9 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1"),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
         200,
-        hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
+        (hasLiveShelf || resolved.collectionsAddon) ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
     }
 
@@ -1583,6 +1583,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       }
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
+      if (resolvedConfig.collectionsAddon && entryIndex < 0) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
       let entry = entryIndex >= 0 ? entries[entryIndex] : unconfiguredEntry;
       if (!entry && typeof findChartOrCollectionEntry === "function") {
         entry = findChartOrCollectionEntry(id, type);

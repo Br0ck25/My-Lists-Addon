@@ -6,7 +6,7 @@
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false, collectionsAddon = false) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -42,9 +42,9 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
     resources.push({ name: "subtitles", types: ["movie", "series"], idPrefixes: ["tt", "tmdb", "kitsu"] });
   }
   return {
-    id: ADDON_ID,
+    id: collectionsAddon ? COLLECTIONS_ADDON_ID : ADDON_ID,
     version: ADDON_VERSION,
-    name: ADDON_NAME,
+    name: collectionsAddon ? COLLECTIONS_ADDON_NAME : ADDON_NAME,
     description:
       "Browse your own mdblist.com, trakt.tv, and themoviedb.org lists (and your MDBList watchlist) as catalogs on the home screen.",
     logo: `${origin}/icon.png`,
@@ -69,6 +69,9 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
           extra: [{ name: "skip", isRequired: false }],
         });
       }
+      // The standalone collection install advertises only its saved sources,
+      // not the home install's search rows or every premade service catalog.
+      if (collectionsAddon) return list;
       addC({
         type: "movie",
         id: "search_movies",
@@ -99,8 +102,8 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
       return list;
     })(),
     behaviorHints: {
-      configurable: true,
-      configurationRequired: active.length === 0,
+      configurable: !collectionsAddon,
+      configurationRequired: !collectionsAddon && active.length === 0,
     },
     stremioAddonsConfig: {
       issuer: "https://stremio-addons.net",

@@ -3824,7 +3824,7 @@ function missingPremadeBrowseRows(col) {
   return premade.lists.filter(function (row) {
     const isDiscoveryBase = folderId === 'col_discovery' && row.catalogId === 'tmdb-chart-discovery';
     return (browseIds.has(row.catalogId) || isDiscoveryBase) && !current.some(function (item) {
-      if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list')) return false;
+      if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list' && item.addonId !== 'app.my-list.collections')) return false;
       return (item.catalogId && item.catalogId === row.catalogId) || (item.url && item.url === row.url);
     });
   });
@@ -4354,8 +4354,10 @@ function buildNuvioCollectionsPayload(collections) {
               else catId = l.name || 'catalog';
             }
             let cleanName = stripMediaSuffix(l.name || catId);
+            let addonId = l.addonId || col.addonId || 'app.my-list.collections';
+            if (addonId === 'app.my-list') addonId = 'app.my-list.collections';
             return {
-              addonId: l.addonId || col.addonId || 'app.my-list',
+              addonId: addonId,
               catalogId: catId,
               name: cleanName || catId,
               title: cleanName || catId,
@@ -4583,7 +4585,9 @@ async function pushLinkedNuvioFolder(col) {
   const stored = current.find(function (c) { return c.id === col.id; });
   // Preserve edits made while the request was in flight.
   if (stored && stored.nuvioLink && JSON.stringify(stored.nuvioLink.folder) === JSON.stringify(link.folder)) {
-    stored.nuvioLink.folder = folder;
+    const savedCollection = res.data && Array.isArray(res.data.collections) && res.data.collections.find(function (c) { return c.id === link.collectionId; });
+    const savedFolder = savedCollection && Array.isArray(savedCollection.folders) && savedCollection.folders.find(function (f) { return f.id === folder.id; });
+    stored.nuvioLink.folder = savedFolder || folder;
     stored.nuvioLink.baseline = linkedNuvioFolderSignature(col);
     saveCustomCollections(current);
   }
@@ -4670,7 +4674,7 @@ async function executeNuvioCollectionsPush(opts) {
     const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged into the chosen collection' : 'replaced all collections');
     let msg = 'Pushed "' + pushName + '" to Nuvio (' + modeDesc + ').';
     if (res.data && res.data.addonInstalled) {
-      msg += ' My Lists Addon was auto-installed in Nuvio!';
+      msg += ' My Lists Collections is installed as a separate addon.';
     }
     if (res.data && res.data.homeVisibilityUpdated === false) {
       showToast(msg + ' Home visibility could not be confirmed. Check Nuvio’s Catalogs & Collections settings.', 'info');
@@ -4821,10 +4825,10 @@ function parseNuvioCollectionsJson(raw) {
     if (col && Array.isArray(col.lists)) known.push.apply(known, col.lists);
   });
   function knownSource(cs, id) {
-    if (cs.addonId && cs.addonId !== 'app.my-list') return null;
+    if (cs.addonId && cs.addonId !== 'app.my-list' && cs.addonId !== 'app.my-list.collections') return null;
     const type = cs.type || 'movie';
     return known.find(function (item) {
-      if (!item || (item.addonId && item.addonId !== 'app.my-list') || (item.type || 'movie') !== type) return false;
+      if (!item || (item.addonId && item.addonId !== 'app.my-list' && item.addonId !== 'app.my-list.collections') || (item.type || 'movie') !== type) return false;
       const itemId = item.catalogId || item.id || (item.url && typeof slugify === 'function' ? slugify(item.url) : '');
       return itemId === id && !!item.name && item.name !== id;
     }) || null;
@@ -4836,7 +4840,7 @@ function parseNuvioCollectionsJson(raw) {
       const knownItem = knownSource(cs, catId);
       const suppliedName = cs.name || cs.title || '';
       let url = cs.url || (knownItem && typeof knownItem.url === 'string' && knownItem.url.indexOf('catalog:') !== 0 ? knownItem.url : '') || '';
-      if (!url && catId && (!cs.addonId || cs.addonId === 'app.my-list') && typeof CHART_SLUG_ENTRIES !== 'undefined') {
+      if (!url && catId && (!cs.addonId || cs.addonId === 'app.my-list' || cs.addonId === 'app.my-list.collections') && typeof CHART_SLUG_ENTRIES !== 'undefined') {
         const match = CHART_SLUG_ENTRIES.find(function (c) {
           return c.slug === catId || (typeof slugify === 'function' && (slugify(c.name) === catId || slugify(c.movieUrl || '') === catId || slugify(c.showUrl || '') === catId));
         });

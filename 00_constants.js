@@ -104,6 +104,8 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
+const COLLECTIONS_ADDON_ID = "app.my-list.collections";
+const COLLECTIONS_ADDON_NAME = "My Lists Collections";
 const ADDON_VERSION = "1.5.7";
 const ADDON_NAME = "My Lists";
 

@@ -73,6 +73,12 @@ function fakeServices(state) {
         state.nuvioRefresh = "REFRESH-" + n;
         return json({ access_token: state.nuvioToken, refresh_token: state.nuvioRefresh, expires_in: 3600 });
       }
+      if (url.pathname === "/rest/v1/addons") {
+        const profileId = Number(url.searchParams.get("profile_id").replace("eq.", ""));
+        seen.addonReads = (seen.addonReads || []).concat(profileId);
+        if (state.addonsReadFails) return json({ message: "boom" }, 500);
+        return json(state.addonsResponse !== undefined ? state.addonsResponse : ((state.addonsByProfile || {})[profileId] || state.addons || []));
+      }
       if (url.pathname.startsWith("/rest/v1/rpc/")) {
         const fn = url.pathname.split("/").pop();
         const auth = new Headers(init.headers || {}).get("authorization");
@@ -149,8 +155,16 @@ function fakeServices(state) {
           if (!state.homeWriteIgnored) state.homeRows = [{ profile_id: body.p_profile_id, settings_json: structuredClone(body.p_settings_json) }];
           return new Response(null, { status: 204 });
         }
+        if (fn === "sync_push_addons") {
+          if (state.addonsWriteFails) return json({ message: "boom" }, 500);
+          seen.addonsPushed = body;
+          state.addonsByProfile = { ...state.addonsByProfile, [body.p_profile_id]: structuredClone(body.p_addons) };
+          return new Response(null, { status: 204 });
+        }
         if (fn === "sync_push_collections") {
           seen.collectionsPushed = (seen.collectionsPushed || []).concat([body.p_collections_json]);
+          const profile = (state.profiles || []).find((p) => p.profile_index === body.p_profile_id);
+          if (profile) profile.collections_json = structuredClone(body.p_collections_json);
           return new Response(null, { status: 204 });
         }
         if (fn === "sync_push_watched_items") {
@@ -1671,7 +1685,7 @@ describe("marking something watched on the website reaches the app soon", () => 
 describe("Nuvio collections push: install modes", () => {
   const STREAMING = { id: "community-streaming", title: "Streaming", folders: [{ id: "f_netflix", title: "Netflix", catalogSources: [{ addonId: "other", catalogId: "nf", type: "movie" }] }] };
   const OTHER = { id: "community-other", title: "Other Provider", folders: [{ id: "f_o", title: "Other", catalogSources: [{ addonId: "other", catalogId: "o", type: "movie" }] }] };
-  const incoming = () => [{ id: "my-lists-collections", title: "My Lists Collections", folders: [{ id: "f_mine", title: "Mine", catalogSources: [{ addonId: "app.my-list", catalogId: "mine", name: "Mine (Movies)", type: "movie" }] }] }];
+  const incoming = () => [{ id: "my-lists-collections", title: "My Lists Collections", folders: [{ id: "f_mine", title: "Mine", catalogSources: [{ addonId: "app.my-list", catalogId: "mine", name: "Mine (Movies)", type: "movie", url: "tmdb:popular" }] }] }];
 
   async function push(mode, extra = {}) {
     const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING, OTHER] }] };
@@ -1690,11 +1704,11 @@ describe("Nuvio collections push: install modes", () => {
     const ctx = await setup("nuvhome" + Math.random().toString(36).slice(2, 8));
     await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
     const response = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 2, installMode: "new", collections: incoming(), hideHomeCatalogs: true, ...extra } });
-    return { seen, response };
+    return { seen, response, ctx, state };
   }
 
   it("hides only incoming catalog rows using Nuvio's shared home payload, keeping collections available", async () => {
-    const mine = { addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: true, order: 7, custom_title: "My title", hero: true };
+    const mine = { addon_id: "app.my-list.collections", type: "movie", catalog_id: "mine", enabled: true, order: 7, custom_title: "My title", hero: true };
     const otherType = { ...mine, type: "series" };
     const otherAddon = { ...mine, addon_id: "other" };
     const collection = { is_collection: true, collection_id: "community-streaming", enabled: true, order: 1 };
@@ -1702,10 +1716,10 @@ describe("Nuvio collections push: install modes", () => {
     const { seen, response } = await homePush({}, { homeRows: [{ profile_id: 2, settings_json: settings }] });
     assert.equal(response.status, 200);
     assert.equal(response.body.homeVisibilityUpdated, true);
-    assert.deepEqual(seen.homePushed, { p_profile_id: 2, p_platform: "home_catalog_shared", p_origin_client_id: "my-lists-addon", p_settings_json: { ...settings, items: [{ ...mine, key: "app.my-list:movie:mine", enabled: false }, otherType, otherAddon, collection] } });
+    assert.deepEqual(seen.homePushed, { p_profile_id: 2, p_platform: "home_catalog_shared", p_origin_client_id: "my-lists-addon", p_settings_json: { ...settings, items: [{ ...mine, key: "app.my-list.collections:movie:mine", enabled: false }, otherType, otherAddon, collection] } });
     assert.deepEqual(seen.collectionsPushed[0][0], STREAMING);
     assert.equal(seen.collectionsPushed[0][1].folders[0].hidden, false);
-    assert.deepEqual(seen.collectionsPushed[0][1].folders[0].catalogSources, incoming()[0].folders[0].catalogSources.map((s) => ({ ...s, name: "Mine", title: "Mine" })));
+    assert.deepEqual(seen.collectionsPushed[0][1].folders[0].catalogSources, incoming()[0].folders[0].catalogSources.map((s) => ({ ...s, addonId: "app.my-list.collections", name: "Mine", title: "Mine" })));
     const pull = seen.nuvio.find((c) => c.fn === "sync_pull_home_catalog_settings");
     assert.deepEqual(pull.body, { p_profile_id: 2, p_platform: "home_catalog_shared" });
   });
@@ -1715,15 +1729,15 @@ describe("Nuvio collections push: install modes", () => {
     cols[0].folders.push({ ...cols[0].folders[0], id: "duplicate" });
     const { seen, response } = await homePush({ collections: cols });
     assert.equal(response.status, 200);
-    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ key: "app.my-list:movie:mine", addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: false, order: 0, custom_title: "", is_collection: false, collection_id: "" }]);
+    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ key: "app.my-list.collections:movie:mine", addon_id: "app.my-list.collections", type: "movie", catalog_id: "mine", enabled: false, order: 0, custom_title: "", is_collection: false, collection_id: "" }]);
   });
 
   it("turning the toggle off shows these catalogs again without touching others", async () => {
-    const hidden = { addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: false, order: 2 };
+    const hidden = { addon_id: "app.my-list.collections", type: "movie", catalog_id: "mine", enabled: false, order: 2 };
     const unrelated = { ...hidden, catalog_id: "unrelated" };
     const { seen, response } = await homePush({ hideHomeCatalogs: false, installMode: "replace" }, { homeRows: [{ settings_json: { items: [hidden, unrelated] } }] });
     assert.equal(response.status, 200);
-    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ ...hidden, key: "app.my-list:movie:mine", enabled: true }, unrelated]);
+    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ ...hidden, key: "app.my-list.collections:movie:mine", enabled: true }, unrelated]);
   });
 
   it("merge hides incoming catalogs, not other catalogs in the target collection", async () => {
@@ -1763,8 +1777,8 @@ describe("Nuvio collections push: install modes", () => {
   });
 
   it("updates every explicit-key entry without creating an enabled duplicate on Desktop/mobile", async () => {
-    const key = "app.my-list:movie:mine";
-    const legacy = { key: "   ", addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: true, order: 1 };
+    const key = "app.my-list.collections:movie:mine";
+    const legacy = { key: "   ", addon_id: "app.my-list.collections", type: "movie", catalog_id: "mine", enabled: true, order: 1 };
     const keyed = { key, enabled: true, order: 2, custom_title: "Keep me" };
     // An explicit key takes precedence even when separate fields disagree.
     const unrelated = { ...legacy, key: "other:movie:mine", custom_title: "Unrelated" };
@@ -1775,7 +1789,7 @@ describe("Nuvio collections push: install modes", () => {
       assert.equal(items.length, 3);
       assert.equal(items[0].enabled, !hidden);
       assert.equal(items[1].enabled, !hidden);
-      assert.equal(items[1].addon_id, "app.my-list");
+      assert.equal(items[1].addon_id, "app.my-list.collections");
       assert.equal(items[1].type, "movie");
       assert.equal(items[1].catalog_id, "mine");
       assert.equal(items[1].custom_title, "Keep me");
@@ -1802,6 +1816,121 @@ describe("Nuvio collections push: install modes", () => {
     const { seen, response } = await homePush({ hideHomeCatalogs: "false" });
     assert.equal(response.status, 400);
     assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("installs My Lists Collections independently and survives home link edits, revocation and reinstall", async () => {
+    const ctx = await setup("separateaddons", { FF_INSTALLS: "1" });
+    const homeRow = { id: "home", type: "movie", name: "Home", url: "tmdb:popular" };
+    const createHome = () => call(ctx.env, "/api/installs", { method: "POST", cookie: ctx.cookie, json: { name: "My home", entries: [homeRow], betterPosters: true } });
+    const home = await createHome();
+    assert.equal(home.status, 201);
+    const regular = { url: home.body.manifestUrl, name: "My Lists", enabled: true, sort_order: 4 };
+    const external = { url: "https://other.test/manifest.json", name: "Other", enabled: false, sort_order: 9 };
+    const state = { watched: [], progress: [], episodes: {}, addons: [regular, external], profiles: [{ profile_index: 1, name: "Main" }] };
+    const seen = fakeServices(state);
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const listUrl = 'customlist:v1:' + JSON.stringify({ listSlug: "collectiononly", items: [{ id: "tt1111111", type: "movie", title: "Stored Movie" }] });
+    const post = (extra = {}) => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: {
+      profileId: 1, installMode: "merge", targetCollectionId: "my-lists-collections", collections: incoming(),
+      collectionLists: [{ catalogId: "mine", name: "Mine", type: "movie", url: listUrl }], manifestUrl: home.body.manifestUrl, hideHomeCatalogs: true, ...extra
+    } });
+    const first = await post({ installMode: "new" });
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.deepEqual(seen.addonsPushed.p_addons.slice(0, 2), [regular, external]);
+    const collectionAddon = seen.addonsPushed.p_addons[2];
+    assert.equal(collectionAddon.name, "My Lists Collections");
+    assert.notEqual(collectionAddon.url, home.body.manifestUrl);
+    assert.equal(collectionAddon.url.includes("collections=1"), false);
+    assert.equal(first.body.collections[0].folders[0].catalogSources[0].addonId, "app.my-list.collections");
+    const manifestPath = new URL(collectionAddon.url).pathname;
+    const manifest = await call(ctx.env, manifestPath);
+    assert.equal(manifest.body.id, "app.my-list.collections");
+    assert.equal(manifest.body.name, "My Lists Collections");
+    assert.deepEqual(manifest.body.catalogs.map((c) => c.id), ["mine"]);
+    assert.ok(manifest.headers.get("cache-control").includes("no-store"));
+    assert.equal((await call(ctx.env, new URL(home.body.manifestUrl).pathname)).body.id, "app.my-list");
+    const rows = ctx.env.DB._db.prepare("SELECT id, config_json FROM installs WHERE account_id = ? ORDER BY id").all(ctx.accountId);
+    const saved = JSON.parse(rows[1].config_json);
+    assert.equal(saved.nuvioCollectionsProfile, 1);
+    assert.equal(saved.betterPosters, true);
+    assert.equal(saved.entries[0].url, listUrl);
+    assert.ok(![...ctx.env.CONFIGS._store.keys()].some((k) => k.startsWith("col_cat:mine:")), "custom sources are account-scoped and durable, not global expiring mappings");
+    const hidden = seen.homePushed.p_settings_json.items.find((i) => i.catalog_id === "mine");
+    assert.equal(hidden.addon_id, "app.my-list.collections");
+    const edit = await call(ctx.env, `/api/installs/${home.body.install.id}`, { method: "PATCH", cookie: ctx.cookie, json: { entries: [{ ...homeRow, id: "new-home" }], betterPosters: false } });
+    assert.equal(edit.status, 200);
+    assert.equal((await call(ctx.env, manifestPath)).body.catalogs[0].id, "mine");
+    await call(ctx.env, `/api/installs/${home.body.install.id}`, { method: "DELETE", cookie: ctx.cookie });
+    const reinstall = await createHome();
+    assert.equal(reinstall.status, 201);
+    state.addonsByProfile[1][0] = { ...regular, url: reinstall.body.manifestUrl };
+    // Nuvio clients may persist the addon base URL rather than manifest.json.
+    state.addonsByProfile[1][2].url = collectionAddon.url.replace("/manifest.json", "/");
+    const again = await post({ manifestUrl: reinstall.body.manifestUrl });
+    assert.equal(again.status, 200, JSON.stringify(again.body));
+    assert.equal(again.body.collectionsManifestUrl, collectionAddon.url, "reuses the existing collections token");
+    assert.equal(seen.addonsPushed.p_addons.length, 3);
+    assert.equal(state.profiles[0].collections_json[0].folders.length, 1, "merge does not duplicate the folder");
+    assert.equal(JSON.parse(ctx.env.DB._db.prepare("SELECT config_json FROM installs WHERE id = ?").get(rows[1].id).config_json).betterPosters, true, "home appearance edits do not change the collections config");
+    const page = await call(ctx.env, manifestPath.replace("manifest.json", "catalog/movie/mine.json"));
+    assert.ok(page.body.metas.some((m) => m.id === "tt1111111"), JSON.stringify(page.body));
+    const notInstalled = await call(ctx.env, manifestPath.replace("manifest.json", "catalog/movie/tmdb-chart-netflix.json"));
+    assert.deepEqual(notInstalled.body.metas, []);
+    const managedEdit = await call(ctx.env, `/api/installs/${rows[1].id}`, { method: "PATCH", cookie: ctx.cookie, json: { betterPosters: false } });
+    assert.equal(managedEdit.status, 200);
+    assert.equal((await call(ctx.env, manifestPath)).body.id, "app.my-list.collections", "editing a managed link preserves its addon identity");
+    await call(ctx.env, `/api/installs/${rows[1].id}`, { method: "DELETE", cookie: ctx.cookie });
+    const revoked = await call(ctx.env, manifestPath);
+    assert.equal(revoked.body.id, "app.my-list.collections");
+    assert.deepEqual(revoked.body.catalogs, []);
+  });
+
+  it("stops before replacing collections or addons if the addon list cannot be read", async () => {
+    for (const state of [{ addonsReadFails: true }, { addonsResponse: {} }, { addonsResponse: [{}] }]) {
+      const { response, seen } = await homePush({}, state);
+      assert.equal(response.status, 502);
+      assert.equal(seen.collectionsPushed, undefined);
+      assert.equal(seen.addonsPushed, undefined);
+      assert.equal(seen.homePushed, undefined);
+    }
+  });
+
+  it("leaves regular My Lists home preferences alone even for the same catalog ID", async () => {
+    const home = { addon_id: "app.my-list", type: "movie", catalog_id: "mine", key: "app.my-list:movie:mine", enabled: true, custom_title: "My home", order: 3 };
+    const { response, seen } = await homePush({}, { homeRows: [{ settings_json: { items: [home] } }] });
+    assert.equal(response.status, 200);
+    assert.deepEqual(seen.homePushed.p_settings_json.items[0], home);
+    assert.equal(seen.homePushed.p_settings_json.items[1].addon_id, "app.my-list.collections");
+    assert.equal(seen.homePushed.p_settings_json.items[1].enabled, false);
+  });
+
+  it("keeps separate collection configs per profile and cannot reuse another profile's token", async () => {
+    const { ctx, state, response, seen } = await homePush();
+    assert.equal(response.status, 200);
+    const firstUrl = response.body.collectionsManifestUrl;
+    state.addonsByProfile[1] = structuredClone(state.addonsByProfile[2]);
+    const second = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: "new", collections: incoming() } });
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+    assert.notEqual(second.body.collectionsManifestUrl, firstUrl);
+    assert.equal(seen.addonsPushed.p_profile_id, 1);
+    const configs = ctx.env.DB._db.prepare("SELECT config_json FROM installs WHERE account_id = ?").all(ctx.accountId).map((r) => JSON.parse(r.config_json));
+    assert.deepEqual(configs.map((c) => c.nuvioCollectionsProfile).sort(), [1, 2]);
+  });
+
+  it("updates the same manifest when custom sources change and clears it when the last source is removed", async () => {
+    const { ctx, response } = await homePush();
+    const url = response.body.collectionsManifestUrl;
+    const post = (collections) => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 2, installMode: "replace", collections } });
+    const changed = incoming();
+    changed[0].folders[0].catalogSources.push({ addonId: "app.my-list", type: "series", catalogId: "second", name: "Second", url: "tmdb:trending" });
+    const update = await post(changed);
+    assert.equal(update.status, 200, JSON.stringify(update.body));
+    assert.equal(update.body.collectionsManifestUrl, url);
+    const manifestPath = new URL(url).pathname;
+    assert.deepEqual((await call(ctx.env, manifestPath)).body.catalogs.map((c) => c.id), ["mine", "second"]);
+    const empty = incoming(); empty[0].folders[0].catalogSources = [];
+    assert.equal((await post(empty)).status, 200);
+    assert.deepEqual((await call(ctx.env, manifestPath)).body.catalogs, []);
   });
 
   it("new: adds a separately named collection and keeps every existing one", async () => {

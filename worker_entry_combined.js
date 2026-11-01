@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-01";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a26fd391c8";
+const WORKER_BUILD = "842c0f41a0";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -127,6 +127,8 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
+const COLLECTIONS_ADDON_ID = "app.my-list.collections";
+const COLLECTIONS_ADDON_NAME = "My Lists Collections";
 const ADDON_VERSION = "1.5.7";
 const ADDON_NAME = "My Lists";
 
@@ -18467,7 +18469,7 @@ async function searchTraktLists(query, traktKeyOverride) {
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false, collectionsAddon = false) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -18503,9 +18505,9 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
     resources.push({ name: "subtitles", types: ["movie", "series"], idPrefixes: ["tt", "tmdb", "kitsu"] });
   }
   return {
-    id: ADDON_ID,
+    id: collectionsAddon ? COLLECTIONS_ADDON_ID : ADDON_ID,
     version: ADDON_VERSION,
-    name: ADDON_NAME,
+    name: collectionsAddon ? COLLECTIONS_ADDON_NAME : ADDON_NAME,
     description:
       "Browse your own mdblist.com, trakt.tv, and themoviedb.org lists (and your MDBList watchlist) as catalogs on the home screen.",
     logo: `${origin}/icon.png`,
@@ -18530,6 +18532,9 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
           extra: [{ name: "skip", isRequired: false }],
         });
       }
+      // The standalone collection install advertises only its saved sources,
+      // not the home install's search rows or every premade service catalog.
+      if (collectionsAddon) return list;
       addC({
         type: "movie",
         id: "search_movies",
@@ -18560,8 +18565,8 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
       return list;
     })(),
     behaviorHints: {
-      configurable: true,
-      configurationRequired: active.length === 0,
+      configurable: !collectionsAddon,
+      configurationRequired: !collectionsAddon && active.length === 0,
     },
     stremioAddonsConfig: {
       issuer: "https://stremio-addons.net",
@@ -36926,6 +36931,8 @@ ${appShellMobileNavHtml}
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeSyncNuvioModal">&#x2715;</button>
       </div>
 
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Collections use a separate <strong>My Lists Collections</strong> addon. Your regular My Lists install and its home catalogs are left unchanged.</p>
+
       <div class="u-gap-12px u-mb-14px" style="display:flex; flex-wrap:wrap;">
         <div style="flex:1; min-width:140px;">
           <label for="syncNuvioProfileSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Profile</label>
@@ -36948,7 +36955,7 @@ ${appShellMobileNavHtml}
       <div class="settings-toggle-row u-mb-14px">
         <div class="u-flex-1 u-minw-0 u-pr-12px">
           <label for="syncNuvioHideCatalogs" class="u-fw-600 u-fs-v_font_size_base">Hide collection catalogs on Nuvio home</label>
-          <p id="syncNuvioHideCatalogsHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Hide individual catalog rows, not the collection. Catalogs stay installed and available in Catalogs &amp; Collections. Applies to catalogs in this sync only; turn off to show them again.</p>
+          <p id="syncNuvioHideCatalogsHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Hide individual rows from My Lists Collections, not the collection itself. Catalogs stay available in Catalogs &amp; Collections. Your regular My Lists home rows are unchanged.</p>
         </div>
         <label class="ui-toggle" aria-label="Hide collection catalogs on Nuvio home">
           <input type="checkbox" id="syncNuvioHideCatalogs" aria-describedby="syncNuvioHideCatalogsHint">
@@ -47430,7 +47437,7 @@ function missingPremadeBrowseRows(col) {
   return premade.lists.filter(function (row) {
     const isDiscoveryBase = folderId === 'col_discovery' && row.catalogId === 'tmdb-chart-discovery';
     return (browseIds.has(row.catalogId) || isDiscoveryBase) && !current.some(function (item) {
-      if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list')) return false;
+      if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list' && item.addonId !== 'app.my-list.collections')) return false;
       return (item.catalogId && item.catalogId === row.catalogId) || (item.url && item.url === row.url);
     });
   });
@@ -47960,8 +47967,10 @@ function buildNuvioCollectionsPayload(collections) {
               else catId = l.name || 'catalog';
             }
             let cleanName = stripMediaSuffix(l.name || catId);
+            let addonId = l.addonId || col.addonId || 'app.my-list.collections';
+            if (addonId === 'app.my-list') addonId = 'app.my-list.collections';
             return {
-              addonId: l.addonId || col.addonId || 'app.my-list',
+              addonId: addonId,
               catalogId: catId,
               name: cleanName || catId,
               title: cleanName || catId,
@@ -48189,7 +48198,9 @@ async function pushLinkedNuvioFolder(col) {
   const stored = current.find(function (c) { return c.id === col.id; });
   // Preserve edits made while the request was in flight.
   if (stored && stored.nuvioLink && JSON.stringify(stored.nuvioLink.folder) === JSON.stringify(link.folder)) {
-    stored.nuvioLink.folder = folder;
+    const savedCollection = res.data && Array.isArray(res.data.collections) && res.data.collections.find(function (c) { return c.id === link.collectionId; });
+    const savedFolder = savedCollection && Array.isArray(savedCollection.folders) && savedCollection.folders.find(function (f) { return f.id === folder.id; });
+    stored.nuvioLink.folder = savedFolder || folder;
     stored.nuvioLink.baseline = linkedNuvioFolderSignature(col);
     saveCustomCollections(current);
   }
@@ -48276,7 +48287,7 @@ async function executeNuvioCollectionsPush(opts) {
     const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged into the chosen collection' : 'replaced all collections');
     let msg = 'Pushed "' + pushName + '" to Nuvio (' + modeDesc + ').';
     if (res.data && res.data.addonInstalled) {
-      msg += ' My Lists Addon was auto-installed in Nuvio!';
+      msg += ' My Lists Collections is installed as a separate addon.';
     }
     if (res.data && res.data.homeVisibilityUpdated === false) {
       showToast(msg + ' Home visibility could not be confirmed. Check Nuvio’s Catalogs & Collections settings.', 'info');
@@ -48427,10 +48438,10 @@ function parseNuvioCollectionsJson(raw) {
     if (col && Array.isArray(col.lists)) known.push.apply(known, col.lists);
   });
   function knownSource(cs, id) {
-    if (cs.addonId && cs.addonId !== 'app.my-list') return null;
+    if (cs.addonId && cs.addonId !== 'app.my-list' && cs.addonId !== 'app.my-list.collections') return null;
     const type = cs.type || 'movie';
     return known.find(function (item) {
-      if (!item || (item.addonId && item.addonId !== 'app.my-list') || (item.type || 'movie') !== type) return false;
+      if (!item || (item.addonId && item.addonId !== 'app.my-list' && item.addonId !== 'app.my-list.collections') || (item.type || 'movie') !== type) return false;
       const itemId = item.catalogId || item.id || (item.url && typeof slugify === 'function' ? slugify(item.url) : '');
       return itemId === id && !!item.name && item.name !== id;
     }) || null;
@@ -48442,7 +48453,7 @@ function parseNuvioCollectionsJson(raw) {
       const knownItem = knownSource(cs, catId);
       const suppliedName = cs.name || cs.title || '';
       let url = cs.url || (knownItem && typeof knownItem.url === 'string' && knownItem.url.indexOf('catalog:') !== 0 ? knownItem.url : '') || '';
-      if (!url && catId && (!cs.addonId || cs.addonId === 'app.my-list') && typeof CHART_SLUG_ENTRIES !== 'undefined') {
+      if (!url && catId && (!cs.addonId || cs.addonId === 'app.my-list' || cs.addonId === 'app.my-list.collections') && typeof CHART_SLUG_ENTRIES !== 'undefined') {
         const match = CHART_SLUG_ENTRIES.find(function (c) {
           return c.slug === catId || (typeof slugify === 'function' && (slugify(c.name) === catId || slugify(c.movieUrl || '') === catId || slugify(c.showUrl || '') === catId));
         });
@@ -91487,9 +91498,9 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1"),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
         200,
-        hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
+        (hasLiveShelf || resolved.collectionsAddon) ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
     }
 
@@ -91811,6 +91822,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
       }
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
+      if (resolvedConfig.collectionsAddon && entryIndex < 0) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
       let entry = entryIndex >= 0 ? entries[entryIndex] : unconfiguredEntry;
       if (!entry && typeof findChartOrCollectionEntry === "function") {
         entry = findChartOrCollectionEntry(id, type);
@@ -106748,7 +106760,11 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
   // A removed install stays what it was: an empty add-on, not a not-found.
-  if (snap && snap.revoked) return emptyResolvedInstallConfig();
+  if (snap && snap.revoked) {
+    let collectionsAddon = false;
+    try { collectionsAddon = Number.isInteger(JSON.parse(snap.config || "{}").nuvioCollectionsProfile); } catch {}
+    return { ...emptyResolvedInstallConfig(), collectionsAddon };
+  }
   if (!snap || snap.missing || typeof snap.config !== "string") return unresolvedInstallConfig();
   let cfg;
   try {
@@ -106799,6 +106815,7 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   const track = Boolean(cfg.track) && canTrack;
   return {
     entries: Array.isArray(cfg.entries) ? cfg.entries : [],
+    collectionsAddon: Number.isInteger(cfg.nuvioCollectionsProfile),
     watchHistory,
     continueWatching,
     watchlist,
@@ -107243,7 +107260,10 @@ async function handleInstallsApiRoutes(request, env, url, path) {
       if (body.track === undefined) merged.track = current.track;
       const built = buildV2InstallConfig(merged, request.account);
       if (built.error) return json({ ok: false, error: built.error }, built.status);
-      configJson = built.json;
+      // Keep a managed collections install's identity when its owner edits
+      // settings here. The client cannot stamp this marker on ordinary links.
+      if (Number.isInteger(current.nuvioCollectionsProfile)) built.config.nuvioCollectionsProfile = current.nuvioCollectionsProfile;
+      configJson = JSON.stringify(built.config);
       scopes = built.config.track ? "read,track" : "read";
     }
     let token = null;
@@ -121445,7 +121465,7 @@ async function nuvioCollectionHomeSettings(env, accessToken, profileId, collecti
   for (const collection of extractNuvioCollections(collections)) {
     for (const folder of Array.isArray(collection.folders) ? collection.folders : [collection]) {
       for (const source of folder.catalogSources || []) {
-        if (!source || !source.addonId || !source.type || !source.catalogId) continue;
+        if (!source || source.addonId !== COLLECTIONS_ADDON_ID || !source.type || !source.catalogId) continue;
         // Desktop/mobile prefer an explicit key over the separate identity
         // fields. Match key-only entries too, or a later enabled duplicate can
         // override the disabled row when the app associates items by key.
@@ -121465,121 +121485,115 @@ async function nuvioCollectionHomeSettings(env, accessToken, profileId, collecti
   return { ...settings, items };
 }
 
+// Addon writes replace the complete profile list. A failed/malformed read
+// must never be mistaken for an empty profile (or another profile's addons).
 async function nuvioGetAddons(env, accessToken, profileId) {
-  try {
-    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/addons?profile_id=eq.${profileId}&select=*`, {
-      method: "GET",
-      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
-    });
-    if (res.ok) {
-      const text = await res.text();
-      if (text) {
-        const data = JSON.parse(text);
-        if (Array.isArray(data) && data.length > 0) return data;
-      }
-    }
-  } catch {}
-
-  try {
-    const profRows = await nuvioRpc(env, accessToken, "sync_pull_profiles", {});
-    if (Array.isArray(profRows)) {
-      const targetProf = profRows.find((r) =>
-        (r.profile_index != null && Number(r.profile_index) === Number(profileId)) ||
-        (r.id != null && String(r.id) === String(profileId))
-      ) || profRows[0];
-      if (targetProf && targetProf.addons_json) {
-        const arr = typeof targetProf.addons_json === "string" ? JSON.parse(targetProf.addons_json) : targetProf.addons_json;
-        if (Array.isArray(arr)) return arr;
-      }
-      if (targetProf && Array.isArray(targetProf.addons)) return targetProf.addons;
-    }
-  } catch {}
-
-  return [];
-}
-
-async function nuvioEnsureAddonInstalled(env, accessToken, profileId, manifestUrl) {
-  if (!manifestUrl) return false;
-  try {
-    // ?collections=1 makes the manifest list the premade service rows (see getPremadeCollectionManifestCatalogs);
-    // a plain link is left for Stremio so those ~250 rows don't land on its home screen.
-    try {
-      const u = new URL(String(manifestUrl));
-      u.searchParams.set("collections", "1");
-      manifestUrl = u.toString();
-    } catch {}
-    const addons = await nuvioGetAddons(env, accessToken, profileId);
-    const mLower = String(manifestUrl).trim().toLowerCase();
-    let foundIndex = -1;
-    for (let i = 0; i < addons.length; i++) {
-      const a = addons[i];
-      if (!a) continue;
-      const u = String(a.url || "").trim().toLowerCase();
-      if (u === mLower) {
-        foundIndex = i;
-        break;
-      }
-      try {
-        const uHost = new URL(u).hostname;
-        const mHost = new URL(manifestUrl).hostname;
-        if (uHost && mHost && uHost === mHost && u.endsWith("/manifest.json")) {
-          foundIndex = i;
-          break;
-        }
-      } catch {}
-    }
-
-    const updatedAddons = addons.map((a, idx) => ({
-      url: a.url,
-      name: a.name || `Addon ${idx + 1}`,
-      enabled: a.enabled !== false,
-      sort_order: a.sort_order != null ? a.sort_order : idx,
-    }));
-
-    if (foundIndex !== -1) {
-      updatedAddons[foundIndex] = {
-        ...updatedAddons[foundIndex],
-        url: manifestUrl,
-        name: ADDON_NAME || "My Lists",
-        enabled: true
-      };
-    } else {
-      updatedAddons.push({
-        url: manifestUrl,
-        name: ADDON_NAME || "My Lists",
-        enabled: true,
-        sort_order: updatedAddons.length,
-      });
-    }
-
-    await nuvioRpc(env, accessToken, "sync_push_addons", {
-      p_profile_id: profileId,
-      p_addons: updatedAddons,
-      p_origin_client_id: "my-lists-addon",
-    });
-    return true;
-  } catch (err) {
-    console.warn("Could not auto-install addon in Nuvio:", err);
-    return false;
+  const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/addons?profile_id=eq.${profileId}&select=*`, {
+    headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+  });
+  if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Sign in to Nuvio again first.");
+  if (!res.ok) throw mediaAppError("unreachable", "Could not read your Nuvio addons. Nothing was changed.");
+  let addons;
+  try { addons = await res.json(); } catch { throw mediaAppError("unreachable", "Nuvio returned an unreadable addon list. Nothing was changed."); }
+  if (!Array.isArray(addons) || addons.some((a) => !a || typeof a.url !== "string" || !a.url || (a.profile_id != null && Number(a.profile_id) !== profileId))) {
+    throw mediaAppError("unreachable", "Nuvio returned an unreadable addon list. Nothing was changed.");
   }
+  return addons;
 }
 
-async function resolveAccountManifestUrl(env, accountId, request) {
-  let origin = "https://mylistsaddon.com";
-  try {
-    const u = new URL(request.url);
-    if (u && u.origin) origin = u.origin;
-  } catch {}
-  if (!env || !env.DB || accountId == null) return `${origin}/manifest.json`;
-  try {
-    const row = await env.DB.prepare(
-      "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
-    ).bind(accountId).first();
-    if (row && row.legacy_cfg_id) {
-      return `${origin}/${row.legacy_cfg_id}/manifest.json`;
-    }
-  } catch {}
-  return `${origin}/manifest.json`;
+// Only our source references change. External addons and collection/folder
+// visibility remain exactly as supplied. Also migrates existing shared-ID refs.
+function nuvioSeparateCollectionSources(collections) {
+  return extractNuvioCollections(collections).map((c) => ({ ...c,
+    folders: (Array.isArray(c.folders) ? c.folders : [c]).map((f) => !Array.isArray(f.catalogSources) ? f : ({ ...f,
+      catalogSources: f.catalogSources.map((source) => source && source.addonId === ADDON_ID
+        ? { ...source, addonId: COLLECTIONS_ADDON_ID } : source)
+    }))
+  }));
+}
+
+// One durable, account-owned v2 install per Nuvio profile. Reuse its bearer URL
+// from Nuvio's addon list; only the hash is stored locally, as for other v2
+// installs. No home-link config/token or expiring global col_cat mapping is
+// required to keep collections working after a home addon edit/reinstall.
+async function nuvioEnsureAddonInstalled(env, accessToken, profileId, origin, account, collections, lists, homeManifestUrl) {
+  const sources = collections.flatMap((c) => c.folders || []).flatMap((f) => f.catalogSources || [])
+    .filter((s) => s && s.addonId === COLLECTIONS_ADDON_ID);
+  const addons = await nuvioGetAddons(env, accessToken, profileId);
+  let index = -1, install = null, config = {}, manifestUrl = "";
+  for (let i = 0; i < addons.length; i++) {
+    let u;
+    try { u = new URL(addons[i].url); } catch { continue; }
+    const match = u.origin === origin && /^\/i\/([A-Za-z0-9_-]{43})(?:\/manifest\.json)?\/?$/.exec(u.pathname);
+    if (!match) continue;
+    const row = await env.DB.prepare("SELECT id, token_hash, config_json, version FROM installs WHERE token_hash = ? AND account_id = ? AND revoked_at IS NULL")
+      .bind(await installTokenHash(match[1]), account.id).first();
+    if (!row) continue;
+    const cfg = JSON.parse(row.config_json);
+    if (cfg.nuvioCollectionsProfile !== profileId) continue;
+    index = i; install = row; config = cfg; manifestUrl = `${origin}/i/${match[1]}/manifest.json`;
+    break;
+  }
+  if (!sources.length && !install) return null;
+  // Copy non-secret appearance/preferences once, never depend on that link
+  // afterwards. Future changes to the home install cannot change this config.
+  if (!install && homeManifestUrl) {
+    try {
+      const u = new URL(homeManifestUrl);
+      const match = u.origin === origin && /^\/(i\/[A-Za-z0-9_-]{43}|[^/]+)\/manifest\.json$/.exec(u.pathname);
+      if (match) {
+        const param = match[1].startsWith("i/") ? INSTALL_TOKEN_PARAM_PREFIX + match[1].slice(2) : match[1];
+        config = nonSecretInstallConfigFields(await resolveConfig(param, env));
+      }
+    } catch {}
+  }
+  const supplied = Array.isArray(lists) ? lists : [];
+  const previous = Array.isArray(config.entries) ? config.entries : [];
+  const entries = new Map();
+  for (const source of sources) {
+    const key = `${source.type}:${source.catalogId}`;
+    if (entries.has(key)) continue;
+    const ownList = supplied.find((l) => l && (!l.addonId || l.addonId === ADDON_ID || l.addonId === COLLECTIONS_ADDON_ID) &&
+      typeof l.url === "string" && l.url && !l.url.startsWith("catalog:") &&
+      (l.catalogId || slugifyServer(l.url || l.name || "")) === source.catalogId && (l.type || "movie") === source.type);
+    const prior = previous.find((e) => e.id === source.catalogId && e.type === source.type);
+    const premade = findChartOrCollectionEntry(source.catalogId, source.type);
+    const sourceUrl = [(ownList && ownList.url), source.url, (prior && prior.url), (premade && premade.url)]
+      .find((value) => typeof value === "string" && value && !value.startsWith("catalog:"));
+    if (!sourceUrl) throw mediaAppError("unreachable", "Could not resolve a collection catalog. Sync all local collections once to migrate custom catalogs.");
+    entries.set(key, { id: source.catalogId, type: source.type, name: source.name || source.title || source.catalogId, url: sourceUrl, enabled: true });
+  }
+  const entryList = [...entries.values()];
+  const problem = saveEntriesProblem(entryList);
+  if (problem) throw mediaAppError("unreachable", problem);
+  const built = entryList.length ? buildV2InstallConfig({ ...config, entries: entryList, track: false }, account)
+    : { config: { ...nonSecretInstallConfigFields(config), entries: [] } };
+  if (built.error) throw mediaAppError("unreachable", built.error);
+  built.config.nuvioCollectionsProfile = profileId;
+  const configJson = JSON.stringify(built.config);
+  const now = Date.now();
+  if (install) {
+    const result = await env.DB.prepare("UPDATE installs SET config_json = ?, version = version + 1, updated_at = ? WHERE id = ? AND account_id = ? AND version = ? AND revoked_at IS NULL")
+      .bind(configJson, now, install.id, account.id, install.version).run();
+    if (!result.meta.changes) throw mediaAppError("unreachable", "The collection install changed. Try syncing again.");
+    await forgetInstallSnapshot(env, install.token_hash);
+  } else {
+    const active = await env.DB.prepare("SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL").bind(account.id).first();
+    if (active && active.n >= INSTALLS_PER_ACCOUNT_MAX) throw mediaAppError("unreachable", "Remove an unused install link before adding the collections addon.");
+    const token = generateInstallToken();
+    await env.DB.prepare("INSERT INTO installs (token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at, last_used_at) VALUES (?, NULL, ?, ?, ?, 1, 'read', ?, ?, NULL)")
+      .bind(await installTokenHash(token), account.id, COLLECTIONS_ADDON_NAME, configJson, now, now).run();
+    manifestUrl = `${origin}/i/${token}/manifest.json`;
+  }
+  const updatedAddons = addons.map((a, i) => ({ url: a.url, name: a.name || `Addon ${i + 1}`, enabled: a.enabled !== false, sort_order: a.sort_order != null ? a.sort_order : i }));
+  const entry = { url: manifestUrl, name: COLLECTIONS_ADDON_NAME, enabled: true,
+    sort_order: index >= 0 ? updatedAddons[index].sort_order : updatedAddons.reduce((max, a) => Math.max(max, a.sort_order + 1), 0) };
+  if (index >= 0) updatedAddons[index] = entry;
+  else updatedAddons.push(entry);
+  await nuvioRpc(env, accessToken, "sync_push_addons", {
+    p_profile_id: profileId, p_addons: updatedAddons, p_origin_client_id: "my-lists-addon"
+  });
+  return manifestUrl;
 }
 
 // POST /api/connections/stremio/link/complete, POST .../nuvio/login,
@@ -121829,13 +121843,14 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
       if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
       const profileId = (body && body.profileId != null) ? Number(body.profileId) : (Number(row.profile_index) || 1);
+      if (!Number.isInteger(profileId) || profileId < 1 || profileId > 6) return json({ ok: false, error: "Choose a valid Nuvio profile." }, 400);
       const installMode = String(body.installMode || (body.merge === false ? "replace" : "new")).toLowerCase();
       let collections = body.collections != null ? body.collections : (body.p_collections_json != null ? body.p_collections_json : null);
       if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
       if (body.hideHomeCatalogs != null && typeof body.hideHomeCatalogs !== "boolean") {
         return json({ ok: false, error: "Home catalog visibility must be a boolean." }, 400);
       }
-      const incomingCollections = collections;
+      const incomingCollections = nuvioSeparateCollectionSources(collections);
 
       let existing = [];
       if (installMode !== "replace") {
@@ -121880,6 +121895,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         collections = mergeNuvioCollections(existing || [], collections);
       }
 
+      collections = nuvioSeparateCollectionSources(collections);
       let homeSettings = null;
       if (typeof body.hideHomeCatalogs === "boolean") {
         try {
@@ -121890,50 +121906,17 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         }
       }
 
+      // Read/merge the complete addon list and install the independent config
+      // before publishing references to it. Never overwrite the regular addon.
+      const collectionsManifestUrl = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId,
+        new URL(request.url).origin, account, collections, body.collectionLists, body.manifestUrl);
+      const addonInstalled = Boolean(collectionsManifestUrl);
+
       await nuvioRpc(env, conn.accessToken, "sync_push_collections", {
         p_profile_id: profileId,
         p_collections_json: collections,
         p_origin_client_id: "my-lists-addon"
       });
-
-      // Save collection catalog mappings in KV so catalog routes resolve any custom/premade list
-      if (env && env.CONFIGS) {
-        try {
-          const listsToStore = Array.isArray(body.collectionLists) ? body.collectionLists.slice() : [];
-          const extractedCols = extractNuvioCollections(collections);
-          for (const col of extractedCols) {
-            if (Array.isArray(col.folders)) {
-              for (const folder of col.folders) {
-                if (Array.isArray(folder.catalogSources)) {
-                  for (const cs of folder.catalogSources) {
-                    if (cs && cs.catalogId && cs.url) {
-                      listsToStore.push({ catalogId: cs.catalogId, url: cs.url, name: cs.name || folder.title, type: cs.type || "movie" });
-                    }
-                  }
-                }
-              }
-            }
-          }
-          for (const item of listsToStore) {
-            if (item && item.catalogId && item.url) {
-              const catType = item.type === "series" ? "series" : "movie";
-              await env.CONFIGS.put(
-                `col_cat:${item.catalogId}:${catType}`,
-                JSON.stringify({ id: item.catalogId, url: item.url, name: item.name || item.catalogId, type: catType, enabled: true }),
-                { expirationTtl: 2592000 }
-              );
-            }
-          }
-        } catch (storeErr) {
-          console.warn("Could not persist collection catalog entries:", storeErr);
-        }
-      }
-
-      let addonInstalled = false;
-      const manifestUrl = installMode === "update-folder" ? null : ((body && body.manifestUrl) || await resolveAccountManifestUrl(env, accountId, request));
-      if (manifestUrl) {
-        addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
-      }
 
       let homeVisibilityUpdated = null;
       if (homeSettings) {
@@ -121959,7 +121942,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
           homeVisibilityUpdated = false;
         }
       }
-      return json({ ok: true, profileId, collections, addonInstalled, existingCount, homeVisibilityUpdated });
+      return json({ ok: true, profileId, collections, addonInstalled, collectionsManifestUrl, existingCount, homeVisibilityUpdated });
     }
   } catch (e) {
     if (e && e.kind) {
