@@ -2467,6 +2467,61 @@ function cwEntriesStillAhead(items, season, episode) {
   });
 }
 
+// Stremio Discover renders its side panel from the catalog preview, not the
+// separate /meta resource. Activity records intentionally contain only the
+// identity and artwork; enrich history previews without changing those records.
+// Cinemeta is keyed by both type and IMDb id: never try the opposite type,
+// which could attach a movie's metadata to a wrongly classified series.
+const HISTORY_PREVIEW_IN_FLIGHT = new Map();
+async function historyPreviewMeta(id, type) {
+  if (!/^tt\d{5,12}$/.test(id) || (type !== "movie" && type !== "series")) return null;
+  const key = `history-preview:v1:${type}:${id}`;
+  const cached = getPerUserCache(key);
+  if (cached && cached.data) return cached.data;
+  if (HISTORY_PREVIEW_IN_FLIGHT.has(key)) return await HISTORY_PREVIEW_IN_FLIGHT.get(key);
+  const pending = (async () => {
+    try {
+      const res = await fetch(`https://v3-cinemeta.strem.io/meta/${type}/${id}.json`, {
+        cf: { cacheTtl: 86400, cacheEverything: true },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) return null;
+      const meta = (await res.json()).meta;
+      if (!meta || meta.id !== id || meta.type !== type) return null;
+      // Exclude episodes/videos, streams, and artwork: history's own identity,
+      // ordering, progress, badges and poster must remain untouched.
+      const preview = {};
+      for (const field of ["description", "runtime", "releaseInfo", "imdbRating", "genres", "links"]) {
+        if (meta[field] != null) preview[field] = meta[field];
+      }
+      setPerUserCache(key, preview, 86400, 604800);
+      return preview;
+    } catch { return null; }
+  })();
+  HISTORY_PREVIEW_IN_FLIGHT.set(key, pending);
+  try { return await pending; } finally { HISTORY_PREVIEW_IN_FLIGHT.delete(key); }
+}
+
+async function enrichHistoryPreviews(metas) {
+  if (!Array.isArray(metas) || !metas.length) return metas;
+  const total = metas.totalItems;
+  // Do not let an upstream outage hold a history shelf for 100 serial
+  // timeouts. Unenriched items remain usable and can retry on the next read.
+  const deadline = Date.now() + 4000;
+  const enriched = await mapWithConcurrency(metas, 8, async (item) => {
+    if (!item || Date.now() >= deadline) return item;
+    const preview = await historyPreviewMeta(String(item.id || ""), item.type);
+    if (!preview) return item;
+    const result = { ...item };
+    for (const [field, value] of Object.entries(preview)) {
+      if (result[field] == null || result[field] === "" || (Array.isArray(result[field]) && !result[field].length)) result[field] = value;
+    }
+    return result;
+  });
+  if (total != null) enriched.totalItems = total;
+  return enriched;
+}
+
 async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   if (!env || !env.CONFIGS) return [];
   

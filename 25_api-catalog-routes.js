@@ -1691,6 +1691,12 @@ Sitemap: ${url.origin}/sitemap.xml`;
           const sq = searchQuery.toLowerCase();
           metas = metas.filter((it) => (it.name && it.name.toLowerCase().includes(sq)) || (it.title && it.title.toLowerCase().includes(sq)));
         }
+        // Only activity-history rows here: their stored records are sparse.
+        // Do this after filtering/deduplication, and preserve all list fields.
+        // Other catalog sources keep their existing request cost and behavior.
+        if (rowSources.includes("autotrack") && String(entry.url || "").split("\n").some((u) => /^autotrack:(?:watch-history|nuvio-watch-history|stremio-watch-history)(?::|$)/.test(u.trim()))) {
+          metas = await enrichHistoryPreviews(metas);
+        }
         if (staleReq && skip === 0 && metas.length > 0 && !searchQuery) {
           // Fire-and-forget -- the response doesn't wait on this write.
           try {
