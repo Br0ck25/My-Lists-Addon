@@ -470,7 +470,13 @@ const CATALOG_SOURCES = [
   {
     name: "autotrack", provider: "mylists", kind: "personal", apiUse: null,
     match: (s) => s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:"),
-    fetchPage: (ref, { entry, keys }) => fetchAutoTrackedCatalog(entry, keys.env, keys),
+    fetchPage: async (ref, { entry, skip, keys }) => {
+      const items = await fetchAutoTrackedCatalog(entry, keys.env, keys);
+      if (!/^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.test(String(entry.url || ""))) return items;
+      const page = items.slice(skip, skip + PAGE_SIZE);
+      page.totalItems = items.length;
+      return page;
+    },
   },
   // Recommended Movies / Shows: the account's own Discover snapshot, or, when
   // that is too old, recommendations built from TMDB (so it counts as TMDB).

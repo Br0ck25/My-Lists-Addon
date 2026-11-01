@@ -1,7 +1,5 @@
 # My Lists Addon
 
-> **Important notice:** the public site, mylistsaddon.com, will **shut down on November 8, 2026** unless donations cover its running costs. [**Donate on Ko-fi**](https://ko-fi.com/mylistsaddon) to help keep it online, and [**back up your data and run your own copy**](#self-hosting-on-cloudflare) if it closes.
-
 > **Official Hosted Platform**: [**mylistsaddon.com**](https://mylistsaddon.com)  
 > **Source Code**: [**github.com/Br0ck25/My-Lists-Addon**](https://github.com/Br0ck25/My-Lists-Addon)  
 > **Compatible Players**: [Stremio](https://stremio.com) (Desktop, Web, Mobile, Android TV, Fire TV), [Wako](https://wako.app), [Nuvio](https://nuvio.to), and any player supporting the Stremio Addon Protocol.
@@ -196,7 +194,7 @@ Anyone (human or AI) changing buttons, colours, spacing, text or wording follows
 
 ## Support This Project
 
-My Lists Addon is a free community service with no ads or subscriptions, run and paid for by one person. Hosting now costs over $100 a month, and **the public site will shut down on November 8, 2026 unless donations cover it.** If you enjoy using the platform and want to help keep it online for everyone:
+My Lists Addon is a free community service with no ads or subscriptions, run and paid for by one person. Hosting now costs over $100 a month. If you enjoy using the platform and want to help keep it online for everyone:
 
 - **Ko-fi**: [ko-fi.com/mylistsaddon](https://ko-fi.com/mylistsaddon)
 - **TorBox Debrid (Referral)**: [torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1](https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1)

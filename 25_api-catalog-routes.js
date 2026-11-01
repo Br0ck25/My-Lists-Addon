@@ -1259,7 +1259,7 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1"),
         200,
         hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
@@ -1529,6 +1529,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
     if (m) {
       const [, config, type, idWithExtra] = m;
       const [id, extraStr] = idWithExtra.split("/");
+      // New browse rows have explicit kind restrictions, even when a stale or
+      // hand-edited install config tries to address the other kind.
+      const browseKey = id.startsWith("tmdb-chart-") ? id.slice("tmdb-chart-".length) : "";
+      const browseRow = browseKey && typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" ? STREAMING_ROW_BY_CHART_KEY[browseKey] : null;
+      if (browseRow && browseRow.additional && !browseRow.kinds[type]) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
       const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
       const skip = parseInt(extra.skip, 10) || 0;
       const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
@@ -1551,19 +1556,60 @@ Sitemap: ${url.origin}/sitemap.xml`;
         if (searchConfig.betterPosters || searchArt.pictoriumTemplate || searchArt.rpdbBase) {
           metas = applyBetterPostersToMetas(metas, searchArt);
         }
-        return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
+        metas = await enrichCatalogPreviews(metas, effectiveTmdbKey);
+        return jsonPublic({ metas }, 200, { "Cache-Control": metas.previewIncomplete ? "public, max-age=30" : "public, max-age=3600, stale-while-revalidate=86400" });
       }
 
-      if (!config) return jsonPublic({ metas: [] });
+      let unconfiguredEntry = null;
+      if (typeof findChartOrCollectionEntry === "function") {
+        unconfiguredEntry = findChartOrCollectionEntry(id, type);
+      }
+      if (!unconfiguredEntry && env && env.CONFIGS) {
+        try {
+          unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!config && !unconfiguredEntry) return jsonPublic({ metas: [] });
 
       // Kept as a whole object as well as destructured: the betterPosters*
       // style keys are passed through wholesale rather than one at a time.
-      const resolvedConfig = await resolveConfig(config, env);
+      const resolvedConfig = config
+        ? await resolveConfig(config, env)
+        : { entries: [unconfiguredEntry], tmdbKey: null, mdblistKey: null, mdblistAccessToken: null, traktKey: null, traktAccessToken: null, simklKey: null, simklAccessToken: null, shuffleItems: false, trackCreatorName: null, trackOwner: null, region: null, hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: null, showBadgesStremio: false, showBadgesStremioAiringNext: false, showBadgesStremioContinueWatching: false, showBadgesStremioCatalogs: false, showBadgesStremioWatchlist: false };
+
       // As in the manifest route: most installs ask for catalogs far more often.
-      ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      if (config) {
+        ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      }
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
-      const entry = entryIndex >= 0 ? entries[entryIndex] : null;
+      let entry = entryIndex >= 0 ? entries[entryIndex] : unconfiguredEntry;
+      if (!entry && typeof findChartOrCollectionEntry === "function") {
+        entry = findChartOrCollectionEntry(id, type);
+      }
+      if (!entry && env && env.CONFIGS) {
+        try {
+          entry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!entry && typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+        const found = CHART_SLUG_ENTRIES.find((c) => {
+          const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+          const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+          const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+          const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+          return id === mSlug || id === sSlug || id === nSlug || id === cSlug;
+        });
+        if (found) {
+          entry = {
+            id,
+            name: found.name,
+            type: type,
+            url: type === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+            enabled: true
+          };
+        }
+      }
       if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its
@@ -1646,7 +1692,10 @@ Sitemap: ${url.origin}/sitemap.xml`;
           const sq = searchQuery.toLowerCase();
           metas = metas.filter((it) => (it.name && it.name.toLowerCase().includes(sq)) || (it.title && it.title.toLowerCase().includes(sq)));
         }
-        if (staleReq && skip === 0 && metas.length > 0 && !searchQuery) {
+        // All catalog sources (including user lists and merged rows) use the
+        // same preview enrichment after filtering and deduplication.
+        metas = await enrichCatalogPreviews(metas, tmdbKey || TMDB_API_KEY);
+        if (staleReq && skip === 0 && metas.length > 0 && !searchQuery && !metas.previewIncomplete) {
           // Fire-and-forget -- the response doesn't wait on this write.
           try {
             ctx.waitUntil(
@@ -1672,8 +1721,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // that; the apps ask once per row per home screen, so this is the
         // number that sets the Workers request count. Upstream rate limits are
         // still guarded by the fetchers' own freshTtlSec windows.
-        return jsonPublic({ metas, cacheMaxAge: CATALOG_SHARED_MAX_AGE, staleRevalidate: CATALOG_STALE_REVALIDATE },
-          200, { "Cache-Control": `public, max-age=${CATALOG_SHARED_MAX_AGE}, s-maxage=${CATALOG_SHARED_MAX_AGE}` });
+        // A deadline-limited page retries promptly, rather than caching the
+        // incomplete preview for the entire shared-catalog lifetime.
+        const previewMaxAge = metas.previewIncomplete ? 30 : CATALOG_SHARED_MAX_AGE;
+        return jsonPublic({ metas, cacheMaxAge: previewMaxAge, staleRevalidate: metas.previewIncomplete ? 30 : CATALOG_STALE_REVALIDATE },
+          200, { "Cache-Control": `public, max-age=${previewMaxAge}, s-maxage=${previewMaxAge}` });
       } catch (err) {
         const errMsg = safeErrorMessage(err);
         if (isUserPersonal || isLiveCustomList) {

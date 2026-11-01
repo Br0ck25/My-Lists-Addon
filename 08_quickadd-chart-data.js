@@ -488,6 +488,465 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
+// --- Streaming service rows (the premade collections' "browse the service" rows) --
+//
+// Netflix shows "Hooked from the First Episode", Hulu "Stream & Scream", Paramount+
+// "NickRewind" and so on. These are our own rows with the same flavour, built from
+// TMDB discover. Every row is filtered by with_watch_providers + flatrate (see
+// tmdbProviderChartPaths in 07_), so it only holds titles included with THAT service.
+//
+// A row is [key, label, recipe]. `recipe` is a name in STREAMING_ROW_RECIPES or an
+// inline { tv, movie } object. A kind a recipe leaves out simply has no catalog (a row
+// like "Anime" has both; "Hooked from the First Episode" is shows only). Tokens in a
+// recipe: {vc} = the service's vote floor (its catalog is smaller or bigger, and movies
+// get 3x), {net} = the service's own TMDB network id (its originals).
+// TMDB ids used here: networks 13 Nickelodeon, 49 HBO, 54 Disney Channel, 80 Adult Swim,
+// 6 NBC, 74 Bravo, 16 CBS; companies 420 Marvel Studios, 1 Lucasfilm, 3 Pixar,
+// 6125 Walt Disney Animation, 25 20th Century, 174 Warner Bros., 9993 DC, 33 Universal,
+// 4 Paramount Pictures; keywords 818 based on novel or book, 9715 superhero,
+// 4344 musical, 6075 sport.
+const STREAMING_ROW_SERVICES = {
+  netflix: { name: "Netflix", provider: 8, network: 213, minVotes: 300, collection: "col_netflix" },
+  hulu: { name: "Hulu", provider: 15, network: 453, minVotes: 150, collection: "col_hulu" },
+  paramount: { name: "Paramount+", provider: 2303, network: 4330, minVotes: 100, collection: "col_paramount" },
+  disney: { name: "Disney+", provider: 337, network: 2739, minVotes: 150, collection: "col_disney" },
+  hbomax: { name: "HBO Max", provider: 1899, network: 49, minVotes: 150, collection: "col_hbomax" },
+  primevideo: { name: "Prime Video", provider: 9, network: 1024, minVotes: 150, collection: "col_primevideo" },
+  peacock: { name: "Peacock", provider: 387, network: 3353, minVotes: 60, collection: "col_peacock" },
+  appletv: { name: "Apple TV+", provider: 350, network: 2552, minVotes: 40, collection: "col_appletv" },
+  discovery: { name: "Discovery+", provider: 520, minVotes: 0, collection: "col_discovery" },
+  netflixkids: { name: "Netflix Kids", provider: 175, minVotes: 0, collection: "col_netflixkids" },
+};
+
+const STREAMING_ROW_RECIPES = {
+  originals: { tv: "with_networks={net}" },
+  hooked: { tv: "with_genres=18|9648|80&vote_average.gte=7.5&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  action: { tv: "with_genres=10759", movie: "with_genres=28" },
+  actionTv: { tv: "with_genres=10759" },
+  actionMovies: { movie: "with_genres=28" },
+  comedy: { tv: "with_genres=35", movie: "with_genres=35" },
+  comedyTv: { tv: "with_genres=35" },
+  comedyMovies: { movie: "with_genres=35" },
+  feelGood: { tv: "with_genres=35|10751&vote_average.gte=7&vote_count.gte={vc}&sort_by=vote_average.desc", movie: "with_genres=35|10751|10749&vote_average.gte=6.8&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  feelGoodTv: { tv: "with_genres=35|10751&vote_average.gte=7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  casual: { tv: "with_genres=35|10764" },
+  drama: { tv: "with_genres=18", movie: "with_genres=18" },
+  dramaTv: { tv: "with_genres=18" },
+  crime: { tv: "with_genres=80", movie: "with_genres=80" },
+  crimeTv: { tv: "with_genres=80" },
+  mystery: { tv: "with_genres=9648", movie: "with_genres=9648" },
+  mysteryTv: { tv: "with_genres=9648" },
+  thriller: { tv: "with_genres=9648,18", movie: "with_genres=53" },
+  psychThriller: { tv: "with_genres=9648,18&vote_average.gte=7&vote_count.gte={vc}", movie: "with_genres=53,18&vote_average.gte=6.5&vote_count.gte={vc}" },
+  horror: { tv: "with_genres=9648,10765", movie: "with_genres=27" },
+  horrorMovies: { movie: "with_genres=27" },
+  darkTv: { tv: "with_genres=9648,10765" },
+  scifi: { tv: "with_genres=10765", movie: "with_genres=878" },
+  scifiTv: { tv: "with_genres=10765" },
+  scifiFantasy: { tv: "with_genres=10765", movie: "with_genres=878|14" },
+  fantasy: { tv: "with_genres=10765", movie: "with_genres=14" },
+  animation: { tv: "with_genres=16", movie: "with_genres=16" },
+  adultAnimation: { tv: "with_genres=16&without_genres=10762,10751", movie: "with_genres=16&without_genres=10751" },
+  anime: { tv: "with_genres=16&with_original_language=ja", movie: "with_genres=16&with_original_language=ja" },
+  reality: { tv: "with_genres=10764" },
+  docs: { tv: "with_genres=99", movie: "with_genres=99" },
+  trueCrime: { tv: "with_genres=80,99", movie: "with_genres=80,99" },
+  travelLifestyle: { tv: "with_genres=10764|99" },
+  family: { tv: "with_genres=10751", movie: "with_genres=10751" },
+  familyMovies: { movie: "with_genres=10751&certification_country=US&certification.lte=PG" },
+  kids: { tv: "with_genres=10762" },
+  kidsFamily: { tv: "with_genres=10762", movie: "with_genres=16|10751&certification_country=US&certification.lte=PG" },
+  romance: { movie: "with_genres=10749" },
+  romcom: { movie: "with_genres=10749,35" },
+  western: { tv: "with_genres=37", movie: "with_genres=37" },
+  warHistory: { tv: "with_genres=10768", movie: "with_genres=10752|36" },
+  musicals: { tv: "with_keywords=4344", movie: "with_keywords=4344" },
+  superhero: { tv: "with_keywords=9715", movie: "with_keywords=9715" },
+  basedOnBooks: { tv: "with_keywords=818", movie: "with_keywords=818" },
+  sports: { tv: "with_keywords=6075", movie: "with_keywords=6075" },
+  awardTv: { tv: "vote_average.gte=8&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  awardMovies: { movie: "vote_average.gte=7.7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  award: { tv: "vote_average.gte=8&vote_count.gte={vc}&sort_by=vote_average.desc", movie: "vote_average.gte=7.7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  bingeable: { tv: "with_status=3&vote_average.gte=7&vote_count.gte={vc}" },
+  completeSeries: { tv: "with_status=3" },
+  completeComedies: { tv: "with_status=3&with_genres=35" },
+  popularTv: { tv: "" },
+  popularMovies: { movie: "" },
+  blockbuster: { movie: "sort_by=revenue.desc" },
+  nineties: { tv: "first_air_date.gte=1990-01-01&first_air_date.lte=1999-12-31", movie: "primary_release_date.gte=1990-01-01&primary_release_date.lte=1999-12-31&vote_count.gte={vc}" },
+  classics: { tv: "first_air_date.lte=1989-12-31", movie: "primary_release_date.lte=1989-12-31&vote_count.gte={vc}" },
+  korean: { tv: "with_original_language=ko", movie: "with_original_language=ko" },
+  spanish: { tv: "with_original_language=es", movie: "with_original_language=es" },
+  british: { tv: "with_origin_country=GB", movie: "with_origin_country=GB" },
+  talk: { tv: "with_genres=10767" },
+};
+
+const STREAMING_ROWS = {
+  // Only categories that TMDB Discover can identify directly. Age-specific,
+  // franchise and editorial rows are not inferred from broad genres.
+  discovery: [
+    ["reality-tv", "Reality TV", { tv: "with_genres=10764" }],
+    ["documentary-series", "Documentary Series", { tv: "with_genres=99" }],
+    // TMDB network IDs (not watch-provider IDs). Restrict them to Discovery+
+    // flatrate availability as for every other row. Network membership is not
+    // evidence that a title is a Discovery+ original.
+    ["discovery-channel", "Discovery Channel", { tv: "with_networks=64" }],
+    ["tlc", "TLC", { tv: "with_networks=84" }],
+    ["hgtv", "HGTV", { tv: "with_networks=210" }],
+    ["food-network", "Food Network", { tv: "with_networks=143" }],
+    ["investigation-discovery", "Investigation Discovery", { tv: "with_networks=244" }],
+    ["animal-planet", "Animal Planet", { tv: "with_networks=91" }],
+    ["travel-channel", "Travel Channel", { tv: "with_networks=209" }],
+    ["science-channel", "Science Channel", { tv: "with_networks=226" }],
+    ["own", "OWN", { tv: "with_networks=827" }],
+    ["magnolia-network", "Magnolia Network", { tv: "with_networks=4519" }],
+    ["ae", "A&E", { tv: "with_networks=129" }],
+    ["lifetime", "Lifetime", { tv: "with_networks=34" }],
+    ["cooking-channel", "Cooking Channel", { tv: "with_networks=802" }],
+    ["motortrend", "MotorTrend", { tv: "with_networks=2444" }],
+    ["destination-america", "Destination America", { tv: "with_networks=530" }],
+  ],
+  netflixkids: [
+    ["kids-tv", "Kids TV Shows", { tv: "with_genres=10762" }],
+    ["animated-tv", "Animated TV Shows", { tv: "with_genres=16,10762" }],
+    ["animated-movies", "Animated Movies", { movie: "with_genres=16&certification_country=US&certification.lte=PG" }],
+    ["family-movies", "Family Movies", { movie: "with_genres=10751&certification_country=US&certification.lte=PG" }],
+  ],
+  netflix: [
+    ["originals", "Netflix Originals", "originals"],
+    ["hooked", "Hooked from the First Episode", "hooked"],
+    ["action-tv", "Action TV", "actionTv"],
+    ["award-tv", "Award-Winning TV Shows", "awardTv"],
+    ["watch-a-while", "Watch for a While", "bingeable"],
+    ["feel-good-tv", "Feel-Good TV Shows", "feelGoodTv"],
+    ["get-in-on-the-action", "Get in on the Action", "actionMovies"],
+    ["casual", "Casual Viewing", "casual"],
+    ["anime", "Anime", "anime"],
+    ["dark-tv-horror", "Dark TV Horror", "darkTv"],
+    ["goofy-tv", "Goofy TV Shows", "comedyTv"],
+    ["reality", "Reality TV", "reality"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["crime-tv", "Crime TV", "crimeTv"],
+    ["docs", "Documentaries", "docs"],
+    ["k-drama", "Korean Titles", "korean"],
+    ["british", "British Titles", "british"],
+    ["romance", "Romantic Movies", "romance"],
+    ["comedy-movies", "Comedy Movies", "comedyMovies"],
+    ["thriller-movies", "Thrillers", "thriller"],
+    ["horror-movies", "Horror Movies", "horrorMovies"],
+    ["scifi-fantasy", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["award-movies", "Award-Winning Movies", "awardMovies"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+  ],
+  hulu: [
+    ["originals", "Hulu Originals", "originals"],
+    ["bingeable-tv", "Bingeable TV", "bingeable"],
+    ["travel-lifestyle", "Travel & Lifestyle", "travelLifestyle"],
+    ["stream-and-scream", "Stream & Scream", "horror"],
+    ["kids", "Kids", "kidsFamily"],
+    ["full-series-comedies", "Full Series Comedies", "completeComedies"],
+    ["popular-tv", "Popular TV", "popularTv"],
+    ["blockbuster-movies", "Blockbuster Movies", "blockbuster"],
+    ["easy-to-watch-tv", "Easy-to-Watch TV", "casual"],
+    ["complete-series", "Complete Series", "completeSeries"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["family-movies", "Family Movies", "familyMovies"],
+    ["comedy-movies", "Comedy Movies", "comedyMovies"],
+    ["mystery-tv", "Mystery TV Shows", "mysteryTv"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["anime", "Anime", "anime"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["action", "Action & Adventure", "action"],
+    ["drama", "Drama", "drama"],
+    ["romance", "Romance", "romance"],
+    ["reality", "Reality TV", "reality"],
+    ["docs", "Documentaries", "docs"],
+    ["award-tv", "Award-Winning TV", "awardTv"],
+    ["nineties", "Best of the 90s", "nineties"],
+  ],
+  paramount: [
+    ["originals", "Paramount+ Originals", "originals"],
+    ["unmissable-action", "Unmissable Action", "action"],
+    ["psychological-thrillers", "Psychological Thrillers", "psychThriller"],
+    ["reality", "Reality Shows", "reality"],
+    ["movie-night", "Movie Night", "popularMovies"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["scifi-series", "Sci-Fi Series", "scifiTv"],
+    ["romantic-comedies", "Romantic Comedies", "romcom"],
+    ["nickrewind", "NickRewind", { tv: "with_networks=13&first_air_date.lte=2009-12-31" }],
+    ["nick-jr", "Nick Jr. Shows", { tv: "with_networks=13&with_genres=10762" }],
+    ["based-on-books", "Movies Based on Books", { movie: "with_keywords=818" }],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["looking-for-a-laugh", "Looking for a Laugh?", "comedy"],
+    ["crime-procedurals", "Crime & Procedurals", "crimeTv"],
+    ["cbs", "CBS Favorites", { tv: "with_networks=16" }],
+    ["horror", "Horror", "horror"],
+    ["westerns", "Westerns", "western"],
+    ["docs", "Documentaries", "docs"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["award", "Award-Winning", "award"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["paramount-pictures", "Paramount Pictures", { movie: "with_companies=4" }],
+    ["mystery", "Mystery", "mystery"],
+  ],
+  disney: [
+    ["originals", "Disney+ Originals", "originals"],
+    ["marvel", "Marvel", { tv: "with_companies=420", movie: "with_companies=420" }],
+    ["star-wars", "Star Wars", { tv: "with_companies=1", movie: "with_companies=1" }],
+    ["pixar", "Pixar", { movie: "with_companies=3" }],
+    ["disney-animation", "Disney Animation", { movie: "with_companies=6125" }],
+    ["disney-classics", "Disney Classics", { movie: "with_companies=2|6125&primary_release_date.lte=1999-12-31" }],
+    ["disney-channel", "Disney Channel", { tv: "with_networks=54" }],
+    ["20th-century", "20th Century Studios", { movie: "with_companies=25" }],
+    ["family-movies", "Family Movies", "familyMovies"],
+    ["kids", "Kids Shows", "kids"],
+    ["animated-series", "Animated Series", "animation"],
+    ["action", "Action & Adventure", "action"],
+    ["scifi-fantasy", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["superheroes", "Superheroes", "superhero"],
+    ["musicals", "Musicals", "musicals"],
+    ["comedy", "Comedy", "comedy"],
+    ["docs", "Documentaries & Nature", "docs"],
+    ["drama", "Drama", "drama"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["award", "Award-Winning", "award"],
+    ["mystery", "Mystery & Thrillers", "thriller"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["reality", "Reality", "reality"],
+  ],
+  hbomax: [
+    ["hbo-originals", "HBO Originals", { tv: "with_networks=49" }],
+    ["max-originals", "Max Originals", "originals"],
+    ["prestige-drama", "Prestige Drama", "hooked"],
+    ["award", "Award-Winning", "award"],
+    ["dc", "DC", { tv: "with_companies=9993", movie: "with_companies=9993" }],
+    ["warner-bros", "Warner Bros. Movies", { movie: "with_companies=174" }],
+    ["superheroes", "Superheroes", "superhero"],
+    ["comedy", "Comedy", "comedy"],
+    ["adult-animation", "Adult Swim & Adult Animation", "adultAnimation"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["docs", "Documentaries", "docs"],
+    ["crime", "Crime", "crime"],
+    ["scifi", "Sci-Fi", "scifi"],
+    ["fantasy", "Fantasy", "fantasy"],
+    ["horror", "Horror", "horror"],
+    ["reality", "Reality", "reality"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["romance", "Romance", "romance"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["action", "Action", "action"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["anime", "Anime", "anime"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+  ],
+  primevideo: [
+    ["originals", "Prime Originals", "originals"],
+    ["action", "Action & Adventure", "action"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["comedy", "Comedy", "comedy"],
+    ["drama", "Drama", "drama"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["crime", "Crime", "crime"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["mystery", "Mystery", "mystery"],
+    ["horror", "Horror", "horror"],
+    ["romance", "Romance", "romance"],
+    ["reality", "Reality TV", "reality"],
+    ["docs", "Documentaries", "docs"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["anime", "Anime", "anime"],
+    ["superheroes", "Superheroes", "superhero"],
+    ["award", "Award-Winning", "award"],
+    ["blockbuster", "Blockbuster Movies", "blockbuster"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+    ["westerns", "Westerns", "western"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["sports", "Sports", "sports"],
+  ],
+  peacock: [
+    ["originals", "Peacock Originals", "originals"],
+    ["nbc", "NBC Favorites", { tv: "with_networks=6" }],
+    ["bravo", "Bravo & Reality", { tv: "with_networks=74" }],
+    ["sitcoms", "Sitcoms", "completeComedies"],
+    ["comedy", "Comedy", "comedy"],
+    ["crime", "Crime", "crime"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["drama", "Drama", "drama"],
+    ["horror", "Horror", "horror"],
+    ["action", "Action", "action"],
+    ["universal", "Universal Movies", { movie: "with_companies=33" }],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["docs", "Documentaries", "docs"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["romance", "Romance", "romance"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["mystery", "Mystery", "mystery"],
+    ["award", "Award-Winning", "award"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["animation", "Animation", "animation"],
+    ["westerns", "Westerns", "western"],
+    ["sports", "Sports", "sports"],
+  ],
+  appletv: [
+    ["originals", "Apple Originals", "originals"],
+    ["award", "Award-Winning", "award"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["comedy", "Comedy", "comedy"],
+    ["feel-good", "Feel-Good", "feelGood"],
+    ["drama", "Drama", "drama"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["mystery", "Mystery", "mystery"],
+    ["crime", "Crime", "crime"],
+    ["action", "Action & Adventure", "action"],
+    ["docs", "Documentaries", "docs"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["animation", "Animation", "animation"],
+    ["war-history", "War & History", "warHistory"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+    ["sports", "Sports", "sports"],
+    ["musicals", "Music & Musicals", "musicals"],
+    ["romance", "Romance", "romance"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["popular", "Popular on Apple TV+", "popularTv"],
+  ],
+};
+
+// Additional rows use only directly queryable metadata. Existing rows stay in
+// their original order and retain their original keys and queries. In
+// particular, high ratings are not treated as award wins and a network is not
+// treated as proof that a movie is an original production.
+const STREAMING_ADDITIONAL_ROWS = {
+  netflix: [
+    ["genre-drama-movies", "Drama Movies", { movie: "with_genres=18" }],
+    ["genre-crime-movies", "Crime Movies", { movie: "with_genres=80" }],
+    ["genre-mystery-movies", "Mystery Movies", { movie: "with_genres=9648" }],
+    ["genre-scifi-movies", "Science Fiction Movies", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy Movies", { movie: "with_genres=14" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-war-movies", "War Movies", { movie: "with_genres=10752" }],
+    ["genre-western-movies", "Western Movies", { movie: "with_genres=37" }],
+    ["language-english-movies", "English-Language Movies", { movie: "with_original_language=en" }],
+    ["genre-drama-tv", "Drama TV Shows", { tv: "with_genres=18" }],
+    ["genre-mystery-tv", "Mystery TV Shows", { tv: "with_genres=9648" }],
+    ["genre-family-tv", "Family TV Shows", { tv: "with_genres=10751" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["sports-docs", "Sports Documentaries", { tv: "with_genres=99&with_keywords=6075", movie: "with_genres=99&with_keywords=6075" }],
+  ],
+  hulu: [
+    ["genre-animated-series", "Animated Series", { tv: "with_genres=16" }],
+    ["genre-comedy-series", "Comedy Series", { tv: "with_genres=35" }],
+    ["genre-crime-mystery", "Crime & Mystery", { tv: "with_genres=80|9648" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-thriller-movies", "Thriller Movies", { movie: "with_genres=53" }],
+  ],
+  paramount: [
+    ["cbs-dramas", "CBS Dramas", { tv: "with_networks=16&with_genres=18" }],
+    ["cbs-comedies", "CBS Comedies", { tv: "with_networks=16&with_genres=35" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-drama-movies", "Drama Movies", { movie: "with_genres=18" }],
+    ["genre-thriller-movies", "Thriller Movies", { movie: "with_genres=53" }],
+    ["genre-scifi-movies", "Science Fiction Movies", { movie: "with_genres=878" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["genre-romance-movies", "Romance Movies", { movie: "with_genres=10749" }],
+  ],
+  disney: [
+    ["marvel-animation", "Marvel Animation", { tv: "with_companies=420&with_genres=16", movie: "with_companies=420&with_genres=16" }],
+    ["disney-musicals", "Disney Musicals", { movie: "with_companies=2|6125&with_keywords=4344" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
+  ],
+  hbomax: [
+    ["hbo-drama", "HBO Drama Series", { tv: "with_networks=49&with_genres=18" }],
+    ["hbo-comedy", "HBO Comedy Series", { tv: "with_networks=49&with_genres=35" }],
+    ["hbo-docs", "HBO Documentaries", { tv: "with_networks=49&with_genres=99" }],
+    ["hbo-crime-mystery", "HBO Crime & Mystery", { tv: "with_networks=49&with_genres=80|9648" }],
+    ["adult-swim-network", "Adult Swim", { tv: "with_networks=80" }],
+  ],
+  primevideo: [
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-war-movies", "War Movies", { movie: "with_genres=10752" }],
+  ],
+  appletv: [
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
+  ],
+  peacock: [
+    ["nbc-comedy", "NBC Comedy", { tv: "with_networks=6&with_genres=35" }],
+    ["nbc-drama", "NBC Drama", { tv: "with_networks=6&with_genres=18" }],
+    ["bravo-reality", "Bravo Reality", { tv: "with_networks=74&with_genres=10764" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["sports-docs", "Sports Documentaries", { tv: "with_genres=99&with_keywords=6075", movie: "with_genres=99&with_keywords=6075" }],
+  ],
+};
+for (const [service, additional] of Object.entries(STREAMING_ADDITIONAL_ROWS)) {
+  STREAMING_ROWS[service].push(...additional);
+}
+
+// One entry per row and kind, in a flat list the page, the manifest and the chart
+// fetcher all read: { service, key, name, chartKey, catalogId, kinds: { movie?, series? } }.
+function getStreamingRowCatalogs() {
+  const out = [];
+  const usedCharts = new Set();
+  const usedQueries = new Set();
+  for (const svc of Object.keys(STREAMING_ROWS)) {
+    const cfg = STREAMING_ROW_SERVICES[svc];
+    for (const definition of STREAMING_ROWS[svc]) {
+      const [key, label, recipe] = definition;
+      const r = typeof recipe === "string" ? STREAMING_ROW_RECIPES[recipe] : recipe;
+      if (!r) continue;
+      const chartKey = `${svc}-${key}`;
+      const build = (kind, params) => {
+        const vc = kind === "movie" ? cfg.minVotes * 3 : cfg.minVotes;
+        const q = String(params).replace(/\{vc\}/g, String(vc)).replace(/\{net\}/g, String(cfg.network));
+        const base = `with_watch_providers=${cfg.provider}&watch_region=US&with_watch_monetization_types=flatrate`;
+        const sorted = /(^|&)sort_by=/.test(q) ? "" : "&sort_by=popularity.desc";
+        return `discover/${kind}?${base}${sorted}${q ? "&" + q : ""}`;
+      };
+      const additional = svc === "discovery" || svc === "netflixkids" || (STREAMING_ADDITIONAL_ROWS[svc] || []).includes(definition);
+      if (additional && usedCharts.has(chartKey)) continue;
+      const kinds = {};
+      for (const [kind, params] of [["movie", r.movie], ["series", r.tv]]) {
+        if (params == null) continue;
+        const path = build(kind === "series" ? "tv" : "movie", params);
+        // Sort parameters, so changing their order cannot hide an identical query.
+        const [endpoint, query] = path.split("?");
+        const normalized = new URLSearchParams(query);
+        normalized.delete("sort_by");
+        normalized.sort();
+        const identity = svc + ":" + endpoint + "?" + normalized.toString();
+        if (additional && usedQueries.has(identity)) continue;
+        usedQueries.add(identity);
+        kinds[kind] = path;
+      }
+      if (!Object.keys(kinds).length) continue;
+      usedCharts.add(chartKey);
+      out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds, additional });
+    }
+  }
+  return out;
+}
+
+const STREAMING_ROW_CATALOGS = getStreamingRowCatalogs();
+const STREAMING_ROW_BY_CHART_KEY = Object.fromEntries(STREAMING_ROW_CATALOGS.map((r) => [r.chartKey, r]));
+
+// Registers each row as a chart key, so `tmdb:chart:netflix-hooked` is served by the
+// same fetcher (and cache) as `tmdb:chart:netflix`.
+for (const row of STREAMING_ROW_CATALOGS) {
+  TMDB_CHART_PATHS[row.chartKey] = { movie: row.kinds.movie, tv: row.kinds.series };
+}
+
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -557,6 +1016,104 @@ function resolveChartSlug(slug) {
   return CHART_SLUG_REGISTRY[slug] || CHART_SLUG_REGISTRY[LEGACY_CHART_SLUGS[slug]] || null;
 }
 
+function findChartOrCollectionEntry(id, type) {
+  if (!id) return null;
+  const cleanId = String(id).trim();
+  const reqType = type === "series" ? "series" : "movie";
+
+  // 1. Direct TMDB chart / kids / holiday / genre slug prefixes
+  if (cleanId.startsWith("tmdb-chart-")) {
+    const net = cleanId.replace(/^tmdb-chart-/, "");
+    const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
+                     (typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === net.replace(/[^a-z0-9]+/g, "")) : null);
+    const row = STREAMING_ROW_BY_CHART_KEY[net];
+    if (row && row.additional && !row.kinds[reqType]) return null;
+    const name = row ? `${row.serviceName}: ${row.name}` : provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:chart:${net}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-kids-")) {
+    const rating = cleanId.replace(/^tmdb-kids-/, "");
+    const match = typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS.find((k) => k.movieUrl === `tmdb:kids:${rating}`) : null;
+    const name = match ? match.name : `Rated ${rating.toUpperCase()} & Under`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:kids:${rating}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-holiday-")) {
+    const hol = cleanId.replace(/^tmdb-holiday-/, "");
+    const match = typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS.find((h) => h.movieUrl === `tmdb:holiday:${hol}`) : null;
+    const name = match ? match.name : `Holiday ${hol}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:holiday:${hol}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-genre-")) {
+    const gen = cleanId.replace(/^tmdb-genre-/, "");
+    const match = typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS.find((g) => g.movieUrl === `tmdb:genre:${gen}`) : null;
+    const name = match ? match.name : `Genre ${gen}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:genre:${gen}`, enabled: true };
+  }
+
+  // 2. Search against all known tables:
+  const tables = [
+    typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10 : [],
+    typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL : [],
+    typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS : [],
+    typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS : [],
+    typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [],
+    typeof MDBLIST_OFFICIAL_CHARTS !== "undefined" ? MDBLIST_OFFICIAL_CHARTS : [],
+    typeof TMDB_CHART_LISTS !== "undefined" ? TMDB_CHART_LISTS : [],
+    typeof TRAKT_CHART_LISTS !== "undefined" ? TRAKT_CHART_LISTS : [],
+    typeof SIMKL_CHART_LISTS !== "undefined" ? SIMKL_CHART_LISTS : [],
+    typeof HIDDEN_GEMS_LIST !== "undefined" ? HIDDEN_GEMS_LIST : [],
+    typeof MY_LISTS_ADDON_CHARTS !== "undefined" ? MY_LISTS_ADDON_CHARTS : []
+  ];
+
+  for (const table of tables) {
+    if (!Array.isArray(table)) continue;
+    for (const item of table) {
+      if (!item) continue;
+      const mUrl = item.movieUrl || item.url || "";
+      const sUrl = item.showUrl || item.url || "";
+      const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
+
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(mUrl) : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(sUrl) : "";
+      const uSlug = typeof slugifyServer === "function" ? slugifyServer(chosenUrl) : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(item.name) : "";
+      const cSlug = item.slug ? String(item.slug).toLowerCase() : "";
+
+      if (cleanId === mSlug || cleanId === sSlug || cleanId === uSlug || cleanId === nSlug || cleanId === cSlug) {
+        return {
+          id: cleanId,
+          name: item.name || cleanId,
+          type: reqType,
+          url: chosenUrl,
+          enabled: true
+        };
+      }
+    }
+  }
+
+  // 3. Fallback: Check CHART_SLUG_ENTRIES
+  if (typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const found = CHART_SLUG_ENTRIES.find((c) => {
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+      const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+      return cleanId === mSlug || cleanId === sSlug || cleanId === nSlug || cleanId === cSlug;
+    });
+    if (found) {
+      return {
+        id: cleanId,
+        name: found.name,
+        type: reqType,
+        url: reqType === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+        enabled: true
+      };
+    }
+  }
+
+  return null;
+}
+
 // --- The curated shelves, in one place ---------------------------------------
 //
 // These twelve used to exist only as a literal inside buildQuickAddPresets
@@ -599,4 +1156,100 @@ const CURATED_LIST_REGISTRY = Object.fromEntries(CURATED_LIST_ENTRIES.map((e) =>
 function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
+
+// Catalogs declared in manifest.catalogs so Nuvio and Stremio recognize that
+// app.my-list provides the sources used by collections folders and premade collections.
+function getPremadeCollectionManifestCatalogs(includeStreamingRows = false) {
+  const list = [];
+  const seen = new Set();
+  function add(type, id, name) {
+    if (!id || !type) return;
+    const key = `${type}:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push({
+      type,
+      id,
+      name: name || id,
+      extra: [{ name: "skip", isRequired: false }],
+    });
+  }
+
+  const explicitCatalogs = [
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today", name: "Apple TV+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-tv-shows-today", name: "Apple TV+ Top 10" },
+    { type: "movie", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "series", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "movie", id: "https-mdblist-com-lists-andykai-disney-top-10-no-hulu", name: "Disney+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-andykai-disney-trending-no-hulu", name: "Disney+ Top 10" },
+    { type: "movie", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "series", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "movie", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q", name: "HBO Max Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-series-cp45l27nhd", name: "HBO Max Top 10" },
+    { type: "movie", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "series", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "movie", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-movies", name: "Hulu Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-shows", name: "Hulu Top 10" },
+    { type: "movie", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "series", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "movie", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-movies", name: "Netflix Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-shows", name: "Netflix Top 10" },
+    { type: "movie", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "series", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "movie", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "series", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-movies-today", name: "Paramount+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-tv-shows-today", name: "Paramount+ Top 10" },
+    { type: "movie", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "series", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-movies", name: "Prime Video Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-tv-shows", name: "Prime Video Top 10" },
+    { type: "movie", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "series", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-peacock-top-10-movies", name: "Peacock Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-peacockpiv-peacock-top-10-shows", name: "Peacock Top 10" },
+    { type: "movie", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "series", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "movie", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "series", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "movie", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "series", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "movie", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+    { type: "series", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+  ];
+
+  for (const exp of explicitCatalogs) {
+    add(exp.type, exp.id, exp.name);
+  }
+
+  // Also include any dynamically defined streaming providers
+  if (typeof STREAMING_TOP10 !== "undefined" && Array.isArray(STREAMING_TOP10)) {
+    for (const item of STREAMING_TOP10) {
+      if (item.movieUrl) add("movie", typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl, `${item.name} Top 10`);
+      if (item.showUrl) add("series", typeof slugifyServer === "function" ? slugifyServer(item.showUrl) : item.showUrl, `${item.name} Top 10`);
+    }
+  }
+  if (typeof STREAMING_ALL !== "undefined" && Array.isArray(STREAMING_ALL)) {
+    for (const item of STREAMING_ALL) {
+      const net = item.movieUrl && item.movieUrl.startsWith("tmdb:chart:") ? item.movieUrl.replace(/^tmdb:chart:/, "") : "";
+      const catId = net ? `tmdb-chart-${net}` : (typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl);
+      if (catId) {
+        add("movie", catId, item.name);
+        add("series", catId, item.name);
+      }
+    }
+  }
+
+  // The service rows are ~250 catalogs: only the Nuvio install link (?collections=1) lists them,
+  // so they do not become 250 shelves on a Stremio home screen.
+  if (includeStreamingRows) {
+    for (const row of STREAMING_ROW_CATALOGS) {
+      if (row.kinds.movie) add("movie", row.catalogId, row.name);
+      if (row.kinds.series) add("series", row.catalogId, row.name);
+    }
+  }
+
+  return list;
+}
+
 

@@ -3271,6 +3271,11 @@ function dismissContinueWatchingShow(showId, btn) {
   // checkmark, and the cron will still periodically check TMDB in case a
   // real new episode later supersedes this dismissal.
   setShowFullyWatched(showId, true);
+  if (typeof syncWebsiteContinueWatchingRemoval === 'function') {
+    commitPromise.then(() => syncWebsiteContinueWatchingRemoval(showId)).catch(() => {
+      if (typeof showToast === 'function') showToast('Could not sync the Continue Watching removal.', 'error');
+    });
+  }
   if (typeof scheduleTrackingSync === 'function') scheduleTrackingSync({ intentionalRemoval: true });
   return commitPromise;
 }

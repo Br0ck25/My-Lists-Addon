@@ -272,11 +272,58 @@ async function continueWatching(env, accountId, opts = {}) {
 async function appContinueWatching(env, accountId, source) {
   const actDb = activityDb(env, accountId);
   if (!actDb) return [];
-  const { results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all();
+  let results;
+  try {
+    ({ results } = await actDb.prepare("SELECT DISTINCT e.media_id FROM watch_events e WHERE e.account_id = ? AND (e.source = ? OR EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = e.id AND s.source = ?))").bind(accountId, source, source).all());
+  } catch (e) {
+    if (!/no such table/i.test(String(e && e.message || e))) throw e;
+    ({ results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all());
+  }
   const mine = new Set((results || []).map((r) => r.media_id));
   const { items } = await continueWatching(env, accountId);
   const resumes = await mediaAppResumes(env, accountId, source);
-  return items.filter((it) => mine.has(it.mediaId) || it.source === source).map((it) => withResumeProgress(it, resumes));
+  const visible = items.filter((it) => mine.has(it.mediaId) || it.source === source).map((it) => withResumeProgress(it, resumes));
+  if (source !== "nuvio") return visible;
+  // A real Nuvio resume can be the first episode the person started, with no
+  // watched event yet. It can also precede a schedule refresh. Neither should
+  // depend on our inferred next-episode shelf or on another app's history.
+  const entries = Object.entries(resumes).filter(([, r]) => r && r.duration > 0 && r.position > 0);
+  const refs = entries.map(([key, r]) => normalizeMediaRef({ id: key.replace(/^(?:movie|series)\|/, ""), kind: r.kind || (r.season != null && r.episode != null ? "series" : "movie") }));
+  const indexed = indexMediaRows(await lookupMediaRows(env, refs.filter(Boolean)));
+  const candidates = entries.map(([id, resume], i) => ({ id, resume, media: refs[i] && matchMediaRow(indexed, refs[i]) })).filter((x) => x.media);
+  const candidateIds = [...new Set(candidates.map((x) => x.media.id))];
+  if (!candidateIds.length) return visible;
+  const titles = await shelfTitles(env, candidateIds);
+  const { results: states } = await actDb.prepare("SELECT media_id, status, dismissed_at_season, dismissed_at_episode FROM show_progress WHERE account_id = ? AND media_id IN (SELECT value FROM json_each(?))").bind(accountId, JSON.stringify(candidateIds)).all();
+  const stateById = new Map((states || []).map((r) => [r.media_id, r]));
+  const included = new Set(visible.map((it) => it.mediaId));
+  for (const { id, resume, media } of candidates) {
+    if (included.has(media.id)) {
+      const existing = visible.findIndex((it) => it.mediaId === media.id);
+      if (existing >= 0) {
+        const item = visible[existing];
+        const resumeKey = item.seasonNum != null && item.episodeNum != null ? item.showId : (item.imdbId || item.id);
+        visible[existing] = withResumeProgress(item, { [resumeKey]: resume });
+      }
+      continue;
+    }
+    const state = stateById.get(media.id);
+    if (state && state.status === "dropped") continue;
+    const series = media.kind === "series";
+    if (series && (resume.season == null || resume.episode == null || resume.episode < 1)) continue;
+    if (series && state && state.dismissed_at_season != null && shelfAtOrBefore(resume.season, Math.max(0, resume.episode - 1), Number(state.dismissed_at_season), Number(state.dismissed_at_episode) || 0)) continue;
+    const t = titles.get(media.id);
+    if (!t) continue;
+    const showId = shelfShowId(t.media);
+    const poster = shelfPoster(t.media);
+    const item = series
+      ? { id: `${showId}:${resume.season}:${resume.episode}`, type: "episode", name: `Episode ${resume.episode}`, showId, showTitle: t.media.title || "", showPoster: poster, poster, seasonNum: resume.season, episodeNum: resume.episode }
+      : { id: showId, type: "movie", name: t.media.title || "", poster };
+    visible.push({ ...withResumeProgress(item, { [series ? showId : item.id]: resume }), mediaId: media.id, updatedAt: Number(resume.at) || 0 });
+    included.add(media.id);
+  }
+  visible.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return visible;
 }
 
 // How far through the app has the account's titles (kept on its sync row, 61_).
@@ -399,20 +446,26 @@ async function watchHistoryPage(env, accountId, opts = {}) {
 // `source` keeps only the plays that came from there (the Nuvio and Stremio
 // lists, 61_media-app-sync.js); without it every play is read, as before.
 async function watchEventRows(actDb, accountId, cursor, limit, source) {
-  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
-  const args = [accountId];
-  if (source) {
-    sql += " AND source = ?";
-    args.push(source);
+  // The linked app can have its own timestamp for the same viewing. Use it
+  // for ordering and keyset pagination without creating a second global play.
+  async function read(linked) {
+    const date = linked ? "COALESCE(s.watched_at, e.watched_at)" : "e.watched_at";
+    let sql = `SELECT e.id, e.media_id, e.season, e.episode, ${date} AS watched_at, e.legacy_id FROM watch_events e`;
+    const args = [];
+    if (linked) { sql += " LEFT JOIN watch_event_sources s ON s.event_id = e.id AND s.source = ?"; args.push(source); }
+    sql += " WHERE e.account_id = ?"; args.push(accountId);
+    if (source) { sql += linked ? " AND (e.source = ? OR s.source IS NOT NULL)" : " AND e.source = ?"; args.push(source); }
+    if (cursor) { sql += ` AND (${date} < ? OR (${date} = ? AND e.id < ?))`; args.push(cursor.t, cursor.t, cursor.id); }
+    sql += ` ORDER BY ${date} DESC, e.id DESC LIMIT ?`; args.push(limit);
+    const { results } = await actDb.prepare(sql).bind(...args).all();
+    return results || [];
   }
-  if (cursor) {
-    sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
-    args.push(cursor.t, cursor.t, cursor.id);
+  if (!source) return read(false);
+  try { return await read(true); }
+  catch (e) {
+    if (!/no such table/i.test(String(e && e.message || e))) throw e;
+    return read(false);
   }
-  sql += " ORDER BY watched_at DESC, id DESC LIMIT ?";
-  args.push(limit);
-  const { results } = await actDb.prepare(sql).bind(...args).all();
-  return results || [];
 }
 
 // Every play an account has, newest first: the whole Watch History, as the
@@ -421,13 +474,13 @@ async function watchEventRows(actDb, accountId, cursor, limit, source) {
 // the legacy record never had.
 const WATCH_HISTORY_READ_ROWS = 5000;
 
-async function watchHistoryAll(env, accountId) {
+async function watchHistoryAll(env, accountId, source) {
   const actDb = activityDb(env, accountId);
   if (!actDb) return [];
   const rows = [];
   let cursor = null;
   for (;;) {
-    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS);
+    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS, source);
     rows.push(...part);
     if (part.length < WATCH_HISTORY_READ_ROWS) break;
     const last = part[part.length - 1];

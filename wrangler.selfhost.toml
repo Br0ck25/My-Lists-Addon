@@ -47,6 +47,7 @@ crons = ["*/5 * * * *"]
 # The settings the public site runs with. Set them now, on an empty database,
 # and leave them set (FF_V2_LISTS_ONLY and FF_EVENT_TRACKING are one-way).
 [vars]
+FF_MEDIA_APP_PUSH = "1"
 FF_SESSIONS = "1"
 FF_INSTALLS = "1"
 FF_V2_LISTS_READ = "1"

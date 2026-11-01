@@ -2,7 +2,7 @@
 --
 -- The whole schema of the mylists-activity database (DB_ACTIVITY), for a
 -- fresh database. Kept identical to running migrations/activity/ in order
--- (a test checks). Today that is A0001 alone.
+-- (a test checks). Today that is A0001 and A0002.
 --
 --
 -- Phase 3c groundwork: watch history and show progress in their own D1
@@ -88,3 +88,14 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 INSERT OR IGNORE INTO schema_migrations (version, applied_at)
   VALUES ('A0001', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+-- Track apps that report a play already recorded by another source. The
+-- canonical event remains one row so global history and counts do not double.
+CREATE TABLE IF NOT EXISTS watch_event_sources (
+    event_id INTEGER NOT NULL REFERENCES watch_events(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    watched_at INTEGER NOT NULL,
+    PRIMARY KEY (event_id, source)
+);
+CREATE INDEX IF NOT EXISTS idx_wes_source_event ON watch_event_sources(source, event_id);
+INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+  VALUES ('A0002', CAST(strftime('%s', 'now') AS INTEGER) * 1000);

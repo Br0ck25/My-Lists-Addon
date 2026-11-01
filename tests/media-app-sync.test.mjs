@@ -44,7 +44,7 @@ function fakeServices(state) {
         if (state.putFails) return json({ result: { success: false } });
         for (const c of body.changes) {
           const i = state.library.findIndex((x) => x._id === c._id);
-          if (i >= 0) state.library[i] = c;
+          if (i >= 0) state.library[i] = c; else state.library.push(c);
         }
         return json({ result: { success: true } });
       }
@@ -78,14 +78,57 @@ function fakeServices(state) {
         const auth = new Headers(init.headers || {}).get("authorization");
         seen.nuvio.push({ fn, auth, body });
         if (state.nuvioRejects || auth !== "Bearer " + state.nuvioToken) return json({ message: "JWT expired" }, 401);
-        if (fn === "sync_pull_profiles") return json(state.profiles || [{ profile_index: 1, name: "Main" }]);
-        if (fn === "sync_pull_watched_items") return state.pullFails ? json({ message: "boom" }, 500) : json(body.p_page === 1 ? state.watched || [] : []);
-        if (fn === "sync_pull_watch_progress") return json(state.progress || []);
+        // The documented shape: profile rows carry no collections; those come from sync_pull_collections.
+        if (fn === "sync_pull_profiles") return json((state.profiles || [{ profile_index: 1, name: "Main" }]).map(({ collections_json, ...profile }) => profile));
+        if (fn === "sync_pull_collections") {
+          if (state.collectionsPullFails) return json({ message: "boom" }, 500);
+          const p = (state.profiles || []).find((r) => r.profile_index === body.p_profile_id);
+          return json(p && p.collections_json ? [{ profile_id: p.profile_index, collections_json: p.collections_json, updated_at: "2026-01-01T00:00:00Z" }] : []);
+        }
+        if (fn === "sync_get_library_delta_cursor") return json(state.libraryCursor || 0);
+        if (fn === "sync_pull_library") {
+          if (state.libraryReadFails) return json({ message: "boom" }, 500);
+          return json((state.nuvioLibrary || []).slice(body.p_offset, body.p_offset + body.p_limit));
+        }
+        if (fn === "sync_pull_library_delta") return json((state.libraryDelta || []).filter((e) => e.event_id > body.p_since_event_id).slice(0, body.p_limit));
+        if (fn === "sync_push_library_items") {
+          if (state.libraryWriteFails) return json({ message: "boom" }, 500);
+          seen.libraryPushed = (seen.libraryPushed || []).concat(body.p_items);
+          state.nuvioLibrary = (state.nuvioLibrary || []).concat(body.p_items);
+          return new Response(null, { status: 204 });
+        }
+        if (fn === "sync_delete_library_items") {
+          if (state.libraryWriteFails) return json({ message: "boom" }, 500);
+          seen.libraryDeleted = (seen.libraryDeleted || []).concat(body.p_keys);
+          state.nuvioLibrary = (state.nuvioLibrary || []).filter((r) => !body.p_keys.some((k) => k.content_id === r.content_id && k.content_type === r.content_type));
+          return new Response(null, { status: 204 });
+        }
+        if (fn === "sync_pull_watched_items") return state.pullFails ? json({ message: "boom" }, 500) : json((state.watched || []).slice((body.p_page - 1) * body.p_page_size, body.p_page * body.p_page_size));
+        if (fn === "sync_pull_watch_progress") {
+          const all = state.progress || [];
+          const range = new Headers(init.headers || {}).get("range");
+          const match = /^(\d+)-(\d+)$/.exec(range || "");
+          const start = match ? Number(match[1]) : 0, end = match ? Number(match[2]) : all.length - 1;
+          seen.nuvio[seen.nuvio.length - 1].range = range;
+          if (state.ignoreProgressRange) return json(all.slice(0, 500));
+          if (match && start >= all.length && all.length) return new Response("", { status: 416, headers: { "Content-Range": `*/${all.length}` } });
+          return new Response(JSON.stringify(all.slice(start, end + 1)), { status: 200, headers: { "content-type": "application/json", "content-range": `${start}-${Math.min(end, all.length - 1)}/${all.length}` } });
+        }
         if (fn === "sync_delete_watched_items") {
           if (state.deleteFails) return json({ message: "boom" }, 500);
           seen.deleted = (seen.deleted || []).concat(body.p_keys);
           const same = (w, k) => String(mediaAppId(w)) === String(mediaAppId(k)) && (w.season ?? null) === (k.season ?? null) && (w.episode ?? null) === (k.episode ?? null);
           state.watched = (state.watched || []).filter((w) => !body.p_keys.some((k) => same(w, k)));
+          return new Response(null, { status: 204 });
+        }
+        if (fn === "sync_delete_watch_progress") {
+          if (state.deleteFails) return json({ message: "boom" }, 500);
+          seen.progressDeleted = (seen.progressDeleted || []).concat(body.p_keys);
+          state.progress = (state.progress || []).filter((p) => {
+            const id = mediaAppId(p);
+            const key = p.season != null && p.episode != null ? `${id}_s${p.season}e${p.episode}` : id;
+            return !body.p_keys.includes(key);
+          });
           return new Response(null, { status: 204 });
         }
         if (fn === "sync_push_watch_progress") {
@@ -94,6 +137,10 @@ function fakeServices(state) {
             const i = (state.progress || []).findIndex((p) => mediaAppId(p) === mediaAppId(e) && (p.season ?? null) === (e.season ?? null) && (p.episode ?? null) === (e.episode ?? null));
             if (i >= 0) state.progress[i] = e;
           }
+          return new Response(null, { status: 204 });
+        }
+        if (fn === "sync_push_collections") {
+          seen.collectionsPushed = (seen.collectionsPushed || []).concat([body.p_collections_json]);
           return new Response(null, { status: 204 });
         }
         if (fn === "sync_push_watched_items") {
@@ -672,7 +719,7 @@ describe("two-way sync: Nuvio", () => {
     return { state, seen, ctx };
   }
 
-  it("sends plays from elsewhere in the shape Nuvio's own rows have, and not the ones it already has", async () => {
+  it("sends plays using the documented Nuvio format and not ones it already has", async () => {
     const { seen, ctx } = await ready("nuvpush", rows("snake"));
     assert.equal(seen.pushed.length, 0, "nothing of Nuvio's own is sent back");
     addEvent(ctx, "tt1111111", "movie", null, null, NOW - 29 * HOUR);
@@ -680,19 +727,19 @@ describe("two-way sync: Nuvio", () => {
     addEvent(ctx, SHOW, "series", 1, 2, NOW - HOUR);
     await runAgain(ctx, "nuvio");
     assert.deepEqual(seen.pushed.map((p) => [p.content_id, p.content_type, p.season, p.episode]), [["tt5555555", "movie", undefined, undefined], [SHOW, "series", 1, 2]], "the movie Nuvio has is skipped");
-    assert.equal(seen.pushed[0].watched_at, Math.round((NOW - 2 * HOUR) / 1000), "seconds, as in its own rows");
+    assert.equal(seen.pushed[0].watched_at, NOW - 2 * HOUR, "the API uses milliseconds");
     assert.equal(seen.pushed[0].title, "Title tt5555555");
     seen.pushed.length = 0;
     await runAgain(ctx, "nuvio");
     assert.equal(seen.pushed.length, 0, "each play is sent once");
   });
 
-  it("follows camelCase rows with camelCase, and milliseconds with milliseconds", async () => {
+  it("writes the documented snake_case even when incoming rows use camelCase", async () => {
     const { seen, ctx } = await ready("nuvcamel", rows("camel"));
     addEvent(ctx, "tt5555555", "movie", null, null, NOW - 2 * HOUR);
     await runAgain(ctx, "nuvio");
-    assert.deepEqual(Object.keys(seen.pushed[0]).sort(), ["contentId", "contentType", "title", "watchedAt"]);
-    assert.equal(seen.pushed[0].watchedAt, NOW - 2 * HOUR);
+    assert.deepEqual(Object.keys(seen.pushed[0]).sort(), ["content_id", "content_type", "title", "watched_at"]);
+    assert.equal(seen.pushed[0].watched_at, NOW - 2 * HOUR);
   });
 
   it("carries plays between the two apps, and not back to where they came from", async () => {
@@ -723,13 +770,14 @@ describe("two-way sync: Nuvio", () => {
     assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events WHERE source = 'nuvio'").get().n, 2, "nothing deleted here either");
   });
 
-  it("waits, and says so, when Nuvio has no row to copy the format from", async () => {
+  it("sends a first play to an empty Nuvio history", async () => {
     const { seen, ctx } = await ready("nuvempty", []);
     addEvent(ctx, "tt5555555", "movie", null, null, NOW - HOUR);
     await runAgain(ctx, "nuvio");
-    assert.equal(seen.pushed.length, 0);
-    assert.match(ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error, /something watched in Nuvio/);
-    assert.equal(cursorOf(ctx).pushedId || 0, 0, "not moved: it will send once it can");
+    assert.equal(seen.pushed.length, 1);
+    assert.equal(seen.pushed[0].content_id, "tt5555555");
+    assert.equal(seen.pushed[0].watched_at, NOW - HOUR);
+    assert.ok(cursorOf(ctx).pushedId > 0);
   });
 
   it("records a failed send and tries again from the same place", async () => {
@@ -843,6 +891,107 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     assert.deepEqual(await row(ctx.env, "lsmaincfg", "stremio", "watch-history", "series"), []);
   });
 
+  it("retains Nuvio provenance on a play already recorded by another source without duplicating it", async () => {
+    const state = { watched: [{ content_id: "tt7777777", content_type: "movie", title: "Shared Film", watched_at: NOW - HOUR }], progress: [] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvprovenance", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    ctx.owner = ctx.user;
+    addEvent(ctx, "tt7777777", "movie", null, null, NOW - 2 * HOUR, "ping");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    await storeConfig(ctx.env, "nuvprov", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "nuvprov", "nuvio", "watch-history", "movie"), ["tt7777777"]);
+    assert.equal(events(ctx.env, ctx.accountId).length, 1, "the global play is not duplicated");
+    const link = ctx.env.DB_ACTIVITY._db.prepare("SELECT source, watched_at FROM watch_event_sources").get();
+    assert.equal(link.source, "nuvio");
+    assert.equal(link.watched_at, NOW - HOUR, "Nuvio's own watch time is preserved");
+    await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } });
+    await pull(ctx.env);
+    assert.equal(seen.pushed.length, 0, "a linked play is not pushed back to Nuvio");
+    const removed = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "history", id: "tt7777777", mediaType: "movie" } });
+    assert.equal(removed.status, 200, JSON.stringify(removed.body));
+    assert.equal(events(ctx.env, ctx.accountId).length, 1, "removing Nuvio history preserves the ping");
+    assert.equal(events(ctx.env, ctx.accountId)[0].source, "ping");
+    assert.deepEqual(await row(ctx.env, "nuvprov", "nuvio", "watch-history", "movie"), []);
+  });
+
+  it("backfills links for an old Nuvio play when upgrading from an incremental cursor", async () => {
+    const state = { watched: [], progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvprovenanceupgrade", { FF_EVENT_TRACKING: "1" });
+    ctx.owner = ctx.user;
+    addEvent(ctx, "tt8888888", "movie", null, null, NOW - 100 * HOUR, "ping");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    state.watched.push({ content_id: "tt8888888", content_type: "movie", title: "Old Film", watched_at: NOW - 99 * HOUR });
+    ctx.env.DB._db.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE provider = 'nuvio'").run(JSON.stringify({ mtime: NOW }));
+    await runAgain(ctx, "nuvio");
+    await storeConfig(ctx.env, "nuvprovold", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "nuvprovold", "nuvio", "watch-history", "movie"), ["tt8888888"]);
+    assert.equal(events(ctx.env, ctx.accountId).length, 1);
+    const cursor = JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync WHERE provider = 'nuvio'").get().cursor_json);
+    assert.equal(cursor.provenanceVersion, 1);
+  });
+
+  it("preserves a linked second app when the originating Nuvio history is removed", async () => {
+    const ctx = await connected("nuvtransfer", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    const event = ctx.env.DB_ACTIVITY._db.prepare("SELECT id FROM watch_events WHERE account_id = ? AND source = 'nuvio' AND season IS NULL").get(ctx.accountId);
+    ctx.env.DB_ACTIVITY._db.prepare("INSERT INTO watch_event_sources (event_id, source, watched_at) VALUES (?, 'stremio', ?)").run(event.id, NOW - HOUR);
+    const result = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "history", id: "tt1111111", mediaType: "movie" } });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    await storeConfig(ctx.env, "nuvtranscfg", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "nuvtranscfg", "nuvio", "watch-history", "movie"), []);
+    assert.deepEqual(await row(ctx.env, "nuvtranscfg", "stremio", "watch-history", "movie"), ["tt1111111"]);
+  });
+
+  it("shows a Nuvio resume for a first episode without watch events or a schedule, and drops it when removed remotely", async () => {
+    const state = { watched: [], progress: [{ content_id: SHOW, content_type: "series", season: 1, episode: 1, position: 600000, duration: 2400000, last_watched: NOW - HOUR }] };
+    fakeServices(state);
+    const ctx = await setup("nuvnoschedule", { FF_EVENT_TRACKING: "1" });
+    ctx.owner = ctx.user;
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    const ask = () => call(ctx.env, "/api/preview", { method: "POST", json: { url: `autotrack:nuvio-continue-watching:mixed:${ctx.owner.creatorName}`, type: "series", sample: 20, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    const first = (await ask()).body.sample;
+    assert.deepEqual(first.map((m) => [m.id, m.seasonNum, m.episodeNum, m.progress]), [[SHOW, 1, 1, 25]]);
+    assert.equal(events(ctx.env, ctx.accountId).length, 0);
+    state.progress = [];
+    const sync = await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+    assert.equal(sync.status, 200);
+    assert.deepEqual((await ask()).body.sample, [], "a disappeared remote resume does not linger");
+  });
+
+  it("keeps separate resume points for a movie and show sharing a TMDB number", async () => {
+    const state = { watched: [], progress: [
+      { content_id: "tmdb:550", content_type: "movie", position: 1000, duration: 4000, last_watched: NOW - HOUR },
+      { content_id: "tmdb:550", content_type: "series", season: 1, episode: 1, position: 2000, duration: 4000, last_watched: NOW - 2 * HOUR },
+    ] };
+    fakeServices(state);
+    const ctx = await setup("nuvcwcollision", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    ctx.owner = ctx.user;
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const ask = (type) => call(ctx.env, "/api/preview", { method: "POST", json: { url: `autotrack:nuvio-continue-watching:mixed:${ctx.owner.creatorName}`, type, sample: 20, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    assert.deepEqual((await ask("movie")).body.sample.map((m) => [m.type, m.progress]), [["movie", 25]]);
+    assert.deepEqual((await ask("series")).body.sample.map((m) => [m.type, m.progress]), [["series", 50]]);
+    const refused = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "continue-watching", id: "tmdb:550" } });
+    assert.equal(refused.status, 400, "ambiguous removal requires a media type");
+    const removed = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "continue-watching", id: "tmdb:550", mediaType: "movie" } });
+    assert.equal(removed.status, 200, JSON.stringify(removed.body));
+    assert.deepEqual((await ask("movie")).body.sample, []);
+    assert.deepEqual((await ask("series")).body.sample.map((m) => [m.type, m.progress]), [["series", 50]]);
+    assert.deepEqual(state.progress.map((p) => p.content_type), ["series"]);
+  });
+
+  it("requires the provenance migration rather than advancing the Nuvio cursor without it", async () => {
+    const state = { watched: [{ content_id: "tt7777777", content_type: "movie", title: "Film", watched_at: NOW - HOUR }], progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvmigration", { FF_EVENT_TRACKING: "1" });
+    ctx.env.DB_ACTIVITY._db.exec("DROP TABLE watch_event_sources; DELETE FROM schema_migrations WHERE version = 'A0002'");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const settings = await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie });
+    assert.match(settings.body.sync.error, /A0002/);
+    assert.equal(events(ctx.env, ctx.accountId).length, 0);
+  });
+
   it("Continue Watching has the movie Nuvio left part way through, and the next episode of its shows", async () => {
     const ctx = await connected("lscw");
     const mediaId = ctx.env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(SHOW).id;
@@ -867,6 +1016,21 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     const other = await createUser(ctx.env, "lsprevother");
     const denied = await ask(`autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`, other);
     assert.equal(denied.body.count, 0, "another account's key reads nothing");
+  });
+
+  it("pages all app history beyond the first 100 plays without repeating titles", async () => {
+    const ctx = await connected("lspages");
+    for (let i = 0; i < 120; i++) addEvent(ctx, `tt${String(2000000 + i)}`, "movie", null, null, NOW - i * 1000, "nuvio");
+    const url = `autotrack:nuvio-watch-history:mixed:${ctx.owner.creatorName}`;
+    const ask = (skip) => call(ctx.env, "/api/preview", { method: "POST", json: { url, type: "mixed", skip, sample: 100, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    const first = (await ask(0)).body;
+    const second = (await ask(100)).body;
+    assert.equal(first.sample.length, 100);
+    assert.equal(first.totalItems, 122);
+    assert.equal(first.maybeMore, true);
+    assert.equal(second.sample.length, 22);
+    assert.equal(second.maybeMore, false);
+    assert.equal(new Set([...first.sample, ...second.sample].map((m) => m.id)).size, 122);
   });
 
   it("answers a movies request with movies only and a shows request with shows only, so a card does not list each title twice", async () => {
@@ -1043,6 +1207,78 @@ describe("refreshing when the person looks, not only every hour", () => {
     assert.equal(events(ctx.env, ctx.accountId).length, 4);
   });
 
+  it("pages the full Nuvio snapshot rather than stopping at 200 progress entries", async () => {
+    const state = { watched: [], progress: Array.from({ length: 505 }, (_, i) => ({
+      id: `progress-${i}`, content_id: `tt${String(3000000 + i)}`, content_type: "movie",
+      name: `Movie ${i}`, position: 3000, duration: 6000, last_watched: NOW - i * 1000,
+    })) };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvprogresspages", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    await pull(ctx.env, 10);
+    assert.equal(progressRows(ctx.env, ctx.accountId).length, 505);
+    const ranges = seen.nuvio.filter((c) => c.fn === "sync_pull_watch_progress").map((c) => c.range);
+    assert.ok(ranges.includes("0-499") && ranges.includes("500-999"), JSON.stringify(ranges));
+    const last = (await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.sync.lastResult;
+    assert.equal(last.found, 505);
+    const stored = JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync WHERE provider = 'nuvio'").get().cursor_json);
+    assert.equal(Object.keys(stored.resumes).length, 505, "resume points are not cut off at 300");
+  });
+
+  it("keeps a movie and a show distinct when their TMDB numbers match", async () => {
+    const state = { watched: [
+      { content_id: "tmdb:550", content_type: "movie", title: "Film", watched_at: NOW - 10000 },
+      { content_id: "tmdb:550", content_type: "series", title: "Show", season: 1, episode: 1, watched_at: NOW - 20000 },
+    ], progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvcollidingid", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    const ask = (type) => call(ctx.env, "/api/preview", { method: "POST", json: {
+      url: `autotrack:nuvio-watch-history:mixed:${ctx.user.creatorName}`, type, sample: 20,
+      creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey,
+    } });
+    const both = (await ask("mixed")).body.sample;
+    assert.deepEqual(both.map((m) => m.type).sort(), ["movie", "series"]);
+    assert.equal((await ask("movie")).body.sample.length, 1);
+    assert.equal((await ask("series")).body.sample.length, 1);
+  });
+
+  it("keeps a later movie rewatch in Continue Watching", async () => {
+    const state = { watched: [{ content_id: "tt7654321", content_type: "movie", title: "Film", watched_at: NOW - 100 * HOUR }],
+      progress: [{ content_id: "tt7654321", content_type: "movie", name: "Film", position: 3000, duration: 6000, last_watched: NOW - HOUR }] };
+    fakeServices(state);
+    const ctx = await setup("nuvrewatch", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    const res = await call(ctx.env, "/api/preview", { method: "POST", json: {
+      url: `autotrack:nuvio-continue-watching:mixed:${ctx.user.creatorName}`, type: "movie", sample: 20,
+      creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey,
+    } });
+    assert.deepEqual(res.body.sample.map((m) => m.id), ["tt7654321"]);
+  });
+
+  it("a forced Nuvio sync recovers older history previously skipped by an incremental cursor", async () => {
+    const state = { watched: watchedRows(), progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvforceold", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    state.watched.push({ content_id: "tt8888888", content_type: "movie", title: "Older", watched_at: NOW - 100 * HOUR });
+    await sync(ctx, { wait: true, force: true });
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt8888888"));
+  });
+
+  it("rejects a server that repeats the first full progress page", async () => {
+    const state = { watched: [], ignoreProgressRange: true, progress: Array.from({ length: 501 }, (_, i) => ({
+      id: `progress-${i}`, content_id: `tt${String(4000000 + i)}`, content_type: "movie", position: 1, duration: 2, last_watched: NOW - i,
+    })) };
+    fakeServices(state);
+    const ctx = await setup("nuvrangefail", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    const result = await sync(ctx, { wait: true, force: true });
+    assert.equal(result.status, 502);
+    assert.match(result.body.detail || result.body.error, /repeated a watch progress page/i);
+    assert.equal(progressRows(ctx.env, ctx.accountId).length, 0);
+  });
+
   it("does not run alongside a pull that is already running for the account", async () => {
     const state = { watched: watchedRows(), progress: [] };
     const seen = fakeServices(state);
@@ -1092,6 +1328,88 @@ describe("refreshing when the person looks, not only every hour", () => {
 });
 
 
+describe("live Nuvio and Stremio libraries", () => {
+  const flags = { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" };
+  const preview = (ctx, app, user = ctx.user, skip = 0) => call(ctx.env, "/api/preview", { method: "POST", json: { url: `autotrack:${app}-library:mixed:${ctx.user.creatorName}`, type: "mixed", sample: 100, skip, creatorName: user.creatorName, creatorKey: user.creatorKey } });
+  const mutate = (ctx, app, body, cookie = ctx.cookie) => call(ctx.env, `/api/connections/${app}/library-item`, { method: "POST", cookie, json: body });
+
+  it("reads a private Nuvio snapshot, replays concurrent deltas and reflects remote edits", async () => {
+    const state = { watched: [], progress: [], nuvioLibrary: [
+      { content_id: "tt1111111", content_type: "movie", name: "One", added_at: 4 },
+      { content_id: "tt2222222", content_type: "series", name: "Two", added_at: 3 },
+    ], libraryCursor: 3, libraryDelta: [
+      { event_id: 4, operation: "delete", content_id: "tt1111111", content_type: "movie" },
+      { event_id: 5, operation: "upsert", content_id: "tt3333333", content_type: "movie", name: "Three", added_at: 5 },
+    ] };
+    fakeServices(state);
+    const ctx = await setup("nuvlibread", flags);
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    let res = await preview(ctx, "nuvio");
+    assert.deepEqual(res.body.sample.map((x) => [x.id, x.type]), [["tt3333333", "movie"], ["tt2222222", "series"]]);
+    const other = await createUser(ctx.env, "nuvlibother");
+    assert.equal((await preview(ctx, "nuvio", other)).body.count, 0);
+    state.libraryCursor = 5; state.libraryDelta = [];
+    state.nuvioLibrary = [{ content_id: "tt4444444", content_type: "movie", name: "External change" }];
+    res = await preview(ctx, "nuvio");
+    assert.deepEqual(res.body.sample.map((x) => x.id), ["tt4444444"]);
+  });
+
+  it("paginates a large Nuvio library and reports a failed read instead of an empty list", async () => {
+    const state = { watched: [], progress: [], nuvioLibrary: Array.from({ length: 510 }, (_, i) => ({ content_id: `tt${2000000 + i}`, content_type: "movie", name: `Movie ${i}`, added_at: i })) };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvliblarge", flags);
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const first = (await preview(ctx, "nuvio")).body;
+    const next = (await preview(ctx, "nuvio", ctx.user, 100)).body;
+    assert.equal(first.totalItems, 510);
+    assert.equal(first.sample.length, 100);
+    assert.equal(next.sample.length, 100);
+    assert.equal(new Set([...first.sample, ...next.sample].map((m) => m.id)).size, 200);
+    assert.ok(seen.nuvio.some((c) => c.fn === "sync_pull_library" && c.body.p_offset === 500));
+    state.libraryReadFails = true;
+    const failed = (await preview(ctx, "nuvio")).body;
+    assert.equal(failed.ok, false);
+  });
+
+  it("uses incremental Nuvio library writes and preserves unrelated items on failure", async () => {
+    const state = { watched: [], progress: [], nuvioLibrary: [{ content_id: "tt1111111", content_type: "movie", name: "Keep", description: "original" }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvlibwrite", flags);
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const add = { action: "add", id: "tmdb:550", mediaType: "movie", title: "New" };
+    assert.equal((await mutate(ctx, "nuvio", add)).status, 200);
+    assert.deepEqual(seen.libraryPushed.map((x) => x.content_id), ["tmdb:550"]);
+    assert.equal(state.nuvioLibrary[0].description, "original");
+    assert.deepEqual((await preview(ctx, "nuvio")).body.sample.map((x) => x.id).sort(), ["tmdb:550", "tt1111111"]);
+    state.libraryWriteFails = true;
+    assert.equal((await mutate(ctx, "nuvio", { action: "remove", id: "tmdb:550", mediaType: "movie" })).status, 502);
+    assert.equal(state.nuvioLibrary.length, 2);
+    state.libraryWriteFails = false;
+    assert.equal((await mutate(ctx, "nuvio", { action: "remove", id: "tmdb:550", mediaType: "movie" })).status, 200);
+    assert.deepEqual(state.nuvioLibrary.map((r) => r.content_id), ["tt1111111"]);
+    assert.equal((await mutate(ctx, "nuvio", add, "")).status, 401);
+  });
+
+  it("reads and updates Stremio library membership without destroying watch state", async () => {
+    const state = { approved: true, library: [{ _id: "tt1111111", type: "movie", name: "Movie", removed: false, temp: false, _mtime: new Date().toISOString(), state: { timesWatched: 2, timeOffset: 300 } }], episodes: {} };
+    const seen = fakeServices(state);
+    const ctx = await setup("stlib", flags);
+    await connectStremio(ctx, state);
+    assert.deepEqual((await preview(ctx, "stremio")).body.sample.map((x) => x.id), ["tt1111111"]);
+    assert.equal((await mutate(ctx, "stremio", { action: "remove", id: "tt1111111", mediaType: "movie" })).status, 200);
+    assert.equal(seen.puts.at(-1)[0].removed, true);
+    assert.equal(seen.puts.at(-1)[0].state.timesWatched, 2);
+    assert.deepEqual((await preview(ctx, "stremio")).body.sample, []);
+    assert.equal((await mutate(ctx, "stremio", { action: "add", id: "tt1111111", mediaType: "movie", title: "Movie" })).status, 200);
+    assert.equal(seen.puts.at(-1)[0].removed, false);
+    assert.equal(seen.puts.at(-1)[0].state.timeOffset, 300);
+    assert.equal((await mutate(ctx, "stremio", { action: "add", id: "tt2222222", mediaType: "series", title: "Show" })).status, 200);
+    assert.equal(state.library.find((x) => x._id === "tt2222222").temp, false);
+    state.library.find((x) => x._id === "tt2222222").removed = true;
+    assert.deepEqual((await preview(ctx, "stremio")).body.sample.map((x) => x.id), ["tt1111111"]);
+  });
+});
+
 // --- Removing from the app ---------------------------------------------------------------
 
 describe("removing an item from the app, from the website", () => {
@@ -1124,6 +1442,21 @@ describe("removing an item from the app, from the website", () => {
     json: { url: `autotrack:${app}-${slug}:mixed:${ctx.user.creatorName}`, type, sample: 20, creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey },
   }).then((r) => (r.body.sample || []).map((m) => m.id));
 
+  it("adds a movie directly to Nuvio history using the documented payload", async () => {
+    const ctx = await nuvio("directhist");
+    const r = await call(ctx.env, "/api/connections/nuvio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: "tt7777777", mediaType: "movie", title: "New movie" } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(ctx.seen.pushed[0].content_id, "tt7777777");
+    assert.equal(ctx.seen.pushed[0].content_type, "movie");
+    assert.ok(ctx.seen.pushed[0].watched_at > 1e12);
+    assert.equal(r.body.mirrored, true);
+    assert.deepEqual(await list(ctx, "nuvio", "watch-history", "movie"), ["tt7777777", "tt1111111"]);
+    const bad = await call(ctx.env, "/api/connections/nuvio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: SHOW, mediaType: "series" } });
+    assert.equal(bad.status, 400);
+    const anon = await call(ctx.env, "/api/connections/nuvio/add-history", { method: "POST", json: { id: "tt7777777", mediaType: "movie" } });
+    assert.equal(anon.status, 401);
+  });
+
   it("Nuvio, Watch History, a show: every watched episode is deleted there, here, and does not come back", async () => {
     const ctx = await nuvio("rmhist");
     const r = await remove(ctx, "nuvio", { target: "history", id: SHOW, mediaType: "series" });
@@ -1147,12 +1480,30 @@ describe("removing an item from the app, from the website", () => {
     assert.deepEqual(await list(ctx, "nuvio", "watch-history", "series"), [SHOW]);
   });
 
-  it("Nuvio, Continue Watching: the position is set to zero there, and the item leaves the list, keeping the history", async () => {
+  it("matches an IMDb shelf item against Nuvio's TMDB history identity", async () => {
+    const ctx = await nuvio("rmtmdb");
+    ctx.env.DB._db.prepare("UPDATE media SET tmdb_id = ? WHERE imdb_id = ?").run(550, "tt1111111");
+    ctx.state.watched[0].content_id = "tmdb:550";
+    const r = await remove(ctx, "nuvio", { target: "history", id: "tt1111111" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(ctx.seen.deleted[0].content_id, "tmdb:550");
+    assert.equal(ctx.state.watched.some((w) => w.content_id === "tmdb:550"), false);
+  });
+
+  it("deletes movie progress with null season and episode using the movie key", async () => {
+    const ctx = await nuvio("rmnullprogress");
+    ctx.state.progress[0].season = null;
+    ctx.state.progress[0].episode = null;
+    const r = await remove(ctx, "nuvio", { target: "continue-watching", id: "tt3333333" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(ctx.seen.progressDeleted, ["tt3333333"]);
+  });
+
+  it("Nuvio, Continue Watching: progress is deleted there and history is kept", async () => {
     const ctx = await nuvio("rmcw");
     await remove(ctx, "nuvio", { target: "continue-watching", id: "tt3333333", mediaType: "movie" });
     await remove(ctx, "nuvio", { target: "continue-watching", id: SHOW, mediaType: "series" });
-    assert.deepEqual(ctx.seen.progressPushed.map((e) => [mediaAppId(e), e.position]).sort(), [[SHOW, 0], ["tt3333333", 0]]);
-    assert.ok(ctx.seen.progressPushed.every((e) => e.duration > 0), "the rest of each row is sent as it was read");
+    assert.deepEqual(ctx.seen.progressDeleted.sort(), [`${SHOW}_s1e3`, "tt3333333"].sort());
     assert.deepEqual(await list(ctx, "nuvio", "continue-watching", "movie"), []);
     assert.deepEqual(await list(ctx, "nuvio", "continue-watching", "series"), []);
     const kept = JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync").get().cursor_json).resumes || {};
@@ -1206,6 +1557,17 @@ describe("removing an item from the app, from the website", () => {
       await connectStremio(ctx, state);
       return { ...ctx, state, seen };
     }
+
+    it("adds a movie to history without replacing its Stremio library metadata", async () => {
+      const ctx = await stremio("addsthist", [item({ state: { timesWatched: 0, flaggedWatched: 0 } })]);
+      const r = await call(ctx.env, "/api/connections/stremio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: "tt1111111", mediaType: "movie", title: "Movie A" } });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.equal(ctx.seen.puts[0][0].state.timesWatched, 1);
+      assert.equal(ctx.seen.puts[0][0].poster, "https://img.test/a.jpg");
+      const missing = await call(ctx.env, "/api/connections/stremio/add-history", { method: "POST", cookie: ctx.cookie, json: { id: "tt8888888", mediaType: "movie" } });
+      assert.equal(missing.status, 400);
+      assert.match(missing.body.error, /library first/);
+    });
 
     it("History, a movie: marked unwatched and its position cleared, keeping the rest of the item, and it stays out after a pull", async () => {
       const ctx = await stremio("rmsthist", [item()]);
@@ -1290,5 +1652,113 @@ describe("marking something watched on the website reaches the app soon", () => 
       json: { creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey, watchHistory: [{ id: "tt5555555", type: "movie", name: "Movie Site", title: "Movie Site", watchedAt: Date.now() - 1000 }], updatedAt: Date.now() },
     });
     assert.equal(ctx.env.DB._db.prepare("SELECT status FROM jobs WHERE type = 'mediaapp.sync-account'").all().filter((j) => j.status !== "done").length, 0);
+  });
+});
+
+
+// --- Pushing collections to Nuvio ------------------------------------------------
+
+describe("Nuvio collections push: install modes", () => {
+  const STREAMING = { id: "community-streaming", title: "Streaming", folders: [{ id: "f_netflix", title: "Netflix", catalogSources: [{ addonId: "other", catalogId: "nf", type: "movie" }] }] };
+  const OTHER = { id: "community-other", title: "Other Provider", folders: [{ id: "f_o", title: "Other", catalogSources: [{ addonId: "other", catalogId: "o", type: "movie" }] }] };
+  const incoming = () => [{ id: "my-lists-collections", title: "My Lists Collections", folders: [{ id: "f_mine", title: "Mine", catalogSources: [{ addonId: "app.my-list", catalogId: "mine", name: "Mine (Movies)", type: "movie" }] }] }];
+
+  async function push(mode, extra = {}) {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING, OTHER] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcol" + mode + Math.random().toString(36).slice(2, 6));
+    const login = await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    assert.equal(login.status, 200, JSON.stringify(login.body));
+    const r = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: mode, collections: incoming(), manifestUrl: "https://x.test/manifest.json", ...extra } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    return { pushed: seen.collectionsPushed[0], body: r.body };
+  }
+
+  it("new: adds a separately named collection and keeps every existing one", async () => {
+    const { pushed } = await push("new", { collectionName: "Weekend Picks" });
+    assert.deepEqual(pushed.map((c) => c.title), ["Streaming", "Other Provider", "Weekend Picks"]);
+    assert.deepEqual(pushed[0], STREAMING, "another provider's collection is untouched");
+    assert.notEqual(pushed[2].id, "community-streaming");
+  });
+
+  it("every collection My Lists writes carries the My Lists logo as its backdrop", async () => {
+    const { pushed } = await push("new");
+    assert.match(pushed[2].backdropImageUrl, /\/icon\.png$/);
+  });
+
+  it("merge: folders go only into the collection that was picked", async () => {
+    const { pushed } = await push("merge", { targetCollectionId: "community-other" });
+    assert.deepEqual(pushed[0], STREAMING);
+    assert.deepEqual(pushed[1].folders.map((f) => f.id), ["f_o", "f_mine"]);
+    assert.equal(pushed[1].title, "Other Provider", "the picked collection is not renamed");
+    assert.equal(pushed[1].folders[1].catalogSources[0].name, "Mine");
+  });
+
+  it("merge: a collection that is no longer in Nuvio is refused, nothing is pushed", async () => {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcolgone");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const r = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: "merge", targetCollectionId: "gone", collections: incoming() } });
+    assert.equal(r.status, 400);
+    assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("a failed read of Nuvio's collections stops the push, so nothing is wiped", async () => {
+    const state = { watched: [], progress: [], collectionsPullFails: true, profiles: [{ profile_index: 1, name: "Main", collections_json: [STREAMING] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcolfail");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    for (const mode of ["new", "merge"]) {
+      const r = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: mode, targetCollectionId: "community-streaming", collections: incoming() } });
+      assert.equal(r.status, 502, mode);
+    }
+    assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("preserves empty collections and refuses malformed provider data", async () => {
+    const empty = { id: "empty", folders: [], customField: "keep" };
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [empty, STREAMING] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcolempty");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const doPush = () => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, installMode: "new", collections: incoming() } });
+    assert.equal((await doPush()).status, 200);
+    assert.deepEqual(seen.collectionsPushed[0][0], empty);
+    state.profiles[0].collections_json = { unexpected: true };
+    assert.equal((await doPush()).status, 502);
+    assert.equal(seen.collectionsPushed.length, 1);
+  });
+
+  it("updates only the linked folder and rejects stale snapshots", async () => {
+    const mine = { ...STREAMING, id: "my-lists-collections" };
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: [mine, OTHER] }] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvcolupdate");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const read = await call(ctx.env, "/api/connections/nuvio/collections", { cookie: ctx.cookie });
+    assert.equal(read.status, 200);
+    assert.ok(read.body.scope);
+    const original = STREAMING.folders[0];
+    const updated = { ...original, title: "Edited", custom: "preserved", catalogSources: [] };
+    const body = { profileId: 1, scope: read.body.scope, installMode: "update-folder", targetCollectionId: mine.id, folderId: original.id, expectedFolder: original, updatedFolder: updated, collections: [updated] };
+    const write = (b) => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: b });
+    assert.equal((await write({ ...body, scope: "another-account" })).status, 409);
+    assert.equal(seen.collectionsPushed, undefined);
+    assert.equal((await write({ ...body, targetCollectionId: OTHER.id })).status, 403);
+    assert.equal(seen.collectionsPushed, undefined);
+    assert.equal((await write(body)).status, 200);
+    assert.deepEqual(seen.collectionsPushed[0], [{ ...mine, folders: [updated] }, OTHER]);
+    state.profiles[0].collections_json = [{ ...mine, folders: [{ ...original, title: "Changed remotely" }] }, OTHER];
+    assert.equal((await write(body)).status, 409);
+    assert.equal(seen.collectionsPushed.length, 1);
+    assert.equal((await write({ ...body, profileId: 2 })).status, 409);
+    assert.equal(seen.collectionsPushed.length, 1);
+  });
+
+  it("replace: only the pushed collection is left", async () => {
+    const { pushed } = await push("replace");
+    assert.equal(pushed.length, 1);
+    assert.equal(pushed[0].folders[0].id, "f_mine");
   });
 });

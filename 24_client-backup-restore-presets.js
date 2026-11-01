@@ -150,6 +150,7 @@ function buildFullBackupPayload() {
     channels: channels,
     mergedChannels: mergedChannels,
     presets: dereferencePresetsMap(presets, map, channels),
+    customCollections: (function() { try { return JSON.parse(localStorage.getItem('myListAddon:customCollections') || '[]'); } catch(e) { return []; } })(),
     settings: {
       trackPlayback: localStorage.getItem('myListAddon:trackPlayback') === '1',
       removeWatchedFromWatchlist: localStorage.getItem('myListAddon:removeWatchedFromWatchlist') !== '0',
@@ -463,6 +464,10 @@ function applyImportedConfig(data) {
   if (entries.length) {
     document.getElementById('lists').innerHTML = '';
     restoreRows(entries);
+  }
+
+  if (data && Array.isArray(data.customCollections)) {
+    try { localStorage.setItem('myListAddon:customCollections', JSON.stringify(data.customCollections)); } catch (e) {}
   }
 
   // Restore API keys and connected accounts
@@ -2004,6 +2009,8 @@ async function generate() {
   }
 
   const installUrl = ORIGIN + '/' + config + '/manifest.json';
+  try { window.myListAddonManifestUrl = installUrl; } catch (e) {}
+  try { localStorage.setItem('myListAddon:lastInstallUrl', installUrl); } catch (e) {}
   const stremioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'stremio://');
   const nuvioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'nuvio://');
   const stremioWebUrl = 'https://web.stremio.com/#/addons?addon=' + encodeURIComponent(installUrl);

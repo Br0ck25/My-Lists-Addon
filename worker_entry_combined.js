@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-10-29";
+const WORKER_BUILD_DATE = "2026-11-01";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cf7a27cac2";
+const WORKER_BUILD = "c5bf302d70";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -127,7 +127,7 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
-const ADDON_VERSION = "1.5.6";
+const ADDON_VERSION = "1.5.7";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --
@@ -1713,7 +1713,7 @@ const NEW_UI_COOKIE = "FF_NEW_UI";
 
 const APP_SHELL_TABS = [
   { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
-  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "collections", "create-list", "import"] },
   { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { id: "search", label: "Search", path: "/search", subs: [] },
@@ -6633,6 +6633,7 @@ async function fetchWithPerUserCacheUncoalesced({
   kvKey = "",
   kvTtlSec = 86400,
   refuseEmptyOverwrite = false,
+  acceptVerifiedEmpty = null,
 }) {
   const cached = getPerUserCache(cacheKey);
   if (cached && cached.isFresh) {
@@ -6699,7 +6700,8 @@ async function fetchWithPerUserCacheUncoalesced({
       // watchlist absolutely is -- they cleared it -- and refusing that write
       // would show them items they had just deleted. So the shared chart and
       // collection call sites pass this and the per-user ones do not.
-      const refusingEmpty = refuseEmptyOverwrite && isEmptyPayload(freshData);
+      const verifiedEmpty = typeof acceptVerifiedEmpty === "function" && acceptVerifiedEmpty(freshData);
+      const refusingEmpty = refuseEmptyOverwrite && isEmptyPayload(freshData) && !verifiedEmpty;
       const lastGood = (cached && cached.data) || (kvData && kvData.data) || (edgeCacheData && edgeCacheData.data) || null;
       if (refusingEmpty && lastGood && !isEmptyPayload(lastGood)) {
         console.warn(`[CircuitBreaker] ${providerLabel} returned an empty result; keeping the last non-empty copy rather than caching the empty one.`);
@@ -17996,7 +17998,13 @@ const CATALOG_SOURCES = [
   {
     name: "autotrack", provider: "mylists", kind: "personal", apiUse: null,
     match: (s) => s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:"),
-    fetchPage: (ref, { entry, keys }) => fetchAutoTrackedCatalog(entry, keys.env, keys),
+    fetchPage: async (ref, { entry, skip, keys }) => {
+      const items = await fetchAutoTrackedCatalog(entry, keys.env, keys);
+      if (!/^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.test(String(entry.url || ""))) return items;
+      const page = items.slice(skip, skip + PAGE_SIZE);
+      page.totalItems = items.length;
+      return page;
+    },
   },
   // Recommended Movies / Shows: the account's own Discover snapshot, or, when
   // that is too old, recommendations built from TMDB (so it counts as TMDB).
@@ -18459,7 +18467,7 @@ async function searchTraktLists(query, traktKeyOverride) {
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -18504,21 +18512,25 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
     resources,
     types: ["movie", "series"],
     idPrefixes,
-    catalogs: [
-      ...active.map((e) => ({
-        type: e.type,
-        id: e.id,
-        name: (liveNames && liveNames[e.id]) || e.name,
-        // Lets wako/Stremio page through lists longer than one screen by
-        // re-requesting the catalog with an increasing `skip`.
-        extra: [{ name: "skip", isRequired: false }],
-      })),
-      // Dedicated search catalogs for movies and series.
-      // With isRequired: true / extraRequired: ["search"], Stremio and Nuvio
-      // recognize that this add-on provides catalog search resources (fixing the
-      // "Missing search interface" error when this is the sole metadata source),
-      // while preventing these catalogs from cluttering the home or discover shelves.
-      {
+    catalogs: (function () {
+      const list = [];
+      const seen = new Set();
+      function addC(c) {
+        if (!c || !c.id || !c.type) return;
+        const key = `${c.type}:${c.id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        list.push(c);
+      }
+      for (const e of active) {
+        addC({
+          type: e.type,
+          id: e.id,
+          name: (liveNames && liveNames[e.id]) || e.name,
+          extra: [{ name: "skip", isRequired: false }],
+        });
+      }
+      addC({
         type: "movie",
         id: "search_movies",
         name: "Movies",
@@ -18528,8 +18540,8 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         ],
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
-      },
-      {
+      });
+      addC({
         type: "series",
         id: "search_series",
         name: "Series",
@@ -18539,8 +18551,14 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         ],
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
-      },
-    ],
+      });
+      if (typeof getPremadeCollectionManifestCatalogs === "function") {
+        for (const c of getPremadeCollectionManifestCatalogs(includeStreamingRows)) {
+          addC(c);
+        }
+      }
+      return list;
+    })(),
     behaviorHints: {
       configurable: true,
       configurationRequired: active.length === 0,
@@ -20910,6 +20928,148 @@ function cwEntriesStillAhead(items, season, episode) {
   });
 }
 
+// Discover reads the selected catalog item, not /meta. Enrich every
+// delivered movie/series preview in one place without changing its identity,
+// list order, poster, badges, or other provider-specific fields.
+const CATALOG_PREVIEW_IN_FLIGHT = new Map();
+// Cinemeta does not have every IMDb title. Resolve only the requested TMDB
+// kind, never the opposite kind, and reuse the TMDB-only preview cache.
+async function tmdbPreviewForImdb(id, type, tmdbKey) {
+  if (!tmdbKey) return null;
+  const flightKey = JSON.stringify(["preview-find", type, id, tmdbKey]);
+  if (CATALOG_PREVIEW_IN_FLIGHT.has(flightKey)) return await CATALOG_PREVIEW_IN_FLIGHT.get(flightKey);
+  const pending = (async () => {
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/find/${id}?api_key=${encodeURIComponent(tmdbKey)}&external_source=imdb_id`, {
+        cf: { cacheTtlByStatus: { "200-299": 86400, "400-599": 0 }, cacheEverything: true }, signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const matches = type === "series" ? data.tv_results : data.movie_results;
+      const match = Array.isArray(matches) && matches[0];
+      return match && Number.isInteger(match.id) && match.id > 0 ? await catalogPreviewMeta(`tmdb:${match.id}`, type, tmdbKey) : null;
+    } catch { return null; }
+  })();
+  CATALOG_PREVIEW_IN_FLIGHT.set(flightKey, pending);
+  try { return await pending; } finally { CATALOG_PREVIEW_IN_FLIGHT.delete(flightKey); }
+}
+async function catalogPreviewMeta(id, type, tmdbKey) {
+  if (type !== "movie" && type !== "series") return null;
+  const isImdb = /^tt\d{5,12}$/.test(id);
+  const tmdbMatch = /^tmdb:(\d{1,12})$/.exec(id);
+  if (!isImdb && (!tmdbMatch || !tmdbKey)) return null;
+  const key = `catalog-preview:v2:${type}:${id}`;
+  const cached = getPerUserCache(key);
+  if (cached) return cached.data.missing ? await tmdbPreviewForImdb(id, type, tmdbKey) : cached.data;
+  // A failed personal TMDB key must never affect another key's in-flight work.
+  const flightKey = isImdb ? key : JSON.stringify([key, tmdbKey]);
+  if (CATALOG_PREVIEW_IN_FLIGHT.has(flightKey)) {
+    const existing = await CATALOG_PREVIEW_IN_FLIGHT.get(flightKey);
+    return !existing && isImdb ? await tmdbPreviewForImdb(id, type, tmdbKey) : existing;
+  }
+  const pending = (async () => {
+    try {
+      const src = isImdb
+        ? `https://v3-cinemeta.strem.io/meta/${type}/${id}.json`
+        : `https://api.themoviedb.org/3/${type === "series" ? "tv" : "movie"}/${tmdbMatch[1]}?api_key=${encodeURIComponent(tmdbKey)}&append_to_response=credits`;
+      const res = await fetch(src, {
+        cf: { cacheTtlByStatus: { "200-299": 86400, "400-599": 0 }, cacheEverything: true },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) throw new Error("Preview unavailable");
+      const data = await res.json();
+      let preview;
+      if (isImdb) {
+        const meta = data && data.meta;
+        if (!meta || meta.id !== id || meta.type !== type) throw new Error("Preview identity mismatch");
+        preview = {};
+        for (const field of ["description", "runtime", "releaseInfo", "imdbRating"]) {
+          if (typeof meta[field] === "string" && meta[field].trim()) preview[field] = meta[field];
+        }
+        if (Array.isArray(meta.genres)) preview.genres = meta.genres.filter((g) => typeof g === "string" && g.trim());
+        if (Array.isArray(meta.links)) preview.links = meta.links.filter((l) => l && typeof l.name === "string" && typeof l.category === "string" && typeof l.url === "string" && /^https?:\/\/|^stremio:/i.test(l.url));
+      } else {
+        if (!data || String(data.id) !== tmdbMatch[1]) throw new Error("Preview identity mismatch");
+        const genres = Array.isArray(data.genres) ? data.genres.filter((g) => g && typeof g.name === "string" && g.name.trim()) : [];
+        const runtime = type === "movie" ? data.runtime : (Array.isArray(data.episode_run_time) ? data.episode_run_time[0] : null);
+        // These links identify their actual source; a TMDB vote is NOT an IMDb
+        // rating and must never be advertised as one.
+        const links = genres.filter((g) => Number.isInteger(g.id) && g.id > 0).map((g) => ({ name: g.name, category: "Genres", url: `https://www.themoviedb.org/genre/${g.id}` }));
+        const credits = data.credits || {};
+        for (const [category, people] of [["Cast", Array.isArray(credits.cast) ? credits.cast.slice(0, 8) : []], ["Directors", Array.isArray(credits.crew) ? credits.crew.filter((p) => p.job === "Director").slice(0, 4) : []]]) {
+          for (const person of people) if (person && Number.isInteger(person.id) && person.id > 0 && typeof person.name === "string" && person.name.trim()) links.push({ name: person.name, category, url: `https://www.themoviedb.org/person/${person.id}` });
+        }
+        preview = {
+          description: typeof data.overview === "string" ? data.overview : undefined,
+          runtime: typeof runtime === "number" && runtime > 0 ? `${runtime} min` : undefined,
+          releaseInfo: String((type === "movie" ? data.release_date : data.first_air_date) || "").slice(0, 4) || undefined,
+          genres: genres.map((g) => g.name), links,
+        };
+      }
+      setPerUserCache(key, preview, 86400, 604800);
+      return preview;
+    } catch {
+      // Briefly memoize IMDb misses/outages to avoid re-querying the same
+      // titles across many rows. TMDB failures may be key-specific.
+      if (isImdb) setPerUserCache(key, { missing: true }, 30, 30);
+      return null;
+    }
+  })();
+  CATALOG_PREVIEW_IN_FLIGHT.set(flightKey, pending);
+  try {
+    const preview = await pending;
+    return !preview && isImdb ? await tmdbPreviewForImdb(id, type, tmdbKey) : preview;
+  } finally { CATALOG_PREVIEW_IN_FLIGHT.delete(flightKey); }
+}
+
+async function enrichCatalogPreviews(metas, tmdbKey) {
+  if (!Array.isArray(metas) || !metas.length) return metas;
+  const total = metas.totalItems;
+  // Bound the time a provider outage holds a shelf. Titles not reached on a
+  // slow request remain usable; later requests can fill them from cache.
+  const deadline = Date.now() + 4000;
+  let incomplete = false;
+  const enriched = await mapWithConcurrency(metas, 8, async (item) => {
+    if (!item || (item.type !== "movie" && item.type !== "series")) return item;
+    // Stremio requires genre strings; several providers return TMDB numeric
+    // ids or objects. Keep known names and discard unknown ids rather than
+    // making the entire catalog fail client-side deserialization.
+    let result = item;
+    if (Array.isArray(item.genres) && item.genres.some((g) => typeof g !== "string")) {
+      result = { ...item, genres: item.genres.map((g) => typeof g === "string" ? g : (g && typeof g.name === "string" ? g.name : "")).filter(Boolean) };
+    }
+    if (Date.now() >= deadline) { incomplete = true; return result; }
+    const preview = await catalogPreviewMeta(String(item.id || ""), item.type, tmdbKey);
+    if (!preview) return result;
+    result = { ...result };
+    for (const [field, value] of Object.entries(preview)) {
+      if (value == null || (Array.isArray(value) && !value.length)) continue;
+      if (field === "links" && Array.isArray(result.links) && result.links.length) {
+        const categories = new Set(result.links.map((link) => link && link.category));
+        result.links = [...result.links, ...value.filter((link) => link && !categories.has(link.category))];
+      } else if (result[field] == null || result[field] === "" || (Array.isArray(result[field]) && !result[field].length)) {
+        result[field] = value;
+      }
+    }
+    // When links are present Stremio does not synthesize its usual IMDb and
+    // genre links from legacy fields, so fill those categories explicitly.
+    if (Array.isArray(result.links) && result.links.length) {
+      result.links = [...result.links];
+      const categories = new Set(result.links.map((l) => String((l && l.category) || "").toLowerCase()));
+      if (!categories.has("imdb") && /^tt\d{5,12}$/.test(String(result.id)) && result.imdbRating) {
+        result.links.push({ name: String(result.imdbRating), category: "imdb", url: `https://www.imdb.com/title/${result.id}` });
+      }
+      if (!categories.has("genres") && Array.isArray(result.genres)) {
+        for (const genre of result.genres) if (typeof genre === "string" && genre.trim()) result.links.push({ name: genre, category: "Genres", url: `stremio:///discover/${encodeURIComponent("https://v3-cinemeta.strem.io/")}/${result.type}/top?genre=${encodeURIComponent(genre)}` });
+      }
+    }
+    return result;
+  });
+  if (total != null) enriched.totalItems = total;
+  if (incomplete) enriched.previewIncomplete = true;
+  return enriched;
+}
+
 async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
   if (!env || !env.CONFIGS) return [];
   
@@ -20972,14 +21132,20 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
     // the activity database. Owner only (the gate above), and nothing when the
     // account is not served from it: the legacy records know no source, so
     // falling back to them would show everything under the app's name.
-    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching)$/.exec(slug);
+    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching|library)$/.exec(slug);
     if (appShelf) {
-      const accountId = await eventTrackingOwns(env, username);
-      if (accountId == null) return [];
-      const read = appShelf[2] === 'watch-history'
-        ? (await watchHistoryPage(env, accountId, { limit: 100, source: appShelf[1] })).items
-        : await appContinueWatching(env, accountId, appShelf[1]);
-      items = read.map(({ mediaId, ...it }) => it);
+      if (appShelf[2] === 'library') {
+        const account = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL").bind(username).first();
+        if (!account) return [];
+        items = await mediaAppLibraryItems(env, account.id, appShelf[1]);
+      } else {
+        const accountId = await eventTrackingOwns(env, username);
+        if (accountId == null) return [];
+        const read = appShelf[2] === 'watch-history'
+          ? await watchHistoryAll(env, accountId, appShelf[1])
+          : await appContinueWatching(env, accountId, appShelf[1]);
+        items = read.map(({ mediaId, ...it }) => it);
+      }
     }
     // D1 is the cheap read, but only while it is current: a tracking write
     // that failed leaves the rows as they were, and these rows used to keep
@@ -21353,7 +21519,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       if (!mapped.id) return;
       
       if (mappedType === 'series') {
-        if (!mappedItems.some(s => s.id === mapped.id)) {
+        if (!mappedItems.some(s => s.type === 'series' && s.id === mapped.id)) {
           mappedItems.push(mapped);
         }
       } else {
@@ -21366,6 +21532,8 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
     }
     return mappedItems;
   } catch (e) {
+    // A failed remote library read is not an empty library.
+    if (/^(nuvio|stremio)-library$/.test(slug)) throw e;
     return [];
   }
 }
@@ -24863,7 +25031,21 @@ async function enrichTrailers(metas, type, apiKey) {
 // (now) fetching trailer videos -- into the single per-item TMDB request
 // this add-on was already making, via append_to_response. Same hard-cached
 // cost as before; trailers just ride along for free.
+// Coalesce cold detail lookups across concurrently loaded streaming rows.
+// Include the API key in the short-lived in-flight identity so failed credentials
+// cannot borrow another request. Entries are removed on both success and failure.
+const TMDB_DETAILS_IN_FLIGHT = new Map();
 async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null) {
+  const key = JSON.stringify([String(tmdbId || ""), kind, apiKey]);
+  const existing = TMDB_DETAILS_IN_FLIGHT.get(key);
+  if (existing) return await existing;
+  const pending = fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env);
+  TMDB_DETAILS_IN_FLIGHT.set(key, pending);
+  try { return await pending; }
+  finally { TMDB_DETAILS_IN_FLIGHT.delete(key); }
+}
+
+async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null) {
   let cleanTmdbId = String(tmdbId || "").trim();
   while (cleanTmdbId.startsWith("tmdb:")) {
     cleanTmdbId = cleanTmdbId.slice(5).trim();
@@ -25274,7 +25456,7 @@ const TMDB_CHART_PATHS = {
 // for that window (callers resolve IMDB ids / shape metas themselves).
 // Shared by fetchTmdbChart and fetchTmdbHiddenGems so this math -- and its
 // "skip may not land on a TMDB page boundary" edge case -- only lives once.
-async function fetchTmdbPagedResults(pathAndQuery, apiKey, skip, pageOffset = 0) {
+async function fetchTmdbPagedResults(pathAndQuery, apiKey, skip, pageOffset = 0, strict = false) {
   const totalSkip = skip + pageOffset * 20;
   const firstTmdbPage = Math.floor(totalSkip / 20) + 1;
   const offsetWithinFirstPage = totalSkip % 20;
@@ -25286,23 +25468,34 @@ async function fetchTmdbPagedResults(pathAndQuery, apiKey, skip, pageOffset = 0)
   const pageNums = Array.from({ length: pagesNeeded }, (_, i) => firstTmdbPage + i);
   const sep = pathAndQuery.includes("?") ? "&" : "?";
 
-  const pageResults = await Promise.all(
-    pageNums.map(async (p) => {
-      const src = `https://api.themoviedb.org/3/${pathAndQuery}${sep}api_key=${encodeURIComponent(
-        apiKey
-      )}&page=${p}`;
-      const res = await fetch(src, {
-        headers: { "User-Agent": "my-list-addon/1.9" },
-        cf: { cacheTtl: 900, cacheEverything: true },
-      });
-      if (!res.ok) return { ok: false, status: res.status, items: [], totalResults: null };
-      const data = await res.json();
-      return { ok: true, items: Array.isArray(data.results) ? data.results : [], totalResults: (typeof data.total_results === 'number') ? data.total_results : null };
-    })
-  );
+  const fetchPage = async (p) => {
+    const src = `https://api.themoviedb.org/3/${pathAndQuery}${sep}api_key=${encodeURIComponent(
+      apiKey
+    )}&page=${p}`;
+    const res = await fetch(src, {
+      headers: { "User-Agent": "my-list-addon/1.9" },
+      cf: { cacheTtl: 900, cacheEverything: true },
+    });
+    if (!res.ok) return { ok: false, status: res.status, items: [], totalResults: null };
+    const data = await res.json();
+    if (strict && (!data || !Array.isArray(data.results) || !Number.isSafeInteger(data.total_results) || data.total_results < 0)) return { ok: false, status: 502, items: [], totalResults: null };
+    return { ok: true, items: Array.isArray(data.results) ? data.results : [], totalResults: (typeof data.total_results === 'number') ? data.total_results : null };
+  };
+  let pageResults;
+  if (strict) {
+    // The first page tells us how many further pages exist; small or empty
+    // rows do not need the usual five full-window requests.
+    const first = await fetchPage(pageNums[0]);
+    const lastPage = first.ok ? Math.ceil(first.totalResults / 20) : 0;
+    const rest = pageNums.slice(1).filter((p) => p <= lastPage);
+    pageResults = [first, ...await Promise.all(rest.map(fetchPage))];
+  } else {
+    pageResults = await Promise.all(pageNums.map(fetchPage));
+  }
 
-  if (!pageResults[0].ok) {
-    const status = pageResults[0].status;
+  const failed = strict ? pageResults.find((p) => !p.ok) : (!pageResults[0].ok ? pageResults[0] : null);
+  if (failed) {
+    const status = failed.status;
     const hint = status === 401 ? " Double-check the TMDB API key." : "";
     throw new Error(`TMDB request failed (HTTP ${status}).${hint}`);
   }
@@ -25337,6 +25530,7 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
   const effectiveRegion = region || "US";
   const cacheKey = `user_cache:tmdb:chart:${chartKey}:${wantKind}:${skip}:${effectiveRegion}:${hideNonDigitalReleases ? "1" : "0"}`;
   const kvKey = `tmdb:chart:${chartKey}:${wantKind}:${skip}:${effectiveRegion}:${hideNonDigitalReleases ? "1" : "0"}`;
+  const addedRow = typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" && STREAMING_ROW_BY_CHART_KEY[chartKey] && STREAMING_ROW_BY_CHART_KEY[chartKey].additional;
 
   return await fetchWithPerUserCacheAndCircuitBreaker({
     cacheKey,
@@ -25346,11 +25540,11 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
     freshTtlSec: 600,
     staleTtlSec: 86400,
     kvTtlSec: 86400,
-    // A shared, provider-owned chart is never legitimately empty, so an
-    // empty-but-successful reply is an upstream fault and must not be allowed
-    // to erase the last good copy -- see refuseEmptyOverwrite in
-    // fetchWithPerUserCacheUncoalesced (02_http-and-creator-utils.js).
+    // A narrowly filtered new browse row can legitimately become empty. Only
+    // accept an empty replacement when TMDB explicitly reports zero results;
+    // missing IDs or a partially failed page still preserve the last good data.
     refuseEmptyOverwrite: true,
+    acceptVerifiedEmpty: addedRow ? (value) => value.authoritativeEmpty === true : null,
     providerLabel: "TMDB Chart",
     fetchFn: async () => {
       let chartPath;
@@ -25365,18 +25559,33 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
       }
       chartPath = substituteWatchRegion(chartPath, region);
 
-      const windowItems = await fetchTmdbPagedResults(chartPath, apiKey, skip);
+      const windowItems = await fetchTmdbPagedResults(chartPath, apiKey, skip, 0, Boolean(addedRow));
       const applyDigitalFilter = !!hideNonDigitalReleases && wantKind === "movie" && (chartKey === "trending" || chartKey === "popular");
 
-      const resolved = await mapWithConcurrency(windowItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
+      const rawIds = new Set();
+      const uniqueItems = addedRow ? windowItems.filter((item) => {
+        if (!item || item.id == null || rawIds.has(item.id)) return false;
+        rawIds.add(item.id);
+        return true;
+      }) : windowItems;
+      const resolved = await mapWithConcurrency(uniqueItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
         const details = await fetchTmdbDetails(it.id, wantKind, apiKey, env);
         if (!details.imdbId) return null;
         if (applyDigitalFilter && details.hasDigitalRelease === false) return null;
         return mapTmdbItem(it, details.imdbId, entry.type, details.videos, details);
       });
 
-      const res = resolved.filter(Boolean);
+      const seen = new Set();
+      const res = resolved.filter((item) => {
+        if (!item) return false;
+        if (!addedRow) return true;
+        const id = `${item.type}:${item.id}`;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
       res.totalItems = windowItems.totalItems;
+      if (addedRow && windowItems.length === 0 && windowItems.totalItems === 0) res.authoritativeEmpty = true;
       return res;
     },
   });
@@ -28968,7 +29177,9 @@ async function searchCatalogMetas(query, type, skip, apiKey, env, ctx, origin) {
       background: item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : undefined,
       description: item.overview || undefined,
       releaseInfo: year || undefined,
-      imdbRating: typeof item.vote_average === "number" && item.vote_average > 0 ? String(Math.round(item.vote_average * 10) / 10) : undefined,
+      // TMDB's vote average is not an IMDb rating. The shared catalog
+      // preview enrichment fills imdbRating from Cinemeta when available.
+      vote_average: typeof item.vote_average === "number" && item.vote_average > 0 ? item.vote_average : undefined,
       behaviorHints: wantType === "movie" ? { defaultVideoId: finalId } : undefined,
     };
   });
@@ -30388,6 +30599,465 @@ function buildMyListsAddonChartsHtml() {
   return buildStreamingRowsHtml(MY_LISTS_ADDON_CHARTS, "", "My Lists Addon Charts");
 }
 
+// --- Streaming service rows (the premade collections' "browse the service" rows) --
+//
+// Netflix shows "Hooked from the First Episode", Hulu "Stream & Scream", Paramount+
+// "NickRewind" and so on. These are our own rows with the same flavour, built from
+// TMDB discover. Every row is filtered by with_watch_providers + flatrate (see
+// tmdbProviderChartPaths in 07_), so it only holds titles included with THAT service.
+//
+// A row is [key, label, recipe]. `recipe` is a name in STREAMING_ROW_RECIPES or an
+// inline { tv, movie } object. A kind a recipe leaves out simply has no catalog (a row
+// like "Anime" has both; "Hooked from the First Episode" is shows only). Tokens in a
+// recipe: {vc} = the service's vote floor (its catalog is smaller or bigger, and movies
+// get 3x), {net} = the service's own TMDB network id (its originals).
+// TMDB ids used here: networks 13 Nickelodeon, 49 HBO, 54 Disney Channel, 80 Adult Swim,
+// 6 NBC, 74 Bravo, 16 CBS; companies 420 Marvel Studios, 1 Lucasfilm, 3 Pixar,
+// 6125 Walt Disney Animation, 25 20th Century, 174 Warner Bros., 9993 DC, 33 Universal,
+// 4 Paramount Pictures; keywords 818 based on novel or book, 9715 superhero,
+// 4344 musical, 6075 sport.
+const STREAMING_ROW_SERVICES = {
+  netflix: { name: "Netflix", provider: 8, network: 213, minVotes: 300, collection: "col_netflix" },
+  hulu: { name: "Hulu", provider: 15, network: 453, minVotes: 150, collection: "col_hulu" },
+  paramount: { name: "Paramount+", provider: 2303, network: 4330, minVotes: 100, collection: "col_paramount" },
+  disney: { name: "Disney+", provider: 337, network: 2739, minVotes: 150, collection: "col_disney" },
+  hbomax: { name: "HBO Max", provider: 1899, network: 49, minVotes: 150, collection: "col_hbomax" },
+  primevideo: { name: "Prime Video", provider: 9, network: 1024, minVotes: 150, collection: "col_primevideo" },
+  peacock: { name: "Peacock", provider: 387, network: 3353, minVotes: 60, collection: "col_peacock" },
+  appletv: { name: "Apple TV+", provider: 350, network: 2552, minVotes: 40, collection: "col_appletv" },
+  discovery: { name: "Discovery+", provider: 520, minVotes: 0, collection: "col_discovery" },
+  netflixkids: { name: "Netflix Kids", provider: 175, minVotes: 0, collection: "col_netflixkids" },
+};
+
+const STREAMING_ROW_RECIPES = {
+  originals: { tv: "with_networks={net}" },
+  hooked: { tv: "with_genres=18|9648|80&vote_average.gte=7.5&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  action: { tv: "with_genres=10759", movie: "with_genres=28" },
+  actionTv: { tv: "with_genres=10759" },
+  actionMovies: { movie: "with_genres=28" },
+  comedy: { tv: "with_genres=35", movie: "with_genres=35" },
+  comedyTv: { tv: "with_genres=35" },
+  comedyMovies: { movie: "with_genres=35" },
+  feelGood: { tv: "with_genres=35|10751&vote_average.gte=7&vote_count.gte={vc}&sort_by=vote_average.desc", movie: "with_genres=35|10751|10749&vote_average.gte=6.8&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  feelGoodTv: { tv: "with_genres=35|10751&vote_average.gte=7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  casual: { tv: "with_genres=35|10764" },
+  drama: { tv: "with_genres=18", movie: "with_genres=18" },
+  dramaTv: { tv: "with_genres=18" },
+  crime: { tv: "with_genres=80", movie: "with_genres=80" },
+  crimeTv: { tv: "with_genres=80" },
+  mystery: { tv: "with_genres=9648", movie: "with_genres=9648" },
+  mysteryTv: { tv: "with_genres=9648" },
+  thriller: { tv: "with_genres=9648,18", movie: "with_genres=53" },
+  psychThriller: { tv: "with_genres=9648,18&vote_average.gte=7&vote_count.gte={vc}", movie: "with_genres=53,18&vote_average.gte=6.5&vote_count.gte={vc}" },
+  horror: { tv: "with_genres=9648,10765", movie: "with_genres=27" },
+  horrorMovies: { movie: "with_genres=27" },
+  darkTv: { tv: "with_genres=9648,10765" },
+  scifi: { tv: "with_genres=10765", movie: "with_genres=878" },
+  scifiTv: { tv: "with_genres=10765" },
+  scifiFantasy: { tv: "with_genres=10765", movie: "with_genres=878|14" },
+  fantasy: { tv: "with_genres=10765", movie: "with_genres=14" },
+  animation: { tv: "with_genres=16", movie: "with_genres=16" },
+  adultAnimation: { tv: "with_genres=16&without_genres=10762,10751", movie: "with_genres=16&without_genres=10751" },
+  anime: { tv: "with_genres=16&with_original_language=ja", movie: "with_genres=16&with_original_language=ja" },
+  reality: { tv: "with_genres=10764" },
+  docs: { tv: "with_genres=99", movie: "with_genres=99" },
+  trueCrime: { tv: "with_genres=80,99", movie: "with_genres=80,99" },
+  travelLifestyle: { tv: "with_genres=10764|99" },
+  family: { tv: "with_genres=10751", movie: "with_genres=10751" },
+  familyMovies: { movie: "with_genres=10751&certification_country=US&certification.lte=PG" },
+  kids: { tv: "with_genres=10762" },
+  kidsFamily: { tv: "with_genres=10762", movie: "with_genres=16|10751&certification_country=US&certification.lte=PG" },
+  romance: { movie: "with_genres=10749" },
+  romcom: { movie: "with_genres=10749,35" },
+  western: { tv: "with_genres=37", movie: "with_genres=37" },
+  warHistory: { tv: "with_genres=10768", movie: "with_genres=10752|36" },
+  musicals: { tv: "with_keywords=4344", movie: "with_keywords=4344" },
+  superhero: { tv: "with_keywords=9715", movie: "with_keywords=9715" },
+  basedOnBooks: { tv: "with_keywords=818", movie: "with_keywords=818" },
+  sports: { tv: "with_keywords=6075", movie: "with_keywords=6075" },
+  awardTv: { tv: "vote_average.gte=8&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  awardMovies: { movie: "vote_average.gte=7.7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  award: { tv: "vote_average.gte=8&vote_count.gte={vc}&sort_by=vote_average.desc", movie: "vote_average.gte=7.7&vote_count.gte={vc}&sort_by=vote_average.desc" },
+  bingeable: { tv: "with_status=3&vote_average.gte=7&vote_count.gte={vc}" },
+  completeSeries: { tv: "with_status=3" },
+  completeComedies: { tv: "with_status=3&with_genres=35" },
+  popularTv: { tv: "" },
+  popularMovies: { movie: "" },
+  blockbuster: { movie: "sort_by=revenue.desc" },
+  nineties: { tv: "first_air_date.gte=1990-01-01&first_air_date.lte=1999-12-31", movie: "primary_release_date.gte=1990-01-01&primary_release_date.lte=1999-12-31&vote_count.gte={vc}" },
+  classics: { tv: "first_air_date.lte=1989-12-31", movie: "primary_release_date.lte=1989-12-31&vote_count.gte={vc}" },
+  korean: { tv: "with_original_language=ko", movie: "with_original_language=ko" },
+  spanish: { tv: "with_original_language=es", movie: "with_original_language=es" },
+  british: { tv: "with_origin_country=GB", movie: "with_origin_country=GB" },
+  talk: { tv: "with_genres=10767" },
+};
+
+const STREAMING_ROWS = {
+  // Only categories that TMDB Discover can identify directly. Age-specific,
+  // franchise and editorial rows are not inferred from broad genres.
+  discovery: [
+    ["reality-tv", "Reality TV", { tv: "with_genres=10764" }],
+    ["documentary-series", "Documentary Series", { tv: "with_genres=99" }],
+    // TMDB network IDs (not watch-provider IDs). Restrict them to Discovery+
+    // flatrate availability as for every other row. Network membership is not
+    // evidence that a title is a Discovery+ original.
+    ["discovery-channel", "Discovery Channel", { tv: "with_networks=64" }],
+    ["tlc", "TLC", { tv: "with_networks=84" }],
+    ["hgtv", "HGTV", { tv: "with_networks=210" }],
+    ["food-network", "Food Network", { tv: "with_networks=143" }],
+    ["investigation-discovery", "Investigation Discovery", { tv: "with_networks=244" }],
+    ["animal-planet", "Animal Planet", { tv: "with_networks=91" }],
+    ["travel-channel", "Travel Channel", { tv: "with_networks=209" }],
+    ["science-channel", "Science Channel", { tv: "with_networks=226" }],
+    ["own", "OWN", { tv: "with_networks=827" }],
+    ["magnolia-network", "Magnolia Network", { tv: "with_networks=4519" }],
+    ["ae", "A&E", { tv: "with_networks=129" }],
+    ["lifetime", "Lifetime", { tv: "with_networks=34" }],
+    ["cooking-channel", "Cooking Channel", { tv: "with_networks=802" }],
+    ["motortrend", "MotorTrend", { tv: "with_networks=2444" }],
+    ["destination-america", "Destination America", { tv: "with_networks=530" }],
+  ],
+  netflixkids: [
+    ["kids-tv", "Kids TV Shows", { tv: "with_genres=10762" }],
+    ["animated-tv", "Animated TV Shows", { tv: "with_genres=16,10762" }],
+    ["animated-movies", "Animated Movies", { movie: "with_genres=16&certification_country=US&certification.lte=PG" }],
+    ["family-movies", "Family Movies", { movie: "with_genres=10751&certification_country=US&certification.lte=PG" }],
+  ],
+  netflix: [
+    ["originals", "Netflix Originals", "originals"],
+    ["hooked", "Hooked from the First Episode", "hooked"],
+    ["action-tv", "Action TV", "actionTv"],
+    ["award-tv", "Award-Winning TV Shows", "awardTv"],
+    ["watch-a-while", "Watch for a While", "bingeable"],
+    ["feel-good-tv", "Feel-Good TV Shows", "feelGoodTv"],
+    ["get-in-on-the-action", "Get in on the Action", "actionMovies"],
+    ["casual", "Casual Viewing", "casual"],
+    ["anime", "Anime", "anime"],
+    ["dark-tv-horror", "Dark TV Horror", "darkTv"],
+    ["goofy-tv", "Goofy TV Shows", "comedyTv"],
+    ["reality", "Reality TV", "reality"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["crime-tv", "Crime TV", "crimeTv"],
+    ["docs", "Documentaries", "docs"],
+    ["k-drama", "Korean Titles", "korean"],
+    ["british", "British Titles", "british"],
+    ["romance", "Romantic Movies", "romance"],
+    ["comedy-movies", "Comedy Movies", "comedyMovies"],
+    ["thriller-movies", "Thrillers", "thriller"],
+    ["horror-movies", "Horror Movies", "horrorMovies"],
+    ["scifi-fantasy", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["award-movies", "Award-Winning Movies", "awardMovies"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+  ],
+  hulu: [
+    ["originals", "Hulu Originals", "originals"],
+    ["bingeable-tv", "Bingeable TV", "bingeable"],
+    ["travel-lifestyle", "Travel & Lifestyle", "travelLifestyle"],
+    ["stream-and-scream", "Stream & Scream", "horror"],
+    ["kids", "Kids", "kidsFamily"],
+    ["full-series-comedies", "Full Series Comedies", "completeComedies"],
+    ["popular-tv", "Popular TV", "popularTv"],
+    ["blockbuster-movies", "Blockbuster Movies", "blockbuster"],
+    ["easy-to-watch-tv", "Easy-to-Watch TV", "casual"],
+    ["complete-series", "Complete Series", "completeSeries"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["family-movies", "Family Movies", "familyMovies"],
+    ["comedy-movies", "Comedy Movies", "comedyMovies"],
+    ["mystery-tv", "Mystery TV Shows", "mysteryTv"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["anime", "Anime", "anime"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["action", "Action & Adventure", "action"],
+    ["drama", "Drama", "drama"],
+    ["romance", "Romance", "romance"],
+    ["reality", "Reality TV", "reality"],
+    ["docs", "Documentaries", "docs"],
+    ["award-tv", "Award-Winning TV", "awardTv"],
+    ["nineties", "Best of the 90s", "nineties"],
+  ],
+  paramount: [
+    ["originals", "Paramount+ Originals", "originals"],
+    ["unmissable-action", "Unmissable Action", "action"],
+    ["psychological-thrillers", "Psychological Thrillers", "psychThriller"],
+    ["reality", "Reality Shows", "reality"],
+    ["movie-night", "Movie Night", "popularMovies"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["scifi-series", "Sci-Fi Series", "scifiTv"],
+    ["romantic-comedies", "Romantic Comedies", "romcom"],
+    ["nickrewind", "NickRewind", { tv: "with_networks=13&first_air_date.lte=2009-12-31" }],
+    ["nick-jr", "Nick Jr. Shows", { tv: "with_networks=13&with_genres=10762" }],
+    ["based-on-books", "Movies Based on Books", { movie: "with_keywords=818" }],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["looking-for-a-laugh", "Looking for a Laugh?", "comedy"],
+    ["crime-procedurals", "Crime & Procedurals", "crimeTv"],
+    ["cbs", "CBS Favorites", { tv: "with_networks=16" }],
+    ["horror", "Horror", "horror"],
+    ["westerns", "Westerns", "western"],
+    ["docs", "Documentaries", "docs"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["award", "Award-Winning", "award"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["paramount-pictures", "Paramount Pictures", { movie: "with_companies=4" }],
+    ["mystery", "Mystery", "mystery"],
+  ],
+  disney: [
+    ["originals", "Disney+ Originals", "originals"],
+    ["marvel", "Marvel", { tv: "with_companies=420", movie: "with_companies=420" }],
+    ["star-wars", "Star Wars", { tv: "with_companies=1", movie: "with_companies=1" }],
+    ["pixar", "Pixar", { movie: "with_companies=3" }],
+    ["disney-animation", "Disney Animation", { movie: "with_companies=6125" }],
+    ["disney-classics", "Disney Classics", { movie: "with_companies=2|6125&primary_release_date.lte=1999-12-31" }],
+    ["disney-channel", "Disney Channel", { tv: "with_networks=54" }],
+    ["20th-century", "20th Century Studios", { movie: "with_companies=25" }],
+    ["family-movies", "Family Movies", "familyMovies"],
+    ["kids", "Kids Shows", "kids"],
+    ["animated-series", "Animated Series", "animation"],
+    ["action", "Action & Adventure", "action"],
+    ["scifi-fantasy", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["superheroes", "Superheroes", "superhero"],
+    ["musicals", "Musicals", "musicals"],
+    ["comedy", "Comedy", "comedy"],
+    ["docs", "Documentaries & Nature", "docs"],
+    ["drama", "Drama", "drama"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["award", "Award-Winning", "award"],
+    ["mystery", "Mystery & Thrillers", "thriller"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["reality", "Reality", "reality"],
+  ],
+  hbomax: [
+    ["hbo-originals", "HBO Originals", { tv: "with_networks=49" }],
+    ["max-originals", "Max Originals", "originals"],
+    ["prestige-drama", "Prestige Drama", "hooked"],
+    ["award", "Award-Winning", "award"],
+    ["dc", "DC", { tv: "with_companies=9993", movie: "with_companies=9993" }],
+    ["warner-bros", "Warner Bros. Movies", { movie: "with_companies=174" }],
+    ["superheroes", "Superheroes", "superhero"],
+    ["comedy", "Comedy", "comedy"],
+    ["adult-animation", "Adult Swim & Adult Animation", "adultAnimation"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["docs", "Documentaries", "docs"],
+    ["crime", "Crime", "crime"],
+    ["scifi", "Sci-Fi", "scifi"],
+    ["fantasy", "Fantasy", "fantasy"],
+    ["horror", "Horror", "horror"],
+    ["reality", "Reality", "reality"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["romance", "Romance", "romance"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["action", "Action", "action"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["anime", "Anime", "anime"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+  ],
+  primevideo: [
+    ["originals", "Prime Originals", "originals"],
+    ["action", "Action & Adventure", "action"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["comedy", "Comedy", "comedy"],
+    ["drama", "Drama", "drama"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["crime", "Crime", "crime"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["mystery", "Mystery", "mystery"],
+    ["horror", "Horror", "horror"],
+    ["romance", "Romance", "romance"],
+    ["reality", "Reality TV", "reality"],
+    ["docs", "Documentaries", "docs"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["anime", "Anime", "anime"],
+    ["superheroes", "Superheroes", "superhero"],
+    ["award", "Award-Winning", "award"],
+    ["blockbuster", "Blockbuster Movies", "blockbuster"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+    ["westerns", "Westerns", "western"],
+    ["adult-animation", "Adult Animation", "adultAnimation"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["sports", "Sports", "sports"],
+  ],
+  peacock: [
+    ["originals", "Peacock Originals", "originals"],
+    ["nbc", "NBC Favorites", { tv: "with_networks=6" }],
+    ["bravo", "Bravo & Reality", { tv: "with_networks=74" }],
+    ["sitcoms", "Sitcoms", "completeComedies"],
+    ["comedy", "Comedy", "comedy"],
+    ["crime", "Crime", "crime"],
+    ["true-crime", "True Crime", "trueCrime"],
+    ["drama", "Drama", "drama"],
+    ["horror", "Horror", "horror"],
+    ["action", "Action", "action"],
+    ["universal", "Universal Movies", { movie: "with_companies=33" }],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["docs", "Documentaries", "docs"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["romance", "Romance", "romance"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["mystery", "Mystery", "mystery"],
+    ["award", "Award-Winning", "award"],
+    ["classics", "Classic TV & Movies", "classics"],
+    ["nineties", "Best of the 90s", "nineties"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["animation", "Animation", "animation"],
+    ["westerns", "Westerns", "western"],
+    ["sports", "Sports", "sports"],
+  ],
+  appletv: [
+    ["originals", "Apple Originals", "originals"],
+    ["award", "Award-Winning", "award"],
+    ["scifi", "Sci-Fi & Fantasy", "scifiFantasy"],
+    ["comedy", "Comedy", "comedy"],
+    ["feel-good", "Feel-Good", "feelGood"],
+    ["drama", "Drama", "drama"],
+    ["thrillers", "Thrillers", "thriller"],
+    ["mystery", "Mystery", "mystery"],
+    ["crime", "Crime", "crime"],
+    ["action", "Action & Adventure", "action"],
+    ["docs", "Documentaries", "docs"],
+    ["kids-family", "Kids & Family", "kidsFamily"],
+    ["animation", "Animation", "animation"],
+    ["war-history", "War & History", "warHistory"],
+    ["based-on-books", "Based on Books", "basedOnBooks"],
+    ["sports", "Sports", "sports"],
+    ["musicals", "Music & Musicals", "musicals"],
+    ["romance", "Romance", "romance"],
+    ["bingeable", "Bingeable TV", "bingeable"],
+    ["popular", "Popular on Apple TV+", "popularTv"],
+  ],
+};
+
+// Additional rows use only directly queryable metadata. Existing rows stay in
+// their original order and retain their original keys and queries. In
+// particular, high ratings are not treated as award wins and a network is not
+// treated as proof that a movie is an original production.
+const STREAMING_ADDITIONAL_ROWS = {
+  netflix: [
+    ["genre-drama-movies", "Drama Movies", { movie: "with_genres=18" }],
+    ["genre-crime-movies", "Crime Movies", { movie: "with_genres=80" }],
+    ["genre-mystery-movies", "Mystery Movies", { movie: "with_genres=9648" }],
+    ["genre-scifi-movies", "Science Fiction Movies", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy Movies", { movie: "with_genres=14" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-war-movies", "War Movies", { movie: "with_genres=10752" }],
+    ["genre-western-movies", "Western Movies", { movie: "with_genres=37" }],
+    ["language-english-movies", "English-Language Movies", { movie: "with_original_language=en" }],
+    ["genre-drama-tv", "Drama TV Shows", { tv: "with_genres=18" }],
+    ["genre-mystery-tv", "Mystery TV Shows", { tv: "with_genres=9648" }],
+    ["genre-family-tv", "Family TV Shows", { tv: "with_genres=10751" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["sports-docs", "Sports Documentaries", { tv: "with_genres=99&with_keywords=6075", movie: "with_genres=99&with_keywords=6075" }],
+  ],
+  hulu: [
+    ["genre-animated-series", "Animated Series", { tv: "with_genres=16" }],
+    ["genre-comedy-series", "Comedy Series", { tv: "with_genres=35" }],
+    ["genre-crime-mystery", "Crime & Mystery", { tv: "with_genres=80|9648" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-thriller-movies", "Thriller Movies", { movie: "with_genres=53" }],
+  ],
+  paramount: [
+    ["cbs-dramas", "CBS Dramas", { tv: "with_networks=16&with_genres=18" }],
+    ["cbs-comedies", "CBS Comedies", { tv: "with_networks=16&with_genres=35" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-drama-movies", "Drama Movies", { movie: "with_genres=18" }],
+    ["genre-thriller-movies", "Thriller Movies", { movie: "with_genres=53" }],
+    ["genre-scifi-movies", "Science Fiction Movies", { movie: "with_genres=878" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["genre-romance-movies", "Romance Movies", { movie: "with_genres=10749" }],
+  ],
+  disney: [
+    ["marvel-animation", "Marvel Animation", { tv: "with_companies=420&with_genres=16", movie: "with_companies=420&with_genres=16" }],
+    ["disney-musicals", "Disney Musicals", { movie: "with_companies=2|6125&with_keywords=4344" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
+  ],
+  hbomax: [
+    ["hbo-drama", "HBO Drama Series", { tv: "with_networks=49&with_genres=18" }],
+    ["hbo-comedy", "HBO Comedy Series", { tv: "with_networks=49&with_genres=35" }],
+    ["hbo-docs", "HBO Documentaries", { tv: "with_networks=49&with_genres=99" }],
+    ["hbo-crime-mystery", "HBO Crime & Mystery", { tv: "with_networks=49&with_genres=80|9648" }],
+    ["adult-swim-network", "Adult Swim", { tv: "with_networks=80" }],
+  ],
+  primevideo: [
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["genre-animated-movies", "Animated Movies", { movie: "with_genres=16" }],
+    ["genre-war-movies", "War Movies", { movie: "with_genres=10752" }],
+  ],
+  appletv: [
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-fantasy-movies", "Fantasy", { movie: "with_genres=14" }],
+  ],
+  peacock: [
+    ["nbc-comedy", "NBC Comedy", { tv: "with_networks=6&with_genres=35" }],
+    ["nbc-drama", "NBC Drama", { tv: "with_networks=6&with_genres=18" }],
+    ["bravo-reality", "Bravo Reality", { tv: "with_networks=74&with_genres=10764" }],
+    ["genre-scifi-movies", "Science Fiction", { movie: "with_genres=878" }],
+    ["genre-family-movies", "Family Movies", { movie: "with_genres=10751" }],
+    ["sports-docs", "Sports Documentaries", { tv: "with_genres=99&with_keywords=6075", movie: "with_genres=99&with_keywords=6075" }],
+  ],
+};
+for (const [service, additional] of Object.entries(STREAMING_ADDITIONAL_ROWS)) {
+  STREAMING_ROWS[service].push(...additional);
+}
+
+// One entry per row and kind, in a flat list the page, the manifest and the chart
+// fetcher all read: { service, key, name, chartKey, catalogId, kinds: { movie?, series? } }.
+function getStreamingRowCatalogs() {
+  const out = [];
+  const usedCharts = new Set();
+  const usedQueries = new Set();
+  for (const svc of Object.keys(STREAMING_ROWS)) {
+    const cfg = STREAMING_ROW_SERVICES[svc];
+    for (const definition of STREAMING_ROWS[svc]) {
+      const [key, label, recipe] = definition;
+      const r = typeof recipe === "string" ? STREAMING_ROW_RECIPES[recipe] : recipe;
+      if (!r) continue;
+      const chartKey = `${svc}-${key}`;
+      const build = (kind, params) => {
+        const vc = kind === "movie" ? cfg.minVotes * 3 : cfg.minVotes;
+        const q = String(params).replace(/\{vc\}/g, String(vc)).replace(/\{net\}/g, String(cfg.network));
+        const base = `with_watch_providers=${cfg.provider}&watch_region=US&with_watch_monetization_types=flatrate`;
+        const sorted = /(^|&)sort_by=/.test(q) ? "" : "&sort_by=popularity.desc";
+        return `discover/${kind}?${base}${sorted}${q ? "&" + q : ""}`;
+      };
+      const additional = svc === "discovery" || svc === "netflixkids" || (STREAMING_ADDITIONAL_ROWS[svc] || []).includes(definition);
+      if (additional && usedCharts.has(chartKey)) continue;
+      const kinds = {};
+      for (const [kind, params] of [["movie", r.movie], ["series", r.tv]]) {
+        if (params == null) continue;
+        const path = build(kind === "series" ? "tv" : "movie", params);
+        // Sort parameters, so changing their order cannot hide an identical query.
+        const [endpoint, query] = path.split("?");
+        const normalized = new URLSearchParams(query);
+        normalized.delete("sort_by");
+        normalized.sort();
+        const identity = svc + ":" + endpoint + "?" + normalized.toString();
+        if (additional && usedQueries.has(identity)) continue;
+        usedQueries.add(identity);
+        kinds[kind] = path;
+      }
+      if (!Object.keys(kinds).length) continue;
+      usedCharts.add(chartKey);
+      out.push({ service: svc, serviceName: cfg.name, collection: cfg.collection, key, name: label, chartKey, catalogId: `tmdb-chart-${chartKey}`, kinds, additional });
+    }
+  }
+  return out;
+}
+
+const STREAMING_ROW_CATALOGS = getStreamingRowCatalogs();
+const STREAMING_ROW_BY_CHART_KEY = Object.fromEntries(STREAMING_ROW_CATALOGS.map((r) => [r.chartKey, r]));
+
+// Registers each row as a chart key, so `tmdb:chart:netflix-hooked` is served by the
+// same fetcher (and cache) as `tmdb:chart:netflix`.
+for (const row of STREAMING_ROW_CATALOGS) {
+  TMDB_CHART_PATHS[row.chartKey] = { movie: row.kinds.movie, tv: row.kinds.series };
+}
+
 // --- Clean, shareable /lists/<slug> urls for every native/official chart ---
 //
 // "TMDB Trending" -> "TMDB-Trending" -- title case preserved, everything
@@ -30457,6 +31127,104 @@ function resolveChartSlug(slug) {
   return CHART_SLUG_REGISTRY[slug] || CHART_SLUG_REGISTRY[LEGACY_CHART_SLUGS[slug]] || null;
 }
 
+function findChartOrCollectionEntry(id, type) {
+  if (!id) return null;
+  const cleanId = String(id).trim();
+  const reqType = type === "series" ? "series" : "movie";
+
+  // 1. Direct TMDB chart / kids / holiday / genre slug prefixes
+  if (cleanId.startsWith("tmdb-chart-")) {
+    const net = cleanId.replace(/^tmdb-chart-/, "");
+    const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
+                     (typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === net.replace(/[^a-z0-9]+/g, "")) : null);
+    const row = STREAMING_ROW_BY_CHART_KEY[net];
+    if (row && row.additional && !row.kinds[reqType]) return null;
+    const name = row ? `${row.serviceName}: ${row.name}` : provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:chart:${net}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-kids-")) {
+    const rating = cleanId.replace(/^tmdb-kids-/, "");
+    const match = typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS.find((k) => k.movieUrl === `tmdb:kids:${rating}`) : null;
+    const name = match ? match.name : `Rated ${rating.toUpperCase()} & Under`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:kids:${rating}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-holiday-")) {
+    const hol = cleanId.replace(/^tmdb-holiday-/, "");
+    const match = typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS.find((h) => h.movieUrl === `tmdb:holiday:${hol}`) : null;
+    const name = match ? match.name : `Holiday ${hol}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:holiday:${hol}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-genre-")) {
+    const gen = cleanId.replace(/^tmdb-genre-/, "");
+    const match = typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS.find((g) => g.movieUrl === `tmdb:genre:${gen}`) : null;
+    const name = match ? match.name : `Genre ${gen}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:genre:${gen}`, enabled: true };
+  }
+
+  // 2. Search against all known tables:
+  const tables = [
+    typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10 : [],
+    typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL : [],
+    typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS : [],
+    typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS : [],
+    typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [],
+    typeof MDBLIST_OFFICIAL_CHARTS !== "undefined" ? MDBLIST_OFFICIAL_CHARTS : [],
+    typeof TMDB_CHART_LISTS !== "undefined" ? TMDB_CHART_LISTS : [],
+    typeof TRAKT_CHART_LISTS !== "undefined" ? TRAKT_CHART_LISTS : [],
+    typeof SIMKL_CHART_LISTS !== "undefined" ? SIMKL_CHART_LISTS : [],
+    typeof HIDDEN_GEMS_LIST !== "undefined" ? HIDDEN_GEMS_LIST : [],
+    typeof MY_LISTS_ADDON_CHARTS !== "undefined" ? MY_LISTS_ADDON_CHARTS : []
+  ];
+
+  for (const table of tables) {
+    if (!Array.isArray(table)) continue;
+    for (const item of table) {
+      if (!item) continue;
+      const mUrl = item.movieUrl || item.url || "";
+      const sUrl = item.showUrl || item.url || "";
+      const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
+
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(mUrl) : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(sUrl) : "";
+      const uSlug = typeof slugifyServer === "function" ? slugifyServer(chosenUrl) : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(item.name) : "";
+      const cSlug = item.slug ? String(item.slug).toLowerCase() : "";
+
+      if (cleanId === mSlug || cleanId === sSlug || cleanId === uSlug || cleanId === nSlug || cleanId === cSlug) {
+        return {
+          id: cleanId,
+          name: item.name || cleanId,
+          type: reqType,
+          url: chosenUrl,
+          enabled: true
+        };
+      }
+    }
+  }
+
+  // 3. Fallback: Check CHART_SLUG_ENTRIES
+  if (typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const found = CHART_SLUG_ENTRIES.find((c) => {
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+      const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+      return cleanId === mSlug || cleanId === sSlug || cleanId === nSlug || cleanId === cSlug;
+    });
+    if (found) {
+      return {
+        id: cleanId,
+        name: found.name,
+        type: reqType,
+        url: reqType === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+        enabled: true
+      };
+    }
+  }
+
+  return null;
+}
+
 // --- The curated shelves, in one place ---------------------------------------
 //
 // These twelve used to exist only as a literal inside buildQuickAddPresets
@@ -30499,6 +31267,102 @@ const CURATED_LIST_REGISTRY = Object.fromEntries(CURATED_LIST_ENTRIES.map((e) =>
 function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
+
+// Catalogs declared in manifest.catalogs so Nuvio and Stremio recognize that
+// app.my-list provides the sources used by collections folders and premade collections.
+function getPremadeCollectionManifestCatalogs(includeStreamingRows = false) {
+  const list = [];
+  const seen = new Set();
+  function add(type, id, name) {
+    if (!id || !type) return;
+    const key = `${type}:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push({
+      type,
+      id,
+      name: name || id,
+      extra: [{ name: "skip", isRequired: false }],
+    });
+  }
+
+  const explicitCatalogs = [
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today", name: "Apple TV+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-tv-shows-today", name: "Apple TV+ Top 10" },
+    { type: "movie", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "series", id: "tmdb-chart-appletv", name: "Apple TV+" },
+    { type: "movie", id: "https-mdblist-com-lists-andykai-disney-top-10-no-hulu", name: "Disney+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-andykai-disney-trending-no-hulu", name: "Disney+ Top 10" },
+    { type: "movie", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "series", id: "tmdb-chart-disney", name: "Disney+" },
+    { type: "movie", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q", name: "HBO Max Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-harmes7-hbo-max-top-10-series-cp45l27nhd", name: "HBO Max Top 10" },
+    { type: "movie", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "series", id: "tmdb-chart-hbomax", name: "HBO Max" },
+    { type: "movie", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-movies", name: "Hulu Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hulupiv-hulu-top-10-shows", name: "Hulu Top 10" },
+    { type: "movie", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "series", id: "tmdb-chart-hulu", name: "Hulu" },
+    { type: "movie", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-movies", name: "Netflix Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-hdlists-netflix-top-10-trending-shows", name: "Netflix Top 10" },
+    { type: "movie", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "series", id: "tmdb-chart-netflix", name: "Netflix" },
+    { type: "movie", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "series", id: "tmdb-chart-netflixkids", name: "Netflix Kids" },
+    { type: "movie", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-movies-today", name: "Paramount+ Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-ahmed2250-paramount-top-10-tv-shows-today", name: "Paramount+ Top 10" },
+    { type: "movie", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "series", id: "tmdb-chart-paramount", name: "Paramount+" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-movies", name: "Prime Video Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-diimaan-amazon-prime-top-10-tv-shows", name: "Prime Video Top 10" },
+    { type: "movie", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "series", id: "tmdb-chart-primevideo", name: "Prime Video" },
+    { type: "movie", id: "https-mdblist-com-lists-diimaan-peacock-top-10-movies", name: "Peacock Top 10" },
+    { type: "series", id: "https-mdblist-com-lists-peacockpiv-peacock-top-10-shows", name: "Peacock Top 10" },
+    { type: "movie", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "series", id: "tmdb-chart-peacock", name: "Peacock" },
+    { type: "movie", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "series", id: "tmdb-kids-g", name: "Rated G & Under" },
+    { type: "movie", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "series", id: "tmdb-kids-pg", name: "Rated PG & Under" },
+    { type: "movie", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+    { type: "series", id: "tmdb-kids-pg13", name: "Rated PG-13 & Under" },
+  ];
+
+  for (const exp of explicitCatalogs) {
+    add(exp.type, exp.id, exp.name);
+  }
+
+  // Also include any dynamically defined streaming providers
+  if (typeof STREAMING_TOP10 !== "undefined" && Array.isArray(STREAMING_TOP10)) {
+    for (const item of STREAMING_TOP10) {
+      if (item.movieUrl) add("movie", typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl, `${item.name} Top 10`);
+      if (item.showUrl) add("series", typeof slugifyServer === "function" ? slugifyServer(item.showUrl) : item.showUrl, `${item.name} Top 10`);
+    }
+  }
+  if (typeof STREAMING_ALL !== "undefined" && Array.isArray(STREAMING_ALL)) {
+    for (const item of STREAMING_ALL) {
+      const net = item.movieUrl && item.movieUrl.startsWith("tmdb:chart:") ? item.movieUrl.replace(/^tmdb:chart:/, "") : "";
+      const catId = net ? `tmdb-chart-${net}` : (typeof slugifyServer === "function" ? slugifyServer(item.movieUrl) : item.movieUrl);
+      if (catId) {
+        add("movie", catId, item.name);
+        add("series", catId, item.name);
+      }
+    }
+  }
+
+  // The service rows are ~250 catalogs: only the Nuvio install link (?collections=1) lists them,
+  // so they do not become 250 shelves on a Stremio home screen.
+  if (includeStreamingRows) {
+    for (const row of STREAMING_ROW_CATALOGS) {
+      if (row.kinds.movie) add("movie", row.catalogId, row.name);
+      if (row.kinds.series) add("series", row.catalogId, row.name);
+    }
+  }
+
+  return list;
+}
+
 
 // --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
 //
@@ -30771,7 +31635,7 @@ ${seoHeadHtml}
       // above hides every Lists panel and then un-hides the one this attribute
       // names, so a stale value naming a panel that no longer exists leaves the
       // tab blank from first paint.
-      if (['my-lists', 'liked', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
+      if (['my-lists', 'liked', 'collections', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
       var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
@@ -31175,6 +32039,7 @@ ${UTILITY_CSS}
   /* Lists */
   html[data-initial-lists-sub] #listsSubMyLists,
   html[data-initial-lists-sub] #listsSubLiked,
+  html[data-initial-lists-sub] #listsSubCollections,
   html[data-initial-lists-sub] #listsSubImport,
   html[data-initial-lists-sub] #listsSubCreateList {
     display: none !important;
@@ -31183,6 +32048,9 @@ ${UTILITY_CSS}
     display: block !important;
   }
   html[data-initial-lists-sub="liked"] #listsSubLiked {
+    display: block !important;
+  }
+  html[data-initial-lists-sub="collections"] #listsSubCollections {
     display: block !important;
   }
   html[data-initial-lists-sub="import"] #listsSubImport {
@@ -31202,6 +32070,7 @@ ${UTILITY_CSS}
   }
   html[data-initial-lists-sub="my-lists"] #listsSubnavBar .subnav-pill[data-sub="my-lists"],
   html[data-initial-lists-sub="liked"] #listsSubnavBar .subnav-pill[data-sub="liked"],
+  html[data-initial-lists-sub="collections"] #listsSubnavBar .subnav-pill[data-sub="collections"],
   html[data-initial-lists-sub="import"] #listsSubnavBar .subnav-pill[data-sub="import"],
   html[data-initial-lists-sub="bulk"] #listsSubnavBar .subnav-pill[data-sub="bulk"],
   html[data-initial-lists-sub="create-list"] #listsSubnavBar .subnav-pill[data-sub="create-list"] {
@@ -35839,6 +36708,7 @@ ${appShellMobileNavHtml}
         <h1 id="detailTitle" class="u-minw-0 u-overflowwrap-anywhere">List Title</h1>
         <div class="u-gap-10px u-ai-center u-ml-auto" style="display:flex;">
           <button type="button" class="lc-btn searchLikeExternalBtn" id="detailLikeBtn" aria-label="Like this list">&#9825;</button>
+          <button type="button" class="btn-secondary btn-sm" id="detailAddMediaHistoryBtn" data-act="openMediaHistoryAdd" hidden>Add title</button>
           <button type="button" class="lc-btn list-add-btn primary" id="detailAddBtn">+ Add</button>
         </div>
       </div>
@@ -35932,6 +36802,155 @@ ${appShellMobileNavHtml}
       <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
         <button type="button" class="lc-btn secondary" data-act="closeCreateListModal">Cancel</button>
         <button type="button" class="lc-btn primary u-minw-80px" id="createListModalBtn" style="opacity:0.5;" disabled data-act="submitCreateListModal">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Collection Folder Modal -->
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a collection" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create Collection</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
+      </div>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Nuvio.</p>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Collection Name *</label>
+        <input type="text" id="createCollectionModalName" placeholder="e.g. Superhero Sagas, Halloween Nights" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="validateCollectionModal">
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this collection groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionAddonId" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Add-on ID (Nuvio)</label>
+        <input type="text" id="createCollectionAddonId" value="app.my-list" placeholder="app.my-list" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+        <span class="u-fs-v_font_size_xs u-c-v_muted u-mt-4px" style="display:block;">Target add-on installed in Nuvio (default: <code class="u-fs-v_font_size_xs">app.my-list</code>).</span>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionCoverImageUrl" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Cover Image URL (Nuvio Backdrop)</label>
+        <input type="text" id="createCollectionCoverImageUrl" placeholder="https://image.tmdb.org/... or any backdrop URL" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+      </div>
+
+      <div class="u-gap-12px u-ai-center u-mb-12px" style="display:flex; flex-wrap:wrap;">
+        <div class="u-flex-1 u-minw-160px">
+          <label for="createCollectionTileShape" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Tile Shape (Nuvio)</label>
+          <select id="createCollectionTileShape" class="u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm" style="width:100%;">
+            <option value="LANDSCAPE">Landscape (Recommended)</option>
+            <option value="POSTER">Poster</option>
+            <option value="SQUARE">Square</option>
+          </select>
+        </div>
+        <div class="u-flex-1 u-minw-160px u-pt-18px">
+          <label class="u-ai-center u-gap-8px u-cur-pointer" style="display:flex;">
+            <input type="checkbox" id="createCollectionHideTitle">
+            <span class="u-fs-v_font_size_sm u-c-v_text">Hide title text over cover</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Add Lists to Collection -->
+      <div class="u-mb-12px">
+        <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Add Lists into this Folder</label>
+        <div class="u-gap-8px u-ai-center u-mb-8px" style="display:flex;">
+          <select id="createCollectionListPicker" aria-label="Choose existing list" class="u-flex-1 u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm">
+            <option value="">-- Pick from your lists --</option>
+          </select>
+          <button type="button" class="lc-btn secondary" data-act="addPickerListToCollectionDraft">+ Add</button>
+        </div>
+        <div class="u-gap-8px u-ai-center" style="display:flex;">
+          <input type="text" id="createCollectionCustomListUrl" placeholder="Or paste list URL (Trakt, MDBList, TMDB)" class="u-flex-1 u-p-8px_10px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm">
+          <button type="button" class="lc-btn secondary" data-act="addUrlListToCollectionDraft">+ Add URL</button>
+        </div>
+      </div>
+
+      <!-- Lists in Draft -->
+      <div class="u-mb-14px">
+        <div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-6px u-tt-uppercase">Lists in this Collection (<span id="collectionDraftCount">0</span>)</div>
+        <div id="collectionDraftListsContainer" class="u-p-8px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border" style="max-height:160px; overflow-y:auto;">
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this collection folder yet.</p>
+        </div>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn secondary" data-act="closeCreateCollectionModal">Cancel</button>
+        <button type="button" class="lc-btn primary u-minw-80px" id="createCollectionModalBtn" style="opacity:0.5;" disabled data-act="submitCreateCollectionModal">Save Collection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Nuvio Collections Modal -->
+  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Nuvio Collections</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeImportNuvioModal">&#x2715;</button>
+      </div>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Import collection folders from a Nuvio <code class="u-fs-v_font_size_xs">collections.json</code> file or paste JSON code directly.</p>
+
+      <div class="u-mb-12px">
+        <label for="importNuvioFileInput" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Upload collections.json file</label>
+        <input type="file" id="importNuvioFileInput" accept=".json,application/json" class="u-p-8px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_surface u-c-v_text u-fs-v_font_size_sm" style="width:100%;" data-act-on="change" data-act="handleNuvioFileSelected">
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="importNuvioJsonTextarea" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Or Paste JSON</label>
+        <textarea id="importNuvioJsonTextarea" placeholder="[ { &quot;id&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;folders&quot;: [ ... ] } ]" rows="6" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_xs u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn secondary" data-act="closeImportNuvioModal">Cancel</button>
+        <button type="button" class="lc-btn primary" data-act="submitImportNuvioModal">Import Collections</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync to Nuvio / Add to Profile Modal -->
+  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; z-index:10001; position:fixed; inset:0;">
+    <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
+      <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="syncNuvioModalTitle">Add to Profile</h2>
+        <button type="button" class="modal-close-x" aria-label="Close" data-act="closeSyncNuvioModal">&#x2715;</button>
+      </div>
+
+      <div class="u-gap-12px u-mb-14px" style="display:flex; flex-wrap:wrap;">
+        <div style="flex:1; min-width:140px;">
+          <label for="syncNuvioProfileSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Profile</label>
+          <select id="syncNuvioProfileSelect" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+            <option value="1">James</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:140px;">
+          <label for="syncNuvioInstallMode" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Install mode</label>
+          <select id="syncNuvioInstallMode" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="change" data-act="handleSyncNuvioModeChange">
+            <option value="new" selected>Add as new collection</option>
+            <option value="merge">Merge into existing collection</option>
+            <option value="replace">Replace all collections</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="syncNuvioModeHint" class="u-p-10px_12px u-br-v_radius_sm u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-fs-v_font_size_xs u-mb-14px">This will create a separate collection and leave existing collections untouched.</div>
+
+      <div id="syncNuvioNameRow" class="u-mb-14px">
+        <label for="syncNuvioCollectionName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Collection name</label>
+        <input type="text" id="syncNuvioCollectionName" maxlength="80" placeholder="My Lists Collections" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+      </div>
+
+      <div id="syncNuvioTargetRow" class="u-mb-14px" style="display:none;">
+        <label for="syncNuvioTargetSelect" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Merge into</label>
+        <select id="syncNuvioTargetSelect" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
+          <option value="">Loading collections&hellip;</option>
+        </select>
+      </div>
+
+      <div class="u-jc-flex_end u-gap-10px u-bdt-1px_solid_v_border u-pt-14px" style="display:flex;">
+        <button type="button" class="lc-btn primary" id="syncNuvioSubmitBtn" data-act="confirmSyncToNuvio">Add collection</button>
+        <button type="button" class="lc-btn secondary" data-act="closeSyncNuvioModal">Cancel</button>
       </div>
     </div>
   </div>
@@ -36111,6 +37130,7 @@ window._CHARTS_SIMKL = ${jsonForScript(SIMKL_CHART_LISTS)};
 window._CHARTS_SIMKL_ANIME = ${jsonForScript(SIMKL_ANIME_LIST)};
 window._CHARTS_STREAMING_TOP10 = ${jsonForScript(STREAMING_TOP10)};
 window._CHARTS_STREAMING_ALL = ${jsonForScript(STREAMING_ALL)};
+window._STREAMING_ROW_CATALOGS = ${jsonForScript(STREAMING_ROW_CATALOGS.map((r) => ({ service: r.service, collection: r.collection, key: r.key, name: r.name, chartKey: r.chartKey, catalogId: r.catalogId, additional: !!r.additional, movie: !!r.kinds.movie, series: !!r.kinds.series })))};
 window._CHARTS_KIDS = ${jsonForScript(KIDS_LISTS)};
 window._CHARTS_HOLIDAYS = ${jsonForScript(HOLIDAY_LISTS)};
 window._CHARTS_GENRES = ${jsonForScript(GENRE_LISTS)};
@@ -36434,6 +37454,7 @@ if ('serviceWorker' in navigator) {
   <div class="subnav-pills-bar" id="listsSubnavBar">
     <button type="button" class="subnav-pill active" data-sub="my-lists" data-act="switchListsSubmenu" data-act-args="[&quot;my-lists&quot;,&quot;@self&quot;]"><span class="check-icon">&#x2713;</span> My Lists</button>
     <button type="button" class="subnav-pill" data-sub="liked" data-act="switchListsSubmenu" data-act-args="[&quot;liked&quot;,&quot;@self&quot;]">Liked</button>
+    <button type="button" class="subnav-pill" data-sub="collections" data-act="switchListsSubmenu" data-act-args="[&quot;collections&quot;,&quot;@self&quot;]">Collections</button>
     <button type="button" class="subnav-pill" data-sub="import" data-act="switchListsSubmenu" data-act-args="[&quot;import&quot;,&quot;@self&quot;]" style="display:none;">Import</button>
   </div>
 
@@ -36502,16 +37523,18 @@ if ('serviceWorker' in navigator) {
     <div class="panel u-mt-12px" id="myListsSectionPanel-nuvio">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Nuvio Lists</h2>
+        <button type="button" class="secondary lc-btn" id="listsNuvioConnectBtn" data-act="toggleListsMediaAppConnection" data-act-args="[&quot;nuvio&quot;]">Connect Nuvio</button>
       </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History and Continue Watching from your connected Nuvio account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History, Continue Watching, and Library from your connected Nuvio account.</p>
       <div id="myNuvioListsResult"></div>
     </div>
 
     <div class="panel u-mt-12px" id="myListsSectionPanel-stremio">
       <div class="shelf-header u-mb-10px">
         <h2 class="panel-title u-mb-0">Your Stremio Lists</h2>
+        <button type="button" class="secondary lc-btn" id="listsStremioConnectBtn" data-act="toggleListsMediaAppConnection" data-act-args="[&quot;stremio&quot;]">Connect Stremio</button>
       </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History and Continue Watching from your connected Stremio account.</p>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Watch History, Continue Watching, and Library from your connected Stremio account.</p>
       <div id="myStremioListsResult"></div>
     </div>
   </div>
@@ -36529,6 +37552,66 @@ if ('serviceWorker' in navigator) {
            the empty case -- nothing may read this element's children to decide
            whether the feed has loaded. See switchListsSubmenu. -->
       <div id="likedListsFeed"><p class="u-c-v_muted u-fs-v_font_size_sm">No liked lists yet. Tap the heart &#x2661; on any list to save it here.</p></div>
+    </div>
+  </div>
+
+  <!-- Submenu 3: Collections (Custom Folders, Premade Bundles & Nuvio Sync) -->
+  <div class="lists-subpanel" id="listsSubCollections" style="display:none;">
+    <div class="panel">
+      <div class="shelf-header u-mb-8px u-ai-center u-jc-space_between u-gap-12px">
+        <div>
+          <h2 class="shelf-title sr-only">Collections</h2>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Nuvio.</p>
+        </div>
+        <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
+          ${refreshButtonHtml('refreshCollectionsView', 'Refresh collections')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Your Custom Collection Folders -->
+    <div class="panel u-mt-12px" id="myCustomCollectionsPanel">
+      <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
+        <div>
+          <h2 class="panel-title u-mb-0">Your Collection Folders</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Nuvio home screen layouts.</p>
+        </div>
+        <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
+          <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull My Lists collections from your connected Nuvio account">Pull from Nuvio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="exportNuvioCollectionsJson" title="Export Nuvio collections.json">Export JSON</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="openImportNuvioModal" title="Import Nuvio collections.json">Import JSON</button>
+        </div>
+      </div>
+      <div class="u-p-10px_14px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-12px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; flex-direction:column; gap:6px;">
+        <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection folder and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
+      </div>
+      <div id="myCustomCollectionsResult"></div>
+    </div>
+
+    <!-- Premade Collections (below Your Collection Folders) -->
+    <div class="panel u-mt-16px" id="premadeCollectionsPanel">
+      <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
+        <div>
+          <h2 class="panel-title u-mb-0">Premade Collections</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Ready-to-use streaming catalogs &amp; kids bundles with Top 10 charts and full catalogs to install or customize.</p>
+        </div>
+        <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="addAllPremadeCollections" title="Add all premade collections to your collection folders">+ Add All to Your Folders</button>
+        </div>
+      </div>
+      <div id="premadeCollectionsResult"></div>
+    </div>
+
+    <!-- Connected Media Apps Collections (Nuvio) -->
+    <div class="panel u-mt-12px" id="collectionsMediaAppsPanel">
+      <div class="shelf-header u-mb-10px">
+        <h2 class="panel-title u-mb-0">Nuvio Collections</h2>
+      </div>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Nuvio account.</p>
+      <div id="collectionsMediaAppsResult"></div>
     </div>
   </div>
 
@@ -38311,7 +39394,7 @@ const APP_SHELL_TAB_LIST = ${jsonForScript(APP_SHELL_TABS)};
 //
 // Validated against the panels that actually exist rather than trusted.
 function normalizeListsSubmenu(raw) {
-  const known = { 'my-lists': 1, 'liked': 1, 'import': 1, 'create-list': 1 };
+  const known = { 'my-lists': 1, 'liked': 1, 'collections': 1, 'import': 1, 'create-list': 1 };
   const v = String(raw || '');
   return known[v] ? v : 'my-lists';
 }
@@ -38357,10 +39440,12 @@ function normalizeListsSubmenu(raw) {
     }
     var subMyLists = document.getElementById('listsSubMyLists');
     var subLiked = document.getElementById('listsSubLiked');
+    var subCollections = document.getElementById('listsSubCollections');
     var subListImport = document.getElementById('listsSubImport');
     var subCreate = document.getElementById('listsSubCreateList');
     if (subMyLists) subMyLists.style.display = (listSub === 'my-lists') ? 'block' : 'none';
     if (subLiked) subLiked.style.display = (listSub === 'liked') ? 'block' : 'none';
+    if (subCollections) subCollections.style.display = (listSub === 'collections') ? 'block' : 'none';
     if (subListImport) subListImport.style.display = (listSub === 'import') ? 'block' : 'none';
     if (subCreate) subCreate.style.display = (listSub === 'create-list') ? 'block' : 'none';
 
@@ -39559,6 +40644,7 @@ function switchTab(name, opts) {
       let current = '';
       try { current = normalizeListsSubmenu(localStorage.getItem('myListAddon:listsSubmenu')); } catch (e) {}
       if (current === 'liked' && typeof renderLikedListsFeed === 'function') renderLikedListsFeed();
+      if (current === 'collections' && typeof renderCollectionsView === 'function') renderCollectionsView();
     }
   }
   if (name === 'settings') {
@@ -40914,6 +42000,7 @@ function switchListsSubmenu(name, btn) {
   const subpanels = {
     'my-lists': 'listsSubMyLists',
     'liked': 'listsSubLiked',
+    'collections': 'listsSubCollections',
     'create-list': 'listsSubCreateList',
     'import': 'listsSubImport'
   };
@@ -40973,6 +42060,12 @@ function switchListsSubmenu(name, btn) {
     if (typeof renderLikedListsFeed === 'function') {
       renderLikedListsFeed();
     }
+  }
+  if (name === 'collections') {
+    if (typeof renderCollectionsView === 'function') {
+      renderCollectionsView();
+    }
+    if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
   }
   if (name === 'create-list') {
     if (typeof initCustomListSearch === 'function') {
@@ -44585,6 +45678,7 @@ const MEDIA_APP_UI_FRESH_MS = 2 * 60 * 1000;
 const MEDIA_APP_LISTS = [
   { slug: 'watch-history', title: 'Watch History', blurb: 'Movies and shows you watched there.' },
   { slug: 'continue-watching', title: 'Continue Watching', blurb: 'Where you stopped there: movies part way through and the next episode of your shows.' },
+  { slug: 'library', title: 'Library', blurb: 'Movies and shows saved in your library.' },
 ];
 
 async function mediaAppUiCall(provider, sub, method, body) {
@@ -44705,6 +45799,7 @@ function toggleMediaAppListAdd(provider, slug, isAdded) {
     if (typeof showAddedToast === 'function') showAddedToast('Added "' + name + '" to your Catalogs.');
   }
   renderMediaAppLists(provider);
+  if (typeof renderCollectionsMediaApps === 'function') renderCollectionsMediaApps();
 }
 
 // info: the settings answer, or null when signed out or unavailable.
@@ -44714,7 +45809,10 @@ function renderMediaAppStatus(provider, info) {
   const lapsed = connected && !!info.status && info.status !== 'ok';
   const live = connected && !lapsed;
   mediaAppListsLive[provider] = live;
+  const listsBtn = document.getElementById('lists' + name + 'ConnectBtn');
+  if (listsBtn) listsBtn.textContent = live ? 'Disconnect' : (lapsed ? 'Reconnect ' + name : 'Connect ' + name);
   if (live) mediaAppUiMaybeUpdate(provider, info.sync || {});
+  if (provider === 'nuvio' && live && typeof maybeRefreshLinkedNuvioFolders === 'function') maybeRefreshLinkedNuvioFolders();
   renderMediaAppLists(provider);
   const statusEl = document.getElementById(provider + 'ConnectStatus');
   if (statusEl) {
@@ -44874,12 +45972,29 @@ async function setMediaAppSyncOption(provider, key, value) {
   mediaAppUiRefresh(provider);
 }
 
+// Use the same secure connection flows as Settings; never collect credentials
+// in a second form. A connected account uses the existing confirmation dialog.
+function toggleListsMediaAppConnection(provider) {
+  if (!MEDIA_APP_UI_NAMES[provider]) return;
+  if (mediaAppListsLive[provider]) { disconnectMediaApp(provider); return; }
+  if (!requireSignedInFor('connect your ' + MEDIA_APP_UI_NAMES[provider] + ' account')) return;
+  goToExternalSettings();
+  const section = document.getElementById(provider + 'Section');
+  if (section && typeof section.scrollIntoView === 'function') section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (provider === 'stremio') startStremioConnect();
+  else {
+    const email = document.getElementById('nuvioEmailInput');
+    if (email && typeof email.focus === 'function') email.focus();
+  }
+}
+
 // Pulls now and waits, so the answer is what the app holds.
 async function syncMediaAppNow(provider, btn) {
   if (btn) btn.disabled = true;
   mediaAppUpdateTried[provider] = Date.now();
   mediaAppListsBusy[provider] = true;
   renderMediaAppLists(provider);
+  if (typeof renderCollectionsMediaApps === 'function') renderCollectionsMediaApps();
   const r = await mediaAppUiCall(provider, 'sync', 'POST', { wait: true, force: true });
   mediaAppListsBusy[provider] = false;
   if (btn) btn.disabled = false;
@@ -44895,6 +46010,93 @@ async function syncMediaAppNow(provider, btn) {
   mediaAppUiRefresh(provider);
 }
 
+// A dismissal on the website also clears the matching app's resume, but only
+// for accounts whose owner explicitly enabled two-way sync. A failed app write
+// is reported rather than silently suggesting that it succeeded.
+async function syncWebsiteContinueWatchingRemoval(id) {
+  for (const provider of Object.keys(MEDIA_APP_UI_NAMES)) {
+    const settings = await mediaAppUiCall(provider, 'settings', 'GET');
+    if (!settings.ok || !settings.data.connected || !settings.data.sync || !settings.data.sync.push) continue;
+    const result = await mediaAppUiCall(provider, 'remove', 'POST', { target: 'continue-watching', id: id });
+    if (!result.ok) showToast(mediaAppUiMessage(result, 'Could not remove this title from ' + MEDIA_APP_UI_NAMES[provider] + '.'), 'error');
+  }
+}
+
+// Search from an app-history page and add a movie or a specific episode.
+function openMediaHistoryAdd() {
+  const p = window._currentListDetailsParams;
+  const match = p && /^autotrack:(nuvio|stremio)-(watch-history|library):/.exec(String(p.listUrl || ''));
+  if (!match) return;
+  window._mediaHistoryAddProvider = match[1];
+  window._mediaAppAddTarget = match[2];
+  const library = match[2] === 'library';
+  showModal('<h2>Add to ' + escapeHtml(MEDIA_APP_UI_NAMES[match[1]]) + (library ? ' Library' : ' Watch History') + '</h2>' +
+    '<label for="mediaHistoryQuery">Title</label><input id="mediaHistoryQuery" type="search" autocomplete="off">' +
+    '<label for="mediaHistoryKind">Type</label><select id="mediaHistoryKind"><option value="movie">Movie</option><option value="series">' + (library ? 'Show' : 'Show episode') + '</option></select>' +
+    (library ? '' : '<p class="u-c-v_muted u-fs-v_font_size_sm">For a show, enter the season and episode before adding it.</p>' +
+    '<label for="mediaHistorySeason">Season</label><input id="mediaHistorySeason" type="number" min="0" step="1">' +
+    '<label for="mediaHistoryEpisode">Episode</label><input id="mediaHistoryEpisode" type="number" min="1" step="1">') +
+    '<button type="button" class="btn-secondary btn-sm" data-act="searchMediaHistoryAdd">Search</button>' +
+    '<div id="mediaHistoryResults" role="status"></div>' +
+    '<button type="button" class="btn-ghost btn-sm" data-act="closeModal">Close</button>');
+}
+
+async function searchMediaHistoryAdd() {
+  const query = document.getElementById('mediaHistoryQuery');
+  const kind = document.getElementById('mediaHistoryKind');
+  const box = document.getElementById('mediaHistoryResults');
+  if (!query || !kind || !box || !query.value.trim()) return;
+  box.textContent = 'Searching…';
+  try {
+    const type = kind.value === 'series' ? 'tv' : 'movie';
+    const adult = typeof isAdultContentFilterEnabled === 'function' && isAdultContentFilterEnabled() ? '&adultContentFilter=1' : '';
+    const res = await fetch(ORIGIN + '/api/title-search?q=' + encodeURIComponent(query.value.trim()) + '&type=' + type + adult, { cache: 'no-store' });
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.results)) throw new Error('Search failed.');
+    box.innerHTML = data.results.slice(0, 12).map(function(r) {
+      const id = String(r.tmdbId || r.id || '').replace(/^tmdb:/, '');
+      if (!/^\\d+$/.test(id)) return '';
+      const title = String(r.title || r.name || 'Untitled');
+      return '<p>' + escapeHtml(title) + (r.year ? ' (' + escapeHtml(String(r.year)) + ')' : '') + ' ' +
+        '<button type="button" class="btn-secondary btn-sm" data-act="addMediaHistoryResult" data-act-args="' + appActArgs([id, kind.value, title, '@self']) + '">Add</button></p>';
+    }).join('') || '<p>No titles found.</p>';
+  } catch (e) { box.textContent = 'Could not search for titles. Please try again.'; }
+}
+
+async function addMediaHistoryResult(tmdbId, kind, title, btn) {
+  const provider = window._mediaHistoryAddProvider;
+  if (!MEDIA_APP_UI_NAMES[provider]) return;
+  const seasonEl = document.getElementById('mediaHistorySeason');
+  const episodeEl = document.getElementById('mediaHistoryEpisode');
+  const season = seasonEl && seasonEl.value !== '' ? Number(seasonEl.value) : null;
+  const episode = episodeEl && episodeEl.value !== '' ? Number(episodeEl.value) : null;
+  const library = window._mediaAppAddTarget === 'library';
+  if (!library && kind === 'series' && (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1)) {
+    showToast('Enter a season and episode first.', 'error');
+    return;
+  }
+  if (btn) btn.disabled = true;
+  let id = 'tmdb:' + tmdbId;
+  if (provider === 'stremio') {
+    try {
+      const res = await fetch(ORIGIN + (kind === 'series' ? '/api/resolve-show?tmdbId=' : '/api/resolve-movie?tmdbId=') + encodeURIComponent(tmdbId));
+      const data = await res.json();
+      if (data.ok && data.imdbId) id = data.imdbId;
+    } catch (e) {}
+  }
+  const body = { id: id, mediaType: kind, season: season, episode: episode, title: title };
+  if (library) body.action = 'add';
+  const result = await mediaAppUiCall(provider, library ? 'library-item' : 'add-history', 'POST', body);
+  if (btn) btn.disabled = false;
+  if (!result.ok) { showToast(mediaAppUiMessage(result, 'Could not add this title.'), 'error'); return; }
+  closeModal();
+  if (window._listPreviewCache && typeof window._listPreviewCache.clear === 'function') window._listPreviewCache.clear();
+  if (library) showToast('Added "' + title + '" to ' + MEDIA_APP_UI_NAMES[provider] + ' Library.', 'success');
+  else showToast(result.data.mirrored ? 'Added "' + title + '" to ' + MEDIA_APP_UI_NAMES[provider] + ' Watch History.' : 'Added to ' + MEDIA_APP_UI_NAMES[provider] + ', but the website copy could not be updated.', result.data.mirrored ? 'success' : 'info');
+  const p = window._currentListDetailsParams;
+  if (p && typeof openListDetailsPage === 'function') openListDetailsPage(p.name, p.type, p.listUrl, null, { preserveScroll: true });
+}
+
 // The tile's remove button on the Nuvio and Stremio lists: removes the item in the app itself,
 // then here (61_media-app-sync.js). Asks first; the tile only goes once the app has accepted.
 function removeMediaAppItem(btn) {
@@ -44904,13 +46106,15 @@ function removeMediaAppItem(btn) {
   const mediaType = btn.dataset.mediaType || 'movie';
   const itemName = btn.dataset.name || 'This title';
   const app = MEDIA_APP_UI_NAMES[provider];
-  if (!app || !id || (target !== 'history' && target !== 'continue-watching')) return;
+  if (!app || !id || (target !== 'history' && target !== 'continue-watching' && target !== 'library')) return;
   const isShow = mediaType === 'series' || mediaType === 'episode';
   const message = target === 'history'
     ? '"' + itemName + '"' + (isShow ? ' and all its watched episodes' : '') + ' will be removed from your Watch History in ' + app + ', and from ' + app + ' itself.'
-    : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
+    : target === 'library' ? '"' + itemName + '" will be removed from your ' + app + ' Library.' : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
   showAppConfirm('Remove from ' + app + '?', message, 'Remove', async function () {
-    const r = await mediaAppUiCall(provider, 'remove', 'POST', { target: target, id: id, mediaType: mediaType });
+    const body = { target: target, id: id, mediaType: mediaType };
+    if (target === 'library') body.action = 'remove';
+    const r = await mediaAppUiCall(provider, target === 'library' ? 'library-item' : 'remove', 'POST', body);
     if (!r.ok) {
       showToast(mediaAppUiMessage(r, 'Could not remove "' + itemName + '" from ' + app + '. Please try again.'), 'error');
       return;
@@ -45521,6 +46725,1998 @@ async function syncSingleItemToConnectedProviders(item, action) {
     }
   }
 }
+
+// --- Collections Option: Sagas, Franchises & Stremio/Nuvio Synced Catalogs -----
+
+const FEATURED_TMDB_COLLECTIONS = [
+  { id: 86311, name: "The Avengers Collection", url: "https://www.themoviedb.org/collection/86311" },
+  { id: 10, name: "Star Wars Collection", url: "https://www.themoviedb.org/collection/10" },
+  { id: 1241, name: "Harry Potter Collection", url: "https://www.themoviedb.org/collection/1241" },
+  { id: 119, name: "The Lord of the Rings Collection", url: "https://www.themoviedb.org/collection/119" },
+  { id: 263, name: "The Dark Knight Collection", url: "https://www.themoviedb.org/collection/263" },
+  { id: 645, name: "James Bond Collection", url: "https://www.themoviedb.org/collection/645" },
+  { id: 558216, name: "Spider-Man (The Movie) Collection", url: "https://www.themoviedb.org/collection/558216" },
+  { id: 9485, name: "Fast & Furious Collection", url: "https://www.themoviedb.org/collection/9485" },
+  { id: 328, name: "Jurassic Park Collection", url: "https://www.themoviedb.org/collection/328" },
+  { id: 87359, name: "Mission: Impossible Collection", url: "https://www.themoviedb.org/collection/87359" },
+  { id: 8091, name: "Alien Collection", url: "https://www.themoviedb.org/collection/8091" },
+  { id: 556, name: "Pixar Animation Collection", url: "https://www.themoviedb.org/collection/556" },
+  { id: 2150, name: "Shrek Collection", url: "https://www.themoviedb.org/collection/2150" },
+  { id: 295, name: "Pirates of the Caribbean Collection", url: "https://www.themoviedb.org/collection/295" },
+  { id: 2344, name: "The Matrix Collection", url: "https://www.themoviedb.org/collection/2344" },
+  { id: 645043, name: "John Wick Collection", url: "https://www.themoviedb.org/collection/645043" },
+];
+
+const CUSTOM_COLLECTIONS_STORAGE_KEY = 'myListAddon:customCollections';
+
+function getPremadeCollectionsBase() {
+  return [
+    {
+      id: 'col_appletv',
+      name: 'Apple TV+',
+      description: 'Apple TV+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://i.ytimg.com/vi/6sX_BfDnyrg/maxresdefault.jpg',
+      lists: [
+        { name: 'Apple TV+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today' },
+        { name: 'Apple TV+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/apple-tv-top-10-tv-shows-today', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-apple-tv-top-10-tv-shows-today' },
+        { name: 'Apple TV+', url: 'tmdb:chart:appletv', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-appletv' },
+        { name: 'Apple TV+', url: 'tmdb:chart:appletv', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-appletv' }
+      ]
+    },
+    {
+      id: 'col_disney',
+      name: 'Disney+',
+      description: 'Disney+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://static-www.adweek.com/wp-content/uploads/2024/03/disney-logo.jpeg?w=1200',
+      lists: [
+        { name: 'Disney+ Top 10', url: 'https://mdblist.com/lists/andykai/disney-top-10-no-hulu', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-andykai-disney-top-10-no-hulu' },
+        { name: 'Disney+ Top 10', url: 'https://mdblist.com/lists/andykai/disney-trending-no-hulu', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-andykai-disney-trending-no-hulu' },
+        { name: 'Disney+', url: 'tmdb:chart:disney', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-disney' },
+        { name: 'Disney+', url: 'tmdb:chart:disney', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-disney' }
+      ]
+    },
+    {
+      id: 'col_hbomax',
+      name: 'HBO Max',
+      description: 'HBO Max Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRInZVxLCd8CpYk_A80vU10wjypKNN_b1JUmTdhDj19ZlVJ2Ecz3nauXpN&s=10',
+      lists: [
+        { name: 'HBO Max Top 10', url: 'https://mdblist.com/lists/harmes7/hbo-max-top-10-movies-m77r6mc20q', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q' },
+        { name: 'HBO Max Top 10', url: 'https://mdblist.com/lists/harmes7/hbo-max-top-10-series-cp45l27nhd', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-harmes7-hbo-max-top-10-series-cp45l27nhd' },
+        { name: 'HBO Max', url: 'tmdb:chart:hbomax', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-hbomax' },
+        { name: 'HBO Max', url: 'tmdb:chart:hbomax', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-hbomax' }
+      ]
+    },
+    {
+      id: 'col_hulu',
+      name: 'Hulu',
+      description: 'Hulu Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://www.thisishulu.com/app/uploads/2023/10/logo-gradient-3up.svg',
+      lists: [
+        { name: 'Hulu Top 10', url: 'https://mdblist.com/lists/hulupiv/hulu-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hulupiv-hulu-top-10-movies' },
+        { name: 'Hulu Top 10', url: 'https://mdblist.com/lists/hulupiv/hulu-top-10-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hulupiv-hulu-top-10-shows' },
+        { name: 'Hulu', url: 'tmdb:chart:hulu', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-hulu' },
+        { name: 'Hulu', url: 'tmdb:chart:hulu', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-hulu' }
+      ]
+    },
+    {
+      id: 'col_netflix',
+      name: 'Netflix',
+      description: 'Netflix Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://m.media-amazon.com/images/I/616QXs8yg0L.png',
+      lists: [
+        { name: 'Netflix Top 10', url: 'https://mdblist.com/lists/hdlists/netflix-top-10-trending-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hdlists-netflix-top-10-trending-movies' },
+        { name: 'Netflix Top 10', url: 'https://mdblist.com/lists/hdlists/netflix-top-10-trending-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-hdlists-netflix-top-10-trending-shows' },
+        { name: 'Netflix', url: 'tmdb:chart:netflix', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflix' },
+        { name: 'Netflix', url: 'tmdb:chart:netflix', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflix' }
+      ]
+    },
+    {
+      id: 'col_netflixkids',
+      name: 'Netflix Kids',
+      description: 'Netflix Kids movies and shows catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://static1.squarespace.com/static/545ad6c5e4b09bbf6a29c5ee/t/5e69c67b1ce5f056432139df/1583990409924/Netflix.jpg?format=1500w',
+      lists: [
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' }
+      ]
+    },
+    {
+      id: 'col_paramount',
+      name: 'Paramount+',
+      description: 'Paramount+ Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://cdn.mos.cms.futurecdn.net/UFo74BuGo7FYxhAE3DrWUP.jpg',
+      lists: [
+        { name: 'Paramount+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/paramount-top-10-movies-today', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-paramount-top-10-movies-today' },
+        { name: 'Paramount+ Top 10', url: 'https://mdblist.com/lists/ahmed2250/paramount-top-10-tv-shows-today', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-ahmed2250-paramount-top-10-tv-shows-today' },
+        { name: 'Paramount+', url: 'tmdb:chart:paramount', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-paramount' },
+        { name: 'Paramount+', url: 'tmdb:chart:paramount', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-paramount' }
+      ]
+    },
+    {
+      id: 'col_primevideo',
+      name: 'Prime Video',
+      description: 'Prime Video Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://oyster.ignimgs.com/mediawiki/apis.ign.com/prime-video/3/3b/Primevideo-seo-logo_s586.png',
+      lists: [
+        { name: 'Prime Video Top 10', url: 'https://mdblist.com/lists/diimaan/amazon-prime-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-amazon-prime-top-10-movies' },
+        { name: 'Prime Video Top 10', url: 'https://mdblist.com/lists/diimaan/amazon-prime-top-10-tv-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-amazon-prime-top-10-tv-shows' },
+        { name: 'Prime Video', url: 'tmdb:chart:primevideo', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-primevideo' },
+        { name: 'Prime Video', url: 'tmdb:chart:primevideo', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-primevideo' }
+      ]
+    },
+    {
+      id: 'col_peacock',
+      name: 'Peacock',
+      description: 'Peacock Top 10 and full streaming catalog',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://www.newscaststudio.com/wp-content/uploads/2026/05/original-peacock-logo.jpg',
+      lists: [
+        { name: 'Peacock Top 10', url: 'https://mdblist.com/lists/diimaan/peacock-top-10-movies', type: 'movie', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-diimaan-peacock-top-10-movies' },
+        { name: 'Peacock Top 10', url: 'https://mdblist.com/lists/peacockpiv/peacock-top-10-shows', type: 'series', addonId: 'app.my-list', catalogId: 'https-mdblist-com-lists-peacockpiv-peacock-top-10-shows' },
+        { name: 'Peacock', url: 'tmdb:chart:peacock', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-peacock' },
+        { name: 'Peacock', url: 'tmdb:chart:peacock', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-peacock' }
+      ]
+    },
+    {
+      id: 'col_kids',
+      name: 'Kids',
+      description: 'Rated G, PG, PG-13 & Under and Netflix Kids',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: 'https://t3.ftcdn.net/jpg/01/83/26/74/360_F_183267411_05WWsOOcByAaAjnfzklSLS530axmLTJB.jpg',
+      lists: [
+        { name: 'Rated G & Under', url: 'tmdb:kids:g', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-g' },
+        { name: 'Rated G & Under', url: 'tmdb:kids:g', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-g' },
+        { name: 'Rated PG & Under', url: 'tmdb:kids:pg', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg' },
+        { name: 'Rated PG & Under', url: 'tmdb:kids:pg', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg' },
+        { name: 'Rated PG-13 & Under', url: 'tmdb:kids:pg13', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg13' },
+        { name: 'Rated PG-13 & Under', url: 'tmdb:kids:pg13', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-kids-pg13' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' },
+        { name: 'Netflix Kids', url: 'tmdb:chart:netflixkids', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-netflixkids' }
+      ]
+    }
+  ];
+}
+
+// The streaming services' own browse rows (Hooked from the First Episode, Stream & Scream ...)
+// come from STREAMING_ROWS (08_): added after each service's Top 10 and full-catalog lists.
+function getPremadeCollections() {
+  const cols = getPremadeCollectionsBase();
+  // Add a Discovery+ browse folder without moving any existing catalog.
+  cols.push({ id: 'col_discovery', name: 'Discovery+', description: '', tileShape: 'LANDSCAPE', hideTitle: false, addonId: 'app.my-list',
+    coverImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10',
+    lists: [
+      { name: 'Discovery+', url: 'tmdb:chart:discovery', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-discovery' },
+      { name: 'Discovery+', url: 'tmdb:chart:discovery', type: 'series', addonId: 'app.my-list', catalogId: 'tmdb-chart-discovery' }
+    ] });
+  const rows = (typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const col = cols.find(function (c) { return c.id === row.collection; });
+    if (!col) continue;
+    ['movie', 'series'].forEach(function (type) {
+      if (!row[type === 'movie' ? 'movie' : 'series']) return;
+      col.lists.push({ name: row.name, url: 'tmdb:chart:' + row.chartKey, type: type, addonId: 'app.my-list', catalogId: row.catalogId });
+    });
+  }
+  return cols;
+}
+
+function loadCustomCollections() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_COLLECTIONS_STORAGE_KEY);
+    if (!raw) {
+      const premade = getPremadeCollections();
+      saveCustomCollections(premade);
+      return premade;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const premade = getPremadeCollections();
+    const premadeMap = {};
+    premade.forEach(function (p) { premadeMap[p.id] = p.coverImageUrl; });
+    let updated = false;
+    for (let i = 0; i < parsed.length; i++) {
+      const item = parsed[i];
+      if (!item) continue;
+      if (item.id === 'col_hbomax') {
+        const hboImg = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRInZVxLCd8CpYk_A80vU10wjypKNN_b1JUmTdhDj19ZlVJ2Ecz3nauXpN&s=10';
+        if (item.coverImageUrl !== hboImg) {
+          item.coverImageUrl = hboImg;
+          updated = true;
+        }
+      } else if (!item.coverImageUrl && item.nuvioLink && item.nuvioLink.folder && item.nuvioLink.folder.id === 'col_discovery') {
+        item.coverImageUrl = premadeMap.col_discovery;
+        updated = true;
+      } else if (item.id && premadeMap[item.id] && (!item.coverImageUrl || item.coverImageUrl.indexOf('assets.nflxext.com') !== -1 || item.coverImageUrl.indexOf('images.ctfassets.net') !== -1 || item.coverImageUrl.indexOf('kXfqcdQKsToO0OUXHcrrNCHDBzO') !== -1 || (item.id === 'col_peacock' && item.coverImageUrl.indexOf('tmdb.org') !== -1))) {
+        item.coverImageUrl = premadeMap[item.id];
+        updated = true;
+      }
+      if (Array.isArray(item.lists)) {
+        for (let j = 0; j < item.lists.length; j++) {
+          const l = item.lists[j];
+          if (l && l.name) {
+            const clean = l.name.replace(/\\s*\\((?:movies|shows|series)\\)\\s*$/i, '').trim();
+            if (clean && clean !== l.name) {
+              l.name = clean;
+              updated = true;
+            }
+          }
+        }
+      }
+    }
+    if (updated) saveCustomCollections(parsed);
+    return parsed;
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomCollections(collections) {
+  try {
+    localStorage.setItem(CUSTOM_COLLECTIONS_STORAGE_KEY, JSON.stringify(collections || []));
+  } catch (e) {}
+}
+
+function loadPremadeCollectionsBtn() {
+  const current = loadCustomCollections();
+  const premade = getPremadeCollections();
+  if (!current.length) {
+    saveCustomCollections(premade);
+    renderCustomCollections();
+    renderPremadeCollections();
+    showToast('Loaded ' + premade.length + ' premade collections.', 'success');
+    return;
+  }
+  if (typeof showAppConfirm === 'function') {
+    showAppConfirm(
+      'Replace collections?',
+      'Replace your collection folders with the current premade collections? Click Replace to overwrite, or Cancel to keep your folders.',
+      'Replace',
+      function () {
+        saveCustomCollections(premade);
+        renderCustomCollections();
+        renderPremadeCollections();
+        showToast('Replaced with ' + premade.length + ' premade collections.', 'success');
+      }
+    );
+  } else {
+    addAllPremadeCollections();
+  }
+}
+
+window._collectionDraft = { id: null, name: '', description: '', lists: [] };
+window._expandedCollectionFolders = new Set();
+
+function openCreateCollectionModal(editId) {
+  const modal = document.getElementById('createCollectionModal');
+  if (!modal) return;
+
+  const existingCollections = loadCustomCollections();
+  const existing = editId ? existingCollections.find(function (c) { return c.id === editId; }) : null;
+
+  if (existing) {
+    window._collectionDraft = {
+      id: existing.id,
+      name: existing.name || '',
+      description: existing.description || '',
+      tileShape: existing.tileShape || 'LANDSCAPE',
+      hideTitle: !!existing.hideTitle,
+      addonId: existing.addonId || 'app.my-list',
+      coverImageUrl: existing.coverImageUrl || '',
+      lists: Array.isArray(existing.lists) ? JSON.parse(JSON.stringify(existing.lists)) : []
+    };
+    const titleEl = document.getElementById('createCollectionModalTitle');
+    if (titleEl) titleEl.textContent = 'Edit Collection';
+    const btnEl = document.getElementById('createCollectionModalBtn');
+    if (btnEl) btnEl.textContent = 'Save Changes';
+  } else {
+    window._collectionDraft = {
+      id: 'col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name: '',
+      description: '',
+      tileShape: 'LANDSCAPE',
+      hideTitle: false,
+      addonId: 'app.my-list',
+      coverImageUrl: '',
+      lists: []
+    };
+    const titleEl = document.getElementById('createCollectionModalTitle');
+    if (titleEl) titleEl.textContent = 'Create Collection';
+    const btnEl = document.getElementById('createCollectionModalBtn');
+    if (btnEl) btnEl.textContent = 'Create Collection';
+  }
+
+  const nameInput = document.getElementById('createCollectionModalName');
+  if (nameInput) nameInput.value = window._collectionDraft.name;
+  const descInput = document.getElementById('createCollectionModalDesc');
+  if (descInput) descInput.value = window._collectionDraft.description;
+  const addonInput = document.getElementById('createCollectionAddonId');
+  if (addonInput) addonInput.value = window._collectionDraft.addonId || 'app.my-list';
+  const coverInput = document.getElementById('createCollectionCoverImageUrl');
+  if (coverInput) coverInput.value = window._collectionDraft.coverImageUrl || '';
+  const tileShapeInput = document.getElementById('createCollectionTileShape');
+  if (tileShapeInput) tileShapeInput.value = window._collectionDraft.tileShape || 'LANDSCAPE';
+  const hideTitleInput = document.getElementById('createCollectionHideTitle');
+  if (hideTitleInput) hideTitleInput.checked = !!window._collectionDraft.hideTitle;
+  const urlInput = document.getElementById('createCollectionCustomListUrl');
+  if (urlInput) urlInput.value = '';
+
+  populateCollectionListPicker();
+  renderCollectionDraftLists();
+  validateCollectionModal();
+
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+  if (nameInput) nameInput.focus();
+}
+
+function closeCreateCollectionModal() {
+  const modal = document.getElementById('createCollectionModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+
+function getAllWebsiteListsGrouped() {
+  const groups = {};
+
+  function addToList(groupName, name, url, type) {
+    if (!name || !url) return;
+    if (!groups[groupName]) groups[groupName] = [];
+    if (!groups[groupName].some(function (item) { return item.name === name && item.url === url && item.type === type; })) {
+      groups[groupName].push({ name: name, url: url, type: type || 'movie' });
+    }
+  }
+
+  // 1. Configured Catalogs
+  const entries = (typeof collectEntries === 'function') ? collectEntries() : [];
+  if (entries.length) {
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (e && e.name && e.url) {
+        addToList('Your Catalogs', e.name, e.url, e.type || 'movie');
+      }
+    }
+  }
+
+  // 2. Custom Lists
+  const localCustom = (typeof loadLocalCustomLists === 'function') ? loadLocalCustomLists() : {};
+  const customSlugs = Object.keys(localCustom);
+  if (customSlugs.length) {
+    for (let i = 0; i < customSlugs.length; i++) {
+      const slug = customSlugs[i];
+      const cl = localCustom[slug];
+      if (cl && cl.name) {
+        const url = 'customlist:v1:' + JSON.stringify({ listId: cl.listId || slug, type: cl.type || 'movie', items: cl.items || [] });
+        addToList('Your Custom Lists', cl.name, url, cl.type || 'movie');
+      }
+    }
+  }
+
+  // 3. Curated Recommendations
+  if (typeof CURATED_LIST_ENTRIES !== 'undefined' && Array.isArray(CURATED_LIST_ENTRIES)) {
+    for (let i = 0; i < CURATED_LIST_ENTRIES.length; i++) {
+      const c = CURATED_LIST_ENTRIES[i];
+      if (c && c.name && c.slug) {
+        addToList('Curated Recommendations', c.name, 'custom:curated:' + c.slug, c.type || 'movie');
+      }
+    }
+  }
+
+  // 4. Connected App Lists (Stremio & Nuvio)
+  const providers = ['stremio', 'nuvio'];
+  for (let p = 0; p < providers.length; p++) {
+    const prov = providers[p];
+    const provName = (typeof MEDIA_APP_UI_NAMES !== 'undefined' && MEDIA_APP_UI_NAMES[prov]) || (prov === 'stremio' ? 'Stremio' : 'Nuvio');
+    if (typeof mediaAppListsLive !== 'undefined' && mediaAppListsLive[prov]) {
+      if (typeof MEDIA_APP_LISTS !== 'undefined' && Array.isArray(MEDIA_APP_LISTS)) {
+        for (let m = 0; m < MEDIA_APP_LISTS.length; m++) {
+          const l = MEDIA_APP_LISTS[m];
+          if (typeof mediaAppListUrls === 'function') {
+            const urls = mediaAppListUrls(prov, l.slug);
+            if (urls) {
+              addToList('Connected Apps (' + provName + ')', provName + ' ' + l.title + ' (Movies)', urls.movie, 'movie');
+              addToList('Connected Apps (' + provName + ')', provName + ' ' + l.title + ' (Shows)', urls.series, 'series');
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 5. Official Charts & Provider Lists (CHART_SLUG_ENTRIES)
+  if (typeof CHART_SLUG_ENTRIES !== 'undefined' && Array.isArray(CHART_SLUG_ENTRIES)) {
+    for (let i = 0; i < CHART_SLUG_ENTRIES.length; i++) {
+      const e = CHART_SLUG_ENTRIES[i];
+      if (!e || !e.name) continue;
+
+      let groupName = 'Official Charts';
+      const n = e.name;
+      const mUrl = e.movieUrl || e.url || '';
+      const sUrl = e.showUrl || e.url || '';
+
+      if (n.indexOf('Most Watched') !== -1 || n === 'New on Streaming') {
+        groupName = 'My Lists Addon Charts';
+      } else if (n === 'Popular' || n === 'Trending' || n.indexOf('All Services') !== -1) {
+        groupName = 'Combined Charts';
+      } else if (n.indexOf('TMDB') !== -1 || n === 'New Releases') {
+        groupName = 'TMDB Official Charts';
+      } else if (n.indexOf('Trakt') !== -1) {
+        groupName = 'Trakt Official Charts';
+      } else if (n.indexOf('MDBList') !== -1 || n.indexOf('MovieMeter') !== -1 || n.indexOf('Streaming Charts') !== -1) {
+        groupName = 'MDBList Official Charts';
+      } else if (n.indexOf('Simkl') !== -1) {
+        groupName = 'Simkl Charts';
+      } else if (mUrl.indexOf('top-10') !== -1 || sUrl.indexOf('top-10') !== -1) {
+        groupName = 'Streaming Top 10';
+      } else if (mUrl.indexOf('tmdb:chart:') !== -1) {
+        groupName = 'Streaming Catalogs';
+      } else if (mUrl.indexOf('tmdb:genre:') !== -1) {
+        groupName = 'Genre Catalogs';
+      } else if (mUrl.indexOf('tmdb:kids:') !== -1) {
+        groupName = 'Kids & Family';
+      } else if (mUrl.indexOf('tmdb:holiday:') !== -1) {
+        groupName = 'Holiday Specials';
+      } else if (n.indexOf('Hidden Gems') !== -1) {
+        groupName = 'Curated Recommendations';
+      }
+
+      if (mUrl && sUrl && mUrl !== sUrl) {
+        addToList(groupName, n + ' (Movies)', mUrl, 'movie');
+        addToList(groupName, n + ' (Shows)', sUrl, 'series');
+      } else if (mUrl && sUrl && mUrl === sUrl) {
+        if (mUrl.indexOf('movie') !== -1) {
+          addToList(groupName, n, mUrl, 'movie');
+        } else if (mUrl.indexOf('show') !== -1 || mUrl.indexOf('series') !== -1 || mUrl.indexOf('anime') !== -1) {
+          addToList(groupName, n, sUrl, 'series');
+        } else {
+          addToList(groupName, n + ' (Movies)', mUrl, 'movie');
+          addToList(groupName, n + ' (Shows)', sUrl, 'series');
+        }
+      } else if (mUrl) {
+        addToList(groupName, n, mUrl, 'movie');
+      } else if (sUrl) {
+        addToList(groupName, n, sUrl, 'series');
+      }
+    }
+  }
+
+  return groups;
+}
+
+function populateCollectionListPicker() {
+  const sel = document.getElementById('createCollectionListPicker');
+  if (!sel) return;
+  let html = '<option value="">-- Pick from website lists --</option>';
+
+  const grouped = getAllWebsiteListsGrouped();
+  const groupOrder = [
+    'Your Catalogs',
+    'Your Custom Lists',
+    'Curated Recommendations',
+    'My Lists Addon Charts',
+    'Combined Charts',
+    'TMDB Official Charts',
+    'Trakt Official Charts',
+    'MDBList Official Charts',
+    'Simkl Charts',
+    'Streaming Top 10',
+    'Streaming Catalogs',
+    'Genre Catalogs',
+    'Kids & Family',
+    'Holiday Specials',
+    'Connected Apps (Stremio)',
+    'Connected Apps (Nuvio)'
+  ];
+
+  const renderedGroups = new Set();
+  for (let g = 0; g < groupOrder.length; g++) {
+    const gName = groupOrder[g];
+    if (grouped[gName] && grouped[gName].length) {
+      renderedGroups.add(gName);
+      html += '<optgroup label="' + escapeAttr(gName) + '">';
+      for (let i = 0; i < grouped[gName].length; i++) {
+        const item = grouped[gName][i];
+        html += '<option value="' + escapeAttr(JSON.stringify(item)) + '">' + escapeHtml(item.name) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+  }
+
+  const allGroupNames = Object.keys(grouped);
+  for (let k = 0; k < allGroupNames.length; k++) {
+    const gName = allGroupNames[k];
+    if (!renderedGroups.has(gName) && grouped[gName].length) {
+      html += '<optgroup label="' + escapeAttr(gName) + '">';
+      for (let i = 0; i < grouped[gName].length; i++) {
+        const item = grouped[gName][i];
+        html += '<option value="' + escapeAttr(JSON.stringify(item)) + '">' + escapeHtml(item.name) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+  }
+
+  sel.innerHTML = html;
+}
+
+function addPickerListToCollectionDraft() {
+  const sel = document.getElementById('createCollectionListPicker');
+  if (!sel || !sel.value) return;
+  try {
+    const item = JSON.parse(sel.value);
+    if (!item || !item.url) return;
+    if (!window._collectionDraft.lists) window._collectionDraft.lists = [];
+    const exists = window._collectionDraft.lists.some(function (l) { return l.url === item.url; });
+    if (exists) {
+      showToast('This list is already in the collection.', 'info');
+      return;
+    }
+    window._collectionDraft.lists.push(item);
+    renderCollectionDraftLists();
+    validateCollectionModal();
+  } catch (e) {}
+}
+
+function addUrlListToCollectionDraft() {
+  const input = document.getElementById('createCollectionCustomListUrl');
+  if (!input) return;
+  const rawUrl = input.value.trim();
+  if (!rawUrl) {
+    showToast('Enter a list URL first.', 'error');
+    return;
+  }
+  const name = (typeof guessNameFromUrl === 'function' ? guessNameFromUrl(rawUrl) : '') || 'Imported List';
+  const type = (rawUrl.indexOf('series') !== -1 || rawUrl.indexOf('shows') !== -1) ? 'series' : 'movie';
+  if (!window._collectionDraft.lists) window._collectionDraft.lists = [];
+  const exists = window._collectionDraft.lists.some(function (l) { return l.url === rawUrl; });
+  if (exists) {
+    showToast('This list is already in the collection.', 'info');
+    return;
+  }
+  window._collectionDraft.lists.push({ name: name, url: rawUrl, type: type });
+  input.value = '';
+  renderCollectionDraftLists();
+  validateCollectionModal();
+}
+
+function removeListFromCollectionDraft(index) {
+  if (!window._collectionDraft || !window._collectionDraft.lists) return;
+  window._collectionDraft.lists.splice(index, 1);
+  renderCollectionDraftLists();
+  validateCollectionModal();
+}
+
+function renderCollectionDraftLists() {
+  const container = document.getElementById('collectionDraftListsContainer');
+  const countEl = document.getElementById('collectionDraftCount');
+  if (!container) return;
+  const lists = (window._collectionDraft && window._collectionDraft.lists) || [];
+  if (countEl) countEl.textContent = String(lists.length);
+
+  if (!lists.length) {
+    container.innerHTML = '<p class="u-m-0 u-c-v_muted u-fs-v_font_size_xs">No lists added to this collection folder yet.</p>';
+    return;
+  }
+
+  container.innerHTML = lists.map(function (item, idx) {
+    return '<div class="u-ai-center u-jc-space_between u-gap-8px u-p-4px_8px u-mb-4px u-br-v_radius_xs u-bg-v_surface u-bd-1px_solid_v_border" style="display:flex;">' +
+      '<div class="u-minw-0 u-flex-1">' +
+        '<div class="u-fw-600 u-fs-v_font_size_xs u-c-v_text u-to-ellipsis u-ws-nowrap u-ov-hidden">' + escapeHtml(item.name || 'Unnamed List') + '</div>' +
+        '<div class="u-fs-v_font_size_xxs u-c-v_muted u-to-ellipsis u-ws-nowrap u-ov-hidden">' + escapeHtml(item.url || '') + '</div>' +
+      '</div>' +
+      '<button type="button" class="lc-btn btn-ghost u-p-2px_6px u-fs-v_font_size_xs" aria-label="Remove ' + escapeAttr(item.name) + '" data-act="removeListFromCollectionDraft" data-act-args="' + appActArgs([idx]) + '">&#x2715;</button>' +
+    '</div>';
+  }).join('');
+}
+
+function validateCollectionModal() {
+  const nameInput = document.getElementById('createCollectionModalName');
+  const btn = document.getElementById('createCollectionModalBtn');
+  if (!btn) return;
+  const name = nameInput ? nameInput.value.trim() : '';
+  const valid = !!name;
+  btn.disabled = !valid;
+  btn.style.opacity = valid ? '1' : '0.5';
+}
+
+function submitCreateCollectionModal() {
+  const nameInput = document.getElementById('createCollectionModalName');
+  const descInput = document.getElementById('createCollectionModalDesc');
+  const coverInput = document.getElementById('createCollectionCoverImageUrl');
+  const tileShapeInput = document.getElementById('createCollectionTileShape');
+  const hideTitleInput = document.getElementById('createCollectionHideTitle');
+
+  const name = nameInput ? nameInput.value.trim() : '';
+  if (!name) {
+    showToast('Name this collection first.', 'error');
+    return;
+  }
+  const desc = descInput ? descInput.value.trim() : '';
+  const addonInput = document.getElementById('createCollectionAddonId');
+  const addonId = (addonInput ? addonInput.value.trim() : '') || 'app.my-list';
+  const coverImageUrl = coverInput ? coverInput.value.trim() : '';
+  const tileShape = tileShapeInput ? tileShapeInput.value : 'LANDSCAPE';
+  const hideTitle = hideTitleInput ? hideTitleInput.checked : false;
+
+  const collections = loadCustomCollections();
+  const id = window._collectionDraft.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7));
+
+  const existingIdx = collections.findIndex(function (c) { return c.id === id; });
+  const entry = {
+    id: id,
+    name: name,
+    description: desc,
+    addonId: addonId,
+    tileShape: tileShape,
+    hideTitle: hideTitle,
+    coverImageUrl: coverImageUrl,
+    lists: window._collectionDraft.lists || [],
+    updatedAt: Date.now()
+  };
+
+  if (existingIdx !== -1) {
+    if (collections[existingIdx].nuvioLink) entry.nuvioLink = collections[existingIdx].nuvioLink;
+    collections[existingIdx] = entry;
+  } else {
+    entry.createdAt = Date.now();
+    collections.unshift(entry);
+  }
+
+  saveCustomCollections(collections);
+  closeCreateCollectionModal();
+  showToast('Collection "' + name + '" saved.', 'success');
+  renderCustomCollections();
+}
+
+// Only add known browse rows; the newly introduced Discovery+ base catalogs
+// are also offered explicitly. Other services' base catalogs are never restored.
+// A linked folder is matched by its original remote folder ID.
+function missingPremadeBrowseRows(col) {
+  if (!col) return [];
+  const folderId = col.nuvioLink && col.nuvioLink.folder ? col.nuvioLink.folder.id : col.id;
+  const premade = getPremadeCollections().find(function (p) { return p.id === folderId; });
+  if (!premade) return [];
+  const browseIds = new Set(((typeof window !== 'undefined' && window._STREAMING_ROW_CATALOGS) || []).filter(function (r) { return r.additional; }).map(function (r) { return r.catalogId; }));
+  const current = Array.isArray(col.lists) ? col.lists : [];
+  return premade.lists.filter(function (row) {
+    const isDiscoveryBase = folderId === 'col_discovery' && row.catalogId === 'tmdb-chart-discovery';
+    return (browseIds.has(row.catalogId) || isDiscoveryBase) && !current.some(function (item) {
+      if (!item || (item.type || 'movie') !== row.type || (item.addonId && item.addonId !== 'app.my-list')) return false;
+      return (item.catalogId && item.catalogId === row.catalogId) || (item.url && item.url === row.url);
+    });
+  });
+}
+
+async function addMissingPremadeBrowseRows(id) {
+  const col = loadCustomCollections().find(function (c) { return c.id === id; });
+  const missing = missingPremadeBrowseRows(col);
+  if (!missing.length) { showToast('No missing browse rows found.', 'info'); return; }
+  const confirmed = await appShellDialog({ title: 'Add browse rows?', message: 'Add ' + missing.length + ' missing browse rows to this local folder? Existing lists stay unchanged. Push the folder to Nuvio separately.', confirmLabel: 'Add rows', cancelLabel: 'Cancel' });
+  if (!confirmed) return;
+  const current = loadCustomCollections();
+  const target = current.find(function (c) { return c.id === id; });
+  if (!target) return;
+  const rows = missingPremadeBrowseRows(target);
+  if (!Array.isArray(target.lists)) target.lists = [];
+  rows.forEach(function (row) { target.lists.push(Object.assign({}, row)); });
+  if (!rows.length) { showToast('No missing browse rows found.', 'info'); return; }
+  saveCustomCollections(current);
+  renderCustomCollections();
+  showToast('Added ' + rows.length + ' browse rows. Push the folder to Nuvio to apply them.', 'success');
+}
+
+function renderCustomCollections() {
+  const box = document.getElementById('myCustomCollectionsResult');
+  if (!box) return;
+  const collections = loadCustomCollections();
+
+  if (!collections.length) {
+    box.innerHTML = '<div class="u-p-16px u-ta-center u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">No collection folders created yet. Create folders with multiple lists inside to easily manage and install them together in Stremio and Nuvio.</p>' +
+      '<button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Your First Collection</button>' +
+    '</div>';
+    return;
+  }
+
+  box.innerHTML = collections.map(function (col) {
+    const listCount = (col.lists && col.lists.length) || 0;
+    const isExpanded = window._expandedCollectionFolders && window._expandedCollectionFolders.has(col.id);
+
+    let listsPreviewHtml = '';
+    if (listCount > 0) {
+      listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="colFolderContent_' + escapeAttr(col.id) + '">' +
+        '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-8px u-tt-uppercase">Lists inside this folder:</div>' +
+        col.lists.map(function (l, lidx) {
+          const lType = l.type || 'movie';
+          const listName = l.name || 'Unnamed List';
+          return '<div class="list-card u-mb-8px" data-url="' + escapeAttr(l.url || '') + '">' +
+            '<div class="list-card-header">' +
+              '<div class="list-card-body">' +
+                '<div class="u-ai-center u-gap-8px" style="display:flex; flex-wrap:wrap;">' +
+                  '<span class="list-card-title">' + escapeHtml(listName) + '</span>' +
+                  '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(lType) + '</span>' +
+                '</div>' +
+                '<div class="list-card-meta">' +
+                  '<span class="u-fs-v_font_size_xs u-c-v_muted">' + escapeHtml(l.url || '') + '</span>' +
+                '</div>' +
+              '</div>' +
+              '<div class="list-card-actions">' +
+                '<button type="button" class="lc-btn btn-ghost u-p-4px_8px u-fs-v_font_size_xs" title="Remove from collection" aria-label="Remove ' + escapeAttr(listName) + '" data-act="removeListFromSavedCollection" data-act-args="' + appActArgs([col.id, lidx]) + '">&#x2715;</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(lType) + '"></div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    const shapeLabel = col.tileShape || 'LANDSCAPE';
+    const hasCover = !!col.coverImageUrl;
+    const coverHtml = hasCover
+      ? '<img src="' + escapeAttr(col.coverImageUrl) + '" alt="' + escapeAttr(col.name) + '" style="width:100px; height:56px; object-fit:cover; border-radius:var(--radius-xs); border:1px solid var(--border); flex-shrink:0;">'
+      : '';
+
+    return '<div class="list-card" data-collection-id="' + escapeAttr(col.id) + '" style="flex-direction:column; align-items:stretch;">' +
+      '<div class="list-card-header">' +
+        (coverHtml ? '<div class="u-mr-10px">' + coverHtml + '</div>' : '') +
+        '<div class="list-card-body">' +
+          '<div class="u-ai-center u-gap-8px u-mb-4px" style="display:flex; flex-wrap:wrap;">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px; color:var(--accent); flex-shrink:0;" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>' +
+            '<span class="list-card-title u-cur-pointer" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + escapeHtml(col.name) + '</span>' +
+            '<span class="u-fs-v_font_size_xs u-p-2px_8px u-br-v_radius_pill u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-bd-1px_solid_v_border">' + listCount + (listCount === 1 ? ' list' : ' lists') + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(shapeLabel) + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border" title="Target Add-on ID in Nuvio">Addon: ' + escapeHtml(col.addonId || 'app.my-list') + '</span>' +
+          '</div>' +
+          (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
+        '</div>' +
+        '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
+          '<button type="button" class="lc-btn secondary" data-act="pushSingleCollectionToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">' + (col.nuvioLink ? 'Update Nuvio' : 'Push to Nuvio') + '</button>' +
+          (missingPremadeBrowseRows(col).length ? '<button type="button" class="lc-btn secondary" data-act="addMissingPremadeBrowseRows" data-act-args="' + appActArgs([col.id]) + '">Add browse rows</button>' : '') +
+          '<button type="button" class="lc-btn secondary" data-act="toggleCustomCollectionFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([col.id]) + '">Edit</button>' +
+          '<button type="button" class="lc-btn btn-danger secondary" data-act="deleteCustomCollection" data-act-args="' + appActArgs([col.id]) + '">Delete</button>' +
+        '</div>' +
+      '</div>' +
+      listsPreviewHtml +
+    '</div>';
+  }).join('');
+
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function toggleCustomCollectionFolder(id) {
+  if (!window._expandedCollectionFolders) window._expandedCollectionFolders = new Set();
+  if (window._expandedCollectionFolders.has(id)) {
+    window._expandedCollectionFolders.delete(id);
+  } else {
+    window._expandedCollectionFolders.add(id);
+  }
+  renderCustomCollections();
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function renderPremadeCollections() {
+  const box = document.getElementById('premadeCollectionsResult');
+  if (!box) return;
+  const premade = getPremadeCollections();
+  const custom = loadCustomCollections();
+  const customNames = new Set(custom.map(function (c) { return (c.name || '').toLowerCase(); }));
+
+  box.innerHTML = premade.map(function (col) {
+    const listCount = (col.lists && col.lists.length) || 0;
+    const isExpanded = window._expandedPremadeFolders && window._expandedPremadeFolders.has(col.id);
+    const inFolders = customNames.has((col.name || '').toLowerCase());
+
+    let listsPreviewHtml = '';
+    if (listCount > 0) {
+      listsPreviewHtml = '<div class="u-mt-10px u-pt-10px u-bdt-1px_solid_v_border"' + (isExpanded ? '' : ' style="display:none;"') + ' id="premadeFolderContent_' + escapeAttr(col.id) + '">' +
+        '<div class="u-fs-v_font_size_xs u-fw-600 u-c-v_muted u-mb-8px u-tt-uppercase">Lists inside this folder:</div>' +
+        col.lists.map(function (l) {
+          const lType = l.type || 'movie';
+          const listName = l.name || 'Unnamed List';
+          return '<div class="list-card u-mb-8px" data-url="' + escapeAttr(l.url || '') + '">' +
+            '<div class="list-card-header">' +
+              '<div class="list-card-body">' +
+                '<div class="u-ai-center u-gap-8px" style="display:flex; flex-wrap:wrap;">' +
+                  '<span class="list-card-title">' + escapeHtml(listName) + '</span>' +
+                  '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(lType) + '</span>' +
+                '</div>' +
+                '<div class="list-card-meta">' +
+                  '<span class="u-fs-v_font_size_xs u-c-v_muted">' + escapeHtml(l.url || '') + '</span>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(l.url || '') + '" data-type="' + escapeAttr(lType) + '"></div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    const hasCover = !!col.coverImageUrl;
+    const coverHtml = hasCover
+      ? '<img src="' + escapeAttr(col.coverImageUrl) + '" alt="' + escapeAttr(col.name) + '" style="width:100px; height:56px; object-fit:cover; border-radius:var(--radius-xs); border:1px solid var(--border); flex-shrink:0;">'
+      : '';
+
+    return '<div class="list-card" data-premade-id="' + escapeAttr(col.id) + '" style="flex-direction:column; align-items:stretch;">' +
+      '<div class="list-card-header">' +
+        (coverHtml ? '<div class="u-mr-10px">' + coverHtml + '</div>' : '') +
+        '<div class="list-card-body">' +
+          '<div class="u-ai-center u-gap-8px u-mb-4px" style="display:flex; flex-wrap:wrap;">' +
+            '<span class="list-card-title u-cur-pointer" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + escapeHtml(col.name) + '</span>' +
+            '<span class="u-fs-v_font_size_xs u-p-2px_8px u-br-v_radius_pill u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-bd-1px_solid_v_border">' + listCount + (listCount === 1 ? ' list' : ' lists') + '</span>' +
+            '<span class="u-fs-v_font_size_xxs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border">' + escapeHtml(col.tileShape || 'LANDSCAPE') + '</span>' +
+          '</div>' +
+          (col.description ? '<div class="list-card-meta"><span>' + escapeHtml(col.description) + '</span></div>' : '') +
+        '</div>' +
+        '<div class="list-card-actions u-ai-center u-gap-6px" style="display:flex; flex-wrap:wrap;">' +
+          (inFolders
+            ? '<button type="button" class="lc-btn secondary" disabled style="opacity:0.6; cursor:default;">&#x2713; In Your Folders</button>'
+            : '<button type="button" class="lc-btn primary" data-act="addPremadeToCustomCollections" data-act-args="' + appActArgs([col.id]) + '">+ Add to Your Folders</button>'
+          ) +
+          '<button type="button" class="lc-btn secondary" data-act="pushSinglePremadeToNuvio" data-act-args="' + appActArgs([col.id]) + '" title="Push this folder to your connected Nuvio account">Push to Nuvio</button>' +
+          '<button type="button" class="lc-btn secondary" data-act="togglePremadeFolder" data-act-args="' + appActArgs([col.id]) + '">' + (isExpanded ? 'Hide Lists' : 'View Lists') + '</button>' +
+        '</div>' +
+      '</div>' +
+      listsPreviewHtml +
+    '</div>';
+  }).join('');
+
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function togglePremadeFolder(id) {
+  if (!window._expandedPremadeFolders) window._expandedPremadeFolders = new Set();
+  if (window._expandedPremadeFolders.has(id)) {
+    window._expandedPremadeFolders.delete(id);
+  } else {
+    window._expandedPremadeFolders.add(id);
+  }
+  renderPremadeCollections();
+  if (typeof populateSearchResultPosters === 'function') {
+    setTimeout(populateSearchResultPosters, 0);
+  }
+}
+
+function addPremadeToCustomCollections(premadeId) {
+  const premade = getPremadeCollections();
+  const target = premade.find(function (p) { return p.id === premadeId; });
+  if (!target) return;
+  const current = loadCustomCollections();
+  const exists = current.some(function (c) { return (c.name || '').toLowerCase() === target.name.toLowerCase(); });
+  if (exists) {
+    showToast('"' + target.name + '" is already in your collection folders.', 'info');
+    return;
+  }
+  current.push(JSON.parse(JSON.stringify(target)));
+  saveCustomCollections(current);
+  renderCustomCollections();
+  renderPremadeCollections();
+  showToast('Added "' + target.name + '" to your collection folders.', 'success');
+}
+
+function addAllPremadeCollections() {
+  const current = loadCustomCollections();
+  const premade = getPremadeCollections();
+  const existingNames = new Set(current.map(function (c) { return (c.name || '').toLowerCase(); }));
+  let added = 0;
+  premade.forEach(function (p) {
+    if (!existingNames.has((p.name || '').toLowerCase())) {
+      current.push(JSON.parse(JSON.stringify(p)));
+      added++;
+    }
+  });
+  if (added > 0) {
+    saveCustomCollections(current);
+    renderCustomCollections();
+    renderPremadeCollections();
+    showToast('Added ' + added + ' premade collection(s) to your folders.', 'success');
+  } else {
+    showToast('All premade collections are already in your folders.', 'info');
+  }
+}
+
+function pushSinglePremadeToNuvio(colId) {
+  openSyncNuvioModal(colId);
+}
+
+function removeListFromSavedCollection(colId, listIdx) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === colId; });
+  if (!col || !Array.isArray(col.lists)) return;
+  col.lists.splice(listIdx, 1);
+  saveCustomCollections(collections);
+  showToast('List removed from collection.', 'success');
+  renderCustomCollections();
+}
+
+function deleteCustomCollection(id) {
+  const collections = loadCustomCollections();
+  const col = collections.find(function (c) { return c.id === id; });
+  const name = col ? col.name : 'this collection';
+  if (typeof appShellDialog === 'function') {
+    appShellDialog({
+      title: 'Delete "' + name + '"?',
+      message: 'This will delete the collection folder. The underlying lists will not be affected.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep'
+    }).then(function (confirmed) {
+      if (confirmed) {
+        const next = collections.filter(function (c) { return c.id !== id; });
+        saveCustomCollections(next);
+        showToast('Deleted "' + name + '".', 'success');
+        renderCustomCollections();
+      }
+    });
+  } else {
+    const next = collections.filter(function (c) { return c.id !== id; });
+    saveCustomCollections(next);
+    showToast('Deleted "' + name + '".', 'success');
+    renderCustomCollections();
+  }
+}
+
+function extractNuvioCollections(raw) {
+  let val = raw;
+  if (typeof val === 'string') {
+    try { val = JSON.parse(val); } catch (e) { return []; }
+  }
+  if (!val) return [];
+  if (val.collections_json != null) return extractNuvioCollections(val.collections_json);
+  if (val.p_collections_json != null) return extractNuvioCollections(val.p_collections_json);
+  if (val.collections != null) return extractNuvioCollections(val.collections);
+  if (val.p_collections != null) return extractNuvioCollections(val.p_collections);
+  if (val.data != null) return extractNuvioCollections(val.data);
+  if (Array.isArray(val)) {
+    const out = [];
+    for (let i = 0; i < val.length; i++) {
+      const item = val[i];
+      if (!item) continue;
+      if (item.collections_json != null) {
+        out.push.apply(out, extractNuvioCollections(item.collections_json));
+      } else if (item.p_collections_json != null) {
+        out.push.apply(out, extractNuvioCollections(item.p_collections_json));
+      } else if (item.collections != null) {
+        out.push.apply(out, extractNuvioCollections(item.collections));
+      } else if (item.p_collections != null) {
+        out.push.apply(out, extractNuvioCollections(item.p_collections));
+      } else if (item.data != null) {
+        out.push.apply(out, extractNuvioCollections(item.data));
+      } else {
+        const itemTitle = String(item.title || item.name || '').trim();
+        const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
+        const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
+        if (item.id || itemTitle || hasFolders || hasSources) {
+          out.push(item);
+        }
+      }
+    }
+    return out;
+  }
+  if (typeof val === 'object') {
+    const valTitle = String(val.title || val.name || '').trim();
+    const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
+    const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
+    if (val.id || valTitle || hasFolders || hasSources) {
+      return [val];
+    }
+  }
+  return [];
+}
+
+function stripMediaSuffix(str) {
+  if (!str) return '';
+  const re = /[ \\t]*[(](?:movies?|shows?|series|tv)[)][ \\t]*$/ig;
+  return String(str).replace(re, '').replace(re, '').trim();
+}
+
+function addNewNuvioCollection(existing, incoming, options) {
+  const opts = options || {};
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  // An empty collection can be intentional. Keep it, including unknown fields.
+  const cleanedExisting = existingArr.filter(Boolean);
+
+  if (!incomingArr.length) return cleanedExisting;
+
+  const newCols = incomingArr.map(function (inCol) {
+    const rawName = opts.collectionName || inCol.title || inCol.name || 'My Lists Collections';
+    const colName = stripMediaSuffix(rawName) || 'My Lists Collections';
+    const colId = inCol.id && !cleanedExisting.some(function (e) { return e.id === inCol.id; })
+      ? inCol.id
+      : 'col_mylists_' + Math.random().toString(36).slice(2, 8);
+
+    const cleanFolders = (Array.isArray(inCol.folders) ? inCol.folders : [inCol]).map(function (inF) {
+      const cleanF = Object.assign({}, inF, {
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      });
+      if (Array.isArray(cleanF.catalogSources)) {
+        cleanF.catalogSources = cleanF.catalogSources.map(function (cs) {
+          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
+          cName = stripMediaSuffix(cName);
+          return Object.assign({}, cs, {
+            name: cName,
+            title: cName
+          });
+        });
+      }
+      return cleanF;
+    });
+
+    return Object.assign({}, inCol, {
+      id: colId,
+      title: colName,
+      name: colName,
+      viewMode: inCol.viewMode || 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cleanFolders
+    });
+  });
+
+  return cleanedExisting.concat(newCols);
+}
+
+function mergeNuvioCollections(existing, incoming) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  if (!existingArr.length) return incomingArr;
+  if (!incomingArr.length) return existingArr;
+
+  // Preserve all collections from other providers / community templates 100% untouched
+  const otherCollections = [];
+  let myListsCol = null;
+
+  for (let i = 0; i < existingArr.length; i++) {
+    const c = existingArr[i];
+    if (!c) continue;
+    const cTitle = String(c.title || c.name || '').trim();
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+
+
+    const isMyLists = (c.id && (c.id === 'my-lists-collections' || c.id === 'my-lists-addon')) ||
+                      (cTitle && (cTitle.toLowerCase() === 'my lists collections' || cTitle.toLowerCase() === 'my lists addon' || cTitle.toLowerCase() === 'my lists'));
+    if (isMyLists) {
+      if (!myListsCol) {
+        myListsCol = JSON.parse(JSON.stringify(c));
+      } else if (cFolders.length > 0) {
+        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+        myListsCol.folders.push.apply(myListsCol.folders, JSON.parse(JSON.stringify(cFolders)));
+      }
+    } else {
+      otherCollections.push(JSON.parse(JSON.stringify(c)));
+    }
+  }
+
+  if (!myListsCol) {
+    myListsCol = {
+      id: 'my-lists-collections',
+      title: 'My Lists Collections',
+      name: 'My Lists Collections',
+      viewMode: 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: []
+    };
+  } else {
+    myListsCol.id = 'my-lists-collections';
+    myListsCol.title = 'My Lists Collections';
+    myListsCol.name = 'My Lists Collections';
+    myListsCol.hidden = false;
+    myListsCol.isVisible = true;
+    myListsCol.enabled = true;
+    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+  }
+
+  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
+  for (let i = 0; i < incomingArr.length; i++) {
+    const inCol = incomingArr[i];
+    if (!inCol) continue;
+    const inTitle = String(inCol.title || inCol.name || '').trim();
+    const isIncomingMyLists = (inCol.id && (inCol.id === 'my-lists-collections' || inCol.id === 'my-lists-addon')) ||
+                             (inTitle && (inTitle.toLowerCase() === 'my lists collections' || inTitle.toLowerCase() === 'my lists addon' || inTitle.toLowerCase() === 'my lists'));
+
+    if (inCol.id && !isIncomingMyLists) {
+      const existingOtherIdx = otherCollections.findIndex(function (oc) { return oc.id === inCol.id; });
+      if (existingOtherIdx !== -1) {
+        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
+        continue;
+      }
+    }
+
+    // Folders intended for My Lists Collections
+    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
+    for (let j = 0; j < foldersToMerge.length; j++) {
+      const inF = foldersToMerge[j];
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = Object.assign({}, inF, {
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      });
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map(function (cs) {
+          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
+          cName = stripMediaSuffix(cName);
+          return Object.assign({}, cs, {
+            name: cName,
+            title: cName
+          });
+        });
+      }
+      const fIdx = myListsCol.folders.findIndex(function (f) {
+        return (f.id && inF.id && f.id === inF.id) ||
+               (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
+               (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase());
+      });
+      if (fIdx !== -1) {
+        myListsCol.folders[fIdx] = Object.assign({}, myListsCol.folders[fIdx], cleanFolder);
+      } else {
+        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
+      }
+    }
+  }
+
+  return otherCollections.concat([myListsCol]);
+}
+
+function buildNuvioCollectionsPayload(collections) {
+  const cols = collections || loadCustomCollections();
+  return [
+    {
+      id: 'my-lists-collections',
+      title: 'My Lists Collections',
+      name: 'My Lists Collections',
+      viewMode: 'FOLLOW_LAYOUT',
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      backdropImageUrl: getNuvioBackdropUrl(),
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cols.map(function (col) {
+        return {
+          id: col.id || ('folder_' + Math.random().toString(36).slice(2, 8)),
+          title: col.name || 'Untitled Folder',
+          name: col.name || 'Untitled Folder',
+          tileShape: col.tileShape || 'LANDSCAPE',
+          hideTitle: !!col.hideTitle,
+          coverImageUrl: col.coverImageUrl || '',
+          hidden: false,
+          isVisible: true,
+          enabled: true,
+          catalogSources: (col.lists || []).map(function (l) {
+            let catId = l.catalogId;
+            if (!catId) {
+              if (l.url && typeof slugify === 'function') catId = slugify(l.url);
+              else if (l.name && typeof slugify === 'function') catId = slugify(l.name);
+              else catId = l.name || 'catalog';
+            }
+            let cleanName = stripMediaSuffix(l.name || catId);
+            return {
+              addonId: l.addonId || col.addonId || 'app.my-list',
+              catalogId: catId,
+              name: cleanName || catId,
+              title: cleanName || catId,
+              type: l.type || 'movie'
+            };
+          })
+        };
+      })
+    }
+  ];
+}
+
+function getNuvioBackdropUrl() {
+  return (window.location && window.location.origin ? window.location.origin : 'https://mylistsaddon.com') + '/icon.png';
+}
+
+function getNuvioManifestUrl() {
+  const display = document.getElementById('manifestLinkDisplay');
+  const txt = (display && display.innerText) ? display.innerText.trim() : '';
+  if (txt && (txt.startsWith('http://') || txt.startsWith('https://'))) return txt;
+  try {
+    const saved = localStorage.getItem('myListAddon:lastInstallUrl');
+    if (saved && (saved.startsWith('http://') || saved.startsWith('https://'))) return saved;
+  } catch (e) {}
+  if (window.myListAddonManifestUrl && (window.myListAddonManifestUrl.startsWith('http://') || window.myListAddonManifestUrl.startsWith('https://'))) {
+    return window.myListAddonManifestUrl;
+  }
+  return (window.location && window.location.origin ? window.location.origin : 'https://mylistsaddon.com') + '/manifest.json';
+}
+window.getNuvioManifestUrl = getNuvioManifestUrl;
+
+async function openSyncNuvioModal(targetColId) {
+  window._syncNuvioTarget = targetColId || null;
+  const modal = document.getElementById('syncNuvioModal');
+  if (!modal) {
+    executeNuvioCollectionsPush({ targetColId: targetColId });
+    return;
+  }
+
+  const titleEl = document.getElementById('syncNuvioModalTitle');
+  if (titleEl) {
+    titleEl.textContent = 'Add to Profile';
+  }
+
+  const sel = document.getElementById('syncNuvioProfileSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="1">James</option>';
+  }
+
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  if (modeSel) {
+    modeSel.value = 'new';
+  }
+  const nameInput = document.getElementById('syncNuvioCollectionName');
+  if (nameInput) {
+    let defaultName = 'My Lists Collections';
+    if (targetColId) {
+      const all = loadCustomCollections().concat((typeof getPremadeCollections === 'function') ? getPremadeCollections() : []);
+      const one = all.find(function (c) { return c.id === targetColId; });
+      if (one && one.name) defaultName = one.name;
+    }
+    nameInput.value = defaultName;
+  }
+  window._syncNuvioRemote = [];
+  handleSyncNuvioModeChange();
+
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
+
+  try {
+    const res = await mediaAppUiCall('nuvio', 'settings', 'GET');
+    if (res && res.ok && res.data && Array.isArray(res.data.profiles) && res.data.profiles.length > 0) {
+      if (sel) {
+        sel.innerHTML = res.data.profiles.map(function (p) {
+          const idx = p.index != null ? p.index : (p.profile_index != null ? p.profile_index : 1);
+          const name = p.name || ('Profile ' + idx);
+          return '<option value="' + escapeAttr(String(idx)) + '">' + escapeHtml(name) + '</option>';
+        }).join('');
+      }
+    }
+  } catch (e) {}
+  loadSyncNuvioTargets();
+}
+
+async function loadSyncNuvioTargets() {
+  const sel = document.getElementById('syncNuvioTargetSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Loading collections\u2026</option>';
+  let cols = [];
+  try {
+    const res = await mediaAppUiCall('nuvio', 'collections', 'GET');
+    if (res && res.ok && res.data) cols = extractNuvioCollections(res.data.collections);
+  } catch (e) {}
+  window._syncNuvioRemote = cols;
+  if (!cols.length) {
+    sel.innerHTML = '<option value="">No collections found in Nuvio</option>';
+    return;
+  }
+  sel.innerHTML = cols.map(function (c) {
+    const label = String(c.title || c.name || c.id || 'Untitled');
+    const n = Array.isArray(c.folders) ? c.folders.length : 0;
+    return '<option value="' + escapeAttr(String(c.id || '')) + '">' + escapeHtml(label) + ' (' + n + ' folder' + (n === 1 ? '' : 's') + ')</option>';
+  }).join('');
+}
+
+function closeSyncNuvioModal() {
+  const modal = document.getElementById('syncNuvioModal');
+  if (modal) modal.style.display = 'none';
+  if (typeof unlockBackgroundScroll === 'function') unlockBackgroundScroll();
+  window._syncNuvioTarget = null;
+}
+
+function handleSyncNuvioModeChange() {
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  const hintEl = document.getElementById('syncNuvioModeHint');
+  const btn = document.getElementById('syncNuvioSubmitBtn');
+  const mode = modeSel ? modeSel.value : 'new';
+  const nameRow = document.getElementById('syncNuvioNameRow');
+  const targetRow = document.getElementById('syncNuvioTargetRow');
+  if (nameRow) nameRow.style.display = mode === 'new' ? '' : 'none';
+  if (targetRow) targetRow.style.display = mode === 'merge' ? '' : 'none';
+
+  if (hintEl) {
+    if (mode === 'new') {
+      hintEl.textContent = 'This adds a collection using the current Nuvio data. Changes made in Nuvio during the push may be overwritten.';
+    } else if (mode === 'merge') {
+      hintEl.textContent = 'This merges folders using the current Nuvio data. Changes made in Nuvio during the push may be overwritten.';
+    } else {
+      hintEl.textContent = 'This will REMOVE every collection on this Nuvio profile (including ones from other providers) and keep only this one.';
+    }
+  }
+  if (btn) {
+    btn.textContent = mode === 'new' ? 'Add collection' : (mode === 'merge' ? 'Merge into collection' : 'Replace all collections');
+  }
+}
+
+async function confirmSyncToNuvio() {
+  const profileSel = document.getElementById('syncNuvioProfileSelect');
+  const modeSel = document.getElementById('syncNuvioInstallMode');
+  const profileId = profileSel ? profileSel.value : '1';
+  const installMode = modeSel ? modeSel.value : 'new';
+  const targetColId = window._syncNuvioTarget;
+  const nameInput = document.getElementById('syncNuvioCollectionName');
+  const targetSel = document.getElementById('syncNuvioTargetSelect');
+  const collectionName = nameInput ? nameInput.value.trim() : '';
+  const mergeTargetId = targetSel ? targetSel.value : '';
+
+  if (installMode === 'merge' && !mergeTargetId) {
+    showToast('Pick which Nuvio collection to merge into.', 'info');
+    return;
+  }
+  if (installMode === 'replace' && !window.confirm('This removes ALL collections on this Nuvio profile, including ones from other providers. Continue?')) {
+    return;
+  }
+
+  closeSyncNuvioModal();
+  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId, collectionName: collectionName, mergeTargetId: mergeTargetId });
+}
+
+function syncCollectionsToNuvio() {
+  openSyncNuvioModal();
+}
+
+// These are IDs that My Lists itself uses when creating Nuvio collections.
+// Titles and catalog addon IDs are not proof of who created a collection.
+function isMyListsNuvioCollectionId(id) {
+  const value = String(id || '');
+  return value === 'my-lists-collections' || value === 'my-lists-addon' || value.indexOf('col_mylists_') === 0;
+}
+
+function pushSingleCollectionToNuvio(colId) {
+  const col = loadCustomCollections().find(function (c) { return c.id === colId; });
+  if (col && col.nuvioLink) { pushLinkedNuvioFolder(col); return; }
+  openSyncNuvioModal(colId);
+}
+
+// Nuvio only exposes a whole-blob write. Check the imported folder before
+// replacing it, but warn that another client can still write after that check.
+async function pushLinkedNuvioFolder(col) {
+  const link = col.nuvioLink;
+  if (!isMyListsNuvioCollectionId(link.collectionId)) {
+    showToast('Only collections created by My Lists can be updated here.', 'error');
+    return;
+  }
+  const confirmed = await appShellDialog({ title: 'Update Nuvio folder?', message: 'Nuvio replaces all collections when saving. Changes made in Nuvio during this push may be overwritten.', confirmLabel: 'Update Nuvio', cancelLabel: 'Cancel' });
+  if (!confirmed) return;
+  if (nuvioFolderWriteBusy) { showToast('A Nuvio folder update is already in progress.', 'info'); return; }
+  const folder = JSON.parse(JSON.stringify(link.folder));
+  folder.title = col.name;
+  if ('name' in folder) folder.name = col.name;
+  folder.description = col.description || '';
+  folder.tileShape = col.tileShape || 'LANDSCAPE';
+  folder.hideTitle = !!col.hideTitle;
+  folder.coverImageUrl = col.coverImageUrl || '';
+  folder.catalogSources = (col.lists || []).map(function (l) {
+    const original = l.nuvioSource ? JSON.parse(JSON.stringify(l.nuvioSource)) : {};
+    const catId = l.catalogId || (typeof slugify === 'function' ? slugify(l.url || l.name || 'catalog') : (l.name || 'catalog'));
+    original.addonId = l.addonId || col.addonId || 'app.my-list';
+    original.catalogId = catId;
+    original.type = l.type || 'movie';
+    original.name = l.name || catId;
+    if ('title' in original) original.title = l.name || catId;
+    return original;
+  });
+  nuvioFolderWriteBusy = true;
+  nuvioFoldersVersion++;
+  let res;
+  try {
+    res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
+      profileId: link.profileId, scope: link.scope, installMode: 'update-folder', targetCollectionId: link.collectionId,
+      folderId: link.folder.id, expectedFolder: link.folder, updatedFolder: folder,
+      collections: [folder], collectionLists: col.lists || []
+    });
+  } finally { nuvioFolderWriteBusy = false; }
+  if (!res || !res.ok) { showToast(mediaAppUiMessage(res, 'Could not update the Nuvio folder.'), 'error'); return; }
+  const current = loadCustomCollections();
+  const stored = current.find(function (c) { return c.id === col.id; });
+  // Preserve edits made while the request was in flight.
+  if (stored && stored.nuvioLink && JSON.stringify(stored.nuvioLink.folder) === JSON.stringify(link.folder)) {
+    stored.nuvioLink.folder = folder;
+    stored.nuvioLink.baseline = linkedNuvioFolderSignature(col);
+    saveCustomCollections(current);
+  }
+  showToast('Nuvio folder updated.', 'success');
+}
+
+function linkedNuvioFolderSignature(col) {
+  return JSON.stringify({ name: col.name, description: col.description, addonId: col.addonId, tileShape: col.tileShape, hideTitle: col.hideTitle, coverImageUrl: col.coverImageUrl, lists: col.lists });
+}
+
+async function executeNuvioCollectionsPush(opts) {
+  const options = opts || {};
+  const profileId = options.profileId || 1;
+  const installMode = options.installMode || 'new';
+  const targetColId = options.targetColId;
+
+  const current = loadCustomCollections();
+  let collectionsToPush = current;
+  let pushName = 'collections';
+
+  if (targetColId) {
+    const premade = (typeof getPremadeCollections === 'function') ? getPremadeCollections() : [];
+    const premadeCol = premade.find(function (c) { return c.id === targetColId; });
+    if (premadeCol) {
+      const idx = current.findIndex(function (c) { return c.id === premadeCol.id || (c.name && premadeCol.name && c.name.toLowerCase() === premadeCol.name.toLowerCase()); });
+      if (idx === -1) {
+        current.push(JSON.parse(JSON.stringify(premadeCol)));
+      }
+      saveCustomCollections(current);
+      renderCustomCollections();
+    }
+
+    const single = current.find(function (c) { return c.id === targetColId; });
+    if (single) {
+      pushName = single.name || 'folder';
+      collectionsToPush = [single];
+    }
+  }
+
+  if (!collectionsToPush.length) {
+    showToast('No collections to push.', 'info');
+    return;
+  }
+
+  const payload = buildNuvioCollectionsPayload(collectionsToPush);
+  const manifestUrl = getNuvioManifestUrl();
+  const allLists = collectionsToPush.reduce(function (acc, c) { return acc.concat(c.lists || []); }, []);
+
+  showToast('Pushing to Nuvio\u2026', 'info');
+
+  let cachedRemote = [];
+  try {
+    const raw = localStorage.getItem('myListAddon:nuvioRemoteCollections');
+    if (raw) cachedRemote = extractNuvioCollections(raw);
+  } catch (e) {}
+
+  try {
+    const pullRes = await mediaAppUiCall('nuvio', 'collections', 'GET');
+    if (pullRes && pullRes.ok && pullRes.data && pullRes.data.collections) {
+      const extracted = extractNuvioCollections(pullRes.data.collections);
+      if (extracted && extracted.length > 0) {
+        cachedRemote = extracted;
+        try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
+    profileId: profileId,
+    installMode: installMode,
+    collectionName: options.collectionName || (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) || 'My Lists Collections',
+    targetCollectionId: options.mergeTargetId || '',
+    collections: payload,
+    knownCollections: cachedRemote,
+    manifestUrl: manifestUrl,
+    collectionLists: allLists
+  });
+
+  if (res && res.ok) {
+    if (res.data && res.data.collections) {
+      try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(res.data.collections)); } catch (e) {}
+    }
+    const modeDesc = installMode === 'new' ? 'added as new collection' : (installMode === 'merge' ? 'merged into the chosen collection' : 'replaced all collections');
+    let msg = 'Pushed "' + pushName + '" to Nuvio (' + modeDesc + ').';
+    if (res.data && res.data.addonInstalled) {
+      msg += ' My Lists Addon was auto-installed in Nuvio!';
+    }
+    showToast(msg, 'success');
+  } else {
+    showToast(mediaAppUiMessage(res, 'Could not push to Nuvio. Check your connection in Settings.'), 'error');
+  }
+}
+
+let nuvioFoldersRefreshBusy = false;
+let nuvioFolderWriteBusy = false;
+let nuvioFoldersVersion = 0;
+let nuvioFoldersLastRefresh = 0;
+const NUVIO_FOLDERS_REFRESH_MS = 2 * 60 * 1000;
+
+// Only refresh existing links while this view is open. Never automatically write
+// the provider's whole collections blob or import folders the user removed here.
+function maybeRefreshLinkedNuvioFolders() {
+  if (!mediaAppListsLive.nuvio || nuvioFoldersRefreshBusy || Date.now() - nuvioFoldersLastRefresh < NUVIO_FOLDERS_REFRESH_MS) return;
+  if (typeof isSignedIn !== 'function' || !isSignedIn()) return;
+  try {
+    if (document.hidden || localStorage.getItem('myListAddon:activeTab') !== 'lists' || localStorage.getItem('myListAddon:listsSubmenu') !== 'collections') return;
+  } catch (e) { return; }
+  const modal = document.getElementById('createCollectionModal');
+  if (modal && modal.style.display === 'flex') return;
+  if (!loadCustomCollections().some(function (c) { return c.nuvioLink && c.nuvioLink.scope && isMyListsNuvioCollectionId(c.nuvioLink.collectionId); })) return;
+  nuvioFoldersLastRefresh = Date.now();
+  pullCollectionsFromNuvio(true);
+}
+setInterval(maybeRefreshLinkedNuvioFolders, NUVIO_FOLDERS_REFRESH_MS);
+
+async function pullCollectionsFromNuvio(automatic) {
+  if (nuvioFoldersRefreshBusy || nuvioFolderWriteBusy) return;
+  const version = nuvioFoldersVersion;
+  const auto = automatic === true;
+  const owner = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
+  if (!auto) showToast('Pulling collections from Nuvio\u2026', 'info');
+  nuvioFoldersRefreshBusy = true;
+  let res;
+  try { res = await mediaAppUiCall('nuvio', 'collections', 'GET'); }
+  finally { nuvioFoldersRefreshBusy = false; }
+  // A sign-out or account change during the fetch must not update another user's browser state.
+  if (version !== nuvioFoldersVersion || owner !== ((typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '')) return;
+  const modal = document.getElementById('createCollectionModal');
+  if (auto && modal && modal.style.display === 'flex') return;
+  if (res && res.ok && res.data && Array.isArray(res.data.collections) && res.data.scope) {
+    const extracted = extractNuvioCollections(res.data.collections);
+    if (!auto) {
+      try { localStorage.setItem('myListAddon:nuvioRemoteCollections', JSON.stringify(extracted)); } catch (e) {}
+    }
+    const imported = [];
+    extracted.forEach(function (parent) {
+      if (!parent || !isMyListsNuvioCollectionId(parent.id) || !Array.isArray(parent.folders)) return;
+      parent.folders.forEach(function (folder) {
+        if (!folder || !folder.id) return;
+        const parsed = parseNuvioCollectionsJson([folder])[0];
+        if (!parsed) return;
+        parsed.id = 'nuvio:' + res.data.scope + ':' + encodeURIComponent(String(res.data.profileId)) + ':' + encodeURIComponent(String(parent.id)) + ':' + encodeURIComponent(String(folder.id));
+        (parsed.lists || []).forEach(function (item, i) { item.nuvioSource = folder.catalogSources[i]; });
+        parsed.nuvioLink = { scope: res.data.scope, profileId: res.data.profileId, collectionId: parent.id, folder: folder, baseline: linkedNuvioFolderSignature(parsed) };
+        imported.push(parsed);
+      });
+    });
+    const current = loadCustomCollections();
+    const merged = current.slice();
+    let count = 0;
+    let skipped = 0;
+    let refreshed = 0;
+    for (let i = 0; i < imported.length; i++) {
+      const imp = imported[i];
+      const idx = merged.findIndex(function (c) { return c.id === imp.id; });
+      if (idx !== -1) {
+        if (!merged[idx].nuvioLink || linkedNuvioFolderSignature(merged[idx]) !== merged[idx].nuvioLink.baseline) { skipped++; continue; }
+        if (JSON.stringify(merged[idx].nuvioLink.folder) !== JSON.stringify(imp.nuvioLink.folder) || linkedNuvioFolderSignature(merged[idx]) !== linkedNuvioFolderSignature(imp)) { merged[idx] = imp; refreshed++; }
+      } else if (!auto) {
+        merged.push(imp);
+        count++;
+      }
+    }
+    if (count || refreshed) { saveCustomCollections(merged); renderCustomCollections(); }
+    if (!auto) {
+      if (!imported.length) showToast('No My Lists collections were found in this Nuvio profile.', 'info');
+      else showToast('Pulled ' + (imported.length - skipped) + ' Nuvio folder(s) (' + count + ' new).' + (skipped ? ' Kept ' + skipped + ' folder(s) with local edits. Delete a local folder and pull again to discard its edits.' : ''), 'success');
+    }
+  } else if (!auto) {
+    showToast(mediaAppUiMessage(res, 'Could not pull collections from Nuvio. Check your connection in Settings.'), 'error');
+  }
+}
+
+function exportNuvioCollectionsJson() {
+  const collections = loadCustomCollections();
+  if (!collections.length) {
+    showToast('No collection folders to export yet.', 'info');
+    return;
+  }
+  const payload = buildNuvioCollectionsPayload(collections);
+  const jsonStr = JSON.stringify(payload, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'collections.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Exported collections.json for Nuvio.', 'success');
+}
+
+function parseNuvioCollectionsJson(raw) {
+  let data = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!data) return [];
+  let folders = [];
+  if (Array.isArray(data)) {
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      if (item && Array.isArray(item.folders)) {
+        folders = folders.concat(item.folders);
+      } else if (item && (item.catalogSources || item.title || item.name)) {
+        folders.push(item);
+      }
+    }
+  } else if (typeof data === 'object') {
+    if (Array.isArray(data.folders)) {
+      folders = data.folders;
+    } else if (data.catalogSources) {
+      folders = [data];
+    }
+  }
+
+  // Catalog IDs are stable identifiers, not necessarily readable names. Reuse
+  // exact type/ID matches from our configured and premade lists, never another
+  // addon's catalog with a coincidentally identical ID.
+  const known = [];
+  if (typeof collectEntries === 'function') {
+    try { known.push.apply(known, collectEntries() || []); } catch (e) {}
+  }
+  loadCustomCollections().concat(getPremadeCollections()).forEach(function (col) {
+    if (col && Array.isArray(col.lists)) known.push.apply(known, col.lists);
+  });
+  function knownSource(cs, id) {
+    if (cs.addonId && cs.addonId !== 'app.my-list') return null;
+    const type = cs.type || 'movie';
+    return known.find(function (item) {
+      if (!item || (item.addonId && item.addonId !== 'app.my-list') || (item.type || 'movie') !== type) return false;
+      const itemId = item.catalogId || item.id || (item.url && typeof slugify === 'function' ? slugify(item.url) : '');
+      return itemId === id && !!item.name && item.name !== id;
+    }) || null;
+  }
+
+  return folders.filter(Boolean).map(function (f) {
+    const lists = Array.isArray(f.catalogSources) ? f.catalogSources.map(function (cs) {
+      const catId = cs.catalogId || cs.name || '';
+      const knownItem = knownSource(cs, catId);
+      const suppliedName = cs.name || cs.title || '';
+      let url = cs.url || (knownItem && typeof knownItem.url === 'string' && knownItem.url.indexOf('catalog:') !== 0 ? knownItem.url : '') || '';
+      if (!url && catId && (!cs.addonId || cs.addonId === 'app.my-list') && typeof CHART_SLUG_ENTRIES !== 'undefined') {
+        const match = CHART_SLUG_ENTRIES.find(function (c) {
+          return c.slug === catId || (typeof slugify === 'function' && (slugify(c.name) === catId || slugify(c.movieUrl || '') === catId || slugify(c.showUrl || '') === catId));
+        });
+        if (match) {
+          url = cs.type === 'series' ? (match.showUrl || match.movieUrl) : (match.movieUrl || match.showUrl);
+        }
+      }
+      return {
+        name: (suppliedName && suppliedName !== catId ? suppliedName : (knownItem && knownItem.name)) || suppliedName || catId || 'Catalog Item',
+        url: url || ('catalog:' + (cs.addonId || 'app.my-list') + ':' + catId),
+        type: cs.type || 'movie',
+        addonId: cs.addonId || 'app.my-list',
+        catalogId: catId
+      };
+    }) : [];
+
+    return {
+      id: f.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      name: f.title || f.name || 'Imported Collection',
+      description: f.description || '',
+      tileShape: f.tileShape || 'LANDSCAPE',
+      hideTitle: !!f.hideTitle,
+      addonId: (f.catalogSources && f.catalogSources[0] && f.catalogSources[0].addonId) || 'app.my-list',
+      coverImageUrl: f.coverImageUrl || '',
+      lists: lists,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  });
+}
+
+function openImportNuvioModal() {
+  const modal = document.getElementById('importNuvioCollectionsModal');
+  if (!modal) return;
+  const fileInput = document.getElementById('importNuvioFileInput');
+  if (fileInput) fileInput.value = '';
+  const textarea = document.getElementById('importNuvioJsonTextarea');
+  if (textarea) textarea.value = '';
+  modal.style.display = 'flex';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(true);
+}
+
+function closeImportNuvioModal() {
+  const modal = document.getElementById('importNuvioCollectionsModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll(false);
+}
+
+function handleNuvioFileSelected(event) {
+  const input = event && event.target ? event.target : document.getElementById('importNuvioFileInput');
+  if (!input || !input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const text = e.target.result;
+    const textarea = document.getElementById('importNuvioJsonTextarea');
+    if (textarea) textarea.value = text;
+  };
+  reader.readAsText(file);
+}
+
+function submitImportNuvioModal() {
+  const textarea = document.getElementById('importNuvioJsonTextarea');
+  const raw = textarea ? textarea.value.trim() : '';
+  if (!raw) {
+    showToast('Paste JSON or choose a collections.json file first.', 'error');
+    return;
+  }
+  const parsed = parseNuvioCollectionsJson(raw);
+  if (!parsed.length) {
+    showToast('Could not find any collection folders in this JSON.', 'error');
+    return;
+  }
+  const current = loadCustomCollections();
+  const merged = current.slice();
+  let count = 0;
+  for (let i = 0; i < parsed.length; i++) {
+    const item = parsed[i];
+    const idx = merged.findIndex(function (c) { return c.id === item.id; });
+    if (idx !== -1) {
+      merged[idx] = item;
+    } else {
+      merged.push(item);
+      count++;
+    }
+  }
+  saveCustomCollections(merged);
+  closeImportNuvioModal();
+  renderCustomCollections();
+  showToast('Imported ' + parsed.length + ' collection folder(s) (' + count + ' new).', 'success');
+}
+
+function renderCollectionsView() {
+  renderCustomCollections();
+  renderPremadeCollections();
+  renderCollectionsMediaApps();
+}
+
+function renderCollectionsCurated() {
+  const box = document.getElementById('collectionsCuratedResult');
+  if (!box) return;
+  box.innerHTML = FEATURED_TMDB_COLLECTIONS.map(function (c) {
+    const added = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(c.url, 'movie') || isListAddedToConfig('tmdb:collection:' + c.id, 'movie'));
+    return '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '">' +
+      '<div class="list-card-header">' +
+        '<div class="list-card-body">' +
+          '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([c.name, c.url]) + '">' + escapeHtml(c.name) + '</div>' +
+          '<div class="list-card-meta"><span>TMDB Franchise Collection</span></div>' +
+        '</div>' +
+        '<div class="list-card-actions">' +
+          '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+            ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([c.name, c.url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+    '</div>';
+  }).join('');
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+function renderCollectionsMediaApps() {
+  const box = document.getElementById('collectionsMediaAppsResult');
+  if (!box) return;
+  const providers = ['nuvio'];
+  box.innerHTML = providers.map(function (provider) {
+    const name = MEDIA_APP_UI_NAMES[provider];
+    const live = !!mediaAppListsLive[provider];
+    const busy = !!mediaAppListsBusy[provider];
+    if (!live) {
+      return '<div class="u-p-12px u-mb-10px u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">' +
+        '<div class="u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">' +
+          '<div>' +
+            '<div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(name) + ' Collections</div>' +
+            '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_xs">Connect your ' + escapeHtml(name) + ' account in Settings to sync and install your personal history and continue watching collections.</p>' +
+          '</div>' +
+          '<button type="button" class="lc-btn secondary" data-act="goToExternalSettings">Connect ' + escapeHtml(name) + '</button>' +
+        '</div>' +
+      '</div>';
+    }
+    const listsHtml = MEDIA_APP_LISTS.map(function (l) {
+      const urls = mediaAppListUrls(provider, l.slug);
+      const added = !!urls && typeof isListAddedToConfig === 'function' && isListAddedToConfig(urls.movie, 'movie') && isListAddedToConfig(urls.series, 'series');
+      const listName = name + ' ' + l.title;
+      return '<div class="list-card" data-list-type="mixed" data-name="' + escapeAttr(listName) + '"' + (urls ? ' data-url="' + escapeAttr(urls.mixed) + '"' : '') + '>' +
+        '<div class="list-card-header">' +
+          '<div class="list-card-body">' +
+            '<div class="list-card-title u-cur-pointer" data-act="openMediaAppListDetails" data-act-args="' + appActArgs([provider, l.slug]) + '">' + escapeHtml(listName) + '</div>' +
+            '<div class="list-card-meta"><span>' + escapeHtml(l.blurb) + '</span></div>' +
+          '</div>' +
+          '<div class="list-card-actions">' +
+            '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+              ' data-act="toggleMediaAppListAdd" data-act-args="' + appActArgs([provider, l.slug, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+          '</div>' +
+        '</div>' +
+        (urls ? '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(urls.mixed) + '" data-type="mixed" data-creator="" data-items="" data-likes="0"></div>' : '') +
+      '</div>';
+    }).join('');
+
+    return '<div class="u-mb-12px">' +
+      '<div class="u-ai-center u-jc-space_between u-gap-12px u-mb-8px" style="display:flex;">' +
+        '<div class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">' + escapeHtml(name) + ' Synced Collections</div>' +
+        '<button type="button" class="lc-btn secondary u-fs-v_font_size_xs" data-act="syncMediaAppNow" data-act-args="' + appActArgs([provider, '@self']) + '"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Syncing\u2026' : 'Sync now') + '</button>' +
+      '</div>' +
+      listsHtml +
+    '</div>';
+  }).join('');
+  if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+}
+
+async function searchCollections() {
+  const input = document.getElementById('collectionsSearchInput');
+  const box = document.getElementById('collectionsSearchResults');
+  if (!input || !box) return;
+  const rawQuery = (input.value || '').trim();
+  if (!rawQuery) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<p class="u-mt-10px u-c-v_muted" role="status"><small>Searching collections\u2026</small></p>';
+
+  const tmdbCollMatch = rawQuery.match(new RegExp('(?:themoviedb[.]org/collection/|tmdb:collection:)([0-9]+)', 'i')) || (rawQuery.match(/^[0-9]+$/) ? [null, rawQuery] : null);
+  if (tmdbCollMatch && tmdbCollMatch[1]) {
+    const id = tmdbCollMatch[1];
+    const url = 'https://www.themoviedb.org/collection/' + id;
+    const name = 'TMDB Collection ' + id;
+    const added = typeof isListAddedToConfig === 'function' && (isListAddedToConfig(url, 'movie') || isListAddedToConfig('tmdb:collection:' + id, 'movie'));
+    box.innerHTML = '<div class="shelf-header u-mb-10px"><h3 class="panel-title u-mb-0 u-fs-v_font_size_sm">Matching Collection</h3></div>' +
+      '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(name) + '" data-url="' + escapeAttr(url) + '">' +
+        '<div class="list-card-header">' +
+          '<div class="list-card-body">' +
+            '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([name, url]) + '">' + escapeHtml(name) + '</div>' +
+            '<div class="list-card-meta"><span>TMDB Franchise Collection #' + escapeHtml(id) + '</span></div>' +
+          '</div>' +
+          '<div class="list-card-actions">' +
+            '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+              ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([name, url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(name) + '" data-url="' + escapeAttr(url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+      '</div>';
+    if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+    return;
+  }
+
+  try {
+    const res = await fetch(ORIGIN + '/api/tmdb-search-lists?q=' + encodeURIComponent(rawQuery));
+    const data = await res.json().catch(function () { return {}; });
+    const lists = (data && Array.isArray(data.lists)) ? data.lists : [];
+    const collections = lists.filter(function (item) {
+      return item.isCollection || (item.url && item.url.indexOf('/collection/') !== -1);
+    });
+
+    if (!collections.length) {
+      box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>No collections found for "' + escapeHtml(rawQuery) + '". Try another franchise name or paste a collection URL.</small></p>';
+      return;
+    }
+
+    box.innerHTML = '<div class="shelf-header u-mb-10px"><h3 class="panel-title u-mb-0 u-fs-v_font_size_sm">Search Results (' + collections.length + ')</h3></div>' +
+      collections.map(function (c) {
+        const added = typeof isListAddedToConfig === 'function' && isListAddedToConfig(c.url, 'movie');
+        return '<div class="list-card" data-list-type="movie" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '">' +
+          '<div class="list-card-header">' +
+            '<div class="list-card-body">' +
+              '<div class="list-card-title u-cur-pointer" data-act="openCollectionDetails" data-act-args="' + appActArgs([c.name, c.url]) + '">' + escapeHtml(c.name) + '</div>' +
+              '<div class="list-card-meta"><span>TMDB Franchise Collection</span></div>' +
+            '</div>' +
+            '<div class="list-card-actions">' +
+              '<button type="button" class="lc-btn list-add-btn secondary' + (added ? ' is-added' : '') + '"' + (added ? ' style="color:var(--danger);"' : '') +
+                ' data-act="toggleCollectionAdd" data-act-args="' + appActArgs([c.name, c.url, added]) + '">' + (added ? 'Remove' : '+ Add') + '</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="list-card-posters poster-preview-slot" data-name="' + escapeAttr(c.name) + '" data-url="' + escapeAttr(c.url) + '" data-type="movie" data-creator="" data-items="" data-likes="0"></div>' +
+        '</div>';
+      }).join('');
+    if (typeof populateSearchResultPosters === 'function') populateSearchResultPosters();
+  } catch (err) {
+    box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Could not search collections. Please try again.</small></p>';
+  }
+}
+
+function onCollectionsSearchKey() {
+  searchCollections();
+}
+
+function toggleCollectionAdd(name, url, isAdded) {
+  if (isAdded) {
+    removeListFromConfig(url, 'movie');
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Removed "' + name + '" from your Catalogs.');
+    }
+  } else {
+    addRow(name, url, 'movie', true, 'Collections');
+    if (typeof showAddedToast === 'function') {
+      showAddedToast('Added "' + name + '" to your Catalogs.');
+    }
+  }
+  renderCollectionsCurated();
+  const searchBox = document.getElementById('collectionsSearchResults');
+  if (searchBox && searchBox.style.display !== 'none') {
+    searchCollections();
+  }
+}
+
+function openCollectionDetails(name, url) {
+  if (typeof openListDetailsPage === 'function') {
+    openListDetailsPage(name, 'movie', url);
+  }
+}
+
+function refreshCollectionsView() {
+  renderCollectionsView();
+  if (typeof refreshMediaAppConnections === 'function') refreshMediaAppConnections();
+  showToast('Collections refreshed.', 'success');
+}
+
+function goToExternalSettings() {
+  if (typeof switchTab === 'function') switchTab('settings');
+  const externalPill = document.querySelector('#settingsSubnavBar button[data-sub="external"]');
+  if (typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu('external', externalPill);
+}
+
+window.renderPremadeCollections = renderPremadeCollections;
+window.togglePremadeFolder = togglePremadeFolder;
+window.addPremadeToCustomCollections = addPremadeToCustomCollections;
+window.addAllPremadeCollections = addAllPremadeCollections;
+window.pushSinglePremadeToNuvio = pushSinglePremadeToNuvio;
+window.renderCollectionsView = renderCollectionsView;
+window.refreshCollectionsView = refreshCollectionsView;
+window.toggleCustomCollectionFolder = toggleCustomCollectionFolder;
+window.pushSingleCollectionToNuvio = pushSingleCollectionToNuvio;
+window.syncCollectionsToNuvio = syncCollectionsToNuvio;
+window.openCreateCollectionModal = openCreateCollectionModal;
+window.closeCreateCollectionModal = closeCreateCollectionModal;
+window.submitCreateCollectionModal = submitCreateCollectionModal;
+window.deleteCustomCollection = deleteCustomCollection;
+window.removeListFromSavedCollection = removeListFromSavedCollection;
+window.addMissingPremadeBrowseRows = addMissingPremadeBrowseRows;
+window.openSyncNuvioModal = openSyncNuvioModal;
+window.closeSyncNuvioModal = closeSyncNuvioModal;
+window.handleSyncNuvioModeChange = handleSyncNuvioModeChange;
+window.confirmSyncToNuvio = confirmSyncToNuvio;
+window.addNewNuvioCollection = addNewNuvioCollection;
+
 
 
 
@@ -48459,7 +51655,8 @@ function previewCreatorAuth() {
 async function fetchListPreviewOnce(listUrl, type, sample) {
   const isAdultFilterOn = isAdultContentFilterEnabled();
   const cacheKey = String(listUrl) + '|' + String(type) + '|' + String(sample || 12) + (isAdultFilterOn ? '|safe' : '');
-  if (window._listPreviewCache && window._listPreviewCache.has(cacheKey)) {
+  const liveLibrary = /^autotrack:(nuvio|stremio)-library:/.test(String(listUrl || ''));
+  if (!liveLibrary && window._listPreviewCache && window._listPreviewCache.has(cacheKey)) {
     return window._listPreviewCache.get(cacheKey);
   }
 
@@ -48497,7 +51694,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('application/json')) return { ok: false };
     const data = await res.json();
-    if (data && data.ok) {
+    if (data && data.ok && !liveLibrary) {
       if (!window._listPreviewCache) window._listPreviewCache = new Map();
       window._listPreviewCache.set(cacheKey, data);
     }
@@ -48675,10 +51872,10 @@ async function loadPosterSlot(slot) {
               const slugMatch = listUrl.match(new RegExp('lists/([^/?#]+)'));
               const traktListId = traktTarget === 'custom' ? (slugMatch ? slugMatch[1] : listUrl) : traktTarget;
               removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="' + escapeAttr(traktTarget) + '" data-list-id="' + escapeAttr(traktListId) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || type || 'movie') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt" aria-label="Remove from Trakt">\u2715</button>';
-            } else if (/^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.test(String(listUrl || ''))) {
-              const appHit = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl));
+            } else if (/^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.test(String(listUrl || ''))) {
+              const appHit = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.exec(String(listUrl));
               const appName = appHit[1] === 'nuvio' ? 'Nuvio' : 'Stremio';
-              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + appHit[1] + '" data-target="' + appHit[2] + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || '') + '" data-name="' + escapeAttr(s.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + appName + '" aria-label="Remove from ' + appName + '">\u2715</button>';
+              removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + appHit[1] + '" data-target="' + (appHit[2] === 'watch-history' ? 'history' : appHit[2]) + '" data-remove-id="' + escapeAttr(s.id || '') + '" data-media-type="' + escapeAttr(s.type || '') + '" data-name="' + escapeAttr(s.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + appName + '" aria-label="Remove from ' + appName + '">\u2715</button>';
             } else if (isMdblistSlot) {
               const isMdbHist = listUrl === 'mdblist:history' || String(listUrl || '').includes('mdblist.com/history') || (String(listUrl || '').includes('mdblist.com/lists/') && String(listUrl || '').includes('/history'));
               const mdbTarget = listUrl === 'mdblist:watchlist' ? 'watchlist' : (isMdbHist ? 'history' : 'custom');
@@ -69701,6 +72898,11 @@ function dismissContinueWatchingShow(showId, btn) {
   // checkmark, and the cron will still periodically check TMDB in case a
   // real new episode later supersedes this dismissal.
   setShowFullyWatched(showId, true);
+  if (typeof syncWebsiteContinueWatchingRemoval === 'function') {
+    commitPromise.then(() => syncWebsiteContinueWatchingRemoval(showId)).catch(() => {
+      if (typeof showToast === 'function') showToast('Could not sync the Continue Watching removal.', 'error');
+    });
+  }
   if (typeof scheduleTrackingSync === 'function') scheduleTrackingSync({ intentionalRemoval: true });
   return commitPromise;
 }
@@ -80872,7 +84074,7 @@ window.switchListDetailsType = function(newType) {
     if (newType === 'movie') {
       filtered = filtered.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (newType === 'series') {
-      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     const gridEl = document.getElementById('detailGrid');
     const statusEl = document.getElementById('detailStatus');
@@ -80883,6 +84085,7 @@ window.switchListDetailsType = function(newType) {
     if (statusEl) {
       statusEl.innerHTML = filtered.length ? '' : '<small>No matching items found.</small>';
     }
+    if (typeof window._listDetailsSubtitleRefresh === 'function') window._listDetailsSubtitleRefresh();
   }
 };
 
@@ -80974,13 +84177,15 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     } catch (e) {}
   }
 
+  // Poster strips contain only a sample; always fetch app shelves from the server.
+  if (/^autotrack:(nuvio|stremio)-/.test(urlStr)) preloaded = null;
   const cacheKey = (name || '') + '::' + (type || '') + '::' + (listUrl || '');
   window._currentListDetailsKey = cacheKey;
   window._listPreloadedCache = window._listPreloadedCache || {};
   if (preloaded && preloaded.sample && preloaded.sample.length) {
     window._listPreloadedCache[cacheKey] = preloaded;
   } else if (!preloaded || !preloaded.sample || !preloaded.sample.length) {
-    if (window._listPreloadedCache[cacheKey]) {
+    if (!/^autotrack:(nuvio|stremio)-/.test(urlStr) && window._listPreloadedCache[cacheKey]) {
       preloaded = window._listPreloadedCache[cacheKey];
     } else if (listUrl && window._curatedRecs && window._curatedRecs[listUrl]) {
       const rec = window._curatedRecs[listUrl];
@@ -81390,7 +84595,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   function formatSubtitle(count) {
     const parts = [];
     if (creatorName) parts.push('by ' + creatorName);
-    parts.push(type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies'));
+    const filter = window._currentListDetailsFilter;
+    const filtered = type === 'mixed' && (filter === 'movie' || filter === 'series');
+    parts.push(filtered ? (filter === 'series' ? 'Shows' : 'Movies') : (type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies')));
     const loaded = (count === undefined || count === null) ? null : Number(count);
     // A known total is only believable while it is at least what is already
     // on screen. One that the loaded items have overtaken was never the
@@ -81398,7 +84605,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     // /api/preview, handed over by whatever card was clicked. Believing it
     // is how a 303-item chart went on saying "100 items" after the whole
     // thing had been scrolled through.
-    if (knownTotalItems != null && (loaded == null || knownTotalItems >= loaded)) {
+    if (!filtered && knownTotalItems != null && (loaded == null || knownTotalItems >= loaded)) {
       parts.push(knownTotalItems.toLocaleString() + ' item' + (knownTotalItems === 1 ? '' : 's'));
     } else if (loaded != null) {
       // No total from the source, so the honest claim is "at least this
@@ -81482,6 +84689,8 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
 
   // The Nuvio and Stremio lists hold movies as well as shows (61_media-app-sync.js).
   const isMediaAppList = /^autotrack:(nuvio|stremio)-/.test(String(listUrl || ''));
+  const addHistoryBtn = document.getElementById('detailAddMediaHistoryBtn');
+  if (addHistoryBtn) addHistoryBtn.hidden = !/^autotrack:(nuvio|stremio)-(watch-history|library):/.test(String(listUrl || ''));
   const isContinueWatching = !isMediaAppList && ((name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching'))));
   if (isContinueWatching) {
     type = 'series';
@@ -81775,7 +84984,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   let done = false;
   let loadedCount = 0;
   let pagesLoaded = 0;
-  const MAX_PAGES = 20;
+  // Account histories can be much longer than ordinary charts. Keep the
+  // repeated-page guard below, but do not stop personal app shelves at 2,000.
+  const MAX_PAGES = isMediaAppList ? 10000 : 20;
   // A source that doesn't actually honor skip (a malformed/misdetected
   // URL, or a provider whose pagination silently ignores an out-of-range
   // offset) can keep answering maybeMore:true with the exact same items
@@ -81809,14 +85020,14 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
   // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
-  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl || ''));
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.exec(String(listUrl || ''));
 
   function annotatePersonalItem(it) {
     if (!it) return it;
     if (mediaAppList) {
       return Object.assign({}, it, {
         removeExternalProvider: mediaAppList[1],
-        removeExternalTarget: mediaAppList[2],
+        removeExternalTarget: mediaAppList[2] === 'watch-history' ? 'history' : mediaAppList[2],
         removeExternalListId: mediaAppList[2],
       });
     }
@@ -81902,7 +85113,8 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     let newCount = 0;
     const freshItems = [];
     items.forEach((it) => {
-      const key = it && (it.id != null ? String(it.id) : null);
+      // TMDB's movie and TV namespaces can share the same numeric ID.
+      const key = it && (it.id != null ? (/^autotrack:(nuvio|stremio)-/.test(String(listUrl || '')) ? String(it.type || '') + ':' : '') + String(it.id) : null);
       if (key === null || !seenItemIds.has(key)) {
         newCount++;
         if (key !== null) seenItemIds.add(key);
@@ -81926,7 +85138,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     if (curFilter === 'movie') {
       newlyMatching = annotated.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (curFilter === 'series') {
-      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     newlyMatching.forEach(item => { item.listUrl = listUrl; item.listName = name; });
     // Append (not rebuild) -- see appendPosterGridItems's own comment for
@@ -81951,13 +85163,19 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     // Set before the subtitle is written, not after: the subtitle says "100+"
     // rather than "100" precisely when this is true.
     moreToLoad = !done;
-    if (!onLineup) subEl.textContent = formatSubtitle(loadedCount);
+    if (!onLineup && typeof window._listDetailsSubtitleRefresh === 'function') window._listDetailsSubtitleRefresh();
   }
   // How All puts the list's own subtitle back after On Today borrowed it --
   // recomputed rather than restored from a string, so a count that grew while
   // On Today was open is still right.
   window._listDetailsSubtitleRefresh = function() {
-    subEl.textContent = formatSubtitle(loadedCount);
+    const filter = window._currentListDetailsFilter;
+    const all = window._currentListDetailsAllItems || [];
+    const visible = type === 'mixed' && (filter === 'movie' || filter === 'series') ? all.filter(function(it) {
+      const show = it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && (!!it.showId || it.seasonNum != null));
+      return filter === 'series' ? show : !show;
+    }).length : loadedCount;
+    subEl.textContent = formatSubtitle(visible);
   };
 
   async function loadNextPage() {
@@ -82245,6 +85463,7 @@ function buildFullBackupPayload() {
     channels: channels,
     mergedChannels: mergedChannels,
     presets: dereferencePresetsMap(presets, map, channels),
+    customCollections: (function() { try { return JSON.parse(localStorage.getItem('myListAddon:customCollections') || '[]'); } catch(e) { return []; } })(),
     settings: {
       trackPlayback: localStorage.getItem('myListAddon:trackPlayback') === '1',
       removeWatchedFromWatchlist: localStorage.getItem('myListAddon:removeWatchedFromWatchlist') !== '0',
@@ -82558,6 +85777,10 @@ function applyImportedConfig(data) {
   if (entries.length) {
     document.getElementById('lists').innerHTML = '';
     restoreRows(entries);
+  }
+
+  if (data && Array.isArray(data.customCollections)) {
+    try { localStorage.setItem('myListAddon:customCollections', JSON.stringify(data.customCollections)); } catch (e) {}
   }
 
   // Restore API keys and connected accounts
@@ -84099,6 +87322,8 @@ async function generate() {
   }
 
   const installUrl = ORIGIN + '/' + config + '/manifest.json';
+  try { window.myListAddonManifestUrl = installUrl; } catch (e) {}
+  try { localStorage.setItem('myListAddon:lastInstallUrl', installUrl); } catch (e) {}
   const stremioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'stremio://');
   const nuvioInstallUrl = installUrl.replace(/^https?:\\/\\//i, 'nuvio://');
   const stremioWebUrl = 'https://web.stremio.com/#/addons?addon=' + encodeURIComponent(installUrl);
@@ -88229,7 +91454,7 @@ async function handleFetch(request, env, ctx) {
         customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
       ));
       return jsonPublic(
-        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false),
+        buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1"),
         200,
         hasLiveShelf ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
       );
@@ -88499,6 +91724,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
     if (m) {
       const [, config, type, idWithExtra] = m;
       const [id, extraStr] = idWithExtra.split("/");
+      // New browse rows have explicit kind restrictions, even when a stale or
+      // hand-edited install config tries to address the other kind.
+      const browseKey = id.startsWith("tmdb-chart-") ? id.slice("tmdb-chart-".length) : "";
+      const browseRow = browseKey && typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" ? STREAMING_ROW_BY_CHART_KEY[browseKey] : null;
+      if (browseRow && browseRow.additional && !browseRow.kinds[type]) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
       const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
       const skip = parseInt(extra.skip, 10) || 0;
       const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
@@ -88521,19 +91751,60 @@ Sitemap: ${url.origin}/sitemap.xml`;
         if (searchConfig.betterPosters || searchArt.pictoriumTemplate || searchArt.rpdbBase) {
           metas = applyBetterPostersToMetas(metas, searchArt);
         }
-        return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
+        metas = await enrichCatalogPreviews(metas, effectiveTmdbKey);
+        return jsonPublic({ metas }, 200, { "Cache-Control": metas.previewIncomplete ? "public, max-age=30" : "public, max-age=3600, stale-while-revalidate=86400" });
       }
 
-      if (!config) return jsonPublic({ metas: [] });
+      let unconfiguredEntry = null;
+      if (typeof findChartOrCollectionEntry === "function") {
+        unconfiguredEntry = findChartOrCollectionEntry(id, type);
+      }
+      if (!unconfiguredEntry && env && env.CONFIGS) {
+        try {
+          unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!config && !unconfiguredEntry) return jsonPublic({ metas: [] });
 
       // Kept as a whole object as well as destructured: the betterPosters*
       // style keys are passed through wholesale rather than one at a time.
-      const resolvedConfig = await resolveConfig(config, env);
+      const resolvedConfig = config
+        ? await resolveConfig(config, env)
+        : { entries: [unconfiguredEntry], tmdbKey: null, mdblistKey: null, mdblistAccessToken: null, traktKey: null, traktAccessToken: null, simklKey: null, simklAccessToken: null, shuffleItems: false, trackCreatorName: null, trackOwner: null, region: null, hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: null, showBadgesStremio: false, showBadgesStremioAiringNext: false, showBadgesStremioContinueWatching: false, showBadgesStremioCatalogs: false, showBadgesStremioWatchlist: false };
+
       // As in the manifest route: most installs ask for catalogs far more often.
-      ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      if (config) {
+        ctx.waitUntil(maybeMigrateLegacyInstall(env, config));
+      }
       const { entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist } = resolvedConfig;
       const entryIndex = entries.findIndex((e) => e.id === id && e.type === type);
-      const entry = entryIndex >= 0 ? entries[entryIndex] : null;
+      let entry = entryIndex >= 0 ? entries[entryIndex] : unconfiguredEntry;
+      if (!entry && typeof findChartOrCollectionEntry === "function") {
+        entry = findChartOrCollectionEntry(id, type);
+      }
+      if (!entry && env && env.CONFIGS) {
+        try {
+          entry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+        } catch {}
+      }
+      if (!entry && typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+        const found = CHART_SLUG_ENTRIES.find((c) => {
+          const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+          const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+          const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+          const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+          return id === mSlug || id === sSlug || id === nSlug || id === cSlug;
+        });
+        if (found) {
+          entry = {
+            id,
+            name: found.name,
+            type: type,
+            url: type === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+            enabled: true
+          };
+        }
+      }
       if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
 
       // Every line of the row, not just the first: a merged row stores its
@@ -88616,7 +91887,10 @@ Sitemap: ${url.origin}/sitemap.xml`;
           const sq = searchQuery.toLowerCase();
           metas = metas.filter((it) => (it.name && it.name.toLowerCase().includes(sq)) || (it.title && it.title.toLowerCase().includes(sq)));
         }
-        if (staleReq && skip === 0 && metas.length > 0 && !searchQuery) {
+        // All catalog sources (including user lists and merged rows) use the
+        // same preview enrichment after filtering and deduplication.
+        metas = await enrichCatalogPreviews(metas, tmdbKey || TMDB_API_KEY);
+        if (staleReq && skip === 0 && metas.length > 0 && !searchQuery && !metas.previewIncomplete) {
           // Fire-and-forget -- the response doesn't wait on this write.
           try {
             ctx.waitUntil(
@@ -88642,8 +91916,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // that; the apps ask once per row per home screen, so this is the
         // number that sets the Workers request count. Upstream rate limits are
         // still guarded by the fetchers' own freshTtlSec windows.
-        return jsonPublic({ metas, cacheMaxAge: CATALOG_SHARED_MAX_AGE, staleRevalidate: CATALOG_STALE_REVALIDATE },
-          200, { "Cache-Control": `public, max-age=${CATALOG_SHARED_MAX_AGE}, s-maxage=${CATALOG_SHARED_MAX_AGE}` });
+        // A deadline-limited page retries promptly, rather than caching the
+        // incomplete preview for the entire shared-catalog lifetime.
+        const previewMaxAge = metas.previewIncomplete ? 30 : CATALOG_SHARED_MAX_AGE;
+        return jsonPublic({ metas, cacheMaxAge: previewMaxAge, staleRevalidate: metas.previewIncomplete ? 30 : CATALOG_STALE_REVALIDATE },
+          200, { "Cache-Control": `public, max-age=${previewMaxAge}, s-maxage=${previewMaxAge}` });
       } catch (err) {
         const errMsg = safeErrorMessage(err);
         if (isUserPersonal || isLiveCustomList) {
@@ -110702,11 +113979,58 @@ async function continueWatching(env, accountId, opts = {}) {
 async function appContinueWatching(env, accountId, source) {
   const actDb = activityDb(env, accountId);
   if (!actDb) return [];
-  const { results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all();
+  let results;
+  try {
+    ({ results } = await actDb.prepare("SELECT DISTINCT e.media_id FROM watch_events e WHERE e.account_id = ? AND (e.source = ? OR EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = e.id AND s.source = ?))").bind(accountId, source, source).all());
+  } catch (e) {
+    if (!/no such table/i.test(String(e && e.message || e))) throw e;
+    ({ results } = await actDb.prepare("SELECT DISTINCT media_id FROM watch_events WHERE account_id = ? AND source = ?").bind(accountId, source).all());
+  }
   const mine = new Set((results || []).map((r) => r.media_id));
   const { items } = await continueWatching(env, accountId);
   const resumes = await mediaAppResumes(env, accountId, source);
-  return items.filter((it) => mine.has(it.mediaId) || it.source === source).map((it) => withResumeProgress(it, resumes));
+  const visible = items.filter((it) => mine.has(it.mediaId) || it.source === source).map((it) => withResumeProgress(it, resumes));
+  if (source !== "nuvio") return visible;
+  // A real Nuvio resume can be the first episode the person started, with no
+  // watched event yet. It can also precede a schedule refresh. Neither should
+  // depend on our inferred next-episode shelf or on another app's history.
+  const entries = Object.entries(resumes).filter(([, r]) => r && r.duration > 0 && r.position > 0);
+  const refs = entries.map(([key, r]) => normalizeMediaRef({ id: key.replace(/^(?:movie|series)\|/, ""), kind: r.kind || (r.season != null && r.episode != null ? "series" : "movie") }));
+  const indexed = indexMediaRows(await lookupMediaRows(env, refs.filter(Boolean)));
+  const candidates = entries.map(([id, resume], i) => ({ id, resume, media: refs[i] && matchMediaRow(indexed, refs[i]) })).filter((x) => x.media);
+  const candidateIds = [...new Set(candidates.map((x) => x.media.id))];
+  if (!candidateIds.length) return visible;
+  const titles = await shelfTitles(env, candidateIds);
+  const { results: states } = await actDb.prepare("SELECT media_id, status, dismissed_at_season, dismissed_at_episode FROM show_progress WHERE account_id = ? AND media_id IN (SELECT value FROM json_each(?))").bind(accountId, JSON.stringify(candidateIds)).all();
+  const stateById = new Map((states || []).map((r) => [r.media_id, r]));
+  const included = new Set(visible.map((it) => it.mediaId));
+  for (const { id, resume, media } of candidates) {
+    if (included.has(media.id)) {
+      const existing = visible.findIndex((it) => it.mediaId === media.id);
+      if (existing >= 0) {
+        const item = visible[existing];
+        const resumeKey = item.seasonNum != null && item.episodeNum != null ? item.showId : (item.imdbId || item.id);
+        visible[existing] = withResumeProgress(item, { [resumeKey]: resume });
+      }
+      continue;
+    }
+    const state = stateById.get(media.id);
+    if (state && state.status === "dropped") continue;
+    const series = media.kind === "series";
+    if (series && (resume.season == null || resume.episode == null || resume.episode < 1)) continue;
+    if (series && state && state.dismissed_at_season != null && shelfAtOrBefore(resume.season, Math.max(0, resume.episode - 1), Number(state.dismissed_at_season), Number(state.dismissed_at_episode) || 0)) continue;
+    const t = titles.get(media.id);
+    if (!t) continue;
+    const showId = shelfShowId(t.media);
+    const poster = shelfPoster(t.media);
+    const item = series
+      ? { id: `${showId}:${resume.season}:${resume.episode}`, type: "episode", name: `Episode ${resume.episode}`, showId, showTitle: t.media.title || "", showPoster: poster, poster, seasonNum: resume.season, episodeNum: resume.episode }
+      : { id: showId, type: "movie", name: t.media.title || "", poster };
+    visible.push({ ...withResumeProgress(item, { [series ? showId : item.id]: resume }), mediaId: media.id, updatedAt: Number(resume.at) || 0 });
+    included.add(media.id);
+  }
+  visible.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return visible;
 }
 
 // How far through the app has the account's titles (kept on its sync row, 61_).
@@ -110829,20 +114153,26 @@ async function watchHistoryPage(env, accountId, opts = {}) {
 // `source` keeps only the plays that came from there (the Nuvio and Stremio
 // lists, 61_media-app-sync.js); without it every play is read, as before.
 async function watchEventRows(actDb, accountId, cursor, limit, source) {
-  let sql = "SELECT id, media_id, season, episode, watched_at, legacy_id FROM watch_events WHERE account_id = ?";
-  const args = [accountId];
-  if (source) {
-    sql += " AND source = ?";
-    args.push(source);
+  // The linked app can have its own timestamp for the same viewing. Use it
+  // for ordering and keyset pagination without creating a second global play.
+  async function read(linked) {
+    const date = linked ? "COALESCE(s.watched_at, e.watched_at)" : "e.watched_at";
+    let sql = `SELECT e.id, e.media_id, e.season, e.episode, ${date} AS watched_at, e.legacy_id FROM watch_events e`;
+    const args = [];
+    if (linked) { sql += " LEFT JOIN watch_event_sources s ON s.event_id = e.id AND s.source = ?"; args.push(source); }
+    sql += " WHERE e.account_id = ?"; args.push(accountId);
+    if (source) { sql += linked ? " AND (e.source = ? OR s.source IS NOT NULL)" : " AND e.source = ?"; args.push(source); }
+    if (cursor) { sql += ` AND (${date} < ? OR (${date} = ? AND e.id < ?))`; args.push(cursor.t, cursor.t, cursor.id); }
+    sql += ` ORDER BY ${date} DESC, e.id DESC LIMIT ?`; args.push(limit);
+    const { results } = await actDb.prepare(sql).bind(...args).all();
+    return results || [];
   }
-  if (cursor) {
-    sql += " AND (watched_at < ? OR (watched_at = ? AND id < ?))";
-    args.push(cursor.t, cursor.t, cursor.id);
+  if (!source) return read(false);
+  try { return await read(true); }
+  catch (e) {
+    if (!/no such table/i.test(String(e && e.message || e))) throw e;
+    return read(false);
   }
-  sql += " ORDER BY watched_at DESC, id DESC LIMIT ?";
-  args.push(limit);
-  const { results } = await actDb.prepare(sql).bind(...args).all();
-  return results || [];
 }
 
 // Every play an account has, newest first: the whole Watch History, as the
@@ -110851,13 +114181,13 @@ async function watchEventRows(actDb, accountId, cursor, limit, source) {
 // the legacy record never had.
 const WATCH_HISTORY_READ_ROWS = 5000;
 
-async function watchHistoryAll(env, accountId) {
+async function watchHistoryAll(env, accountId, source) {
   const actDb = activityDb(env, accountId);
   if (!actDb) return [];
   const rows = [];
   let cursor = null;
   for (;;) {
-    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS);
+    const part = await watchEventRows(actDb, accountId, cursor, WATCH_HISTORY_READ_ROWS, source);
     rows.push(...part);
     if (part.length < WATCH_HISTORY_READ_ROWS) break;
     const last = part[part.length - 1];
@@ -116559,8 +119889,8 @@ async function removeOwnerlessChannels(env, { cursor, limit, apply } = {}) {
 // A signed-in account can connect its Stremio and Nuvio accounts. Their real
 // watch history and Continue Watching are then pulled into the activity
 // database (36_) the same way a play from a media server is, so the shelves
-// (39_) show them. Neither service has a public API; what is used here is what
-// their own apps use, so every call is checked by tests/fixtures/providers/
+// (39_) show them. Nuvio documents a public API; Stremio calls follow what
+// its app uses. Calls are checked by tests/fixtures/providers/
 // {stremio,nuvio} and is kept to the few calls needed.
 //
 // Stremio (api.strem.io): no password ever reaches us. The person approves a
@@ -116677,6 +120007,7 @@ function mediaAppPick(o, ...keys) {
 }
 
 function mediaAppInt(v) {
+  if (v == null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
 }
@@ -116737,6 +120068,54 @@ async function stremioFetchLibrary(authKey) {
   const items = Array.isArray(result) ? result.filter((x) => x && typeof x === "object" && !x.removed) : [];
   items.sort((a, b) => mediaAppTime(b._mtime) - mediaAppTime(a._mtime));
   return items;
+}
+
+// Read a consistent Nuvio snapshot: capture the event cursor first, then
+// replay mutations that happened while the offset-paginated snapshot was read.
+async function nuvioFetchLibrary(env, token, profileIndex) {
+  let cursor = Number(await nuvioRpc(env, token, "sync_get_library_delta_cursor", { p_profile_id: profileIndex }));
+  if (!Number.isSafeInteger(cursor) || cursor < 0) throw mediaAppError("unreachable", "Nuvio sent an invalid library cursor.");
+  const items = new Map();
+  const key = (r) => `${String(r.content_type || "").toLowerCase()}:${String(r.content_id || "").toLowerCase()}`;
+  let complete = false;
+  for (let offset = 0; offset < 50000; offset += 500) {
+    const rows = await nuvioRpc(env, token, "sync_pull_library", { p_profile_id: profileIndex, p_limit: 500, p_offset: offset });
+    if (!Array.isArray(rows)) throw mediaAppError("unreachable", "Nuvio sent an invalid library page.");
+    for (const row of rows) if (row && row.content_id && row.content_type) items.set(key(row), row);
+    if (rows.length < 500) { complete = true; break; }
+  }
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's library is too large to read safely.");
+  complete = false;
+  for (let page = 0; page < 100; page++) {
+    const rows = await nuvioRpc(env, token, "sync_pull_library_delta", { p_profile_id: profileIndex, p_since_event_id: cursor, p_limit: 500 });
+    if (!Array.isArray(rows)) throw mediaAppError("unreachable", "Nuvio sent an invalid library update.");
+    for (const row of rows) {
+      const eventId = Number(row && row.event_id);
+      if (!Number.isSafeInteger(eventId) || eventId <= cursor || !row.content_id || !row.content_type || !["upsert", "delete"].includes(row.operation)) throw mediaAppError("unreachable", "Nuvio sent an invalid library update.");
+      cursor = eventId;
+      if (row.operation === "delete") items.delete(key(row)); else items.set(key(row), row);
+    }
+    if (rows.length < 500) { complete = true; break; }
+  }
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's library is changing too quickly to read safely.");
+  return [...items.values()].sort((a, b) => (Number(b.added_at) || 0) - (Number(a.added_at) || 0));
+}
+
+// Remote library rows are read directly, so changes in either app show on the
+// next read; there is no stale mirrored snapshot to reconcile or overwrite.
+async function mediaAppLibraryItems(env, accountId, provider) {
+  let conn = await loadProviderConnection(env, accountId, provider);
+  const sync = await loadMediaAppSync(env, accountId, provider);
+  if (!conn || conn.status !== "ok" || !sync) return [];
+  if (provider === "nuvio") {
+    if (!sync.profile_index) return [];
+    conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+    if (!conn || !conn.accessToken) throw mediaAppError("invalid", "Sign in to Nuvio again first.");
+    const rows = await nuvioFetchLibrary(env, conn.accessToken, sync.profile_index);
+    return rows.filter((r) => mediaAppTitleId(r.content_id) && mediaAppKind(r.content_type)).map((r) => ({ id: r.content_id, type: mediaAppKind(r.content_type), name: r.name || "", poster: r.poster || (String(r.content_id).startsWith("tt") ? `https://images.metahub.space/poster/medium/${r.content_id}/img` : ""), year: r.release_info || undefined }));
+  }
+  const rows = await stremioFetchLibrary(conn.accessToken);
+  return rows.filter((r) => !r.temp && mediaAppTitleId(r._id) && mediaAppKind(r.type)).map((r) => ({ id: r._id, type: mediaAppKind(r.type), name: r.name || "", poster: r.poster || (String(r._id).startsWith("tt") ? `https://images.metahub.space/poster/medium/${r._id}/img` : "") }));
 }
 
 // A show's episodes in the order Stremio numbers them: by season, with
@@ -116869,19 +120248,26 @@ async function nuvioToken(env, grant, body) {
   };
 }
 
-async function nuvioRpc(env, accessToken, fn, params) {
+async function nuvioRpc(env, accessToken, fn, params, options = {}) {
   const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
     body: JSON.stringify(params || {}),
   });
   if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Nuvio refused this sign-in.");
+  if (options.range && res.status === 416) {
+    const match = /^\*\/(\d+)$/.exec(res.headers.get("content-range") || "");
+    if (match && Number(options.range.split("-")[0]) >= Number(match[1])) return options.returnPage ? { rows: [], total: Number(match[1]) } : [];
+  }
   if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
   try {
-    return JSON.parse(text);
+    const rows = JSON.parse(text);
+    if (!options.returnPage) return rows;
+    const match = /\/(\d+)$/.exec(res.headers.get("content-range") || "");
+    return { rows, total: match ? Number(match[1]) : null };
   } catch {
     throw mediaAppError("unreachable", "Nuvio sent a reply we could not read.");
   }
@@ -116902,14 +120288,36 @@ async function nuvioProfiles(env, accessToken) {
 // p_profile_id.
 async function nuvioFetchProfile(env, accessToken, profileIndex) {
   const watched = [];
-  for (let page = 1; page <= 40; page++) {
+  let complete = false;
+  for (let page = 1; page <= 200; page++) {
     const rows = await nuvioRpc(env, accessToken, "sync_pull_watched_items", { p_profile_id: profileIndex, p_page: page, p_page_size: 500 });
-    const list = Array.isArray(rows) ? rows : [];
-    watched.push(...list);
-    if (list.length < 500) break;
+    if (!Array.isArray(rows)) throw mediaAppError("unreachable", "Nuvio sent an invalid watch history page.");
+    watched.push(...rows);
+    if (rows.length < 500) { complete = true; break; }
   }
-  const progress = await nuvioRpc(env, accessToken, "sync_pull_watch_progress", { p_profile_id: profileIndex, p_limit: 200 });
-  return { watched, progress: Array.isArray(progress) ? progress : [] };
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's watch history is too large to read safely.");
+  // The timestamp parameter filters NEWER rows, not older pages. Paginate the
+  // unbounded RPC result with PostgREST item ranges instead. A repeated page
+  // means the server ignored Range; fail rather than silently drop old items.
+  const progress = [];
+  const seen = new Set();
+  complete = false;
+  for (let offset = 0; offset < 100000;) {
+    const result = await nuvioRpc(env, accessToken, "sync_pull_watch_progress", { p_profile_id: profileIndex }, { range: `${offset}-${offset + 499}`, returnPage: true });
+    const page = result && result.rows;
+    if (!Array.isArray(page)) throw mediaAppError("unreachable", "Nuvio sent invalid watch progress.");
+    for (const item of page) {
+      const id = mediaAppPick(item, "id", "progress_key", "progressKey") || JSON.stringify([mediaAppPick(item, "content_id", "contentId"), item.season, item.episode]);
+      if (seen.has(id)) throw mediaAppError("unreachable", "Nuvio repeated a watch progress page; the pull was not saved.");
+      seen.add(id);
+      progress.push(item);
+    }
+    offset += page.length;
+    if (result.total != null ? offset >= result.total : page.length < 500) { complete = true; break; }
+    if (!page.length) throw mediaAppError("unreachable", "Nuvio returned an incomplete watch progress page.");
+  }
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's watch progress is too large to read safely.");
+  return { watched, progress };
 }
 
 // Nuvio's watched items and progress entries as one record per title (the same
@@ -116919,7 +120327,9 @@ function nuvioRecords({ watched, progress }) {
   const recFor = (rawId, rawType, title, poster) => {
     const id = mediaAppTitleId(rawId);
     if (!id) return null;
-    const key = id.imdbId || `tmdb:${id.tmdbId}`;
+    // TMDB IDs are scoped by media type: movie 550 and TV 550 are unrelated.
+    const kind = mediaAppKind(rawType) || "movie";
+    const key = `${kind}:${id.imdbId || `tmdb:${id.tmdbId}`}`;
     let rec = by.get(key);
     if (!rec) {
       rec = { ...id, kind: mediaAppKind(rawType) || "movie", title: "", poster: "", mtime: 0, plays: [], furthest: null, at: 1, resume: null };
@@ -116975,7 +120385,8 @@ function nuvioRecords({ watched, progress }) {
     // A resume point behind what is already finished is stale.
     if (rec.resume && rec.kind === "series" && rec.furthest
       && (rec.resume.season < rec.furthest.season || (rec.resume.season === rec.furthest.season && rec.resume.episode <= rec.furthest.episode))) rec.resume = null;
-    if (rec.resume && rec.kind === "movie" && rec.plays.length) rec.resume = null;
+    // An older watched play does not cancel a later rewatch in progress.
+    if (rec.resume && rec.kind === "movie" && rec.plays.some((play) => play.watchedAt >= rec.resume.at)) rec.resume = null;
   }
   out.sort((a, b) => b.mtime - a.mtime);
   return out;
@@ -116983,11 +120394,22 @@ function nuvioRecords({ watched, progress }) {
 
 // --- Writing records to the activity database -------------------------------------------
 
+// Stored resume points use the app's own title identity, not a guessed next
+// episode. A full Nuvio snapshot replaces this map so remote deletions clear it.
+function mediaAppResumeChanges(records, provider) {
+  return records.map((r) => [
+    r.imdbId || (provider === "nuvio" ? `${r.kind}|tmdb:${r.tmdbId}` : `tmdb:${r.tmdbId}`),
+    r.resume && r.resume.duration > 0 ? { kind: r.kind, season: r.resume.season, episode: r.resume.episode, position: r.resume.position, duration: r.resume.duration, at: r.resume.at || r.at } : null,
+  ]);
+}
+
 // Records an account's pulled titles. Returns { plays, progress, resumes, unresolved,
 // lookups } or { skipped: reason } when the activity database cannot take them yet.
 async function applyMediaAppRecords(env, accountId, provider, records, { lookups = MEDIA_APP_LOOKUPS_PER_STEP } = {}) {
   const actDb = activityDb(env, accountId);
   if (!actDb || !(await activitySchemaReady(actDb))) return { skipped: "The activity database is not ready." };
+  const sourcesReady = await actDb.prepare("SELECT version FROM schema_migrations WHERE version = 'A0002'").first();
+  if (!sourcesReady) return { skipped: "The activity database needs migration A0002 before app history can sync." };
   // Like recordActivityPlay: before the account's history is copied the copy
   // would rebuild show_progress and undo these, so wait.
   const copied = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(`${ACTIVITY_BACKFILL_TYPE}:acct:${accountId}`).first();
@@ -116995,10 +120417,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
   const out = { plays: 0, progress: 0, resumes: 0, unresolved: 0, lookups: 0 };
   // How far through each title is, for the lists' bars: set for a title part way through with a
   // known length, removed for one that is not (finished, or not started).
-  out.resumeChanges = records.map((r) => [
-    r.imdbId || `tmdb:${r.tmdbId}`,
-    r.resume && r.resume.duration > 0 ? { season: r.resume.season, episode: r.resume.episode, position: r.resume.position, duration: r.resume.duration, at: r.at } : null,
-  ]);
+  out.resumeChanges = mediaAppResumeChanges(records, provider);
   if (!records.length) return out;
 
   const refs = records.map((r) => ({ imdbId: r.imdbId, tmdbId: r.tmdbId, kind: r.kind, title: r.title }));
@@ -117014,12 +120433,12 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
   // What the activity database already knows of these titles.
   const mediaIdsJson = JSON.stringify([...new Set(usable.map((r) => r.mediaId))]);
   const { results: known } = await actDb.prepare(
-    "SELECT media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND media_id IN (SELECT value FROM json_each(?))"
+    "SELECT id, source, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND media_id IN (SELECT value FROM json_each(?))"
   ).bind(accountId, mediaIdsJson).all();
   const stored = new Map();
   for (const e of known || []) {
     const k = `${e.media_id}:${e.season == null ? "" : e.season}:${e.episode == null ? "" : e.episode}`;
-    (stored.get(k) || stored.set(k, []).get(k)).push(Number(e.watched_at));
+    (stored.get(k) || stored.set(k, []).get(k)).push({ id: e.id, source: e.source, at: Number(e.watched_at) });
   }
   const { results: haveShow } = await actDb.prepare(
     "SELECT media_id FROM show_progress WHERE account_id = ? AND media_id IN (SELECT value FROM json_each(?))"
@@ -117034,9 +120453,16 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
     let datedLast = null;
     for (const p of r.plays) {
       const k = `${r.mediaId}:${p.season == null ? "" : p.season}:${p.episode == null ? "" : p.episode}`;
-      const near = (stored.get(k) || []).some((t) => Math.abs(t - p.watchedAt) < MEDIA_APP_PLAY_WINDOW_MS);
-      if (near) continue;
-      (stored.get(k) || stored.set(k, []).get(k)).push(p.watchedAt);
+      const near = (stored.get(k) || []).filter((e) => Math.abs(e.at - p.watchedAt) < MEDIA_APP_PLAY_WINDOW_MS)
+        .sort((a, b) => Math.abs(a.at - p.watchedAt) - Math.abs(b.at - p.watchedAt))[0];
+      if (near) {
+        if (near.id != null && near.source !== provider) {
+          stmts.push(actDb.prepare(`INSERT INTO watch_event_sources (event_id, source, watched_at) VALUES (?, ?, ?)
+            ON CONFLICT(event_id, source) DO UPDATE SET watched_at = excluded.watched_at`).bind(near.id, provider, p.watchedAt));
+        }
+        continue;
+      }
+      (stored.get(k) || stored.set(k, []).get(k)).push({ id: null, source: provider, at: p.watchedAt });
       stmts.push(...activityPlayStatements(actDb, accountId, r.mediaId, { season: p.season, episode: p.episode, watchedAt: p.watchedAt, legacyId: null }, provider, now));
       out.plays++;
       if (isSeries && (!datedLast || p.season > datedLast.season || (p.season === datedLast.season && p.episode > datedLast.episode))) datedLast = p;
@@ -117158,7 +120584,7 @@ function mediaAppLastResultOf(row) {
 }
 
 // The resume map with the changes applied, newest MEDIA_APP_RESUMES_MAX kept.
-const MEDIA_APP_RESUMES_MAX = 300;
+const MEDIA_APP_RESUMES_MAX = 10000;
 function mergeMediaAppResumes(current, changes) {
   const map = { ...(current && typeof current === "object" ? current : {}) };
   for (const [key, value] of changes || []) {
@@ -117216,7 +120642,9 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
   const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
   const every = nuvioRecords(profile);
   const all = every.filter(fresh);
-  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: every.length, newest: all.length ? all[0].mtime : 0 };
+  const snapshotResumes = step.offset === 0 ? mediaAppResumeChanges(every, provider).filter(([, value]) => value) : null;
+  if (snapshotResumes && snapshotResumes.length > MEDIA_APP_RESUMES_MAX) throw mediaAppError("unreachable", "Nuvio has too many resume points to sync safely.");
+  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes };
 }
 
 // One step of an account's pull. Returns { done, offset, total, ... }; throws
@@ -117240,7 +120668,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   try {
     cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
   } catch {}
-  const since = cursorSince != null ? cursorSince : (Number(cursor.mtime) > 0 ? Number(cursor.mtime) - MEDIA_APP_OVERLAP_MS : 0);
+  const since = cursorSince != null ? cursorSince : (provider === "nuvio" && cursor.provenanceVersion !== 1 ? 0 : (Number(cursor.mtime) > 0 ? Number(cursor.mtime) - MEDIA_APP_OVERLAP_MS : 0));
   let fetched;
   try {
     fetched = await mediaAppFetchRecords(env, accountId, provider, conn, sync, { offset, since });
@@ -117257,14 +120685,16 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     await setMediaAppSyncError(env, accountId, provider, applied.skipped);
     return { done: true, skipped: applied.skipped };
   }
+  if (fetched.snapshotResumes) cursor.resumes = mergeMediaAppResumes({}, fetched.snapshotResumes);
   if (applied.resumeChanges && applied.resumeChanges.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, applied.resumeChanges);
   const next = offset + MEDIA_APP_STEP_ITEMS;
   if (next < fetched.total) {
-    if (applied.resumeChanges && applied.resumeChanges.length) {
+    if (fetched.snapshotResumes || (applied.resumeChanges && applied.resumeChanges.length)) {
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
     }
     return { done: false, offset: next, total: fetched.total, since, applied };
   }
+  if (provider === "nuvio" && since === 0) cursor.provenanceVersion = 1;
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
@@ -117378,15 +120808,10 @@ async function stremioPushChanges(library, groups, nowIso) {
   return { changes, skipped };
 }
 
-// A watched item in the shape Nuvio's own rows have. `sample` is one of the
-// account's rows, which tells snake_case from camelCase and how time is written.
-function nuvioWatchedItem(sample, rec) {
-  const snake = sample && Object.prototype.hasOwnProperty.call(sample, "content_id");
-  const k = (a, b) => (snake ? a : b);
-  const raw = mediaAppPick(sample, "watched_at", "watchedAt");
-  const at = typeof raw === "string" && !/^\d+(\.\d+)?$/.test(raw) ? new Date(rec.watchedAt).toISOString()
-    : (mediaAppTime(raw) && Number(raw) < 1e11 ? Math.round(rec.watchedAt / 1000) : rec.watchedAt);
-  const item = { [k("content_id", "contentId")]: rec.contentId, [k("content_type", "contentType")]: rec.kind, title: rec.title || "", [k("watched_at", "watchedAt")]: at };
+// The public Nuvio API accepts snake_case fields and epoch milliseconds,
+// even when the profile has no watched items yet.
+function nuvioWatchedItem(rec) {
+  const item = { content_id: rec.contentId, content_type: rec.kind, title: rec.title || "", watched_at: rec.watchedAt };
   if (rec.kind === "series") {
     item.season = rec.season;
     item.episode = rec.episode;
@@ -117417,8 +120842,8 @@ async function pushMediaAppStep(env, accountId, provider) {
     } catch {}
     const after = Number(cursor.pushedId) || 0;
     const { results: rows } = await actDb.prepare(
-      "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? ORDER BY id LIMIT ?"
-    ).bind(accountId, after, provider, MEDIA_APP_PUSH_EVENTS).all();
+      "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? AND NOT EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?) ORDER BY id LIMIT ?"
+    ).bind(accountId, after, provider, provider, MEDIA_APP_PUSH_EVENTS).all();
     const events = rows || [];
     if (!events.length) return none(null);
     const ids = [...new Set(events.map((e) => e.media_id))];
@@ -117450,16 +120875,10 @@ async function pushMediaAppStep(env, accountId, provider) {
         sent = changes.length;
       } else {
         const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
-        const sample = profile.watched.find((w) => mediaAppPick(w, "content_id", "contentId")) || profile.progress.find((w) => mediaAppPick(w, "content_id", "contentId"));
         const present = new Set(profile.watched.map((w) => `${String(mediaAppPick(w, "content_id", "contentId") || "").toLowerCase()}:${mediaAppInt(w.season) == null ? "" : mediaAppInt(w.season)}:${mediaAppInt(w.episode) == null ? "" : mediaAppInt(w.episode)}`));
         const fresh = plays.filter((p) => !present.has(`${p.contentId}:${p.season == null ? "" : p.season}:${p.episode == null ? "" : p.episode}`));
-        if (fresh.length && !sample) {
-          // Nothing of the account's own to copy the format from.
-          await setMediaAppSyncError(env, accountId, provider, "Two-way sync starts once there is something watched in Nuvio to match.");
-          return none("no sample");
-        }
         for (let i = 0; i < fresh.length; i += MEDIA_APP_PUSH_CHUNK) {
-          await nuvioRpc(env, conn.accessToken, "sync_push_watched_items", { p_profile_id: sync.profile_index, p_items: fresh.slice(i, i + MEDIA_APP_PUSH_CHUNK).map((p) => nuvioWatchedItem(sample, p)) });
+          await nuvioRpc(env, conn.accessToken, "sync_push_watched_items", { p_profile_id: sync.profile_index, p_items: fresh.slice(i, i + MEDIA_APP_PUSH_CHUNK).map((p) => nuvioWatchedItem(p)) });
         }
         sent = fresh.length;
       }
@@ -117488,7 +120907,7 @@ async function pushMediaAppStep(env, accountId, provider) {
 // account, in formats not checked against a live one. If the app refuses, nothing is changed
 // here either.
 //   history            Stremio: marked unwatched, position cleared. Nuvio: its watched rows deleted.
-//   continue-watching  Stremio: position cleared. Nuvio: its progress rows set to position 0.
+//   continue-watching  Stremio: position cleared. Nuvio: its progress keys deleted.
 // A show means all of its episodes. Nothing of any other title is touched.
 
 const MEDIA_APP_REMOVE_TARGETS = ["history", "continue-watching"];
@@ -117505,15 +120924,16 @@ async function stremioRemoveTitle(conn, imdbId, target) {
   return true;
 }
 
-async function nuvioRemoveTitle(env, conn, profileIndex, imdbId, target) {
+async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind) {
   const profile = await nuvioFetchProfile(env, conn.accessToken, profileIndex);
-  const mine = (row) => String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase() === imdbId;
+  const mine = (row) => titleIds.includes(String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase()) && (!kind || mediaAppKind(mediaAppPick(row, "content_type", "contentType")) === kind);
   if (target === "history") {
     const rows = profile.watched.filter(mine);
-    // The key of a row is its own title and episode, spelt as the row spells them.
+    // The public delete RPC always expects snake_case identity keys.
     const keys = rows.map((r) => {
-      const snake = Object.prototype.hasOwnProperty.call(r, "content_id");
-      return { [snake ? "content_id" : "contentId"]: mediaAppPick(r, "content_id", "contentId"), season: r.season == null ? null : r.season, episode: r.episode == null ? null : r.episode };
+      const key = { content_id: mediaAppPick(r, "content_id", "contentId") };
+      if (r.season != null && r.episode != null) { key.season = r.season; key.episode = r.episode; }
+      return key;
     });
     for (let i = 0; i < keys.length; i += MEDIA_APP_PUSH_CHUNK) {
       await nuvioRpc(env, conn.accessToken, "sync_delete_watched_items", { p_profile_id: profileIndex, p_keys: keys.slice(i, i + MEDIA_APP_PUSH_CHUNK) });
@@ -117521,9 +120941,13 @@ async function nuvioRemoveTitle(env, conn, profileIndex, imdbId, target) {
     return rows.length > 0;
   }
   const rows = profile.progress.filter(mine);
-  const entries = rows.map((r) => ({ ...r, position: 0 }));
-  for (let i = 0; i < entries.length; i += MEDIA_APP_PUSH_CHUNK) {
-    await nuvioRpc(env, conn.accessToken, "sync_push_watch_progress", { p_profile_id: profileIndex, p_entries: entries.slice(i, i + MEDIA_APP_PUSH_CHUNK) });
+  const keys = rows.map((r) => {
+    const id = String(mediaAppPick(r, "content_id", "contentId"));
+    const season = mediaAppInt(r.season), episode = mediaAppInt(r.episode);
+    return season != null && episode != null ? `${id}_s${season}e${episode}` : id;
+  });
+  for (let i = 0; i < keys.length; i += MEDIA_APP_PUSH_CHUNK) {
+    await nuvioRpc(env, conn.accessToken, "sync_delete_watch_progress", { p_profile_id: profileIndex, p_keys: keys.slice(i, i + MEDIA_APP_PUSH_CHUNK) });
   }
   return rows.length > 0;
 }
@@ -117531,14 +120955,21 @@ async function nuvioRemoveTitle(env, conn, profileIndex, imdbId, target) {
 // The same removal here: the app's own plays of the title (history), its resume numbers, and
 // for Continue Watching the kept movie entry or, for a show, a dismissal at the furthest episode
 // watched (the way the website's own Continue Watching removal works). Returns the plays removed.
-async function removeMediaAppItemLocally(env, accountId, provider, imdbId, target) {
+async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target) {
   const actDb = activityDb(env, accountId);
-  const media = await env.DB.prepare("SELECT id FROM media WHERE imdb_id = ?").bind(imdbId).first();
   let removed = 0;
   if (actDb && media && (await activitySchemaReady(actDb))) {
     if (target === "history") {
-      const out = await actDb.prepare("DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ?").bind(accountId, media.id, provider).run();
-      removed = Number(out && out.meta && out.meta.changes) || 0;
+      // Unlink this app from other sources' plays. If an event originated in
+      // this app but another app also reported it, transfer ownership rather
+      // than deleting that other app's only copy.
+      const out = await actDb.batch([
+        actDb.prepare("DELETE FROM watch_event_sources WHERE source = ? AND event_id IN (SELECT id FROM watch_events WHERE account_id = ? AND media_id = ?)").bind(provider, accountId, media.id),
+        actDb.prepare(`UPDATE watch_events SET source = (SELECT s.source FROM watch_event_sources s WHERE s.event_id = watch_events.id ORDER BY s.source LIMIT 1)
+          WHERE account_id = ? AND media_id = ? AND source = ? AND EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id)`).bind(accountId, media.id, provider),
+        actDb.prepare("DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ?").bind(accountId, media.id, provider),
+      ]);
+      removed = out.reduce((n, r) => n + (Number(r && r.meta && r.meta.changes) || 0), 0);
     } else {
       await actDb.batch([
         actDb.prepare("UPDATE show_progress SET companion_json = NULL WHERE account_id = ? AND media_id = ? AND last_season IS NULL").bind(accountId, media.id),
@@ -117552,8 +120983,10 @@ async function removeMediaAppItemLocally(env, accountId, provider, imdbId, targe
     try {
       cursor = row.cursor_json ? JSON.parse(row.cursor_json) : {};
     } catch {}
-    if (cursor.resumes && cursor.resumes[imdbId]) {
-      cursor.resumes = mergeMediaAppResumes(cursor.resumes, [[imdbId, null]]);
+    const resumeIds = [imdbId, media && media.tmdb_id ? `tmdb:${media.tmdb_id}` : null].filter(Boolean);
+    const resumeKeys = resumeIds.flatMap((id) => [id, ...(media && media.kind ? [`${media.kind}|${id}`] : [`movie|${id}`, `series|${id}`])]);
+    if (cursor.resumes && resumeKeys.some((key) => cursor.resumes[key])) {
+      cursor.resumes = mergeMediaAppResumes(cursor.resumes, resumeKeys.map((key) => [key, null]));
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
     }
   }
@@ -117602,7 +121035,9 @@ async function refreshMediaAppNow(env, accountId, provider, { maxSteps = MEDIA_A
   } catch {}
   const totals = { plays: 0, progress: 0, resumes: 0, unresolved: 0 };
   let offset = 0;
-  let since = null;
+  // A forced Nuvio sync must revisit old records too, including ones an
+  // earlier incomplete pull never stored. Carry zero through queued steps.
+  let since = force && provider === "nuvio" ? 0 : null;
   for (let i = 0; i < maxSteps; i++) {
     const out = await pullMediaAppStep(env, accountId, provider, offset, since);
     if (out.applied) for (const k of Object.keys(totals)) totals[k] += out.applied[k] || 0;
@@ -117673,6 +121108,393 @@ function mediaAppSyncSummary(row) {
   };
 }
 
+function extractNuvioCollections(raw) {
+  let val = raw;
+  if (typeof val === "string") {
+    try { val = JSON.parse(val); } catch { return []; }
+  }
+  if (!val) return [];
+  if (val.collections_json != null) return extractNuvioCollections(val.collections_json);
+  if (val.p_collections_json != null) return extractNuvioCollections(val.p_collections_json);
+  if (val.collections != null) return extractNuvioCollections(val.collections);
+  if (val.p_collections != null) return extractNuvioCollections(val.p_collections);
+  if (val.data != null) return extractNuvioCollections(val.data);
+  if (Array.isArray(val)) {
+    const out = [];
+    for (const item of val) {
+      if (!item) continue;
+      if (item.collections_json != null) {
+        out.push(...extractNuvioCollections(item.collections_json));
+      } else if (item.p_collections_json != null) {
+        out.push(...extractNuvioCollections(item.p_collections_json));
+      } else if (item.collections != null) {
+        out.push(...extractNuvioCollections(item.collections));
+      } else if (item.p_collections != null) {
+        out.push(...extractNuvioCollections(item.p_collections));
+      } else if (item.data != null) {
+        out.push(...extractNuvioCollections(item.data));
+      } else {
+        const itemTitle = String(item.title || item.name || "").trim();
+        const hasFolders = Array.isArray(item.folders) && item.folders.length > 0;
+        const hasSources = Array.isArray(item.catalogSources) && item.catalogSources.length > 0;
+        if (item.id || itemTitle || hasFolders || hasSources) {
+          out.push(item);
+        }
+      }
+    }
+    return out;
+  }
+  if (typeof val === "object") {
+    const valTitle = String(val.title || val.name || "").trim();
+    const hasFolders = Array.isArray(val.folders) && val.folders.length > 0;
+    const hasSources = Array.isArray(val.catalogSources) && val.catalogSources.length > 0;
+    if (val.id || valTitle || hasFolders || hasSources) {
+      return [val];
+    }
+  }
+  return [];
+}
+
+// My Lists owns these collection IDs; catalog sources or display names alone
+// do not identify the collection creator.
+function isMyListsNuvioCollectionId(id) {
+  const value = String(id || "");
+  return value === "my-lists-collections" || value === "my-lists-addon" || value.startsWith("col_mylists_");
+}
+
+function addNewNuvioCollection(existing, incoming, options = {}) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  // An empty collection can be intentional. Keep it, including unknown fields.
+  const cleanedExisting = existingArr.filter(Boolean);
+
+  if (!incomingArr.length) return cleanedExisting;
+
+  // Build the incoming collections with unique IDs and clean titles
+  const newCols = incomingArr.map((inCol) => {
+    const rawName = options.collectionName || inCol.title || inCol.name || "My Lists Collections";
+    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+    const colId = inCol.id && !cleanedExisting.some((e) => e.id === inCol.id)
+      ? inCol.id
+      : "col_mylists_" + Math.random().toString(36).slice(2, 8);
+
+    const cleanFolders = (Array.isArray(inCol.folders) ? inCol.folders : [inCol]).map((inF) => {
+      const cleanF = {
+        ...inF,
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      };
+      if (Array.isArray(cleanF.catalogSources)) {
+        cleanF.catalogSources = cleanF.catalogSources.map((cs) => {
+          let cName = String(cs.name || cs.title || cs.catalogId || "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return {
+            ...cs,
+            name: cName,
+            title: cName
+          };
+        });
+      }
+      return cleanF;
+    });
+
+    return {
+      ...inCol,
+      id: colId,
+      title: colName,
+      name: colName,
+      viewMode: inCol.viewMode || "FOLLOW_LAYOUT",
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      backdropImageUrl: inCol.backdropImageUrl || options.backdropImageUrl || "",
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: cleanFolders
+    };
+  });
+
+  return [...cleanedExisting, ...newCols];
+}
+
+// Add the incoming folders to ONE existing collection (the one the person picked);
+// every other collection is returned untouched, in its original position.
+function mergeIntoNuvioCollection(existing, incoming, targetId) {
+  const existingArr = extractNuvioCollections(existing);
+  const idx = existingArr.findIndex((c) => c && String(c.id) === String(targetId));
+  if (idx === -1) return null;
+  const target = JSON.parse(JSON.stringify(existingArr[idx]));
+  if (!Array.isArray(target.folders)) target.folders = [];
+  for (const inCol of extractNuvioCollections(incoming)) {
+    if (!inCol) continue;
+    for (const inF of Array.isArray(inCol.folders) ? inCol.folders : [inCol]) {
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = { ...inF, hidden: false, isVisible: true, enabled: true };
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map((cs) => {
+          const cName = String(cs.name || cs.title || cs.catalogId || "").trim().replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return { ...cs, name: cName, title: cName };
+        });
+      }
+      const fIdx = target.folders.findIndex((f) =>
+        (f.id && inF.id && f.id === inF.id) ||
+        (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase())
+      );
+      if (fIdx !== -1) target.folders[fIdx] = { ...target.folders[fIdx], ...cleanFolder };
+      else target.folders.push(cleanFolder);
+    }
+  }
+  return existingArr.map((c, i) => (i === idx ? target : c));
+}
+
+function mergeNuvioCollections(existing, incoming) {
+  const existingArr = extractNuvioCollections(existing);
+  const incomingArr = extractNuvioCollections(incoming);
+
+  if (!existingArr.length) return incomingArr;
+  if (!incomingArr.length) return existingArr;
+
+  // Preserve all collections from other providers / community templates 100% untouched
+  const otherCollections = [];
+  let myListsCol = null;
+
+  for (const c of existingArr) {
+    if (!c) continue;
+    const cTitle = String(c.title || c.name || "").trim();
+    const cFolders = Array.isArray(c.folders) ? c.folders : [];
+
+
+    const isMyLists = (c.id && (c.id === "my-lists-collections" || c.id === "my-lists-addon")) ||
+                      (cTitle && (cTitle.toLowerCase() === "my lists collections" || cTitle.toLowerCase() === "my lists addon" || cTitle.toLowerCase() === "my lists"));
+    if (isMyLists) {
+      if (!myListsCol) {
+        myListsCol = JSON.parse(JSON.stringify(c));
+      } else if (cFolders.length > 0) {
+        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+        myListsCol.folders.push(...JSON.parse(JSON.stringify(cFolders)));
+      }
+    } else {
+      otherCollections.push(JSON.parse(JSON.stringify(c)));
+    }
+  }
+
+  if (!myListsCol) {
+    myListsCol = {
+      id: "my-lists-collections",
+      title: "My Lists Collections",
+      name: "My Lists Collections",
+      viewMode: "FOLLOW_LAYOUT",
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: []
+    };
+  } else {
+    myListsCol.id = "my-lists-collections";
+    myListsCol.title = "My Lists Collections";
+    myListsCol.name = "My Lists Collections";
+    myListsCol.hidden = false;
+    myListsCol.isVisible = true;
+    myListsCol.enabled = true;
+    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
+  }
+
+  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
+  for (const inCol of incomingArr) {
+    if (!inCol) continue;
+    const inTitle = String(inCol.title || inCol.name || "").trim();
+    const isIncomingMyLists = (inCol.id && (inCol.id === "my-lists-collections" || inCol.id === "my-lists-addon")) ||
+                             (inTitle && (inTitle.toLowerCase() === "my lists collections" || inTitle.toLowerCase() === "my lists addon" || inTitle.toLowerCase() === "my lists"));
+
+    if (inCol.id && !isIncomingMyLists) {
+      const existingOtherIdx = otherCollections.findIndex((oc) => oc.id === inCol.id);
+      if (existingOtherIdx !== -1) {
+        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
+        continue;
+      }
+    }
+
+    // Folders intended for My Lists Collections
+    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
+    for (const inF of foldersToMerge) {
+      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
+      const cleanFolder = {
+        ...inF,
+        hidden: false,
+        isVisible: true,
+        enabled: true
+      };
+      if (Array.isArray(cleanFolder.catalogSources)) {
+        cleanFolder.catalogSources = cleanFolder.catalogSources.map((cs) => {
+          let cName = String(cs.name || cs.title || cs.catalogId || "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          cName = cName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+          return {
+            ...cs,
+            name: cName,
+            title: cName
+          };
+        });
+      }
+      const fIdx = myListsCol.folders.findIndex((f) =>
+        (f.id && inF.id && f.id === inF.id) ||
+        (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
+        (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase())
+      );
+      if (fIdx !== -1) {
+        myListsCol.folders[fIdx] = { ...myListsCol.folders[fIdx], ...cleanFolder };
+      } else {
+        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
+      }
+    }
+  }
+
+  return [...otherCollections, myListsCol];
+}
+
+// Nuvio's documented read: sync_pull_collections returns [{ profile_id, collections_json, updated_at }].
+// sync_pull_profiles has no collections in it (its rows are the profiles themselves), so it is not used
+// here: a profile row read as a collection made the profile look empty. Errors are thrown, never turned
+// into "no collections": sync_push_collections replaces the whole blob, so a failed read must stop a push.
+async function nuvioPullCollections(env, accessToken, profileId) {
+  const rows = await nuvioRpc(env, accessToken, "sync_pull_collections", { p_profile_id: profileId });
+  const list = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+  const row = list.find((r) => r && r.profile_id != null && Number(r.profile_id) === Number(profileId)) || (list.length === 1 ? list[0] : null);
+  if (!row) return [];
+  let blob = row.collections_json;
+  if (typeof blob === "string") {
+    try { blob = JSON.parse(blob); } catch { throw new Error("Nuvio returned collections that could not be read."); }
+  }
+  if (!Array.isArray(blob) || blob.some((c) => !c || typeof c !== "object" || Array.isArray(c))) {
+    throw new Error("Nuvio returned collections in an unexpected format.");
+  }
+  return blob;
+}
+
+async function nuvioGetAddons(env, accessToken, profileId) {
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/addons?profile_id=eq.${profileId}&select=*`, {
+      method: "GET",
+      headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text) {
+        const data = JSON.parse(text);
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    }
+  } catch {}
+
+  try {
+    const profRows = await nuvioRpc(env, accessToken, "sync_pull_profiles", {});
+    if (Array.isArray(profRows)) {
+      const targetProf = profRows.find((r) =>
+        (r.profile_index != null && Number(r.profile_index) === Number(profileId)) ||
+        (r.id != null && String(r.id) === String(profileId))
+      ) || profRows[0];
+      if (targetProf && targetProf.addons_json) {
+        const arr = typeof targetProf.addons_json === "string" ? JSON.parse(targetProf.addons_json) : targetProf.addons_json;
+        if (Array.isArray(arr)) return arr;
+      }
+      if (targetProf && Array.isArray(targetProf.addons)) return targetProf.addons;
+    }
+  } catch {}
+
+  return [];
+}
+
+async function nuvioEnsureAddonInstalled(env, accessToken, profileId, manifestUrl) {
+  if (!manifestUrl) return false;
+  try {
+    // ?collections=1 makes the manifest list the premade service rows (see getPremadeCollectionManifestCatalogs);
+    // a plain link is left for Stremio so those ~250 rows don't land on its home screen.
+    try {
+      const u = new URL(String(manifestUrl));
+      u.searchParams.set("collections", "1");
+      manifestUrl = u.toString();
+    } catch {}
+    const addons = await nuvioGetAddons(env, accessToken, profileId);
+    const mLower = String(manifestUrl).trim().toLowerCase();
+    let foundIndex = -1;
+    for (let i = 0; i < addons.length; i++) {
+      const a = addons[i];
+      if (!a) continue;
+      const u = String(a.url || "").trim().toLowerCase();
+      if (u === mLower) {
+        foundIndex = i;
+        break;
+      }
+      try {
+        const uHost = new URL(u).hostname;
+        const mHost = new URL(manifestUrl).hostname;
+        if (uHost && mHost && uHost === mHost && u.endsWith("/manifest.json")) {
+          foundIndex = i;
+          break;
+        }
+      } catch {}
+    }
+
+    const updatedAddons = addons.map((a, idx) => ({
+      url: a.url,
+      name: a.name || `Addon ${idx + 1}`,
+      enabled: a.enabled !== false,
+      sort_order: a.sort_order != null ? a.sort_order : idx,
+    }));
+
+    if (foundIndex !== -1) {
+      updatedAddons[foundIndex] = {
+        ...updatedAddons[foundIndex],
+        url: manifestUrl,
+        name: ADDON_NAME || "My Lists",
+        enabled: true
+      };
+    } else {
+      updatedAddons.push({
+        url: manifestUrl,
+        name: ADDON_NAME || "My Lists",
+        enabled: true,
+        sort_order: updatedAddons.length,
+      });
+    }
+
+    await nuvioRpc(env, accessToken, "sync_push_addons", {
+      p_profile_id: profileId,
+      p_addons: updatedAddons,
+      p_origin_client_id: "my-lists-addon",
+    });
+    return true;
+  } catch (err) {
+    console.warn("Could not auto-install addon in Nuvio:", err);
+    return false;
+  }
+}
+
+async function resolveAccountManifestUrl(env, accountId, request) {
+  let origin = "https://mylistsaddon.com";
+  try {
+    const u = new URL(request.url);
+    if (u && u.origin) origin = u.origin;
+  } catch {}
+  if (!env || !env.DB || accountId == null) return `${origin}/manifest.json`;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
+    ).bind(accountId).first();
+    if (row && row.legacy_cfg_id) {
+      return `${origin}/${row.legacy_cfg_id}/manifest.json`;
+    }
+  } catch {}
+  return `${origin}/manifest.json`;
+}
+
 // POST /api/connections/stremio/link/complete, POST .../nuvio/login,
 // GET|POST /api/connections/:provider/settings, POST /api/connections/:provider/sync.
 // The caller has already required a session.
@@ -117686,6 +121508,25 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     const conn = await loadProviderConnection(env, accountId, provider);
     const row = await loadMediaAppSync(env, accountId, provider);
     return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), profiles: provider === "nuvio" ? mediaAppProfilesOf(row) : undefined, sync: mediaAppSyncSummary(row) });
+  }
+
+  if (sub === "collections" && request.method === "GET") {
+    if (provider !== "nuvio") return json({ ok: false, error: "Collections sync is only supported for Nuvio." }, 400);
+    let conn = await loadProviderConnection(env, accountId, provider);
+    const row = await loadMediaAppSync(env, accountId, provider);
+    if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "Your Nuvio account isn't connected." }, 404);
+    conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+    if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+    const profileId = Number(row.profile_index) || 1;
+    let data;
+    try {
+      data = await nuvioPullCollections(env, conn.accessToken, profileId);
+    } catch {
+      return json({ ok: false, error: "Couldn't read your collections from Nuvio. Please try again." }, 502);
+    }
+    // Bind browser-side links to both accounts, not just profile/folder IDs.
+    const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+    return json({ ok: true, profileId, profiles: mediaAppProfilesOf(row), collections: data || [], scope });
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
@@ -117761,12 +121602,112 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
     }
+    if (sub === "library-item") {
+      if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
+      const id = mediaAppTitleId(body.id);
+      const kind = mediaAppKind(body.mediaType);
+      const action = body.action;
+      if (!id || !kind || !["add", "remove"].includes(action)) return json({ ok: false, error: "Choose a movie or show." }, 400);
+      let conn = await loadProviderConnection(env, accountId, provider);
+      const sync = await loadMediaAppSync(env, accountId, provider);
+      if (!conn || conn.status !== "ok" || !sync) return json({ ok: false, error: "That account isn't connected." }, 404);
+      const contentId = id.imdbId || `tmdb:${id.tmdbId}`;
+      if (provider === "nuvio") {
+        if (!sync.profile_index) return json({ ok: false, error: "Choose a Nuvio profile first." }, 400);
+        conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+        if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+        const existing = await nuvioFetchLibrary(env, conn.accessToken, sync.profile_index);
+        const found = existing.find((r) => String(r.content_id).toLowerCase() === contentId && mediaAppKind(r.content_type) === kind);
+        if (action === "add" && !found) {
+          await nuvioRpc(env, conn.accessToken, "sync_push_library_items", { p_profile_id: sync.profile_index, p_origin_client_id: "my-lists-addon", p_items: [{ content_id: contentId, content_type: kind, name: String(body.title || "").slice(0, 200), added_at: Date.now() }] });
+        } else if (action === "remove" && found) {
+          await nuvioRpc(env, conn.accessToken, "sync_delete_library_items", { p_profile_id: sync.profile_index, p_origin_client_id: "my-lists-addon", p_keys: [{ content_id: found.content_id, content_type: found.content_type }] });
+        }
+      } else {
+        if (!id.imdbId) return json({ ok: false, error: "Stremio needs an IMDb ID for this title." }, 400);
+        const all = await stremioCall("datastoreGet", { authKey: conn.accessToken, collection: "libraryItem", ids: [], all: true });
+        if (!Array.isArray(all)) throw mediaAppError("unreachable", "Stremio sent an invalid library.");
+        const existing = all.find((r) => r && String(r._id) === id.imdbId);
+        if (existing && mediaAppKind(existing.type) !== kind) return json({ ok: false, error: "This title has a different type in Stremio." }, 409);
+        if (action === "remove" && !existing) return json({ ok: true });
+        const now = new Date().toISOString();
+        const item = existing || { _id: id.imdbId, type: kind, name: String(body.title || "").slice(0, 200), poster: null, posterShape: "poster", _ctime: now, behaviorHints: {}, state: { lastWatched: null, timeWatched: 0, timeOffset: 0, overallTimeWatched: 0, timesWatched: 0, flaggedWatched: 0, duration: 0, video_id: null, watched: null, noNotif: false } };
+        const result = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: [{ ...item, removed: action === "remove", temp: false, _mtime: now }] });
+        if (!result || result.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
+      }
+      return json({ ok: true });
+    }
+    if (sub === "add-history") {
+      if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
+      const id = mediaAppTitleId(body.id);
+      const kind = mediaAppKind(body.mediaType);
+      const season = body.season == null ? null : mediaAppInt(body.season);
+      const episode = body.episode == null ? null : mediaAppInt(body.episode);
+      if (!id || !kind || (kind === "series" && (season == null || episode == null || episode < 1))) {
+        return json({ ok: false, error: "Choose a movie or a show episode." }, 400);
+      }
+      let conn = await loadProviderConnection(env, accountId, provider);
+      const sync = await loadMediaAppSync(env, accountId, provider);
+      if (!conn || conn.status !== "ok" || !sync) return json({ ok: false, error: "That account isn't connected." }, 404);
+      const now = Date.now();
+      const contentId = id.imdbId || `tmdb:${id.tmdbId}`;
+      const play = { contentId, kind, title: String(body.title || "").slice(0, 200), season: kind === "series" ? season : null, episode: kind === "series" ? episode : null, watchedAt: now };
+      if (provider === "nuvio") {
+        conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+        if (!conn || !conn.accessToken || !sync.profile_index) return json({ ok: false, error: "Sign in and choose a Nuvio profile first." }, 400);
+        await nuvioRpc(env, conn.accessToken, "sync_push_watched_items", { p_profile_id: sync.profile_index, p_items: [nuvioWatchedItem(play)] });
+      } else {
+        if (!id.imdbId) return json({ ok: false, error: "Stremio needs an IMDb ID for this title." }, 400);
+        const library = await stremioFetchLibrary(conn.accessToken);
+        const item = library.find((it) => String(it._id) === id.imdbId && mediaAppKind(it.type) === kind);
+        if (!item) return json({ ok: false, error: "Add this title to your Stremio library first." }, 400);
+        let state = { ...(item.state || {}) };
+        if (kind === "series") {
+          const eps = await stremioEpisodes(id.imdbId);
+          if (!eps || !eps.some((e) => e.season === season && e.episode === episode)) return json({ ok: false, error: "Stremio could not find that episode." }, 400);
+          const watched = new Set((state.watched ? await stremioWatchedEpisodes(state.watched, eps) : []).map((e) => `${e.season}:${e.episode}`));
+          watched.add(`${season}:${episode}`);
+          state.watched = await stremioEncodeWatched(eps, watched);
+          state.video_id = `${id.imdbId}:${season}:${episode}`;
+        } else {
+          state.timesWatched = Math.max(1, Number(state.timesWatched) || 0);
+          state.flaggedWatched = 1;
+        }
+        state.lastWatched = new Date(now).toISOString();
+        const result = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: [{ ...item, _mtime: new Date(now).toISOString(), state }] });
+        if (!result || result.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
+      }
+      const rec = { ...id, kind, title: play.title, mtime: now, at: now, plays: [{ season: play.season, episode: play.episode, watchedAt: now }], furthest: kind === "series" ? { season, episode } : null, resume: null };
+      let local = null;
+      try { local = await applyMediaAppRecords(env, accountId, provider, [rec]); }
+      catch (e) { console.error("mediaapp: could not mirror added history", e); }
+      return json({ ok: true, mirrored: !!local && !local.skipped && !local.unresolved && local.plays > 0 });
+    }
     if (sub === "remove") {
       const name = provider === "nuvio" ? "Nuvio" : "Stremio";
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: `Removing from ${name} isn't switched on yet.` }, 409);
+      const removeDb = activityDb(env, accountId);
+      if (removeDb && !(await removeDb.prepare("SELECT version FROM schema_migrations WHERE version = 'A0002'").first())) {
+        return json({ ok: false, error: "The activity database needs migration A0002 before app history can be changed." }, 503);
+      }
       const target = String(body.target || "");
       const id = mediaAppTitleId(body.id);
-      if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id || !id.imdbId) return json({ ok: false, error: "Choose an item to remove." }, 400);
+      if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id) return json({ ok: false, error: "Choose an item to remove." }, 400);
+      const requestedKind = mediaAppKind(body.mediaType);
+      let media;
+      if (id.imdbId) {
+        media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE imdb_id = ?").bind(id.imdbId).first();
+        if (media && requestedKind && media.kind !== requestedKind) return json({ ok: false, error: "Choose the matching movie or show." }, 400);
+      } else if (requestedKind) {
+        media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE tmdb_id = ? AND kind = ?").bind(id.tmdbId, requestedKind).first();
+      } else {
+        const found = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE tmdb_id = ? LIMIT 2").bind(id.tmdbId).all();
+        if ((found.results || []).length > 1) return json({ ok: false, error: "Choose whether this title is a movie or show." }, 400);
+        media = (found.results || [])[0] || null;
+      }
+      const imdbId = id.imdbId || (media && media.imdb_id) || null;
+      const titleIds = [...new Set([id.imdbId, id.tmdbId ? `tmdb:${id.tmdbId}` : null, imdbId, media && media.tmdb_id ? `tmdb:${media.tmdb_id}` : null].filter(Boolean))];
+      if (provider === "stremio" && !imdbId) return json({ ok: false, error: "This title needs an IMDb ID to remove it from Stremio." }, 400);
       let conn = await loadProviderConnection(env, accountId, provider);
       const row = await loadMediaAppSync(env, accountId, provider);
       if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "That account isn't connected." }, 404);
@@ -117777,9 +121718,9 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       // In the app first: if it refuses, nothing here changes either.
       const inApp = provider === "stremio"
-        ? await stremioRemoveTitle(conn, id.imdbId, target)
-        : await nuvioRemoveTitle(env, conn, row.profile_index, id.imdbId, target);
-      const here = await removeMediaAppItemLocally(env, accountId, provider, id.imdbId, target);
+        ? await stremioRemoveTitle(conn, imdbId, target)
+        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind));
+      const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target);
       if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);
       return json({ ok: true, removedInApp: inApp, removedPlays: here.removed });
     }
@@ -117793,6 +121734,107 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       const made = await startMediaAppSync(env, accountId, provider);
       return json({ ok: Boolean(made && made.ok), started: Boolean(made && made.created) }, made && made.ok ? 202 : 503);
+    }
+    if (provider === "nuvio" && sub === "collections") {
+      let conn = await loadProviderConnection(env, accountId, provider);
+      const row = await loadMediaAppSync(env, accountId, provider);
+      if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "Your Nuvio account isn't connected." }, 404);
+      conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+      if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+      const profileId = (body && body.profileId != null) ? Number(body.profileId) : (Number(row.profile_index) || 1);
+      const installMode = String(body.installMode || (body.merge === false ? "replace" : "new")).toLowerCase();
+      let collections = body.collections != null ? body.collections : (body.p_collections_json != null ? body.p_collections_json : null);
+      if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
+
+      let existing = [];
+      if (installMode !== "replace") {
+        // The push replaces everything Nuvio holds, so it only goes ahead on a successful read.
+        try {
+          existing = await nuvioPullCollections(env, conn.accessToken, profileId);
+        } catch (pullErr) {
+          if (pullErr && pullErr.kind === "invalid") throw pullErr;
+          return json({ ok: false, error: "Couldn't read your existing Nuvio collections, so nothing was changed. Please try again." }, 502);
+        }
+      }
+
+      const existingCount = (existing || []).length;
+      const backdropImageUrl = `${new URL(request.url).origin}/icon.png`;
+      if (installMode === "update-folder") {
+        const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+        if (!scope || body.scope !== scope) return json({ ok: false, error: "This folder belongs to a different connection. Pull it again before editing." }, 409);
+        if (profileId !== (Number(row.profile_index) || 1)) return json({ ok: false, error: "The selected Nuvio profile changed. Pull again before editing." }, 409);
+        if (!isMyListsNuvioCollectionId(body.targetCollectionId)) return json({ ok: false, error: "Only collections created by My Lists can be updated here." }, 403);
+        const targets = existing.filter((c) => c && String(c.id) === String(body.targetCollectionId));
+        const target = targets.length === 1 ? targets[0] : null;
+        const folders = target && Array.isArray(target.folders) ? target.folders : [];
+        const matches = folders.filter((f) => f && String(f.id) === String(body.folderId));
+        const expected = body.expectedFolder;
+        const updated = body.updatedFolder;
+        if (!body.targetCollectionId || !body.folderId || !expected || typeof expected !== "object" || !updated || typeof updated !== "object" || Array.isArray(updated) || String(updated.id) !== String(body.folderId) || !Array.isArray(updated.catalogSources)) {
+          return json({ ok: false, error: "Invalid collection folder update." }, 400);
+        }
+        if (matches.length !== 1 || JSON.stringify(matches[0]) !== JSON.stringify(expected)) {
+          return json({ ok: false, error: "This Nuvio folder changed or was removed. Your local edits are kept. To discard them, delete the local folder and pull again." }, 409);
+        }
+        collections = existing.map((c) => c === target ? { ...c, folders: c.folders.map((f) => f === matches[0] ? updated : f) } : c);
+      } else if (installMode === "new") {
+        collections = addNewNuvioCollection(existing || [], collections, { collectionName: body.collectionName, backdropImageUrl });
+      } else if (installMode === "replace") {
+        collections = extractNuvioCollections(collections).map((c) => ({ ...c, backdropImageUrl: c.backdropImageUrl || backdropImageUrl }));
+      } else if (body.targetCollectionId) {
+        const merged = mergeIntoNuvioCollection(existing || [], collections, body.targetCollectionId);
+        if (!merged) return json({ ok: false, error: "That Nuvio collection wasn't found. Reopen the dialog and pick it again." }, 400);
+        collections = merged;
+      } else {
+        collections = mergeNuvioCollections(existing || [], collections);
+      }
+
+      await nuvioRpc(env, conn.accessToken, "sync_push_collections", {
+        p_profile_id: profileId,
+        p_collections_json: collections,
+        p_origin_client_id: "my-lists-addon"
+      });
+
+      // Save collection catalog mappings in KV so catalog routes resolve any custom/premade list
+      if (env && env.CONFIGS) {
+        try {
+          const listsToStore = Array.isArray(body.collectionLists) ? body.collectionLists.slice() : [];
+          const extractedCols = extractNuvioCollections(collections);
+          for (const col of extractedCols) {
+            if (Array.isArray(col.folders)) {
+              for (const folder of col.folders) {
+                if (Array.isArray(folder.catalogSources)) {
+                  for (const cs of folder.catalogSources) {
+                    if (cs && cs.catalogId && cs.url) {
+                      listsToStore.push({ catalogId: cs.catalogId, url: cs.url, name: cs.name || folder.title, type: cs.type || "movie" });
+                    }
+                  }
+                }
+              }
+            }
+          }
+          for (const item of listsToStore) {
+            if (item && item.catalogId && item.url) {
+              const catType = item.type === "series" ? "series" : "movie";
+              await env.CONFIGS.put(
+                `col_cat:${item.catalogId}:${catType}`,
+                JSON.stringify({ id: item.catalogId, url: item.url, name: item.name || item.catalogId, type: catType, enabled: true }),
+                { expirationTtl: 2592000 }
+              );
+            }
+          }
+        } catch (storeErr) {
+          console.warn("Could not persist collection catalog entries:", storeErr);
+        }
+      }
+
+      let addonInstalled = false;
+      const manifestUrl = installMode === "update-folder" ? null : ((body && body.manifestUrl) || await resolveAccountManifestUrl(env, accountId, request));
+      if (manifestUrl) {
+        addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
+      }
+
+      return json({ ok: true, profileId, collections, addonInstalled, existingCount });
     }
   } catch (e) {
     if (e && e.kind) {

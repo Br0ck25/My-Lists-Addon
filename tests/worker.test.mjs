@@ -13624,6 +13624,9 @@ describe("worker: Stremio / Nuvio Catalog Search Interface", () => {
           ],
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
+      if (u.includes("/meta/movie/tt1375666.json")) {
+        return Response.json({ meta: { id: "tt1375666", type: "movie", imdbRating: "8.8" } });
+      }
       if (u.includes("/movie/27205")) {
         return new Response(JSON.stringify({
           id: 27205,
@@ -13643,7 +13646,8 @@ describe("worker: Stremio / Nuvio Catalog Search Interface", () => {
       assert.equal(meta.type, "movie");
       assert.equal(meta.name, "Inception");
       assert.equal(meta.releaseInfo, "2010");
-      assert.equal(meta.imdbRating, "8.4");
+      assert.equal(meta.imdbRating, "8.8");
+      assert.equal(meta.vote_average, 8.4);
       assert.ok(meta.poster && meta.poster.includes("oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg"));
     } finally {
       globalThis.fetch = realFetch;
@@ -13670,6 +13674,9 @@ describe("worker: Stremio / Nuvio Catalog Search Interface", () => {
           ],
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
+      if (u.includes("/meta/series/tt0903747.json")) {
+        return Response.json({ meta: { id: "tt0903747", type: "series", imdbRating: "9.5" } });
+      }
       if (u.includes("/tv/1396")) {
         return new Response(JSON.stringify({
           id: 1396,
@@ -13689,7 +13696,8 @@ describe("worker: Stremio / Nuvio Catalog Search Interface", () => {
       assert.equal(meta.type, "series");
       assert.equal(meta.name, "Breaking Bad");
       assert.equal(meta.releaseInfo, "2008");
-      assert.equal(meta.imdbRating, "8.9");
+      assert.equal(meta.imdbRating, "9.5");
+      assert.equal(meta.vote_average, 8.9);
       assert.ok(meta.poster && meta.poster.includes("ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg"));
     } finally {
       globalThis.fetch = realFetch;

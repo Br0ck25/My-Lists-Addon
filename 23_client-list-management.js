@@ -2735,7 +2735,7 @@ window.switchListDetailsType = function(newType) {
     if (newType === 'movie') {
       filtered = filtered.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (newType === 'series') {
-      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     const gridEl = document.getElementById('detailGrid');
     const statusEl = document.getElementById('detailStatus');
@@ -2746,6 +2746,7 @@ window.switchListDetailsType = function(newType) {
     if (statusEl) {
       statusEl.innerHTML = filtered.length ? '' : '<small>No matching items found.</small>';
     }
+    if (typeof window._listDetailsSubtitleRefresh === 'function') window._listDetailsSubtitleRefresh();
   }
 };
 
@@ -2837,13 +2838,15 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     } catch (e) {}
   }
 
+  // Poster strips contain only a sample; always fetch app shelves from the server.
+  if (/^autotrack:(nuvio|stremio)-/.test(urlStr)) preloaded = null;
   const cacheKey = (name || '') + '::' + (type || '') + '::' + (listUrl || '');
   window._currentListDetailsKey = cacheKey;
   window._listPreloadedCache = window._listPreloadedCache || {};
   if (preloaded && preloaded.sample && preloaded.sample.length) {
     window._listPreloadedCache[cacheKey] = preloaded;
   } else if (!preloaded || !preloaded.sample || !preloaded.sample.length) {
-    if (window._listPreloadedCache[cacheKey]) {
+    if (!/^autotrack:(nuvio|stremio)-/.test(urlStr) && window._listPreloadedCache[cacheKey]) {
       preloaded = window._listPreloadedCache[cacheKey];
     } else if (listUrl && window._curatedRecs && window._curatedRecs[listUrl]) {
       const rec = window._curatedRecs[listUrl];
@@ -3253,7 +3256,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   function formatSubtitle(count) {
     const parts = [];
     if (creatorName) parts.push('by ' + creatorName);
-    parts.push(type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies'));
+    const filter = window._currentListDetailsFilter;
+    const filtered = type === 'mixed' && (filter === 'movie' || filter === 'series');
+    parts.push(filtered ? (filter === 'series' ? 'Shows' : 'Movies') : (type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies')));
     const loaded = (count === undefined || count === null) ? null : Number(count);
     // A known total is only believable while it is at least what is already
     // on screen. One that the loaded items have overtaken was never the
@@ -3261,7 +3266,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     // /api/preview, handed over by whatever card was clicked. Believing it
     // is how a 303-item chart went on saying "100 items" after the whole
     // thing had been scrolled through.
-    if (knownTotalItems != null && (loaded == null || knownTotalItems >= loaded)) {
+    if (!filtered && knownTotalItems != null && (loaded == null || knownTotalItems >= loaded)) {
       parts.push(knownTotalItems.toLocaleString() + ' item' + (knownTotalItems === 1 ? '' : 's'));
     } else if (loaded != null) {
       // No total from the source, so the honest claim is "at least this
@@ -3345,6 +3350,8 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
 
   // The Nuvio and Stremio lists hold movies as well as shows (61_media-app-sync.js).
   const isMediaAppList = /^autotrack:(nuvio|stremio)-/.test(String(listUrl || ''));
+  const addHistoryBtn = document.getElementById('detailAddMediaHistoryBtn');
+  if (addHistoryBtn) addHistoryBtn.hidden = !/^autotrack:(nuvio|stremio)-(watch-history|library):/.test(String(listUrl || ''));
   const isContinueWatching = !isMediaAppList && ((name && name.toLowerCase().includes('continue watching')) || (listUrl === 'autotrack:continue-watching' || listUrl === 'custom:continue-watching' || (listUrl && listUrl.includes('continue-watching'))));
   if (isContinueWatching) {
     type = 'series';
@@ -3638,7 +3645,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   let done = false;
   let loadedCount = 0;
   let pagesLoaded = 0;
-  const MAX_PAGES = 20;
+  // Account histories can be much longer than ordinary charts. Keep the
+  // repeated-page guard below, but do not stop personal app shelves at 2,000.
+  const MAX_PAGES = isMediaAppList ? 10000 : 20;
   // A source that doesn't actually honor skip (a malformed/misdetected
   // URL, or a provider whose pagination silently ignores an out-of-range
   // offset) can keep answering maybeMore:true with the exact same items
@@ -3672,14 +3681,14 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
   // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
-  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching):/.exec(String(listUrl || ''));
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.exec(String(listUrl || ''));
 
   function annotatePersonalItem(it) {
     if (!it) return it;
     if (mediaAppList) {
       return Object.assign({}, it, {
         removeExternalProvider: mediaAppList[1],
-        removeExternalTarget: mediaAppList[2],
+        removeExternalTarget: mediaAppList[2] === 'watch-history' ? 'history' : mediaAppList[2],
         removeExternalListId: mediaAppList[2],
       });
     }
@@ -3765,7 +3774,8 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     let newCount = 0;
     const freshItems = [];
     items.forEach((it) => {
-      const key = it && (it.id != null ? String(it.id) : null);
+      // TMDB's movie and TV namespaces can share the same numeric ID.
+      const key = it && (it.id != null ? (/^autotrack:(nuvio|stremio)-/.test(String(listUrl || '')) ? String(it.type || '') + ':' : '') + String(it.id) : null);
       if (key === null || !seenItemIds.has(key)) {
         newCount++;
         if (key !== null) seenItemIds.add(key);
@@ -3789,7 +3799,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     if (curFilter === 'movie') {
       newlyMatching = annotated.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (curFilter === 'series') {
-      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     newlyMatching.forEach(item => { item.listUrl = listUrl; item.listName = name; });
     // Append (not rebuild) -- see appendPosterGridItems's own comment for
@@ -3814,13 +3824,19 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     // Set before the subtitle is written, not after: the subtitle says "100+"
     // rather than "100" precisely when this is true.
     moreToLoad = !done;
-    if (!onLineup) subEl.textContent = formatSubtitle(loadedCount);
+    if (!onLineup && typeof window._listDetailsSubtitleRefresh === 'function') window._listDetailsSubtitleRefresh();
   }
   // How All puts the list's own subtitle back after On Today borrowed it --
   // recomputed rather than restored from a string, so a count that grew while
   // On Today was open is still right.
   window._listDetailsSubtitleRefresh = function() {
-    subEl.textContent = formatSubtitle(loadedCount);
+    const filter = window._currentListDetailsFilter;
+    const all = window._currentListDetailsAllItems || [];
+    const visible = type === 'mixed' && (filter === 'movie' || filter === 'series') ? all.filter(function(it) {
+      const show = it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && (!!it.showId || it.seasonNum != null));
+      return filter === 'series' ? show : !show;
+    }).length : loadedCount;
+    subEl.textContent = formatSubtitle(visible);
   };
 
   async function loadNextPage() {

@@ -104,7 +104,7 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
-const ADDON_VERSION = "1.5.6";
+const ADDON_VERSION = "1.5.7";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --
@@ -1690,7 +1690,7 @@ const NEW_UI_COOKIE = "FF_NEW_UI";
 
 const APP_SHELL_TABS = [
   { id: "catalogs", label: "Catalogs", path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
-  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "create-list", "import"] },
+  { id: "lists", label: "Lists", path: "/lists", subs: ["my-lists", "liked", "collections", "create-list", "import"] },
   { id: "channels", label: "Channels", path: "/channels", subs: ["my-channels", "storylines", "quickadd", "explore", "import", "build"] },
   { id: "discover", label: "Discover", path: "/discover", subs: ["movie", "all", "series", "popular", "curated", "gems", "kids", "holidays", "genres"] },
   { id: "search", label: "Search", path: "/search", subs: [] },

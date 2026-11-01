@@ -2174,3 +2174,40 @@ Found by counting the KV operations of each request in a test run (the "KV Write
 - `bash verify.sh`, `node tests/ui-contract.mjs`, the `MLA_TEST_V2_LISTS_READ=1` run and the `MLA_TEST_FLAGS=FF_MATERIALIZER` run pass (2,633 tests each). Also fixed: three client tests had fixed "upcoming" air dates that have now passed (PR #43, tests only).
 
 **Steps:** deploy the new `worker_entry_combined.js`; check that `/admin` says **Built 2026-10-29 (build cf7a27cac2)**. No migration. To undo, paste the f603487eaf file.
+
+## 2026-10-30: pushing a collection to Nuvio respects the install mode
+
+### What it changes
+
+- **Add as new collection** now has a name box and adds a separate collection; every existing collection (other providers included) is sent back to Nuvio untouched.
+- **Merge into existing collection** shows a list of the collections found in Nuvio; the folders go only into the one picked (it is not renamed). If that collection is gone, nothing is pushed.
+- **Replace all collections** asks for confirmation, then leaves only what was pushed.
+- Pushing one collection with Merge or Replace used to push *every* My Lists folder; it now pushes just that one.
+- Collections My Lists writes carry the My Lists logo (`/icon.png`) as `backdropImageUrl`. The field name comes from Nuvio's open-source collection format; nuvio.tv/docs did not load for the assistant, so check it shows in the app.
+- The push reply includes `existingCount` (collections Nuvio had before the push).
+- Removed the "Addon preflight / Streaming Catalogs / READY" box in the dialog: it was fixed text and checked nothing.
+
+### Checked
+
+- `tests/media-app-sync.test.mjs` "Nuvio collections push: install modes" (new, merge, merge to a missing collection, replace, backdrop).
+
+**Steps:** deploy the new `worker_entry_combined.js`. No migration.
+
+### Follow-up: why Add and Merge wiped Nuvio
+
+Nuvio's `sync_pull_profiles` returns profile rows, not collections (per its docs). The old read took the profile row as a collection, so Nuvio looked empty, and `sync_push_collections` (a full replace) then wrote only the new one. Collections are now read with the documented `sync_pull_collections`, and Add/Merge refuse to push if that read fails. The old KV/browser-cached fallbacks that could resurrect deleted collections are gone from the push path.
+
+## 2026-10-30: streaming service rows in the premade collections; Stremio collection buttons removed
+
+### What it changes
+
+- **Removed** the Stremio-only collection controls (Stremio has no collections): "+ Add All to Stremio", the per-folder "+ Add to Catalogs" / "Remove" button, the Stremio hint, and Stremio from the Collections tab's synced-collections panel (Stremio's Watch History lists stay under Settings).
+- **New rows** on Netflix, Hulu, Paramount+, Disney+, HBO Max, Prime Video, Peacock and Apple TV+ (about 18 to 26 per service, e.g. Netflix "Hooked from the First Episode", Hulu "Stream & Scream", Paramount+ "NickRewind"). Defined in `STREAMING_ROWS` (08_), built from TMDB discover with `with_watch_providers` + flatrate, so a row holds only titles included with that service. They follow each service's Top 10 and full catalog in its premade collection.
+- These are our own approximations: the services' real rows are editorial and have no public feed. Genre, rating, year, network, studio and a few TMDB keyword ids stand in for them. The ids are listed at the top of the table.
+- The ~250 new catalogs are in the manifest only when the link has `?collections=1`. Pushing to Nuvio now installs/updates the addon with that link, so Stremio's home screen is not flooded. An existing Nuvio install is updated the next time you push.
+
+### Checked
+
+- `tests/streaming-rows.test.mjs`: every row filters to its own service, one `sort_by`, unique ids, shows-only rows have no movie catalog, the manifest gate, and the app gives each collection its own service's rows.
+
+**Steps:** deploy the new `worker_entry_combined.js`. No migration. Push a premade collection to Nuvio again to pick up the rows.

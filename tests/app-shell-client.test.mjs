@@ -141,6 +141,12 @@ describe("the new UI shell's routes", () => {
     assert.equal(client.localStorage.getItem("myListAddon:activeTab"), "lists");
     assert.equal(client.localStorage.getItem("myListAddon:listsSubmenu"), "liked");
     assert.deepEqual(plain(client.get("appShellState.get('route')")), { tab: "lists", sub: "liked" });
+
+    // Collections subnav under Lists (/lists/collections)
+    assert.equal(client.call("appShellGo", "/lists/collections"), true);
+    assert.deepEqual(pushedPaths(client), ["/lists/liked", "/lists/collections"]);
+    assert.equal(client.localStorage.getItem("myListAddon:listsSubmenu"), "collections");
+    assert.deepEqual(plain(client.get("appShellState.get('route')")), { tab: "lists", sub: "collections" });
   });
 
   it("turns a legacy tab click into a path, once", () => {
@@ -266,5 +272,633 @@ describe("the shell's dialog", () => {
     // not hang.
     client.call("closeModal");
     assert.equal(await dismissed, false);
+  });
+});
+
+describe("collections subnav and website lists picker", () => {
+  it("getAllWebsiteListsGrouped aggregates lists across the website into categories", () => {
+    const client = loadClient();
+    const grouped = client.call("getAllWebsiteListsGrouped");
+    assert.ok(grouped && typeof grouped === "object");
+    assert.ok(grouped["Curated Recommendations"]);
+    assert.ok(grouped["Curated Recommendations"].some((item) => item.name.includes("Recommended Movies")));
+    assert.ok(grouped["TMDB Official Charts"]);
+    assert.ok(grouped["TMDB Official Charts"].some((item) => item.name.includes("Trending")));
+    assert.ok(grouped["Trakt Official Charts"]);
+    assert.ok(grouped["Streaming Top 10"]);
+    assert.ok(grouped["Genre Catalogs"]);
+  });
+
+  it("populateCollectionListPicker populates every website list into optgroups", () => {
+    const client = loadClient();
+    client.call("populateCollectionListPicker");
+    const sel = client.__byId.get("createCollectionListPicker");
+    assert.ok(sel);
+    assert.ok(sel.innerHTML.includes("Curated Recommendations"));
+    assert.ok(sel.innerHTML.includes("TMDB Official Charts"));
+    assert.ok(sel.innerHTML.includes("Streaming Top 10"));
+    assert.ok(sel.innerHTML.includes("Genre Catalogs"));
+  });
+
+  it("loads, saves, and renders custom collection folders with lists", () => {
+    const client = loadClient();
+    const testCollections = [
+      {
+        id: "col_test_1",
+        name: "Sci-Fi Favorites",
+        description: "My personal sci-fi lists folder",
+        lists: [
+          { name: "Cyberpunk Gems", url: "https://trakt.tv/users/test/lists/cyberpunk", type: "movie" },
+          { name: "Space Operas", url: "https://trakt.tv/users/test/lists/space", type: "movie" }
+        ]
+      }
+    ];
+
+    client.call("saveCustomCollections", testCollections);
+    const loaded = client.call("loadCustomCollections");
+    assert.strictEqual(loaded.length, 1);
+    assert.strictEqual(loaded[0].name, "Sci-Fi Favorites");
+    assert.strictEqual(loaded[0].lists.length, 2);
+
+    client.call("renderCustomCollections");
+    const box = client.__byId.get("myCustomCollectionsResult");
+    assert.ok(box);
+    assert.ok(box.innerHTML.includes("Sci-Fi Favorites"));
+    assert.ok(box.innerHTML.includes("2 lists"));
+    assert.ok(!box.innerHTML.includes("Add to Catalogs"), "Stremio has no collections, so no per-folder Stremio catalog button");
+    assert.ok(box.innerHTML.includes("Push to Nuvio"));
+    assert.ok(box.innerHTML.includes("Cyberpunk Gems"));
+  });
+
+  it("builds official Nuvio collections payload matching docs schema", () => {
+    const client = loadClient();
+    const testCollections = [
+      {
+        id: "folder-sci-fi",
+        name: "Sci-Fi & Cyberpunk",
+        description: "Best of sci-fi",
+        tileShape: "LANDSCAPE",
+        hideTitle: true,
+        coverImageUrl: "https://example.com/cover.jpg",
+        lists: [
+          { name: "Cyberpunk", url: "https://trakt.tv/users/test/lists/cyberpunk", type: "movie" },
+          { name: "Sci-Fi Shows", url: "https://trakt.tv/users/test/lists/shows", type: "series" }
+        ]
+      }
+    ];
+
+    const payload = client.call("buildNuvioCollectionsPayload", testCollections);
+    assert.ok(Array.isArray(payload));
+    assert.strictEqual(payload.length, 1);
+    const col = payload[0];
+    assert.strictEqual(col.id, "my-lists-collections");
+    assert.strictEqual(col.title, "My Lists Collections");
+    assert.strictEqual(col.viewMode, "FOLLOW_LAYOUT");
+    assert.ok(Array.isArray(col.folders));
+    assert.strictEqual(col.folders.length, 1);
+    const f = col.folders[0];
+    assert.strictEqual(f.id, "folder-sci-fi");
+    assert.strictEqual(f.title, "Sci-Fi & Cyberpunk");
+    assert.strictEqual(f.tileShape, "LANDSCAPE");
+    assert.strictEqual(f.hideTitle, true);
+    assert.strictEqual(f.coverImageUrl, "https://example.com/cover.jpg");
+    assert.strictEqual(f.catalogSources.length, 2);
+    assert.strictEqual(f.catalogSources[0].addonId, "app.my-list");
+    assert.strictEqual(f.catalogSources[0].type, "movie");
+    assert.strictEqual(f.catalogSources[1].type, "series");
+  });
+
+  it("parses Nuvio collections.json files into custom collection folders", () => {
+    const client = loadClient();
+    const nuvioJson = JSON.stringify([
+      {
+        id: "col-nuvio",
+        title: "Community Layout",
+        folders: [
+          {
+            id: "folder-marvel",
+            title: "Marvel Cinematic Universe",
+            tileShape: "LANDSCAPE",
+            hideTitle: false,
+            coverImageUrl: "https://image.tmdb.org/t/p/w500/mcu.jpg",
+            catalogSources: [
+              { addonId: "app.my-list", catalogId: "MCU Movies", type: "movie" }
+            ]
+          }
+        ]
+      }
+    ]);
+
+    const parsed = client.call("parseNuvioCollectionsJson", nuvioJson);
+    assert.strictEqual(parsed.length, 1);
+    assert.strictEqual(parsed[0].id, "folder-marvel");
+    assert.strictEqual(parsed[0].name, "Marvel Cinematic Universe");
+    assert.strictEqual(parsed[0].tileShape, "LANDSCAPE");
+    assert.strictEqual(parsed[0].coverImageUrl, "https://image.tmdb.org/t/p/w500/mcu.jpg");
+    assert.strictEqual(parsed[0].lists.length, 1);
+    assert.strictEqual(parsed[0].lists[0].name, "MCU Movies");
+  });
+
+  it("uses existing list names and URLs for My Lists catalog IDs without changing identity", () => {
+    const client = loadClient();
+    const parsed = plain(client.call("parseNuvioCollectionsJson", [{ id: "folder", title: "Sources", catalogSources: [
+      { addonId: "app.my-list", catalogId: "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today", type: "movie" },
+      { addonId: "app.my-list", catalogId: "tmdb-chart-disney", name: "tmdb-chart-disney", type: "series" },
+      { addonId: "app.my-list", catalogId: "tmdb-chart-disney", name: "My Disney picks", type: "movie" },
+      { addonId: "other.addon", catalogId: "tmdb-chart-disney", type: "series" },
+      { addonId: "app.my-list", catalogId: "unknown", type: "movie" }
+    ] }]));
+    const lists = parsed[0].lists;
+    assert.equal(lists[0].name, "Apple TV+ Top 10");
+    assert.equal(lists[0].url, "https://mdblist.com/lists/ahmed2250/apple-tv-top-10-movies-today");
+    assert.equal(lists[0].catalogId, "https-mdblist-com-lists-ahmed2250-apple-tv-top-10-movies-today");
+    assert.equal(lists[1].name, "Disney+");
+    assert.equal(lists[1].url, "tmdb:chart:disney");
+    assert.equal(lists[1].type, "series");
+    assert.equal(lists[2].name, "My Disney picks", "explicit names are preserved");
+    assert.equal(lists[3].name, "tmdb-chart-disney", "do not borrow another addon's name");
+    assert.equal(lists[3].url, "catalog:other.addon:tmdb-chart-disney");
+    assert.equal(lists[4].name, "unknown");
+  });
+
+  it("repairs old ID-only linked labels on refresh without changing the remote folder", async () => {
+    const client = loadClient();
+    const folder = { id: "disney", title: "Disney", catalogSources: [{ addonId: "app.my-list", catalogId: "tmdb-chart-disney", type: "movie" }] };
+    const remote = [{ id: "my-lists-collections", folders: [folder] }];
+    const methods = [];
+    client.set("mediaAppUiCall", async (p, sub, method) => { methods.push(method); return { ok: true, data: { profileId: 1, scope: "scope", collections: remote } }; });
+    await client.call("pullCollectionsFromNuvio");
+    const collections = plain(client.call("loadCustomCollections"));
+    const linked = collections.find((c) => c.nuvioLink);
+    linked.lists[0].name = "tmdb-chart-disney";
+    linked.lists[0].url = "catalog:app.my-list:tmdb-chart-disney";
+    linked.nuvioLink.baseline = client.call("linkedNuvioFolderSignature", linked);
+    client.call("saveCustomCollections", collections);
+    await client.call("pullCollectionsFromNuvio", true);
+    const refreshed = plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink);
+    assert.equal(refreshed.lists[0].name, "Disney+");
+    assert.equal(refreshed.lists[0].url, "tmdb:chart:disney");
+    assert.deepEqual(refreshed.nuvioLink.folder, folder);
+    assert.deepEqual(methods, ["GET", "GET"]);
+  });
+
+  it("links Nuvio folders, preserves local edits on pull, and updates their original parent", async () => {
+    const client = loadClient();
+    const source = { addonId: "community", catalogId: "list", type: "movie", name: "List", extra: "keep" };
+    const folder = { id: "folder", title: "Remote", catalogSources: [source], custom: "keep" };
+    const remote = [{ id: "my-lists-collections", title: "Parent", folders: [folder] }];
+    const calls = [];
+    client.set("mediaAppUiCall", async (provider, sub, method, body) => {
+      calls.push({ method, body });
+      return method === "GET" ? { ok: true, data: { profileId: 1, collections: remote, scope: "scope-a" } } : { ok: true, data: {} };
+    });
+    client.set("appShellDialog", async () => true);
+    await client.call("pullCollectionsFromNuvio");
+    let collections = plain(client.call("loadCustomCollections"));
+    let linked = collections.find((c) => c.nuvioLink);
+    assert.equal(linked.nuvioLink.collectionId, "my-lists-collections");
+    assert.equal(linked.lists[0].nuvioSource.extra, "keep");
+    folder.title = "Refreshed remotely";
+    remote.push({ id: "new-parent", folders: [{ id: "new", title: "New", catalogSources: [] }] });
+    await client.call("pullCollectionsFromNuvio", true);
+    collections = plain(client.call("loadCustomCollections"));
+    linked = collections.find((c) => c.nuvioLink);
+    assert.equal(linked.name, "Refreshed remotely");
+    assert.equal(collections.filter((c) => c.nuvioLink).length, 1, "automatic refresh does not import new folders");
+    assert.ok(calls.every((c) => c.method === "GET"), "automatic refresh must never write to Nuvio");
+    linked.name = "Locally edited";
+    client.call("saveCustomCollections", collections);
+    folder.title = "Remotely edited";
+    await client.call("pullCollectionsFromNuvio");
+    collections = plain(client.call("loadCustomCollections"));
+    linked = collections.find((c) => c.nuvioLink);
+    assert.equal(linked.name, "Locally edited");
+    assert.equal(linked.nuvioLink.folder.title, "Refreshed remotely");
+    await client.call("pushLinkedNuvioFolder", linked);
+    const sent = calls.at(-1).body;
+    assert.equal(sent.installMode, "update-folder");
+    assert.equal(sent.targetCollectionId, "my-lists-collections");
+    assert.equal(sent.expectedFolder.title, "Refreshed remotely");
+    assert.equal(sent.scope, "scope-a");
+    assert.equal(sent.updatedFolder.title, "Locally edited");
+    assert.equal(sent.updatedFolder.custom, "keep");
+    assert.equal(sent.updatedFolder.catalogSources[0].extra, "keep");
+  });
+
+  it("pulls only collections created by My Lists, not similar third-party collections", async () => {
+    const client = loadClient();
+    const folder = (id) => ({ id, title: id, catalogSources: [{ addonId: "app.my-list", catalogId: "list", type: "movie" }] });
+    const remote = [
+      { id: "my-lists-collections", folders: [folder("mine")] },
+      { id: "col_mylists_abc123", folders: [folder("also-mine")] },
+      { id: "my-lists-addon", folders: [folder("legacy")] },
+      { id: "other-addon", title: "My Lists Collections", folders: [folder("other")] },
+      { id: "unrelated", folders: [folder("another")] }
+    ];
+    const calls = [];
+    client.set("mediaAppUiCall", async (p, sub, method) => { calls.push(method); return { ok: true, data: { profileId: 1, scope: "scope", collections: remote } }; });
+    await client.call("pullCollectionsFromNuvio");
+    const linked = plain(client.call("loadCustomCollections")).filter((c) => c.nuvioLink);
+    assert.deepEqual(linked.map((c) => c.nuvioLink.collectionId), ["my-lists-collections", "col_mylists_abc123", "my-lists-addon"]);
+    assert.ok(!linked.some((c) => c.name === "other" || c.name === "another"));
+    // Already imported third-party copies stay local, but cannot be pushed.
+    const old = { ...linked[0], id: "old", name: "Saved local copy", nuvioLink: { ...linked[0].nuvioLink, collectionId: "other-addon" } };
+    const saved = plain(client.call("loadCustomCollections"));
+    saved.push(old);
+    client.call("saveCustomCollections", saved);
+    await client.call("pushLinkedNuvioFolder", old);
+    assert.deepEqual(calls, ["GET"]);
+    await client.call("pullCollectionsFromNuvio", true);
+    assert.deepEqual(calls, ["GET", "GET"]);
+    assert.equal(plain(client.call("loadCustomCollections")).find((c) => c.id === "old").name, "Saved local copy");
+  });
+
+  it("does not apply an automatic refresh while the editor is open or the account changes", async () => {
+    const client = loadClient({ signedInAs: "alice" });
+    const folder = { id: "f", title: "Original", catalogSources: [] };
+    const response = () => ({ ok: true, data: { profileId: 1, scope: "alice-scope", collections: [{ id: "my-lists-collections", folders: [folder] }] } });
+    client.set("mediaAppUiCall", async () => response());
+    await client.call("pullCollectionsFromNuvio");
+    folder.title = "Changed in Nuvio";
+    client.document.getElementById("createCollectionModal").style.display = "flex";
+    await client.call("pullCollectionsFromNuvio", true);
+    assert.equal(plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink).name, "Original");
+    client.document.getElementById("createCollectionModal").style.display = "none";
+    let finish;
+    client.set("mediaAppUiCall", () => new Promise((resolve) => { finish = resolve; }));
+    const pending = client.call("pullCollectionsFromNuvio", true);
+    client.set("activeCreator", { creatorName: "bob" });
+    finish(response());
+    await pending;
+    assert.equal(plain(client.call("loadCustomCollections")).find((c) => c.nuvioLink).name, "Original");
+  });
+
+  it("provides premade collections with corresponding Streaming Top 10, Catalogs, and Kids", () => {
+    const client = loadClient();
+    const premade = client.call("getPremadeCollections");
+    assert.ok(Array.isArray(premade));
+    assert.strictEqual(premade.length, 11);
+
+    const names = premade.map((c) => c.name);
+    assert.deepEqual(plain(names), [
+      "Apple TV+",
+      "Disney+",
+      "HBO Max",
+      "Hulu",
+      "Netflix",
+      "Netflix Kids",
+      "Paramount+",
+      "Prime Video",
+      "Peacock",
+      "Kids",
+      "Discovery+"
+    ]);
+
+    // Check Apple TV+ has Top 10 and Catalogs
+    const apple = premade.find((c) => c.name === "Apple TV+");
+    assert.ok(apple.lists.some((l) => l.name.includes("Top 10")));
+    assert.ok(apple.lists.some((l) => l.url.includes("tmdb:chart:appletv")));
+
+    // Check Netflix has Top 10 and Catalogs
+    const netflix = premade.find((c) => c.name === "Netflix");
+    assert.ok(netflix.lists.some((l) => l.name.includes("Top 10")));
+    assert.ok(netflix.lists.some((l) => l.url.includes("tmdb:chart:netflix")));
+
+    const discovery = premade.find((c) => c.name === "Discovery+");
+    const discoveryPayload = plain(client.call("buildNuvioCollectionsPayload", [discovery]))[0].folders[0];
+    assert.equal(discoveryPayload.coverImageUrl, discovery.coverImageUrl);
+    assert.deepEqual(discoveryPayload.catalogSources.filter((r) => r.catalogId === "tmdb-chart-discovery").map((r) => r.type), ["movie", "series"]);
+
+    // Check Kids collection has Rated G, PG, PG-13, and Netflix Kids
+    const kids = premade.find((c) => c.name === "Kids");
+    assert.ok(kids.lists.some((l) => l.url === "tmdb:kids:g"));
+    assert.ok(kids.lists.some((l) => l.url === "tmdb:kids:pg"));
+    assert.ok(kids.lists.some((l) => l.url === "tmdb:kids:pg13"));
+    assert.ok(kids.lists.some((l) => l.url === "tmdb:chart:netflixkids"));
+
+    // Verify user-specified cover images
+    assert.strictEqual(premade.find((c) => c.name === "Discovery+").coverImageUrl, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10");
+    assert.strictEqual(netflix.coverImageUrl, "https://m.media-amazon.com/images/I/616QXs8yg0L.png");
+    assert.strictEqual(apple.coverImageUrl, "https://i.ytimg.com/vi/6sX_BfDnyrg/maxresdefault.jpg");
+    assert.strictEqual(premade.find((c) => c.name === "Disney+").coverImageUrl, "https://static-www.adweek.com/wp-content/uploads/2024/03/disney-logo.jpeg?w=1200");
+    assert.strictEqual(premade.find((c) => c.name === "HBO Max").coverImageUrl, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRInZVxLCd8CpYk_A80vU10wjypKNN_b1JUmTdhDj19ZlVJ2Ecz3nauXpN&s=10");
+    assert.strictEqual(premade.find((c) => c.name === "Hulu").coverImageUrl, "https://www.thisishulu.com/app/uploads/2023/10/logo-gradient-3up.svg");
+    assert.strictEqual(premade.find((c) => c.name === "Netflix Kids").coverImageUrl, "https://static1.squarespace.com/static/545ad6c5e4b09bbf6a29c5ee/t/5e69c67b1ce5f056432139df/1583990409924/Netflix.jpg?format=1500w");
+    assert.strictEqual(premade.find((c) => c.name === "Paramount+").coverImageUrl, "https://cdn.mos.cms.futurecdn.net/UFo74BuGo7FYxhAE3DrWUP.jpg");
+    assert.strictEqual(premade.find((c) => c.name === "Prime Video").coverImageUrl, "https://oyster.ignimgs.com/mediawiki/apis.ign.com/prime-video/3/3b/Primevideo-seo-logo_s586.png");
+    assert.strictEqual(premade.find((c) => c.name === "Peacock").coverImageUrl, "https://www.newscaststudio.com/wp-content/uploads/2026/05/original-peacock-logo.jpg");
+    assert.strictEqual(kids.coverImageUrl, "https://t3.ftcdn.net/jpg/01/83/26/74/360_F_183267411_05WWsOOcByAaAjnfzklSLS530axmLTJB.jpg");
+
+    // Default loadCustomCollections initializes with premade collections
+    client.localStorage.removeItem("myListAddon:customCollections");
+    const loaded = client.call("loadCustomCollections");
+    assert.strictEqual(loaded.length, 11);
+  });
+
+  it("renders collection folders with poster preview slots inside expanded lists", () => {
+    const client = loadClient();
+    const box = client.document.getElementById("myCustomCollectionsResult");
+    const premadeBox = client.document.getElementById("premadeCollectionsResult");
+    assert.ok(box, "myCustomCollectionsResult exists in DOM");
+    assert.ok(premadeBox, "premadeCollectionsResult exists in DOM");
+
+    // Render collections view
+    client.call("renderCollectionsView");
+
+    // Expand first collection
+    const loaded = client.call("loadCustomCollections");
+    assert.ok(loaded.length > 0);
+    client.call("toggleCustomCollectionFolder", loaded[0].id);
+
+    // Verify poster preview slot rendered in expanded folder
+    assert.ok(box.innerHTML.includes("Lists inside this folder:"), "expanded custom folder shows lists section");
+    assert.ok(box.innerHTML.includes("poster-preview-slot"), "lists inside expanded custom folder render poster-preview-slot");
+
+    // Expand premade folder and check poster slots
+    client.call("togglePremadeFolder", "col_netflix");
+    assert.ok(premadeBox.innerHTML.includes("Lists inside this folder:"), "expanded premade folder shows lists section");
+    assert.ok(premadeBox.innerHTML.includes("poster-preview-slot"), "premade expanded folder renders poster-preview-slot");
+  });
+
+  it("addPremadeToCustomCollections and addAllPremadeCollections add premade collections to custom folders", () => {
+    const client = loadClient();
+    // Start with empty custom collections
+    client.localStorage.setItem("myListAddon:customCollections", "[]");
+    assert.strictEqual(client.call("loadCustomCollections").length, 0);
+
+    // Add single premade collection
+    client.call("addPremadeToCustomCollections", "col_netflix");
+    let current = client.call("loadCustomCollections");
+    assert.strictEqual(current.length, 1);
+    assert.strictEqual(current[0].name, "Netflix");
+
+    // Add all premade collections
+    client.call("addAllPremadeCollections");
+    current = client.call("loadCustomCollections");
+    assert.strictEqual(current.length, 11);
+  });
+
+  it("adds only missing new browse rows to an existing folder without replacing edits or base catalogs", async () => {
+    const client = loadClient();
+    const premade = plain(client.call("getPremadeCollections"));
+    const nf = premade.find((c) => c.id === "col_netflix");
+    const base = nf.lists.slice(0, 3); // The fourth base catalog was intentionally removed.
+    base[0].name = "My preferred name";
+    const linked = { id: "linked", name: "My Netflix", lists: base, nuvioLink: { folder: { id: "col_netflix" } } };
+    client.call("saveCustomCollections", [linked]);
+    const before = plain(client.call("missingPremadeBrowseRows", linked));
+    assert.ok(before.some((r) => r.catalogId === "tmdb-chart-netflix-genre-crime-movies"));
+    assert.ok(!before.some((r) => r.catalogId === "tmdb-chart-netflix-hooked"), "legacy rows are not silently introduced");
+    assert.ok(!before.some((r) => r.catalogId === "tmdb-chart-netflix"), "deleted base catalog is not restored");
+    client.set("appShellDialog", async () => true);
+    await client.call("addMissingPremadeBrowseRows", "linked");
+    const after = plain(client.call("loadCustomCollections"))[0];
+    assert.deepEqual(after.lists.slice(0, 3), base);
+    assert.equal(after.name, "My Netflix");
+    assert.deepEqual(after.nuvioLink, linked.nuvioLink);
+    assert.equal(after.lists.length, 3 + before.length);
+    assert.equal(plain(client.call("missingPremadeBrowseRows", after)).length, 0);
+    await client.call("addMissingPremadeBrowseRows", "linked");
+    assert.equal(plain(client.call("loadCustomCollections"))[0].lists.length, after.lists.length);
+  });
+
+  it("offers the Discovery+ base catalogs once to existing linked folders without replacing edits", async () => {
+    const client = loadClient();
+    const folder = { id: "linked-discovery", name: "My Discovery", coverImageUrl: "", lists: [
+      { name: "My movie name", url: "tmdb:chart:discovery", type: "movie", addonId: "app.my-list", catalogId: "tmdb-chart-discovery" },
+      { name: "Other addon", type: "series", addonId: "foreign.addon", catalogId: "tmdb-chart-discovery" }
+    ], nuvioLink: { folder: { id: "col_discovery" } } };
+    client.call("saveCustomCollections", [folder]);
+    const loaded = plain(client.call("loadCustomCollections"))[0];
+    assert.equal(loaded.coverImageUrl, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10");
+    const missing = plain(client.call("missingPremadeBrowseRows", loaded));
+    assert.deepEqual(missing.filter((r) => r.catalogId === "tmdb-chart-discovery").map((r) => r.type), ["series"]);
+    assert.equal(missing.length, 18);
+    assert.ok(missing.some((r) => r.catalogId === "tmdb-chart-discovery-hgtv" && r.type === "series"));
+    client.set("appShellDialog", async () => true);
+    await client.call("addMissingPremadeBrowseRows", "linked-discovery");
+    const after = plain(client.call("loadCustomCollections"))[0];
+    assert.deepEqual(after.lists.slice(0, 2), folder.lists);
+    assert.equal(after.lists.filter((r) => r.catalogId === "tmdb-chart-discovery" && r.addonId === "app.my-list").length, 2);
+    await client.call("addMissingPremadeBrowseRows", "linked-discovery");
+    assert.deepEqual(plain(client.call("loadCustomCollections"))[0].lists, after.lists);
+    after.coverImageUrl = "https://example.com/custom.jpg";
+    client.call("saveCustomCollections", [after]);
+    assert.equal(plain(client.call("loadCustomCollections"))[0].coverImageUrl, "https://example.com/custom.jpg");
+  });
+
+  it("mergeNuvioCollections preserves existing Nuvio collections when pushing new folders", () => {
+    const client = loadClient();
+    const existingNuvio = [
+      {
+        id: "existing-nuvio-col",
+        title: "My Nuvio Home",
+        folders: [
+          { id: "folder-anime", title: "Anime Hits", tileShape: "POSTER", catalogSources: [] },
+          { id: "folder-horror", title: "Spooky Nights", tileShape: "LANDSCAPE", catalogSources: [] }
+        ]
+      }
+    ];
+
+    const incomingPush = [
+      {
+        id: "my-lists-collections",
+        title: "My Lists Collections",
+        folders: [
+          { id: "folder-netflix", title: "Netflix", tileShape: "LANDSCAPE", catalogSources: [{ addonId: "app.my-list", catalogId: "tmdb-chart-netflix" }] }
+        ]
+      }
+    ];
+
+    const merged = client.call("mergeNuvioCollections", existingNuvio, incomingPush);
+    assert.ok(Array.isArray(merged));
+    assert.strictEqual(merged.length, 2, "Creates a dedicated collection for My Lists Addon instead of merging into user's existing collection");
+    const existingCol = merged.find((c) => c.id === "existing-nuvio-col");
+    assert.ok(existingCol, "Existing Nuvio collection is preserved untouched");
+    assert.strictEqual(existingCol.folders.length, 2);
+    const myListsCol = merged.find((c) => c.id === "my-lists-collections");
+    assert.ok(myListsCol, "My Lists Collections is created as its own collection");
+    assert.strictEqual(myListsCol.folders.length, 1);
+    assert.strictEqual(myListsCol.folders[0].title, "Netflix");
+  });
+
+  it("mergeNuvioCollections unwraps RPC responses and preserves sequential pushes", () => {
+    const client = loadClient();
+
+    // 1. First push: Apple TV+ is pushed to an empty profile
+    const applePush = [
+      {
+        id: "my-lists-collections",
+        title: "My Lists Collections",
+        viewMode: "TABBED_GRID",
+        folders: [
+          { id: "col_appletv", title: "Apple TV+", tileShape: "LANDSCAPE", catalogSources: [{ addonId: "app.my-list", catalogId: "tmdb-chart-appletv" }] }
+        ]
+      }
+    ];
+
+    const afterApple = client.call("mergeNuvioCollections", [], applePush);
+    assert.strictEqual(afterApple.length, 1);
+    assert.strictEqual(afterApple[0].folders.length, 1);
+    assert.strictEqual(afterApple[0].folders[0].title, "Apple TV+");
+
+    // 2. Nuvio returns { p_profile_id: 1, p_collections_json: [ ... ] } on sync_pull_collections
+    const nuvioRpcExisting = {
+      p_profile_id: 1,
+      p_collections_json: afterApple
+    };
+
+    // 3. Second push: Disney+ is pushed
+    const disneyPush = [
+      {
+        id: "my-lists-collections",
+        title: "My Lists Collections",
+        viewMode: "TABBED_GRID",
+        folders: [
+          { id: "col_disney", title: "Disney+", tileShape: "LANDSCAPE", catalogSources: [{ addonId: "app.my-list", catalogId: "tmdb-chart-disney" }] }
+        ]
+      }
+    ];
+
+    const afterDisney = client.call("mergeNuvioCollections", nuvioRpcExisting, disneyPush);
+    assert.ok(Array.isArray(afterDisney));
+    assert.strictEqual(afterDisney.length, 1, "Should remain 1 collection");
+    assert.strictEqual(afterDisney[0].folders.length, 2, "Should contain both Apple TV+ and Disney+ folders");
+    const folderTitles = afterDisney[0].folders.map((f) => f.title);
+    assert.ok(folderTitles.includes("Apple TV+"), "Apple TV+ must be preserved");
+    assert.ok(folderTitles.includes("Disney+"), "Disney+ must be present");
+
+    // 4. Empty collections are retained: they may be intentional.
+    const withCorruptedEmpty = [
+      { id: "corrupted_empty", folders: [] },
+      ...afterDisney
+    ];
+    const cleaned = client.call("mergeNuvioCollections", withCorruptedEmpty, []);
+    assert.strictEqual(cleaned.length, 2);
+    assert.ok(cleaned.some((c) => c.id === "corrupted_empty"));
+    assert.ok(cleaned.some((c) => c.id === "my-lists-collections" || c.id === "my-lists-streaming"));
+
+    // 5. Community "Streaming" collection with 12 folders is preserved 100% untouched
+    const communityStreaming = [
+      {
+        id: "collection-a33b28eb-community",
+        title: "Streaming",
+        viewMode: "FOLLOW_LAYOUT",
+        folders: [
+          { id: "f_netflix", title: "Netflix", catalogSources: [{ addonId: "stremio-stream", catalogId: "netflix" }] },
+          { id: "f_disney", title: "Disney+", catalogSources: [{ addonId: "stremio-stream", catalogId: "disney" }] },
+          { id: "f_prime", title: "Prime Video", catalogSources: [{ addonId: "stremio-stream", catalogId: "prime" }] }
+        ]
+      }
+    ];
+    const myListsIncoming = [
+      {
+        id: "my-lists-collections",
+        title: "My Lists Collections",
+        folders: [
+          { id: "f_appletv", title: "Apple TV+", catalogSources: [{ addonId: "app.my-list", catalogId: "tmdb-chart-appletv" }] }
+        ]
+      }
+    ];
+    const mergedWithCommunity = client.call("mergeNuvioCollections", communityStreaming, myListsIncoming);
+    assert.strictEqual(mergedWithCommunity.length, 2, "Must contain exactly 2 separate collections");
+    const preservedStreaming = mergedWithCommunity.find((c) => c.id === "collection-a33b28eb-community");
+    assert.ok(preservedStreaming, "Community Streaming collection must be preserved");
+    assert.strictEqual(preservedStreaming.folders.length, 3, "Community Streaming folders must NOT be altered");
+    const preservedMyLists = mergedWithCommunity.find((c) => c.id === "my-lists-collections");
+    assert.ok(preservedMyLists, "My Lists Collections must be present");
+    assert.strictEqual(preservedMyLists.folders.length, 1, "My Lists Collections must contain only its own folder");
+    assert.strictEqual(preservedMyLists.folders[0].title, "Apple TV+");
+  });
+
+  it("determines the manifest URL to auto-install My Lists Addon in Nuvio", () => {
+    const client = loadClient();
+    const defaultUrl = client.call("getNuvioManifestUrl");
+    assert.ok(defaultUrl.endsWith("/manifest.json"));
+
+    // Check localStorage saved install link takes priority
+    client.localStorage.setItem("myListAddon:lastInstallUrl", "https://mylistsaddon.com/saved-cfg-123/manifest.json");
+    const savedUrl = client.call("getNuvioManifestUrl");
+    assert.strictEqual(savedUrl, "https://mylistsaddon.com/saved-cfg-123/manifest.json");
+  });
+
+  it("buildManifest includes premade collection catalogs so Nuvio discovers them", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const vm = await import("node:vm");
+    const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+    const sandbox = { console, URL, URLSearchParams, atob, btoa, Uint8Array, TextDecoder, TextEncoder, Response, Headers, Request, crypto: globalThis.crypto };
+    sandbox.globalThis = sandbox;
+    vm.createContext(sandbox);
+    for (const f of ["00_constants.js", "02_http-and-creator-utils.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js", "08_quickadd-chart-data.js"]) {
+      const src = fs.readFileSync(path.join(repoRoot, f), "utf8");
+      vm.runInContext(src, sandbox, { filename: f });
+    }
+    const manifest = sandbox.buildManifest([{ id: "custom1", type: "movie", enabled: true }], "https://mylistsaddon.com");
+    assert.ok(manifest && Array.isArray(manifest.catalogs), "manifest.catalogs must be an array");
+    const catalogIds = manifest.catalogs.map((c) => c.id);
+    // Verifies key collection catalogs exist in manifest so Nuvio does not display 'Addon not found: app.my-list'
+    assert.ok(catalogIds.includes("tmdb-chart-hbomax"), "HBO Max catalog must be in manifest");
+    assert.ok(catalogIds.includes("tmdb-chart-netflix"), "Netflix catalog must be in manifest");
+    assert.ok(catalogIds.includes("tmdb-chart-disney"), "Disney+ catalog must be in manifest");
+    assert.ok(catalogIds.includes("tmdb-chart-appletv"), "Apple TV+ catalog must be in manifest");
+    assert.ok(catalogIds.includes("https-mdblist-com-lists-harmes7-hbo-max-top-10-movies-m77r6mc20q"), "HBO Max Top 10 must be in manifest");
+  });
+
+  it("addNewNuvioCollection creates a separate collection leaving existing collections untouched", () => {
+    const client = loadClient();
+    const existing = [
+      {
+        id: "collection-a33b28eb-community",
+        title: "Streaming",
+        folders: [
+          { id: "f_netflix", title: "Netflix", catalogSources: [{ name: "Netflix", type: "movie", catalogId: "streaming_netflix" }] }
+        ]
+      },
+      {
+        id: "8467ec44-2731-4b0f-a8b5-48e42d215150",
+        title: "8467ec44-2731-4b0f-a8b5-48e42d215150",
+        folders: [],
+        catalogSources: []
+      }
+    ];
+
+    const incoming = [
+      {
+        id: "col_appletv",
+        name: "Apple TV+",
+        folders: [
+          {
+            id: "f_appletv",
+            title: "Apple TV+",
+            catalogSources: [
+              { name: "Apple TV+ Top 10 (Movies)", catalogId: "https-mdblist-apple", type: "movie" }
+            ]
+          }
+        ]
+      }
+    ];
+
+    const result = client.call("addNewNuvioCollection", existing, incoming, { collectionName: "Apple TV+" });
+    assert.ok(Array.isArray(result));
+    // Keep empty collections too, as they may be intentional.
+    assert.strictEqual(result.length, 3);
+
+    const streaming = result.find((c) => c.id === "collection-a33b28eb-community");
+    assert.ok(streaming, "Streaming collection must be kept intact");
+    assert.strictEqual(streaming.title, "Streaming");
+    assert.strictEqual(streaming.folders.length, 1);
+    assert.strictEqual(streaming.folders[0].id, "f_netflix");
+
+    const apple = result.find((c) => c.title === "Apple TV+");
+    assert.ok(apple, "Apple TV+ must be added as a separate collection");
+    assert.strictEqual(apple.folders.length, 1);
+    // Verifies trailing (Movies) is stripped
+    assert.strictEqual(apple.folders[0].catalogSources[0].name, "Apple TV+ Top 10");
+
+    // Empty collection must be preserved
+    const stub = result.find((c) => c.id === "8467ec44-2731-4b0f-a8b5-48e42d215150");
+    assert.ok(stub, "Empty collection must be retained");
   });
 });
