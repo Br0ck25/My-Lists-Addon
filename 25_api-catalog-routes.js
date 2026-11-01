@@ -1556,7 +1556,8 @@ Sitemap: ${url.origin}/sitemap.xml`;
         if (searchConfig.betterPosters || searchArt.pictoriumTemplate || searchArt.rpdbBase) {
           metas = applyBetterPostersToMetas(metas, searchArt);
         }
-        return jsonPublic({ metas }, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
+        metas = await enrichCatalogPreviews(metas, effectiveTmdbKey);
+        return jsonPublic({ metas }, 200, { "Cache-Control": metas.previewIncomplete ? "public, max-age=30" : "public, max-age=3600, stale-while-revalidate=86400" });
       }
 
       let unconfiguredEntry = null;
@@ -1691,21 +1692,10 @@ Sitemap: ${url.origin}/sitemap.xml`;
           const sq = searchQuery.toLowerCase();
           metas = metas.filter((it) => (it.name && it.name.toLowerCase().includes(sq)) || (it.title && it.title.toLowerCase().includes(sq)));
         }
-        // Recommended and activity snapshots often contain only title and
-        // poster. Stremio Discover renders its preview from catalog items,
-        // not /meta. Also recognize the older custom-list wrapper for
-        // Recommended; leave other custom lists' hot path unchanged.
-        const previewSources = String(entry.url || "").split("\n").map((u) => u.trim()).filter(Boolean);
-        const wrappedRecommended = previewSources.some((u) => {
-          if (detectSource(u) !== "custom-list") return false;
-          const p = parseCustomListPayload(u);
-          const name = String((p && p.name) || "").toLowerCase().trim();
-          return !!(p && (/^(?:custom:)?curated:/.test(p.listSlug || "") || name === "recommended" || name.includes("recommended movies") || name.includes("recommended shows")));
-        });
-        if (rowSources.some((src) => src === "autotrack" || src === "curated") || wrappedRecommended) {
-          metas = await enrichCatalogPreviews(metas);
-        }
-        if (staleReq && skip === 0 && metas.length > 0 && !searchQuery) {
+        // All catalog sources (including user lists and merged rows) use the
+        // same preview enrichment after filtering and deduplication.
+        metas = await enrichCatalogPreviews(metas, tmdbKey || TMDB_API_KEY);
+        if (staleReq && skip === 0 && metas.length > 0 && !searchQuery && !metas.previewIncomplete) {
           // Fire-and-forget -- the response doesn't wait on this write.
           try {
             ctx.waitUntil(
@@ -1731,8 +1721,11 @@ Sitemap: ${url.origin}/sitemap.xml`;
         // that; the apps ask once per row per home screen, so this is the
         // number that sets the Workers request count. Upstream rate limits are
         // still guarded by the fetchers' own freshTtlSec windows.
-        return jsonPublic({ metas, cacheMaxAge: CATALOG_SHARED_MAX_AGE, staleRevalidate: CATALOG_STALE_REVALIDATE },
-          200, { "Cache-Control": `public, max-age=${CATALOG_SHARED_MAX_AGE}, s-maxage=${CATALOG_SHARED_MAX_AGE}` });
+        // A deadline-limited page retries promptly, rather than caching the
+        // incomplete preview for the entire shared-catalog lifetime.
+        const previewMaxAge = metas.previewIncomplete ? 30 : CATALOG_SHARED_MAX_AGE;
+        return jsonPublic({ metas, cacheMaxAge: previewMaxAge, staleRevalidate: metas.previewIncomplete ? 30 : CATALOG_STALE_REVALIDATE },
+          200, { "Cache-Control": `public, max-age=${previewMaxAge}, s-maxage=${previewMaxAge}` });
       } catch (err) {
         const errMsg = safeErrorMessage(err);
         if (isUserPersonal || isLiveCustomList) {

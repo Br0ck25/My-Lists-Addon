@@ -2467,58 +2467,145 @@ function cwEntriesStillAhead(items, season, episode) {
   });
 }
 
-// Stremio Discover renders its side panel from the catalog preview, not the
-// separate /meta resource. Sparse personal catalog items need these fields
-// without changing their saved identity or artwork.
-// Cinemeta is keyed by both type and IMDb id: never try the opposite type,
-// which could attach a movie's metadata to a wrongly classified series.
+// Discover reads the selected catalog item, not /meta. Enrich every
+// delivered movie/series preview in one place without changing its identity,
+// list order, poster, badges, or other provider-specific fields.
 const CATALOG_PREVIEW_IN_FLIGHT = new Map();
-async function catalogPreviewMeta(id, type) {
-  if (!/^tt\d{5,12}$/.test(id) || (type !== "movie" && type !== "series")) return null;
-  const key = `catalog-preview:v1:${type}:${id}`;
-  const cached = getPerUserCache(key);
-  if (cached && cached.data) return cached.data;
-  if (CATALOG_PREVIEW_IN_FLIGHT.has(key)) return await CATALOG_PREVIEW_IN_FLIGHT.get(key);
+// Cinemeta does not have every IMDb title. Resolve only the requested TMDB
+// kind, never the opposite kind, and reuse the TMDB-only preview cache.
+async function tmdbPreviewForImdb(id, type, tmdbKey) {
+  if (!tmdbKey) return null;
+  const flightKey = JSON.stringify(["preview-find", type, id, tmdbKey]);
+  if (CATALOG_PREVIEW_IN_FLIGHT.has(flightKey)) return await CATALOG_PREVIEW_IN_FLIGHT.get(flightKey);
   const pending = (async () => {
     try {
-      const res = await fetch(`https://v3-cinemeta.strem.io/meta/${type}/${id}.json`, {
-        cf: { cacheTtl: 86400, cacheEverything: true },
-        signal: AbortSignal.timeout(3000),
+      const res = await fetch(`https://api.themoviedb.org/3/find/${id}?api_key=${encodeURIComponent(tmdbKey)}&external_source=imdb_id`, {
+        cf: { cacheTtlByStatus: { "200-299": 86400, "400-599": 0 }, cacheEverything: true }, signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) return null;
-      const meta = (await res.json()).meta;
-      if (!meta || meta.id !== id || meta.type !== type) return null;
-      // Exclude episodes/videos, streams, and artwork: history's own identity,
-      // ordering, progress, badges and poster must remain untouched.
-      const preview = {};
-      for (const field of ["description", "runtime", "releaseInfo", "imdbRating", "genres", "links"]) {
-        if (meta[field] != null) preview[field] = meta[field];
+      const data = await res.json();
+      const matches = type === "series" ? data.tv_results : data.movie_results;
+      const match = Array.isArray(matches) && matches[0];
+      return match && Number.isInteger(match.id) && match.id > 0 ? await catalogPreviewMeta(`tmdb:${match.id}`, type, tmdbKey) : null;
+    } catch { return null; }
+  })();
+  CATALOG_PREVIEW_IN_FLIGHT.set(flightKey, pending);
+  try { return await pending; } finally { CATALOG_PREVIEW_IN_FLIGHT.delete(flightKey); }
+}
+async function catalogPreviewMeta(id, type, tmdbKey) {
+  if (type !== "movie" && type !== "series") return null;
+  const isImdb = /^tt\d{5,12}$/.test(id);
+  const tmdbMatch = /^tmdb:(\d{1,12})$/.exec(id);
+  if (!isImdb && (!tmdbMatch || !tmdbKey)) return null;
+  const key = `catalog-preview:v2:${type}:${id}`;
+  const cached = getPerUserCache(key);
+  if (cached) return cached.data.missing ? await tmdbPreviewForImdb(id, type, tmdbKey) : cached.data;
+  // A failed personal TMDB key must never affect another key's in-flight work.
+  const flightKey = isImdb ? key : JSON.stringify([key, tmdbKey]);
+  if (CATALOG_PREVIEW_IN_FLIGHT.has(flightKey)) {
+    const existing = await CATALOG_PREVIEW_IN_FLIGHT.get(flightKey);
+    return !existing && isImdb ? await tmdbPreviewForImdb(id, type, tmdbKey) : existing;
+  }
+  const pending = (async () => {
+    try {
+      const src = isImdb
+        ? `https://v3-cinemeta.strem.io/meta/${type}/${id}.json`
+        : `https://api.themoviedb.org/3/${type === "series" ? "tv" : "movie"}/${tmdbMatch[1]}?api_key=${encodeURIComponent(tmdbKey)}&append_to_response=credits`;
+      const res = await fetch(src, {
+        cf: { cacheTtlByStatus: { "200-299": 86400, "400-599": 0 }, cacheEverything: true },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) throw new Error("Preview unavailable");
+      const data = await res.json();
+      let preview;
+      if (isImdb) {
+        const meta = data && data.meta;
+        if (!meta || meta.id !== id || meta.type !== type) throw new Error("Preview identity mismatch");
+        preview = {};
+        for (const field of ["description", "runtime", "releaseInfo", "imdbRating"]) {
+          if (typeof meta[field] === "string" && meta[field].trim()) preview[field] = meta[field];
+        }
+        if (Array.isArray(meta.genres)) preview.genres = meta.genres.filter((g) => typeof g === "string" && g.trim());
+        if (Array.isArray(meta.links)) preview.links = meta.links.filter((l) => l && typeof l.name === "string" && typeof l.category === "string" && typeof l.url === "string" && /^https?:\/\/|^stremio:/i.test(l.url));
+      } else {
+        if (!data || String(data.id) !== tmdbMatch[1]) throw new Error("Preview identity mismatch");
+        const genres = Array.isArray(data.genres) ? data.genres.filter((g) => g && typeof g.name === "string" && g.name.trim()) : [];
+        const runtime = type === "movie" ? data.runtime : (Array.isArray(data.episode_run_time) ? data.episode_run_time[0] : null);
+        // These links identify their actual source; a TMDB vote is NOT an IMDb
+        // rating and must never be advertised as one.
+        const links = genres.filter((g) => Number.isInteger(g.id) && g.id > 0).map((g) => ({ name: g.name, category: "Genres", url: `https://www.themoviedb.org/genre/${g.id}` }));
+        const credits = data.credits || {};
+        for (const [category, people] of [["Cast", Array.isArray(credits.cast) ? credits.cast.slice(0, 8) : []], ["Directors", Array.isArray(credits.crew) ? credits.crew.filter((p) => p.job === "Director").slice(0, 4) : []]]) {
+          for (const person of people) if (person && Number.isInteger(person.id) && person.id > 0 && typeof person.name === "string" && person.name.trim()) links.push({ name: person.name, category, url: `https://www.themoviedb.org/person/${person.id}` });
+        }
+        preview = {
+          description: typeof data.overview === "string" ? data.overview : undefined,
+          runtime: typeof runtime === "number" && runtime > 0 ? `${runtime} min` : undefined,
+          releaseInfo: String((type === "movie" ? data.release_date : data.first_air_date) || "").slice(0, 4) || undefined,
+          genres: genres.map((g) => g.name), links,
+        };
       }
       setPerUserCache(key, preview, 86400, 604800);
       return preview;
-    } catch { return null; }
+    } catch {
+      // Briefly memoize IMDb misses/outages to avoid re-querying the same
+      // titles across many rows. TMDB failures may be key-specific.
+      if (isImdb) setPerUserCache(key, { missing: true }, 30, 30);
+      return null;
+    }
   })();
-  CATALOG_PREVIEW_IN_FLIGHT.set(key, pending);
-  try { return await pending; } finally { CATALOG_PREVIEW_IN_FLIGHT.delete(key); }
+  CATALOG_PREVIEW_IN_FLIGHT.set(flightKey, pending);
+  try {
+    const preview = await pending;
+    return !preview && isImdb ? await tmdbPreviewForImdb(id, type, tmdbKey) : preview;
+  } finally { CATALOG_PREVIEW_IN_FLIGHT.delete(flightKey); }
 }
 
-async function enrichCatalogPreviews(metas) {
+async function enrichCatalogPreviews(metas, tmdbKey) {
   if (!Array.isArray(metas) || !metas.length) return metas;
   const total = metas.totalItems;
-  // Do not let an upstream outage hold a history shelf for 100 serial
-  // timeouts. Unenriched items remain usable and can retry on the next read.
+  // Bound the time a provider outage holds a shelf. Titles not reached on a
+  // slow request remain usable; later requests can fill them from cache.
   const deadline = Date.now() + 4000;
+  let incomplete = false;
   const enriched = await mapWithConcurrency(metas, 8, async (item) => {
-    if (!item || Date.now() >= deadline) return item;
-    const preview = await catalogPreviewMeta(String(item.id || ""), item.type);
-    if (!preview) return item;
-    const result = { ...item };
+    if (!item || (item.type !== "movie" && item.type !== "series")) return item;
+    // Stremio requires genre strings; several providers return TMDB numeric
+    // ids or objects. Keep known names and discard unknown ids rather than
+    // making the entire catalog fail client-side deserialization.
+    let result = item;
+    if (Array.isArray(item.genres) && item.genres.some((g) => typeof g !== "string")) {
+      result = { ...item, genres: item.genres.map((g) => typeof g === "string" ? g : (g && typeof g.name === "string" ? g.name : "")).filter(Boolean) };
+    }
+    if (Date.now() >= deadline) { incomplete = true; return result; }
+    const preview = await catalogPreviewMeta(String(item.id || ""), item.type, tmdbKey);
+    if (!preview) return result;
+    result = { ...result };
     for (const [field, value] of Object.entries(preview)) {
-      if (result[field] == null || result[field] === "" || (Array.isArray(result[field]) && !result[field].length)) result[field] = value;
+      if (value == null || (Array.isArray(value) && !value.length)) continue;
+      if (field === "links" && Array.isArray(result.links) && result.links.length) {
+        const categories = new Set(result.links.map((link) => link && link.category));
+        result.links = [...result.links, ...value.filter((link) => link && !categories.has(link.category))];
+      } else if (result[field] == null || result[field] === "" || (Array.isArray(result[field]) && !result[field].length)) {
+        result[field] = value;
+      }
+    }
+    // When links are present Stremio does not synthesize its usual IMDb and
+    // genre links from legacy fields, so fill those categories explicitly.
+    if (Array.isArray(result.links) && result.links.length) {
+      result.links = [...result.links];
+      const categories = new Set(result.links.map((l) => String((l && l.category) || "").toLowerCase()));
+      if (!categories.has("imdb") && /^tt\d{5,12}$/.test(String(result.id)) && result.imdbRating) {
+        result.links.push({ name: String(result.imdbRating), category: "imdb", url: `https://www.imdb.com/title/${result.id}` });
+      }
+      if (!categories.has("genres") && Array.isArray(result.genres)) {
+        for (const genre of result.genres) if (typeof genre === "string" && genre.trim()) result.links.push({ name: genre, category: "Genres", url: `stremio:///discover/${encodeURIComponent("https://v3-cinemeta.strem.io/")}/${result.type}/top?genre=${encodeURIComponent(genre)}` });
+      }
     }
     return result;
   });
   if (total != null) enriched.totalItems = total;
+  if (incomplete) enriched.previewIncomplete = true;
   return enriched;
 }
 

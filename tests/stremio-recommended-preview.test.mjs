@@ -35,13 +35,15 @@ it('Recommended movie and series catalog items include Discover previews, retain
     assert.equal(movies[0].runtime, '118 min');
     assert.equal(movies[0].imdbRating, '7.2');
     assert.equal(movies[0].links[0].category, 'Cast');
+    assert.ok(movies[0].links.some(l => l.category === 'imdb' && l.name === '7.2'));
+    assert.ok(movies[0].links.some(l => l.category === 'Genres' && l.name === 'Comedy'));
     assert.equal(shows[0].description, 'Full plot');
     assert.ok(requests.some(s => s.includes('/meta/series/tt8100399.json')));
     assert.ok(requests.some(s => s.includes('/meta/movie/tt8100199.json')));
   } finally { globalThis.fetch = realFetch; }
 });
 
-it('an older Recommended custom-list wrapper gets previews too, without enriching unrelated lists', async () => {
+it('Recommended wrappers and ordinary user-created custom lists get previews', async () => {
   const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
   const user = await createUser(env, 'wrappedrec');
   const wrap = (name, id) => 'customlist:v1:' + JSON.stringify({ name, listSlug: name === 'Recommended' ? 'curated:recommended-movies' : 'ordinary', items: [{ id, type: 'movie', title: name }] });
@@ -53,13 +55,14 @@ it('an older Recommended custom-list wrapper gets previews too, without enrichin
   const requests = [];
   globalThis.fetch = async (url) => {
     requests.push(String(url));
-    return Response.json({ meta: { id: 'tt8877001', type: 'movie', name: 'Recommended', description: 'Wrapped plot' } });
+    const id = String(url).includes('tt8877002') ? 'tt8877002' : 'tt8877001';
+    return Response.json({ meta: { id, type: 'movie', name: 'Provider', description: id === 'tt8877001' ? 'Wrapped plot' : 'Custom plot' } });
   };
   try {
     const rec = (await call(env, '/wrapcfg/catalog/movie/rec.json')).body.metas;
     const ordinary = (await call(env, '/wrapcfg/catalog/movie/ordinary.json')).body.metas;
     assert.equal(rec[0].description, 'Wrapped plot');
-    assert.equal(ordinary[0].description, undefined);
-    assert.equal(requests.length, 1);
+    assert.equal(ordinary[0].description, 'Custom plot');
+    assert.equal(requests.length, 2);
   } finally { globalThis.fetch = realFetch; }
 });

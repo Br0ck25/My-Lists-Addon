@@ -4532,7 +4532,9 @@ async function searchCatalogMetas(query, type, skip, apiKey, env, ctx, origin) {
       background: item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : undefined,
       description: item.overview || undefined,
       releaseInfo: year || undefined,
-      imdbRating: typeof item.vote_average === "number" && item.vote_average > 0 ? String(Math.round(item.vote_average * 10) / 10) : undefined,
+      // TMDB's vote average is not an IMDb rating. The shared catalog
+      // preview enrichment fills imdbRating from Cinemeta when available.
+      vote_average: typeof item.vote_average === "number" && item.vote_average > 0 ? item.vote_average : undefined,
       behaviorHints: wantType === "movie" ? { defaultVideoId: finalId } : undefined,
     };
   });
