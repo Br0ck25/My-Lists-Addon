@@ -1157,8 +1157,8 @@ function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
 
-// Catalogs declared in manifest.catalogs so Nuvio and Stremio recognize that
-// app.my-list provides the sources used by collections folders and premade collections.
+// Opt-in collection manifest catalogs so Nuvio recognizes that app.my-list
+// provides the sources used by collections folders and premade collections.
 function getPremadeCollectionManifestCatalogs(includeStreamingRows = false) {
   const list = [];
   const seen = new Set();

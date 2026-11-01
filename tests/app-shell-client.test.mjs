@@ -860,7 +860,10 @@ describe("collections subnav and website lists picker", () => {
       const src = fs.readFileSync(path.join(repoRoot, f), "utf8");
       vm.runInContext(src, sandbox, { filename: f });
     }
-    const manifest = sandbox.buildManifest([{ id: "custom1", type: "movie", enabled: true }], "https://mylistsaddon.com");
+    const entries = [{ id: "custom1", type: "movie", enabled: true }];
+    const plain = sandbox.buildManifest(entries, "https://mylistsaddon.com");
+    assert.deepEqual(Array.from(plain.catalogs, (c) => c.id), ["custom1", "search_movies", "search_series"]);
+    const manifest = sandbox.buildManifest(entries, "https://mylistsaddon.com", false, false, "", null, true, true);
     assert.ok(manifest && Array.isArray(manifest.catalogs), "manifest.catalogs must be an array");
     const catalogIds = manifest.catalogs.map((c) => c.id);
     // Verifies key collection catalogs exist in manifest so Nuvio does not display 'Addon not found: app.my-list'

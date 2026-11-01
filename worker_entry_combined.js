@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-01";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "24ac7c8b60";
+const WORKER_BUILD = "264d4fa0f8";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -18552,7 +18552,7 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
       });
-      if (typeof getPremadeCollectionManifestCatalogs === "function") {
+      if (includeStreamingRows && typeof getPremadeCollectionManifestCatalogs === "function") {
         for (const c of getPremadeCollectionManifestCatalogs(includeStreamingRows)) {
           addC(c);
         }
@@ -31277,8 +31277,8 @@ function resolveCuratedSlug(slug) {
   return CURATED_LIST_REGISTRY[String(slug || "").toLowerCase()] || null;
 }
 
-// Catalogs declared in manifest.catalogs so Nuvio and Stremio recognize that
-// app.my-list provides the sources used by collections folders and premade collections.
+// Opt-in collection manifest catalogs so Nuvio recognizes that app.my-list
+// provides the sources used by collections folders and premade collections.
 function getPremadeCollectionManifestCatalogs(includeStreamingRows = false) {
   const list = [];
   const seen = new Set();
