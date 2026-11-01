@@ -37,8 +37,9 @@ it('history catalog supplies Stremio preview metadata without changing titles or
     assert.ok(requests.some(u => u.includes('/series/tt8823457.json')));
     const count = requests.length;
     await call(env, `/${config}/catalog/movie/history.json`);
-    await call(env, `/${config}/catalog/movie/watchlist.json`);
-    assert.equal(requests.length, count, 'cached history and other shelves make no new metadata requests');
+    assert.equal(requests.length, count, 'cached history makes no new metadata request');
+    const watchlist = (await call(env, `/${config}/catalog/movie/watchlist.json`)).body.metas;
+    assert.equal(watchlist[0].description, 'A synopsis');
   } finally { globalThis.fetch = originalFetch; }
 });
 

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-01";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "3ca169c2f8";
+const WORKER_BUILD = "967b16aca2";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -20929,17 +20929,17 @@ function cwEntriesStillAhead(items, season, episode) {
 }
 
 // Stremio Discover renders its side panel from the catalog preview, not the
-// separate /meta resource. Activity records intentionally contain only the
-// identity and artwork; enrich history previews without changing those records.
+// separate /meta resource. Sparse personal catalog items need these fields
+// without changing their saved identity or artwork.
 // Cinemeta is keyed by both type and IMDb id: never try the opposite type,
 // which could attach a movie's metadata to a wrongly classified series.
-const HISTORY_PREVIEW_IN_FLIGHT = new Map();
-async function historyPreviewMeta(id, type) {
+const CATALOG_PREVIEW_IN_FLIGHT = new Map();
+async function catalogPreviewMeta(id, type) {
   if (!/^tt\d{5,12}$/.test(id) || (type !== "movie" && type !== "series")) return null;
-  const key = `history-preview:v1:${type}:${id}`;
+  const key = `catalog-preview:v1:${type}:${id}`;
   const cached = getPerUserCache(key);
   if (cached && cached.data) return cached.data;
-  if (HISTORY_PREVIEW_IN_FLIGHT.has(key)) return await HISTORY_PREVIEW_IN_FLIGHT.get(key);
+  if (CATALOG_PREVIEW_IN_FLIGHT.has(key)) return await CATALOG_PREVIEW_IN_FLIGHT.get(key);
   const pending = (async () => {
     try {
       const res = await fetch(`https://v3-cinemeta.strem.io/meta/${type}/${id}.json`, {
@@ -20959,11 +20959,11 @@ async function historyPreviewMeta(id, type) {
       return preview;
     } catch { return null; }
   })();
-  HISTORY_PREVIEW_IN_FLIGHT.set(key, pending);
-  try { return await pending; } finally { HISTORY_PREVIEW_IN_FLIGHT.delete(key); }
+  CATALOG_PREVIEW_IN_FLIGHT.set(key, pending);
+  try { return await pending; } finally { CATALOG_PREVIEW_IN_FLIGHT.delete(key); }
 }
 
-async function enrichHistoryPreviews(metas) {
+async function enrichCatalogPreviews(metas) {
   if (!Array.isArray(metas) || !metas.length) return metas;
   const total = metas.totalItems;
   // Do not let an upstream outage hold a history shelf for 100 serial
@@ -20971,7 +20971,7 @@ async function enrichHistoryPreviews(metas) {
   const deadline = Date.now() + 4000;
   const enriched = await mapWithConcurrency(metas, 8, async (item) => {
     if (!item || Date.now() >= deadline) return item;
-    const preview = await historyPreviewMeta(String(item.id || ""), item.type);
+    const preview = await catalogPreviewMeta(String(item.id || ""), item.type);
     if (!preview) return item;
     const result = { ...item };
     for (const [field, value] of Object.entries(preview)) {
@@ -91797,11 +91797,19 @@ Sitemap: ${url.origin}/sitemap.xml`;
           const sq = searchQuery.toLowerCase();
           metas = metas.filter((it) => (it.name && it.name.toLowerCase().includes(sq)) || (it.title && it.title.toLowerCase().includes(sq)));
         }
-        // Only activity-history rows here: their stored records are sparse.
-        // Do this after filtering/deduplication, and preserve all list fields.
-        // Other catalog sources keep their existing request cost and behavior.
-        if (rowSources.includes("autotrack") && String(entry.url || "").split("\n").some((u) => /^autotrack:(?:watch-history|nuvio-watch-history|stremio-watch-history)(?::|$)/.test(u.trim()))) {
-          metas = await enrichHistoryPreviews(metas);
+        // Recommended and activity snapshots often contain only title and
+        // poster. Stremio Discover renders its preview from catalog items,
+        // not /meta. Also recognize the older custom-list wrapper for
+        // Recommended; leave other custom lists' hot path unchanged.
+        const previewSources = String(entry.url || "").split("\n").map((u) => u.trim()).filter(Boolean);
+        const wrappedRecommended = previewSources.some((u) => {
+          if (detectSource(u) !== "custom-list") return false;
+          const p = parseCustomListPayload(u);
+          const name = String((p && p.name) || "").toLowerCase().trim();
+          return !!(p && (/^(?:custom:)?curated:/.test(p.listSlug || "") || name === "recommended" || name.includes("recommended movies") || name.includes("recommended shows")));
+        });
+        if (rowSources.some((src) => src === "autotrack" || src === "curated") || wrappedRecommended) {
+          metas = await enrichCatalogPreviews(metas);
         }
         if (staleReq && skip === 0 && metas.length > 0 && !searchQuery) {
           // Fire-and-forget -- the response doesn't wait on this write.

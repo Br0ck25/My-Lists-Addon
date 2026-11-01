@@ -2468,17 +2468,17 @@ function cwEntriesStillAhead(items, season, episode) {
 }
 
 // Stremio Discover renders its side panel from the catalog preview, not the
-// separate /meta resource. Activity records intentionally contain only the
-// identity and artwork; enrich history previews without changing those records.
+// separate /meta resource. Sparse personal catalog items need these fields
+// without changing their saved identity or artwork.
 // Cinemeta is keyed by both type and IMDb id: never try the opposite type,
 // which could attach a movie's metadata to a wrongly classified series.
-const HISTORY_PREVIEW_IN_FLIGHT = new Map();
-async function historyPreviewMeta(id, type) {
+const CATALOG_PREVIEW_IN_FLIGHT = new Map();
+async function catalogPreviewMeta(id, type) {
   if (!/^tt\d{5,12}$/.test(id) || (type !== "movie" && type !== "series")) return null;
-  const key = `history-preview:v1:${type}:${id}`;
+  const key = `catalog-preview:v1:${type}:${id}`;
   const cached = getPerUserCache(key);
   if (cached && cached.data) return cached.data;
-  if (HISTORY_PREVIEW_IN_FLIGHT.has(key)) return await HISTORY_PREVIEW_IN_FLIGHT.get(key);
+  if (CATALOG_PREVIEW_IN_FLIGHT.has(key)) return await CATALOG_PREVIEW_IN_FLIGHT.get(key);
   const pending = (async () => {
     try {
       const res = await fetch(`https://v3-cinemeta.strem.io/meta/${type}/${id}.json`, {
@@ -2498,11 +2498,11 @@ async function historyPreviewMeta(id, type) {
       return preview;
     } catch { return null; }
   })();
-  HISTORY_PREVIEW_IN_FLIGHT.set(key, pending);
-  try { return await pending; } finally { HISTORY_PREVIEW_IN_FLIGHT.delete(key); }
+  CATALOG_PREVIEW_IN_FLIGHT.set(key, pending);
+  try { return await pending; } finally { CATALOG_PREVIEW_IN_FLIGHT.delete(key); }
 }
 
-async function enrichHistoryPreviews(metas) {
+async function enrichCatalogPreviews(metas) {
   if (!Array.isArray(metas) || !metas.length) return metas;
   const total = metas.totalItems;
   // Do not let an upstream outage hold a history shelf for 100 serial
@@ -2510,7 +2510,7 @@ async function enrichHistoryPreviews(metas) {
   const deadline = Date.now() + 4000;
   const enriched = await mapWithConcurrency(metas, 8, async (item) => {
     if (!item || Date.now() >= deadline) return item;
-    const preview = await historyPreviewMeta(String(item.id || ""), item.type);
+    const preview = await catalogPreviewMeta(String(item.id || ""), item.type);
     if (!preview) return item;
     const result = { ...item };
     for (const [field, value] of Object.entries(preview)) {
