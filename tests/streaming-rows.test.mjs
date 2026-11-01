@@ -453,7 +453,8 @@ describe("streaming service rows", () => {
     const plain = sandbox.buildManifest([], "https://mylistsaddon.com").catalogs.map((c) => c.id);
     const withRows = sandbox.buildManifest([], "https://mylistsaddon.com", false, false, "", null, true, true).catalogs;
     assert.ok(!plain.includes("tmdb-chart-netflix-hooked"));
-    assert.ok(plain.includes("tmdb-chart-netflix"), "the existing premade catalogs are unchanged");
+    assert.ok(!plain.includes("tmdb-chart-netflix"), "premade catalogs must not become unselected home shelves");
+    assert.ok(withRows.some((c) => c.id === "tmdb-chart-netflix"), "the opt-in collection manifest retains premade catalogs");
     assert.ok(withRows.some((c) => c.id === "tmdb-chart-netflix-hooked" && c.type === "series"));
     assert.ok(!withRows.some((c) => c.id === "tmdb-chart-netflix-hooked" && c.type === "movie"));
   });

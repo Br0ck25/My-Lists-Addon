@@ -91,7 +91,7 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         extraSupported: ["search", "skip"],
         extraRequired: ["search"],
       });
-      if (typeof getPremadeCollectionManifestCatalogs === "function") {
+      if (includeStreamingRows && typeof getPremadeCollectionManifestCatalogs === "function") {
         for (const c of getPremadeCollectionManifestCatalogs(includeStreamingRows)) {
           addC(c);
         }
