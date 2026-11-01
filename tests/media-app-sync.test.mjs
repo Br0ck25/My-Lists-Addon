@@ -1940,6 +1940,22 @@ describe("Nuvio collections push: install modes", () => {
     assert.notEqual(pushed[2].id, "community-streaming");
   });
 
+  it("new: preserves each parent title and folder when pushing multiple collections", async () => {
+    const services = incoming()[0];
+    services.id = "col_mylists_services";
+    services.title = "Streaming Services";
+    const family = structuredClone(services);
+    family.id = "col_mylists_family";
+    family.title = "Family";
+    family.folders[0].id = "family-folder";
+    const { pushed } = await push("new", { collections: [services, family], collectionName: "My Lists Collections" });
+    assert.deepEqual(pushed.slice(0, 2), [STREAMING, OTHER]);
+    assert.deepEqual(pushed.slice(2).map((c) => [c.id, c.title, c.folders[0].id]), [
+      ["col_mylists_services", "Streaming Services", "f_mine"],
+      ["col_mylists_family", "Family", "family-folder"]
+    ]);
+  });
+
   it("every collection My Lists writes carries the My Lists logo as its backdrop", async () => {
     const { pushed } = await push("new");
     assert.match(pushed[2].backdropImageUrl, /\/icon\.png$/);

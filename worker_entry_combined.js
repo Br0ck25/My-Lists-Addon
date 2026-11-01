@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-01";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "842c0f41a0";
+const WORKER_BUILD = "8bca9b2379";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -36821,22 +36821,28 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Create Collection Folder Modal -->
-  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a collection" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; z-index:10001; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
-        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create Collection</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create folder</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
       </div>
-      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Nuvio.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Collections contain folders, and folders contain lists. Choose an existing collection name or enter a new one.</p>
 
       <div class="u-mb-12px">
-        <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Collection Name *</label>
+        <label for="createCollectionParentName" class="app-shell-muted">Collection name *</label>
+        <input type="text" id="createCollectionParentName" list="createCollectionParentOptions" placeholder="e.g. Streaming Services, Family" maxlength="120" required>
+        <datalist id="createCollectionParentOptions"></datalist>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Folder name *</label>
         <input type="text" id="createCollectionModalName" placeholder="e.g. Superhero Sagas, Halloween Nights" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="validateCollectionModal">
       </div>
 
       <div class="u-mb-12px">
         <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this collection groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
 
       <div class="u-mb-12px">
@@ -37588,7 +37594,7 @@ if ('serviceWorker' in navigator) {
       <div class="shelf-header u-mb-8px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">Collections</h2>
-          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Nuvio.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Organize collections into folders, add lists inside each folder, and sync them to Nuvio.</p>
         </div>
         <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           ${refreshButtonHtml('refreshCollectionsView', 'Refresh collections')}
@@ -37600,11 +37606,11 @@ if ('serviceWorker' in navigator) {
     <div class="panel u-mt-12px" id="myCustomCollectionsPanel">
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
-          <h2 class="panel-title u-mb-0">Your Collection Folders</h2>
-          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Nuvio home screen layouts.</p>
+          <h2 class="panel-title u-mb-0">Your Collections</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Collections contain folders; each folder contains your lists.</p>
         </div>
         <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
-          <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create folder</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull My Lists collections from your connected Nuvio account">Pull from Nuvio</button>
@@ -37613,12 +37619,12 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
       <div class="u-p-10px_14px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-12px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; flex-direction:column; gap:6px;">
-        <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection folder and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
+        <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
       </div>
       <div id="myCustomCollectionsResult"></div>
     </div>
 
-    <!-- Premade Collections (below Your Collection Folders) -->
+    <!-- Premade Collections (below Your Collections) -->
     <div class="panel u-mt-16px" id="premadeCollectionsPanel">
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
@@ -37632,14 +37638,6 @@ if ('serviceWorker' in navigator) {
       <div id="premadeCollectionsResult"></div>
     </div>
 
-    <!-- Connected Media Apps Collections (Nuvio) -->
-    <div class="panel u-mt-12px" id="collectionsMediaAppsPanel">
-      <div class="shelf-header u-mb-10px">
-        <h2 class="panel-title u-mb-0">Nuvio Collections</h2>
-      </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Nuvio account.</p>
-      <div id="collectionsMediaAppsResult"></div>
-    </div>
   </div>
 
   <!-- Submenu 5: Create Custom List Builder -->
@@ -46937,8 +46935,8 @@ function getPremadeCollectionsBase() {
 // come from STREAMING_ROWS (08_): added after each service's Top 10 and full-catalog lists.
 function getPremadeCollections() {
   const cols = getPremadeCollectionsBase();
-  // Add a Discovery+ browse folder without moving any existing catalog.
-  cols.push({ id: 'col_discovery', name: 'Discovery+', description: '', tileShape: 'LANDSCAPE', hideTitle: false, addonId: 'app.my-list',
+  // Service folders appear in the same order in the editor and in Nuvio.
+  cols.splice(1, 0, { id: 'col_discovery', name: 'Discovery+', description: '', tileShape: 'LANDSCAPE', hideTitle: false, addonId: 'app.my-list',
     coverImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFcanySRcnirlfDb5fXXxIYA2A31kLoHJ6DCj1sf4_C0xcQg_wzJjwU_7N&s=10',
     lists: [
       { name: 'Discovery+', url: 'tmdb:chart:discovery', type: 'movie', addonId: 'app.my-list', catalogId: 'tmdb-chart-discovery' },
@@ -46955,6 +46953,59 @@ function getPremadeCollections() {
     });
   }
   return cols;
+}
+
+// Retain the existing flat folder storage and add parent metadata, so old
+// backups and locally edited lists need no destructive migration.
+function collectionGroupInfo(folder) {
+  const link = folder.nuvioLink;
+  if (link) {
+    return {
+      id: 'nuvio:' + link.scope + ':' + encodeURIComponent(String(link.profileId)) + ':' + encodeURIComponent(String(link.collectionId)),
+      name: link.collectionName || folder.parentCollectionName || 'My Lists Collections',
+      remoteId: link.collectionId
+    };
+  }
+  if (folder.parentCollectionId) {
+    return { id: folder.parentCollectionId, name: folder.parentCollectionName || 'My Lists Collections', remoteId: folder.parentNuvioId || folder.parentCollectionId };
+  }
+  const premade = folder.id === 'col_discovery' || getPremadeCollectionsBase().some(function (p) { return p.id === folder.id; });
+  return premade
+    ? { id: 'col_mylists_streaming_services', name: 'Streaming Services', remoteId: 'col_mylists_streaming_services' }
+    : { id: 'my-lists-collections', name: 'My Lists Collections', remoteId: 'my-lists-collections' };
+}
+
+function groupCollectionFolders(folders) {
+  const groups = [];
+  const byId = new Map();
+  (folders || []).forEach(function (folder) {
+    if (!folder) return;
+    const parent = collectionGroupInfo(folder);
+    let group = byId.get(parent.id);
+    if (!group) {
+      group = Object.assign({}, parent, { folders: [] });
+      byId.set(parent.id, group);
+      groups.push(group);
+    }
+    group.folders.push(folder);
+  });
+  // Correct old seeded Discovery+ ordering without rewriting user folder data.
+  const order = getPremadeCollections().map(function (p) { return p.id; });
+  groups.forEach(function (group) {
+    if (group.id !== 'col_mylists_streaming_services') return;
+    group.folders.sort(function (a, b) {
+      const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
+      return (ai === -1 ? order.length : ai) - (bi === -1 ? order.length : bi);
+    });
+  });
+  return groups;
+}
+
+function collectionGroupStartHtml(group, editable) {
+  return '<details class="channel-accordion" data-collection-group="' + escapeAttr(group.id) + '" open>' +
+    '<summary><span class="list-card-title">' + escapeHtml(group.name) + '</span><span class="app-shell-muted">' + group.folders.length + (group.folders.length === 1 ? ' folder' : ' folders') + '</span></summary>' +
+    '<div class="channel-accordion-body">' +
+    (editable ? '<div class="catalog-actions-bar u-mb-12px"><button type="button" class="lc-btn secondary" data-act="openCreateCollectionModal" data-act-args="' + appActArgs([null, group.id, group.name]) + '">Add folder</button></div>' : '');
 }
 
 function loadCustomCollections() {
@@ -47043,7 +47094,7 @@ function loadPremadeCollectionsBtn() {
 window._collectionDraft = { id: null, name: '', description: '', lists: [] };
 window._expandedCollectionFolders = new Set();
 
-function openCreateCollectionModal(editId) {
+function openCreateCollectionModal(editId, parentId, parentName) {
   const modal = document.getElementById('createCollectionModal');
   if (!modal) return;
 
@@ -47062,7 +47113,7 @@ function openCreateCollectionModal(editId) {
       lists: Array.isArray(existing.lists) ? JSON.parse(JSON.stringify(existing.lists)) : []
     };
     const titleEl = document.getElementById('createCollectionModalTitle');
-    if (titleEl) titleEl.textContent = 'Edit Collection';
+    if (titleEl) titleEl.textContent = 'Edit folder';
     const btnEl = document.getElementById('createCollectionModalBtn');
     if (btnEl) btnEl.textContent = 'Save Changes';
   } else {
@@ -47077,10 +47128,22 @@ function openCreateCollectionModal(editId) {
       lists: []
     };
     const titleEl = document.getElementById('createCollectionModalTitle');
-    if (titleEl) titleEl.textContent = 'Create Collection';
+    if (titleEl) titleEl.textContent = 'Create folder';
     const btnEl = document.getElementById('createCollectionModalBtn');
-    if (btnEl) btnEl.textContent = 'Create Collection';
+    if (btnEl) btnEl.textContent = 'Create folder';
   }
+
+  const parent = existing ? collectionGroupInfo(existing) : (groupCollectionFolders(existingCollections).find(function (g) { return g.id === parentId; }) || { id: parentId || 'my-lists-collections', name: parentName || 'My Lists Collections' });
+  window._collectionDraft.parent = parent;
+  const parentInput = document.getElementById('createCollectionParentName');
+  if (parentInput) {
+    parentInput.value = parent.name;
+    // A linked folder must stay in its actual remote parent; moving it would
+    // invalidate the optimistic update target and its original snapshot.
+    parentInput.disabled = !!(existing && existing.nuvioLink);
+  }
+  const parentOptions = document.getElementById('createCollectionParentOptions');
+  if (parentOptions) parentOptions.innerHTML = groupCollectionFolders(existingCollections).map(function (g) { return '<option value="' + escapeAttr(g.name) + '"></option>'; }).join('');
 
   const nameInput = document.getElementById('createCollectionModalName');
   if (nameInput) nameInput.value = window._collectionDraft.name;
@@ -47384,7 +47447,7 @@ function submitCreateCollectionModal() {
 
   const name = nameInput ? nameInput.value.trim() : '';
   if (!name) {
-    showToast('Name this collection first.', 'error');
+    showToast('Name this folder first.', 'error');
     return;
   }
   const desc = descInput ? descInput.value.trim() : '';
@@ -47398,10 +47461,20 @@ function submitCreateCollectionModal() {
   const id = window._collectionDraft.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7));
 
   const existingIdx = collections.findIndex(function (c) { return c.id === id; });
+  const parentInput = document.getElementById('createCollectionParentName');
+  const draftParent = window._collectionDraft.parent || { id: 'my-lists-collections', name: 'My Lists Collections' };
+  const parentName = parentInput && !parentInput.disabled ? parentInput.value.trim() : draftParent.name;
+  if (!parentName) { showToast('Name the parent collection first.', 'error'); return; }
+  const parent = parentName === draftParent.name ? draftParent :
+    (groupCollectionFolders(collections).find(function (g) { return g.name.toLowerCase() === parentName.toLowerCase(); }) ||
+      { id: 'col_mylists_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name: parentName });
   const entry = {
     id: id,
     name: name,
     description: desc,
+    parentCollectionId: parent.id,
+    parentCollectionName: parent.name,
+    parentNuvioId: parent.remoteId || parent.id,
     addonId: addonId,
     tileShape: tileShape,
     hideTitle: hideTitle,
@@ -47412,6 +47485,8 @@ function submitCreateCollectionModal() {
 
   if (existingIdx !== -1) {
     if (collections[existingIdx].nuvioLink) entry.nuvioLink = collections[existingIdx].nuvioLink;
+    if (collections[existingIdx].originalFolderId) entry.originalFolderId = collections[existingIdx].originalFolderId;
+    entry.createdAt = collections[existingIdx].createdAt || Date.now();
     collections[existingIdx] = entry;
   } else {
     entry.createdAt = Date.now();
@@ -47420,7 +47495,7 @@ function submitCreateCollectionModal() {
 
   saveCustomCollections(collections);
   closeCreateCollectionModal();
-  showToast('Collection "' + name + '" saved.', 'success');
+  showToast('Folder "' + name + '" saved.', 'success');
   renderCustomCollections();
 }
 
@@ -47468,13 +47543,14 @@ function renderCustomCollections() {
 
   if (!collections.length) {
     box.innerHTML = '<div class="u-p-16px u-ta-center u-bg-v_surface_2_rgba_255_255_255_0_04 u-br-v_radius_sm u-bd-1px_solid_v_border">' +
-      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">No collection folders created yet. Create folders with multiple lists inside to easily manage and install them together in Stremio and Nuvio.</p>' +
-      '<button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Your First Collection</button>' +
+      '<p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">No folders yet. Create a folder and choose a collection to organize your lists for Nuvio.</p>' +
+      '<button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create your first folder</button>' +
     '</div>';
     return;
   }
 
-  box.innerHTML = collections.map(function (col) {
+  box.innerHTML = groupCollectionFolders(collections).map(function (group) {
+    return collectionGroupStartHtml(group, true) + group.folders.map(function (col) {
     const listCount = (col.lists && col.lists.length) || 0;
     const isExpanded = window._expandedCollectionFolders && window._expandedCollectionFolders.has(col.id);
 
@@ -47535,6 +47611,7 @@ function renderCustomCollections() {
       '</div>' +
       listsPreviewHtml +
     '</div>';
+    }).join('') + '</div></details>';
   }).join('');
 
   if (typeof populateSearchResultPosters === 'function') {
@@ -47562,7 +47639,8 @@ function renderPremadeCollections() {
   const custom = loadCustomCollections();
   const customNames = new Set(custom.map(function (c) { return (c.name || '').toLowerCase(); }));
 
-  box.innerHTML = premade.map(function (col) {
+  box.innerHTML = groupCollectionFolders(premade).map(function (group) {
+    return collectionGroupStartHtml(group, false) + group.folders.map(function (col) {
     const listCount = (col.lists && col.lists.length) || 0;
     const isExpanded = window._expandedPremadeFolders && window._expandedPremadeFolders.has(col.id);
     const inFolders = customNames.has((col.name || '').toLowerCase());
@@ -47619,6 +47697,7 @@ function renderPremadeCollections() {
       '</div>' +
       listsPreviewHtml +
     '</div>';
+    }).join('') + '</div></details>';
   }).join('');
 
   if (typeof populateSearchResultPosters === 'function') {
@@ -47782,7 +47861,7 @@ function addNewNuvioCollection(existing, incoming, options) {
   if (!incomingArr.length) return cleanedExisting;
 
   const newCols = incomingArr.map(function (inCol) {
-    const rawName = opts.collectionName || inCol.title || inCol.name || 'My Lists Collections';
+    const rawName = (incomingArr.length === 1 && opts.collectionName) || inCol.title || inCol.name || 'My Lists Collections';
     const colName = stripMediaSuffix(rawName) || 'My Lists Collections';
     const colId = inCol.id && !cleanedExisting.some(function (e) { return e.id === inCol.id; })
       ? inCol.id
@@ -47935,11 +48014,15 @@ function mergeNuvioCollections(existing, incoming) {
 
 function buildNuvioCollectionsPayload(collections) {
   const cols = collections || loadCustomCollections();
-  return [
-    {
-      id: 'my-lists-collections',
-      title: 'My Lists Collections',
-      name: 'My Lists Collections',
+  const usedIds = new Set();
+  return groupCollectionFolders(cols).map(function (group, index) {
+    let parentId = group.remoteId || group.id;
+    while (usedIds.has(parentId)) parentId = 'col_mylists_group_' + index + '_' + parentId;
+    usedIds.add(parentId);
+    return {
+      id: parentId,
+      title: group.name,
+      name: group.name,
       viewMode: 'FOLLOW_LAYOUT',
       showAllTab: false,
       pinToTop: false,
@@ -47948,9 +48031,9 @@ function buildNuvioCollectionsPayload(collections) {
       hidden: false,
       isVisible: true,
       enabled: true,
-      folders: cols.map(function (col) {
+      folders: group.folders.map(function (col) {
         return {
-          id: col.id || ('folder_' + Math.random().toString(36).slice(2, 8)),
+          id: (col.nuvioLink && col.nuvioLink.folder && col.nuvioLink.folder.id) || col.originalFolderId || col.id || ('folder_' + Math.random().toString(36).slice(2, 8)),
           title: col.name || 'Untitled Folder',
           name: col.name || 'Untitled Folder',
           tileShape: col.tileShape || 'LANDSCAPE',
@@ -47979,8 +48062,8 @@ function buildNuvioCollectionsPayload(collections) {
           })
         };
       })
-    }
-  ];
+    };
+  });
 }
 
 function getNuvioBackdropUrl() {
@@ -48026,13 +48109,11 @@ async function openSyncNuvioModal(targetColId) {
   }
   const nameInput = document.getElementById('syncNuvioCollectionName');
   if (nameInput) {
-    let defaultName = 'My Lists Collections';
-    if (targetColId) {
-      const all = loadCustomCollections().concat((typeof getPremadeCollections === 'function') ? getPremadeCollections() : []);
-      const one = all.find(function (c) { return c.id === targetColId; });
-      if (one && one.name) defaultName = one.name;
-    }
-    nameInput.value = defaultName;
+    const all = loadCustomCollections();
+    const one = targetColId ? all.concat(getPremadeCollections()).find(function (c) { return c.id === targetColId; }) : null;
+    const groups = groupCollectionFolders(one ? [one] : all);
+    nameInput.disabled = groups.length > 1;
+    nameInput.value = groups.length > 1 ? 'Each collection keeps its name' : (groups[0] ? groups[0].name : 'My Lists Collections');
   }
   const hideCatalogs = document.getElementById('syncNuvioHideCatalogs');
   if (hideCatalogs) {
@@ -48120,7 +48201,7 @@ async function confirmSyncToNuvio() {
   const targetColId = window._syncNuvioTarget;
   const nameInput = document.getElementById('syncNuvioCollectionName');
   const targetSel = document.getElementById('syncNuvioTargetSelect');
-  const collectionName = nameInput ? nameInput.value.trim() : '';
+  const collectionName = nameInput && !nameInput.disabled ? nameInput.value.trim() : '';
   const mergeTargetId = targetSel ? targetSel.value : '';
 
   if (installMode === 'merge' && !mergeTargetId) {
@@ -48271,7 +48352,7 @@ async function executeNuvioCollectionsPush(opts) {
   const res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
     profileId: profileId,
     installMode: installMode,
-    collectionName: options.collectionName || (targetColId && collectionsToPush.length === 1 && collectionsToPush[0].name) || 'My Lists Collections',
+    collectionName: payload.length === 1 ? (options.collectionName || payload[0].title) : '',
     targetCollectionId: options.mergeTargetId || '',
     collections: payload,
     knownCollections: cachedRemote,
@@ -48349,7 +48430,7 @@ async function pullCollectionsFromNuvio(automatic) {
         if (!parsed) return;
         parsed.id = 'nuvio:' + res.data.scope + ':' + encodeURIComponent(String(res.data.profileId)) + ':' + encodeURIComponent(String(parent.id)) + ':' + encodeURIComponent(String(folder.id));
         (parsed.lists || []).forEach(function (item, i) { item.nuvioSource = folder.catalogSources[i]; });
-        parsed.nuvioLink = { scope: res.data.scope, profileId: res.data.profileId, collectionId: parent.id, folder: folder, baseline: linkedNuvioFolderSignature(parsed) };
+        parsed.nuvioLink = { scope: res.data.scope, profileId: res.data.profileId, collectionId: parent.id, collectionName: parent.title || parent.name || 'My Lists Collections', folder: folder, baseline: linkedNuvioFolderSignature(parsed) };
         imported.push(parsed);
       });
     });
@@ -48363,7 +48444,7 @@ async function pullCollectionsFromNuvio(automatic) {
       const idx = merged.findIndex(function (c) { return c.id === imp.id; });
       if (idx !== -1) {
         if (!merged[idx].nuvioLink || linkedNuvioFolderSignature(merged[idx]) !== merged[idx].nuvioLink.baseline) { skipped++; continue; }
-        if (JSON.stringify(merged[idx].nuvioLink.folder) !== JSON.stringify(imp.nuvioLink.folder) || linkedNuvioFolderSignature(merged[idx]) !== linkedNuvioFolderSignature(imp)) { merged[idx] = imp; refreshed++; }
+        if (merged[idx].nuvioLink.collectionName !== imp.nuvioLink.collectionName || JSON.stringify(merged[idx].nuvioLink.folder) !== JSON.stringify(imp.nuvioLink.folder) || linkedNuvioFolderSignature(merged[idx]) !== linkedNuvioFolderSignature(imp)) { merged[idx] = imp; refreshed++; }
       } else if (!auto) {
         merged.push(imp);
         count++;
@@ -48414,14 +48495,16 @@ function parseNuvioCollectionsJson(raw) {
     for (let i = 0; i < data.length; i++) {
       const item = data[i];
       if (item && Array.isArray(item.folders)) {
-        folders = folders.concat(item.folders);
+        const parentId = item.id || ('col_mylists_' + Date.now() + '_' + i);
+        folders = folders.concat(item.folders.map(function (f) { return Object.assign({}, f, { parentCollectionId: parentId, parentCollectionName: item.title || item.name || 'My Lists Collections' }); }));
       } else if (item && (item.catalogSources || item.title || item.name)) {
         folders.push(item);
       }
     }
   } else if (typeof data === 'object') {
     if (Array.isArray(data.folders)) {
-      folders = data.folders;
+      const parentId = data.id || ('col_mylists_' + Date.now());
+      folders = data.folders.map(function (f) { return Object.assign({}, f, { parentCollectionId: parentId, parentCollectionName: data.title || data.name || 'My Lists Collections' }); });
     } else if (data.catalogSources) {
       folders = [data];
     }
@@ -48472,7 +48555,9 @@ function parseNuvioCollectionsJson(raw) {
 
     return {
       id: f.id || ('col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
-      name: f.title || f.name || 'Imported Collection',
+      name: f.title || f.name || 'Imported Folder',
+      parentCollectionId: f.parentCollectionId,
+      parentCollectionName: f.parentCollectionName,
       description: f.description || '',
       tileShape: f.tileShape || 'LANDSCAPE',
       hideTitle: !!f.hideTitle,
@@ -48533,10 +48618,17 @@ function submitImportNuvioModal() {
   let count = 0;
   for (let i = 0; i < parsed.length; i++) {
     const item = parsed[i];
-    const idx = merged.findIndex(function (c) { return c.id === item.id; });
+    const parentId = collectionGroupInfo(item).id;
+    const idx = merged.findIndex(function (c) { return (c.originalFolderId || c.id) === item.id && collectionGroupInfo(c).id === parentId; });
     if (idx !== -1) {
+      item.id = merged[idx].id;
+      if (merged[idx].originalFolderId) item.originalFolderId = merged[idx].originalFolderId;
       merged[idx] = item;
     } else {
+      if (merged.some(function (c) { return c.id === item.id; })) {
+        item.originalFolderId = item.id;
+        item.id = 'import:' + encodeURIComponent(parentId) + ':' + encodeURIComponent(item.id);
+      }
       merged.push(item);
       count++;
     }
@@ -48550,7 +48642,6 @@ function submitImportNuvioModal() {
 function renderCollectionsView() {
   renderCustomCollections();
   renderPremadeCollections();
-  renderCollectionsMediaApps();
 }
 
 function renderCollectionsCurated() {
@@ -121226,7 +121317,7 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
 
   // Build the incoming collections with unique IDs and clean titles
   const newCols = incomingArr.map((inCol) => {
-    const rawName = options.collectionName || inCol.title || inCol.name || "My Lists Collections";
+    const rawName = (incomingArr.length === 1 && options.collectionName) || inCol.title || inCol.name || "My Lists Collections";
     const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
     const colId = inCol.id && !cleanedExisting.some((e) => e.id === inCol.id)
       ? inCol.id

@@ -5441,22 +5441,28 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Create Collection Folder Modal -->
-  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a collection" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; z-index:10001; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
-        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create Collection</h2>
+        <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create folder</h2>
         <button type="button" class="modal-close-x" aria-label="Close" data-act="closeCreateCollectionModal">&#x2715;</button>
       </div>
-      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">A collection is a folder that groups multiple lists together for Nuvio.</p>
+      <p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm">Collections contain folders, and folders contain lists. Choose an existing collection name or enter a new one.</p>
 
       <div class="u-mb-12px">
-        <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Collection Name *</label>
+        <label for="createCollectionParentName" class="app-shell-muted">Collection name *</label>
+        <input type="text" id="createCollectionParentName" list="createCollectionParentOptions" placeholder="e.g. Streaming Services, Family" maxlength="120" required>
+        <datalist id="createCollectionParentOptions"></datalist>
+      </div>
+
+      <div class="u-mb-12px">
+        <label for="createCollectionModalName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Folder name *</label>
         <input type="text" id="createCollectionModalName" placeholder="e.g. Superhero Sagas, Halloween Nights" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;" data-act-on="input" data-act="validateCollectionModal">
       </div>
 
       <div class="u-mb-12px">
         <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this collection groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
 
       <div class="u-mb-12px">

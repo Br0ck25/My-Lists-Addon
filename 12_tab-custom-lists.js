@@ -110,7 +110,7 @@
       <div class="shelf-header u-mb-8px u-ai-center u-jc-space_between u-gap-12px">
         <div>
           <h2 class="shelf-title sr-only">Collections</h2>
-          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Create custom collection folders grouping lists together, and install them directly into Nuvio.</p>
+          <p class="u-m-0 u-c-v_muted u-fs-v_font_size_sm">Organize collections into folders, add lists inside each folder, and sync them to Nuvio.</p>
         </div>
         <div class="u-gap-8px u-ai-center u-fw2-wrap u-fsh-0" style="display:flex;">
           ${refreshButtonHtml('refreshCollectionsView', 'Refresh collections')}
@@ -122,11 +122,11 @@
     <div class="panel u-mt-12px" id="myCustomCollectionsPanel">
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
-          <h2 class="panel-title u-mb-0">Your Collection Folders</h2>
-          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Custom folders grouping lists into unified catalogs for Nuvio home screen layouts.</p>
+          <h2 class="panel-title u-mb-0">Your Collections</h2>
+          <p class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Collections contain folders; each folder contains your lists.</p>
         </div>
         <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
-          <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create Collection</button>
+          <button type="button" class="primary lc-btn" data-act="openCreateCollectionModal">+ Create folder</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="loadPremadeCollectionsBtn" title="Load premade streaming &amp; kids collections">Premade Collections</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull My Lists collections from your connected Nuvio account">Pull from Nuvio</button>
@@ -135,12 +135,12 @@
         </div>
       </div>
       <div class="u-p-10px_14px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-12px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; flex-direction:column; gap:6px;">
-        <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection folder and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
+        <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
       </div>
       <div id="myCustomCollectionsResult"></div>
     </div>
 
-    <!-- Premade Collections (below Your Collection Folders) -->
+    <!-- Premade Collections (below Your Collections) -->
     <div class="panel u-mt-16px" id="premadeCollectionsPanel">
       <div class="shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px" style="display:flex; flex-wrap:wrap;">
         <div>
@@ -154,14 +154,6 @@
       <div id="premadeCollectionsResult"></div>
     </div>
 
-    <!-- Connected Media Apps Collections (Nuvio) -->
-    <div class="panel u-mt-12px" id="collectionsMediaAppsPanel">
-      <div class="shelf-header u-mb-10px">
-        <h2 class="panel-title u-mb-0">Nuvio Collections</h2>
-      </div>
-      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Sync and install collections from your connected Nuvio account.</p>
-      <div id="collectionsMediaAppsResult"></div>
-    </div>
   </div>
 
   <!-- Submenu 5: Create Custom List Builder -->

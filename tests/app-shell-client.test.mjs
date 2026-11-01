@@ -573,6 +573,7 @@ describe("collections subnav and website lists picker", () => {
     const names = premade.map((c) => c.name);
     assert.deepEqual(plain(names), [
       "Apple TV+",
+      "Discovery+",
       "Disney+",
       "HBO Max",
       "Hulu",
@@ -581,8 +582,7 @@ describe("collections subnav and website lists picker", () => {
       "Paramount+",
       "Prime Video",
       "Peacock",
-      "Kids",
-      "Discovery+"
+      "Kids"
     ]);
 
     // Check Apple TV+ has Top 10 and Catalogs
