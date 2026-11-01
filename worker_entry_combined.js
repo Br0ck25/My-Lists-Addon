@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-10-31";
+const WORKER_BUILD_DATE = "2026-11-01";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "6b56b3bc29";
+const WORKER_BUILD = "ac9fb31688";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -21377,7 +21377,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       if (!mapped.id) return;
       
       if (mappedType === 'series') {
-        if (!mappedItems.some(s => s.id === mapped.id)) {
+        if (!mappedItems.some(s => s.type === 'series' && s.id === mapped.id)) {
           mappedItems.push(mapped);
         }
       } else {
@@ -83930,7 +83930,7 @@ window.switchListDetailsType = function(newType) {
     if (newType === 'movie') {
       filtered = filtered.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (newType === 'series') {
-      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     const gridEl = document.getElementById('detailGrid');
     const statusEl = document.getElementById('detailStatus');
@@ -84840,7 +84840,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   let done = false;
   let loadedCount = 0;
   let pagesLoaded = 0;
-  const MAX_PAGES = 20;
+  // Account histories can be much longer than ordinary charts. Keep the
+  // repeated-page guard below, but do not stop personal app shelves at 2,000.
+  const MAX_PAGES = isMediaAppList ? 10000 : 20;
   // A source that doesn't actually honor skip (a malformed/misdetected
   // URL, or a provider whose pagination silently ignores an out-of-range
   // offset) can keep answering maybeMore:true with the exact same items
@@ -84967,7 +84969,8 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     let newCount = 0;
     const freshItems = [];
     items.forEach((it) => {
-      const key = it && (it.id != null ? String(it.id) : null);
+      // TMDB's movie and TV namespaces can share the same numeric ID.
+      const key = it && (it.id != null ? (/^autotrack:(nuvio|stremio)-/.test(String(listUrl || '')) ? String(it.type || '') + ':' : '') + String(it.id) : null);
       if (key === null || !seenItemIds.has(key)) {
         newCount++;
         if (key !== null) seenItemIds.add(key);
@@ -84991,7 +84994,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     if (curFilter === 'movie') {
       newlyMatching = annotated.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (curFilter === 'series') {
-      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     newlyMatching.forEach(item => { item.listUrl = listUrl; item.listName = name; });
     // Append (not rebuild) -- see appendPosterGridItems's own comment for
@@ -120041,19 +120044,26 @@ async function nuvioToken(env, grant, body) {
   };
 }
 
-async function nuvioRpc(env, accessToken, fn, params) {
+async function nuvioRpc(env, accessToken, fn, params, options = {}) {
   const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}` },
+    headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
     body: JSON.stringify(params || {}),
   });
   if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Nuvio refused this sign-in.");
+  if (options.range && res.status === 416) {
+    const match = /^\*\/(\d+)$/.exec(res.headers.get("content-range") || "");
+    if (match && Number(options.range.split("-")[0]) >= Number(match[1])) return options.returnPage ? { rows: [], total: Number(match[1]) } : [];
+  }
   if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
   try {
-    return JSON.parse(text);
+    const rows = JSON.parse(text);
+    if (!options.returnPage) return rows;
+    const match = /\/(\d+)$/.exec(res.headers.get("content-range") || "");
+    return { rows, total: match ? Number(match[1]) : null };
   } catch {
     throw mediaAppError("unreachable", "Nuvio sent a reply we could not read.");
   }
@@ -120074,14 +120084,36 @@ async function nuvioProfiles(env, accessToken) {
 // p_profile_id.
 async function nuvioFetchProfile(env, accessToken, profileIndex) {
   const watched = [];
-  for (let page = 1; page <= 40; page++) {
+  let complete = false;
+  for (let page = 1; page <= 200; page++) {
     const rows = await nuvioRpc(env, accessToken, "sync_pull_watched_items", { p_profile_id: profileIndex, p_page: page, p_page_size: 500 });
-    const list = Array.isArray(rows) ? rows : [];
-    watched.push(...list);
-    if (list.length < 500) break;
+    if (!Array.isArray(rows)) throw mediaAppError("unreachable", "Nuvio sent an invalid watch history page.");
+    watched.push(...rows);
+    if (rows.length < 500) { complete = true; break; }
   }
-  const progress = await nuvioRpc(env, accessToken, "sync_pull_watch_progress", { p_profile_id: profileIndex, p_limit: 200 });
-  return { watched, progress: Array.isArray(progress) ? progress : [] };
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's watch history is too large to read safely.");
+  // The timestamp parameter filters NEWER rows, not older pages. Paginate the
+  // unbounded RPC result with PostgREST item ranges instead. A repeated page
+  // means the server ignored Range; fail rather than silently drop old items.
+  const progress = [];
+  const seen = new Set();
+  complete = false;
+  for (let offset = 0; offset < 100000;) {
+    const result = await nuvioRpc(env, accessToken, "sync_pull_watch_progress", { p_profile_id: profileIndex }, { range: `${offset}-${offset + 499}`, returnPage: true });
+    const page = result && result.rows;
+    if (!Array.isArray(page)) throw mediaAppError("unreachable", "Nuvio sent invalid watch progress.");
+    for (const item of page) {
+      const id = mediaAppPick(item, "id", "progress_key", "progressKey") || JSON.stringify([mediaAppPick(item, "content_id", "contentId"), item.season, item.episode]);
+      if (seen.has(id)) throw mediaAppError("unreachable", "Nuvio repeated a watch progress page; the pull was not saved.");
+      seen.add(id);
+      progress.push(item);
+    }
+    offset += page.length;
+    if (result.total != null ? offset >= result.total : page.length < 500) { complete = true; break; }
+    if (!page.length) throw mediaAppError("unreachable", "Nuvio returned an incomplete watch progress page.");
+  }
+  if (!complete) throw mediaAppError("unreachable", "Nuvio's watch progress is too large to read safely.");
+  return { watched, progress };
 }
 
 // Nuvio's watched items and progress entries as one record per title (the same
@@ -120091,7 +120123,9 @@ function nuvioRecords({ watched, progress }) {
   const recFor = (rawId, rawType, title, poster) => {
     const id = mediaAppTitleId(rawId);
     if (!id) return null;
-    const key = id.imdbId || `tmdb:${id.tmdbId}`;
+    // TMDB IDs are scoped by media type: movie 550 and TV 550 are unrelated.
+    const kind = mediaAppKind(rawType) || "movie";
+    const key = `${kind}:${id.imdbId || `tmdb:${id.tmdbId}`}`;
     let rec = by.get(key);
     if (!rec) {
       rec = { ...id, kind: mediaAppKind(rawType) || "movie", title: "", poster: "", mtime: 0, plays: [], furthest: null, at: 1, resume: null };
@@ -120147,7 +120181,8 @@ function nuvioRecords({ watched, progress }) {
     // A resume point behind what is already finished is stale.
     if (rec.resume && rec.kind === "series" && rec.furthest
       && (rec.resume.season < rec.furthest.season || (rec.resume.season === rec.furthest.season && rec.resume.episode <= rec.furthest.episode))) rec.resume = null;
-    if (rec.resume && rec.kind === "movie" && rec.plays.length) rec.resume = null;
+    // An older watched play does not cancel a later rewatch in progress.
+    if (rec.resume && rec.kind === "movie" && rec.plays.some((play) => play.watchedAt >= rec.resume.at)) rec.resume = null;
   }
   out.sort((a, b) => b.mtime - a.mtime);
   return out;
@@ -120767,7 +120802,9 @@ async function refreshMediaAppNow(env, accountId, provider, { maxSteps = MEDIA_A
   } catch {}
   const totals = { plays: 0, progress: 0, resumes: 0, unresolved: 0 };
   let offset = 0;
-  let since = null;
+  // A forced Nuvio sync must revisit old records too, including ones an
+  // earlier incomplete pull never stored. Carry zero through queued steps.
+  let since = force && provider === "nuvio" ? 0 : null;
   for (let i = 0; i < maxSteps; i++) {
     const out = await pullMediaAppStep(env, accountId, provider, offset, since);
     if (out.applied) for (const k of Object.keys(totals)) totals[k] += out.applied[k] || 0;

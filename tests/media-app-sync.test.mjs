@@ -103,8 +103,17 @@ function fakeServices(state) {
           state.nuvioLibrary = (state.nuvioLibrary || []).filter((r) => !body.p_keys.some((k) => k.content_id === r.content_id && k.content_type === r.content_type));
           return new Response(null, { status: 204 });
         }
-        if (fn === "sync_pull_watched_items") return state.pullFails ? json({ message: "boom" }, 500) : json(body.p_page === 1 ? state.watched || [] : []);
-        if (fn === "sync_pull_watch_progress") return json(state.progress || []);
+        if (fn === "sync_pull_watched_items") return state.pullFails ? json({ message: "boom" }, 500) : json((state.watched || []).slice((body.p_page - 1) * body.p_page_size, body.p_page * body.p_page_size));
+        if (fn === "sync_pull_watch_progress") {
+          const all = state.progress || [];
+          const range = new Headers(init.headers || {}).get("range");
+          const match = /^(\d+)-(\d+)$/.exec(range || "");
+          const start = match ? Number(match[1]) : 0, end = match ? Number(match[2]) : all.length - 1;
+          seen.nuvio[seen.nuvio.length - 1].range = range;
+          if (state.ignoreProgressRange) return json(all.slice(0, 500));
+          if (match && start >= all.length && all.length) return new Response("", { status: 416, headers: { "Content-Range": `*/${all.length}` } });
+          return new Response(JSON.stringify(all.slice(start, end + 1)), { status: 200, headers: { "content-type": "application/json", "content-range": `${start}-${Math.min(end, all.length - 1)}/${all.length}` } });
+        }
         if (fn === "sync_delete_watched_items") {
           if (state.deleteFails) return json({ message: "boom" }, 500);
           seen.deleted = (seen.deleted || []).concat(body.p_keys);
@@ -1095,6 +1104,76 @@ describe("refreshing when the person looks, not only every hour", () => {
     ctx.env.DB._db.prepare("UPDATE media_app_sync SET last_pull_at = ?").run(Date.now() - 3 * 60 * 1000);
     await sync(ctx, { wait: true });
     assert.equal(events(ctx.env, ctx.accountId).length, 4);
+  });
+
+  it("pages the full Nuvio snapshot rather than stopping at 200 progress entries", async () => {
+    const state = { watched: [], progress: Array.from({ length: 505 }, (_, i) => ({
+      id: `progress-${i}`, content_id: `tt${String(3000000 + i)}`, content_type: "movie",
+      name: `Movie ${i}`, position: 3000, duration: 6000, last_watched: NOW - i * 1000,
+    })) };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvprogresspages", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    await pull(ctx.env, 10);
+    assert.equal(progressRows(ctx.env, ctx.accountId).length, 505);
+    const ranges = seen.nuvio.filter((c) => c.fn === "sync_pull_watch_progress").map((c) => c.range);
+    assert.ok(ranges.includes("0-499") && ranges.includes("500-999"), JSON.stringify(ranges));
+    const last = (await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.sync.lastResult;
+    assert.equal(last.found, 505);
+  });
+
+  it("keeps a movie and a show distinct when their TMDB numbers match", async () => {
+    const state = { watched: [
+      { content_id: "tmdb:550", content_type: "movie", title: "Film", watched_at: NOW - 10000 },
+      { content_id: "tmdb:550", content_type: "series", title: "Show", season: 1, episode: 1, watched_at: NOW - 20000 },
+    ], progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvcollidingid", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    const ask = (type) => call(ctx.env, "/api/preview", { method: "POST", json: {
+      url: `autotrack:nuvio-watch-history:mixed:${ctx.user.creatorName}`, type, sample: 20,
+      creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey,
+    } });
+    const both = (await ask("mixed")).body.sample;
+    assert.deepEqual(both.map((m) => m.type).sort(), ["movie", "series"]);
+    assert.equal((await ask("movie")).body.sample.length, 1);
+    assert.equal((await ask("series")).body.sample.length, 1);
+  });
+
+  it("keeps a later movie rewatch in Continue Watching", async () => {
+    const state = { watched: [{ content_id: "tt7654321", content_type: "movie", title: "Film", watched_at: NOW - 100 * HOUR }],
+      progress: [{ content_id: "tt7654321", content_type: "movie", name: "Film", position: 3000, duration: 6000, last_watched: NOW - HOUR }] };
+    fakeServices(state);
+    const ctx = await setup("nuvrewatch", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    const res = await call(ctx.env, "/api/preview", { method: "POST", json: {
+      url: `autotrack:nuvio-continue-watching:mixed:${ctx.user.creatorName}`, type: "movie", sample: 20,
+      creatorName: ctx.user.creatorName, creatorKey: ctx.user.creatorKey,
+    } });
+    assert.deepEqual(res.body.sample.map((m) => m.id), ["tt7654321"]);
+  });
+
+  it("a forced Nuvio sync recovers older history previously skipped by an incremental cursor", async () => {
+    const state = { watched: watchedRows(), progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvforceold", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    state.watched.push({ content_id: "tt8888888", content_type: "movie", title: "Older", watched_at: NOW - 100 * HOUR });
+    await sync(ctx, { wait: true, force: true });
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt8888888"));
+  });
+
+  it("rejects a server that repeats the first full progress page", async () => {
+    const state = { watched: [], ignoreProgressRange: true, progress: Array.from({ length: 501 }, (_, i) => ({
+      id: `progress-${i}`, content_id: `tt${String(4000000 + i)}`, content_type: "movie", position: 1, duration: 2, last_watched: NOW - i,
+    })) };
+    fakeServices(state);
+    const ctx = await setup("nuvrangefail", { FF_EVENT_TRACKING: "1" });
+    await login(ctx);
+    const result = await sync(ctx, { wait: true, force: true });
+    assert.equal(result.status, 502);
+    assert.match(result.body.detail || result.body.error, /repeated a watch progress page/i);
+    assert.equal(progressRows(ctx.env, ctx.accountId).length, 0);
   });
 
   it("does not run alongside a pull that is already running for the account", async () => {

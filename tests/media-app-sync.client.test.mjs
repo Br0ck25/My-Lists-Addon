@@ -550,6 +550,19 @@ describe("removing an item from Nuvio or Stremio", () => {
     assert.match(c.document.getElementById('detailSubtitle').textContent, /Shows • 1 item/);
   });
 
+  it("keeps explicitly typed movies off the Shows tab even when metadata contains a showId", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/preview": () => ({ json: { ok: true, sample: [
+      { id: "tt3333333", type: "movie", showId: "tt3333333", name: "Movie" },
+      { id: "tt4444444", type: "series", showId: "tt4444444", name: "Show" },
+    ], maybeMore: false } }) } });
+    const rendered = [];
+    c.set("renderPosterGridChunked", (_, items) => rendered.push(Array.from(items, (item) => item.id)));
+    await c.call("openListDetailsPage", "Nuvio Watch History", "mixed", "autotrack:nuvio-watch-history:mixed:alice");
+    c.window.switchListDetailsType("movie");
+    c.window.switchListDetailsType("series");
+    assert.deepEqual(rendered, [["tt3333333"], ["tt4444444"]]);
+  });
+
   it("puts the same button on a See all tile", () => {
     const c = loadClient({ signedIn: "alice" });
     const html = c.call("livePreviewPosterHtml", { id: "tt2222222", type: "series", name: "Show S", poster: "https://img.test/p.jpg", removeExternalProvider: "stremio", removeExternalTarget: "continue-watching", removeExternalListId: "continue-watching" });

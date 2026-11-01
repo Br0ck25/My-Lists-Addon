@@ -2735,7 +2735,7 @@ window.switchListDetailsType = function(newType) {
     if (newType === 'movie') {
       filtered = filtered.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (newType === 'series') {
-      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      filtered = filtered.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     const gridEl = document.getElementById('detailGrid');
     const statusEl = document.getElementById('detailStatus');
@@ -3645,7 +3645,9 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   let done = false;
   let loadedCount = 0;
   let pagesLoaded = 0;
-  const MAX_PAGES = 20;
+  // Account histories can be much longer than ordinary charts. Keep the
+  // repeated-page guard below, but do not stop personal app shelves at 2,000.
+  const MAX_PAGES = isMediaAppList ? 10000 : 20;
   // A source that doesn't actually honor skip (a malformed/misdetected
   // URL, or a provider whose pagination silently ignores an out-of-range
   // offset) can keep answering maybeMore:true with the exact same items
@@ -3772,7 +3774,8 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     let newCount = 0;
     const freshItems = [];
     items.forEach((it) => {
-      const key = it && (it.id != null ? String(it.id) : null);
+      // TMDB's movie and TV namespaces can share the same numeric ID.
+      const key = it && (it.id != null ? (/^autotrack:(nuvio|stremio)-/.test(String(listUrl || '')) ? String(it.type || '') + ':' : '') + String(it.id) : null);
       if (key === null || !seenItemIds.has(key)) {
         newCount++;
         if (key !== null) seenItemIds.add(key);
@@ -3796,7 +3799,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     if (curFilter === 'movie') {
       newlyMatching = annotated.filter((it) => it.type === 'movie' || it.kind === 'movie' || (!it.showId && it.type !== 'series' && it.type !== 'tv' && it.type !== 'show' && it.type !== 'episode' && it.kind !== 'series' && it.kind !== 'tv'));
     } else if (curFilter === 'series') {
-      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || !!it.showId || it.seasonNum != null);
+      newlyMatching = annotated.filter((it) => it.type === 'series' || it.type === 'tv' || it.type === 'show' || it.type === 'episode' || it.kind === 'series' || it.kind === 'tv' || (it.type !== 'movie' && it.kind !== 'movie' && (!!it.showId || it.seasonNum != null)));
     }
     newlyMatching.forEach(item => { item.listUrl = listUrl; item.listName = name; });
     // Append (not rebuild) -- see appendPosterGridItems's own comment for

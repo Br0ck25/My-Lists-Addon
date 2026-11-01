@@ -2916,7 +2916,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       if (!mapped.id) return;
       
       if (mappedType === 'series') {
-        if (!mappedItems.some(s => s.id === mapped.id)) {
+        if (!mappedItems.some(s => s.type === 'series' && s.id === mapped.id)) {
           mappedItems.push(mapped);
         }
       } else {
