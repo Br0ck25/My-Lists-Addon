@@ -2031,6 +2031,131 @@ describe("Nuvio collections push: install modes", () => {
     assert.equal(seen.collectionsPushed.length, 1);
   });
 
+  async function collectionLifecycleState(collections = [STREAMING, OTHER], extra = {}) {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 1, name: "Main", collections_json: structuredClone(collections) }], ...extra };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvlife" + Math.random().toString(36).slice(2, 8));
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const read = await call(ctx.env, "/api/connections/nuvio/collections", { cookie: ctx.cookie });
+    const post = body => call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 1, scope: read.body.scope, ...body } });
+    return { state, seen, post };
+  }
+
+  it("keeps sibling folder and collection snapshots valid during an individual folder update", async () => {
+    const legacy = { id: "legacy", catalogSources: [{ addonId: "app.my-list", catalogId: "old", type: "movie" }] };
+    const mine = { ...STREAMING, id: "my-lists-collections", folders: [...STREAMING.folders, legacy] };
+    const untouched = { ...OTHER, folders: [legacy] };
+    const { post, seen } = await collectionLifecycleState([mine, untouched]);
+    const original = mine.folders[0], updated = { ...original, title: "Edited", catalogSources: [] };
+    const result = await post({ installMode: "update-folder", targetCollectionId: mine.id, folderId: original.id, expectedFolder: original, updatedFolder: updated, collections: [updated] });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.deepEqual(seen.collectionsPushed[0], [{ ...mine, folders: [updated, legacy] }, untouched]);
+  });
+
+  it("deletes exactly the selected Nuvio collection, preserving other collections, addons and home settings", async () => {
+    const untouched = { ...OTHER, unknown: { keep: true }, folders: [{ id: "legacy", catalogSources: [{ addonId: "app.my-list", catalogId: "legacy", type: "movie" }] }] };
+    const { seen, post } = await collectionLifecycleState([STREAMING, untouched], { addonsReadFails: true });
+    const r = await post({ installMode: "delete-collection", targetCollectionId: STREAMING.id, expectedCollection: STREAMING });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(seen.collectionsPushed, [[untouched]]);
+    assert.equal(seen.addonsPushed, undefined);
+    assert.equal(seen.homePushed, undefined);
+  });
+
+  it("can delete the final collection without uninstalling any addon", async () => {
+    const { seen, post } = await collectionLifecycleState([STREAMING]);
+    assert.equal((await post({ installMode: "delete-collection", targetCollectionId: STREAMING.id, expectedCollection: STREAMING })).status, 200);
+    assert.deepEqual(seen.collectionsPushed, [[]]);
+    assert.equal(seen.addonsPushed, undefined);
+  });
+
+  it("updates one whole collection and keeps foreign fields and unrelated legacy sources", async () => {
+    const target = { ...STREAMING, custom: { keep: true } };
+    const untouched = { ...OTHER, folders: [{ id: "old", catalogSources: [{ addonId: "app.my-list", catalogId: "old", type: "movie" }] }] };
+    const { seen, post } = await collectionLifecycleState([target, untouched]);
+    const updated = { id: target.id, title: "Renamed", folders: [{ id: "new", title: "New", catalogSources: [] }] };
+    const r = await post({ installMode: "update-collection", targetCollectionId: target.id, expectedCollection: target, updatedCollection: updated });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(seen.collectionsPushed[0], [{ ...target, ...updated }, untouched]);
+    assert.equal(seen.addonsPushed, undefined);
+    assert.equal(seen.homePushed, undefined);
+  });
+
+  it("preserves unknown folder/source metadata when an edited collection omits future fields", async () => {
+    const source = { addonId: "third-party", catalogId: "one", type: "movie", future: { keep: true } };
+    const target = { ...STREAMING, folders: [{ id: "one", title: "One", hidden: true, future: { keep: true }, catalogSources: [source] }] };
+    const { post, seen } = await collectionLifecycleState([target, OTHER], { addonsReadFails: true });
+    const edited = { id: target.id, title: "Edited", folders: [{ id: "one", title: "Edited folder", catalogSources: [{ addonId: source.addonId, catalogId: source.catalogId, type: source.type, title: "Edited source" }] }] };
+    const result = await post({ installMode: "update-collection", targetCollectionId: target.id, expectedCollection: target, updatedCollection: edited });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.deepEqual(seen.collectionsPushed[0], [{ ...target, title: "Edited", folders: [{ ...target.folders[0], title: "Edited folder", catalogSources: [{ ...source, title: "Edited source" }] }] }, OTHER]);
+    assert.equal(seen.addonsPushed, undefined);
+  });
+
+  it("fails closed on unreadable collections for both whole-collection actions", async () => {
+    const { post, seen, state } = await collectionLifecycleState();
+    state.profiles[0].collections_json = "{broken";
+    for (const installMode of ["update-collection", "delete-collection"]) {
+      assert.equal((await post({ installMode, targetCollectionId: STREAMING.id, expectedCollection: STREAMING, updatedCollection: STREAMING })).status, 502);
+      assert.equal(seen.collectionsPushed, undefined);
+      assert.equal(seen.addonsPushed, undefined);
+      assert.equal(seen.homePushed, undefined);
+    }
+  });
+
+  it("maintains the independent Collections addon on whole updates and keeps it on remote deletion", async () => {
+    const regular = { url: "https://example.test/home/manifest.json", name: "My Lists", enabled: true, sort_order: 3 };
+    const target = { ...STREAMING, folders: [] };
+    const { post, seen } = await collectionLifecycleState([target, OTHER], { addons: [regular] });
+    const updated = { ...target, folders: [{ id: "own", title: "Own", catalogSources: [{ addonId: "app.my-list", catalogId: "own", type: "movie" }] }] };
+    const result = await post({ installMode: "update-collection", targetCollectionId: target.id, expectedCollection: target, updatedCollection: updated,
+      collectionLists: [{ catalogId: "own", url: "tmdb:popular", name: "Own", type: "movie" }] });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.deepEqual(seen.addonsPushed.p_addons[0], regular);
+    assert.equal(seen.addonsPushed.p_addons[1].name, "My Lists Collections");
+    assert.equal(result.body.collections[0].folders[0].catalogSources[0].addonId, "app.my-list.collections");
+    assert.deepEqual(result.body.collections[1], OTHER);
+    const addonWrites = seen.nuvio.filter(c => c.fn === "sync_push_addons").length;
+    const deleted = await post({ installMode: "delete-collection", targetCollectionId: target.id, expectedCollection: result.body.collections[0] });
+    assert.equal(deleted.status, 200);
+    assert.deepEqual(deleted.body.collections, [OTHER]);
+    assert.equal(seen.nuvio.filter(c => c.fn === "sync_push_addons").length, addonWrites);
+    assert.equal(seen.homePushed, undefined);
+  });
+
+  it("rejects stale, wrong-connection, wrong-profile, missing and ambiguous collection targets before writing anything", async () => {
+    const { seen, post, state } = await collectionLifecycleState();
+    const body = { installMode: "delete-collection", targetCollectionId: STREAMING.id, expectedCollection: STREAMING };
+    for (const change of [{ scope: "another-account" }, { profileId: 2 }, { expectedCollection: { ...STREAMING, title: "stale" } }, { targetCollectionId: "missing" }]) {
+      assert.equal((await post({ ...body, ...change })).status, 409);
+      assert.equal(seen.collectionsPushed, undefined);
+    }
+    state.profiles[0].collections_json = [STREAMING, STREAMING];
+    assert.equal((await post(body)).status, 409);
+    assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("compares snapshots semantically after JSONB reorders object keys, but rejects array reordering", async () => {
+    const target = { ...STREAMING, custom: { z: 1, a: 2 }, folders: [STREAMING.folders[0], { id: "second", catalogSources: [] }] };
+    const reverseKeys = value => Array.isArray(value) ? value.map(reverseKeys) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).reverse().map(([k, v]) => [k, reverseKeys(v)])) : value;
+    const { post, seen } = await collectionLifecycleState([target, OTHER]);
+    const body = { installMode: "delete-collection", targetCollectionId: target.id, expectedCollection: { ...target, folders: target.folders.slice().reverse() } };
+    assert.equal((await post(body)).status, 409);
+    assert.equal(seen.collectionsPushed, undefined);
+    assert.equal((await post({ ...body, expectedCollection: reverseKeys(target) })).status, 200);
+    assert.deepEqual(seen.collectionsPushed, [[OTHER]]);
+  });
+
+  it("rejects malformed whole-collection updates before touching addons or collections", async () => {
+    const { seen, post } = await collectionLifecycleState();
+    for (const updatedCollection of [{ id: "wrong", folders: [] }, { id: STREAMING.id, folders: "bad" }, { id: STREAMING.id, folders: [{ id: "same", catalogSources: [] }, { id: "same", catalogSources: [] }] }]) {
+      const r = await post({ installMode: "update-collection", targetCollectionId: STREAMING.id, expectedCollection: STREAMING, updatedCollection });
+      assert.equal(r.status, 400);
+      assert.equal(seen.collectionsPushed, undefined);
+      assert.equal(seen.addonsPushed, undefined);
+    }
+  });
+
   it("replace: only the pushed collection is left", async () => {
     const { pushed } = await push("replace");
     assert.equal(pushed.length, 1);

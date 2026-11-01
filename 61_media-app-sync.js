@@ -1474,6 +1474,18 @@ function mergeNuvioCollections(existing, incoming) {
   return [...otherCollections, myListsCol];
 }
 
+// JSONB can reorder object keys after a write. Treat key order as irrelevant,
+// but preserve all values, object membership, and array/folder/source order.
+function nuvioSnapshotEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, i) => nuvioSnapshotEqual(value, b[i]));
+  }
+  const keys = Object.keys(a).sort(), other = Object.keys(b).sort();
+  return keys.length === other.length && keys.every((key, i) => key === other[i] && nuvioSnapshotEqual(a[key], b[key]));
+}
+
 // Nuvio's documented read: sync_pull_collections returns [{ profile_id, collections_json, updated_at }].
 // sync_pull_profiles has no collections in it (its rows are the profiles themselves), so it is not used
 // here: a profile row read as a collection made the profile look empty. Errors are thrown, never turned
@@ -1907,6 +1919,56 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const profileId = (body && body.profileId != null) ? Number(body.profileId) : (Number(row.profile_index) || 1);
       if (!Number.isInteger(profileId) || profileId < 1 || profileId > 6) return json({ ok: false, error: "Choose a valid Nuvio profile." }, 400);
       const installMode = String(body.installMode || (body.merge === false ? "replace" : "new")).toLowerCase();
+      // Scoped collection management never replaces or normalizes unrelated
+      // collections, addons or home preferences. Nuvio only has a whole-blob
+      // write, so verify the exact target snapshot against a fresh pull first.
+      if (installMode === "update-collection" || installMode === "delete-collection") {
+        const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+        if (!scope || body.scope !== scope) return json({ ok: false, error: "This collection belongs to a different connection. Pull it again before making changes." }, 409);
+        if (profileId !== (Number(row.profile_index) || 1)) return json({ ok: false, error: "The selected Nuvio profile changed. Pull again before making changes." }, 409);
+        const expected = body.expectedCollection;
+        if (typeof body.targetCollectionId !== "string" || !body.targetCollectionId || !expected || typeof expected !== "object" || Array.isArray(expected)) {
+          return json({ ok: false, error: "Provide the collection and its original snapshot." }, 400);
+        }
+        let existing;
+        try { existing = await nuvioPullCollections(env, conn.accessToken, profileId); }
+        catch { return json({ ok: false, error: "Couldn't read your existing Nuvio collections, so nothing was changed." }, 502); }
+        const matches = existing.filter((c) => c.id === body.targetCollectionId);
+        if (matches.length !== 1 || !nuvioSnapshotEqual(matches[0], expected)) {
+          return json({ ok: false, error: "This Nuvio collection changed or was removed. Your local copy is kept. Remove the local copy and pull again to discard its edits." }, 409);
+        }
+        const target = matches[0];
+        let updated = null;
+        let collectionsManifestUrl = null;
+        if (installMode === "update-collection") {
+          const incoming = body.updatedCollection;
+          const folders = incoming && incoming.folders;
+          if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || incoming.id !== target.id || !Array.isArray(folders) ||
+              ["title", "name"].some((key) => incoming[key] != null && typeof incoming[key] !== "string") ||
+              folders.some((f) => !f || typeof f !== "object" || Array.isArray(f) || typeof f.id !== "string" || !f.id || !Array.isArray(f.catalogSources) ||
+                f.catalogSources.some((source) => !source || typeof source !== "object" || typeof source.addonId !== "string" || !source.addonId || typeof source.catalogId !== "string" || !source.catalogId || typeof source.type !== "string" || !source.type)) ||
+              new Set(folders.map((f) => f.id)).size !== folders.length) {
+            return json({ ok: false, error: "Invalid collection update. Each folder needs a unique ID and valid catalog sources." }, 400);
+          }
+          const mergedFolders = folders.map((folder) => {
+            const original = (target.folders || []).find((f) => f && f.id === folder.id);
+            return { ...original, ...folder, catalogSources: folder.catalogSources.map((source) => {
+              const prior = ((original && original.catalogSources) || []).find((s) => s &&
+                (s.addonId === ADDON_ID ? COLLECTIONS_ADDON_ID : s.addonId) === (source.addonId === ADDON_ID ? COLLECTIONS_ADDON_ID : source.addonId) &&
+                s.catalogId === source.catalogId && s.type === source.type);
+              return { ...prior, ...source };
+            }) };
+          });
+          updated = nuvioSeparateCollectionSources([{ ...target, ...incoming, id: target.id, folders: mergedFolders }])[0];
+        }
+        const collections = installMode === "delete-collection" ? existing.filter((c) => c !== target) : existing.map((c) => c === target ? updated : c);
+        const ownsSources = [target, updated].filter(Boolean).some((c) => (c.folders || []).some((f) => (f.catalogSources || []).some((source) => source && (source.addonId === ADDON_ID || source.addonId === COLLECTIONS_ADDON_ID))));
+        if (updated && ownsSources) {
+          collectionsManifestUrl = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, new URL(request.url).origin, account, collections, body.collectionLists, body.manifestUrl);
+        }
+        await nuvioRpc(env, conn.accessToken, "sync_push_collections", { p_profile_id: profileId, p_collections_json: collections, p_origin_client_id: "my-lists-addon" });
+        return json({ ok: true, profileId, scope, collections, deletedCollectionId: updated ? null : target.id, writtenCollectionIds: updated ? [target.id] : [], collectionsManifestUrl });
+      }
       let collections = body.collections != null ? body.collections : (body.p_collections_json != null ? body.p_collections_json : null);
       if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
       if (body.hideHomeCatalogs != null && typeof body.hideHomeCatalogs !== "boolean") {
@@ -1941,7 +2003,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         if (!body.targetCollectionId || !body.folderId || !expected || typeof expected !== "object" || !updated || typeof updated !== "object" || Array.isArray(updated) || String(updated.id) !== String(body.folderId) || !Array.isArray(updated.catalogSources)) {
           return json({ ok: false, error: "Invalid collection folder update." }, 400);
         }
-        if (matches.length !== 1 || JSON.stringify(matches[0]) !== JSON.stringify(expected)) {
+        if (matches.length !== 1 || !nuvioSnapshotEqual(matches[0], expected)) {
           return json({ ok: false, error: "This Nuvio folder changed or was removed. Your local edits are kept. To discard them, delete the local folder and pull again." }, 409);
         }
         collections = existing.map((c) => c === target ? { ...c, folders: c.folders.map((f) => f === matches[0] ? updated : f) } : c);
@@ -1957,7 +2019,9 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         collections = mergeNuvioCollections(existing || [], collections);
       }
 
-      collections = nuvioSeparateCollectionSources(collections);
+      collections = installMode === "update-folder"
+        ? collections.map((c) => c.id === body.targetCollectionId ? { ...c, folders: c.folders.map((f) => f.id === body.folderId ? nuvioSeparateCollectionSources([{ folders: [f] }])[0].folders[0] : f) } : c)
+        : nuvioSeparateCollectionSources(collections);
       let homeSettings = null;
       if (typeof body.hideHomeCatalogs === "boolean") {
         try {
@@ -2004,7 +2068,10 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
           homeVisibilityUpdated = false;
         }
       }
-      return json({ ok: true, profileId, collections, addonInstalled, collectionsManifestUrl, existingCount, homeVisibilityUpdated });
+      const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
+      const writtenCollectionIds = installMode === "new" ? collections.slice(existingCount).map((c) => c.id)
+        : installMode === "replace" ? collections.map((c) => c.id) : body.targetCollectionId ? [body.targetCollectionId] : [];
+      return json({ ok: true, profileId, scope, collections, writtenCollectionIds, addonInstalled, collectionsManifestUrl, existingCount, homeVisibilityUpdated });
     }
   } catch (e) {
     if (e && e.kind) {

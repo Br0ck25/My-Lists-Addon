@@ -308,3 +308,202 @@ describe('first-class collection safety', () => {
     assert.equal(plain(client.call('loadCustomCollections'))[0].name, 'Legacy favorites');
   });
 });
+
+describe('collection expansion and Nuvio lifecycle', () => {
+  const remoteParent = () => ({ id: 'community-parent', title: 'Remote collection', custom: { keep: true }, folders: [
+    { id: 'one', title: 'One', customFolder: 'keep', hidden: true, catalogSources: [{ addonId: 'other', catalogId: 'one', type: 'movie', extra: 'keep' }] },
+    { id: 'two', title: 'Two', catalogSources: [] }
+  ] });
+  async function pullParent(client, parent = remoteParent()) {
+    emptyCollections(client);
+    client.set('mediaAppUiCall', async () => ({ ok: true, data: { scope: 'account-scope', profileId: 1, collections: [parent] } }));
+    await client.call('pullCollectionsFromNuvio');
+    return plain(client.call('loadCollectionGroups'))[0];
+  }
+
+  it('persists collapse and expansion separately for My Collections and premade collections', () => {
+    const client = loadClient();
+    const group = plain(client.call('loadCollectionGroups'))[0];
+    const element = { open: false, getAttribute: name => name === 'data-collection-group' ? group.id : 'custom' };
+    client.call('rememberCollectionExpansion', element);
+    client.call('renderCollectionsView');
+    const custom = client.document.getElementById('myCustomCollectionsResult').innerHTML;
+    const premade = client.document.getElementById('premadeCollectionsResult').innerHTML;
+    assert.ok(!custom.match(/<details[^>]*\bopen(?:\s|>)/));
+    assert.ok(premade.match(/<details[^>]*\bopen(?:\s|>)/));
+    element.open = true;
+    client.call('rememberCollectionExpansion', element);
+    client.call('renderCustomCollections');
+    assert.ok(client.document.getElementById('myCustomCollectionsResult').innerHTML.match(/<details[^>]*\bopen(?:\s|>)/));
+  });
+
+  it('pulls an entire Nuvio collection with a scoped parent snapshot, including third-party collections', async () => {
+    const client = loadClient();
+    const parent = remoteParent();
+    const group = await pullParent(client, parent);
+    assert.ok(group);
+    assert.equal(group.nuvioLink.scope, 'account-scope');
+    assert.equal(group.nuvioLink.profileId, 1);
+    assert.deepEqual(group.nuvioLink.collection, parent);
+    assert.equal(plain(client.call('loadCustomCollections')).length, 2);
+    client.call('renderCustomCollections');
+    const html = client.document.getElementById('myCustomCollectionsResult').innerHTML;
+    assert.ok(html.includes('Update Nuvio'));
+    assert.ok(html.includes('Delete from Nuvio'));
+    assert.ok(html.includes('Remove local copy'));
+    assert.deepEqual(plain(client.call('buildFullBackupPayload')).customCollectionGroups[0].nuvioLink.collection, parent);
+  });
+
+  it('updates one linked collection including renamed, removed, and added folders without losing foreign metadata', async () => {
+    const client = loadClient();
+    const parent = remoteParent();
+    const group = await pullParent(client, parent);
+    client.set('appShellDialog', async () => true);
+    client.call('openCreateCollectionGroupModal', group.id);
+    client.document.getElementById('collectionGroupName').value = 'Renamed here';
+    client.call('submitCollectionGroupModal');
+    const saved = plain(client.call('loadCustomCollections'));
+    saved[0].name = 'Edited folder';
+    const added = folder('local-new', 'New folder', { parentCollectionId: group.id, parentCollectionName: 'Renamed here', lists: [] });
+    client.call('saveCustomCollections', [saved[0], added]);
+    let sent;
+    client.set('mediaAppUiCall', async (provider, sub, method, body) => {
+      sent = plain(body);
+      return { ok: true, data: { collections: [body.updatedCollection], profileId: 1, scope: 'account-scope' } };
+    });
+    await client.call('pushLinkedNuvioCollection', group.id);
+    assert.equal(sent.installMode, 'update-collection');
+    assert.equal(sent.targetCollectionId, parent.id);
+    assert.equal(sent.scope, 'account-scope');
+    assert.deepEqual(sent.expectedCollection, parent);
+    assert.equal(sent.updatedCollection.title, 'Renamed here');
+    assert.deepEqual(sent.updatedCollection.custom, { keep: true });
+    assert.deepEqual(sent.updatedCollection.folders.map(f => f.id), ['one', 'local-new']);
+    assert.equal(sent.updatedCollection.folders[0].customFolder, 'keep');
+    assert.equal(sent.updatedCollection.folders[0].hidden, true);
+    assert.equal(sent.updatedCollection.folders[0].catalogSources[0].extra, 'keep');
+    assert.equal(plain(client.call('loadCollectionGroups'))[0].nuvioLink.collection.title, 'Renamed here');
+  });
+
+  it('deletes only from Nuvio after confirmation and keeps a detached local copy', async () => {
+    const client = loadClient();
+    const parent = remoteParent();
+    const group = await pullParent(client, parent);
+    let posts = 0;
+    client.set('mediaAppUiCall', async (p, s, method, body) => { posts++; assert.equal(body.installMode, 'delete-collection'); assert.deepEqual(plain(body.expectedCollection), parent); return { ok: true, data: { collections: [] } }; });
+    client.set('appShellDialog', async () => false);
+    await client.call('deleteNuvioCollection', group.id);
+    assert.equal(posts, 0);
+    client.set('appShellDialog', async () => true);
+    await client.call('deleteNuvioCollection', group.id);
+    assert.equal(posts, 1);
+    const local = plain(client.call('loadCollectionGroups'))[0];
+    assert.equal(local.name, parent.title);
+    assert.ok(!local.nuvioLink);
+    const folders = plain(client.call('loadCustomCollections'));
+    assert.equal(folders.length, 2);
+    assert.ok(folders.every(f => !f.nuvioLink && f.parentCollectionId === local.id));
+  });
+
+  it('keeps all local edits and links when Nuvio rejects an update or deletion', async () => {
+    const client = loadClient();
+    const group = await pullParent(client);
+    const before = plain(client.call('buildFullBackupPayload'));
+    client.set('appShellDialog', async () => true);
+    client.set('mediaAppUiCall', async () => ({ ok: false, status: 409, error: 'Changed remotely' }));
+    await client.call('pushLinkedNuvioCollection', group.id);
+    await client.call('deleteNuvioCollection', group.id);
+    assert.deepEqual(plain(client.call('loadCollectionGroups')), before.customCollectionGroups);
+    assert.deepEqual(plain(client.call('loadCustomCollections')), before.customCollections);
+  });
+
+  it('links a newly pushed entire collection to the actual server-assigned ID for later edits', async () => {
+    const client = loadClient();
+    emptyCollections(client);
+    const group = createParent(client, 'New collection');
+    const child = folder('child', 'Child', { parentCollectionId: group.id, parentCollectionName: group.name, lists: [] });
+    client.call('saveCustomCollections', [child]);
+    client.set('mediaAppUiCall', async (p, s, method, body) => method === 'GET' ? { ok: true, data: { collections: [] } } : ({ ok: true, data: { profileId: 1, scope: 'scope', writtenCollectionIds: ['col_mylists_actual'], collections: [{ ...plain(body.collections[0]), id: 'col_mylists_actual' }] } }));
+    await client.call('executeNuvioCollectionsPush', { targetGroupId: group.id, installMode: 'new' });
+    const linked = plain(client.call('loadCollectionGroups'))[0];
+    assert.equal(linked.id, group.id);
+    assert.equal(linked.nuvioLink.collectionId, 'col_mylists_actual');
+    assert.equal(plain(client.call('loadCustomCollections'))[0].id, child.id);
+    assert.equal(client.call('collectionHasLocalEdits', linked, client.call('loadCustomCollections')), false);
+  });
+  it('protects parent renames and deleted or new folders from automatic and manual pulls', async () => {
+    for (const edit of ['name', 'delete', 'add']) {
+      const client = loadClient();
+      const parent = remoteParent();
+      const group = await pullParent(client, parent);
+      const folders = plain(client.call('loadCustomCollections'));
+      if (edit === 'name') client.call('saveCollectionGroups', [{ ...group, name: 'My unsaved name' }]);
+      if (edit === 'delete') client.call('saveCustomCollections', folders.slice(1));
+      if (edit === 'add') client.call('saveCustomCollections', folders.concat(folder('new', 'New', { parentCollectionId: group.id, lists: [] })));
+      const before = plain(client.call('buildFullBackupPayload'));
+      assert.equal(client.call('collectionHasLocalEdits', client.call('loadCollectionGroups')[0], client.call('loadCustomCollections')), true);
+      for (const automatic of [true, false]) {
+        await client.call('pullCollectionsFromNuvio', automatic);
+        assert.deepEqual(plain(client.call('loadCollectionGroups')), before.customCollectionGroups);
+        assert.deepEqual(plain(client.call('loadCustomCollections')), before.customCollections);
+      }
+    }
+  });
+
+  it('keeps in-flight local edits while advancing the confirmed remote snapshot', async () => {
+    const client = loadClient();
+    const group = await pullParent(client);
+    client.set('appShellDialog', async () => true);
+    let resolve, started;
+    const posted = new Promise(r => { started = r; });
+    client.set('mediaAppUiCall', async (p, s, method, body) => {
+      started(plain(body));
+      return new Promise(r => { resolve = () => r({ ok: true, data: { collections: [plain(body.updatedCollection)] } }); });
+    });
+    const pending = client.call('pushLinkedNuvioCollection', group.id);
+    const sent = await posted;
+    client.call('saveCollectionGroups', [{ ...group, name: 'Edited during save' }]);
+    const folders = plain(client.call('loadCustomCollections'));
+    folders[0].name = 'Edited during save';
+    client.call('saveCustomCollections', folders.slice(0, 1));
+    resolve();
+    await pending;
+    const current = plain(client.call('loadCollectionGroups'))[0];
+    assert.equal(current.name, 'Edited during save');
+    assert.deepEqual(current.nuvioLink.collection, sent.updatedCollection);
+    assert.equal(plain(client.call('loadCustomCollections'))[0].name, 'Edited during save');
+    assert.equal(plain(client.call('loadCustomCollections')).length, 1);
+    assert.equal(client.call('collectionHasLocalEdits', current, client.call('loadCustomCollections')), true);
+  });
+
+  it('uses the saved push name and matches the linked local parent on subsequent pulls', async () => {
+    const client = loadClient();
+    emptyCollections(client);
+    const group = createParent(client, 'Local name');
+    let saved;
+    client.set('mediaAppUiCall', async (p, s, method, body) => {
+      if (method === 'GET') return { ok: true, data: { profileId: 1, scope: 'scope', collections: saved ? [saved] : [] } };
+      saved = { ...plain(body.collections[0]), id: 'col_mylists_actual', title: 'Chosen push name', name: 'Chosen push name' };
+      return { ok: true, data: { profileId: 1, scope: 'scope', collections: [saved], writtenCollectionIds: [saved.id] } };
+    });
+    await client.call('executeNuvioCollectionsPush', { targetGroupId: group.id, installMode: 'new', collectionName: 'Chosen push name' });
+    let current = plain(client.call('loadCollectionGroups'))[0];
+    assert.equal(current.name, 'Chosen push name');
+    assert.equal(client.call('collectionHasLocalEdits', current, client.call('loadCustomCollections')), false);
+    await client.call('pullCollectionsFromNuvio');
+    const parents = plain(client.call('loadCollectionGroups'));
+    assert.equal(parents.length, 1);
+    assert.equal(parents[0].id, group.id);
+    assert.equal(parents[0].nuvioLink.collectionId, saved.id);
+  });
+
+  it('does not link a partial merge to a remote parent with unseen folders', async () => {
+    const client = loadClient();
+    emptyCollections(client);
+    const group = createParent(client, 'Local');
+    client.set('mediaAppUiCall', async () => ({ ok: true, data: { profileId: 1, scope: 'scope', writtenCollectionIds: ['remote'], collections: [{ id: 'remote', folders: [{ id: 'unseen', catalogSources: [] }] }] } }));
+    await client.call('executeNuvioCollectionsPush', { targetGroupId: group.id, installMode: 'merge', targetRemoteCollectionId: 'remote' });
+    assert.ok(!plain(client.call('loadCollectionGroups'))[0].nuvioLink);
+  });
+
+});

@@ -584,7 +584,7 @@ function dropLegacyProviderSecret(key) {
 // attribute. 08_quickadd-chart-data.js builds its markup inside the Worker
 // instead (see buildCombinedChartsHtml), and uses appActArgsServer, its
 // server-side twin (09_page-shell.js).
-const APP_ACT_EVENT_TYPES = ['click', 'change', 'input', 'keydown'];
+const APP_ACT_EVENT_TYPES = ['click', 'change', 'input', 'keydown', 'toggle'];
 
 // What a call site writes: appActArgs([name, id, 3, true]) -> the attribute
 // value. undefined/null become '' the way the deleted attribute escaper did,
@@ -758,7 +758,8 @@ function initDelegatedActions() {
   };
   for (let i = 0; i < APP_ACT_EVENT_TYPES.length; i++) {
     document.addEventListener(APP_ACT_EVENT_TYPES[i], appActCapture, true);
-    document.addEventListener(APP_ACT_EVENT_TYPES[i], handler, false);
+    // Native details toggle events do not bubble.
+    document.addEventListener(APP_ACT_EVENT_TYPES[i], handler, APP_ACT_EVENT_TYPES[i] === 'toggle');
   }
   // A broken poster fires an error event that does not bubble, so the
   // fallbacks (handlePosterImgError and friends) are caught in the capture

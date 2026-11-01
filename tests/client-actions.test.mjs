@@ -241,7 +241,10 @@ describe("P6-8: controls name their action instead of carrying one", () => {
 
   it("wires the listener once, for every event type a control uses", () => {
     const client = loadClient();
-    assert.equal(client.get("APP_ACT_EVENT_TYPES").join(","), "click,change,input,keydown");
+    assert.equal(client.get("APP_ACT_EVENT_TYPES").join(","), "click,change,input,keydown,toggle");
+    const toggles = client.document._listeners.filter(listener => listener.type === "toggle");
+    assert.equal(toggles.length, 2);
+    assert.ok(toggles.every(listener => listener.capture), "non-bubbling details events must reach both delegated handlers in capture");
     assert.equal(client.call("initDelegatedActions"), false, "already bound at load");
     assert.equal(client.get("window._appActBound"), true);
   });

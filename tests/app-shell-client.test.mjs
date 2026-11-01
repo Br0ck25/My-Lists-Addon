@@ -516,7 +516,7 @@ describe("collections subnav and website lists picker", () => {
     assert.equal(client.call("missingPremadeBrowseRows", imported).length, 0);
   });
 
-  it("pulls only collections created by My Lists, not similar third-party collections", async () => {
+  it("pulls all connected Nuvio collections for explicit collection-level management", async () => {
     const client = loadClient();
     const folder = (id) => ({ id, title: id, catalogSources: [{ addonId: "app.my-list", catalogId: "list", type: "movie" }] });
     const remote = [
@@ -530,9 +530,11 @@ describe("collections subnav and website lists picker", () => {
     client.set("mediaAppUiCall", async (p, sub, method) => { calls.push(method); return { ok: true, data: { profileId: 1, scope: "scope", collections: remote } }; });
     await client.call("pullCollectionsFromNuvio");
     const linked = plain(client.call("loadCustomCollections")).filter((c) => c.nuvioLink);
-    assert.deepEqual(linked.map((c) => c.nuvioLink.collectionId), ["my-lists-collections", "col_mylists_abc123", "my-lists-addon"]);
-    assert.ok(!linked.some((c) => c.name === "other" || c.name === "another"));
-    // Already imported third-party copies stay local, but cannot be pushed.
+    assert.deepEqual(linked.map((c) => c.nuvioLink.collectionId), ["my-lists-collections", "col_mylists_abc123", "my-lists-addon", "other-addon", "unrelated"]);
+    assert.ok(linked.some((c) => c.name === "other"));
+    assert.ok(linked.some((c) => c.name === "another"));
+    // A legacy per-folder target still cannot write another collection; whole
+    // collection management requires its own scoped parent snapshot.
     const old = { ...linked[0], id: "old", name: "Saved local copy", nuvioLink: { ...linked[0].nuvioLink, collectionId: "other-addon" } };
     const saved = plain(client.call("loadCustomCollections"));
     saved.push(old);

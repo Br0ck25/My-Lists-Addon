@@ -128,13 +128,13 @@
         <div class="u-gap-8px u-ai-center" style="display:flex; flex-wrap:wrap;">
           <button type="button" class="primary lc-btn" data-act="openCreateCollectionGroupModal">+ Create collection</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="syncCollectionsToNuvio" title="Push collections to your connected Nuvio account">Sync to Nuvio</button>
-          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull My Lists collections from your connected Nuvio account">Pull from Nuvio</button>
+          <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="pullCollectionsFromNuvio" title="Pull all collections from your selected Nuvio profile">Pull from Nuvio</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="exportNuvioCollectionsJson" title="Export Nuvio collections.json">Export JSON</button>
           <button type="button" class="secondary lc-btn u-fs-v_font_size_xs" data-act="openImportNuvioModal" title="Import Nuvio collections.json">Import JSON</button>
         </div>
       </div>
       <div class="u-p-10px_14px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-12px u-fs-v_font_size_xs u-c-v_muted" style="display:flex; flex-direction:column; gap:6px;">
-        <span><strong>Nuvio:</strong> Click <strong>Push to Nuvio</strong> or <strong>Sync to Nuvio</strong> to open the Add to Profile dialog. Choose <strong>Add as new collection</strong> to create a separate collection and leave existing collections completely untouched, or <strong>Merge</strong> to update your existing My Lists folders.</span>
+        <span><strong>Nuvio:</strong> <strong>Push collection to Nuvio</strong> sends every folder and list in that collection. <strong>Pull from Nuvio</strong> brings in collections from your selected profile. Use <strong>Edit collection</strong> and <strong>Update Nuvio</strong> to publish changes. <strong>Delete from Nuvio</strong> deletes the remote collection; <strong>Remove local copy</strong> only removes it here.</span>
       </div>
       <div id="myCustomCollectionsResult"></div>
     </div>
