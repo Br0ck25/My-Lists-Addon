@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-01";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a7497d06f7";
+const WORKER_BUILD = "c5bf302d70";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -127,7 +127,7 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
-const ADDON_VERSION = "1.5.6";
+const ADDON_VERSION = "1.5.7";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --

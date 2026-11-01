@@ -104,7 +104,7 @@ function isSecretFieldName(name) {
 }
 
 const ADDON_ID = "app.my-list";
-const ADDON_VERSION = "1.5.6";
+const ADDON_VERSION = "1.5.7";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --
