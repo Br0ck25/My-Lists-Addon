@@ -1493,6 +1493,41 @@ async function nuvioPullCollections(env, accessToken, profileId) {
   return blob;
 }
 
+// Nuvio TV and Smart share this namespace and the SyncHomeCatalogPayload.items
+// format (not the illustrative rows/hidden_catalogs blob in the API docs):
+// NuvioMedia/NuvioTV core/sync/HomeCatalogSettingsSyncService.kt and
+// NuvioMedia/NuvioTVSmart js/core/profile/homeCatalogSettingsSyncService.js.
+// This RPC replaces the whole settings blob: never write after a failed read.
+async function nuvioCollectionHomeSettings(env, accessToken, profileId, collections, hidden) {
+  const rows = await nuvioRpc(env, accessToken, "sync_pull_home_catalog_settings", {
+    p_profile_id: profileId, p_platform: "home_catalog_shared"
+  });
+  if (!Array.isArray(rows) || rows.length > 1) throw new Error("Unexpected home settings response.");
+  let settings = rows.length ? rows[0] && rows[0].settings_json : {};
+  if (typeof settings === "string") settings = JSON.parse(settings);
+  if (!settings || typeof settings !== "object" || Array.isArray(settings) ||
+      (settings.items != null && (!Array.isArray(settings.items) || settings.items.some((i) => !i || typeof i !== "object" || Array.isArray(i))))) {
+    throw new Error("Nuvio home settings could not be read.");
+  }
+  const items = (settings.items || []).map((i) => ({ ...i }));
+  let nextOrder = items.reduce((max, i) => Number.isFinite(i.order) ? Math.max(max, i.order + 1) : max, items.length);
+  for (const collection of extractNuvioCollections(collections)) {
+    for (const folder of Array.isArray(collection.folders) ? collection.folders : [collection]) {
+      for (const source of folder.catalogSources || []) {
+        if (!source || !source.addonId || !source.type || !source.catalogId) continue;
+        const matches = items.filter((i) => !i.is_collection && i.addon_id === source.addonId && i.type === source.type && i.catalog_id === source.catalogId);
+        if (matches.length) {
+          for (const item of matches) item.enabled = !hidden;
+        } else {
+          items.push({ addon_id: source.addonId, type: source.type, catalog_id: source.catalogId,
+            enabled: !hidden, order: nextOrder++, custom_title: "", is_collection: false, collection_id: "" });
+        }
+      }
+    }
+  }
+  return { ...settings, items };
+}
+
 async function nuvioGetAddons(env, accessToken, profileId) {
   try {
     const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/addons?profile_id=eq.${profileId}&select=*`, {
@@ -1860,6 +1895,10 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const installMode = String(body.installMode || (body.merge === false ? "replace" : "new")).toLowerCase();
       let collections = body.collections != null ? body.collections : (body.p_collections_json != null ? body.p_collections_json : null);
       if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
+      if (body.hideHomeCatalogs != null && typeof body.hideHomeCatalogs !== "boolean") {
+        return json({ ok: false, error: "Home catalog visibility must be a boolean." }, 400);
+      }
+      const incomingCollections = collections;
 
       let existing = [];
       if (installMode !== "replace") {
@@ -1902,6 +1941,16 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         collections = merged;
       } else {
         collections = mergeNuvioCollections(existing || [], collections);
+      }
+
+      let homeSettings = null;
+      if (typeof body.hideHomeCatalogs === "boolean") {
+        try {
+          homeSettings = await nuvioCollectionHomeSettings(env, conn.accessToken, profileId, incomingCollections, body.hideHomeCatalogs);
+        } catch (homeErr) {
+          if (homeErr && homeErr.kind === "invalid") throw homeErr;
+          return json({ ok: false, error: "Couldn't read your Nuvio home settings, so nothing was changed. Please try again." }, 502);
+        }
       }
 
       await nuvioRpc(env, conn.accessToken, "sync_push_collections", {
@@ -1949,7 +1998,22 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         addonInstalled = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, manifestUrl);
       }
 
-      return json({ ok: true, profileId, collections, addonInstalled, existingCount });
+      let homeVisibilityUpdated = null;
+      if (homeSettings) {
+        try {
+          await nuvioRpc(env, conn.accessToken, "sync_push_home_catalog_settings", {
+            p_profile_id: profileId, p_platform: "home_catalog_shared",
+            p_settings_json: homeSettings, p_origin_client_id: "my-lists-addon"
+          });
+          homeVisibilityUpdated = true;
+        } catch (homeErr) {
+          // Collections/addon may already be saved. Report partial success, not
+          // a generic failure that makes someone unknowingly add a duplicate.
+          console.warn("Could not save Nuvio home catalog visibility:", homeErr);
+          homeVisibilityUpdated = false;
+        }
+      }
+      return json({ ok: true, profileId, collections, addonInstalled, existingCount, homeVisibilityUpdated });
     }
   } catch (e) {
     if (e && e.kind) {

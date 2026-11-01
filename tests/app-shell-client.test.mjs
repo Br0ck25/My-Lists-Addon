@@ -811,6 +811,31 @@ describe("collections subnav and website lists picker", () => {
     assert.strictEqual(preservedMyLists.folders[0].title, "Apple TV+");
   });
 
+  it("remembers the Nuvio home visibility toggle and sends both on and off choices", async () => {
+    const client = loadClient({ signedIn: true, routes: {
+      "/api/connections/nuvio/settings": () => ({ json: { ok: true, profiles: [{ index: 2, name: "Other" }] } }),
+      "/api/connections/nuvio/collections": () => ({ json: { ok: true, collections: [] } })
+    } });
+    client.call("saveCustomCollections", [{ id: "col_test", name: "Test", lists: [{ name: "Mine", type: "movie", catalogId: "mine", url: "tmdb:popular" }] }]);
+    await client.call("openSyncNuvioModal", "col_test");
+    const toggle = client.document.getElementById("syncNuvioHideCatalogs");
+    assert.equal(toggle.checked, false, "preserve the existing visible default");
+    toggle.checked = true;
+    client.document.getElementById("syncNuvioProfileSelect").value = "2";
+    await client.call("confirmSyncToNuvio");
+    let writes = requestsTo(client, "/api/connections/nuvio/collections").filter((r) => r.method === "POST");
+    assert.equal(writes.at(-1).body.hideHomeCatalogs, true);
+    assert.equal(writes.at(-1).body.profileId, "2");
+    assert.equal(client.localStorage.getItem("myListAddon:nuvioHideCollectionCatalogs"), "true");
+    await client.call("openSyncNuvioModal", "col_test");
+    assert.equal(toggle.checked, true);
+    toggle.checked = false;
+    await client.call("confirmSyncToNuvio");
+    writes = requestsTo(client, "/api/connections/nuvio/collections").filter((r) => r.method === "POST");
+    assert.equal(writes.at(-1).body.hideHomeCatalogs, false);
+    assert.equal(client.localStorage.getItem("myListAddon:nuvioHideCollectionCatalogs"), "false");
+  });
+
   it("determines the manifest URL to auto-install My Lists Addon in Nuvio", () => {
     const client = loadClient();
     const defaultUrl = client.call("getNuvioManifestUrl");

@@ -4419,6 +4419,11 @@ async function openSyncNuvioModal(targetColId) {
     }
     nameInput.value = defaultName;
   }
+  const hideCatalogs = document.getElementById('syncNuvioHideCatalogs');
+  if (hideCatalogs) {
+    hideCatalogs.checked = false;
+    try { hideCatalogs.checked = localStorage.getItem('myListAddon:nuvioHideCollectionCatalogs') === 'true'; } catch (e) {}
+  }
   window._syncNuvioRemote = [];
   handleSyncNuvioModeChange();
 
@@ -4511,8 +4516,11 @@ async function confirmSyncToNuvio() {
     return;
   }
 
+  const hideCatalogs = document.getElementById('syncNuvioHideCatalogs');
+  const hideHomeCatalogs = !!(hideCatalogs && hideCatalogs.checked);
+  try { localStorage.setItem('myListAddon:nuvioHideCollectionCatalogs', String(hideHomeCatalogs)); } catch (e) {}
   closeSyncNuvioModal();
-  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId, collectionName: collectionName, mergeTargetId: mergeTargetId });
+  await executeNuvioCollectionsPush({ profileId: profileId, installMode: installMode, targetColId: targetColId, collectionName: collectionName, mergeTargetId: mergeTargetId, hideHomeCatalogs: hideHomeCatalogs });
 }
 
 function syncCollectionsToNuvio() {
@@ -4651,7 +4659,8 @@ async function executeNuvioCollectionsPush(opts) {
     collections: payload,
     knownCollections: cachedRemote,
     manifestUrl: manifestUrl,
-    collectionLists: allLists
+    collectionLists: allLists,
+    hideHomeCatalogs: options.hideHomeCatalogs
   });
 
   if (res && res.ok) {
@@ -4663,7 +4672,11 @@ async function executeNuvioCollectionsPush(opts) {
     if (res.data && res.data.addonInstalled) {
       msg += ' My Lists Addon was auto-installed in Nuvio!';
     }
-    showToast(msg, 'success');
+    if (res.data && res.data.homeVisibilityUpdated === false) {
+      showToast(msg + ' Home visibility could not be saved. Change it in Nuvio’s Catalogs & Collections settings.', 'info');
+    } else {
+      showToast(msg, 'success');
+    }
   } else {
     showToast(mediaAppUiMessage(res, 'Could not push to Nuvio. Check your connection in Settings.'), 'error');
   }

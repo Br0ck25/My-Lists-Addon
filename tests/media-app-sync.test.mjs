@@ -139,6 +139,15 @@ function fakeServices(state) {
           }
           return new Response(null, { status: 204 });
         }
+        if (fn === "sync_pull_home_catalog_settings") {
+          if (state.homeReadFails) return json({ message: "boom" }, 500);
+          return json(state.homeRows || []);
+        }
+        if (fn === "sync_push_home_catalog_settings") {
+          if (state.homeWriteFails) return json({ message: "boom" }, 500);
+          seen.homePushed = body;
+          return new Response(null, { status: 204 });
+        }
         if (fn === "sync_push_collections") {
           seen.collectionsPushed = (seen.collectionsPushed || []).concat([body.p_collections_json]);
           return new Response(null, { status: 204 });
@@ -1673,6 +1682,90 @@ describe("Nuvio collections push: install modes", () => {
     assert.equal(r.status, 200, JSON.stringify(r.body));
     return { pushed: seen.collectionsPushed[0], body: r.body };
   }
+
+  async function homePush(extra = {}, stateExtra = {}) {
+    const state = { watched: [], progress: [], profiles: [{ profile_index: 2, name: "Other", collections_json: [STREAMING] }], ...stateExtra };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvhome" + Math.random().toString(36).slice(2, 8));
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const response = await call(ctx.env, "/api/connections/nuvio/collections", { method: "POST", cookie: ctx.cookie, json: { profileId: 2, installMode: "new", collections: incoming(), hideHomeCatalogs: true, ...extra } });
+    return { seen, response };
+  }
+
+  it("hides only incoming catalog rows using Nuvio's shared home payload, keeping collections available", async () => {
+    const mine = { addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: true, order: 7, custom_title: "My title", hero: true };
+    const otherType = { ...mine, type: "series" };
+    const otherAddon = { ...mine, addon_id: "other" };
+    const collection = { is_collection: true, collection_id: "community-streaming", enabled: true, order: 1 };
+    const settings = { items: [mine, otherType, otherAddon, collection], hide_unreleased_content: true, future_setting: { value: 42 } };
+    const { seen, response } = await homePush({}, { homeRows: [{ profile_id: 2, settings_json: settings }] });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.homeVisibilityUpdated, true);
+    assert.deepEqual(seen.homePushed, { p_profile_id: 2, p_platform: "home_catalog_shared", p_origin_client_id: "my-lists-addon", p_settings_json: { ...settings, items: [{ ...mine, enabled: false }, otherType, otherAddon, collection] } });
+    assert.deepEqual(seen.collectionsPushed[0][0], STREAMING);
+    assert.equal(seen.collectionsPushed[0][1].folders[0].hidden, false);
+    assert.deepEqual(seen.collectionsPushed[0][1].folders[0].catalogSources, incoming()[0].folders[0].catalogSources.map((s) => ({ ...s, name: "Mine", title: "Mine" })));
+    const pull = seen.nuvio.find((c) => c.fn === "sync_pull_home_catalog_settings");
+    assert.deepEqual(pull.body, { p_profile_id: 2, p_platform: "home_catalog_shared" });
+  });
+
+  it("creates missing home entries once per addon/type/catalog, not per folder", async () => {
+    const cols = incoming();
+    cols[0].folders.push({ ...cols[0].folders[0], id: "duplicate" });
+    const { seen, response } = await homePush({ collections: cols });
+    assert.equal(response.status, 200);
+    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: false, order: 0, custom_title: "", is_collection: false, collection_id: "" }]);
+  });
+
+  it("turning the toggle off shows these catalogs again without touching others", async () => {
+    const hidden = { addon_id: "app.my-list", type: "movie", catalog_id: "mine", enabled: false, order: 2 };
+    const unrelated = { ...hidden, catalog_id: "unrelated" };
+    const { seen, response } = await homePush({ hideHomeCatalogs: false, installMode: "replace" }, { homeRows: [{ settings_json: { items: [hidden, unrelated] } }] });
+    assert.equal(response.status, 200);
+    assert.deepEqual(seen.homePushed.p_settings_json.items, [{ ...hidden, enabled: true }, unrelated]);
+  });
+
+  it("merge hides incoming catalogs, not other catalogs in the target collection", async () => {
+    const other = { addon_id: "other", type: "movie", catalog_id: "nf", enabled: true, order: 12 };
+    const { seen, response } = await homePush({ installMode: "merge", targetCollectionId: STREAMING.id }, { homeRows: [{ settings_json: { items: [other] } }] });
+    assert.equal(response.status, 200);
+    assert.deepEqual(seen.homePushed.p_settings_json.items[0], other);
+    assert.equal(seen.homePushed.p_settings_json.items[1].catalog_id, "mine");
+    assert.equal(seen.homePushed.p_settings_json.items[1].enabled, false);
+    assert.equal(seen.homePushed.p_settings_json.items[1].order, 13);
+    assert.equal(seen.collectionsPushed[0][0].folders.length, 2);
+  });
+
+  it("old callers that omit the option leave home preferences alone", async () => {
+    const { seen, response } = await homePush({ hideHomeCatalogs: undefined });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.homeVisibilityUpdated, null);
+    assert.ok(!seen.nuvio.some((c) => c.fn.includes("home_catalog_settings")));
+  });
+
+  it("failed or malformed home reads stop all writes instead of replacing settings", async () => {
+    for (const state of [{ homeReadFails: true }, { homeRows: [{ settings_json: { items: {} } }] }, { homeRows: [{ settings_json: null }] }]) {
+      const { seen, response } = await homePush({}, state);
+      assert.equal(response.status, 502);
+      assert.equal(seen.collectionsPushed, undefined);
+      assert.equal(seen.homePushed, undefined);
+      assert.ok(!seen.nuvio.some((c) => c.fn.startsWith("sync_push_")));
+    }
+  });
+
+  it("reports partial success when collections save but home visibility fails", async () => {
+    const { seen, response } = await homePush({}, { homeWriteFails: true });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(response.body.homeVisibilityUpdated, false);
+    assert.equal(seen.collectionsPushed.length, 1);
+  });
+
+  it("rejects a non-boolean visibility option", async () => {
+    const { seen, response } = await homePush({ hideHomeCatalogs: "false" });
+    assert.equal(response.status, 400);
+    assert.equal(seen.collectionsPushed, undefined);
+  });
 
   it("new: adds a separately named collection and keeps every existing one", async () => {
     const { pushed } = await push("new", { collectionName: "Weekend Picks" });

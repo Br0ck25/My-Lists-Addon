@@ -5570,6 +5570,17 @@ ${appShellMobileNavHtml}
 
       <div id="syncNuvioModeHint" class="u-p-10px_12px u-br-v_radius_sm u-bg-v_surface_2_rgba_255_255_255_0_04 u-c-v_muted u-fs-v_font_size_xs u-mb-14px">This will create a separate collection and leave existing collections untouched.</div>
 
+      <div class="settings-toggle-row u-mb-14px">
+        <div class="u-flex-1 u-minw-0 u-pr-12px">
+          <label for="syncNuvioHideCatalogs" class="u-fw-600 u-fs-v_font_size_base">Hide collection catalogs on Nuvio home</label>
+          <p id="syncNuvioHideCatalogsHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Hide individual catalog rows, not the collection. Catalogs stay installed and available in Catalogs &amp; Collections. Applies to catalogs in this sync only; turn off to show them again.</p>
+        </div>
+        <label class="ui-toggle" aria-label="Hide collection catalogs on Nuvio home">
+          <input type="checkbox" id="syncNuvioHideCatalogs" aria-describedby="syncNuvioHideCatalogsHint">
+          <span class="ui-toggle-slider"></span>
+        </label>
+      </div>
+
       <div id="syncNuvioNameRow" class="u-mb-14px">
         <label for="syncNuvioCollectionName" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px" style="display:block;">Collection name</label>
         <input type="text" id="syncNuvioCollectionName" maxlength="80" placeholder="My Lists Collections" class="u-p-10px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base" style="width:100%;">
