@@ -891,6 +891,107 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     assert.deepEqual(await row(ctx.env, "lsmaincfg", "stremio", "watch-history", "series"), []);
   });
 
+  it("retains Nuvio provenance on a play already recorded by another source without duplicating it", async () => {
+    const state = { watched: [{ content_id: "tt7777777", content_type: "movie", title: "Shared Film", watched_at: NOW - HOUR }], progress: [] };
+    const seen = fakeServices(state);
+    const ctx = await setup("nuvprovenance", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    ctx.owner = ctx.user;
+    addEvent(ctx, "tt7777777", "movie", null, null, NOW - 2 * HOUR, "ping");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    await storeConfig(ctx.env, "nuvprov", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "nuvprov", "nuvio", "watch-history", "movie"), ["tt7777777"]);
+    assert.equal(events(ctx.env, ctx.accountId).length, 1, "the global play is not duplicated");
+    const link = ctx.env.DB_ACTIVITY._db.prepare("SELECT source, watched_at FROM watch_event_sources").get();
+    assert.equal(link.source, "nuvio");
+    assert.equal(link.watched_at, NOW - HOUR, "Nuvio's own watch time is preserved");
+    await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } });
+    await pull(ctx.env);
+    assert.equal(seen.pushed.length, 0, "a linked play is not pushed back to Nuvio");
+    const removed = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "history", id: "tt7777777", mediaType: "movie" } });
+    assert.equal(removed.status, 200, JSON.stringify(removed.body));
+    assert.equal(events(ctx.env, ctx.accountId).length, 1, "removing Nuvio history preserves the ping");
+    assert.equal(events(ctx.env, ctx.accountId)[0].source, "ping");
+    assert.deepEqual(await row(ctx.env, "nuvprov", "nuvio", "watch-history", "movie"), []);
+  });
+
+  it("backfills links for an old Nuvio play when upgrading from an incremental cursor", async () => {
+    const state = { watched: [], progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvprovenanceupgrade", { FF_EVENT_TRACKING: "1" });
+    ctx.owner = ctx.user;
+    addEvent(ctx, "tt8888888", "movie", null, null, NOW - 100 * HOUR, "ping");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    state.watched.push({ content_id: "tt8888888", content_type: "movie", title: "Old Film", watched_at: NOW - 99 * HOUR });
+    ctx.env.DB._db.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE provider = 'nuvio'").run(JSON.stringify({ mtime: NOW }));
+    await runAgain(ctx, "nuvio");
+    await storeConfig(ctx.env, "nuvprovold", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "nuvprovold", "nuvio", "watch-history", "movie"), ["tt8888888"]);
+    assert.equal(events(ctx.env, ctx.accountId).length, 1);
+    const cursor = JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync WHERE provider = 'nuvio'").get().cursor_json);
+    assert.equal(cursor.provenanceVersion, 1);
+  });
+
+  it("preserves a linked second app when the originating Nuvio history is removed", async () => {
+    const ctx = await connected("nuvtransfer", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    const event = ctx.env.DB_ACTIVITY._db.prepare("SELECT id FROM watch_events WHERE account_id = ? AND source = 'nuvio' AND season IS NULL").get(ctx.accountId);
+    ctx.env.DB_ACTIVITY._db.prepare("INSERT INTO watch_event_sources (event_id, source, watched_at) VALUES (?, 'stremio', ?)").run(event.id, NOW - HOUR);
+    const result = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "history", id: "tt1111111", mediaType: "movie" } });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    await storeConfig(ctx.env, "nuvtranscfg", ctx.owner);
+    assert.deepEqual(await row(ctx.env, "nuvtranscfg", "nuvio", "watch-history", "movie"), []);
+    assert.deepEqual(await row(ctx.env, "nuvtranscfg", "stremio", "watch-history", "movie"), ["tt1111111"]);
+  });
+
+  it("shows a Nuvio resume for a first episode without watch events or a schedule, and drops it when removed remotely", async () => {
+    const state = { watched: [], progress: [{ content_id: SHOW, content_type: "series", season: 1, episode: 1, position: 600000, duration: 2400000, last_watched: NOW - HOUR }] };
+    fakeServices(state);
+    const ctx = await setup("nuvnoschedule", { FF_EVENT_TRACKING: "1" });
+    ctx.owner = ctx.user;
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    const ask = () => call(ctx.env, "/api/preview", { method: "POST", json: { url: `autotrack:nuvio-continue-watching:mixed:${ctx.owner.creatorName}`, type: "series", sample: 20, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    const first = (await ask()).body.sample;
+    assert.deepEqual(first.map((m) => [m.id, m.seasonNum, m.episodeNum, m.progress]), [[SHOW, 1, 1, 25]]);
+    assert.equal(events(ctx.env, ctx.accountId).length, 0);
+    state.progress = [];
+    const sync = await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+    assert.equal(sync.status, 200);
+    assert.deepEqual((await ask()).body.sample, [], "a disappeared remote resume does not linger");
+  });
+
+  it("keeps separate resume points for a movie and show sharing a TMDB number", async () => {
+    const state = { watched: [], progress: [
+      { content_id: "tmdb:550", content_type: "movie", position: 1000, duration: 4000, last_watched: NOW - HOUR },
+      { content_id: "tmdb:550", content_type: "series", season: 1, episode: 1, position: 2000, duration: 4000, last_watched: NOW - 2 * HOUR },
+    ] };
+    fakeServices(state);
+    const ctx = await setup("nuvcwcollision", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    ctx.owner = ctx.user;
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const ask = (type) => call(ctx.env, "/api/preview", { method: "POST", json: { url: `autotrack:nuvio-continue-watching:mixed:${ctx.owner.creatorName}`, type, sample: 20, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    assert.deepEqual((await ask("movie")).body.sample.map((m) => [m.type, m.progress]), [["movie", 25]]);
+    assert.deepEqual((await ask("series")).body.sample.map((m) => [m.type, m.progress]), [["series", 50]]);
+    const refused = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "continue-watching", id: "tmdb:550" } });
+    assert.equal(refused.status, 400, "ambiguous removal requires a media type");
+    const removed = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "continue-watching", id: "tmdb:550", mediaType: "movie" } });
+    assert.equal(removed.status, 200, JSON.stringify(removed.body));
+    assert.deepEqual((await ask("movie")).body.sample, []);
+    assert.deepEqual((await ask("series")).body.sample.map((m) => [m.type, m.progress]), [["series", 50]]);
+    assert.deepEqual(state.progress.map((p) => p.content_type), ["series"]);
+  });
+
+  it("requires the provenance migration rather than advancing the Nuvio cursor without it", async () => {
+    const state = { watched: [{ content_id: "tt7777777", content_type: "movie", title: "Film", watched_at: NOW - HOUR }], progress: [] };
+    fakeServices(state);
+    const ctx = await setup("nuvmigration", { FF_EVENT_TRACKING: "1" });
+    ctx.env.DB_ACTIVITY._db.exec("DROP TABLE watch_event_sources; DELETE FROM schema_migrations WHERE version = 'A0002'");
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    const settings = await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie });
+    assert.match(settings.body.sync.error, /A0002/);
+    assert.equal(events(ctx.env, ctx.accountId).length, 0);
+  });
+
   it("Continue Watching has the movie Nuvio left part way through, and the next episode of its shows", async () => {
     const ctx = await connected("lscw");
     const mediaId = ctx.env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(SHOW).id;
@@ -1120,6 +1221,8 @@ describe("refreshing when the person looks, not only every hour", () => {
     assert.ok(ranges.includes("0-499") && ranges.includes("500-999"), JSON.stringify(ranges));
     const last = (await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.sync.lastResult;
     assert.equal(last.found, 505);
+    const stored = JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync WHERE provider = 'nuvio'").get().cursor_json);
+    assert.equal(Object.keys(stored.resumes).length, 505, "resume points are not cut off at 300");
   });
 
   it("keeps a movie and a show distinct when their TMDB numbers match", async () => {
