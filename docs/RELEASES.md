@@ -60,6 +60,15 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Day counts on clock-change days, and where the Account Key comes from (built 2026-11-02, stamp 524aaa0a8d)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-16 and CQ-17, steps 1 to 3); each step is one commit.
+
+- **"N days ago" is now right on the two days a year the clocks change** (CQ-16). On those days one date was shown twice and another was skipped, so the /admin day-by-day table, the 7-day Account Key total, the API-use totals and the Most Watched windows could be off. Nothing else changes on other days.
+- **The Account Key counter now says where the key came from** (CQ-17). The total is unchanged, so the history still compares. Each request is also counted by path and by reason: no session, a session for another account, a session for the same account sent together with the key (this one should fall to about 0), or an install-link save.
+- **/admin, Creators tab:** the label now reads "Requests that sent the Account Key today" (it counted more than saves), and a new "Where the key came from (7 days)" section lists the reasons and the paths. Read it for a week after the deploy: a lot of "No session" on `/api/creator/sync/` means old open tabs or blocked browser storage; a path no page uses means an outside caller.
+- **Making an install link with a personal shelf is now signed by the sign-in session** when there is one, so it no longer counts as an Account Key use. The key is still checked (a wrong one is still refused) and still stored in the link, because playback tracking on those links needs it. These checks are counted apart as "Install-link save".
+
 ## Repo layout (2026-11-02, no code change)
 
 - The 62 numbered sources and `header.js` moved into `src/` in groups: `core`, `admin`, `catalog`, `page`, `client`, `api`, `data`, `jobs`. `build.py` orders by the `NN_` prefix, not the folder, and the built Worker is byte-identical (same stamp as before the move).
