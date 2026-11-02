@@ -1570,7 +1570,7 @@ async function createSession(env, accountId, userAgent = null) {
   };
 }
 
-async function resolveSession(request, env) {
+async function resolveSession(request, env, ctx) {
   const token = extractSessionToken(request);
   if (!token) return null;
   const idHash = await hashSessionToken(token);
@@ -1607,7 +1607,7 @@ async function resolveSession(request, env) {
 
     // Throttle last_seen_at update (at most once every 5 minutes per session)
     if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
-      env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {});
+      (ctx || { waitUntil() {} }).waitUntil(env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {}));
     }
 
     const account = {

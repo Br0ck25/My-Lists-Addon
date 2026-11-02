@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "bce21c96c1";
+const WORKER_BUILD = "7523c1efcb";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -5417,7 +5417,7 @@ async function createSession(env, accountId, userAgent = null) {
   };
 }
 
-async function resolveSession(request, env) {
+async function resolveSession(request, env, ctx) {
   const token = extractSessionToken(request);
   if (!token) return null;
   const idHash = await hashSessionToken(token);
@@ -5454,7 +5454,7 @@ async function resolveSession(request, env) {
 
     // Throttle last_seen_at update (at most once every 5 minutes per session)
     if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
-      env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {});
+      (ctx || { waitUntil() {} }).waitUntil(env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {}));
     }
 
     const account = {
@@ -91182,7 +91182,7 @@ async function handleFetch(request, env, ctx) {
     if (csrfErr) return csrfErr;
 
     // Resolve session if mla_session cookie or Bearer token is present
-    const sessionAuth = await resolveSession(request, env);
+    const sessionAuth = await resolveSession(request, env, ctx);
     if (sessionAuth) {
       request.account = sessionAuth.account;
       request.session = sessionAuth.session;
