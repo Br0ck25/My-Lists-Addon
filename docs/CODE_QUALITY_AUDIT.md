@@ -11,6 +11,29 @@ Scope: code quality, architecture, technical debt, dead code, duplication, depen
 - Compatibility date: **yes, update it**, with a staging check first (CQ-10).
 - Feature flags (CQ-09): **not yet.** They wait on retiring the old Account Key sign-in, and that waits on the "Saves that sent the Account Key" count reaching near zero. CQ-17 makes that counter tell us where the key comes from, and fixes one cause found in the code.
 
+## Progress (updated 2026-11-02)
+
+| item | status | where |
+|---|---|---|
+| CQ-16 DST-safe day keys | **done** | `easternDateKeyDaysAgo` (03_admin.js), tests/dst-days-ago.test.mjs |
+| CQ-17 steps 1–3 Account Key breakdown, install-link save signed by session | **done**; step 5 (read /admin for a week) is the owner's | 62_creator-auth.js, 03_admin.js, tests/authkey-breakdown.test.mjs |
+| CQ-08 wizard (client + `/api/wizard-channel-shows`) | **done** | |
+| CQ-06, CQ-07, CQ-11/12 | **done** | |
+| CQ-03 parity test | **done**; owner decisions applied: poster badge "AIRED" for past dates, blank Nuvio collection name → "My Lists Collections". Remaining known differences are `todo` cases (getSafePosterUrl type/title, options.backdropImageUrl) | tests/server-client-parity.test.mjs |
+| CQ-04 step 1 shared `traktIsHiddenShow` | **done** (step 2 not started) | 06_ |
+| CQ-18 size ratchet | **done** (rule 12 in CLAUDE.md) | tests/size-budget.test.mjs |
+| CQ-10 compatibility date | **repo done** (all wrangler files = 2026-07-27, OPERATIONS §32 flag table); owner sets the staging dashboard date and checks staging | |
+| CQ-01 split `handleFetch` | **done**: 15,494 → 227 lines; routes in `src/api/62_`–`80_` and `src/admin/65_`–`66_`; verified by four replay scripts (~2,900 requests) identical before/after every commit | |
+| Bug found during CQ-01: scrobble user filter answered 500 | **fixed** | 64_media-server-scrobble.js, tests/scrobble-user-filter.test.mjs |
+| CQ-05, CQ-04 step 2, CQ-13 | optional, not started | |
+| CQ-09 flags | blocked on CQ-17 data | |
+
+### New follow-ups found while doing the work
+- **CQ-19 Scope-check blind spot.** `tools/scope_check.mjs` accepts a free name if the same name is assigned bare or `typeof`-guarded anywhere in the bundle, so a moved function that uses `m` without receiving it passed `verify.sh --fast` (the replay caught it). Make the check per-function for names that are not real globals, with a test that reproduces the miss first.
+- **CQ-20 Long parameter lists from the mechanical split.** Some helpers take many positional parameters (e.g. `stremioCatalogRowFetch` in 70_ has 35). Behaviour is exact, but readability suffers. Optional tidy: pass one settings object, one function per commit, replay-verified. Needs an owner yes (rule 2).
+- **Dispatcher styles.** Slices 1–4 use `async` dispatchers; slices 5–6 use plain functions returning a promise or `null` (keeps the catalog hot path free of extra awaits). Both are correct; leave as is.
+- Line references to `25_`/`26_` in this document and `docs/BACKEND_AUDIT.md` are now historical (the code moved); use `docs/FUNCTION-MAP.md` to find a symbol.
+
 ---
 
 ## 0. Read this first (rules for the implementer)
