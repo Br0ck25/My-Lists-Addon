@@ -860,7 +860,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/reply
   if (path === '/admin/api/support-emails/reply' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const result = await sendSupportEmailReply(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -871,7 +872,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/compose
   if (path === '/admin/api/support-emails/compose' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const result = await composeNewSupportEmail(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -882,7 +884,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/status
   if (path === '/admin/api/support-emails/status' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const { threadId, status } = body || {};
       if (!threadId || !['open', 'replied', 'closed', 'spam'].includes(status)) {
         return json({ ok: false, error: 'Invalid threadId or status.' }, 400);
@@ -899,7 +902,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/delete
   if (path === '/admin/api/support-emails/delete' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const threadId = body && body.threadId;
       if (!threadId) return json({ ok: false, error: 'Thread ID required.' }, 400);
 

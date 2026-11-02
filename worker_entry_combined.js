@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4a450f1ad8";
+const WORKER_BUILD = "67caeea405";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -104929,7 +104929,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/reply
   if (path === '/admin/api/support-emails/reply' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const result = await sendSupportEmailReply(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -104940,7 +104941,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/compose
   if (path === '/admin/api/support-emails/compose' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const result = await composeNewSupportEmail(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -104951,7 +104953,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/status
   if (path === '/admin/api/support-emails/status' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const { threadId, status } = body || {};
       if (!threadId || !['open', 'replied', 'closed', 'spam'].includes(status)) {
         return json({ ok: false, error: 'Invalid threadId or status.' }, 400);
@@ -104968,7 +104971,8 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/delete
   if (path === '/admin/api/support-emails/delete' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      let body;
+      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
       const threadId = body && body.threadId;
       if (!threadId) return json({ ok: false, error: 'Thread ID required.' }, 400);
 
