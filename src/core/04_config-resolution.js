@@ -871,12 +871,7 @@ async function searchTraktLists(query, traktKeyOverride) {
     throw new Error("Trakt lists are temporarily unavailable. Please try again later.");
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    "trakt-api-version": "2",
-    "trakt-api-key": traktKey,
-    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-  };
+  const headers = traktHeaders(null, traktKey);
 
   const requests = [
     fetchTraktWithRetry(`https://api.trakt.tv/search/list?query=${encodeURIComponent(q)}&limit=30`, {

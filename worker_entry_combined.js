@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9acd2db668";
+const WORKER_BUILD = "d8334b8811";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -18675,12 +18675,7 @@ async function searchTraktLists(query, traktKeyOverride) {
     throw new Error("Trakt lists are temporarily unavailable. Please try again later.");
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    "trakt-api-version": "2",
-    "trakt-api-key": traktKey,
-    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-  };
+  const headers = traktHeaders(null, traktKey);
 
   const requests = [
     fetchTraktWithRetry(`https://api.trakt.tv/search/list?query=${encodeURIComponent(q)}&limit=30`, {
@@ -25173,12 +25168,7 @@ async function fetchTraktChart(entry, skip, traktKey, chartKey, env = null, ctx 
   const page = Math.floor(skip / PAGE_SIZE) + 1;
   const src = `https://api.trakt.tv/${chartPath}?limit=${PAGE_SIZE}&page=${page}&extended=full`;
 
-  const headers = {
-    "Content-Type": "application/json",
-    "trakt-api-version": "2",
-    "trakt-api-key": traktKey,
-    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-  };
+  const headers = traktHeaders(null, traktKey);
 
   const cacheKey = `user_cache:trakt:chart:v2:${chartKey}:${wantKind}:${page}`;
   const kvKey = `trakt:chart:v2:${chartKey}:${wantKind}:${page}`;

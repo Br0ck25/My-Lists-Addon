@@ -260,12 +260,7 @@ async function fetchTraktChart(entry, skip, traktKey, chartKey, env = null, ctx 
   const page = Math.floor(skip / PAGE_SIZE) + 1;
   const src = `https://api.trakt.tv/${chartPath}?limit=${PAGE_SIZE}&page=${page}&extended=full`;
 
-  const headers = {
-    "Content-Type": "application/json",
-    "trakt-api-version": "2",
-    "trakt-api-key": traktKey,
-    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-  };
+  const headers = traktHeaders(null, traktKey);
 
   const cacheKey = `user_cache:trakt:chart:v2:${chartKey}:${wantKind}:${page}`;
   const kvKey = `trakt:chart:v2:${chartKey}:${wantKind}:${page}`;
