@@ -60,6 +60,13 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Internal tidy-up of the remaining routes (built 2026-11-02, stamp a3fee60b71)
+
+No change for users. This finishes CQ-01 (splitting the huge `handleFetch` function into smaller files): the routes that were still inside it have moved out.
+
+- **Internal tidy-up, no change for users:** everything the Stremio, Nuvio and Wako apps call (install links, catalog rows, details, the playback ping, the media-server webhook), the web app's pages and images, public lists and channels, the Trakt, MDBList, Simkl and TMDB sign-in and list routes, feedback, saving and liking lists, sign-in sessions and the admin sign-in now each live in their own small, numbered file. The big function that used to hold all of them (about 9,400 lines) is now 227 lines: it only does the checks every request needs and then asks each group in turn, in the same order as before.
+- **Proof:** the same 1,299 requests to those routes (every kind of install link, catalog row, poster and OAuth step, with signed-in, signed-out, wrong-input and unknown-path cases, plus the earlier 1,230 + 152 + 261 for account, sign-in and admin routes) gave byte-identical answers, headers, outgoing provider calls and stored data before and after every step. Catalog rows read the same amount from storage as before.
+
 ## Internal tidy-up of account routes (built 2026-11-02, stamp 5377ccd95f)
 
 No change for users. This is the fourth step of CQ-01 (splitting the huge `handleFetch` function into smaller files).
