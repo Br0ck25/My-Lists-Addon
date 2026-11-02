@@ -9,7 +9,7 @@
     // the stored hash each time, which is what "no authentication system"
     // means here in practice -- simple, stateless, and nothing to expire
     // or revoke separately from the key itself.
-    async function authenticateCreator(creatorNameRaw, creatorKey) {
+    async function authenticateCreator(creatorNameRaw, creatorKey, via) {
       if (!env || !env.CONFIGS) return { ok: false, error: "no-kv" };
 
       const sessionsEnabled = isSessionsEnabled(env);
@@ -113,8 +113,22 @@
       // How many requests still sign with the key on the routes the page now
       // signs with its session (CREATOR_SESSION_PATH_PREFIXES): the count the
       // 60-day sunset waits on (Release 19, /admin -> Creators).
-      if (typeof path === "string" && CREATOR_SESSION_PATH_PREFIXES.some((p) => path.startsWith(p))) {
+      //
+      // Alongside the total (kept as it was, so the history stays comparable)
+      // it counts the matched path and the reason the key was sent, which is
+      // what tells a browser with no session from a bug that sends the key
+      // next to a valid session (CQ-17). `via` is "trackkey" when the key
+      // came from an install-link save's trackCreatorKey.
+      const keyPathPrefix = typeof path === "string" ? CREATOR_SESSION_PATH_PREFIXES.find((p) => path.startsWith(p)) : undefined;
+      if (keyPathPrefix) {
+        const heldSessionFor = request && request.account ? String(request.account.username || "").toLowerCase() : "";
+        const why = via === "trackkey" ? "trackkey"
+          : heldSessionFor === v.normalized ? "withsession"
+          : heldSessionFor ? "othersession"
+          : "nocookie";
         ctx.waitUntil(bumpStat(env, "authkey"));
+        ctx.waitUntil(bumpStat(env, "authkey:" + keyPathPrefix.replace(/^\/|\/$/g, "").replace(/\//g, "-")));
+        ctx.waitUntil(bumpStat(env, "authkey:why:" + why));
       }
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
