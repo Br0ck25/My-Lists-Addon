@@ -80,6 +80,8 @@ async function apiSessionSignIn(request, env, ctx, path) {
           "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
         ).bind(hmac, accountRow.id).run();
         accountRow.key_lookup_hmac = hmac;
+        // SEC-01: the HMAC is stored, so the unsalted copy can go.
+        await deleteLegacyCreatorKeyLookup(env, accountRow.username);
       }
     } catch (hmacErr) {
       console.error("Failed to write accounts.key_lookup_hmac on login:", hmacErr);
