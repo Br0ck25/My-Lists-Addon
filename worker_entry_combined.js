@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7614eecddf";
+const WORKER_BUILD = "ff54e556b6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -120089,7 +120089,7 @@ async function insertSupportMessage(db, msg) {
 }
 
 // Dispatches an outbound email reply via env.EMAIL.send() and records it
-async function sendSupportEmailReply(env, { threadId, text, html, attachments, closeOnSend, actor }) {
+async function sendSupportEmailReply(env, { threadId, text, html, attachments, closeOnSend }) {
   if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
   if (!threadId) return { ok: false, error: 'threadId is required.' };
   if (!text || !String(text).trim()) return { ok: false, error: 'Reply text cannot be empty.' };
@@ -120204,13 +120204,6 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
     'UPDATE support_threads SET status = ?, unread = 0, updated_at = ?, last_message_at = ? WHERE id = ?'
   ).bind(newStatus, now, now, threadId).run();
 
-  // Audit log if available
-  try {
-    if (typeof recordAdminAudit === 'function' && actor) {
-      await recordAdminAudit(env, actor, 'support_email_reply', thread.customer_email, threadId);
-    }
-  } catch {}
-
   const updatedThread = Object.assign({}, thread, {
     status: newStatus,
     unread: 0,
@@ -120235,7 +120228,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
 }
 
 // Composes a brand-new outbound email thread to a recipient
-async function composeNewSupportEmail(env, { toEmail, customerName, subject, text, html, attachments, actor }) {
+async function composeNewSupportEmail(env, { toEmail, customerName, subject, text, html, attachments }) {
   if (!env || !env.DB) return { ok: false, error: 'Database is not bound.' };
   if (!toEmail || !String(toEmail).includes('@')) return { ok: false, error: 'Valid recipient email is required.' };
   if (!subject || !String(subject).trim()) return { ok: false, error: 'Subject is required.' };

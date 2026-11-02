@@ -142,6 +142,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: a new case next to `tests/admin-security.test.mjs`. Feed `handleIncomingEmail` a raw message with the image body above and `From: <b>hi</b>`, then render the thread list and the conversation with the dashboard's render functions (in the client harness) and assert no `<form` and no `<b>` in the markup. A second assert checks the CSP header contains `form-action 'self'`.
 
 ### BA-004 Large email attachments are dropped without a trace
+- Status: Fixed in e2157e1
 - Category: bug
 - Severity / confidence: P3 / Medium (based on D1's documented 2,000,000-byte limit for a row; not reproduced against real D1)
 - Where: src/admin/59_support-emails.js:213-222 (attachments kept inline) and `insertSupportMessage` (:383-440)

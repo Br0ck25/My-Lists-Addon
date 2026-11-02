@@ -786,3 +786,23 @@ describe("support emails: attachments over the row limit (BA-004)", () => {
     assert.equal(row.body_text, "hello", "the fallback still stores the message");
   });
 });
+
+// BA-005: a reply is audited once, by the admin gate (isAdminRequest), under
+// the request's real actor. sendSupportEmailReply used to carry a second audit
+// call with its arguments in the wrong order that never ran; it is gone, and
+// this pins that the gate's row is the only one and carries the right fields.
+describe("support emails: the audit trail (BA-005)", () => {
+  it("writes exactly one audit row per reply and per compose, naming the route", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db, EMAIL: { async send() { return {}; } } });
+    const cookie = await adminCookie(env);
+    await worker.email(createMockEmailMessage({ from: "eve@example.com", subject: "Q", messageId: "<q@x>", text: "?" }), env, {});
+    const threadId = (await db.prepare("SELECT id FROM support_threads").first()).id;
+    db.q("DELETE FROM admin_audit_log");
+    await call(env, "/admin/api/support-emails/reply", { method: "POST", cookie, json: { threadId, text: "A." } });
+    await call(env, "/admin/api/support-emails/compose", { method: "POST", cookie, json: { toEmail: "f@example.com", subject: "S", text: "T" } });
+    const rows = db.q("SELECT action, target FROM admin_audit_log ORDER BY id ASC");
+    assert.deepEqual(rows.map((r) => r.action), ["admin.api.support.emails.reply", "admin.api.support.emails.compose"]);
+    assert.equal(rows.some((r) => String(r.action) === "support_email_reply"), false);
+  });
+});
