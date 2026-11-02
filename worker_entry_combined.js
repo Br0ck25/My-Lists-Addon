@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "54fd03d8db";
+const WORKER_BUILD = "09c14526c3";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -108219,6 +108219,10 @@ function detectClientApp(request) {
 // one are returned and passed on. The filter block stays in this function,
 // because it reads the ids and flags parsed above.
 
+const SCROBBLE_MAX_BODY_BYTES = 8 * 1024 * 1024;
+const SCROBBLE_BAD_TOKEN_MAX = 30;
+const SCROBBLE_BAD_TOKEN_WINDOW_SEC = 600;
+
 // Handles incoming webhooks from Plex, Jellyfin, and Emby media servers
 // Automatically marks watched episodes/movies and advances Continue Watching
 async function handleMediaServerScrobbleFor(request, url, env, ctx) {
@@ -108226,7 +108230,13 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
     return json({ ok: false, error: "Cloudflare KV storage (CONFIGS) not configured." }, 500);
   }
 
-  const authed = await authenticateScrobbleRequest(url, env);
+  // SEC-07: Plex attaches a thumbnail, which is well under this; nothing else should be bigger.
+  const declaredBytes = Number(request.headers.get("content-length"));
+  if (declaredBytes > SCROBBLE_MAX_BODY_BYTES) {
+    return json({ ok: false, error: "Payload too large." }, 413);
+  }
+
+  const authed = await authenticateScrobbleRequest(url, env, request, ctx);
   if (authed.response) return authed.response;
   const { authUser, authForm, effectiveTmdbKey } = authed;
 
@@ -108334,7 +108344,7 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
 }
 
 // Steps 1 of the webhook: who is calling. Returns { response } to answer straight away, or the account.
-async function authenticateScrobbleRequest(url, env) {
+async function authenticateScrobbleRequest(url, env, request, ctx) {
   const configParam = url.searchParams.get("config") || url.searchParams.get("token") || "";
   const queryCreator = url.searchParams.get("creator") || url.searchParams.get("user") || "";
   const queryKey = url.searchParams.get("key") || "";
@@ -108377,6 +108387,12 @@ async function authenticateScrobbleRequest(url, env) {
   }
 
   if (!authUser) {
+    // SEC-07: a wrong token spends this IP's budget; a correct one never does,
+    // so a busy media server is never limited.
+    if (scrobbleToken && request) {
+      const badToken = await reserveRateLimit(env, ctx, "scrobblebadtoken", clientIpKey(request), SCROBBLE_BAD_TOKEN_MAX, SCROBBLE_BAD_TOKEN_WINDOW_SEC);
+      if (badToken.over) return { response: json({ ok: false, error: "Too many attempts. Please wait and try again." }, 429) };
+    }
     return { response: json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401) };
   }
   await ensureTrackingMigrated(env, authUser);
