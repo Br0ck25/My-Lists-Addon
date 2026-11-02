@@ -130,13 +130,7 @@ async function apiExternalListItemMutate(request, env, path) {
     try {
       const tRes = await fetch(traktUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-          "trakt-api-version": "2",
-          "trakt-api-key": clientId,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(token, clientId),
         body: JSON.stringify(traktPayload),
       });
       const tData = await tRes.json().catch(() => ({}));
@@ -668,13 +662,7 @@ async function apiExternalSyncHistoryTrakt(env, body, provider, items, parseWatc
     try {
       const tRes = await fetch("https://api.trakt.tv/sync/history", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-          "trakt-api-version": "2",
-          "trakt-api-key": clientId,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(token, clientId),
         body: JSON.stringify(traktPayload),
       });
       const tData = await tRes.json().catch(() => ({}));
@@ -895,13 +883,7 @@ async function apiExternalListCreate(request, env) {
     try {
       const res = await fetch("https://api.trakt.tv/users/me/lists", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-          "trakt-api-key": traktKey,
-          "trakt-api-version": "2",
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(token, traktKey),
         body: JSON.stringify({
           name: name,
           description: description,
