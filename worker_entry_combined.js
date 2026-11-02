@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "fbe061adf0";
+const WORKER_BUILD = "505f94f8b5";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -113115,9 +113115,19 @@ async function creatorApiSyncSaveChannels(request, env, ctx, path) {
       // Unreadable -- nothing coherent to protect; write normally.
     }
   }
+  // Keep only plain-object entries; an array counts as empty. One null entry
+  // saved here would be loaded by every device and break its page.
+  const plainObjectEntries = (map) => {
+    const out = {};
+    if (!map || typeof map !== "object" || Array.isArray(map)) return out;
+    for (const [k, v] of Object.entries(map)) {
+      if (v && typeof v === "object" && !Array.isArray(v)) out[k] = v;
+    }
+    return out;
+  };
   const channelsBlob = {
-    channels: body.channels && typeof body.channels === "object" ? body.channels : {},
-    mergedChannels: body.mergedChannels && typeof body.mergedChannels === "object" ? body.mergedChannels : {},
+    channels: plainObjectEntries(body.channels),
+    mergedChannels: plainObjectEntries(body.mergedChannels),
     updatedAt: nextSyncVersion(channelsCurrentUpdatedAt),
   };
   const serialized = JSON.stringify(channelsBlob);
