@@ -3493,8 +3493,7 @@ async function likeVoterId(request, env, creatorUsername, scopeId) {
   if (creatorUsername) return `u:${creatorUsername}`;
   const ip = clientIpKey(request);
   if (!ip) return null;
-  const hash = await hashStringForKey(`${ip}|${scopeId}`);
-  return `a:${hash}`;
+  return `a:${await anonLikeVoterHash(env, ip, scopeId)}`;
 }
 
 function ledgerKeyToListId(ledgerKey) {

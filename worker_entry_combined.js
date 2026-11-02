@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "d562575eb1";
+const WORKER_BUILD = "a4f090f704";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -7351,8 +7351,7 @@ async function likeVoterId(request, env, creatorUsername, scopeId) {
   if (creatorUsername) return `u:${creatorUsername}`;
   const ip = clientIpKey(request);
   if (!ip) return null;
-  const hash = await hashStringForKey(`${ip}|${scopeId}`);
-  return `a:${hash}`;
+  return `a:${await anonLikeVoterHash(env, ip, scopeId)}`;
 }
 
 function ledgerKeyToListId(ledgerKey) {
@@ -96100,6 +96099,19 @@ function likeWriteStatements(env, target, voter, liking, accountId) {
   // What this account has liked changed: its other devices should look.
   stmts.push(accountVersionStatement(env, accountId));
   return stmts;
+}
+
+// SEC-05: the hash behind a signed-out voter id ("a:<hash>", likeVoterId in 02_). A
+// bare SHA-256 of "ip|scope" can be reversed by trying every IPv4 address, so with
+// LIKE_VOTER_PEPPER (or LOOKUP_PEPPER) set it is an HMAC with that secret instead.
+// With neither set it is exactly the old hash. Signed-out likes are retired (D-6), so
+// no route reaches this today; the "a:" ids already stored (D-9) are not changed.
+async function anonLikeVoterHash(env, ip, scopeId) {
+  const pepper = String((env && (env.LIKE_VOTER_PEPPER || env.LOOKUP_PEPPER)) || "");
+  if (!pepper) return hashStringForKey(`${ip}|${scopeId}`);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pepper), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`like-voter|${ip}|${scopeId}`));
+  return bufferToHex(new Uint8Array(mac)).slice(0, 32);
 }
 
 // --- The public list directory and search on v2 (Phase 3b, P3b-6) -------------
