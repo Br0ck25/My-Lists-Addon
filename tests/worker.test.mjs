@@ -2138,7 +2138,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -4960,7 +4960,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
@@ -8555,6 +8555,8 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/api/63_subtitles-track.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/63_subtitles-track.js"), "utf8"),
     // The /admin/api/ routes moved here out of handleFetch (CQ-01), one function each.
     "src/admin/65_admin-api-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/admin/65_admin-api-routes.js"), "utf8"),
+    // The /api/creator/ account and lists routes moved here out of handleFetch (CQ-01), one function each.
+    "src/api/67_creator-api-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/67_creator-api-routes.js"), "utf8"),
   };
 
   // Every place in the storage-owning files that names a custom-list key,
@@ -8586,7 +8588,7 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/core/02_http-and-creator-utils.js :: deleteCreatorLists",
     "src/core/02_http-and-creator-utils.js :: purgeCreatorData",
     "src/api/63_subtitles-track.js :: recordSubtitlesPlay",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/save",
+    "src/api/67_creator-api-routes.js :: creatorApiListsSave",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/reorder",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/save-tracking",
   ];
@@ -8597,7 +8599,14 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/core/02_http-and-creator-utils.js :: readAccountWatchlist": "reads the Watchlist's list record to pick its newest copy; writes nothing",
     "src/core/02_http-and-creator-utils.js :: removeLegacyListLeftovers": "removes a deleted list's leftover legacy record with FF_V2_LISTS_ONLY; its only caller, deleteCreatorLists, bumps",
     "src/admin/65_admin-api-routes.js :: adminApiCreatorLists": "enumerates one creator's records for the admin browse; changes nothing",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists": "self-heals the order key on a read; the same response already carries the healed order",
+    "src/api/67_creator-api-routes.js :: creatorApiLists": "self-heals the order key on a read; the same response already carries the healed order",
+    // creatorApiLists and creatorApiListsSave were split into helpers for the 150-line limit (CQ-01);
+    // the helpers below hold the keys their parent used to hold.
+    "src/api/67_creator-api-routes.js :: creatorListsReadOrder": "reads the order key for the lists read; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListsOrphanSweep": "lists the record keys the order lost for the lists read; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveReadOrder": "reads the order key for a list save; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveSlug": "checks which slugs are taken; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveAddToOrder": "adds the just-saved slug to the order key; its only caller, creatorApiListsSave, bumps the stamp right after",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/load": "reads the order key",
     "src/api/26_api-creator-and-admin-routes.js :: /api/search-published-lists": "reads published records",
     "src/admin/65_admin-api-routes.js :: adminApiBackfillTrending": "reads to build the trending set",
