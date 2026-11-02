@@ -654,3 +654,55 @@ Content-Type: text/html; charset="us-ascii"
     assert.equal(threadView.body.messages[0].attachments[0].filename, "a120c1be-f07e-436f-98c4-0b1a09d6dbcd.png");
   });
 });
+
+// BA-002: with no EMAIL binding (every self-hosted copy) Send used to store the
+// reply, mark the conversation replied/closed and answer ok:true although
+// nothing was sent. It now refuses and writes nothing.
+describe("support emails: no EMAIL binding (BA-002)", () => {
+  it("refuses a reply and leaves the thread and its messages untouched", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    const cookie = await adminCookie(env);
+    await worker.email(createMockEmailMessage({
+      from: "carol@example.com", subject: "Where is my list?", messageId: "<c-1@example.com>", text: "It vanished.",
+    }), env, {});
+    const before = await db.prepare("SELECT * FROM support_threads").first();
+
+    const res = await call(env, "/admin/api/support-emails/reply", {
+      method: "POST", cookie, json: { threadId: before.id, text: "Looking into it.", closeOnSend: true },
+    });
+    assert.equal(res.body.ok, false);
+    assert.match(res.body.error, /not set up/i);
+
+    const after = await db.prepare("SELECT * FROM support_threads WHERE id = ?").bind(before.id).first();
+    assert.equal(after.status, before.status, "the thread is not marked replied or closed");
+    assert.equal(after.unread, before.unread);
+    const msgs = (await db.prepare("SELECT * FROM support_messages WHERE thread_id = ?").bind(before.id).all()).results;
+    assert.equal(msgs.length, 1, "no outbound message was recorded");
+  });
+
+  it("refuses a compose and creates no thread", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    const cookie = await adminCookie(env);
+    const res = await call(env, "/admin/api/support-emails/compose", {
+      method: "POST", cookie, json: { toEmail: "dan@example.com", subject: "Hello", text: "Hi Dan." },
+    });
+    assert.equal(res.body.ok, false);
+    assert.match(res.body.error, /not set up/i);
+    assert.equal((await db.prepare("SELECT * FROM support_threads").all()).results.length, 0);
+    assert.equal((await db.prepare("SELECT * FROM support_messages").all()).results.length, 0);
+  });
+
+  it("still sends and records when the binding exists", async () => {
+    const db = makeD1();
+    const sent = [];
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db, EMAIL: { async send(p) { sent.push(p); return {}; } } });
+    const cookie = await adminCookie(env);
+    const res = await call(env, "/admin/api/support-emails/compose", {
+      method: "POST", cookie, json: { toEmail: "dan@example.com", subject: "Hello", text: "Hi Dan." },
+    });
+    assert.equal(res.body.ok, true);
+    assert.equal(sent.length, 1);
+  });
+});

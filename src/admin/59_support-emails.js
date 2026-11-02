@@ -449,6 +449,12 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
   if (!threadId) return { ok: false, error: 'threadId is required.' };
   if (!text || !String(text).trim()) return { ok: false, error: 'Reply text cannot be empty.' };
 
+  // Without the EMAIL binding nothing can be sent, so nothing is recorded as
+  // sent either (BA-002). Self-hosted copies have no binding by default.
+  if (!(env.EMAIL && typeof env.EMAIL.send === 'function')) {
+    return { ok: false, error: 'Email sending is not set up (no EMAIL binding).' };
+  }
+
   const thread = await env.DB.prepare('SELECT * FROM support_threads WHERE id = ?').bind(threadId).first();
   if (!thread) return { ok: false, error: 'Conversation thread not found.' };
 
@@ -510,8 +516,8 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
     }
   }
 
-  // Send via Cloudflare Email Sending Worker binding if available
-  if (env.EMAIL && typeof env.EMAIL.send === 'function') {
+  // Send via the Cloudflare Email Sending Worker binding
+  {
     const payload = {
       to: thread.customer_email,
       from: 'support@mylistsaddon.com',
@@ -529,8 +535,6 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
       payload.attachments = outgoingAttachments;
     }
     await env.EMAIL.send(payload);
-  } else {
-    console.warn('[Support Email] env.EMAIL binding missing. Recorded outbound reply in DB without sending network email.');
   }
 
   // Insert outbound message into DB
@@ -592,6 +596,12 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
   if (!subject || !String(subject).trim()) return { ok: false, error: 'Subject is required.' };
   if (!text || !String(text).trim()) return { ok: false, error: 'Email text is required.' };
 
+  // Without the EMAIL binding nothing can be sent, so nothing is recorded as
+  // sent either (BA-002). Self-hosted copies have no binding by default.
+  if (!(env.EMAIL && typeof env.EMAIL.send === 'function')) {
+    return { ok: false, error: 'Email sending is not set up (no EMAIL binding).' };
+  }
+
   const now = Date.now();
   const threadId = 'th_' + now + '_' + Math.random().toString(36).slice(2, 8);
   const cleanTo = String(toEmail).trim().toLowerCase();
@@ -646,7 +656,7 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
     }
   }
 
-  if (env.EMAIL && typeof env.EMAIL.send === 'function') {
+  {
     const payload = {
       to: cleanTo,
       from: 'support@mylistsaddon.com',

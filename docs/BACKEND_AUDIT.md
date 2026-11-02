@@ -113,6 +113,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: a new case in `tests/admin-actions.test.mjs`. As admin, with no `EMAIL` in env, POST `/admin/api/support-emails/reply` and assert `ok === false` and the thread's status is unchanged. Repeat for `/compose` and assert no thread row is created.
 
 ### BA-003 A customer's email can put its own HTML into the /admin support inbox
+- Status: Fixed in d044671
 - Category: security
 - Severity / confidence: P2 / High for the injection, Medium for the impact (the strict CSP stops scripts but not forms, links or images)
 - Where: src/admin/59_support-emails.js:197-220 (inbound attachment parsing) and :73-91 (`parseEmailSender`); src/admin/03_admin.js:6353-6360 (attachment `<img src>` and `<a href>`) and `renderSupportEmailThreadList` (`'<strong …>' + sender + '</strong>'`)
