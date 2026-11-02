@@ -1292,7 +1292,7 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
   // Build the incoming collections with unique IDs and clean titles
   const newCols = incomingArr.map((inCol) => {
     const rawName = (incomingArr.length === 1 && options.collectionName) || inCol.title || inCol.name || "My Lists Collections";
-    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim() || "My Lists Collections";
     const colId = inCol.id && !cleanedExisting.some((e) => e.id === inCol.id)
       ? inCol.id
       : "col_mylists_" + Math.random().toString(36).slice(2, 8);

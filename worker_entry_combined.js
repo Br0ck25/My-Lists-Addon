@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "bef3217f98";
+const WORKER_BUILD = "70d3a6e9b3";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -121652,7 +121652,7 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
   // Build the incoming collections with unique IDs and clean titles
   const newCols = incomingArr.map((inCol) => {
     const rawName = (incomingArr.length === 1 && options.collectionName) || inCol.title || inCol.name || "My Lists Collections";
-    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim() || "My Lists Collections";
     const colId = inCol.id && !cleanedExisting.some((e) => e.id === inCol.id)
       ? inCol.id
       : "col_mylists_" + Math.random().toString(36).slice(2, 8);

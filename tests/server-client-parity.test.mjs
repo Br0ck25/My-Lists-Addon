@@ -239,7 +239,8 @@ const addCases = [
   [[], [{ id: "a", title: "A", viewMode: "ROWS" }]], [[], [{ id: "a", title: "A", backdropImageUrl: "https://x/b.jpg" }]],
   { args: [[], [{ id: "a", title: "A" }], { backdropImageUrl: "https://x/opt.jpg" }], todo: "the options.backdropImageUrl setting is honoured by the server only; the client drops it" },
   [[], [{ id: "a", title: "A", backdropImageUrl: "https://x/own.jpg" }], { backdropImageUrl: "https://x/opt.jpg" }],
-  { args: [[], [{ id: "a", title: "(Movies)", folders: [folderA] }], {}], todo: "a name that is only a media suffix: client falls back to 'My Lists Collections', server ends up with an empty name" },
+  [[], [{ id: "a", title: "(Movies)", folders: [folderA] }], {}],
+  [[], [{ id: "a", title: "(Shows)" }], { collectionName: " (TV) " }],
   [[], [{ id: "a", title: "Tab\t(Movies)" , folders: [folderA] }], {}],
   [[], [{ id: "a", title: "Line\n(Movies)", folders: [folderA] }], {}],
   [[], [{ id: "a", title: "Nbsp (Movies)", folders: [folderA] }], {}],
@@ -249,6 +250,13 @@ const addCases = [
 // The server writes backdropImageUrl: "" on every new collection and the
 // client leaves the key out. An empty value and no value mean the same to
 // Nuvio, so that one empty key is dropped before comparing; a real URL is not.
+// A name that is only a media suffix ("(Movies)") must fall back to the default
+// name on both sides, never an empty one (owner decision 2026-11-02).
+it("addNewNuvioCollection: a suffix-only name becomes 'My Lists Collections' on the server", () => {
+  const out = serverFn("addNewNuvioCollection")([], [{ id: "a", title: "(Movies)", folders: [folderA] }], {});
+  assert.equal(out[0].title, "My Lists Collections");
+  assert.equal(out[0].name, "My Lists Collections");
+});
 const dropEmptyBackdrop = (v) => JSON.parse(JSON.stringify(v), (k, x) => (k === "backdropImageUrl" && x === "" ? undefined : x));
 parity("addNewNuvioCollection", addCases.map((a) => (Array.isArray(a) ? { args: a } : a)), { ...same("addNewNuvioCollection"), norm: (v) => dropEmptyBackdrop(maskIds(plain(v))) });
 
