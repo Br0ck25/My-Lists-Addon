@@ -5,7 +5,7 @@
 // Split into helpers only for the 150-line limit; each helper is a block of the
 // original in the same order, and the values a later block read from an earlier
 // one are returned and passed on. The filter block stays in this function,
-// because it reads pingId, which is declared further down (see the note there).
+// because it reads the ids and flags parsed above.
 async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   if (!env || !env.CONFIGS) {
     return json({ ok: false, error: "Cloudflare KV storage (CONFIGS) not configured." }, 500);
@@ -43,6 +43,8 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   } catch {}
 
   if (filterEnabled) {
+    // Same formula as pingId below, from the ids the payload carried (TMDB lookup has not run yet).
+    const filterPingId = mediaType === "series" ? `${imdbId || tmdbId}:${season || 1}:${episode || 1}` : (imdbId || tmdbId || title);
     const allowed = allowedUsersParam.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
     if (!mediaServerUser) {
       if (blockAnon || allowed.length > 0) {
@@ -50,7 +52,7 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
         const diagnosticsKey = `creatortrack:${authUser}`;
         await env.CONFIGS.put(diagnosticsKey, JSON.stringify({
           lastPingAt: Date.now(),
-          lastPingId: pingId || "unknown",
+          lastPingId: filterPingId || "unknown",
           lastServer: server,
           lastUser: null,
           matched: `ignored (${ignoredMsg})`,
@@ -64,7 +66,7 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
       const diagnosticsKey = `creatortrack:${authUser}`;
       await env.CONFIGS.put(diagnosticsKey, JSON.stringify({
         lastPingAt: Date.now(),
-        lastPingId: pingId || mediaServerUser,
+        lastPingId: filterPingId || mediaServerUser,
         lastServer: server,
         lastUser: mediaServerUser,
         matched: `ignored (${ignoredMsg})`,
@@ -85,10 +87,6 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   tmdbId = resolvedIds.tmdbId;
   const searchFoundPoster = resolvedIds.searchFoundPoster;
 
-  // Kept exactly as it was in handleFetch: the filter block above reads pingId
-  // before this line runs, so a ping the filter turns away throws a ReferenceError
-  // (answered as 500) instead of the intended "ignored" reply. Not fixed here: this
-  // was a mechanical move.
   const pingId = mediaType === "series" ? `${imdbId || tmdbId}:${season || 1}:${episode || 1}` : (imdbId || tmdbId || title);
 
   // 5. Execute Watch Record
