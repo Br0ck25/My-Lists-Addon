@@ -1224,6 +1224,21 @@ async function fetchMdblistUpNext(entry, skip = 0, mdblistKey = "", mdblistAcces
   });
 }
 
+// Whether a show or movie is on the account's hidden set (progress-hidden,
+// dropped or reset on Trakt). Shared by fetchTraktContinueWatching and the
+// /api/trakt-my-private-lists route; hiddenShowKeys holds Trakt ids, lowercased
+// IMDB ids and slugs, TMDB ids and lowercased titles.
+function traktIsHiddenShow(hiddenShowKeys, sObj, idObj) {
+  if (!sObj && !idObj) return false;
+  const ids = idObj || (sObj && sObj.ids) || {};
+  if (ids.trakt && hiddenShowKeys.has(String(ids.trakt))) return true;
+  if (ids.imdb && hiddenShowKeys.has(String(ids.imdb).toLowerCase())) return true;
+  if (ids.tmdb && hiddenShowKeys.has(String(ids.tmdb))) return true;
+  if (ids.slug && hiddenShowKeys.has(String(ids.slug).toLowerCase())) return true;
+  if (sObj && sObj.title && hiddenShowKeys.has(String(sObj.title).toLowerCase().trim())) return true;
+  return false;
+}
+
 // Pulls the connected account's Trakt Continue Watching / Playback sessions
 async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", accessToken = "", env = null, ctx = null) {
   if (!accessToken) {
@@ -1309,17 +1324,6 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
         }
       }
 
-      function isHiddenShow(sObj, idObj) {
-        if (!sObj && !idObj) return false;
-        const ids = idObj || (sObj && sObj.ids) || {};
-        if (ids.trakt && hiddenShowKeys.has(String(ids.trakt))) return true;
-        if (ids.imdb && hiddenShowKeys.has(String(ids.imdb).toLowerCase())) return true;
-        if (ids.tmdb && hiddenShowKeys.has(String(ids.tmdb))) return true;
-        if (ids.slug && hiddenShowKeys.has(String(ids.slug).toLowerCase())) return true;
-        if (sObj && sObj.title && hiddenShowKeys.has(String(sObj.title).toLowerCase().trim())) return true;
-        return false;
-      }
-
       const rawPb = (pbRes && pbRes.ok) ? await pbRes.json().catch(() => []) : [];
       const playbackItems = (Array.isArray(rawPb) ? rawPb : []).filter((it) => {
         if (!it) return false;
@@ -1328,7 +1332,7 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
         const mov = it.movie || {};
         const inner = isEp ? show : mov;
         const ids = (isEp ? (show.ids || it.episode?.ids) : mov.ids) || {};
-        return !isHiddenShow(inner, ids);
+        return !traktIsHiddenShow(hiddenShowKeys, inner, ids);
       });
 
       const seenShowIds = new Set();
@@ -1353,7 +1357,7 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
         const candidates = sorted
           .filter((it) => {
             const ids = (it.show && it.show.ids) || {};
-            if (isHiddenShow(it.show, ids)) return false;
+            if (traktIsHiddenShow(hiddenShowKeys, it.show, ids)) return false;
             const hasPb = (ids.trakt && seenShowIds.has(String(ids.trakt))) ||
                           (ids.imdb && seenShowIds.has(String(ids.imdb).toLowerCase())) ||
                           (ids.tmdb && seenShowIds.has(String(ids.tmdb))) ||

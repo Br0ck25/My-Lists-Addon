@@ -6318,17 +6318,6 @@ function generateSearchVariations(query) {
                 }
               }
 
-              function isHiddenShow(sObj, idObj) {
-                if (!sObj && !idObj) return false;
-                const ids = idObj || (sObj && sObj.ids) || {};
-                if (ids.trakt && hiddenShowKeys.has(String(ids.trakt))) return true;
-                if (ids.imdb && hiddenShowKeys.has(String(ids.imdb).toLowerCase())) return true;
-                if (ids.tmdb && hiddenShowKeys.has(String(ids.tmdb))) return true;
-                if (ids.slug && hiddenShowKeys.has(String(ids.slug).toLowerCase())) return true;
-                if (sObj && sObj.title && hiddenShowKeys.has(String(sObj.title).toLowerCase().trim())) return true;
-                return false;
-              }
-
               const seenShowIds = new Set();
               if (playbackRes && playbackRes.ok) {
                 const pbData = await playbackRes.json().catch(() => []);
@@ -6341,7 +6330,7 @@ function generateSearchVariations(query) {
                     const mov = it.movie || {};
                     const inner = isEp ? show : mov;
                     const ids = (isEp ? (ep.ids || show.ids) : mov.ids) || {};
-                    if (isHiddenShow(inner, ids)) continue;
+                    if (traktIsHiddenShow(hiddenShowKeys, inner, ids)) continue;
                     const imdbId = ids.imdb || show.ids?.imdb || mov.ids?.imdb || "";
                     const tmdbId = ids.tmdb || show.ids?.tmdb || mov.ids?.tmdb || "";
                     const traktId = ids.trakt || show.ids?.trakt || mov.ids?.trakt || null;
@@ -6388,7 +6377,7 @@ function generateSearchVariations(query) {
                 const candidates = sorted
                   .filter((it) => {
                     const ids = it.show.ids;
-                    if (isHiddenShow(it.show, ids)) return false;
+                    if (traktIsHiddenShow(hiddenShowKeys, it.show, ids)) return false;
                     const hasPb = (ids.trakt && seenShowIds.has(String(ids.trakt))) ||
                                   (ids.imdb && seenShowIds.has(String(ids.imdb))) ||
                                   (ids.tmdb && seenShowIds.has(String(ids.tmdb)));
