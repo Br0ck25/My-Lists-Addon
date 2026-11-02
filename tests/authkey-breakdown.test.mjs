@@ -59,3 +59,36 @@ describe("authkey counter breakdown", () => {
     assert.equal(db._stat("authkey:why:withsession", "total"), undefined);
   });
 });
+
+describe("/admin shows where the key came from", () => {
+  async function dashboard(env) {
+    const login = await call(env, "/admin/login", { method: "POST", form: { key: env.ADMIN_KEY } });
+    const cookie = (login.headers.get("set-cookie") || "").match(/^([^=]+=[^;]+)/)[1];
+    return (await call(env, "/admin", { cookie })).text;
+  }
+  // The row for one label, as [label, count].
+  const row = (html, label) => {
+    const m = html.match(new RegExp("<tr><td>" + label + "</td><td>(\\d+)</td></tr>"));
+    return m ? Number(m[1]) : null;
+  };
+
+  it("labels the totals as requests, and lists the last 7 days by path and by reason", async () => {
+    const { env } = await setup();
+    // A key beside a session of the same account, on the restore path.
+    const user = await createUser(env, "adminviewed");
+    const first = await call(env, "/api/creator/sync/save", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey, config: [] } });
+    const cookie = ((first.headers.get("set-cookie") || "").match(/(mla_session=[^;]+)/) || [])[1];
+    await call(env, "/api/creator/restore", { method: "POST", cookie, json: { creatorName: user.creatorName, creatorKey: user.creatorKey } });
+    const html = await dashboard(env);
+    assert.match(html, /Requests that sent the Account Key today/);
+    assert.doesNotMatch(html, /Saves that sent the Account Key/);
+    assert.match(html, /Where the key came from \(7 days\)/);
+    // setup() made one cookie-less sync request and this test made another, plus the restore.
+    assert.equal(row(html, "/api/creator/sync/"), 2);
+    assert.equal(row(html, "/api/creator/restore"), 1);
+    assert.equal(row(html, "No session on the request"), 2);
+    assert.equal(row(html, "Session for the same account sent too \\(should be 0\\)"), 1);
+    assert.equal(row(html, "Session for a different account"), 0);
+    assert.equal(row(html, "Install-link save"), 0);
+  });
+});

@@ -1583,6 +1583,67 @@ async function readSourceGroupTotals(env) {
   return readStatTotalsByPrefix({ CONFIGS: env.CONFIGS }, "sourcegroup:");
 }
 
+// Counts of the "authkey:" breakdown (CQ-17) summed over the given Eastern
+// day keys, as { "authkey:api-save": n, "authkey:why:nocookie": n, ... }.
+// With D1 it is one range query; without it, one loadStatsByDay per kind.
+async function loadAuthKeyBreakdown(env, dateKeys) {
+  const sums = {};
+  if (!env || !env.CONFIGS) return sums;
+  if (env.DB) {
+    try {
+      const [lo, hi] = statKindRange("authkey:");
+      const marks = dateKeys.map(() => "?").join(",");
+      const { results } = await env.DB.prepare(
+        "SELECT kind, SUM(n) AS total FROM stats WHERE kind >= ? AND kind < ? AND day IN (" + marks + ") GROUP BY kind"
+      ).bind(lo, hi, ...dateKeys).all();
+      for (const row of results || []) sums[row.kind] = Number(row.total) || 0;
+      return sums;
+    } catch (e) {
+      // Table missing or D1 unavailable -- fall through to the KV counters.
+    }
+  }
+  const kinds = CREATOR_SESSION_PATH_PREFIXES.map(authKeyPathKind).concat(AUTHKEY_REASON_ROWS.map((r) => r[0]));
+  await Promise.all(kinds.map(async (kind) => {
+    const byDay = await loadStatsByDay(env, kind);
+    sums[kind] = dateKeys.reduce((n, d) => n + (Number(byDay[d]) || 0), 0);
+  }));
+  return sums;
+}
+
+// The reasons authenticateCreator records, in the order /admin lists them,
+// with the wording the owner reads.
+const AUTHKEY_REASON_ROWS = [
+  ["authkey:why:nocookie", "No session on the request"],
+  ["authkey:why:othersession", "Session for a different account"],
+  ["authkey:why:withsession", "Session for the same account sent too (should be 0)"],
+  ["authkey:why:trackkey", "Install-link save"],
+];
+
+// The two small tables under the Account Key numbers: one row per path that
+// sent the key, one row per reason. Only paths with a count are listed.
+function authKeyBreakdownHtml(sums) {
+  const pathRows = CREATOR_SESSION_PATH_PREFIXES
+    .map((prefix) => [prefix, Number(sums[authKeyPathKind(prefix)]) || 0])
+    .filter((r) => r[1] > 0)
+    .map((r) => `<tr><td>${escapeHtmlServer(r[0])}</td><td>${r[1]}</td></tr>`);
+  const reasonRows = AUTHKEY_REASON_ROWS
+    .map((r) => `<tr><td>${escapeHtmlServer(r[1])}</td><td>${Number(sums[r[0]]) || 0}</td></tr>`);
+  return `<h2 class="admin-section-title">Where the key came from (7 days)</h2>
+    <p class="admin-hint">By reason, then by path. A path only appears once it has sent the key.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Reason</th><th>Requests</th></tr>
+        ${reasonRows.join("")}
+      </table>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Path</th><th>Requests</th></tr>
+        ${pathRows.join("") || '<tr><td colspan="2">None in the last 7 days.</td></tr>'}
+      </table>
+    </div>`;
+}
+
 // Reads every stats:{kind}:YYYY-MM-DD entry via a prefix list (there's no
 // KV range-query, so this is the only way to enumerate them) and returns a
 // { "YYYY-MM-DD": count } map, skipping the :total key itself.
@@ -2676,7 +2737,7 @@ async function renderAdminDashboard(env) {
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
     pvByDay, inByDay, ppByDay,
-    creatorResult, sourceGroupResult, authKeyByDay
+    creatorResult, sourceGroupResult, authKeyByDay, authKeySums
   ] = await Promise.all([
     readStatCount(env, "pageviews", "total"),
     readStatCount(env, "pageviews", today),
@@ -2693,6 +2754,7 @@ async function renderAdminDashboard(env) {
     listAllKeys(env.CONFIGS, "creator:"),
     listAllKeys(env.CONFIGS, "stats:sourcegroup:"),
     loadStatsByDay(env, "authkey"),
+    loadAuthKeyBreakdown(env, Array.from({ length: 7 }, (_, i) => easternDateKeyDaysAgo(Date.now(), i))),
   ]);
   // Requests that still sent the Account Key where the session would do
   // (Release 19): today, and the last 7 days.
@@ -2968,9 +3030,10 @@ ${UTILITY_CSS}
   <div class="admin-tab-panel" data-admin-panel="creators">
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value">${totalCreatorCount}</div><div class="stat-label">Creator accounts</div></div>
-      <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Saves that sent the Account Key today</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Requests that sent the Account Key today</div></div>
       <div class="stat-card"><div class="stat-value">${authKeyWeek}</div><div class="stat-label">Same, last 7 days</div></div>
     </div>
+    ${authKeyBreakdownHtml(authKeySums)}
     <div class="admin-toolbar">
       <input type="search" id="creatorSearchInput" placeholder="Search every username or display name" aria-label="Search creator accounts" autocomplete="off" data-act="onCreatorSearchInput" data-act-on="input">
       <select class="admin-select" id="creatorPageSize" aria-label="Accounts per page" data-act="changeCreatorPageSize">

@@ -1331,6 +1331,13 @@ const CREATOR_SESSION_PATH_PREFIXES = [
   "/api/channel/unpublish",
 ];
 
+// The stats kind that counts key-signed requests for one entry of the list
+// above ("/api/creator/sync/" -> "authkey:api-creator-sync"). One place, so
+// the counter in authenticateCreator and the /admin table agree.
+function authKeyPathKind(prefix) {
+  return "authkey:" + String(prefix).replace(/^\/|\/$/g, "").replace(/\//g, "-");
+}
+
 // --- Session management (P3a-4) -------------------------------------------
 const SESSION_COOKIE_NAME = "mla_session";
 const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days

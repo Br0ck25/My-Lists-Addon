@@ -127,7 +127,7 @@
           : heldSessionFor ? "othersession"
           : "nocookie";
         ctx.waitUntil(bumpStat(env, "authkey"));
-        ctx.waitUntil(bumpStat(env, "authkey:" + keyPathPrefix.replace(/^\/|\/$/g, "").replace(/\//g, "-")));
+        ctx.waitUntil(bumpStat(env, authKeyPathKind(keyPathPrefix)));
         ctx.waitUntil(bumpStat(env, "authkey:why:" + why));
       }
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
