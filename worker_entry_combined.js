@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ff7ef686f6";
+const WORKER_BUILD = "1deb4ca362";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -113050,7 +113050,7 @@ async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
 async function creatorApiSyncSavePresets(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -113103,7 +113103,7 @@ async function creatorApiSyncSavePresets(request, env, ctx, path) {
 async function creatorApiSyncSaveChannels(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -113184,7 +113184,7 @@ async function creatorApiSyncSaveChannels(request, env, ctx, path) {
 async function creatorApiSyncMeta(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -113284,7 +113284,7 @@ async function creatorApiSyncMeta(request, env, ctx, path) {
 async function creatorApiSyncLoad(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -113627,7 +113627,7 @@ async function creatorSyncLoadMergeQueue(env, auth, data) {
 async function creatorApiSyncLike(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -113694,7 +113694,7 @@ async function creatorApiSyncShareTracking(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
