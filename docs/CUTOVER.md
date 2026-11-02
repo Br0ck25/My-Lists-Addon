@@ -346,7 +346,7 @@ Remove from `03_admin.js`:
 - `migrateGenreDecadeStatsIfNeeded` function definition and its call site
 - `backfillCreatorLastActive` function definition and its call site (BE-M19)
 
-After removal: `python build.py && python check_sync.py && node --check worker_entry_combined.js && python gen_map.py && node --test tests/*.test.mjs`.
+After removal: `python build.py && python tools/check_sync.py && node --check worker_entry_combined.js && python tools/gen_map.py && node --test tests/*.test.mjs`.
 
 ---
 
@@ -359,7 +359,7 @@ After removal: `python build.py && python check_sync.py && node --check worker_e
 - [ ] Legacy D1 tables dropped — table by table, likewise.
 - [ ] `cfg:` records cleaned up (30-day per-install window).
 - [ ] Admin migration tools removed from source.
-- [ ] `FUNCTION-MAP.md` regenerated (`python gen_map.py`).
+- [ ] `FUNCTION-MAP.md` regenerated (`python tools/gen_map.py`).
 - [ ] `docs/OPERATIONS.md`, `docs/ARCHITECTURE.md`, `README.md` updated for v2 steady state.
 
 ---

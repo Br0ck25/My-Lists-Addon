@@ -188,11 +188,11 @@ print(f"  data-act actions resolve ({len(act_calls)} distinct actions, "
 #
 # So this does not read the source. It renders the page with every
 # caller-supplied field set to a payload and asserts the payload came out inert
-# -- see render_check.js --hostile, which produces the input.
+# -- see tools/render_check.js --hostile, which produces the input.
 #
 # Two markers, two contexts: the script preamble (jsonForScript) and the
 # settings value="..." attributes (escapeHtmlServer). Keep them identical to
-# the ones in render_check.js.
+# the ones in tools/render_check.js.
 XSS_SCRIPT_MARK = 'MYLXSSPROBE'
 XSS_ATTR_MARK = 'MYLXSSATTR'
 
@@ -201,7 +201,7 @@ if 'hostile' in tag:
     # Positive control FIRST. Without it a render that silently stopped
     # including these values would pass every assertion below by rendering
     # nothing -- which is exactly the shape of check this repo has been bitten
-    # by before (see the note on check_sync.py).
+    # by before (see the note on tools/check_sync.py).
     if XSS_SCRIPT_MARK not in html:
         problems.append(f"{XSS_SCRIPT_MARK} is absent -- the hostile render did not reach the script preamble, "
                         "so the breakout assertion below proves nothing")
@@ -224,7 +224,7 @@ if 'hostile' in tag:
     print(f"  hostile render is inert (both markers present, neither breaks out)")
 elif XSS_SCRIPT_MARK in html or XSS_ATTR_MARK in html:
     print(f"FAIL: XSS probe markers found in a non-hostile render ({tag}) -- "
-          "render_check.js is injecting them where it should not")
+          "tools/render_check.js is injecting them where it should not")
     sys.exit(1)
 
 

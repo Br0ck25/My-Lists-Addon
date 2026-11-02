@@ -665,7 +665,7 @@ function appActRunOne(el, ev) {
   const fn = window[name];
   if (typeof fn !== 'function') {
     // A renamed or misspelled action fails loudly once per name. The inline
-    // handlers it replaced failed silently -- html_checks.py exists because
+    // handlers it replaced failed silently -- tools/html_checks.py exists because
     // of exactly that, and now checks these names the same way.
     if (!_appActMissingReported[name]) {
       _appActMissingReported[name] = true;
@@ -2102,7 +2102,7 @@ function createSortableList(container, options = {}) {
 // build order) and this copy never ran -- editing it changed nothing,
 // which is exactly the trap a duplicate top-level declaration sets. The
 // surviving definition now covers both DOM shapes; see
-// showPosterPlaceholderFor there. html_checks.py fails the build if a
+// showPosterPlaceholderFor there. tools/html_checks.py fails the build if a
 // duplicate is ever reintroduced.
 
 function resolveMissingPostersInDom(rootEl) {
@@ -2450,11 +2450,11 @@ if (typeof document !== 'undefined') {
 // the public site closes on 2026-11-08 unless donations cover its costs. Its
 // buttons are the donation page and the existing full backup download
 // (downloadConfigJson), so a visitor can leave with their data in one click.
-// Self-hosting steps for the data live in SELF-HOSTING.md. It is the public
+// Self-hosting steps for the data live in docs/SELF-HOSTING.md. It is the public
 // site's message, so a self-hosted copy (any other hostname) never shows it.
 const SITE_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
 const SITE_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
-const SITE_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
+const SITE_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/docs/SELF-HOSTING.md';
 
 // The admin's plain text as markup: every character escaped first, then a blank
 // line is a paragraph, a single newline a line break and **words** bold.

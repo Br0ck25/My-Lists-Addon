@@ -47,4 +47,4 @@ jobs:
           MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
           SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-        run: node provider_live_check.mjs
+        run: node tools/provider_live_check.mjs

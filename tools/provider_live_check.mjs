@@ -13,7 +13,7 @@
 //     Worker reads, this fails and names the field, before anyone's catalog
 //     quietly empties.
 //
-// Run it:  node provider_live_check.mjs
+// Run it:  node tools/provider_live_check.mjs
 // Keys come from the environment (TMDB_API_KEY, TRAKT_CLIENT_ID,
 // MDBLIST_API_KEY, SIMKL_CLIENT_ID, RAPIDAPI_KEY). A fixture whose key is not
 // set is skipped and reported as skipped; the keyless providers (MDBList's
@@ -32,7 +32,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const REPO_ROOT = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const FIXTURE_DIR = path.join(REPO_ROOT, "tests", "fixtures", "providers");
 // The only secrets a fixture may name. Their values are masked in anything
 // this script prints.

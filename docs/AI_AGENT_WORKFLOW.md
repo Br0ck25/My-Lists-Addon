@@ -25,7 +25,7 @@ When you open Antigravity (Gemini 3.8 Flash High) to continue the work, copy and
 ### Prompt 3: When Starting in Arena.ai (Agent Mode)
 When you switch to Arena.ai Agent Mode, copy and paste this:
 
-> *"You are working on the My Lists Addon project. Read `HANDOFF.md` and `AGENTS.md`. Follow the next steps in `HANDOFF.md` exactly. Do NOT refactor or change the existing architecture. Rebuild using `python build.py` and verify with `python check_sync.py` after making changes. When done, update `HANDOFF.md` and commit to Git."*
+> *"You are working on the My Lists Addon project. Read `HANDOFF.md` and `AGENTS.md`. Follow the next steps in `HANDOFF.md` exactly. Do NOT refactor or change the existing architecture. Rebuild using `python build.py` and verify with `python tools/check_sync.py` after making changes. When done, update `HANDOFF.md` and commit to Git."*
 
 ---
 

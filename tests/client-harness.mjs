@@ -2,8 +2,8 @@
 // behaviour can be tested rather than only its syntax.
 //
 // Why this exists. 35,225 of the 59,240 source lines are the builder UI, and
-// until now the suite reached them only through render_check.js (does the page
-// render) and html_checks.py (does the bundle parse, do inline handlers
+// until now the suite reached them only through tools/render_check.js (does the page
+// render) and tools/html_checks.py (does the bundle parse, do inline handlers
 // resolve). Both audits have been server-side audits for exactly this reason.
 // Nothing exercised what the client actually DOES -- which request it sends,
 // what it does with the answer -- and that is where the client/server contract
@@ -13,8 +13,8 @@
 // How it works, and why not jsdom or Playwright. This repo has no package.json
 // and CI runs on bare node + python; adding a browser or a DOM library would
 // change that and cost minutes per run. The pieces were already here: the
-// Worker evaluates in a `vm` (render_check.js), renderBuilder returns the page
-// as a string, and html_checks.py already pulls the inline script out of it.
+// Worker evaluates in a `vm` (tools/render_check.js), renderBuilder returns the page
+// as a string, and tools/html_checks.py already pulls the inline script out of it.
 // This does the same three things and then evaluates the result against a DOM
 // stub small enough to read.
 //

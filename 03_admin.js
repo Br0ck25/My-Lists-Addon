@@ -4185,7 +4185,7 @@ ${UTILITY_CSS}
       if (typeof fn !== 'function') {
         // A renamed or misspelled action fails loudly once per name, instead of
         // being a button that silently does nothing -- the same net the builder
-        // page has, and html_checks.py checks these names the same way.
+        // page has, and tools/html_checks.py checks these names the same way.
         if (!_adminActMissing[name]) {
           _adminActMissing[name] = true;
           console.warn('Admin action not found: ' + name);

@@ -9,7 +9,7 @@
 # Worker was invisible to the CI drift check. It now comes from header.js
 # like every other input.
 #
-# assemble() is what check_sync.py compares the committed Worker against, so
+# assemble() is what tools/check_sync.py compares the committed Worker against, so
 # the two cannot disagree about how the file is made.
 import datetime
 import glob
@@ -22,7 +22,7 @@ STAMP_PLACEHOLDER = b'"__BUILD_STAMP__"'
 # release number someone had to raise by hand. It is the day the code last
 # changed, not the day of the build: when the stamp is the one the committed
 # Worker already carries, its date is kept, so building the same sources again
-# (verify.sh, CI, check_sync.py) gives the same bytes on any later day.
+# (verify.sh, CI, tools/check_sync.py) gives the same bytes on any later day.
 DATE_PLACEHOLDER = b'"__BUILD_DATE__"'
 
 
@@ -47,7 +47,7 @@ def assemble():
         # LF, not CRLF. This separator only fires for a source that does not end
         # with a newline, so it was a single stray CRLF in an otherwise-LF file --
         # invisible to verify.sh and CI (both ignore CR at EOL) but enough to make
-        # check_sync.py's byte-exact compare fail on a clean checkout. See
+        # tools/check_sync.py's byte-exact compare fail on a clean checkout. See
         # .gitattributes.
         if not data.endswith(b'\n'):
             out += b'\n'

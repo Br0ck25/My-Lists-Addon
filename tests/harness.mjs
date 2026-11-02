@@ -43,7 +43,7 @@ if (!globalThis.caches) {
   const root = fileURLToPath(new URL("..", import.meta.url));
   let res = null;
   for (const py of ["python", "python3", "py"]) {
-    res = spawnSync(py, ["check_sync.py"], { cwd: root, encoding: "utf8" });
+    res = spawnSync(py, ["tools/check_sync.py"], { cwd: root, encoding: "utf8" });
     if (!res.error && res.status === 0) break;
   }
   if (res && !res.error && res.status !== 0) {

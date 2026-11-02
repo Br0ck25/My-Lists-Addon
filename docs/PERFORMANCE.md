@@ -36,7 +36,7 @@ Phase 8 targeted the core throughput bottlenecks identified in the initial perfo
 - **Implementation:** Partitioned client JavaScript into two separate assets:
   1. `/app.js` (**First View / Critical Path**): Core shell runtime, navigation, search modal, and library views. Compressed size: **93.26 KB gzip** (budget: <= 150 KB gzip).
   2. `/app-features.js` (**Secondary / Deferred**): Channel builder, custom list creator/editor, profile settings, and explore filters. Loaded with `defer` without blocking first paint or interaction readiness.
-- **Automated Enforcement:** [`check_bundle_budget.mjs`](../check_bundle_budget.mjs) runs on every commit in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`).
+- **Automated Enforcement:** [`tools/check_bundle_budget.mjs`](../check_bundle_budget.mjs) runs on every commit in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`).
 
 ### P8-4: Badged Posters SVG URL Overlays & Precomputed Icon Bytes
 - **Implementation:** Rewrote `/api/poster-badge` to generate compact SVG overlays referencing allowlisted poster URLs directly in `<image href="..." xlink:href="...">`.

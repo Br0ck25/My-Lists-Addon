@@ -2,7 +2,7 @@
 
 > **Audience: AI assistants (and humans) adding or changing UI.** Follow every rule here. Where this file says "legacy", do **not** copy it.
 > Source of truth: the **tokens** are one constant, `DESIGN_TOKENS_CSS` in `00_constants.js`, shared by the app (`09_page-shell.js`), the admin pages (`03_admin.js`) and the backup guide (`24_…`). The component CSS is the app stylesheet in `09_page-shell.js` (between `/*MYLISTS_APP_CSS_START*/` and `/*MYLISTS_APP_CSS_END*/`). The 2026-10-06 audit's remediation has been applied (see §9 for what is left). Search for selectors; line numbers drift.
-> Edit the numbered source files only, never `worker_entry_combined.js`. After any change run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `node --test tests/*.test.mjs` (see `CLAUDE.md`).
+> Edit the numbered source files only, never `worker_entry_combined.js`. After any change run `python build.py`, `python tools/check_sync.py`, `node --check worker_entry_combined.js`, `node --test tests/*.test.mjs` (see `CLAUDE.md`).
 
 ---
 
@@ -363,7 +363,7 @@ Observed conventions (enforce for new copy):
 8. **Responsive:** test ≤640px (incl. 320–360px width) and ≥641px; check nothing overflows horizontally and content clears the bottom nav and toast area.
 9. **Dark mode:** toggle the theme and verify contrast; no hard-coded colours.
 10. **Escape and CSP:** `escapeHtml/escapeAttr`; nonce on any new `<style>`/`<script>`; no unescaped `</script>`; no external fonts, CSS or icon libraries.
-11. **Preserve the build rules** (`tests/design-system.test.mjs` enforces tokens, breakpoints, z-index and contrast pairing automatically): edit numbered files only; run `python build.py`, `python check_sync.py`, `node --check worker_entry_combined.js`, `python gen_map.py` (if functions changed), `node --test tests/*.test.mjs`.
+11. **Preserve the build rules** (`tests/design-system.test.mjs` enforces tokens, breakpoints, z-index and contrast pairing automatically): edit numbered files only; run `python build.py`, `python tools/check_sync.py`, `node --check worker_entry_combined.js`, `python tools/gen_map.py` (if functions changed), `node --test tests/*.test.mjs`.
 12. **Update this file** if you added a variant or token.
 
 ---
@@ -391,7 +391,7 @@ Still open. Do not copy these; fix them opportunistically:
 
 ## 10. Recipes (copy these, do not improvise)
 
-Every recipe ends the same way: build with the existing classes, check light and dark mode, check ≤640px and ≥641px, run `python build.py && python check_sync.py && node --check worker_entry_combined.js && node --test tests/*.test.mjs`.
+Every recipe ends the same way: build with the existing classes, check light and dark mode, check ≤640px and ≥641px, run `python build.py && python tools/check_sync.py && node --check worker_entry_combined.js && node --test tests/*.test.mjs`.
 
 ### 10.1 Add a button
 1. **Choose the variant** (§3.1): main action `btn-primary`; second action `btn-secondary`; low-emphasis `btn-ghost`; destructive `btn-danger`; inside a card or list row `lc-btn` (+ `secondary` or `primary`); add/remove a list or channel `lc-btn list-add-btn` (see 10.5).

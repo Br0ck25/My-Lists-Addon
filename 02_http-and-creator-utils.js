@@ -94,7 +94,7 @@ function isPrivateApiPath(path) {
 // real nonce is substituted once per response at the Worker's boundary
 // (withSecurityHeaders, 02_), which is also where the header is set. One place
 // substitutes, so a page that forgets is a page that does not run, and the
-// build fails on one (html_checks.py) rather than shipping it.
+// build fails on one (tools/html_checks.py) rather than shipping it.
 //
 // It is deliberately not a valid base64 nonce value: nothing that is not this
 // exact placeholder can be mistaken for one.
@@ -132,7 +132,7 @@ const CSP_REPORT_MAX_PER_MINUTE = 60;
 // The history matters for reading this: the inline on*= handlers the CSP used
 // to need 'unsafe-inline' for are gone from both pages -- P6-8 on the builder,
 // P6-10 on /admin -- replaced by data-act attributes run by one delegated
-// listener, and html_checks.py fails the build on a handler, whatever it is
+// listener, and tools/html_checks.py fails the build on a handler, whatever it is
 // called. P7-1 closed the second half: the inline <script> blocks themselves.
 //
 // style-src keeps 'unsafe-inline'. That is deliberate and it is about
@@ -2163,7 +2163,7 @@ function escapeHtmlServer(s) {
 // Applied at EVERY stringify that lands in a script element, not only the ones
 // reachable by a caller today. Deciding per site is how this was missed twice:
 // two prior audits checked the client-side render, where escapeHtml is applied
-// correctly, and never the server-rendered preamble. html_checks.py now proves
+// correctly, and never the server-rendered preamble. tools/html_checks.py now proves
 // the rule holds against a deliberately hostile render -- see its
 // MYLXSSPROBE check.
 function jsonForScript(value) {
@@ -3047,7 +3047,7 @@ function withoutEdgeCacheForCredentials(input, init) {
 }
 
 // AbortSignal.timeout exists in the Workers runtime, but this also runs
-// inside render_check.js's sandbox (which deliberately provides a minimal
+// inside tools/render_check.js's sandbox (which deliberately provides a minimal
 // global set) and in tests that stub fetch -- so the capability is probed
 // rather than assumed, and its absence just means no signal.
 function timeoutSignal(ms) {

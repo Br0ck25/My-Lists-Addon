@@ -20,7 +20,7 @@ This file defines the mandatory rules and protocols for all AI agents working in
 - **Rebuild and verify after ANY file change**:
   ```bash
   python build.py
-  python check_sync.py
+  python tools/check_sync.py
   node --check worker_entry_combined.js
   ```
 
@@ -106,9 +106,9 @@ For every non-trivial change, leave a meaningful verification using the smallest
 Before reporting a task complete or handing off to another agent, run:
 ```bash
 python build.py
-python check_sync.py
+python tools/check_sync.py
 node --check worker_entry_combined.js
-python gen_map.py
+python tools/gen_map.py
 node --test tests/*.test.mjs
 ```
 

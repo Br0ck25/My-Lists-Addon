@@ -24,7 +24,7 @@
 // will. Server-only, at module level after the Worker's exports (like 27_
 // and 28_), so it takes `env` from its caller. (Never write the two words
 // of that export next to each other in a comment in these files:
-// render_check.js cuts the combined file at the last place they appear.)
+// tools/render_check.js cuts the combined file at the last place they appear.)
 
 const MEDIA_LOOKUP_CHUNK = 90;      // ids per IN (...): D1 allows 100 bound parameters, and one more is the kind
 const MEDIA_WRITE_CHUNK = 50;       // statements per D1 batch

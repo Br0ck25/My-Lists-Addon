@@ -4,7 +4,7 @@ How the hosted Worker is deployed, configured and recovered. The Worker is deplo
 
 ---
 
-> **Running your own copy?** Start with [`SELF-HOSTING.md`](../SELF-HOSTING.md) (plain steps, copy and paste). This file is the operator reference for the public site, and its bindings, secrets and migrations apply to a self-hosted copy too.
+> **Running your own copy?** Start with [`docs/SELF-HOSTING.md`](SELF-HOSTING.md) (plain steps, copy and paste). This file is the operator reference for the public site, and its bindings, secrets and migrations apply to a self-hosted copy too.
 
 ## 1. Release checklist
 
@@ -13,9 +13,9 @@ The comprehensive release procedure is documented in **[`docs/DEPLOY_CHECKLIST.m
 1. **Build and verify locally**, from the repo root:
    ```bash
    python build.py
-   python check_sync.py
+   python tools/check_sync.py
    node --check worker_entry_combined.js
-   node check_bundle_budget.mjs
+   node tools/check_bundle_budget.mjs
    node --test tests/*.test.mjs
    MLA_TEST_V2_LISTS_READ=1 node --test tests/*.test.mjs
    ```
@@ -446,7 +446,7 @@ A link that still carries `?ff_new_ui=` (a bookmark, an old post) is sent to the
 
 **Nothing to configure.** Unlike P6-1 to P6-7, this one is not behind the new-UI cookie: it is the page's own markup and this browser's own storage, so it reaches every visitor once the new `worker_entry_combined.js` is deployed. Nothing in the dashboard, no migration and no variable.
 
-- **Every control names its action.** The buttons, boxes and lists in the builder no longer carry a line of JavaScript in the markup; a single listener runs them (`appActDispatch`, `16_client-row-core.js`). If a control ever "does nothing" in the new build, the browser console says `Action failed: <name>` (once per name) instead of failing silently, and `verify.sh`/`html_checks.py` fail the build if a name does not exist in the bundle.
+- **Every control names its action.** The buttons, boxes and lists in the builder no longer carry a line of JavaScript in the markup; a single listener runs them (`appActDispatch`, `16_client-row-core.js`). If a control ever "does nothing" in the new build, the browser console says `Action failed: <name>` (once per name) instead of failing silently, and `verify.sh`/`tools/html_checks.py` fail the build if a name does not exist in the bundle.
 - **No more browser pop-ups.** A message that used to be an `alert()` is now the app's own toast, bottom centre; anything that needed a yes/no is the app's own dialog.
 - **Provider keys are no longer re-saved in the browser.** A Trakt, MDBList, Simkl or TMDB key or token lives in memory while the page is open, is read from the old stored copy if one is there, and the stored copy is cleaned up once the account (signed in) hands the same value back. Consequence to know: if a visitor is **not signed in** and pastes a key, it works for that visit but is not kept for the next one — signing in is what saves it. The Creator Key itself is untouched (it is what signs this browser in; it moves in P6-9).
 - **Nothing to undo** if the deploy has to be rolled back: the previous file re-stores what the old page stored.
@@ -465,7 +465,7 @@ What remains: a list built while signed out still lives in this browser (`myList
 - **The box that filters as you type** (Creator Accounts') still filters as you type — they say so with `data-act-on="input"`. **The provider search box** still searches when you press Enter, and only when you press Enter.
 - **A creator's display name cannot reach the markup as code.** The Reset Key button already kept the name in a `data-` attribute; the Copy Key button in the "new key" box used to have the key written into its own handler, and now takes it as an argument. A test renders a display name containing a quote and a `<script>` tag and proves it stays text.
 - **The dashboard's messages are its own dialog now** (`showAdminAlert`), not the browser's pop-up: 8 `alert()` calls became it. The ten yes/no `confirm()` prompts (delete lists, undo the installs move, restart a copy, reset a key) are **unchanged for now** — each one is inside a flow that has to be restructured around a callback, which is a change of its own.
-- **If something looks wrong:** the browser console says `Admin action not found: <name>` (once per name) if a control ever names a function that is not there, instead of the button silently doing nothing. `html_checks.py` fails the build on any inline handler on any page, so that shape cannot come back quietly.
+- **If something looks wrong:** the browser console says `Admin action not found: <name>` (once per name) if a control ever names a function that is not there, instead of the button silently doing nothing. `tools/html_checks.py` fails the build on any inline handler on any page, so that shape cannot come back quietly.
 - **Nothing to undo** if you roll back the deploy: the previous file is the previous dashboard.
 - **The CSP was unchanged by this task** (`docs/DECISIONS.md` D-18); P7-1 (§24 below) then removed `'unsafe-inline'` from `script-src` by stamping the dashboard's inline `<script>` blocks with a per-response nonce, rather than by moving them into files.
 
@@ -475,7 +475,7 @@ What remains: a list built while signed out still lives in this browser (`myList
 
 - **What changed for visitors:** nothing they should notice. The pages look and behave the same; the fonts are the device's own now (San Francisco, Segoe UI, Roboto — see `docs/DECISIONS.md` D-20) instead of Inter/Space Grotesk/JetBrains Mono from Google, and the zip reader is one same-origin file, so importing an export works with no third-party request.
 - **What changed in the header:** `script-src 'self' 'nonce-<one per response>'`. `'unsafe-inline'` and the jsDelivr host are gone, so an injected `<script>` — or an `src` pointing at somebody else's server — is refused by the browser. `style-src-elem` is nonce-only too; `style-src` keeps `'unsafe-inline'` because the app writes `style="…"` attributes, which a nonce cannot cover. `connect-src`/`img-src` still allow `https:` (the client talks to provider APIs directly and posters come from provider hosts).
-- **If a page ever came out without its nonce**, its own scripts would be refused and the page would be visibly dead — that is the loud failure, not a silent downgrade. It cannot happen quietly: `html_checks.py` fails the build if any rendered inline `<script>`/`<style>` lacks the nonce, and `tests/csp.test.mjs` checks every page the Worker serves, including both `/admin` ones.
+- **If a page ever came out without its nonce**, its own scripts would be refused and the page would be visibly dead — that is the loud failure, not a silent downgrade. It cannot happen quietly: `tools/html_checks.py` fails the build if any rendered inline `<script>`/`<style>` lacks the nonce, and `tests/csp.test.mjs` checks every page the Worker serves, including both `/admin` ones.
 - **Trusted Types is REPORT-ONLY.** With `FF_CSP_TT_REPORT=1`, every page also carries `Content-Security-Policy-Report-Only: require-trusted-types-for 'script'`, which does not block anything; it reports what *would* be blocked, and the app assigns to `innerHTML` in ~300 places, so that is a to-do list rather than a switch to flip. Reports are posted to `POST /api/csp-report`.
 - **Where you can see the reports:** Workers Logs (Observability → Logs), filtered on `[csp]` — one line per distinct violation per isolate, e.g. `[csp] refused: csp-violation require-trusted-types-for https://example.test`. If the Analytics Engine binding (`ANALYTICS`) is set, each report also writes one data point indexed `csp:<kind>`, which is where counts belong. Nothing is stored per report: the endpoint writes no KV and no D1.
 - **The reports are off unless you ask for them** (release branch, Release 10): set the Worker variable **`FF_CSP_TT_REPORT`** to `1` to send them, and delete it again when done. They are browser-generated POSTs, one per `innerHTML` assignment a page makes, and since P7-3 each one spends a D1 rate-limit write, so they belong on for an hour of work on the sinks, not on every visit. The switch touches only the report-only header; the enforced policy is the same either way.
@@ -572,7 +572,7 @@ Read replication is configured in Cloudflare's dashboard (no Worker environment 
   1. `/app.js` (**First View / Critical Path**): Contains the core runtime, header navigation, search modal, account basics, notifications, copy/export utilities, and library views. Compressed size is **~93 KB gzip**, strictly under the 150 KB budget.
   2. `/app-features.js` (**Secondary Features / Deferred**): Contains the Channels builder, custom list creator/editor, creator profile management, backup/restore/presets, and explore filters. Injected into HTML with `defer` so it loads asynchronously in the background without delaying first paint, LCP, or interaction readiness.
 - **Immutable Caching & Service Worker:** Both bundles are served with content-addressed query strings (`?v=<hash>`), `Cache-Control: public, max-age=31536000, immutable`, and 304 revalidation support. The service worker (`sw.js`) caches both bundles as immutable assets for complete offline PWA reliability.
-- **CI Budget Enforcement:** `check_bundle_budget.mjs` runs on every pull request and push in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`). The build automatically fails if `/app.js` exceeds 150 KB gzip.
+- **CI Budget Enforcement:** `tools/check_bundle_budget.mjs` runs on every pull request and push in GitHub Actions (`.github/workflows/ci.yml`) and local verification (`verify.sh`). The build automatically fails if `/app.js` exceeds 150 KB gzip.
 
 ## 30. Counters (D1) and Analytics Engine (P8-2, corrected 2026-10-04)
 

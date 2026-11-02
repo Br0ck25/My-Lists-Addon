@@ -30,7 +30,7 @@ Run these checks in order from the repository root:
 
 - [ ] **2. Check Source Synchronization:**
   ```bash
-  python check_sync.py
+  python tools/check_sync.py
   ```
   *Assertion:* Outputs `ok: worker_entry_combined.js matches its sources`.
 
@@ -42,21 +42,21 @@ Run these checks in order from the repository root:
 
 - [ ] **4. First-View Bundle Budget Audit (P8-3):**
   ```bash
-  node check_bundle_budget.mjs
+  node tools/check_bundle_budget.mjs
   ```
   *Assertion:* First-view `/app.js` bundle $\le$ 150.00 KB gzip (currently ~93.26 KB).
 
 - [ ] **5. Scope & Identifier Resolution Check:**
   ```bash
   npm install --no-save --no-audit --no-fund acorn@8.14.0 eslint-scope@8.2.0
-  node scope_check.mjs worker worker_entry_combined.js
+  node tools/scope_check.mjs worker worker_entry_combined.js
   ```
   *Assertion:* Every identifier resolves cleanly without TDZ or scope collisions.
 
 - [ ] **6. HTML Living Standard & Render Check:**
   ```bash
-  node render_check.js rendered.html
-  python html_checks.py rendered.html
+  node tools/render_check.js rendered.html
+  python tools/html_checks.py rendered.html
   ```
   *Assertion:* Passes with 0 HTML or nonce violations.
 
@@ -69,7 +69,7 @@ Run these checks in order from the repository root:
 
 - [ ] **8. Regenerate Function Map:**
   ```bash
-  python gen_map.py
+  python tools/gen_map.py
   git diff --quiet -- FUNCTION-MAP.md || echo "FUNCTION-MAP.md was updated"
   ```
 
@@ -138,7 +138,7 @@ Perform the deployment during a low-traffic window:
   - **Before pasting, save the Worker currently in the dashboard** (Select all, copy, keep it as `previous-worker.js` outside the repository). It is the fastest rollback.
   - **Do not run `npx wrangler deploy`** against production: see the warning at the top of `wrangler.toml`. Production is deployed by pasting.
 - [ ] **2b. Confirm the right file is live:**
-  - Open `/admin`. The heading line must read **Built YYYY-MM-DD (build XXXXXXXXXX)**: both are filled in by `python build.py` (the date is the day the code last changed), and the build matches the `build stamp:` line that `python build.py` printed (also shown by `python check_sync.py`).
+  - Open `/admin`. The heading line must read **Built YYYY-MM-DD (build XXXXXXXXXX)**: both are filled in by `python build.py` (the date is the day the code last changed), and the build matches the `build stamp:` line that `python build.py` printed (also shown by `python tools/check_sync.py`).
   - If the build differs, the pasted file is not the one that passed the checks. Paste again from the committed `worker_entry_combined.js`.
   - Write the release and build in `docs/RELEASES.md` so there is a record of what was live when.
 - [ ] **3. Verify Production Smoke Tests:**

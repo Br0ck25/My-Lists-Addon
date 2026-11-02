@@ -31,8 +31,8 @@ Do this while mylistsaddon.com is still up.
 - A free **TMDB API key**: create an account at [themoviedb.org](https://www.themoviedb.org/), then Settings → API. This powers search and posters.
 - Optional keys for the services you use: Trakt, MDBList, Simkl. You can add them later.
 - The files from this repository (you will copy and paste from them):
-  - [`schema.sql`](schema.sql): the whole main database, ready to paste.
-  - [`schema_activity.sql`](schema_activity.sql): the watch history database, ready to paste.
+  - [`schema.sql`](../schema.sql): the whole main database, ready to paste.
+  - [`schema_activity.sql`](../schema_activity.sql): the watch history database, ready to paste.
   - [`worker_entry_combined.js`](worker_entry_combined.js): the whole program, in one file.
 
 **How to copy a file from GitHub:** open it, click **Raw** (top right of the file), press `Ctrl+A` (Mac: `Cmd+A`) to select everything, then `Ctrl+C` (Mac: `Cmd+C`) to copy.
@@ -52,14 +52,14 @@ Open [dash.cloudflare.com](https://dash.cloudflare.com) and follow the steps in 
 1. **Storage & Databases → D1 SQL database → Create database.**
 2. Name: `my-lists-db`. Create it.
 3. Open it, then the **Console** tab.
-4. Open [`schema.sql`](schema.sql) on GitHub, copy the **entire file** (see "How to copy a file" above), paste it into the Console and press **Execute**.
+4. Open [`schema.sql`](../schema.sql) on GitHub, copy the **entire file** (see "How to copy a file" above), paste it into the Console and press **Execute**.
 5. It is safe to run twice: nothing is deleted. When it finishes, run `SELECT name FROM sqlite_master WHERE type='table';` and check that you see a long list of tables (`creators`, `lists`, `media`, and more).
 
 ### Step 3. Create the watch history database
 
 1. **Storage & Databases → D1 SQL database → Create database.**
 2. Name: `mylists-activity`. Create it.
-3. Open it, then **Console**. Paste the **entire** [`schema_activity.sql`](schema_activity.sql) and press **Execute**.
+3. Open it, then **Console**. Paste the **entire** [`schema_activity.sql`](../schema_activity.sql) and press **Execute**.
 
 > The two databases are separate. Paste `schema.sql` only into `my-lists-db` and `schema_activity.sql` only into `mylists-activity`.
 
@@ -179,7 +179,7 @@ npx wrangler d1 execute my-lists-db --remote --file=./schema.sql
 npx wrangler d1 execute mylists-activity --remote --file=./schema_activity.sql
 ```
 
-Each create command prints an id (`database_id`, or the KV `id`). Open [`wrangler.selfhost.toml`](wrangler.selfhost.toml) and replace the three `PASTE-...-ID-HERE` values with them. Nothing else in it needs changing.
+Each create command prints an id (`database_id`, or the KV `id`). Open [`wrangler.selfhost.toml`](../wrangler.selfhost.toml) and replace the three `PASTE-...-ID-HERE` values with them. Nothing else in it needs changing.
 
 Add the secrets. Each command asks you to paste the value (see Step 9 above for what each one is and how to make the two random ones):
 
@@ -230,4 +230,4 @@ It prints your address. The settings of Step 10 and the schedule of Step 11 are 
 
 More detail for operators: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) (bindings, secrets, migrations, backups).
 
-This project is licensed for noncommercial use ([PolyForm Noncommercial 1.0.0](LICENSE)). Running it for yourself and friends is fine; it comes with no support.
+This project is licensed for noncommercial use ([PolyForm Noncommercial 1.0.0](../LICENSE)). Running it for yourself and friends is fine; it comes with no support.

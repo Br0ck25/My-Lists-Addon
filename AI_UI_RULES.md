@@ -23,6 +23,6 @@ Full detail: `DESIGN_SYSTEM.md` (read it before adding or changing any UI). Main
 - Copy the legacy spots listed in `DESIGN_SYSTEM.md` §9 (inline styles, leftover `!important`).
 - External fonts, icon libraries, CSS frameworks, or a framework rewrite.
 
-**Build (every change):** edit numbered files only (never `worker_entry_combined.js`), then `python build.py && python check_sync.py && node --check worker_entry_combined.js && node --test tests/*.test.mjs`.
+**Build (every change):** edit numbered files only (never `worker_entry_combined.js`), then `python build.py && python tools/check_sync.py && node --check worker_entry_combined.js && node --test tests/*.test.mjs`.
 
 **If unsure:** pick the most-used existing pattern, say so, and ask. Update `DESIGN_SYSTEM.md` if you add a variant or token.

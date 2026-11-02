@@ -2,7 +2,7 @@
 //
 // Each fixture in tests/fixtures/providers/ is one provider answer the Worker
 // reads, with the fields it depends on listed under `required` (see
-// provider_live_check.mjs for the path syntax). This file checks:
+// tools/provider_live_check.mjs for the path syntax). This file checks:
 //   * each fixture is well-formed and keeps its own contract;
 //   * every provider the Worker calls has fixtures;
 //   * the real fetchers turn the fixtures into rows Stremio can use;

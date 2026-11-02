@@ -4,10 +4,10 @@
 // evaluated as a plain script inside a vm context, then renders a page and
 // writes it out for downstream checks.
 //
-//   node render_check.js rendered.html          -> the builder page
-//   node render_check.js admin.html --admin     -> the admin dashboard
-//   node render_check.js sw.js --sw             -> the service worker
-//   node render_check.js hostile.html --hostile -> the builder page with every
+//   node tools/render_check.js rendered.html          -> the builder page
+//   node tools/render_check.js admin.html --admin     -> the admin dashboard
+//   node tools/render_check.js sw.js --sw             -> the service worker
+//   node tools/render_check.js hostile.html --hostile -> the builder page with every
 //                                                  caller-supplied field set to
 //                                                  an XSS payload
 //
@@ -79,11 +79,11 @@ if (wantSw) {
 
 // Every field a caller can put into the rendered page, set to a payload that
 // would end the inline <script> (or the enclosing attribute) if it reached the
-// browser unescaped. html_checks.py asserts, against this exact render, that
+// browser unescaped. tools/html_checks.py asserts, against this exact render, that
 // neither marker survives in a form that could break out -- and that both
 // markers are present at all, so the check cannot pass by rendering nothing.
 //
-// Keep the two marker strings identical to the ones in html_checks.py.
+// Keep the two marker strings identical to the ones in tools/html_checks.py.
 const XSS_SCRIPT = 'MYLXSSPROBE</script><svg onload=1>';
 const XSS_ATTR = 'MYLXSSATTR" onfocus="1';
 const hostileOpts = {

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5146a18fa5";
+const WORKER_BUILD = "7dd96738be";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -3931,7 +3931,7 @@ function isPrivateApiPath(path) {
 // real nonce is substituted once per response at the Worker's boundary
 // (withSecurityHeaders, 02_), which is also where the header is set. One place
 // substitutes, so a page that forgets is a page that does not run, and the
-// build fails on one (html_checks.py) rather than shipping it.
+// build fails on one (tools/html_checks.py) rather than shipping it.
 //
 // It is deliberately not a valid base64 nonce value: nothing that is not this
 // exact placeholder can be mistaken for one.
@@ -3969,7 +3969,7 @@ const CSP_REPORT_MAX_PER_MINUTE = 60;
 // The history matters for reading this: the inline on*= handlers the CSP used
 // to need 'unsafe-inline' for are gone from both pages -- P6-8 on the builder,
 // P6-10 on /admin -- replaced by data-act attributes run by one delegated
-// listener, and html_checks.py fails the build on a handler, whatever it is
+// listener, and tools/html_checks.py fails the build on a handler, whatever it is
 // called. P7-1 closed the second half: the inline <script> blocks themselves.
 //
 // style-src keeps 'unsafe-inline'. That is deliberate and it is about
@@ -6000,7 +6000,7 @@ function escapeHtmlServer(s) {
 // Applied at EVERY stringify that lands in a script element, not only the ones
 // reachable by a caller today. Deciding per site is how this was missed twice:
 // two prior audits checked the client-side render, where escapeHtml is applied
-// correctly, and never the server-rendered preamble. html_checks.py now proves
+// correctly, and never the server-rendered preamble. tools/html_checks.py now proves
 // the rule holds against a deliberately hostile render -- see its
 // MYLXSSPROBE check.
 function jsonForScript(value) {
@@ -6884,7 +6884,7 @@ function withoutEdgeCacheForCredentials(input, init) {
 }
 
 // AbortSignal.timeout exists in the Workers runtime, but this also runs
-// inside render_check.js's sandbox (which deliberately provides a minimal
+// inside tools/render_check.js's sandbox (which deliberately provides a minimal
 // global set) and in tests that stub fetch -- so the capability is probed
 // rather than assumed, and its absence just means no signal.
 function timeoutSignal(ms) {
@@ -15176,7 +15176,7 @@ ${UTILITY_CSS}
       if (typeof fn !== 'function') {
         // A renamed or misspelled action fails loudly once per name, instead of
         // being a button that silently does nothing -- the same net the builder
-        // page has, and html_checks.py checks these names the same way.
+        // page has, and tools/html_checks.py checks these names the same way.
         if (!_adminActMissing[name]) {
           _adminActMissing[name] = true;
           console.warn('Admin action not found: ' + name);
@@ -31514,7 +31514,7 @@ function buildAppShellNavHtml(style) {
     // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
     // pointing at a real element: the legacy buttons carry these ids and the
     // panels were never changed, so a nav without them leaves six references
-    // dangling (html_checks.py fails the build for exactly that).
+    // dangling (tools/html_checks.py fails the build for exactly that).
     const attrs = `class="${cls}" id="tab-${isDesktop ? "desktop" : "mobile"}-${t.id}" aria-controls="content-${t.id}"` +
       ` data-tab="${t.id}" data-app-route href="${t.path}" title="${t.label}"` +
       (active ? ' aria-current="page"' : "");
@@ -40006,7 +40006,7 @@ function appActRunOne(el, ev) {
   const fn = window[name];
   if (typeof fn !== 'function') {
     // A renamed or misspelled action fails loudly once per name. The inline
-    // handlers it replaced failed silently -- html_checks.py exists because
+    // handlers it replaced failed silently -- tools/html_checks.py exists because
     // of exactly that, and now checks these names the same way.
     if (!_appActMissingReported[name]) {
       _appActMissingReported[name] = true;
@@ -41443,7 +41443,7 @@ function createSortableList(container, options = {}) {
 // build order) and this copy never ran -- editing it changed nothing,
 // which is exactly the trap a duplicate top-level declaration sets. The
 // surviving definition now covers both DOM shapes; see
-// showPosterPlaceholderFor there. html_checks.py fails the build if a
+// showPosterPlaceholderFor there. tools/html_checks.py fails the build if a
 // duplicate is ever reintroduced.
 
 function resolveMissingPostersInDom(rootEl) {
@@ -41791,11 +41791,11 @@ if (typeof document !== 'undefined') {
 // the public site closes on 2026-11-08 unless donations cover its costs. Its
 // buttons are the donation page and the existing full backup download
 // (downloadConfigJson), so a visitor can leave with their data in one click.
-// Self-hosting steps for the data live in SELF-HOSTING.md. It is the public
+// Self-hosting steps for the data live in docs/SELF-HOSTING.md. It is the public
 // site's message, so a self-hosted copy (any other hostname) never shows it.
 const SITE_NOTICE_HOSTS = ['mylistsaddon.com', 'www.mylistsaddon.com'];
 const SITE_NOTICE_SEEN_KEY = 'myListAddon:shutdownNoticeSeen';
-const SITE_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md';
+const SITE_NOTICE_GUIDE_URL = 'https://github.com/Br0ck25/My-Lists-Addon/blob/main/docs/SELF-HOSTING.md';
 
 // The admin's plain text as markup: every character escaped first, then a blank
 // line is a paragraph, a single newline a line break and **words** bold.
@@ -89877,7 +89877,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Yes, with no subscriptions, ads, or paywalls. The public site at mylistsaddon.com will shut down on November 8, 2026 unless donations on Ko-fi cover its costs; you can also self-host (SELF-HOSTING.md).",
+            "Yes, with no subscriptions, ads, or paywalls. The public site at mylistsaddon.com will shut down on November 8, 2026 unless donations on Ko-fi cover its costs; you can also self-host (docs/SELF-HOSTING.md).",
         },
       },
     ],
@@ -90692,7 +90692,7 @@ ${UTILITY_CSS}
 
     <div class="faq-item">
       <div class="faq-q">Is My Lists Addon completely free?</div>
-      <div class="faq-a">Yes, it has no subscription, no ads, and no paid tier. Running it costs the owner real money, though, and the public site will shut down on November 8, 2026 unless donations cover its costs (Ko-fi). You can also run your own copy on Cloudflare (a Workers Paid plan, about $5 a month): see <a href="https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md" target="_blank" rel="noopener">SELF-HOSTING.md</a>.</div>
+      <div class="faq-a">Yes, it has no subscription, no ads, and no paid tier. Running it costs the owner real money, though, and the public site will shut down on November 8, 2026 unless donations cover its costs (Ko-fi). You can also run your own copy on Cloudflare (a Workers Paid plan, about $5 a month): see <a href="https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md" target="_blank" rel="noopener">docs/SELF-HOSTING.md</a>.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Do I need to sign up or create an account?</div>
@@ -90998,7 +90998,7 @@ async function renderBadgedPosterJpeg(env, posterBytes, o) {
 // sees this whole thing as string content either way. As a module-level
 // binding it can be pulled out of a vm sandbox and syntax-checked like any
 // other emitted script -- which is exactly the gap that let a SyntaxError sit
-// in the admin page for two days. See render_check.js --sw.
+// in the admin page for two days. See tools/render_check.js --sw.
 //
 // Two caches, because the two kinds of thing here have opposite needs.
 //
@@ -108564,7 +108564,7 @@ async function connectionSuppliedConfigFields(env, accountId) {
 // will. Server-only, at module level after the Worker's exports (like 27_
 // and 28_), so it takes `env` from its caller. (Never write the two words
 // of that export next to each other in a comment in these files:
-// render_check.js cuts the combined file at the last place they appear.)
+// tools/render_check.js cuts the combined file at the last place they appear.)
 
 const MEDIA_LOOKUP_CHUNK = 90;      // ids per IN (...): D1 allows 100 bound parameters, and one more is the kind
 const MEDIA_WRITE_CHUNK = 50;       // statements per D1 batch

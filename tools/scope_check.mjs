@@ -24,15 +24,15 @@
 // check and five prior audits all went past them. A parser does not.
 //
 // Run:
-//   node scope_check.mjs worker worker_entry_combined.js
-//   node scope_check.mjs page   rendered.html
+//   node tools/scope_check.mjs worker worker_entry_combined.js
+//   node tools/scope_check.mjs page   rendered.html
 import { readFileSync } from "node:fs";
 import * as acorn from "acorn";
 import * as escope from "eslint-scope";
 
 const [mode, file] = process.argv.slice(2);
 if (!mode || !file) {
-  console.error("usage: node scope_check.mjs <worker|page> <file>");
+  console.error("usage: node tools/scope_check.mjs <worker|page> <file>");
   process.exit(2);
 }
 

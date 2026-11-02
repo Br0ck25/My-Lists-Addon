@@ -5,7 +5,7 @@ package-lock.json
 wrangler.local.toml
 wrangler.d1test.toml
 
-# Transient output of render_check.js / html_checks.py / extract_html.py
+# Transient output of tools/render_check.js / tools/html_checks.py / extract_html.py
 # (see verify.sh and .github/workflows/ci.yml) -- generated snapshots of
 # the rendered builder page, not source. A stale committed copy of one of
 # these (test_inner.js) is exactly the kind of drift this ignores.

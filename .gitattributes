@@ -10,7 +10,7 @@
 # That is how the two ended up disagreeing: the sources are committed LF and
 # worker_entry_combined.js was committed CRLF. Nothing caught it, because
 # verify.sh and CI both compare with `git diff --ignore-cr-at-eol`. What did
-# notice was check_sync.py, which compared raw bytes and therefore failed on a
+# notice was tools/check_sync.py, which compared raw bytes and therefore failed on a
 # clean checkout -- and told you to run build.py, which would have committed
 # 3.3MB of line-ending churn and flipped the file back again for the next
 # person on the other platform.

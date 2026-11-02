@@ -1,7 +1,7 @@
 # ============================================================================
 # Your own My Lists Addon on Cloudflare (terminal method)
 # ============================================================================
-# Step by step: SELF-HOSTING.md ("Method B"). Deploy with:
+# Step by step: docs/SELF-HOSTING.md ("Method B"). Deploy with:
 #   npx wrangler deploy -c wrangler.selfhost.toml
 #
 # The only edit this file needs is the three PASTE-...-HERE values below: the

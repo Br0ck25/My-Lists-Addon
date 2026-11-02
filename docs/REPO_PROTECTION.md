@@ -6,14 +6,14 @@ Rules in documents are not enough: people and AI assistants forget them. Everyth
 
 | What | Where it runs | What it stops |
 |---|---|---|
-| `check_sync.py`, CI "Rebuild and fail on drift" | pre-commit hook, CI | a Worker that does not match its sources |
-| `scope_check.mjs` | CI | names that do not exist in the shared scope |
-| `render_check.js` + `html_checks.py` (page, admin, hostile input, service worker) | CI | broken or injectable pages |
+| `tools/check_sync.py`, CI "Rebuild and fail on drift" | pre-commit hook, CI | a Worker that does not match its sources |
+| `tools/scope_check.mjs` | CI | names that do not exist in the shared scope |
+| `tools/render_check.js` + `tools/html_checks.py` (page, admin, hostile input, service worker) | CI | broken or injectable pages |
 | `tests/design-system.test.mjs` | pre-commit hook, CI | token, breakpoint, hex-colour, contrast, add-button drift |
 | `tests/route-access.test.mjs` + `tests/route-access.json` | pre-commit hook, CI | a route nobody classified; an admin or account route that answers an anonymous caller |
 | `tests/build-stamp.test.mjs` | pre-commit hook, CI | losing the build stamp that proves which file is live |
 | `tests/ui-contract.mjs` + `tests/ui-contract.json` (CI job **ui-contract**) | CI | a button, tab or input that changes size, padding, radius, font or colour (light, dark, phone, desktop) without the contract being updated on purpose |
-| `check_bundle_budget.mjs`, `gen_map.py` freshness | CI | a slow first page; a stale function map |
+| `tools/check_bundle_budget.mjs`, `tools/gen_map.py` freshness | CI | a slow first page; a stale function map |
 | the full test suite, run twice (plain and `MLA_TEST_V2_LISTS_READ=1`) | CI | behaviour regressions |
 
 Turn the pre-commit hook on once in each clone: `git config core.hooksPath .githooks`.

@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 echo "pre-commit: Worker matches its sources"
-python3 check_sync.py || { echo "run: python3 build.py   (then git add worker_entry_combined.js)"; exit 1; }
+python3 tools/check_sync.py || { echo "run: python3 build.py   (then git add worker_entry_combined.js)"; exit 1; }
 
 echo "pre-commit: Worker parses"
 node --check worker_entry_combined.js

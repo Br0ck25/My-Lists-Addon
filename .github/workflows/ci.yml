@@ -64,9 +64,9 @@ jobs:
       - name: Every identifier resolves
         run: |
           npm install --no-save --no-audit --no-fund acorn@8.14.0 eslint-scope@8.2.0
-          node scope_check.mjs worker worker_entry_combined.js
-          node render_check.js rendered-scope.html > /dev/null
-          node scope_check.mjs page rendered-scope.html
+          node tools/scope_check.mjs worker worker_entry_combined.js
+          node tools/render_check.js rendered-scope.html > /dev/null
+          node tools/scope_check.mjs page rendered-scope.html
 
       # node --check above only parses the outer JS file. The served page
       # is a giant template literal that renderBuilder() returns as a
@@ -77,8 +77,8 @@ jobs:
       # renderBuilder() in a sandbox and syntax-checks what it returns.
       - name: Render + validate the builder page
         run: |
-          node render_check.js rendered.html
-          python3 html_checks.py rendered.html ci
+          node tools/render_check.js rendered.html
+          python3 tools/html_checks.py rendered.html ci
 
       # (The new UI shell used to be a second render, checked in its own step.
       # It is the only page since the classic page was retired in Release 21,
@@ -93,8 +93,8 @@ jobs:
       # `node --check`, which sees both pages as string content.
       - name: Render + validate the admin dashboard
         run: |
-          node render_check.js rendered-admin.html --admin
-          python3 html_checks.py rendered-admin.html ci-admin
+          node tools/render_check.js rendered-admin.html --admin
+          python3 tools/html_checks.py rendered-admin.html ci-admin
 
       # The two steps above prove the page PARSES. Neither can see the bug that
       # mattered most: JSON.stringify escapes " and \ but not "</script", so a
@@ -112,8 +112,8 @@ jobs:
       # pass by proving nothing.
       - name: Render the builder page with hostile input
         run: |
-          node render_check.js rendered-hostile.html --hostile
-          python3 html_checks.py rendered-hostile.html ci-hostile
+          node tools/render_check.js rendered-hostile.html --hostile
+          python3 tools/html_checks.py rendered-hostile.html ci-hostile
 
       # /sw.js is a template literal as well, so `node --check` above sees it
       # as string content. A broken service worker is quieter than a broken
@@ -121,18 +121,18 @@ jobs:
       # stops working.
       - name: Syntax-check the service worker
         run: |
-          node render_check.js service-worker.js --sw
+          node tools/render_check.js service-worker.js --sw
           node --check service-worker.js
 
-      # gen_map.py is deterministic, so the committed map should always be
+      # tools/gen_map.py is deterministic, so the committed map should always be
       # exactly what it produces. Without this check it silently rotted --
       # 26% of its line numbers pointed at the wrong line.
       - name: FUNCTION-MAP.md is current
         run: |
-          python3 gen_map.py > /dev/null
+          python3 tools/gen_map.py > /dev/null
           if ! git diff --ignore-cr-at-eol --quiet -- FUNCTION-MAP.md; then
             git diff --ignore-cr-at-eol -- FUNCTION-MAP.md
-            echo "FUNCTION-MAP.md is stale — run: python3 gen_map.py"
+            echo "FUNCTION-MAP.md is stale — run: python3 tools/gen_map.py"
             exit 1
           fi
           echo "FUNCTION-MAP.md matches source"
@@ -140,7 +140,7 @@ jobs:
       # P8-3: Bundle budget check -- ensure the first-view JS bundle (/app.js)
       # stays strictly under the 150 KB gzip budget to protect initial page load.
       - name: Bundle budget check
-        run: node check_bundle_budget.mjs
+        run: node tools/check_bundle_budget.mjs
 
       - name: Test suite
         run: node --test tests/*.test.mjs

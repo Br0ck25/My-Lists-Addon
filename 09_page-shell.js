@@ -27,7 +27,7 @@ function buildAppShellNavHtml(style) {
     // The id and aria-controls keep the panels' own aria-labelledby="tab-..."
     // pointing at a real element: the legacy buttons carry these ids and the
     // panels were never changed, so a nav without them leaves six references
-    // dangling (html_checks.py fails the build for exactly that).
+    // dangling (tools/html_checks.py fails the build for exactly that).
     const attrs = `class="${cls}" id="tab-${isDesktop ? "desktop" : "mobile"}-${t.id}" aria-controls="content-${t.id}"` +
       ` data-tab="${t.id}" data-app-route href="${t.path}" title="${t.label}"` +
       (active ? ' aria-current="page"' : "");

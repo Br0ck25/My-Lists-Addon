@@ -24,12 +24,14 @@
 # is kept anyway -- it costs nothing, and it means a checkout that somehow
 # gains CRLF still reports only real mismatches instead of every line:
 #
-#   python3 check_sync.py
+#   python3 tools/check_sync.py
 #
 # Exits non-zero, and says where the first difference is, if the committed
 # Worker is not byte-for-byte what the sources build to.
+import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build import assemble
 
 expected, stamp = assemble()

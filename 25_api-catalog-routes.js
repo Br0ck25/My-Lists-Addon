@@ -263,7 +263,7 @@ async function renderBadgedPosterJpeg(env, posterBytes, o) {
 // sees this whole thing as string content either way. As a module-level
 // binding it can be pulled out of a vm sandbox and syntax-checked like any
 // other emitted script -- which is exactly the gap that let a SyntaxError sit
-// in the admin page for two days. See render_check.js --sw.
+// in the admin page for two days. See tools/render_check.js --sw.
 //
 // Two caches, because the two kinds of thing here have opposite needs.
 //

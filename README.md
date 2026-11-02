@@ -120,7 +120,7 @@ Install links never expire. When you update your lists or settings at [mylistsad
 
 ## Self-hosting on Cloudflare
 
-You can run your own copy of My Lists Addon on your own Cloudflare account and move your lists into it. No programming is needed: it is clicks, and copying and pasting. **The full walkthrough, with every step, is [`SELF-HOSTING.md`](SELF-HOSTING.md).** The short version:
+You can run your own copy of My Lists Addon on your own Cloudflare account and move your lists into it. No programming is needed: it is clicks, and copying and pasting. **The full walkthrough, with every step, is [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md).** The short version:
 
 **Cost:** Cloudflare's **Workers Paid** plan, $5 a month at the time of writing (the Free plan is not supported). One person's use normally stays inside what that includes.
 
@@ -132,11 +132,11 @@ You can run your own copy of My Lists Addon on your own Cloudflare account and m
 
 **4. Create the Worker** `my-lists-addon`, and paste the whole of [`worker_entry_combined.js`](worker_entry_combined.js) into its code editor. Deploy.
 
-**5. Connect and configure** (Worker → Settings): add the five bindings (`DB`, `DB_ACTIVITY`, `CONFIGS`, `BLOBS`, `JOBS`), the secrets (`ADMIN_KEY`, `TMDB_API_KEY`, `TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER`), the settings and a cron trigger of `*/5 * * * *`. The exact names and values are in [`SELF-HOSTING.md`](SELF-HOSTING.md), Steps 8 to 11, including a line to paste in your browser that makes the two random secrets.
+**5. Connect and configure** (Worker → Settings): add the five bindings (`DB`, `DB_ACTIVITY`, `CONFIGS`, `BLOBS`, `JOBS`), the secrets (`ADMIN_KEY`, `TMDB_API_KEY`, `TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER`), the settings and a cron trigger of `*/5 * * * *`. The exact names and values are in [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md), Steps 8 to 11, including a line to paste in your browser that makes the two random secrets.
 
 **6. Move in:** open your Worker's address, create an account, then **Settings → Presets & Backup → Upload & Restore File** and choose your backup. Install the add-on again from your own site (your install link contains the site's address, so it changes).
 
-Comfortable in a terminal? [`wrangler.selfhost.toml`](wrangler.selfhost.toml) plus the commands in `SELF-HOSTING.md` (Method B) do the same in a few lines. Operator reference: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+Comfortable in a terminal? [`wrangler.selfhost.toml`](wrangler.selfhost.toml) plus the commands in `docs/SELF-HOSTING.md` (Method B) do the same in a few lines. Operator reference: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ---
 
@@ -175,13 +175,13 @@ Before submitting changes, ensure all sync checks and budgets pass:
 
 ```bash
 # Verify the combined worker matches the split source files
-python check_sync.py
+python tools/check_sync.py
 
 # Verify JavaScript syntax of the bundle
 node --check worker_entry_combined.js
 
 # Verify bundle size constraints and performance budgets
-node check_bundle_budget.mjs
+node tools/check_bundle_budget.mjs
 ```
 
 ---
@@ -203,4 +203,4 @@ My Lists Addon is a free community service with no ads or subscriptions, run and
 
 ## License
 
-This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use only. Self-hosting for yourself and friends is welcome ([`SELF-HOSTING.md`](SELF-HOSTING.md)); it comes with no support.
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use only. Self-hosting for yourself and friends is welcome ([`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md)); it comes with no support.

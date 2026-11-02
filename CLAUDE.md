@@ -24,7 +24,7 @@
 
 ## Verify before committing
 - While iterating: `bash verify.sh -q --fast` (build, syntax, scope) plus one test file, e.g. `node --test tests/design-system.test.mjs`.
-- Before commit: `bash verify.sh -q` (everything, prints one line unless a step fails). Run `python gen_map.py` if functions were added, removed or moved (it rewrites `FUNCTION-MAP.md` and `FILE-INDEX.md`).
+- Before commit: `bash verify.sh -q` (everything, prints one line unless a step fails). Run `python tools/gen_map.py` if functions were added, removed or moved (it rewrites `FUNCTION-MAP.md` and `FILE-INDEX.md`).
 - UI look changed on purpose: `node tests/ui-contract.mjs --update` and keep the `tests/ui-contract.json` diff.
 - Once per clone: `git config core.hooksPath .githooks`.
 - Release: add an entry to `docs/RELEASES.md` under the build date and stamp `python build.py` prints. `/admin` shows both; there is no release number to bump.

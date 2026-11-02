@@ -51,7 +51,7 @@ async function adminCookie(env) {
 // embedded inside 09_page-shell.js's own giant template literal (the
 // served page's inline <script>) and reference client-only globals
 // (window, document, ...) at their own top level, so they throw here --
-// see loadOneClientFunction below for those instead, and render_check.js
+// see loadOneClientFunction below for those instead, and tools/render_check.js
 // for how 09-24 actually get syntax-checked (as the rendered page's
 // inline script, not as standalone files).
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -4776,7 +4776,7 @@ describe("audit fix 13: outbound requests are bounded by a timeout", () => {
     let called = false;
     sandbox.fetch = async () => { called = true; return { status: 200 }; };
     // No AbortSignal in this sandbox at all -- the capability is probed,
-    // not assumed (render_check.js's sandbox omits it).
+    // not assumed (tools/render_check.js's sandbox omits it).
     await sandbox.fetchWithTimeout("https://x/", {});
     assert.equal(called, true);
   });

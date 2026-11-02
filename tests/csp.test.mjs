@@ -20,7 +20,7 @@ import { awaitFreshRateWindow, call, makeD1, makeEnv } from "./harness.mjs";
 //   3. Every inline block in every page carries it -- builder, shell, /guide,
 //      /admin login and /admin dashboard. A block that missed it is not a
 //      degraded page, it is a dead one: the browser refuses the whole bundle.
-//      html_checks.py fails the build on the same thing at render time; this
+//      tools/html_checks.py fails the build on the same thing at render time; this
 //      runs it against the real responses.
 //   4. Two requests still agree on the ETag. The nonce is per response, the
 //      memoized page is not: if the nonce leaked into the memo or the hash,
