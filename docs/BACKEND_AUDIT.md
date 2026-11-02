@@ -270,7 +270,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: `bash verify.sh -q` (scope check) stays green after each removal.
 
 ### BA-012 Docs and comments that disagree with the code
-- Status: Fixed in BA012SHA
+- Status: Fixed in cf3deb7
 - Category: docs
 - Severity / confidence: P3 / High
 - docs/ARCHITECTURE.md:102-113, the jobs table:

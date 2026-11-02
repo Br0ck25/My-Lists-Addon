@@ -74,6 +74,22 @@ The owner decided to release the new version **one phase at a time, straight to 
 - **Traffic** (was "Last 30 Days"): the totals are all-time, only the table is 30 days, and the page now says so.
 - **Install sources:** "My Lists", "Collections" and "New Releases" were being counted as Other; they now have their own rows.
 
+## Backend audit fixes (built 2026-11-02, stamp 161befdf42)
+
+From `docs/BACKEND_AUDIT.md`; each finding is one commit.
+
+- **A customer's email can no longer put its own HTML into the /admin support inbox** (BA-003). Sender and attachment data are escaped, only real images are kept as images, and pages may only post forms to this site.
+- **A support reply is no longer marked "sent" when email sending is not set up** (BA-002). Send and Compose now say so and save nothing.
+- **The Ko-fi "raised this month" total is a counter in the database** (BA-001), so two donations at the same moment both count, the same donation counts once, and a storage hiccup no longer resets the total or hides the support strip.
+- **Email attachments over the size limit are dropped on purpose, with a note** in the stored message giving the name and size (BA-004).
+- **The support-email audit call that never ran was removed** (BA-005).
+- **Silent failures now leave a log line** in the places that can lose plays or empty a shelf (BA-008): the save-tracking rescue merges, reading a stored install link, and the Trakt and MDBList "my lists" shelves. Nothing else changed.
+- **The 30-day TMDB title cache write is no longer cut off** when a response finishes first (BA-006).
+- **Deleting an account also removes its Stremio/Nuvio sync row and play sources by hand** (BA-009), instead of relying on the database cascade. A database without the sync table can still delete an account.
+- **Retired admin routes were removed from the audit-name list, and the route-access test now also fails on stale prefix entries** (BA-010).
+- **Small dead code removed** (BA-011), and **docs that disagreed with the code were corrected** (BA-012: jobs table, scrobble settings, `FF_NEW_UI`, the duplicate decision number, now D-35 for the shutdown notice).
+- **Skipped: BA-007** (Nuvio/Stremio Watch History rows still read the whole history). The page and its total are worked out after the whole list is read, so paging the database read would change what the app shows. It needs a decision.
+
 ## How the release branch works
 
 `claude/elegant-ride-o7m8fh` holds the release being prepared.
