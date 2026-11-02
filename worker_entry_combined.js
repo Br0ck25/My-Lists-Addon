@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "dd7f099fd8";
+const WORKER_BUILD = "110a7407a8";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -120214,7 +120214,7 @@ function handleMyListsAndFeedbackRoutes(request, env, ctx, url, path) {
 async function apiTraktMyPrivateLists(request, env, ctx) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -120611,7 +120611,7 @@ async function apiTraktMyPrivateListsContinueWatching(accessToken, continueWatch
 async function apiTraktHistoryRaw(request, env, ctx) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -120661,7 +120661,7 @@ async function apiFeedback(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -120891,7 +120891,7 @@ async function apiFeedbackThreads(request, env, ctx, url, path) {
   let creatorKey = null;
   if (request.method === "POST") {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       if (Array.isArray(body.threadIds)) threadIds = body.threadIds.map((t) => String(t).trim()).filter(Boolean);
       if (body.creatorName) creatorName = String(body.creatorName).trim().toLowerCase();
       if (body.creatorKey) creatorKey = String(body.creatorKey);
@@ -121009,7 +121009,7 @@ async function apiFeedbackDelete(request, env, ctx, path) {
     return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { "Cache-Control": "no-store" });
   }
   let body = null;
-  try { body = await request.json(); } catch {}
+  try { body = await readJsonObject(request); } catch {}
   body = body && typeof body === "object" ? body : {};
   const threadIds = Array.isArray(body.threadIds) ? body.threadIds.map((t) => String(t).trim()).filter(Boolean).slice(0, 30) : [];
   let owner = null;
@@ -121074,7 +121074,7 @@ async function apiFeedbackDelete(request, env, ctx, path) {
 async function apiTrackSearch(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: true });
   let body;
-  try { body = await request.json(); } catch { return json({ ok: true }); }
+  try { body = await readJsonObject(request); } catch { return json({ ok: true }); }
   // recordSearchQuery keys `searchquery:{q}:days` on the query text
   // itself, so like /api/track-event this is an unauthenticated write
   // whose key name comes from the caller. Same per-IP bucket, same
@@ -121097,7 +121097,7 @@ async function apiTrackEvent(request, env, ctx, url) {
   if (!env || !env.CONFIGS) return json({ ok: true });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: true });
   }
@@ -121467,7 +121467,7 @@ async function apiMdblistMyListsAiringItems(mdblistAiringCandidates, rawAiringIt
 // /api/mdblist-history-raw (POST) { apikey, accessToken, username? } -> { ok, items }
 async function apiMdblistHistoryRaw(request) {
   let body;
-  try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+  try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
   const apikey = String(body.apikey || "").trim();
   const accessToken = String(body.accessToken || "").trim();
   let username = String(body.username || "").trim();
