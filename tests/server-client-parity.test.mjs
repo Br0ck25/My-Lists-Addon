@@ -163,11 +163,25 @@ parity("formatAirDateBadge (today pinned to 2026-06-15, compared ignoring case)"
   { args: ["2027-01-05"] }, { args: ["2030-03-03"] }, { args: ["2026-06-16T20:00:00Z"] }, { args: ["2026-06-17 21:00"] },
   { args: ["2026-6-18"] }, { args: ["2026-13-01"] }, { args: ["2026-06"] }, { args: ["TBA"] },
   { args: [""] }, { args: [null] }, { args: [undefined] },
-  { args: ["2026-06-14"], todo: "a day already past: server says TODAY, client says nothing (empty string)" },
-  { args: ["2025-01-01"], todo: "a day already past: server says TODAY, client says nothing (empty string)" },
 ], {
   ...same("formatAirDateBadge"),
   norm: (v) => (typeof v === "string" ? v.toUpperCase() : plain(v)),
+});
+
+// INTENDED difference, not a bug: the owner chose on 2026-11-02 that Stremio and
+// Nuvio posters (server) say "AIRED" for a day already past, while the web page
+// (client) shows nothing for it. Today and tomorrow still match on both sides.
+describe("formatAirDateBadge: past dates differ on purpose (owner decision 2026-11-02)", () => {
+  const cases = [
+    ["2026-06-14", "AIRED", ""], ["2025-01-01", "AIRED", ""],
+    ["2026-06-15", "TODAY", "TODAY"], ["2026-06-16", "TOMORROW", "TOMORROW"],
+  ];
+  for (const [date, serverWants, clientWants] of cases) {
+    it(`${date}: server "${serverWants}", client "${clientWants}"`, () => {
+      assert.equal(String(serverFn("formatAirDateBadge")(date)).toUpperCase(), serverWants);
+      assert.equal(String(clientFn("formatAirDateBadge")(date)).toUpperCase(), clientWants);
+    });
+  }
 });
 
 // Random ids ("col_mylists_" + 6 random characters) are the one thing that

@@ -6126,7 +6126,7 @@ function formatAirDateBadge(airDateStr) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (diffDays <= 0) return 'TODAY';
+  if (diffDays <= 0) return diffDays < 0 ? 'AIRED' : 'TODAY'; // past = AIRED on posters only (owner, 2026-11-02)
   if (diffDays === 1) return 'TOMORROW';
   if (diffDays > 1 && diffDays < 7) {
     const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
