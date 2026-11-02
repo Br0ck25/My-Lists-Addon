@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "83c40af5db";
+const WORKER_BUILD = "5a3173b48f";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -107261,11 +107261,11 @@ async function authenticateCreatorFor(request, env, ctx, path, creatorNameRaw, c
   // full PBKDF2 run every single time.
   const valid = await verifyCreatorKeyMemoized(creatorKey || "", keyHash, v.normalized);
   if (!valid) return { ok: false, error: "Username or Key is incorrect." };
-  return creatorKeyAuthAccepted(request, env, ctx, path, creatorKey, via, v, profile, sessionsEnabled);
+  return creatorKeyAuthAccepted(request, env, ctx, { path, creatorKey, via, v, profile, sessionsEnabled });
 }
 
 // Second half of authenticateCreatorFor: runs only after the Creator Key verified.
-async function creatorKeyAuthAccepted(request, env, ctx, path, creatorKey, via, v, profile, sessionsEnabled) {
+async function creatorKeyAuthAccepted(request, env, ctx, { path, creatorKey, via, v, profile, sessionsEnabled }) {
   // How many requests still sign with the key on the routes the page now
   // signs with its session (CREATOR_SESSION_PATH_PREFIXES): the count the
   // 60-day sunset waits on (Release 19, /admin -> Creators).
