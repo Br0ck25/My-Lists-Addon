@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7e656b4263";
+const WORKER_BUILD = "49f1fb8409";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -114030,11 +114030,11 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
       }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
     }
   }
-  return stremioCatalogRowFetch(env, ctx, url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList);
+  return stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList });
 }
 
 // The rest of stremioCatalogRow, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function stremioCatalogRowFetch(env, ctx, url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList) {
+async function stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList }) {
   // Graceful degradation only applies to the first page (skip === 0):
   // that's the case that makes a whole shelf silently vanish from the
   // home screen, whereas a failure deeper into pagination (scrolling
@@ -114621,11 +114621,11 @@ async function apiPosterBadge(env, ctx, url) {
       embeddedPoster = `data:${contentType || "image/jpeg"};base64,${bytesToBase64(buffer)}`;
     }
   } catch (e) {}
-  return apiPosterBadgeRender(env, posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes);
+  return apiPosterBadgeRender(env, { posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes });
 }
 
 // The rest of apiPosterBadge, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiPosterBadgeRender(env, posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes) {
+async function apiPosterBadgeRender(env, { posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes }) {
   // Without the bytes, the plain poster is better than a blank badge.
   if (!embeddedPoster) return Response.redirect(posterUrl, 302);
 

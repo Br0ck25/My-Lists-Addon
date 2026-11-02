@@ -373,11 +373,11 @@ async function apiPosterBadge(env, ctx, url) {
       embeddedPoster = `data:${contentType || "image/jpeg"};base64,${bytesToBase64(buffer)}`;
     }
   } catch (e) {}
-  return apiPosterBadgeRender(env, posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes);
+  return apiPosterBadgeRender(env, { posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes });
 }
 
 // The rest of apiPosterBadge, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiPosterBadgeRender(env, posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes) {
+async function apiPosterBadgeRender(env, { posterUrl, airDate, airTime, isPremiere, isFinale, finaleDate, companion, cacheKey, embeddedPoster, posterBytes }) {
   // Without the bytes, the plain poster is better than a blank badge.
   if (!embeddedPoster) return Response.redirect(posterUrl, 302);
 
