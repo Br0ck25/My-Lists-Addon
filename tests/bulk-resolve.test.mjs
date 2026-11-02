@@ -43,3 +43,50 @@ describe("/api/bulk-resolve keeps the good titles when one item is bad", () => {
     });
   }
 });
+
+// Series lookup: a show with no IMDb id must be searched as a show. Searched as
+// a movie, a movie sharing its title and year hands over the wrong IMDb id.
+describe("/api/bulk-resolve resolves series through the TV endpoints", () => {
+  beforeEach(() => { realFetch = globalThis.fetch; });
+  afterEach(() => { globalThis.fetch = realFetch; });
+
+  const env = () => makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+  // Movie 111 and show 222 share the title "Same" and the year 2000.
+  const bothStub = () => stubTmdb((url) => {
+    if (url.includes("/search/movie")) return ok({ results: [{ id: 111, title: "Same", release_date: "2000-05-05" }] });
+    if (url.includes("/search/tv")) return ok({ results: [{ id: 222, name: "Same", first_air_date: "2000-09-09" }] });
+    if (url.includes("/movie/111/external_ids")) return ok({ imdb_id: "tt1111111" });
+    if (url.includes("/tv/222/external_ids")) return ok({ imdb_id: "tt2222222" });
+    return new Response("{}", { status: 404 });
+  });
+
+  it("a series item uses /search/tv with first_air_date_year, then /tv/{id}/external_ids", async () => {
+    bothStub();
+    const r = await call(env(), "/api/bulk-resolve", { method: "POST", json: { items: [{ title: "Same", year: "2000", type: "series" }] } });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.resolved.map((x) => [x.imdbId, x.type, x.title, x.year]), [["tt2222222", "series", "Same", "2000"]]);
+    assert.ok(fetched.some((u) => u.includes("/search/tv") && u.includes("first_air_date_year=2000")));
+    assert.ok(fetched.some((u) => u.includes("/tv/222/external_ids")));
+    assert.ok(!fetched.some((u) => u.includes("/search/movie")), "a show must never be searched as a movie");
+    assert.equal(fetched.length, 2, "a series costs the same two TMDB calls as a movie");
+  });
+
+  it("a series and a movie with the same title and year each get their own id", async () => {
+    bothStub();
+    const r = await call(env(), "/api/bulk-resolve", {
+      method: "POST",
+      json: { items: [{ title: "Same", year: "2000", type: "series" }, { title: "Same", year: "2000", type: "movie" }] },
+    });
+    const byType = Object.fromEntries(r.body.resolved.map((x) => [x.type, x.imdbId]));
+    assert.deepEqual(byType, { series: "tt2222222", movie: "tt1111111" });
+  });
+
+  it("a movie item, and an item with no type (older client), still use /search/movie", async () => {
+    bothStub();
+    const r = await call(env(), "/api/bulk-resolve", {
+      method: "POST", json: { items: [{ title: "Same", year: "2000", type: "movie" }, { title: "Same", year: "2000" }] },
+    });
+    assert.deepEqual(r.body.resolved.map((x) => [x.imdbId, x.type]), [["tt1111111", "movie"], ["tt1111111", "movie"]]);
+    assert.ok(!fetched.some((u) => u.includes("/tv")));
+  });
+});

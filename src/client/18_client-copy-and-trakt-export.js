@@ -1607,11 +1607,11 @@ async function runUnifiedListImport() {
         const resolvedAll = await bulkResolveInChunks(toResolve);
         const resolvedMap = new Map();
         resolvedAll.forEach(r => {
-          if (r.title) resolvedMap.set((r.title + '|' + (r.year || '')).toLowerCase(), r);
+          if (r.title) resolvedMap.set(bulkResolveKey(r.title, r.year, r.type), r);
         });
         rawItems.forEach(it => {
           if (!it.imdbId && it.title) {
-            const found = resolvedMap.get((it.title + '|' + it.year).toLowerCase());
+            const found = resolvedMap.get(bulkResolveKey(it.title, it.year, it.type));
             if (found && found.imdbId) {
               it.imdbId = found.imdbId;
               it.id = found.imdbId;

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "8d9c5da5ee";
+const WORKER_BUILD = "1234615946";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -49401,6 +49401,12 @@ window.pushCollectionGroupToNuvio = pushCollectionGroupToNuvio;
 window.pushPremadeCollectionToNuvio = pushPremadeCollectionToNuvio;
 window.pushLinkedNuvioCollection = pushLinkedNuvioCollection;
 window.deleteNuvioCollection = deleteNuvioCollection;
+// The key an import row and its /api/bulk-resolve answer are matched by. The
+// type is part of it: a movie and a show with the same title and year must not
+// share an IMDb id. A missing type (an older server's answer) means a movie.
+function bulkResolveKey(title, year, type) {
+  return (String(title || '') + '|' + (year || '') + '|' + (type === 'series' ? 'series' : 'movie')).toLowerCase();
+}
 async function fetchAllItemsForList(listUrl, type, btn, progressLabel) {
   const keys = (typeof collectKeys === 'function') ? collectKeys() : {};
   const items = [];
@@ -51010,11 +51016,11 @@ async function runUnifiedListImport() {
         const resolvedAll = await bulkResolveInChunks(toResolve);
         const resolvedMap = new Map();
         resolvedAll.forEach(r => {
-          if (r.title) resolvedMap.set((r.title + '|' + (r.year || '')).toLowerCase(), r);
+          if (r.title) resolvedMap.set(bulkResolveKey(r.title, r.year, r.type), r);
         });
         rawItems.forEach(it => {
           if (!it.imdbId && it.title) {
-            const found = resolvedMap.get((it.title + '|' + it.year).toLowerCase());
+            const found = resolvedMap.get(bulkResolveKey(it.title, it.year, it.type));
             if (found && found.imdbId) {
               it.imdbId = found.imdbId;
               it.id = found.imdbId;
@@ -123246,8 +123252,14 @@ async function apiBulkResolve(request, env, ctx) {
         const y = item.year ? parseInt(item.year, 10) : null;
         if (!q) return null;
 
+        // A show is searched as a show: searched as a movie, a movie with the
+        // same title and year would hand over its IMDb id and poster. An item
+        // with no type is a movie, so older clients behave as before.
+        const isSeries = item.type === "series";
+        const kind = isSeries ? "tv" : "movie";
+
         // Step 1: Search TMDB
-        const searchSrc = `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(TMDB_API_KEY)}&query=${encodeURIComponent(q)}&include_adult=false${y ? '&primary_release_year=' + y : ''}`;
+        const searchSrc = `https://api.themoviedb.org/3/search/${kind}?api_key=${encodeURIComponent(TMDB_API_KEY)}&query=${encodeURIComponent(q)}&include_adult=false${y ? (isSeries ? '&first_air_date_year=' : '&primary_release_year=') + y : ''}`;
         tmdbCallCount++;
         const searchRes = await fetch(searchSrc, {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
@@ -123259,7 +123271,7 @@ async function apiBulkResolve(request, env, ctx) {
         if (!match) return null;
 
         // Step 2: Get External IDs to find IMDB id
-        const extSrc = `https://api.themoviedb.org/3/movie/${match.id}/external_ids?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
+        const extSrc = `https://api.themoviedb.org/3/${kind}/${match.id}/external_ids?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
         tmdbCallCount++;
         const extRes = await fetch(extSrc, {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
@@ -123269,10 +123281,13 @@ async function apiBulkResolve(request, env, ctx) {
         const extData = await extRes.json();
 
         if (extData.imdb_id) {
+          const matchTitle = isSeries ? (match.name || match.original_name) : (match.title || match.original_title);
+          const matchDate = isSeries ? match.first_air_date : match.release_date;
           return {
-            title: match.title || match.original_title || item.title,
-            year: match.release_date ? match.release_date.substring(0, 4) : item.year,
+            title: matchTitle || item.title,
+            year: matchDate ? matchDate.substring(0, 4) : item.year,
             imdbId: extData.imdb_id,
+            type: isSeries ? "series" : "movie",
           };
         }
         return null;
