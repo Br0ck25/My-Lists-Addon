@@ -190,7 +190,8 @@ export const D1_MAX_STATEMENT_BYTES = 100000;
 // (schema_activity.sql, the DB_ACTIVITY database of Phase 3c).
 export function makeD1({ foreignKeys = true, schema = "main" } = {}) {
   const db = new DatabaseSync(":memory:");
-  if (foreignKeys) db.exec("PRAGMA foreign_keys = ON;");
+  // node:sqlite turns foreign keys on by default, so "off" has to be asked for.
+  db.exec(foreignKeys ? "PRAGMA foreign_keys = ON;" : "PRAGMA foreign_keys = OFF;");
   db.exec(schema === "activity" ? ACTIVITY_SCHEMA_SQL : SCHEMA_SQL);
   // schema.sql is the documented way to provision a fresh database and now
   // carries every index the migrations leave behind, so there is nothing to

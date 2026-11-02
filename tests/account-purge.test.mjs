@@ -127,6 +127,38 @@ describe("P5-8: account.purge", () => {
     assert.deepEqual(sync.body.data && sync.body.data.watchHistory ? sync.body.data.watchHistory : [], []);
   });
 
+  // BA-009: media_app_sync and watch_event_sources were only removed by the
+  // foreign-key cascade. In a database where foreign keys are off (a restore, a
+  // copy) the next holder of the id would inherit them: push_enabled = 1 and
+  // the sync cursor, or play sources attached to nothing.
+  it("clears media_app_sync and watch_event_sources by hand, with foreign keys off", async () => {
+    const { env, db, id, cookie } = await populated({
+      DB: makeD1({ foreignKeys: false }),
+      DB_ACTIVITY: makeD1({ schema: "activity", foreignKeys: false }),
+    });
+    const act = env.DB_ACTIVITY._db;
+    db.prepare("INSERT INTO media_app_sync (account_id, provider, profile_index, push_enabled, cursor_json, updated_at) VALUES (?, 'nuvio', 1, 1, '{\"mtime\":5}', 0)").run(id);
+    const eventId = act.prepare("SELECT id FROM watch_events WHERE account_id = ?").get(id).id;
+    act.prepare("INSERT INTO watch_event_sources (event_id, source, watched_at) VALUES (?, 'nuvio', 2)").run(eventId);
+    assert.equal(count(db, "SELECT count(*) AS n FROM media_app_sync WHERE account_id = ?", id), 1);
+    assert.equal(count(act, "SELECT count(*) AS n FROM watch_event_sources WHERE event_id = ?", eventId), 1);
+
+    await call(env, "/api/me", { method: "DELETE", cookie, json: { confirm: "DELETE" } });
+    await drainQueue(env);
+
+    assert.equal(count(db, "SELECT count(*) AS n FROM accounts WHERE id = ?", id), 0);
+    assert.equal(count(db, "SELECT count(*) AS n FROM media_app_sync WHERE account_id = ?", id), 0, "the sync row does not wait for a cascade");
+    assert.equal(count(act, "SELECT count(*) AS n FROM watch_event_sources WHERE event_id = ?", eventId), 0, "the play sources do not wait for a cascade");
+  });
+
+  it("a database without the media_app_sync table (migration 0023) can still delete an account", async () => {
+    const { env, db, id, ann } = await populated();
+    db.exec("DROP TABLE media_app_sync");
+    const r = await call(env, "/api/creator/delete-account", { method: "POST", json: { creatorName: "annpurge", creatorKey: ann.creatorKey, confirm: "DELETE" } });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.equal(count(db, "SELECT count(*) AS n FROM accounts WHERE id = ?", id), 0);
+  });
+
   it("the old delete-account route clears the same rows", async () => {
     const { env, db, id, ann } = await populated();
     const r = await call(env, "/api/creator/delete-account", { method: "POST", json: { creatorName: "annpurge", creatorKey: ann.creatorKey, confirm: "DELETE" } });

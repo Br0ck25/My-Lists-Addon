@@ -1495,6 +1495,16 @@ async function deleteAccountRow(env, username) {
       const rows = await purgeAccountRowsById(env, id);
       if (!rows.ok) return { ok: false };
     }
+    // Its own step: the table comes from migration 0023, which a database may
+    // not have had yet, and that must not stop an account being deleted.
+    try {
+      await env.DB.prepare("DELETE FROM media_app_sync WHERE account_id = ?").bind(id).run();
+    } catch (e) {
+      if (!/no such table/i.test(String(e && e.message || e))) {
+        console.error("deleteAccountRow: media_app_sync delete failed:", e);
+        return { ok: false };
+      }
+    }
     try {
       await env.DB.batch([
         env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),

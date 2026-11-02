@@ -56,6 +56,7 @@ async function purgeAccountRowsById(env, accountId) {
   const actDb = typeof activityDb === "function" ? activityDb(env, id) : null;
   if (actDb) {
     await run("activity", () => actDb.batch([
+      actDb.prepare("DELETE FROM watch_event_sources WHERE event_id IN (SELECT id FROM watch_events WHERE account_id = ?)").bind(id),
       actDb.prepare("DELETE FROM watch_events WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(id),

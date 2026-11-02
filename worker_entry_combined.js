@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c909ed995b";
+const WORKER_BUILD = "e4ef9923b1";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -5331,6 +5331,16 @@ async function deleteAccountRow(env, username) {
     if (typeof purgeAccountRowsById === "function") {
       const rows = await purgeAccountRowsById(env, id);
       if (!rows.ok) return { ok: false };
+    }
+    // Its own step: the table comes from migration 0023, which a database may
+    // not have had yet, and that must not stop an account being deleted.
+    try {
+      await env.DB.prepare("DELETE FROM media_app_sync WHERE account_id = ?").bind(id).run();
+    } catch (e) {
+      if (!/no such table/i.test(String(e && e.message || e))) {
+        console.error("deleteAccountRow: media_app_sync delete failed:", e);
+        return { ok: false };
+      }
     }
     try {
       await env.DB.batch([
@@ -118526,6 +118536,7 @@ async function purgeAccountRowsById(env, accountId) {
   const actDb = typeof activityDb === "function" ? activityDb(env, id) : null;
   if (actDb) {
     await run("activity", () => actDb.batch([
+      actDb.prepare("DELETE FROM watch_event_sources WHERE event_id IN (SELECT id FROM watch_events WHERE account_id = ?)").bind(id),
       actDb.prepare("DELETE FROM watch_events WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(id),
