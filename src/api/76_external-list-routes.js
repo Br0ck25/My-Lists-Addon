@@ -143,11 +143,11 @@ async function apiExternalListItemMutate(request, env, path) {
       return json({ ok: false, error: safeErrorMessage(err) }, 500);
     }
   }
-  return apiExternalListMutateFromSimkl(env, body, action, provider, target, listId, mediaType, title, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb);
+  return apiExternalListMutateFromSimkl(env, { body, action, provider, target, listId, mediaType, title, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb });
 }
 
 // The rest of apiExternalListItemMutate, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiExternalListMutateFromSimkl(env, body, action, provider, target, listId, mediaType, title, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb) {
+async function apiExternalListMutateFromSimkl(env, { body, action, provider, target, listId, mediaType, title, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb }) {
   // 2. SIMKL
   if (provider === "simkl") {
     const token = body.simklAccessToken || body.token || "";
@@ -228,11 +228,11 @@ async function apiExternalListMutateFromSimkl(env, body, action, provider, targe
       return json({ ok: false, error: safeErrorMessage(err) }, 500);
     }
   }
-  return apiExternalListMutateFromTmdb(body, action, provider, target, listId, mediaType, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb);
+  return apiExternalListMutateFromTmdb({ body, action, provider, target, listId, mediaType, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb });
 }
 
 // The rest of apiExternalListItemMutate, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiExternalListMutateFromTmdb(body, action, provider, target, listId, mediaType, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb) {
+async function apiExternalListMutateFromTmdb({ body, action, provider, target, listId, mediaType, id, imdbId, tmdbId, seasonNum, episodeNum, apiKeyTmdb }) {
   // 3. TMDB
   if (provider === "tmdb") {
     const apiKey = apiKeyTmdb;
@@ -349,16 +349,16 @@ async function apiExternalListMutateFromTmdb(body, action, provider, target, lis
     if (bestId) idsObj.id = bestId;
 
     if (target === "watchlist") {
-      return apiExternalListMutateMdblistWatchlist(action, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj);
+      return apiExternalListMutateMdblistWatchlist({ action, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj });
     }
 
     const isHistoryTarget = target === "history" || (target === "custom" && String(listId || "").toLowerCase().includes("history"));
     if (isHistoryTarget) {
-      return apiExternalListMutateMdblistHistory(action, seasonNum, episodeNum, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj);
+      return apiExternalListMutateMdblistHistory({ action, seasonNum, episodeNum, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj });
     }
 
     if (target === "custom" && listId) {
-      return apiExternalListMutateMdblistCustom(action, listId, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj);
+      return apiExternalListMutateMdblistCustom({ action, listId, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj });
     }
   }
 
@@ -366,7 +366,7 @@ async function apiExternalListMutateFromTmdb(body, action, provider, target, lis
 }
 
 // A branch of apiExternalListItemMutate, moved unchanged: its body, split out only for the 150-line limit.
-async function apiExternalListMutateMdblistWatchlist(action, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj) {
+async function apiExternalListMutateMdblistWatchlist({ action, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj }) {
   const endpoints = [
     `https://api.mdblist.com/watchlist/items/${action === "add" ? "add" : "remove"}${authParam}`,
     `https://api.mdblist.com/watchlist/${action === "add" ? "add" : "remove"}${authParam}`,
@@ -408,7 +408,7 @@ async function apiExternalListMutateMdblistWatchlist(action, token, headers, aut
 }
 
 // A branch of apiExternalListItemMutate, moved unchanged: its body, split out only for the 150-line limit.
-async function apiExternalListMutateMdblistHistory(action, seasonNum, episodeNum, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj) {
+async function apiExternalListMutateMdblistHistory({ action, seasonNum, episodeNum, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj }) {
   const itemObj = Object.assign({}, idsObj);
   if (action === "remove") {
     itemObj.watched_at = null;
@@ -489,7 +489,7 @@ async function apiExternalListMutateMdblistHistory(action, seasonNum, episodeNum
 }
 
 // A branch of apiExternalListItemMutate, moved unchanged: its body, split out only for the 150-line limit.
-async function apiExternalListMutateMdblistCustom(action, listId, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj) {
+async function apiExternalListMutateMdblistCustom({ action, listId, token, headers, authParam, cleanImdb, numTmdb, bestId, isMovie, mdbType, idsObj }) {
   const endpoints = [
     `https://api.mdblist.com/lists/${encodeURIComponent(listId)}/items/${action === "add" ? "add" : "remove"}${authParam}`,
     `https://api.mdblist.com/lists/${encodeURIComponent(listId)}/${action === "add" ? "add" : "remove"}${authParam}`,
