@@ -706,3 +706,83 @@ describe("support emails: no EMAIL binding (BA-002)", () => {
     assert.equal(sent.length, 1);
   });
 });
+
+// BA-004: attachments are stored inline as base64 in the message row, and D1
+// refuses a row over 2,000,000 bytes (the harness enforces the same limit).
+// A ~1.5 MB screenshot is ~2 MB of base64, so the first insert failed and the
+// fallback insert silently left every attachment out. Now the attachments that
+// do not fit are dropped on purpose, and the message says which.
+describe("support emails: attachments over the row limit (BA-004)", () => {
+  function rawMultipart({ text, images }) {
+    const b = "==cap_boundary==";
+    const parts = [`--${b}`, "Content-Type: text/plain; charset=UTF-8", "", text];
+    for (const im of images) {
+      parts.push(`--${b}`, `Content-Type: image/png; name="${im.name}"`, "Content-Transfer-Encoding: base64", "", im.b64);
+    }
+    parts.push(`--${b}--`);
+    const body = `Content-Type: multipart/mixed; boundary="${b}"\r\n\r\n` + parts.join("\r\n");
+    const bytes = new TextEncoder().encode(body);
+    const headers = new Map([["from", "pat@example.com"], ["to", "support@mylistsaddon.com"], ["subject", "Screenshot"], ["message-id", "<big-" + Math.random() + "@x>"]]);
+    return {
+      from: "pat@example.com", to: "support@mylistsaddon.com",
+      headers: { get: (k) => headers.get(String(k).toLowerCase()) || null },
+      raw: new ReadableStream({ start(c) { c.enqueue(bytes); c.close(); } }),
+    };
+  }
+  const b64OfSize = (chars) => "A".repeat(chars);
+
+  it("stores the message with a note about the attachment that does not fit", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    await worker.email(rawMultipart({
+      text: "see the screenshot attached",
+      images: [{ name: "shot.png", b64: b64OfSize(2_500_000) }],
+    }), env, {});
+    const row = await db.prepare("SELECT body_text, attachments_json FROM support_messages").first();
+    assert.ok(row, "the message is stored at all");
+    assert.match(row.body_text, /see the screenshot attached/);
+    assert.match(row.body_text, /1 attachment too large to store: shot\.png, 1\.8 MB/);
+    assert.deepEqual(JSON.parse(row.attachments_json), [], "the oversized image is not stored");
+  });
+
+  it("keeps the attachments that fit and notes only the one that does not", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    await worker.email(rawMultipart({
+      text: "two pictures",
+      images: [{ name: "small.png", b64: b64OfSize(100_000) }, { name: "huge.png", b64: b64OfSize(2_000_000) }],
+    }), env, {});
+    const row = await db.prepare("SELECT body_text, attachments_json FROM support_messages").first();
+    const kept = JSON.parse(row.attachments_json);
+    assert.deepEqual(kept.map((a) => a.filename), ["small.png"]);
+    assert.match(row.body_text, /too large to store: huge\.png/);
+    assert.equal(/small\.png/.test(row.body_text), false, "the kept one is not mentioned in the note");
+  });
+
+  it("does not touch a message whose attachments fit", async () => {
+    const db = makeD1();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    await worker.email(rawMultipart({ text: "tiny", images: [{ name: "ok.png", b64: b64OfSize(4000) }] }), env, {});
+    const row = await db.prepare("SELECT body_text, attachments_json FROM support_messages").first();
+    assert.equal(row.body_text, "tiny");
+    assert.equal(JSON.parse(row.attachments_json).length, 1);
+  });
+
+  it("logs why the first insert failed before it falls back to the one without attachments", async () => {
+    const db = makeD1();
+    db.failWhen((sql) => /INSERT INTO support_messages/.test(sql) && /attachments_json/.test(sql));
+    const env = makeEnv({ CONFIGS: makeKv(), DB: db });
+    const errors = [];
+    const realError = console.error;
+    console.error = (...a) => errors.push(a.map(String).join(" "));
+    try {
+      await worker.email(createMockEmailMessage({ from: "x@example.com", subject: "hi", messageId: "<fb@x>", text: "hello" }), env, {});
+    } finally {
+      console.error = realError;
+    }
+    db.failWhen(null);
+    assert.ok(errors.some((e) => /^\[Support Email\].*injected failure/.test(e)), "the first insert's error is logged by the support-email code: " + JSON.stringify(errors));
+    const row = await db.prepare("SELECT body_text FROM support_messages").first();
+    assert.equal(row.body_text, "hello", "the fallback still stores the message");
+  });
+});

@@ -68,6 +68,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 
 ## Findings
 ### BA-001 The Ko-fi support total can lose a payment, or reset to one payment
+- Status: Fixed in f2c3bcc
 - Category: bug
 - Severity / confidence: P2 / High (path read end to end; the race needs two deliveries close together, the reset needs one failed KV read)
 - Where: src/api/25_api-catalog-routes.js:655-657 (the webhook), src/admin/03_admin.js:2421 (`readSupportGoal`), :2460 (`addKofiPaymentToSupportGoal`)

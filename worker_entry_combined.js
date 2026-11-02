@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "bc3bce3ef0";
+const WORKER_BUILD = "7614eecddf";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -119890,6 +119890,42 @@ function parseMimeEmail(rawText, headers) {
   return result;
 }
 
+// D1 refuses a row over 2,000,000 bytes, and an inbound message's attachments
+// are stored inline in it as base64 (BA-004). A ~1.5 MB screenshot is ~2 MB of
+// base64, so the insert failed and the fallback quietly left every attachment
+// out. Attachments are kept while they fit in what the row has left after the
+// message text; the rest are dropped on purpose and named in a note.
+const SUPPORT_ATTACHMENTS_MAX_CHARS = 1500000;
+const SUPPORT_ROW_MAX_BYTES = 1900000;
+
+function limitSupportAttachments(attachments, bodyText, bodyHtml) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  const enc = new TextEncoder();
+  const used = enc.encode(String(bodyText || '')).length + enc.encode(String(bodyHtml || '')).length + 4000;
+  const budget = Math.max(0, Math.min(SUPPORT_ATTACHMENTS_MAX_CHARS, SUPPORT_ROW_MAX_BYTES - used));
+  const kept = [];
+  const dropped = [];
+  let total = 0;
+  for (const att of list) {
+    const len = String((att && att.dataUrl) || '').length;
+    if (total + len <= budget) {
+      kept.push(att);
+      total += len;
+    } else {
+      dropped.push(att);
+    }
+  }
+  let note = '';
+  if (dropped.length) {
+    const names = dropped.map((a) => {
+      const mb = (Number(a.size) || Math.round(String(a.dataUrl || '').length * 0.75)) / 1048576;
+      return (a.filename || 'attachment') + ', ' + mb.toFixed(1) + ' MB';
+    });
+    note = '(' + dropped.length + (dropped.length === 1 ? ' attachment' : ' attachments') + ' too large to store: ' + names.join('; ') + ')';
+  }
+  return { kept, note };
+}
+
 // Handler for Cloudflare Email Routing (incoming email)
 async function handleIncomingEmail(message, env, ctx) {
   if (!env || !env.DB) {
@@ -119963,6 +119999,7 @@ async function handleIncomingEmail(message, env, ctx) {
 
     // 4. Insert message
     const msgId = 'msg_' + now + '_' + Math.random().toString(36).slice(2, 8);
+    const fit = limitSupportAttachments(parsed.attachments, bodyText, bodyHtml);
     await insertSupportMessage(env.DB, {
       id: msgId,
       threadId,
@@ -119970,9 +120007,9 @@ async function handleIncomingEmail(message, env, ctx) {
       fromEmail,
       toEmail,
       subject,
-      bodyText,
+      bodyText: fit.note ? (bodyText ? bodyText + '\n\n' : '') + fit.note : bodyText,
       bodyHtml,
-      attachments: parsed.attachments || [],
+      attachments: fit.kept,
       messageId,
       inReplyTo,
       createdAt: now,
@@ -120006,6 +120043,9 @@ async function insertSupportMessage(db, msg) {
     ).run();
   } catch (err) {
     const errStr = safeErrorMessage(err);
+    // The first insert's error says why attachments might be missing from the
+    // fallback below; it used to vanish.
+    console.error('[Support Email] Insert with attachments_json failed, trying without:', errStr);
     if (errStr.includes('no column named attachments_json')) {
       try {
         await db.prepare("ALTER TABLE support_messages ADD COLUMN attachments_json TEXT DEFAULT '[]'").run();
