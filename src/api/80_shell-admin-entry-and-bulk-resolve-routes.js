@@ -296,7 +296,10 @@ async function apiBulkResolve(request, env, ctx) {
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
       const promises = batch.map(async (item) => {
-        const q = (item.title || "").trim();
+        // One bad title or one failed TMDB call must not lose the whole batch.
+        try {
+        if (!item || typeof item !== "object") return null;
+        const q = String(item.title || "").trim();
         const y = item.year ? parseInt(item.year, 10) : null;
         if (!q) return null;
 
@@ -330,6 +333,9 @@ async function apiBulkResolve(request, env, ctx) {
           };
         }
         return null;
+        } catch {
+          return null;
+        }
       });
 
       const results = await Promise.all(promises);
