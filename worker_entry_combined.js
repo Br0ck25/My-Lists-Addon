@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7523c1efcb";
+const WORKER_BUILD = "6db78b2da5";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -19967,7 +19967,7 @@ async function flushBetterPosterRetries(env, force) {
     for (const [path, at] of add) {
       if (!list[path]) { list[path] = { at }; changed = true; }
     }
-    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now)));
+    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now))); // read-modify-write: a concurrent isolate's addition can be lost; accepted (the poster is queued again when it is next missed)
   } catch {}
 }
 
@@ -20112,8 +20112,8 @@ async function noteBetterPosterVariant(env, bp) {
     if (now - (Number(seen[key]) || 0) < 86400 * 1000) return;
     seen[key] = now;
     for (const k of Object.keys(seen)) if (now - Number(seen[k]) > BETTER_POSTER_VARIANT_TTL_MS) delete seen[k];
-    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen));
-  } catch {}
+    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen)); // read-modify-write: a concurrent isolate's entry can be lost; accepted (it is re-added on its next request)
+  } catch { _betterPosterVariantNoted.delete(key); } // a failed write is retried on the next call
 }
 
 // The styles used within BETTER_POSTER_VARIANT_TTL_MS, as posters for one
@@ -29748,7 +29748,7 @@ async function refreshAiringNextSweep(env, ctx) {
         const previousStamp = Number(target.updatedAt) || 0;
         target.airingNext = items;
         target.updatedAt = Math.max(Date.now(), previousStamp + 1);
-        await env.CONFIGS.put(trackingKey, JSON.stringify(target));
+        await env.CONFIGS.put(trackingKey, JSON.stringify(target)); // the fresh read above leaves a one-round-trip gap (no compare-and-set in KV); accepted, and airingNext is rebuilt every cycle
         if (env.DB) await saveAiringNextD1(env, username, items, target.updatedAt, previousStamp);
       }
       const ttlSec = Math.round(AIRING_NEXT_SERVER_REFRESH_MS / 1000);
@@ -30089,7 +30089,7 @@ async function rememberSharedPosterIds(env, ids) {
     const prev = raw ? JSON.parse(raw) : [];
     const merged = [...new Set([...ids, ...(Array.isArray(prev) ? prev : [])])].slice(0, SHARED_POSTER_IDS_MAX);
     if (JSON.stringify(merged) === raw) return;
-    await env.CONFIGS.put(SHARED_POSTER_IDS_KEY, JSON.stringify(merged));
+    await env.CONFIGS.put(SHARED_POSTER_IDS_KEY, JSON.stringify(merged)); // read-modify-write: a concurrent isolate's ids can be lost; accepted (a charting title is re-added on its next request)
   } catch {}
 }
 
@@ -30132,7 +30132,7 @@ async function retryMissedBetterPosters(env, fetchCap) {
     try {
       const latest = readBetterPosterRetries(await env.CONFIGS.get(BETTER_POSTER_RETRY_KEY));
       for (const path of gone) delete latest[path];
-      await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(latest, Date.now())));
+      await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(latest, Date.now()))); // the re-read above narrows the window but KV has no compare-and-set; a lost addition is accepted (re-queued on the next miss)
     } catch {}
   }
   if (done) console.log(`[Cron] BetterPosters: ${done} of ${due.length} missed poster(s) fetched on retry.`);

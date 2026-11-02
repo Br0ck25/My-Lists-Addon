@@ -1224,7 +1224,7 @@ async function flushBetterPosterRetries(env, force) {
     for (const [path, at] of add) {
       if (!list[path]) { list[path] = { at }; changed = true; }
     }
-    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now)));
+    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now))); // read-modify-write: a concurrent isolate's addition can be lost; accepted (the poster is queued again when it is next missed)
   } catch {}
 }
 
@@ -1369,8 +1369,8 @@ async function noteBetterPosterVariant(env, bp) {
     if (now - (Number(seen[key]) || 0) < 86400 * 1000) return;
     seen[key] = now;
     for (const k of Object.keys(seen)) if (now - Number(seen[k]) > BETTER_POSTER_VARIANT_TTL_MS) delete seen[k];
-    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen));
-  } catch {}
+    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen)); // read-modify-write: a concurrent isolate's entry can be lost; accepted (it is re-added on its next request)
+  } catch { _betterPosterVariantNoted.delete(key); } // a failed write is retried on the next call
 }
 
 // The styles used within BETTER_POSTER_VARIANT_TTL_MS, as posters for one
