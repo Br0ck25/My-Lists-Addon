@@ -109,23 +109,58 @@ try {
 }
 const scopeManager = escope.analyze(ast, { ecmaVersion: 2023, sourceType });
 
-// Three things legitimately create a global that no declaration mentions, and
-// all three are used deliberately throughout this codebase. Each is an
-// allowance with a reason, not a blanket mute:
+// Three things legitimately create or tolerate a global that no declaration
+// mentions, and all three are used deliberately throughout this codebase. Each
+// is an allowance with a reason, not a blanket mute. All are found in the AST,
+// never by text search (a "window.x =" inside a template literal is a string,
+// not an export), and none of them is allowed to be satisfied by an unrelated
+// LOCAL of the same name in another function (CQ-19: a moved function that
+// used `m` without receiving it passed while `m` was a local elsewhere).
 //
-//   1. `window.foo = ...` -- how every client entry point is exported.
+//   1. `window.foo = ...` -- how every client entry point is exported. This
+//      makes `foo` a real global for the whole script.
 //   2. A bare top-level assignment in sloppy mode (`traktUsername = ...`),
 //      which creates a global. Only in `page` mode: the Worker is an ES module,
-//      where the same line is itself a ReferenceError and so IS the bug.
-//   3. `typeof foo` anywhere -- the author is saying "this may not exist",
-//      which is a decision, not a slip.
+//      where the same line is itself a ReferenceError and so IS the bug. Only
+//      writes that reached the global scope unresolved count, so a write to a
+//      local never makes the name global.
+//   3. `typeof foo` IN THE SAME FUNCTION as the read (or an enclosing one) --
+//      the author is saying "this may not exist", a decision made at the read
+//      site. A typeof in some other function says nothing about this read.
 const assignedToGlobalObject = new Set();
-for (const m of code.matchAll(/\b(?:window|globalThis|self)\.([A-Za-z_$][\w$]*)\s*=(?!=)/g)) {
-  assignedToGlobalObject.add(m[1]);
-}
-const typeofGuarded = new Set();
-for (const m of code.matchAll(/\btypeof\s+([A-Za-z_$][\w$]*)/g)) {
-  typeofGuarded.add(m[1]);
+const typeofSites = []; // { name, fns: Set of enclosing function nodes (or null for top level) }
+const fnChainAt = new Map(); // identifier node -> array of enclosing function nodes, innermost first
+const GLOBAL_OBJ = new Set(["window", "globalThis", "self"]);
+const isFn = (n) => n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression";
+(function walk(node, chain) {
+  if (!node || typeof node.type !== "string") return;
+  if (node.type === "Identifier") fnChainAt.set(node, chain);
+  if (node.type === "AssignmentExpression" && node.left.type === "MemberExpression" &&
+      node.left.object.type === "Identifier" && GLOBAL_OBJ.has(node.left.object.name)) {
+    const p = node.left.property;
+    if (!node.left.computed && p.type === "Identifier") assignedToGlobalObject.add(p.name);
+    else if (node.left.computed && p.type === "Literal" && typeof p.value === "string") assignedToGlobalObject.add(p.value);
+  }
+  if (node.type === "UnaryExpression" && node.operator === "typeof" && node.argument.type === "Identifier") {
+    typeofSites.push({ name: node.argument.name, chain });
+  }
+  const next = isFn(node) ? [node, ...chain] : chain;
+  for (const key of Object.keys(node)) {
+    const v = node[key];
+    if (Array.isArray(v)) v.forEach((c) => c && typeof c.type === "string" && walk(c, next));
+    else if (v && typeof v.type === "string") walk(v, next);
+  }
+})(ast, []);
+const typeofGuarded = new Set(typeofSites.map((t) => t.name));
+// Is this read covered by a typeof of the same name in its own function or an
+// enclosing function? Top level only covers other top-level code.
+function guardedAtRead(ref) {
+  const readChain = fnChainAt.get(ref.identifier) || [];
+  return typeofSites.some((t) => {
+    if (t.name !== ref.identifier.name) return false;
+    if (t.chain.length === 0) return readChain.length === 0;
+    return readChain.includes(t.chain[0]);
+  });
 }
 
 // In `script` mode eslint-scope deliberately leaves top-level declarations
@@ -147,7 +182,7 @@ for (const ref of scopeManager.globalScope.through) {
   if (RUNTIME.has(name)) continue;
   if (topLevelDeclared.has(name)) continue;
   if (assignedToGlobalObject.has(name)) continue;
-  if (typeofGuarded.has(name)) continue;
+  if (guardedAtRead(ref)) continue;
   if (isPage && ref.isWrite()) continue;
   if (isPage) {
     // A name written bare somewhere in this script is an implicit global from
