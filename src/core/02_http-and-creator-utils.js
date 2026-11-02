@@ -1730,8 +1730,54 @@ function creatorLookupHashKey(username) {
   return `creatorlookuphash:${username}`;
 }
 
+// SEC-01: removes the unsalted SHA-256 copies (D1 rows and KV keys) of one
+// account's key but leaves accounts.key_lookup_hmac alone. deleteCreatorKeyLookup
+// clears the HMAC too, which is wrong once the HMAC is what the account uses.
+async function deleteLegacyCreatorKeyLookup(env, username) {
+  if (!env || !username) return;
+  if (env.DB) {
+    try {
+      await env.DB.prepare("DELETE FROM creator_key_lookups WHERE username = ?").bind(username).run();
+    } catch (dbErr) {
+      console.error("D1 delete error (deleteLegacyCreatorKeyLookup):", dbErr);
+    }
+  }
+  if (env.CONFIGS) {
+    try {
+      const oldHash = await env.CONFIGS.get(creatorLookupHashKey(username));
+      if (oldHash) await env.CONFIGS.delete(creatorKeyLookupKey(oldHash));
+      await env.CONFIGS.delete(creatorLookupHashKey(username));
+    } catch (kvErr) {
+      console.error("KV delete error (deleteLegacyCreatorKeyLookup):", kvErr);
+    }
+  }
+}
+
+// Writes the peppered HMAC to the account row. True only when a row changed,
+// so a caller never drops the legacy copy for an account that has no HMAC.
+async function writeKeyLookupHmac(env, key, username) {
+  if (!env || !env.DB || !env.LOOKUP_PEPPER) return false;
+  try {
+    const hmac = await hmacLookupKey(key, env);
+    if (!hmac) return false;
+    const res = await env.DB.prepare(
+      "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
+    ).bind(hmac, username).run();
+    return Boolean(res && res.meta && res.meta.changes > 0);
+  } catch (hmacErr) {
+    console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
+    return false;
+  }
+}
+
 async function storeCreatorKeyLookup(env, key, username) {
   if (!env || !key || !username) return;
+  // SEC-01: with the pepper set and the HMAC stored, the unsalted SHA-256 copy
+  // is not written at all, and any older one for this account is removed.
+  if (await writeKeyLookupHmac(env, key, username)) {
+    await deleteLegacyCreatorKeyLookup(env, username);
+    return;
+  }
   const lookupHash = await creatorKeyLookupHash(key);
   if (!lookupHash) return;
   const now = Date.now();
@@ -1742,18 +1788,6 @@ async function storeCreatorKeyLookup(env, key, username) {
       ).bind(lookupHash, username, now).run();
     } catch (dbErr) {
       console.error("D1 write error (storeCreatorKeyLookup):", dbErr);
-    }
-    if (env.LOOKUP_PEPPER) {
-      try {
-        const hmac = await hmacLookupKey(key, env);
-        if (hmac) {
-          await env.DB.prepare(
-            "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
-          ).bind(hmac, username).run();
-        }
-      } catch (hmacErr) {
-        console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
-      }
     }
   }
   if (env.CONFIGS) {
