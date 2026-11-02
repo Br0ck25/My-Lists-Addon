@@ -58,7 +58,6 @@ FF_PROVIDER_BREAKER = "1"
 FF_CHART_SNAPSHOTS = "1"
 FF_CANONICAL_IDS = "1"
 FF_MATERIALIZER = "1"
-FF_SCROBBLE_ST_ONLY = "1"
 INSTALL_MIGRATION_PERCENT = "100"
 
 # Secrets are never written here. Set them with `wrangler secret put`:

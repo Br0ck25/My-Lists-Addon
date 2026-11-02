@@ -857,13 +857,17 @@ describe("audit fix: the scrobble webhook carries a revocable token, not the Cre
     assert.equal((await scrobble(env, "st=" + after)).status, 200);
   });
 
-  it("keeps pre-existing creator+key webhook URLs working", async () => {
-    // Those URLs are sitting in people's media servers. Breaking them would
-    // silently stop their history syncing with no error anyone would see.
+  it("refuses pre-existing creator+key webhook URLs (retired 2026-11-02, D-36)", async () => {
+    // These URLs used to be kept working because they sit in people's media
+    // servers. The owner retired them: they carry the Account Key itself into
+    // the media server's settings and logs. They get 410 Gone, and the token
+    // form keeps working.
     const env = makeEnv();
     const alice = await createUser(env, "alicetoklegacy");
     const legacy = `creator=${encodeURIComponent(alice.creatorName)}&key=${encodeURIComponent(alice.creatorKey)}`;
-    assert.equal((await scrobble(env, legacy)).status, 200);
+    const res = await scrobble(env, legacy);
+    assert.equal(res.status, 410);
+    assert.equal(res.body.sunset, true);
   });
 
   it("revokes the token when the account is deleted", async () => {

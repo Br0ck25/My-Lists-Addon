@@ -2,6 +2,12 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-11-02 — Old scrobble webhook addresses are retired
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-36 | **Media-server webhooks work only with the scrobble token (`?st=`).** The old forms, the Account Key in the address (`?creator=&key=`) and an install link (`?config=`, also `?token=`), are refused. The owner chose this after the 2026-11-02 backend audit: the old forms put the Account Key, or a link that can carry it, into Plex, Jellyfin and Emby settings and logs. | `handleMediaServerScrobble` (`src/api/26_api-creator-and-admin-routes.js`) answers 410 `sunset: true` to any request that carries an old form and no working `?st=`, before anything is verified. `FF_SCROBBLE_ST_ONLY` and `SCROBBLE_SUNSET_DATE` are no longer read (`isScrobbleSunset` is gone). A media server still on an old address stops recording plays; its owner sees the existing "update your webhook" banner in Settings only if one of their pings was recorded with an old form before the change. |
+
 ## 2026-10-04 — Where the counters live, and what cleanup may delete (review of P8–P10)
 
 | # | Decision | Consequence in the code |

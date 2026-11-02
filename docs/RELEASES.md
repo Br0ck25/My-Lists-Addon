@@ -74,6 +74,13 @@ The owner decided to release the new version **one phase at a time, straight to 
 - **Traffic** (was "Last 30 Days"): the totals are all-time, only the table is 30 days, and the page now says so.
 - **Install sources:** "My Lists", "Collections" and "New Releases" were being counted as Other; they now have their own rows.
 
+## Old scrobble webhook addresses retired (built 2026-11-02, stamp 4a403ac54b)
+
+- **Plex, Jellyfin and Emby webhooks now work only with the scrobble token address (`/api/scrobble?st=…`)** (D-36). An address with the Account Key in it (`?creator=&key=`) or an install link (`?config=`) gets "410 Gone" and nothing is recorded. The key is not even checked. Copy the webhook address again from Settings → Auto-Track & Media Server Scrobbling to fix a media server that stopped recording.
+- `FF_SCROBBLE_ST_ONLY` and `SCROBBLE_SUNSET_DATE` are no longer read; delete them from the dashboard if they are set.
+- A second copy of the unused public-lists code (BA-011) was removed from `src/core/02_http-and-creator-utils.js`.
+- **Deploy:** paste `worker_entry_combined.js`. No database step.
+
 ## Backend audit fixes (built 2026-11-02, stamp 161befdf42)
 
 From `docs/BACKEND_AUDIT.md`; each finding is one commit.

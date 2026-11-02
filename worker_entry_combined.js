@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "161befdf42";
+const WORKER_BUILD = "4a403ac54b";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -6089,24 +6089,6 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
-// --- Scrobble auth sunset (Phase 7, P7-6) --------------------------------------
-//
-// Webhooks originally carried the Creator Key in the query string (?creator=&key=),
-// or a legacy install config id (?config=), exposing master credentials in media
-// server logs and configurations. P7-6 requires the scoped ?st= token.
-// The legacy forms are logged and show a banner in Settings, and are rejected
-// when FF_SCROBBLE_ST_ONLY=1 or past SCROBBLE_SUNSET_DATE.
-function isScrobbleSunset(env) {
-  if (!env) return false;
-  const v = env.FF_SCROBBLE_ST_ONLY;
-  if (v === "1" || v === "true" || v === true) return true;
-  if (env.SCROBBLE_SUNSET_DATE) {
-    const t = Date.parse(String(env.SCROBBLE_SUNSET_DATE));
-    if (Number.isFinite(t) && Date.now() >= t) return true;
-  }
-  return false;
-}
-
 // --- Phase 10 legacy sunset notices (P10-2) -------------------------------------
 //
 // Set SUNSET_60DAY_START_DATE (YYYY-MM-DD) in Worker variables when FF_SESSIONS
@@ -8277,10 +8259,8 @@ async function getPublicListIndex(env, ctx, opts = {}) {
     try {
       const fetchLimit = 200;
       // Account-owned lists only; see the D1 query above.
-      const pubRes = { keys: [] };
       const creatorRes = await env.CONFIGS.list({ prefix: "creatorlist:", limit: fetchLimit });
       const listKeys = [];
-      (pubRes.keys || []).forEach(k => listKeys.push({ key: k.name, isCreator: false }));
       (creatorRes.keys || []).forEach(k => {
         const rest = k.name.slice("creatorlist:".length);
         if (rest.includes(":")) listKeys.push({ key: k.name, isCreator: true });
@@ -8310,9 +8290,6 @@ async function getPublicListIndex(env, ctx, opts = {}) {
               } catch {
                 creatorName = username;
               }
-            } else {
-              slug = key.slice("publishedlist:user:".length);
-              id = `a:${slug}`;
             }
             return {
               id,
@@ -99913,8 +99890,13 @@ function generateSearchVariations(query) {
         }
       }
 
-      const sunset = isScrobbleSunset(env);
-      if (!authUser && sunset && (configParam || (queryCreator && queryKey))) {
+      // The old forms -- the Account Key in the query string (?creator=&key=)
+      // and an install link (?config=, alias ?token=) -- were retired on
+      // 2026-11-02 (docs/DECISIONS.md D-36). They are refused whatever the
+      // Worker's variables say, and before anything is verified: the key is
+      // not checked, so a request still carrying one learns nothing from the
+      // answer. A URL that also has a working ?st= token is served by it.
+      if (!authUser && (configParam || queryCreator || queryKey)) {
         return json({
           ok: false,
           error: "Legacy scrobble authentication (?config= and ?creator=&key=) has been sunset. Please update your media server webhook URL in Settings to use the '?st=' token.",
@@ -99922,59 +99904,10 @@ function generateSearchVariations(query) {
         }, 410);
       }
 
-      if (!authUser && !sunset && configParam) {
-        try {
-          const resolved = await resolveConfig(configParam, env);
-          if (resolved && resolved.installTrackOwner) {
-            // A v2 install link with the "track" scope -- see handleSubtitlesTrack.
-            if (!(await isCreatorTombstoned(env, resolved.installTrackOwner))) {
-              authUser = resolved.installTrackOwner;
-              authForm = "config";
-              if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
-            }
-          } else if (resolved && resolved.trackCreatorName && resolved.trackCreatorKey) {
-            const auth = await authenticateCreator(resolved.trackCreatorName, resolved.trackCreatorKey);
-            if (auth.ok) {
-              authUser = auth.username;
-              authForm = "config";
-              if (resolved.tmdbKey) effectiveTmdbKey = resolved.tmdbKey;
-            }
-          }
-        } catch {}
-      }
-
-      let authThrottled = false;
-      if (!authUser && !sunset && queryCreator && queryKey) {
-        const auth = await authenticateCreator(queryCreator, queryKey);
-        if (auth.ok) {
-          authUser = auth.username;
-          authForm = "key";
-        } else if (auth.throttled) {
-          authThrottled = true;
-        }
-      }
-
       if (!authUser) {
-        // A throttle is not a bad credential, and a media server retrying a
-        // webhook should be told to back off rather than that its key is
-        // wrong -- this endpoint is the one that gets hit on every play, and
-        // it was also the easiest way to drive unbounded PBKDF2 runs.
-        if (authThrottled) {
-          return json({ ok: false, error: "Too many attempts. Please wait a minute and try again." }, 429);
-        }
         return json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401);
       }
-      // creator+key still works until sunset: webhook URLs handed out before scrobble
-      // tokens existed are sitting in people's media servers, and breaking
-      // them would silently stop their history syncing with no error anyone
-      // would see. The dashboard only ever shows the token form now, so
-      // these age out as people re-copy the URL.
       await ensureTrackingMigrated(env, authUser);
-
-      // P7-6: Log usage of legacy scrobble authentication forms
-      if (authForm !== "st") {
-        console.warn(`[scrobble] legacy auth form '${authForm}' used by user '${authUser}'`);
-      }
 
       if (!effectiveTmdbKey && authUser && env && env.CONFIGS) {
         try {

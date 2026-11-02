@@ -46,8 +46,8 @@ numbered source files (`src/core/00_constants.js` through `src/api/61_media-app-
   in `install_secrets` (`TOKEN_ENCRYPTION_KEY` AES-GCM).
 - **Admin:** `ADMIN_KEY` secret + `mla_admin` cookie, optionally behind Cloudflare Access
   (`CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`).
-- **Scrobble webhooks:** `?st=` token (new); legacy `?config=` and `?creator=&key=` forms sunset
-  at Day 60 after Phase 1.
+- **Scrobble webhooks:** `?st=` token only. The old `?config=` and `?creator=&key=` forms are
+  refused with 410 since 2026-11-02 (`docs/DECISIONS.md` D-36).
 
 ---
 

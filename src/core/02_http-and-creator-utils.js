@@ -2252,24 +2252,6 @@ async function hashStringForKey(s) {
 // sent when the browser already holds a byte-identical copy.
 const BUILDER_PAGE_MEMO = new Map();
 
-// --- Scrobble auth sunset (Phase 7, P7-6) --------------------------------------
-//
-// Webhooks originally carried the Creator Key in the query string (?creator=&key=),
-// or a legacy install config id (?config=), exposing master credentials in media
-// server logs and configurations. P7-6 requires the scoped ?st= token.
-// The legacy forms are logged and show a banner in Settings, and are rejected
-// when FF_SCROBBLE_ST_ONLY=1 or past SCROBBLE_SUNSET_DATE.
-function isScrobbleSunset(env) {
-  if (!env) return false;
-  const v = env.FF_SCROBBLE_ST_ONLY;
-  if (v === "1" || v === "true" || v === true) return true;
-  if (env.SCROBBLE_SUNSET_DATE) {
-    const t = Date.parse(String(env.SCROBBLE_SUNSET_DATE));
-    if (Number.isFinite(t) && Date.now() >= t) return true;
-  }
-  return false;
-}
-
 // --- Phase 10 legacy sunset notices (P10-2) -------------------------------------
 //
 // Set SUNSET_60DAY_START_DATE (YYYY-MM-DD) in Worker variables when FF_SESSIONS
@@ -4440,10 +4422,8 @@ async function getPublicListIndex(env, ctx, opts = {}) {
     try {
       const fetchLimit = 200;
       // Account-owned lists only; see the D1 query above.
-      const pubRes = { keys: [] };
       const creatorRes = await env.CONFIGS.list({ prefix: "creatorlist:", limit: fetchLimit });
       const listKeys = [];
-      (pubRes.keys || []).forEach(k => listKeys.push({ key: k.name, isCreator: false }));
       (creatorRes.keys || []).forEach(k => {
         const rest = k.name.slice("creatorlist:".length);
         if (rest.includes(":")) listKeys.push({ key: k.name, isCreator: true });
@@ -4473,9 +4453,6 @@ async function getPublicListIndex(env, ctx, opts = {}) {
               } catch {
                 creatorName = username;
               }
-            } else {
-              slug = key.slice("publishedlist:user:".length);
-              id = `a:${slug}`;
             }
             return {
               id,

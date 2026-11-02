@@ -139,7 +139,6 @@ Same page, **Add**, type **Text**, one per line:
 | `FF_CHART_SNAPSHOTS` | `1` |
 | `FF_CANONICAL_IDS` | `1` |
 | `FF_MATERIALIZER` | `1` |
-| `FF_SCROBBLE_ST_ONLY` | `1` |
 | `INSTALL_MIGRATION_PERCENT` | `100` |
 
 These match what the public site runs. Set them now, on an empty database, and leave them set.

@@ -197,14 +197,9 @@ FF_MEDIA_APP_PUSH = "1"
 # CF_ACCESS_TEAM_DOMAIN = "myteam.cloudflareaccess.com"
 # CF_ACCESS_AUD = "0000000000000000000000000000000000000000000000000000000000000000"
 # FF_ADMIN_EMAILS = "you@example.com"
-# Optional, Phase 7 (P7-6): disallows legacy creator=&key= and config= forms on
-# scrobble webhooks, requiring the scoped scrobble token (?st=). Turning it on
-# stops every media server still using an old webhook address, with no message
-# to its owner -- leave it off until the sunset (docs/RELEASES.md Release 14).
-# FF_SCROBBLE_ST_ONLY = "1"
-# Optional, Phase 7 (P7-6): date string (e.g. "2026-06-01") after which legacy
-# scrobble forms are automatically sunsetted even if FF_SCROBBLE_ST_ONLY is not set.
-# SCROBBLE_SUNSET_DATE = "2026-06-01"
+# FF_SCROBBLE_ST_ONLY and SCROBBLE_SUNSET_DATE are no longer read (2026-11-02,
+# docs/DECISIONS.md D-36): the old creator=&key= and config= scrobble webhook
+# forms are always refused, and only the scoped ?st= token works.
 # Optional, Phase 10 (P10-2): date string (e.g. "2026-10-02") starting 60-day
 # sunset notices. Leave unset: the site's own page still uses several of the
 # routes the notices say are going (docs/CUTOVER.md P10-2).
@@ -326,6 +321,5 @@ FF_PROVIDER_BREAKER = "1"
 FF_CHART_SNAPSHOTS = "1"
 FF_CANONICAL_IDS = "1"
 FF_MATERIALIZER = "1"
-FF_SCROBBLE_ST_ONLY = "1"
 INSTALL_MIGRATION_PERCENT = "100"
 

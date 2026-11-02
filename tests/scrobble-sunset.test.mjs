@@ -1,9 +1,9 @@
-// Scrobble endpoint authentication and sunset (P7-6, S-08).
-// The scoped ?st= token is the preferred, secure webhook credential.
-// The legacy ?creator=&key= and ?config= forms log usage warnings and
-// record diagnostics so Settings can show an in-app banner with the new URL.
-// When FF_SCROBBLE_ST_ONLY=1 or past SCROBBLE_SUNSET_DATE, the legacy
-// forms are retired (410 Gone) while ?st= continues to function.
+// Scrobble endpoint authentication (P7-6, S-08; old forms retired 2026-11-02,
+// docs/DECISIONS.md D-36).
+// The scoped ?st= token is the only webhook credential. The old ?creator=&key=
+// and ?config= (alias ?token=) forms are refused with 410 Gone whatever the
+// Worker's variables say: they put the Account Key, or an install link that
+// can carry it, into a media server's settings and logs.
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -50,48 +50,33 @@ describe("P7-6: scrobble authentication and sunset", () => {
     assert.equal(statusRes.body.legacyAuthForm, null);
   });
 
-  it("authenticates via legacy creator=&key= before sunset, logging usage and setting legacyAuthForm", async () => {
+  it("refuses creator=&key= with 410, records nothing, and never verifies the key", async () => {
     const points = [];
-    const env = makeEnv({
-      DB: makeD1(),
-      ANALYTICS: {
-        writeDataPoint(p) { points.push(p); },
-      },
-    });
+    const env = makeEnv({ DB: makeD1(), ANALYTICS: { writeDataPoint(p) { points.push(p); } } });
     const user = await createUser(env, "scrobble_key_user");
     const auth = { creatorName: user.creatorName, creatorKey: user.creatorKey };
 
-    const legacyQs = `creator=${encodeURIComponent(user.creatorName)}&key=${encodeURIComponent(user.creatorKey)}`;
-    const res = await scrobble(env, legacyQs);
-    assert.equal(res.status, 200);
+    const res = await scrobble(env, `creator=${encodeURIComponent(user.creatorName)}&key=${encodeURIComponent(user.creatorKey)}`);
+    assert.equal(res.status, 410);
+    assert.equal(res.body.sunset, true);
 
-    // Diagnostics in track-status flags the legacy auth form
-    const statusRes = await call(env, "/api/creator/track-status", {
-      method: "POST",
-      json: auth,
-    });
-    assert.equal(statusRes.status, 200);
-    assert.equal(statusRes.body.lastAuthForm, "key");
-    assert.equal(statusRes.body.legacyAuthForm, "key");
-
-    // Analytics Engine logged scrobble_auth metric
-    const authPoint = points.find((p) => p.blobs && p.blobs[0] === "scrobble_auth");
-    assert.ok(authPoint, "Analytics Engine data point recorded for scrobble_auth");
-    assert.equal(authPoint.blobs[1], "key");
+    // Nothing was written for the account: no ping, no play.
+    const status = (await call(env, "/api/creator/track-status", { method: "POST", json: auth })).body;
+    assert.equal(status.lastPingAt, null);
+    assert.ok(!points.some((p) => p.blobs && p.blobs[0] === "scrobble_auth"), "a refused request is not counted as an auth");
   });
 
-  it("authenticates via legacy config= before sunset, setting legacyAuthForm to 'config'", async () => {
-    const points = [];
-    const env = makeEnv({
-      DB: makeD1(),
-      ANALYTICS: {
-        writeDataPoint(p) { points.push(p); },
-      },
-    });
+  it("refuses creator=&key= even with a wrong key (410, not 401: the form itself is gone)", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const user = await createUser(env, "scrobble_wrongkey_user");
+    const res = await scrobble(env, `creator=${encodeURIComponent(user.creatorName)}&key=MYL-WRONG-WRONG-WRONG`);
+    assert.equal(res.status, 410);
+  });
+
+  it("refuses config= and its token= alias with 410, even for a link that carries the Account Key", async () => {
+    const env = makeEnv({ DB: makeD1() });
     const user = await createUser(env, "scrobble_cfg_user");
     const auth = { creatorName: user.creatorName, creatorKey: user.creatorKey };
-
-    // Seed a legacy config in KV (SHORT_ID_LENGTH is 12)
     const configId = "legacyid0001";
     await env.CONFIGS.put(`cfg:${configId}`, JSON.stringify({
       entries: [],
@@ -99,76 +84,52 @@ describe("P7-6: scrobble authentication and sunset", () => {
       trackCreatorKey: user.creatorKey,
     }));
 
-    const res = await scrobble(env, `config=${configId}`);
-    assert.equal(res.status, 200);
-
-    const statusRes = await call(env, "/api/creator/track-status", {
-      method: "POST",
-      json: auth,
-    });
-    assert.equal(statusRes.status, 200);
-    assert.equal(statusRes.body.lastAuthForm, "config");
-    assert.equal(statusRes.body.legacyAuthForm, "config");
-
-    const authPoint = points.find((p) => p.blobs && p.blobs[0] === "scrobble_auth");
-    assert.ok(authPoint);
-    assert.equal(authPoint.blobs[1], "config");
+    for (const qs of [`config=${configId}`, `token=${configId}`]) {
+      const res = await scrobble(env, qs);
+      assert.equal(res.status, 410, qs);
+      assert.equal(res.body.sunset, true, qs);
+    }
+    const status = (await call(env, "/api/creator/track-status", { method: "POST", json: auth })).body;
+    assert.equal(status.lastPingAt, null);
   });
 
-  it("clears legacyAuthForm once a user upgrades to the st= token", async () => {
+  it("refuses the old forms whatever FF_SCROBBLE_ST_ONLY or SCROBBLE_SUNSET_DATE say", async () => {
+    for (const vars of [{ FF_SCROBBLE_ST_ONLY: "0" }, { SCROBBLE_SUNSET_DATE: "2099-01-01T00:00:00Z" }, {}]) {
+      const env = makeEnv({ DB: makeD1(), ...vars });
+      const user = await createUser(env, "scrobble_vars_user");
+      const res = await scrobble(env, `creator=${encodeURIComponent(user.creatorName)}&key=${encodeURIComponent(user.creatorKey)}`);
+      assert.equal(res.status, 410, JSON.stringify(vars));
+    }
+  });
+
+  it("st= keeps working, and wins when old parameters ride along on the same URL", async () => {
+    const env = makeEnv({ DB: makeD1() });
+    const user = await createUser(env, "scrobble_both_user");
+    const auth = { creatorName: user.creatorName, creatorKey: user.creatorKey };
+    const token = await mintToken(env, auth);
+
+    const res = await scrobble(env, `st=${encodeURIComponent(token)}&creator=${encodeURIComponent(user.creatorName)}&key=nope`);
+    assert.equal(res.status, 200);
+    const status = (await call(env, "/api/creator/track-status", { method: "POST", json: auth })).body;
+    assert.equal(status.lastAuthForm, "st");
+    assert.equal(status.legacyAuthForm, null);
+  });
+
+  it("an st= ping clears the Settings banner left by an old-form ping from before", async () => {
     const env = makeEnv({ DB: makeD1() });
     const user = await createUser(env, "scrobble_upgrade_user");
     const auth = { creatorName: user.creatorName, creatorKey: user.creatorKey };
     const token = await mintToken(env, auth);
+    // What an old-form ping recorded before the forms were retired.
+    await env.CONFIGS.put(`creatortrack:${user.creatorName.toLowerCase()}`, JSON.stringify({
+      lastPingAt: Date.now() - 60000, lastPingId: "x", lastServer: "Plex", lastUser: null,
+      matched: "yes", lastAuthForm: "key", legacyAuthForm: "key",
+    }));
+    assert.equal((await call(env, "/api/creator/track-status", { method: "POST", json: auth })).body.legacyAuthForm, "key");
 
-    // First ping: old creator+key form
-    await scrobble(env, `creator=${encodeURIComponent(user.creatorName)}&key=${encodeURIComponent(user.creatorKey)}`);
-    const status1 = (await call(env, "/api/creator/track-status", { method: "POST", json: auth })).body;
-    assert.equal(status1.legacyAuthForm, "key");
-
-    // Second ping: updated st= token form
     await scrobble(env, `st=${encodeURIComponent(token)}`);
-    const status2 = (await call(env, "/api/creator/track-status", { method: "POST", json: auth })).body;
-    assert.equal(status2.lastAuthForm, "st");
-    assert.equal(status2.legacyAuthForm, null);
-  });
-
-  it("retires legacy forms when FF_SCROBBLE_ST_ONLY=1, while st= continues to work", async () => {
-    const env = makeEnv({ DB: makeD1(), FF_SCROBBLE_ST_ONLY: "1" });
-    const user = await createUser(env, "scrobble_sunset_user");
-    const auth = { creatorName: user.creatorName, creatorKey: user.creatorKey };
-    const token = await mintToken(env, auth);
-
-    // st= token continues to work normally
-    const tokenRes = await scrobble(env, `st=${encodeURIComponent(token)}`);
-    assert.equal(tokenRes.status, 200);
-
-    // creator=&key= is retired with 410
-    const keyRes = await scrobble(env, `creator=${encodeURIComponent(user.creatorName)}&key=${encodeURIComponent(user.creatorKey)}`);
-    assert.equal(keyRes.status, 410);
-    assert.equal(keyRes.body.sunset, true);
-
-    // config= is retired with 410
-    const cfgRes = await scrobble(env, "config=cfg_fake");
-    assert.equal(cfgRes.status, 410);
-    assert.equal(cfgRes.body.sunset, true);
-  });
-
-  it("retires legacy forms when SCROBBLE_SUNSET_DATE is in the past", async () => {
-    const env = makeEnv({ DB: makeD1(), SCROBBLE_SUNSET_DATE: "2025-01-01T00:00:00Z" });
-    const user = await createUser(env, "scrobble_date_user");
-    const auth = { creatorName: user.creatorName, creatorKey: user.creatorKey };
-
-    const keyRes = await scrobble(env, `creator=${encodeURIComponent(user.creatorName)}&key=${encodeURIComponent(user.creatorKey)}`);
-    assert.equal(keyRes.status, 410);
-    assert.equal(keyRes.body.sunset, true);
-  });
-
-  it("keeps legacy forms working when SCROBBLE_SUNSET_DATE is in the future", async () => {
-    const env = makeEnv({ DB: makeD1(), SCROBBLE_SUNSET_DATE: "2099-01-01T00:00:00Z" });
-    const user = await createUser(env, "scrobble_future_user");
-
-    const keyRes = await scrobble(env, `creator=${encodeURIComponent(user.creatorName)}&key=${encodeURIComponent(user.creatorKey)}`);
-    assert.equal(keyRes.status, 200);
+    const status = (await call(env, "/api/creator/track-status", { method: "POST", json: auth })).body;
+    assert.equal(status.lastAuthForm, "st");
+    assert.equal(status.legacyAuthForm, null);
   });
 });

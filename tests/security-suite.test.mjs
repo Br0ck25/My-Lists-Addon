@@ -271,8 +271,8 @@ describe("P9-4: Security Regression Suite", () => {
       assert.equal(listsRes.status, 401, "installId must not authorize creator lists");
     });
 
-    it("rejects legacy scrobble query credentials when sunset is enforced (FF_SCROBBLE_ST_ONLY)", async () => {
-      const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), FF_SCROBBLE_ST_ONLY: "1" });
+    it("rejects legacy scrobble query credentials (retired 2026-11-02, D-36)", async () => {
+      const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
       const user = await createUser(env, "sunsetscrobble");
 
       // Attempt legacy scrobble via ?creator=&key=
