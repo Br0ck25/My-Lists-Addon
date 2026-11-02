@@ -50,13 +50,7 @@ async function apiTraktMyPrivateLists(request, env, ctx) {
       providerLabel: "Trakt Private Lists",
       fetchFn: async () => {
         const res = await fetchTraktWithRetry("https://api.trakt.tv/users/me/lists", {
-          headers: {
-            "Content-Type": "application/json",
-            "trakt-api-version": "2",
-            "trakt-api-key": TRAKT_CLIENT_ID,
-            Authorization: `Bearer ${accessToken}`,
-            "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-          },
+          headers: traktHeaders(accessToken),
           cf: { cacheTtl: 0, cacheEverything: false },
         });
         if (res.status === 401) {
@@ -65,13 +59,7 @@ async function apiTraktMyPrivateLists(request, env, ctx) {
         if (!res.ok) throw new Error(`Trakt request failed (HTTP ${res.status}).`);
         const data = await res.json();
         const meRes = await fetchTraktWithRetry("https://api.trakt.tv/users/me", {
-          headers: {
-            "Content-Type": "application/json",
-            "trakt-api-version": "2",
-            "trakt-api-key": TRAKT_CLIENT_ID,
-            Authorization: `Bearer ${accessToken}`,
-            "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-          },
+          headers: traktHeaders(accessToken),
           cf: { cacheTtl: 0, cacheEverything: false },
         });
         const me = meRes.ok ? await meRes.json() : null;
@@ -97,13 +85,7 @@ async function apiTraktMyPrivateLists(request, env, ctx) {
         let watchlistCount = 0;
         try {
           const watchlistRes = await fetchTraktWithRetry("https://api.trakt.tv/users/me/watchlist?limit=1&page=1", {
-            headers: {
-              "Content-Type": "application/json",
-              "trakt-api-version": "2",
-              "trakt-api-key": TRAKT_CLIENT_ID,
-              Authorization: `Bearer ${accessToken}`,
-              "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-            },
+            headers: traktHeaders(accessToken),
             cf: { cacheTtl: 0, cacheEverything: false },
           });
           if (watchlistRes.ok) {
@@ -123,13 +105,7 @@ async function apiTraktMyPrivateLists(request, env, ctx) {
         let historyCount = 0;
         try {
           const historyRes = await fetchTraktWithRetry("https://api.trakt.tv/users/me/history?limit=1&page=1", {
-            headers: {
-              "Content-Type": "application/json",
-              "trakt-api-version": "2",
-              "trakt-api-key": TRAKT_CLIENT_ID,
-              Authorization: `Bearer ${accessToken}`,
-              "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-            },
+            headers: traktHeaders(accessToken),
             cf: { cacheTtl: 0, cacheEverything: false },
           });
           if (historyRes.ok) {
@@ -201,53 +177,23 @@ async function apiTraktMyPrivateListsContinueWatchingBlock(accessToken, continue
   try {
     const [playbackRes, wShowsRes, hProgRes, hDroppedRes, hResetRes] = await Promise.all([
       fetchTraktWithRetry("https://api.trakt.tv/sync/playback?limit=50", {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": TRAKT_CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken),
         cf: { cacheTtl: 0, cacheEverything: false },
       }).catch(() => null),
       fetchTraktWithRetry("https://api.trakt.tv/users/me/watched/shows?extended=noseasons", {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": TRAKT_CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken),
         cf: { cacheTtl: 60, cacheEverything: false },
       }).catch(() => null),
       fetchTraktWithRetry("https://api.trakt.tv/users/hidden/progress_watched?type=show&limit=100", {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": TRAKT_CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken),
         cf: { cacheTtl: 300, cacheEverything: false },
       }).catch(() => null),
       fetchTraktWithRetry("https://api.trakt.tv/users/hidden/dropped?type=show&limit=100", {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": TRAKT_CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken),
         cf: { cacheTtl: 300, cacheEverything: false },
       }).catch(() => null),
       fetchTraktWithRetry("https://api.trakt.tv/users/hidden/progress_watched_reset?type=show&limit=100", {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": TRAKT_CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken),
         cf: { cacheTtl: 300, cacheEverything: false },
       }).catch(() => null),
     ]);
@@ -328,23 +274,11 @@ async function apiTraktMyPrivateListsAiringNext(accessToken, airingCandidates) {
   try {
     const [wShowsRes, wlShowsRes] = await Promise.all([
       fetchTraktWithRetry("https://api.trakt.tv/users/me/watched/shows?extended=noseasons", {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": TRAKT_CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken),
         cf: { cacheTtl: 60, cacheEverything: false },
       }).catch(() => null),
       fetchTraktWithRetry("https://api.trakt.tv/users/me/watchlist/shows?limit=50", {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": TRAKT_CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken),
         cf: { cacheTtl: 60, cacheEverything: false },
       }).catch(() => null),
     ]);
@@ -413,13 +347,7 @@ async function apiTraktMyPrivateListsContinueWatching(accessToken, continueWatch
       if (!showKey) return;
       try {
         const pRes = await fetchTraktWithRetry(`https://api.trakt.tv/shows/${encodeURIComponent(showKey)}/progress/watched?last_activity=watched&hidden=false&specials=false&count_specials=false`, {
-          headers: {
-            "Content-Type": "application/json",
-            "trakt-api-version": "2",
-            "trakt-api-key": TRAKT_CLIENT_ID,
-            Authorization: `Bearer ${accessToken}`,
-            "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-          },
+          headers: traktHeaders(accessToken),
           cf: { cacheTtl: 60, cacheEverything: false },
         });
         if (!pRes.ok) return;
@@ -519,13 +447,7 @@ async function apiTraktHistoryRaw(request, env, ctx) {
       fetchFn: async () => {
         ctx.waitUntil(bumpStat(env, "apiuse:trakt"));
         const res = await fetchTraktWithRetry(`https://api.trakt.tv/users/me/history/${itemKind}?limit=${limit}&page=${page}`, {
-          headers: {
-            "Content-Type": "application/json",
-            "trakt-api-version": "2",
-            "trakt-api-key": TRAKT_CLIENT_ID,
-            Authorization: `Bearer ${accessToken}`,
-            "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-          },
+          headers: traktHeaders(accessToken),
           cf: { cacheTtl: 0, cacheEverything: false },
         });
         if (res.status === 401) {
