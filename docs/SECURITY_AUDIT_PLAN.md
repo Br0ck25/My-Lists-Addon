@@ -11,10 +11,10 @@ What I found is mostly about **what an attacker could do if they ever got a copy
 
 1. The "forgot username" lookup keeps a fast, unsalted fingerprint of every Account Key. With a database copy, someone could work out Account Keys in hours instead of centuries (SEC-01).
 2. Trakt, MDBList and Simkl sign-ins saved by cloud sync sit unencrypted in KV, although the newer storage for the same tokens is encrypted (SEC-02).
-3. The Account Key stays in the browser's storage forever, even once a sign-in cookie exists. **This needs your decision** (SEC-03).
+3. The Account Key stays in the browser's storage forever, even once a sign-in cookie exists. **Owner decided (2026-11-02): yes, with sessions that renew while in use** (SEC-03).
 4. Media-server webhook tokens are stored as-is, unlike every other token (SEC-04).
 5. Anonymous like votes store a fingerprint of the voter's IP address that can be reversed (SEC-05). Expired sign-in records are never deleted (SEC-06).
-6. Smaller items: the webhook endpoint has no limit on bad tokens (SEC-07); shared channels can carry images from any web host, which lets a sharer log viewers' IP addresses (**your decision**, SEC-08).
+6. Smaller items: the webhook endpoint has no limit on bad tokens (SEC-07); shared channels can carry images from any web host, which lets a sharer log viewers' IP addresses (**owner decided: HTTPS only**, SEC-08).
 7. Settings to confirm in Cloudflare and GitHub (SEC-09, SEC-10).
 
 ## How this audit was done (what it covers and does not)
@@ -34,7 +34,7 @@ Already covered by earlier audits and **not re-opened here**: `docs/BACKEND_AUDI
 - After each item: `bash verify.sh -q --fast` plus that test file. Before pushing: `bash verify.sh -q`. Run `python tools/gen_map.py` if functions were added or moved.
 - A schema change is a new file in `migrations/` (next number is `0024_`) **and** the same change in `schema.sql`. Code must keep working when the migration has not been applied yet (the codebase's pattern: try the new column, catch "no such column", fall back). `tests/migration-suite.test.mjs` shows how this is tested.
 - New secrets (env vars) must be optional: with the secret missing, behaviour stays exactly as today. Document each in `docs/OPERATIONS.md` and `docs/SELF-HOSTING.md`.
-- **Do not start SEC-03 or SEC-08 until the owner has answered the question in that item.**
+- SEC-03 and SEC-08 were decided by the owner on 2026-11-02; build them exactly as the "Decision" line in each item says.
 - Add one `docs/RELEASES.md` entry at the end. Finding IDs are `SEC-nn`. Fix in the order in "Fix order".
 
 ---
@@ -74,7 +74,7 @@ Test: with an encryption key set, after a save the raw KV value contains no toke
 
 ---
 
-### SEC-03 (Medium, authentication) — **needs the owner's decision first**: the Account Key is kept in `localStorage` forever
+### SEC-03 (Medium, authentication) — **decided**: the Account Key is kept in `localStorage` forever
 **Evidence.** The key is written to `localStorage['myListAddon:creatorKey']` on sign-in (`src/client/22_client-creator-profile.js:772, 1769, 1843, 2104, 3926`) and stays there even after the browser holds an HttpOnly 30-day session (Release 19, `16_client-row-core.js` "Requests signed by the session"). `docs/DECISIONS.md` D-13 says the key "moves with P6-9's session sign-in"; that step has not happened.
 
 **Impact.** The key never expires and replaces the password. Any script that runs on the origin (an XSS that slips past the CSP, a malicious browser extension) or anyone using a shared computer can read it and take over the account permanently, until the owner resets the key. A session cookie, by contrast, is HttpOnly, expires and can be revoked.
@@ -84,6 +84,7 @@ Test: with an encryption key set, after a save the raw KV value contains no toke
 **Fix, if yes.**
 1. When the server confirms a session for this account (the `X-MLA-Session` header handling in `16_`), remove `myListAddon:creatorKey` and keep `creatorName` plus a "signed in by session" marker. `activeCreator` (`16_:1224`) must treat "name + session marker" as signed in.
 2. On a 401 from a session-only request, show the existing sign-in prompt instead of resending the key.
+2b. Before the key is forgotten in a browser for the first time, tell the person once to keep their Account Key somewhere safe, and offer to set a recovery answer if they have none (`hasRecoveryAnswer` is already sent to the page). Reuse the existing notice/toast components and copy style (`docs/AI_UI_RULES.md`); no new styles.
 3. Browsers where `localStorage` or cookies are blocked (`creatorSessionHeldFor()` returns `''`) keep today's behaviour.
 4. Pages that read the key directly (`18_:162, 443`, `19_:1163, 1769, 1813, 1851`, the public list page's like button) must use the session.
 Tests: client-harness test that after a session-confirmed response the key is gone from storage and a save still succeeds; a server test that a session-only request to every `/api/creator/` route the client calls succeeds.
@@ -125,14 +126,14 @@ Tests: after a rotate, no raw token appears in D1 or KV; the URL shown in Settin
 
 ---
 
-### SEC-08 (Low, privacy) — **needs the owner's decision first**: shared channels can carry images from any host
+### SEC-08 (Low, privacy) — **decided**: shared channels can carry images from any host
 **Evidence.** `sharedChannelImageUrl` (`src/catalog/05_catalog-core.js:3382`) accepts any `http://` or `https://` URL for a shared channel's poster, thumbnail, show poster and backdrop. Other people who add the channel load those images in Stremio/Nuvio.
 
 **Impact.** Someone who shares a channel can point its images at a server they control and log the IP address (and app) of everyone who views it. `http://` images also load without encryption.
 
-**Question for the owner.** Should shared channels only show images from the poster hosts the add-on already trusts (`POSTER_IMAGE_HOSTS`, the same list `/api/poster-badge` uses)? Images from other hosts would be dropped and the channel's generated poster used instead. A softer option is HTTPS only.
+**Decision (owner, 2026-11-02): HTTPS only.** Custom logos on hosts like Imgur must keep working; the strict host allowlist is not wanted.
 
-**Fix, if yes.** In `sharedChannelImageUrl`, return the URL only when `isAllowedPosterUrl(url, origin)` (`25_api-catalog-routes.js:67`) passes (or only `https:` for the softer option). Test: an attacker-host image is dropped, a TMDB image is kept, an `http://` image is dropped.
+**Fix.** In `sharedChannelImageUrl`, accept only `https://` URLs (parse with `new URL`, require `protocol === "https:"`); an `http://` image is dropped and the channel's generated poster is used. Also check the client-side channel builder accepts the same rule when saving, so a person is not surprised later (grep the client for where channel images are entered). Test: an `http://` image is dropped, an `https://` image on any host (e.g. `https://i.imgur.com/x.png`) is kept, a `javascript:` or `data:` value is dropped.
 
 ---
 
@@ -161,8 +162,8 @@ Tick each in Cloudflare / GitHub; none needs a code change.
 6. SEC-06.
 7. SEC-05.
 8. SEC-10.
-9. SEC-08, after the owner answers.
-10. SEC-03, after the owner answers; behind a flag, off by default.
+9. SEC-08 (HTTPS only).
+10. SEC-03: step 0 (sliding sessions) first, then the rest behind `FF_FORGET_KEY`, off by default.
 
 ## Checked and fine (by audit area)
 
