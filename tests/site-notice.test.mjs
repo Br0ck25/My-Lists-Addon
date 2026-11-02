@@ -79,7 +79,7 @@ describe("site notice: what visitors are told", () => {
     const { env, cookie } = await setup();
     const admin = await call(env, "/admin", { cookie });
     assert.match(admin.text, /data-admin-panel="sitenotice"/);
-    assert.match(admin.text, /Site Notice<\/button>/);
+    assert.match(admin.text, /Site notice<\/button>/);
   });
 });
 

@@ -63,6 +63,9 @@ describe("/api/track-install", () => {
     for (const m of q08.matchAll(/"([A-Za-z ]+)"\]\)\}">\+ (?:Movies|Shows)/g)) labels.add(m[1]);
     for (const m of q20.matchAll(/addRow\([^;]*?,\s*true,\s*'([^']+)'/g)) labels.add(m[1]);
     for (const m of q19.matchAll(/addRow\([^;]*?,\s*true,\s*'([^']+)'/g)) labels.add(m[1]);
+    for (const f of ["17_client-my-lists-and-trakt-oauth.js", "22_client-creator-profile.js", "23_client-list-management.js", "24_client-backup-restore-presets.js"]) {
+      for (const m of read(f).matchAll(/addRow\([^;]*?,\s*true,\s*'([^']+)'/g)) labels.add(m[1]);
+    }
     assert.ok(labels.size >= 14, "the scan found only " + [...labels].join(", "));
     const DB = makeD1();
     const env = makeEnv({ DB, CONFIGS: makeKv() });

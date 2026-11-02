@@ -104,7 +104,7 @@ describe("support goal: the public endpoint and the admin save", () => {
     const cookie = await adminCookie(env);
     const admin = await call(env, "/admin", { cookie });
     assert.match(admin.text, /data-admin-panel="supportgoal"/);
-    assert.match(admin.text, /Support Goal<\/button>/);
+    assert.match(admin.text, /Support goal<\/button>/);
     const site = (await call(env, "/")).text;
     assert.match(site, /id="supportStrip"/);
   });

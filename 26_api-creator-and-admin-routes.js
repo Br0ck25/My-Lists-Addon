@@ -5652,6 +5652,21 @@
       return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
     }
 
+    // /admin/api/creators?q=&page=&pageSize=50|100 -> { ok, total, matched,
+    // page, pages, pageSize, rows } -- one page of creator accounts for the
+    // Creator Accounts tab, searchable over every username and display name.
+    if (path === "/admin/api/creators" && request.method === "GET") {
+      const authed = await isAdminRequest(request, env);
+      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+      try {
+        const data = await listAdminCreators(env, url.searchParams.get("q"), url.searchParams.get("page"), url.searchParams.get("pageSize"));
+        return json({ ok: true, ...data }, 200, { "Cache-Control": "no-store" });
+      } catch (e) {
+        console.error("admin creators list failed:", e);
+        return json({ ok: false, error: "Could not load creator accounts." }, 500, { "Cache-Control": "no-store" });
+      }
+    }
+
     // /admin/api/leaderboard?type=watched|list-add&window=today|7|30|90|alltime&mediaType=movie|series
     // -> { ok, entries } -- backs the Trending Data tab's dropdown, computed
     // on demand rather than eagerly for every window/type combo on every

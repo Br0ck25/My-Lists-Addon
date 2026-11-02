@@ -12,6 +12,7 @@
   "/admin/api/channel-presets/clear": "admin",
   "/admin/api/channel-presets/rebuild": "admin",
   "/admin/api/creator-lists": "admin",
+  "/admin/api/creators": "admin",
   "/admin/api/delete-creator-list": "admin",
   "/admin/api/export-kv-to-r2": "admin",
   "/admin/api/feedback": "admin",

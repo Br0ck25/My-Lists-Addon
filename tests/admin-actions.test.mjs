@@ -338,21 +338,27 @@ describe("P6-10: the /admin dashboard names its actions", () => {
 
   it("keeps a creator's own display name out of the markup, as data", async () => {
     // The one admin control whose arguments include text somebody else chose:
-    // Reset Key, in Creator Accounts. Before P6-10 the row spliced displayName
-    // into an onclick string; it is data now, escaped once, and the handler
-    // reads it back off the element at click time.
+    // Reset key, in Creator accounts. The rows are built in the page from the
+    // paged JSON, so the name must (a) never be in the dashboard markup at
+    // all, (b) arrive as JSON data, and (c) go into the button through the
+    // page's own escaper, never a handler string.
     const env = makeEnv({});
-    await createUser(env, "p610creator", { displayName: "O'Brien \"Best\" <script>alert(1)</script>" });
+    const evil = "O'Brien \"Best\" <script>alert(1)</script>";
+    await createUser(env, "p610creator", { displayName: evil });
     const login = await call(env, "/admin/login", { method: "POST", form: { key: env.ADMIN_KEY } });
-    const cookie = (login.headers.get("set-cookie") || "").match(/^([^=]+=[^;]+)/);
-    const html = (await call(env, "/admin", { cookie: cookie ? cookie[1] : "" })).text;
+    const cookie = (login.headers.get("set-cookie") || "").match(/^([^=]+=[^;]+)/)[1];
+    const html = (await call(env, "/admin", { cookie })).text;
+    assert.equal(html.includes("Brien"), false, "the dashboard markup does not carry the name");
+    assert.equal(html.includes("onclick="), false, "and no handler string");
 
-    assert.ok(html.includes('data-act="resetCreatorKey"'), "the button names its action");
-    assert.ok(html.includes('data-act-args="[&quot;@self&quot;]'), "and takes the element it was clicked on");
-    assert.equal(html.includes("onclick="), false, "with no handler string anywhere near the name");
-    const row = html.slice(html.indexOf('data-act="resetCreatorKey"') - 200);
-    assert.ok(row.includes("data-displayname=\"O&#39;Brien &quot;Best&quot; &lt;script&gt;"), "the name is escaped data");
-    assert.equal(/<script>alert\(1\)<\/script>/.test(html), false, "and cannot become markup");
+    const page = await call(env, "/admin/api/creators?q=p610creator", { cookie });
+    assert.equal(page.body.rows[0].displayName, evil, "the name travels as data");
+
+    const script = pageScript(html);
+    const build = script.slice(script.indexOf("async function loadCreators"), script.indexOf("async function resetCreatorKey"));
+    assert.ok(build.includes('data-act="resetCreatorKey"'), "the button names its action");
+    assert.ok(build.includes("adminActAttr(['@self'])"), "and takes the element it was clicked on");
+    assert.ok(build.includes("data-displayname=\"' + escapeHtmlAdmin(c.displayName)"), "the name is escaped data");
   });
 
   it("wires one listener per event type, once, and runs the action through it", async () => {

@@ -1339,7 +1339,11 @@ async function computeAudienceAnalytics(env) {
   }
 
   return {
-    watchTypes: { movies, series, episodes, total: totalWatch },
+    // Every show play is recorded as an episode play (the playback route
+    // sees an episode id, never a bare show), so "series" is only ever
+    // non-zero in counts recorded before that was settled. A show play is
+    // an episode played, so both feed the one Show plays figure.
+    watchTypes: { movies, shows: series + episodes, total: totalWatch },
     genres: validGenres.slice(0, 50),
     decades: validDecades.slice(0, 50),
   };
@@ -1375,7 +1379,7 @@ function sanitizeStatGroupName(raw) {
 const INSTALL_STAT_GROUPS = new Set([
   "Combined Charts", "MDBList Charts", "TMDB Charts", "Trakt Charts", "Simkl Charts",
   "My Lists Addon Charts", "Streaming", "Streaming Top 10", "Hidden Gems", "Kids",
-  "Holidays", "Genres", "Custom", "Custom Lists", "Curated", "Channels",
+  "Holidays", "Genres", "Custom", "Custom Lists", "Curated", "Channels", "My Lists", "Collections", "New Releases",
 ]);
 const INSTALL_STAT_OTHER_GROUP = "Other";
 // Per address, per minute: the same budget as /api/track-event.
@@ -2501,6 +2505,72 @@ function applySupportGoalUpdate(stored, body, now = new Date()) {
   return { value: out };
 }
 
+// One page of creator accounts for the admin Creator Accounts tab, with an
+// optional search over every username and display name (not just the newest
+// ones). The dashboard used to render the first 1,000 accounts into the page
+// and stop there, so anyone past that was invisible. D1 does the filtering
+// and paging in SQL; without D1 the KV key list is filtered by username and
+// only the rows on the requested page are read.
+const ADMIN_CREATOR_PAGE_SIZES = [50, 100];
+async function listAdminCreators(env, rawQuery, rawPage, rawPageSize) {
+  const q = String(rawQuery || "").trim().toLowerCase().slice(0, 60);
+  const pageSize = ADMIN_CREATOR_PAGE_SIZES.includes(Number(rawPageSize)) ? Number(rawPageSize) : ADMIN_CREATOR_PAGE_SIZES[0];
+  let total = 0;
+  let matched = 0;
+  let rows = [];
+  let page = Math.max(1, parseInt(rawPage, 10) || 1);
+  if (env && env.DB) {
+    const like = "%" + q.replace(/[\\%_]/g, "\\$&") + "%";
+    const where = q ? " WHERE LOWER(username) LIKE ? ESCAPE '\\' OR LOWER(display_name) LIKE ? ESCAPE '\\'" : "";
+    const binds = q ? [like, like] : [];
+    const totalRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM creators").all();
+    total = totalRes.results && totalRes.results[0] ? Number(totalRes.results[0].n) || 0 : 0;
+    if (q) {
+      const m = await env.DB.prepare("SELECT COUNT(*) AS n FROM creators" + where).bind(...binds).all();
+      matched = m.results && m.results[0] ? Number(m.results[0].n) || 0 : 0;
+    } else {
+      matched = total;
+    }
+    page = Math.min(page, Math.max(1, Math.ceil(matched / pageSize)));
+    const { results } = await env.DB.prepare(
+      "SELECT username, display_name, created_at, last_active FROM creators" + where +
+      " ORDER BY last_active DESC, created_at DESC LIMIT ? OFFSET ?"
+    ).bind(...binds, pageSize, (page - 1) * pageSize).all();
+    rows = (results || []).map((r) => ({
+      username: r.username,
+      displayName: r.display_name || r.username,
+      createdAt: r.created_at || null,
+      lastActive: r.last_active || null,
+    }));
+  } else if (env && env.CONFIGS) {
+    const listed = await listAllKeys(env.CONFIGS, "creator:");
+    const names = (listed.keys || []).map((k) => k.name.slice("creator:".length)).sort();
+    total = names.length;
+    const hits = q ? names.filter((n) => n.toLowerCase().includes(q)) : names;
+    matched = hits.length;
+    page = Math.min(page, Math.max(1, Math.ceil(matched / pageSize)));
+    rows = await Promise.all(hits.slice((page - 1) * pageSize, page * pageSize).map(async (username) => {
+      let displayName = username;
+      let createdAt = null;
+      let lastActive = null;
+      try {
+        const raw = await env.CONFIGS.get("creator:" + username);
+        if (raw) {
+          const data = JSON.parse(raw);
+          displayName = data.displayName || username;
+          createdAt = typeof data.createdAt === "number" ? data.createdAt : null;
+        }
+      } catch {}
+      try {
+        const lastRaw = await env.CONFIGS.get("creatorlastseen:" + username);
+        lastActive = lastRaw ? parseInt(lastRaw, 10) || null : null;
+      } catch {}
+      return { username, displayName, createdAt, lastActive };
+    }));
+  }
+  return { total, matched, page, pageSize, pages: Math.max(1, Math.ceil(matched / pageSize)), q, rows };
+}
+
 async function renderAdminDashboard(env) {
   if (!env || !env.CONFIGS) {
     return `<!DOCTYPE html><html><body class="u-bg-F2F2F7 u-c-1C1C1E u-ff-sans_serif u-p-40px">This Worker has no CONFIGS KV namespace bound, so there's no stats to show.</body></html>`;
@@ -2553,95 +2623,19 @@ async function renderAdminDashboard(env) {
     rows.push(`<tr><td>${key}</td><td>${pvByDay[key] || 0}</td><td>${inByDay[key] || 0}</td><td>${ppByDay[key] || 0}</td></tr>`);
   }
 
-  // Creator accounts. The total is counted separately from the rows we
-  // render because creators can outnumber a single request's safe read
-  // budget: the stat card must report the true number of accounts rather
-  // than silently displaying the capped number as if it were the total.
-  let creatorAccounts = [];
+  // Creator accounts: only the total is counted here. The rows are fetched a
+  // page at a time (with search) from /admin/api/creators when the tab opens.
   let totalCreatorCount = 0;
-  // Hard ceiling on how many accounts one dashboard load will render. The
-  // page is for a human eyeballing the newest/most-recent accounts, not
-  // paging through thousands, and this keeps a load bounded regardless of
-  // how large the site grows (the real cap is Cloudflare's 1,000
-  // subrequests/invocation; D1 rows are cheap, so this sits just under it
-  // to leave headroom for everything else the page does).
-  const CREATOR_RENDER_CAP = 1000;
   if (env.DB) {
-    // One query for the count, one bounded query for the rows -- no
-    // per-account reads. last_active now comes straight from the row (kept
-    // current by touchCreatorLastSeen), which is what removed the old
-    // one-KV-get-per-creator fan-out.
-    let count = 0;
     try {
       const countRes = await env.DB.prepare("SELECT COUNT(*) AS n FROM creators").all();
-      count = countRes.results && countRes.results[0] ? Number(countRes.results[0].n) || 0 : 0;
+      totalCreatorCount = countRes.results && countRes.results[0] ? Number(countRes.results[0].n) || 0 : 0;
     } catch (e) {
       console.error("D1 creator count failed:", e);
     }
-    totalCreatorCount = count;
-    const { results } = await env.DB.prepare(
-      "SELECT username, display_name, created_at, last_active FROM creators ORDER BY last_active DESC, created_at DESC LIMIT ?"
-    ).bind(CREATOR_RENDER_CAP).all();
-    creatorAccounts = (results || []).map((row) => ({
-      username: row.username,
-      displayName: row.display_name,
-      createdAt: row.created_at || null,
-      lastActive: row.last_active || null,
-    }));
   } else {
-    // KV-only fallback. listAllKeys is a full cursor sweep (fine for
-    // enumerating, no per-key reads), then bound the fan-out: a KV get per
-    // account over more than this many would blow the subrequest cap, so
-    // cap the renders and report the real total.
     totalCreatorCount = (creatorResult.keys || []).length;
-    const keys = (creatorResult.keys || []).slice(0, CREATOR_RENDER_CAP);
-    creatorAccounts = await Promise.all(
-      keys.map(async (k) => {
-        const username = k.name.slice("creator:".length);
-        let displayName = username;
-        let createdAt = null;
-        try {
-          const raw = await env.CONFIGS.get(k.name);
-          if (raw) {
-            const data = JSON.parse(raw);
-            displayName = data.displayName || username;
-            createdAt = typeof data.createdAt === "number" ? data.createdAt : null;
-          }
-        } catch {}
-        let lastActive = null;
-        try {
-          const lastRaw = await env.CONFIGS.get(`creatorlastseen:${username}`);
-          lastActive = lastRaw ? parseInt(lastRaw, 10) || null : null;
-        } catch {}
-        return { username, displayName, createdAt, lastActive };
-      })
-    );
   }
-
-  creatorAccounts.sort((a, b) => (b.lastActive || b.createdAt || 0) - (a.lastActive || a.createdAt || 0));
-  const shownCreatorCount = creatorAccounts.length;
-  const accountRows = creatorAccounts
-    .map(
-      (c) =>
-        `<tr><td>${escapeHtmlServer(c.displayName)}</td><td>${escapeHtmlServer(c.username)}</td>` +
-        `<td>${c.createdAt ? easternDateKey(new Date(c.createdAt)) : "\u2014"}</td>` +
-        `<td>${c.lastActive ? easternDateKey(new Date(c.lastActive)) : "\u2014"}</td>` +
-        // data-* attributes here rather than passing c.displayName inline into
-        // the onclick string -- displayName is arbitrary creator-chosen text
-        // (only .trim()'d server-side, not restricted to safe characters the
-        // way the normalized username is), so splicing it directly into an
-        // attribute would both break on a display name
-        // containing a quote and, worse, let a crafted display name inject
-        // script into this admin page. escapeHtmlServer handles the HTML-
-        // attribute escaping here the same way it already does for the two
-        // <td> values above; resetCreatorKey reads the values back off the
-        // element at click time instead of receiving them as literals.
-        `<td><button type="button" class="lc-btn secondary u-p-4px_10px u-fs-v_font_size_sm" data-username="${escapeHtmlServer(c.username)}" data-displayname="${escapeHtmlServer(c.displayName)}" data-act="resetCreatorKey" data-act-args="${adminActArgs(['@self'])}">Reset Key</button></td></tr>`
-    )
-    .join("");
-  const creatorTruncatedNote = shownCreatorCount < totalCreatorCount
-    ? `, showing ${shownCreatorCount} of ${totalCreatorCount}`
-    : "";
 
   // Each key is stats:sourcegroup:{group}:total -- strip both ends to get
   // the group name back. ":total" is a fixed suffix here (see bumpStatBy's
@@ -2683,25 +2677,38 @@ async function renderAdminDashboard(env) {
 ${DESIGN_TOKENS_CSS}
 ${UTILITY_CSS}
   * { box-sizing: border-box; }
-  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,system-ui,sans-serif; max-width:900px; margin:0 auto; padding:20px 14px; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,system-ui,sans-serif; max-width:1100px; margin:0 auto; padding:var(--space-5) var(--space-4); }
   h1 { margin-bottom:4px; font-size:1.6rem; color:var(--text); }
   h2 { font-size:1.1rem; color:var(--text); }
   .stat-cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin:16px 0; }
   .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow-sm); }
-  .stat-value { font-size:1.6rem; font-weight:700; color:var(--text); }
+  .stat-value { font-size:1.6rem; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
   .stat-label { color:var(--muted); font-size:0.82rem; margin-top:4px; }
   .table-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); }
   table { width:100%; border-collapse:collapse; background:var(--surface); border:none; margin:0; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:0.85rem; white-space:nowrap; color:var(--text); }
   th { color:var(--muted); font-weight:600; background:var(--panel-strong); }
   a { color:var(--accent); }
-  .admin-main-tab-bar { display:flex; gap:16px; border-bottom:1px solid var(--border); margin-top:20px; flex-wrap:wrap; }
+  .admin-header { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap; }
+  .admin-header h1 { margin:0; }
+  .admin-header-meta { color:var(--muted); font-size:var(--font-size-sm); margin:var(--space-1) 0 0; }
+  .admin-main-tab-bar { display:flex; gap:var(--space-1); padding:var(--space-1); margin-top:var(--space-4); background:var(--color-bg-sunken); border-radius:var(--radius-pill); overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .admin-main-tab-btn {
-    background:none; border:none; color:var(--muted); font-size:0.95rem; font-weight:700; cursor:pointer;
-    padding:10px 4px; margin-bottom:-1px; border-bottom:2px solid transparent; transition:color 0.15s ease;
+    flex:1 1 auto; background:none; border:none; color:var(--muted); font:inherit; font-size:var(--font-size-base); font-weight:600; cursor:pointer; white-space:nowrap;
+    min-height:var(--control-height-md); padding:0 var(--space-4); border-radius:var(--radius-pill); transition:background-color var(--duration-base) var(--ease), color var(--duration-base) var(--ease);
   }
   .admin-main-tab-btn:hover { color:var(--text); }
-  .admin-main-tab-btn.active { color:var(--text); border-bottom-color:var(--accent); }
+  .admin-main-tab-btn:focus-visible { outline:2px solid var(--color-border-focus); outline-offset:2px; }
+  .admin-main-tab-btn.active { background:var(--surface); color:var(--text); box-shadow:var(--shadow-sm); }
+  .admin-section-title { margin:var(--space-5) 0 var(--space-1); font-size:var(--font-size-md); font-weight:700; color:var(--text); }
+  .admin-section-title:first-child { margin-top:0; }
+  .admin-hint { color:var(--muted); font-size:var(--font-size-sm); margin:0 0 var(--space-3); }
+  .stat-hint { color:var(--muted); font-size:var(--font-size-xs); margin-top:var(--space-1); }
+  .admin-toolbar { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; margin:var(--space-3) 0; }
+  .admin-toolbar input[type="search"] { flex:1 1 220px; min-height:var(--control-touch-min); padding:0 var(--space-3); font-size:16px; border-radius:var(--radius-sm); border:1px solid var(--color-border-strong); background:var(--surface); color:var(--text); }
+  .admin-toolbar input[type="search"]:focus-visible { outline:2px solid var(--color-border-focus); outline-offset:1px; }
+  .admin-pager { display:flex; gap:var(--space-2); align-items:center; justify-content:space-between; flex-wrap:wrap; margin-top:var(--space-3); color:var(--muted); font-size:var(--font-size-sm); }
+  .admin-pager-btns { display:flex; gap:var(--space-2); align-items:center; }
   .admin-subnav-bar { display:flex; gap:8px; margin:14px 0 16px; flex-wrap:wrap; }
   .subnav-pill {
     background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:6px 14px;
@@ -2798,8 +2805,12 @@ ${UTILITY_CSS}
   }
 </style></head>
 <body>
-  <h1>Admin Dashboard</h1>
-  <p class="u-c-v_muted u-mt-0">My Lists Addon usage stats. <span id="workerRelease">Built ${WORKER_BUILD_DATE}</span> <span id="workerBuild">(build ${WORKER_BUILD})</span></p>
+  <div class="admin-header">
+    <div>
+      <h1>Admin</h1>
+      <p class="admin-header-meta">My Lists Addon &middot; <span id="workerRelease">Built ${WORKER_BUILD_DATE}</span> <span id="workerBuild">(build ${WORKER_BUILD})</span></p>
+    </div>
+  </div>
   ${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
@@ -2807,35 +2818,46 @@ ${UTILITY_CSS}
        content. role="tablist" with nothing inside it carrying role="tab"
        told assistive technology to expect tabs and hand it none, so this
        is a labelled group of toggle buttons, which is what it is. -->
+  <!-- Not a tablist: these buttons do not reveal panels, they choose which
+       row of sub-tabs is shown, and it is the sub-tab that selects content.
+       A labelled group of toggle buttons, which is what it is. -->
   <div class="admin-main-tab-bar" role="group" aria-label="Dashboard sections">
-    <button type="button" class="admin-main-tab-btn active" aria-pressed="true" data-main-tab="overview" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['overview'])}">Overview &amp; Traffic</button>
-    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="discovery" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['discovery'])}">Analytics &amp; Discovery</button>
-    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="management" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['management'])}">Management &amp; Tools</button>
+    <button type="button" class="admin-main-tab-btn active" aria-pressed="true" data-main-tab="overview" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['overview'])}">Overview</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="insights" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['insights'])}">Insights</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="people" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['people'])}">People</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="content" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['content'])}">Content</button>
+    <button type="button" class="admin-main-tab-btn" aria-pressed="false" data-main-tab="site" data-act="switchAdminMainTab" data-act-args="${adminActArgs(['site'])}">Site</button>
   </div>
 
   <div class="admin-subnav-bar" id="adminSubnavOverview">
-    <button type="button" class="subnav-pill active" data-sub-tab="last30" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['last30'])}">Last 30 Days</button>
-    <button type="button" class="subnav-pill" data-sub-tab="sources" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sources'])}">Sources people use</button>
-    <button type="button" class="subnav-pill" data-sub-tab="apiusage" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['apiusage'])}">API Usage</button>
+    <button type="button" class="subnav-pill active" data-sub-tab="last30" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['last30'])}">Traffic</button>
+    <button type="button" class="subnav-pill" data-sub-tab="sources" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sources'])}">Install sources</button>
+    <button type="button" class="subnav-pill" data-sub-tab="apiusage" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['apiusage'])}">API usage</button>
   </div>
-  <div class="admin-subnav-bar" id="adminSubnavDiscovery" style="display:none;">
-    <button type="button" class="subnav-pill" data-sub-tab="trending" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['trending'])}">Trending Data</button>
-    <button type="button" class="subnav-pill" data-sub-tab="search" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['search'])}">Search &amp; Queries</button>
-    <button type="button" class="subnav-pill" data-sub-tab="catalogs_lists" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['catalogs_lists'])}">Catalogs &amp; Lists</button>
-    <button type="button" class="subnav-pill" data-sub-tab="audience" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['audience'])}">Playback &amp; Audience</button>
+  <div class="admin-subnav-bar" id="adminSubnavInsights" style="display:none;">
+    <button type="button" class="subnav-pill" data-sub-tab="trending" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['trending'])}">Trending</button>
+    <button type="button" class="subnav-pill" data-sub-tab="search" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['search'])}">Searches</button>
+    <button type="button" class="subnav-pill" data-sub-tab="catalogs_lists" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['catalogs_lists'])}">Catalogs &amp; lists</button>
+    <button type="button" class="subnav-pill" data-sub-tab="audience" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['audience'])}">Playback &amp; audience</button>
   </div>
-  <div class="admin-subnav-bar" id="adminSubnavManagement" style="display:none;">
-    <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator Accounts</button>
+  <div class="admin-subnav-bar" id="adminSubnavPeople" style="display:none;">
+    <button type="button" class="subnav-pill" data-sub-tab="creators" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['creators'])}">Creator accounts</button>
     <button type="button" class="subnav-pill" data-sub-tab="feedback" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['feedback'])}">Feedback</button>
-    <button type="button" class="subnav-pill" data-sub-tab="support_emails" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['support_emails'])}">Support Emails <span id="supportEmailsBadge" class="u-fs-v_font_size_xs u-fw-700 u-p-2px_6px u-br-v_radius_pill u-ml-4px" style="display:none;background:var(--accent);color:#fff;">0</span></button>
+    <button type="button" class="subnav-pill" data-sub-tab="support_emails" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['support_emails'])}">Support emails <span id="supportEmailsBadge" class="u-fs-v_font_size_xs u-fw-700 u-p-2px_6px u-br-v_radius_pill u-ml-4px" style="display:none;background:var(--accent);color:#fff;">0</span></button>
+  </div>
+  <div class="admin-subnav-bar" id="adminSubnavContent" style="display:none;">
     <button type="button" class="subnav-pill" data-sub-tab="newonstreaming" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['newonstreaming'])}">New on Streaming</button>
-    <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel Presets</button>
-    <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support Goal</button>
-    <button type="button" class="subnav-pill" data-sub-tab="sitenotice" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sitenotice'])}">Site Notice</button>
+    <button type="button" class="subnav-pill" data-sub-tab="channelpresets" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['channelpresets'])}">Channel presets</button>
+  </div>
+  <div class="admin-subnav-bar" id="adminSubnavSite" style="display:none;">
+    <button type="button" class="subnav-pill" data-sub-tab="supportgoal" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['supportgoal'])}">Support goal</button>
+    <button type="button" class="subnav-pill" data-sub-tab="sitenotice" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['sitenotice'])}">Site notice</button>
     <button type="button" class="subnav-pill" data-sub-tab="maintenance" data-act="switchAdminSubTab" data-act-args="${adminActArgs(['maintenance'])}">Maintenance</button>
   </div>
 
   <div class="admin-tab-panel active" data-admin-panel="last30">
+    <h2 class="admin-section-title">Totals</h2>
+    <p class="admin-hint">Counted since the add-on started. Only the table below covers the last 30 days.</p>
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value">${Number(totalPV) || 0}</div><div class="stat-label">Total page views</div></div>
       <div class="stat-card"><div class="stat-value">${Number(todayPV) || 0}</div><div class="stat-label">Page views today</div></div>
@@ -2844,9 +2866,11 @@ ${UTILITY_CSS}
       <div class="stat-card"><div class="stat-value">${Number(totalPP) || 0}</div><div class="stat-label">Total playback streams</div></div>
       <div class="stat-card"><div class="stat-value">${Number(todayPP) || 0}</div><div class="stat-label">Streams today</div></div>
     </div>
+    <h2 class="admin-section-title">Last 30 days</h2>
+    <p class="admin-hint">One row per day, newest first. Days are Eastern time.</p>
     <div class="table-wrap">
       <table>
-        <tr><th>Date</th><th>Page views</th><th>Install links</th><th>Playback pings</th></tr>
+        <tr><th>Date</th><th>Page views</th><th>Install links</th><th>Playback streams</th></tr>
         ${rows.join("")}
       </table>
     </div>
@@ -2854,20 +2878,34 @@ ${UTILITY_CSS}
 
   <div class="admin-tab-panel" data-admin-panel="creators">
     <div class="stat-cards">
-      <div class="stat-card"><div class="stat-value">${totalCreatorCount}</div><div class="stat-label">Creator accounts${creatorTruncatedNote}</div></div>
+      <div class="stat-card"><div class="stat-value">${totalCreatorCount}</div><div class="stat-label">Creator accounts</div></div>
       <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Saves that sent the Account Key today</div></div>
-      <div class="stat-card"><div class="stat-value">${authKeyWeek}</div><div class="stat-label">... in the last 7 days</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyWeek}</div><div class="stat-label">Same, last 7 days</div></div>
+    </div>
+    <div class="admin-toolbar">
+      <input type="search" id="creatorSearchInput" placeholder="Search every username or display name" aria-label="Search creator accounts" autocomplete="off" data-act="onCreatorSearchInput" data-act-on="input">
+      <select class="admin-select" id="creatorPageSize" aria-label="Accounts per page" data-act="changeCreatorPageSize">
+        <option value="50" selected>50 per page</option>
+        <option value="100">100 per page</option>
+      </select>
     </div>
     <div class="table-wrap">
       <table>
-        <tr><th>Display name</th><th>Username</th><th>Created</th><th>Last Active</th><th>Key</th></tr>
-        ${accountRows || '<tr><td colspan="5">No accounts yet.</td></tr>'}
+        <thead><tr><th>Display name</th><th>Username</th><th>Created</th><th>Last active</th><th>Key</th></tr></thead>
+        <tbody id="creatorsTableBody"><tr><td colspan="5">Loading\u2026</td></tr></tbody>
       </table>
+    </div>
+    <div class="admin-pager">
+      <span id="creatorPagerInfo"></span>
+      <span class="admin-pager-btns">
+        <button type="button" class="lc-btn secondary" id="creatorPrevBtn" data-act="creatorChangePage" data-act-args="${adminActArgs([-1])}" disabled>Previous</button>
+        <button type="button" class="lc-btn secondary" id="creatorNextBtn" data-act="creatorChangePage" data-act-args="${adminActArgs([1])}" disabled>Next</button>
+      </span>
     </div>
   </div>
 
   <div class="admin-tab-panel" data-admin-panel="sources">
-    <p class="u-c-v_muted u-mt-0 u-fs-v_font_size_base">Counted from each row's group at the moment an install link is generated -- one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five.</p>
+    <p class="admin-hint">Counted from each row's group at the moment an install link is generated: one Custom List and one Channel in the same install still count as one of each, five MDBList Charts rows count as five. <strong>My Lists</strong> is a user's own saved lists. <strong>My Lists Addon Charts</strong> are this add-on's built-in charts (Most Watched, New on Streaming and similar).</p>
     <div class="table-wrap">
       <table>
         <tr><th>Source</th><th>Count</th><th>Share</th></tr>
@@ -2957,8 +2995,7 @@ ${UTILITY_CSS}
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value" id="audienceTotalPlays">0</div><div class="stat-label">Total streams tracked</div></div>
       <div class="stat-card"><div class="stat-value" id="audienceMoviePlays">0</div><div class="stat-label">Movie plays</div></div>
-      <div class="stat-card"><div class="stat-value" id="audienceSeriesPlays">0</div><div class="stat-label">Show plays</div></div>
-      <div class="stat-card"><div class="stat-value" id="audienceEpisodePlays">0</div><div class="stat-label">Episode plays</div></div>
+      <div class="stat-card"><div class="stat-value" id="audienceShowPlays">0</div><div class="stat-label">Show plays</div></div>
     </div>
 
     <h2 class="u-mt-20px">Top Watched Genres</h2>
@@ -3465,25 +3502,27 @@ ${UTILITY_CSS}
   <script nonce="${CSP_NONCE_PLACEHOLDER}">
     const categoryDefaults = {
       overview: 'last30',
-      discovery: 'trending',
-      management: 'creators',
+      insights: 'trending',
+      people: 'creators',
+      content: 'newonstreaming',
+      site: 'supportgoal',
     };
     const tabToCategory = {
       last30: 'overview',
       sources: 'overview',
       apiusage: 'overview',
-      trending: 'discovery',
-      search: 'discovery',
-      catalogs_lists: 'discovery',
-      audience: 'discovery',
-      creators: 'management',
-      feedback: 'management',
-      support_emails: 'management',
-      newonstreaming: 'management',
-      channelpresets: 'management',
-      supportgoal: 'management',
-      sitenotice: 'management',
-      maintenance: 'management',
+      trending: 'insights',
+      search: 'insights',
+      catalogs_lists: 'insights',
+      audience: 'insights',
+      creators: 'people',
+      feedback: 'people',
+      support_emails: 'people',
+      newonstreaming: 'content',
+      channelpresets: 'content',
+      supportgoal: 'site',
+      sitenotice: 'site',
+      maintenance: 'site',
     };
 
     function switchAdminMainTab(catId) {
@@ -3524,6 +3563,7 @@ ${UTILITY_CSS}
       document.querySelectorAll('.admin-subnav-bar .subnav-pill').forEach((p) => p.classList.toggle('active', p.dataset.subTab === tabId));
       document.querySelectorAll('.admin-tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.adminPanel === tabId));
 
+      if (tabId === 'creators' && !window._creatorsLoadedOnce) { window._creatorsLoadedOnce = true; loadCreators(); }
       if (tabId === 'trending' && !window._trendingLoadedOnce) { window._trendingLoadedOnce = true; loadTrendingData(); }
       if (tabId === 'search' && !window._searchLoadedOnce) { window._searchLoadedOnce = true; loadSearchData(); }
       if (tabId === 'catalogs_lists' && !window._catalogsListsLoadedOnce) { window._catalogsListsLoadedOnce = true; loadCatalogsAndListsData(); }
@@ -3690,6 +3730,74 @@ ${UTILITY_CSS}
     // confirm() naming exactly what's about to happen and to whom, then
     // the new key is shown once in a copyable box -- there is no second
     // chance to see it, same as the reveal shown at signup.
+    // --- Creator accounts: one page at a time, searchable ------------------
+    let creatorPage = 1;
+    let creatorPages = 1;
+    let creatorSearchTimeout = null;
+    let creatorLoadSeq = 0;
+
+    function onCreatorSearchInput() {
+      if (creatorSearchTimeout) clearTimeout(creatorSearchTimeout);
+      creatorSearchTimeout = setTimeout(function () { creatorPage = 1; loadCreators(); }, 300);
+    }
+
+    function changeCreatorPageSize() {
+      creatorPage = 1;
+      loadCreators();
+    }
+
+    function creatorChangePage(delta) {
+      const next = creatorPage + (Number(delta) || 0);
+      if (next < 1 || next > creatorPages) return;
+      creatorPage = next;
+      loadCreators();
+    }
+
+    async function loadCreators() {
+      const body = document.getElementById('creatorsTableBody');
+      const info = document.getElementById('creatorPagerInfo');
+      const prev = document.getElementById('creatorPrevBtn');
+      const next = document.getElementById('creatorNextBtn');
+      const q = document.getElementById('creatorSearchInput').value.trim();
+      const size = document.getElementById('creatorPageSize').value;
+      const seq = ++creatorLoadSeq;
+      body.innerHTML = '<tr><td colspan="5">Loading\u2026</td></tr>';
+      prev.disabled = true;
+      next.disabled = true;
+      try {
+        const res = await fetch('/admin/api/creators?q=' + encodeURIComponent(q) + '&page=' + creatorPage + '&pageSize=' + encodeURIComponent(size), { cache: 'no-store' });
+        const data = await res.json();
+        if (seq !== creatorLoadSeq) return;
+        if (!data.ok) {
+          body.innerHTML = '<tr><td colspan="5">Could not load creator accounts.</td></tr>';
+          info.textContent = '';
+          return;
+        }
+        creatorPage = data.page;
+        creatorPages = data.pages;
+        const day = function (ms) { return ms ? new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : '\u2014'; };
+        if (!data.rows.length) {
+          body.innerHTML = '<tr><td colspan="5">' + (q ? 'No accounts match "' + escapeHtmlAdmin(q) + '".' : 'No accounts yet.') + '</td></tr>';
+        } else {
+          body.innerHTML = data.rows.map(function (c) {
+            return '<tr><td>' + escapeHtmlAdmin(c.displayName) + '</td><td>' + escapeHtmlAdmin(c.username) + '</td>' +
+              '<td>' + day(c.createdAt) + '</td><td>' + day(c.lastActive) + '</td>' +
+              '<td><button type="button" class="lc-btn secondary u-p-4px_10px u-fs-v_font_size_sm" data-username="' + escapeHtmlAdmin(c.username) +
+              '" data-displayname="' + escapeHtmlAdmin(c.displayName) + '" data-act="resetCreatorKey" data-act-args="' + adminActAttr(['@self']) + '">Reset key</button></td></tr>';
+          }).join('');
+        }
+        const first = data.matched ? (data.page - 1) * data.pageSize + 1 : 0;
+        const last = Math.min(data.matched, data.page * data.pageSize);
+        info.textContent = (q ? data.matched + ' of ' + data.total + ' accounts match. ' : '') + 'Showing ' + first + '\u2013' + last + (q ? '' : ' of ' + data.total) + ' \u00b7 page ' + data.page + ' of ' + data.pages;
+        prev.disabled = data.page <= 1;
+        next.disabled = data.page >= data.pages;
+      } catch (e) {
+        if (seq !== creatorLoadSeq) return;
+        body.innerHTML = '<tr><td colspan="5">Could not load creator accounts -- try again.</td></tr>';
+        info.textContent = '';
+      }
+    }
+
     async function resetCreatorKey(btn) {
       const username = btn.dataset.username;
       const displayName = btn.dataset.displayname;
@@ -3960,8 +4068,7 @@ ${UTILITY_CSS}
         const wt = data.watchTypes || {};
         document.getElementById('audienceTotalPlays').textContent = (wt.total || 0).toLocaleString();
         document.getElementById('audienceMoviePlays').textContent = (wt.movies || 0).toLocaleString();
-        document.getElementById('audienceSeriesPlays').textContent = (wt.series || 0).toLocaleString();
-        document.getElementById('audienceEpisodePlays').textContent = (wt.episodes || 0).toLocaleString();
+        document.getElementById('audienceShowPlays').textContent = (wt.shows || 0).toLocaleString();
 
         if (!data.genres || !data.genres.length) {
           genresBody.innerHTML = '<tr><td colspan="3">No genre playback data yet.</td></tr>';

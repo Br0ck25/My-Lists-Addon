@@ -60,6 +60,14 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Admin dashboard makeover (built 2026-11-02, stamp 5146a18fa5)
+
+- **Five groups instead of three:** Overview (Traffic, Install sources, API usage), Insights (Trending, Searches, Catalogs & lists, Playback & audience), People (Creator accounts, Feedback, Support emails), Content (New on Streaming, Channel presets), Site (Support goal, Site notice, Maintenance). Tab ids are unchanged, so old `#links` still work.
+- **Creator accounts** are paged (50 or 100 a page) and searchable over every username and display name, through the new `GET /admin/api/creators`. It used to render the first 1,000 accounts and stop.
+- **Show plays was always 0** because every show play is recorded as an episode play; the card now counts episodes played, and the separate Episode plays card is gone.
+- **Traffic** (was "Last 30 Days"): the totals are all-time, only the table is 30 days, and the page now says so.
+- **Install sources:** "My Lists", "Collections" and "New Releases" were being counted as Other; they now have their own rows.
+
 ## How the release branch works
 
 `claude/elegant-ride-o7m8fh` holds the release being prepared.
