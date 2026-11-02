@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5506978fac";
+const WORKER_BUILD = "2a3fdb4518";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -120369,7 +120369,8 @@ async function apiTraktMyPrivateListsContinueWatchingBlock(accessToken, continue
           const show = it.show || {};
           const mov = it.movie || {};
           const inner = isEp ? show : mov;
-          const ids = (isEp ? (ep.ids || show.ids) : mov.ids) || {};
+          // An episode row is filed under the SHOW's ids, like the shelf (fetchTraktContinueWatching); the episode's own ids are only a fallback.
+          const ids = (isEp ? (show.ids || ep.ids) : mov.ids) || {};
           if (traktIsHiddenShow(hiddenShowKeys, inner, ids)) continue;
           const imdbId = ids.imdb || show.ids?.imdb || mov.ids?.imdb || "";
           const tmdbId = ids.tmdb || show.ids?.tmdb || mov.ids?.tmdb || "";

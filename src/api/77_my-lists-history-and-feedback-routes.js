@@ -228,7 +228,8 @@ async function apiTraktMyPrivateListsContinueWatchingBlock(accessToken, continue
           const show = it.show || {};
           const mov = it.movie || {};
           const inner = isEp ? show : mov;
-          const ids = (isEp ? (ep.ids || show.ids) : mov.ids) || {};
+          // An episode row is filed under the SHOW's ids, like the shelf (fetchTraktContinueWatching); the episode's own ids are only a fallback.
+          const ids = (isEp ? (show.ids || ep.ids) : mov.ids) || {};
           if (traktIsHiddenShow(hiddenShowKeys, inner, ids)) continue;
           const imdbId = ids.imdb || show.ids?.imdb || mov.ids?.imdb || "";
           const tmdbId = ids.tmdb || show.ids?.tmdb || mov.ids?.tmdb || "";

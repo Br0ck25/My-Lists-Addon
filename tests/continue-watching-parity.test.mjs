@@ -123,7 +123,7 @@ describe("Trakt continue watching: shelf (fetchTraktContinueWatching) vs list ro
 
   // ---- differences found (nothing below is changed by this commit) ----
 
-  it("agree on a paused episode when Trakt gives the episode its own ids", { todo: "DIFFERENT: for a paused episode the shelf names the show by the SHOW's ids (tt1), but the list route takes the EPISODE's ids first, so when Trakt gives the episode its own IMDB id the row is filed under that episode id instead of the show's. Real Trakt playback always has episode ids." }, async () => {
+  it("agree on a paused episode when Trakt gives the episode its own ids", async () => {
     const { shelf, route } = await both({ playback: [pbEpisode(1, 2, 3, { trakt: 777, tmdb: 9001, imdb: "tt9001" })] });
     assert.deepEqual(shelf, ["tt1:2:3"]);
     assert.deepEqual(route, shelf);
