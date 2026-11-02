@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "6db78b2da5";
+const WORKER_BUILD = "f98d5ade10";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -20247,7 +20247,7 @@ async function rpdbUsage(env, key, hash) {
       const raw = await env.CONFIGS.get(kvKey);
       const kv = raw ? JSON.parse(raw) : null;
       if (kv && Number.isFinite(kv.req) && Number.isFinite(kv.limit) && now - kv.at < RPDB_USAGE_TTL_SECONDS * 1000) {
-        RPDB_USAGE.set(hash, kv);
+        if (RPDB_USAGE.size >= 1000) RPDB_USAGE.clear(); RPDB_USAGE.set(hash, kv);
         return kv;
       }
     }
@@ -20258,7 +20258,7 @@ async function rpdbUsage(env, key, hash) {
     const data = await res.json();
     if (!data || !Number.isFinite(data.req) || !Number.isFinite(data.limit)) return null;
     const usage = { req: data.req, limit: data.limit, at: now };
-    RPDB_USAGE.set(hash, usage);
+    if (RPDB_USAGE.size >= 1000) RPDB_USAGE.clear(); RPDB_USAGE.set(hash, usage);
     if (env && env.CONFIGS) await env.CONFIGS.put(kvKey, JSON.stringify(usage), { expirationTtl: RPDB_USAGE_TTL_SECONDS * 2 }).catch(() => {});
     return usage;
   } catch {
@@ -20288,7 +20288,7 @@ async function rpdbFetchUpstream(env, ctx, key, hash, imdbId) {
       if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
         // A refused key and a spent or struggling service are both left alone
         // for a while rather than asked again poster by poster.
-        RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
+        if (RPDB_BACKOFF.size >= 1000) RPDB_BACKOFF.clear(); RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
         return null;
       }
       const contentType = res.headers.get("content-type") || "";
