@@ -2138,7 +2138,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -4535,7 +4535,7 @@ describe("admin feedback: a failed write says what failed", () => {
   it("leaves no feedback write that drops the error it caught", () => {
     // The defect was structural: four catches that bound `e` and never used
     // it. This is what stops a fifth being added the same way.
-    const sources = ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"];
+    const sources = ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js"];
     for (const rel of sources) {
       const src = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
       let from = 0;
@@ -4960,7 +4960,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
