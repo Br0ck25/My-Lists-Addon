@@ -112,6 +112,7 @@ Then connect the queue back to the Worker: **Compute → Queues → `mylists-job
 | `TMDB_API_KEY` | Your TMDB key. |
 | `TOKEN_ENCRYPTION_KEY` | See below. **Never change or delete it later.** |
 | `LOOKUP_PEPPER` | See below. **Never change or delete it later.** |
+| `LIKE_VOTER_PEPPER` | **Optional.** Only used for signed-out like votes, which are retired, so you can leave it out. Any long random value; never change it once set. |
 
 Optional, add only for what you use: `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET`, `MDBLIST_API_KEY`, `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET`.
 
@@ -142,6 +143,8 @@ Same page, **Add**, type **Text**, one per line:
 | `INSTALL_MIGRATION_PERCENT` | `100` |
 
 These match what the public site runs. Set them now, on an empty database, and leave them set.
+
+**Optional, not in the table:** `FF_FORGET_KEY` = `1` makes a browser with a working sign-in stop storing the Account Key (it shows the key once and asks the person to save it). Sessions renew while used, so people who visit regularly never type the key again. Leave it out at first and try it on your own account before leaving it on. Updating an older copy? Run `migrations/0024_scrobble_token_hash.sql` once (a new copy already has it), so media-server webhook tokens are stored hashed.
 
 ### Step 11. Add the schedule
 

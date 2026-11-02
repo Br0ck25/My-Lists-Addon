@@ -14348,7 +14348,9 @@ describe("P3a-4: sessions API and authentication", () => {
     hashCreatorKey,
   } = loadSourceFunctions(
     "src/core/00_constants.js",
-    "src/core/02_http-and-creator-utils.js"
+    "src/core/02_http-and-creator-utils.js",
+    // SEC-03: resolveSession calls renewSessionIfDue, which lives in this file.
+    "src/api/62_session-renewal.js"
   );
   const PBKDF2_ITERATIONS = 100000;
 

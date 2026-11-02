@@ -28,3 +28,6 @@ ALTER TABLE scrobble_tokens ADD COLUMN token_hash TEXT;
 ALTER TABLE scrobble_tokens ADD COLUMN token_enc TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_scrobble_tokens_hash ON scrobble_tokens(token_hash);
+
+INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+  VALUES ('0024', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
