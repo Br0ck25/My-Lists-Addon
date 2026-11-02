@@ -2662,7 +2662,6 @@ async function renderAdminDashboard(env) {
   // entirely optional, and every D1-specific action in that tab only
   // makes sense once this is true.
   const isD1Bound = !!(env && env.DB);
-  const isActivityBound = !!(env && env.DB && env.DB_ACTIVITY);
   const isJobsBound = !!(env && env.JOBS && typeof env.JOBS.send === "function");
   const today = statsToday();
   const [

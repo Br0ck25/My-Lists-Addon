@@ -240,7 +240,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: `tests/account-purge.test.mjs`. Create an account with a `media_app_sync` row and a `watch_event_sources` row, run the purge against a D1 mock with foreign keys off, and assert both rows are gone.
 
 ### BA-010 The audit-action map and the route-access test still list retired admin routes
-- Status: Fixed in BA010SHA
+- Status: Fixed in 703ec99
 - Category: dead-code
 - Severity / confidence: P3 / High
 - Where: src/admin/03_admin.js:1971-1974, :1980, :1982; tests/route-access.test.mjs:45, :48
@@ -260,6 +260,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: the new stale check in `tests/route-access.test.mjs` fails on today's tree and passes after the two lines go.
 
 ### BA-011 Small dead code
+- Status: Fixed in BA011SHA
 - Category: dead-code
 - Severity / confidence: P3 / High
 - Where / evidence: see the "Dead code" table below. Each entry was found by a token count over all of `src/` (client and page files included, comment-only mentions ignored) and confirmed with `grep -rwn <name> src tests tools`.

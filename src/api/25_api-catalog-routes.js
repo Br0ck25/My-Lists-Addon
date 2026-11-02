@@ -1086,10 +1086,8 @@ async function handleFetch(request, env, ctx) {
 
       const fetchLimit = 150;
       // Account-owned lists only (legacy anonymous lists are not listed).
-      const pubRes = { keys: [] };
       const creatorRes = await env.CONFIGS.list({ prefix: "creatorlist:", limit: fetchLimit });
       const listKeys = [];
-      (pubRes.keys || []).forEach(k => listKeys.push({ key: k.name, isCreator: false }));
       (creatorRes.keys || []).forEach(k => {
         const rest = k.name.slice("creatorlist:".length);
         if (rest.includes(":")) listKeys.push({ key: k.name, isCreator: true });
@@ -1109,8 +1107,6 @@ async function handleFetch(request, env, ctx) {
             const parts = key.slice("creatorlist:".length).split(":");
             username = parts[0] || "creator";
             slug = parts[1] || slug;
-          } else {
-            slug = key.slice("publishedlist:user:".length);
           }
           // Never advertise a list whose creator no longer exists -- see
           // makeCreatorExistsMemo. The index path cannot produce one (the
@@ -7580,7 +7576,6 @@ function generateSearchVariations(query) {
       const apikey = String(body.apikey || "").trim();
       const accessToken = String(body.accessToken || "").trim();
       let username = String(body.username || "").trim();
-      const pageArg = parseInt(body.page || 1, 10);
       const token = accessToken || apikey;
       if (!token && !username) return json({ ok: false, error: "Not connected to MDBList." }, 400);
       try {
