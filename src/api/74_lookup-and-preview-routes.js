@@ -46,7 +46,7 @@ async function apiTrackInstall(request, env, ctx) {
   }
   ctx.waitUntil(bumpStat(env, "installs"));
   try {
-    const body = await request.json();
+    const body = await readJsonObject(request);
     if (body && body.groups && typeof body.groups === "object") {
       // Known categories under their own name, the rest together as Other.
       const counted = new Map();
@@ -90,7 +90,7 @@ async function apiPreview(request, env, ctx, url, path) {
   if (request.method === "POST") {
     let reqBody;
     try {
-      reqBody = await request.json();
+      reqBody = await readJsonObject(request);
     } catch {
       reqBody = {};
     }
@@ -1074,7 +1074,7 @@ async function apiChannelPreset(env, ctx, url) {
 async function apiChannelLineup(request, env, ctx, url) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
