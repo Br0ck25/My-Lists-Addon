@@ -60,6 +60,13 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Internal tidy-up of account routes (built 2026-11-02, stamp 5377ccd95f)
+
+No change for users. This is the fourth step of CQ-01 (splitting the huge `handleFetch` function into smaller files).
+
+- **Internal tidy-up, no change for users:** the account routes under `/api/creator/` (23 of them: sign-up and sign-in checks, forgotten username and key reset, scrobble token, your lists and list saving, reordering and deleting, account reset and delete, and all the sync routes for tracking, presets, channels, likes and sharing) moved out of `handleFetch` into `src/api/67_creator-api-routes.js`, `src/api/68_creator-api-account-and-save-routes.js` and `src/api/69_creator-api-sync-routes.js`, one function per route, with the same sign-in checks and the same "someone else saved first" protections in the same order. A few very long routes were cut into smaller steps, still run in the same order. `handleFetch` went from 12,389 to 9,407 lines.
+- **Proof:** the same 1,230 requests to those routes (signed out, wrong key, right key, signed-in session, saves including an out-of-date save, reset and delete of throwaway accounts, unknown paths and wrong methods) gave the same answers and left the same stored data as the code from before this step, and the same after each of the three moves. The earlier 152-request and 261-request checks also still match.
+
 ## Plex/Jellyfin/Emby user filter fix, and admin routes tidied (built 2026-11-02, stamp df3fdc41f0)
 
 - **Fix you can see:** if you set the scrobble webhook to accept only some Plex/Jellyfin/Emby users (or to block pings with no username), a ping from someone not on the list used to make the server answer with an error (500). It now answers "ignored" as intended, and the ignored ping shows in the account's last-ping details. Pings from allowed users behave exactly as before. A new test (`tests/scrobble-user-filter.test.mjs`) covers both cases and failed with the 500 before the fix.
