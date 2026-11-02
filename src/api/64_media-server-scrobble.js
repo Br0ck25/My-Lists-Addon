@@ -6,6 +6,9 @@
 // original in the same order, and the values a later block read from an earlier
 // one are returned and passed on. The filter block stays in this function,
 // because it reads the ids and flags parsed above.
+
+// Handles incoming webhooks from Plex, Jellyfin, and Emby media servers
+// Automatically marks watched episodes/movies and advances Continue Watching
 async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   if (!env || !env.CONFIGS) {
     return json({ ok: false, error: "Cloudflare KV storage (CONFIGS) not configured." }, 500);

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5377ccd95f";
+const WORKER_BUILD = "1d48ba9a1a";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -98969,30 +98969,12 @@ function generateSearchVariations(query) {
       return authenticateCreatorFor(request, env, ctx, path, creatorNameRaw, creatorKey, via);
     }
 
-    // Handles a single "this just started playing" ping from the
-    // /:config/subtitles/... route (25_api-catalog-routes.js) -- see
-    // buildManifest's comment for the full mechanism. Never throws back
-    // to the caller (that route already responded before this runs, via
-    // ctx.waitUntil), so every failure path below just records a
-    // diagnostic and returns quietly instead.
-    //
-    // An episode gets marked watched outright: if you're playing it,
-    // you're caught up to it -- a discrete, already-aired unit with
-    // nothing ambiguous about it. A movie ping gets treated the same way
-    // here, marked watched immediately, which is a deliberate
-    // simplification versus where this idea started (a similar reference
-    // implementation treats a movie ping as merely "in progress," since
-    // one ping at the start doesn't prove you finished a 2-hour movie the
-    // way starting an episode implies you're caught up to that episode).
-    // This addon's Watch History has no in-progress state to put a movie
-    // into, only watched/not-watched, so there isn't a cleanly analogous
-    // middle ground to preserve that distinction with.
+    // The playback ping: see handleSubtitlesTrackFor (63_subtitles-track.js).
     async function handleSubtitlesTrack(configParam, stremioType, id, env, request) {
       return handleSubtitlesTrackFor(configParam, stremioType, id, env, request, ctx, path);
     }
 
-    // Handles incoming webhooks from Plex, Jellyfin, and Emby media servers
-    // Automatically marks watched episodes/movies and advances Continue Watching
+    // The media-server webhook: see handleMediaServerScrobbleFor (64_media-server-scrobble.js).
     async function handleMediaServerScrobble(request, url, env, ctx) {
       return handleMediaServerScrobbleFor(request, url, env, ctx);
     }
@@ -116570,6 +116552,24 @@ async function creatorKeyAuthAccepted(request, env, ctx, path, creatorKey, via, 
 // one-line handleSubtitlesTrack wrapper. detectClientApp, which only this
 // ping used, moved with it. Split into helpers only for the 150-line limit;
 // each helper is a block of the original, in the same order.
+// Handles a single "this just started playing" ping from the
+// /:config/subtitles/... route (25_api-catalog-routes.js) -- see
+// buildManifest's comment for the full mechanism. Never throws back
+// to the caller (that route already responded before this runs, via
+// ctx.waitUntil), so every failure path below just records a
+// diagnostic and returns quietly instead.
+//
+// An episode gets marked watched outright: if you're playing it,
+// you're caught up to it -- a discrete, already-aired unit with
+// nothing ambiguous about it. A movie ping gets treated the same way
+// here, marked watched immediately, which is a deliberate
+// simplification versus where this idea started (a similar reference
+// implementation treats a movie ping as merely "in progress," since
+// one ping at the start doesn't prove you finished a 2-hour movie the
+// way starting an episode implies you're caught up to that episode).
+// This addon's Watch History has no in-progress state to put a movie
+// into, only watched/not-watched, so there isn't a cleanly analogous
+// middle ground to preserve that distinction with.
 async function handleSubtitlesTrackFor(configParam, stremioType, id, env, request, ctx, path) {
   if (!env || !env.CONFIGS) return;
 
@@ -117064,6 +117064,9 @@ function detectClientApp(request) {
 // original in the same order, and the values a later block read from an earlier
 // one are returned and passed on. The filter block stays in this function,
 // because it reads the ids and flags parsed above.
+
+// Handles incoming webhooks from Plex, Jellyfin, and Emby media servers
+// Automatically marks watched episodes/movies and advances Continue Watching
 async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   if (!env || !env.CONFIGS) {
     return json({ ok: false, error: "Cloudflare KV storage (CONFIGS) not configured." }, 500);

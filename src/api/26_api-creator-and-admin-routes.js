@@ -13,30 +13,12 @@
       return authenticateCreatorFor(request, env, ctx, path, creatorNameRaw, creatorKey, via);
     }
 
-    // Handles a single "this just started playing" ping from the
-    // /:config/subtitles/... route (25_api-catalog-routes.js) -- see
-    // buildManifest's comment for the full mechanism. Never throws back
-    // to the caller (that route already responded before this runs, via
-    // ctx.waitUntil), so every failure path below just records a
-    // diagnostic and returns quietly instead.
-    //
-    // An episode gets marked watched outright: if you're playing it,
-    // you're caught up to it -- a discrete, already-aired unit with
-    // nothing ambiguous about it. A movie ping gets treated the same way
-    // here, marked watched immediately, which is a deliberate
-    // simplification versus where this idea started (a similar reference
-    // implementation treats a movie ping as merely "in progress," since
-    // one ping at the start doesn't prove you finished a 2-hour movie the
-    // way starting an episode implies you're caught up to that episode).
-    // This addon's Watch History has no in-progress state to put a movie
-    // into, only watched/not-watched, so there isn't a cleanly analogous
-    // middle ground to preserve that distinction with.
+    // The playback ping: see handleSubtitlesTrackFor (63_subtitles-track.js).
     async function handleSubtitlesTrack(configParam, stremioType, id, env, request) {
       return handleSubtitlesTrackFor(configParam, stremioType, id, env, request, ctx, path);
     }
 
-    // Handles incoming webhooks from Plex, Jellyfin, and Emby media servers
-    // Automatically marks watched episodes/movies and advances Continue Watching
+    // The media-server webhook: see handleMediaServerScrobbleFor (64_media-server-scrobble.js).
     async function handleMediaServerScrobble(request, url, env, ctx) {
       return handleMediaServerScrobbleFor(request, url, env, ctx);
     }
