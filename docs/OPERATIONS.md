@@ -606,3 +606,34 @@ The Admin panel includes a dedicated Customer Support email client (`/admin` →
 3. Deploy the worker or verify binding.
 4. Admins can view threads, inspect full conversations, reply directly from `/admin` (dispatched via `env.EMAIL.send()` with standard threading headers `In-Reply-To` and `References`), update status (`open`, `pending`, `resolved`, `closed`), and compose new emails.
 
+
+## 32. The compatibility date (CQ-10, 2026-11-02)
+
+The compatibility date tells Cloudflare which version of its Workers runtime a Worker behaves like.
+
+- **Production (`my-lists-addon`) and staging (`my-lists-addon-staging`) take the date from the dashboard** (Worker → Settings → Runtime), because both are deployed through the dashboard. The `compatibility_date` lines in the repo do not control them.
+- Production is `2026-07-27`, with no compatibility flags. `wrangler.toml` (top level and `env.staging`) and `wrangler.selfhost.toml` now say the same. Keep the files equal to production.
+- To move the date later, change **both together** (dashboard and the three lines in the files), **staging first**: set staging, run `docs/DEPLOY_CHECKLIST.md` against it, then do production.
+- The local test harness does not emulate compatibility flags, so staging is the real check.
+
+### Flags that became default between 2024-01-01 and 2026-07-27
+
+Source: Cloudflare's "Compatibility flags" page (read 2026-11-02). Production already runs all of them. The flags below are the ones that touch an API this project could use; every other flag on the page (Node.js stub modules, Python Workers, Containers, Workflows, Durable Object `deleteAll`, `URLPattern`, `WeakRef`, `importScripts`, and similar) is for features the source does not use (searched `src/`; no `node:` imports, no `nodejs_compat`, no WebSocket, no Durable Objects, no `structuredClone`, no `URLPattern`, no `AsyncLocalStorage`).
+
+| Flag (default date) | What changes | Affects us? |
+|---|---|---|
+| `strip_authorization_on_cross_origin_redirect` (2025-09-01) | `Authorization` header is dropped when a `fetch` follows a redirect to another origin | No, in practice. The Trakt, MDBList and Nuvio calls do not rely on cross-origin redirects, and `mediaAppFetch` uses `redirect: "manual"` so it never follows one. |
+| `fetch_standard_url` (2024-06-03) | `fetch()` parses URLs with the WHATWG rules; a bad URL fails at `new Request()` | No. Every fetch URL is built from `https://` literals or `new URL`. |
+| `allow_custom_ports` (2024-09-02) | `fetch()` honors a custom port in the URL | No. No fetch URL has a custom port. |
+| `upper_case_all_http_methods` (2024-10-14) | Lower-case methods are upper-cased | No. No lower-case `method:` values. |
+| `fetch_iterable_type_support` (2026-02-19) | Iterables are accepted as `fetch` bodies; arrays are no longer stringified | No. Bodies are strings, `FormData` or bytes. |
+| `cache_option_enabled` (2024-11-11), `cache_no_cache_enabled` (2025-08-07) | `cache: "no-store"` / `"no-cache"` accepted on `fetch` | No harm. They make an option we pass honored rather than rejected. |
+| `request_cf_overrides_cache_rules` (2025-04-02), `cache_api_request_cf_overrides_cache_rules` (2025-05-19) | `cf` cache settings win over Cache Rules | No. The public site is on `workers.dev` paths we do not put Cache Rules on; if a Cache Rule is ever added for a hostname, our `cf` TTLs would win. |
+| `fixup-transform-stream-backpressure` (2024-12-16), `internal_stream_byob_return_view` (2024-05-13), `internal_writable_stream_abort_clears_queue` (2024-09-02), `encoder_stream_spec_compliant_backpressure` and `writable_stream_spec_compliant_writer` (2026-03-24) | Stream edge-case fixes | No visible change. We only use `Blob.stream().pipeThrough(CompressionStream / DecompressionStream)` and read the whole result. |
+| `blob_standard_mime_type` (2024-06-03) | `Blob.type` parsed per the standard | No. We never read `Blob.type`. |
+| `queues_json_messages` (2024-03-18), `queue_expose_error_codes` (2026-03-12) | Queue `send` defaults to JSON; errors carry codes | No. `src/jobs/44_jobs-queue.js` already passes `contentType: "json"`. |
+| `set_forwardable_email_full_headers` (2025-08-01) | The email handler gets full, untruncated header values | Harmless. The support-email handler reads `message.headers.get(...)`. Longer values are the only difference. |
+| `text_decoder_replace_surrogates`, `text_decoder_cjk_decoder` (2026-02/03) | `TextDecoder` edge cases for UTF-16 and CJK | No. We decode UTF-8 only. |
+| `enable_ctx_exports`, `rpc`, `fetcher_no_get_put_delete`, `unwrap_custom_thenables`, `handle_cross_request_promise_resolution`, `set_event_target_this`, `set_tostring_tag` | RPC and promise-context housekeeping | No. No service-binding RPC; `ctx.waitUntil` promises are created inside their own request. |
+
+Result: no flag found that plausibly breaks something we use.

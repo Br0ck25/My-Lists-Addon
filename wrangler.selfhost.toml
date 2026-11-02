@@ -9,7 +9,7 @@
 # Do NOT use wrangler.toml: it names the public site's own databases.
 name = "my-lists-addon"
 main = "worker_entry_combined.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-07-27"
 
 [[kv_namespaces]]
 binding = "CONFIGS"
