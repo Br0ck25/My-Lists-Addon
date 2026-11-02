@@ -6633,7 +6633,9 @@ function generateSearchVariations(query) {
                   } catch {}
                 });
               }
-            } catch {}
+            } catch (e) {
+              console.error("/api/trakt-my-private-lists: the Continue Watching / Up Next block failed; the shelf is left out", e);
+            }
 
             const continueWatchingEntry = {
               name: "Trakt Continue Watching",
@@ -7516,7 +7518,9 @@ function generateSearchVariations(query) {
               }
             }
           }
-        } catch {}
+        } catch (e) {
+          console.error("/api/mdblist-my-lists: the Airing / Up Next block failed; the shelf is left out", e);
+        }
 
         const upNextCard = {
           name: "MDBList Up Next",

@@ -197,3 +197,57 @@ describe("scrobble queue: a removed recent play stays removed", () => {
     assert.deepEqual(cwShows(loaded), []);
   });
 });
+
+// BA-008: the rescue merges in save-tracking are best-effort on purpose (a
+// problem in them must never block the save), but they used to fail silently,
+// so a TypeError in them meant plays were dropped with nothing in the logs.
+describe("scrobble queue: the save-tracking rescue merges report their failures", () => {
+  async function withConsoleError(fn) {
+    const errors = [];
+    const real = console.error;
+    console.error = (...a) => errors.push(a.map((x) => (x && x.message) || String(x)).join(" "));
+    try { await fn(); } finally { console.error = real; }
+    return errors;
+  }
+
+  it("a record holding a null item does not stop queued plays surviving the save, and nothing is logged", async () => {
+    fakeTmdb();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "test-tmdb-key" });
+    const { cred, token } = await account(env, "sqnullitem");
+    await plexPlays(env, token, movie("tt0137523", "Fight Club"));
+    const loaded = await load(env, cred);
+    await new Promise((r) => setTimeout(r, 5));
+    await plexPlays(env, token, movie("tt0133093", "The Matrix"));
+
+    const key = `creatorsynctracking:${cred.creatorName}`;
+    const record = JSON.parse(await env.CONFIGS.get(key));
+    record.watchHistory = [null, ...record.watchHistory];
+    record.continueWatching = [null, ...(record.continueWatching || [])];
+    await env.CONFIGS.put(key, JSON.stringify(record));
+
+    const errors = await withConsoleError(async () => {
+      await push(env, cred, loaded, {});
+    });
+    assert.deepEqual(errors.filter((e) => /save-tracking/.test(e)), [], "a malformed old item is not an error");
+    assert.ok(whIds(await load(env, cred)).includes("tt0133093"), "the play the browser never saw is still there");
+  });
+
+  it("a failed read of the scrobble queue is logged, and the save still goes through", async () => {
+    fakeTmdb();
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: "test-tmdb-key" });
+    const { cred, token } = await account(env, "sqqueuefail");
+    await plexPlays(env, token, movie("tt0137523", "Fight Club"));
+    const loaded = await load(env, cred);
+
+    env.CONFIGS._hooks.beforeGet = async (key) => {
+      if (String(key).startsWith("creatorscrobblequeue:")) throw new Error("KV read failed (queue)");
+    };
+    let result;
+    const errors = await withConsoleError(async () => {
+      result = await push(env, cred, loaded, {});
+    });
+    env.CONFIGS._hooks.beforeGet = null;
+    assert.equal(result.ok, true, "the save is not blocked");
+    assert.ok(errors.some((e) => /save-tracking/.test(e) && /KV read failed/.test(e)), "the failure is in the log: " + JSON.stringify(errors));
+  });
+});

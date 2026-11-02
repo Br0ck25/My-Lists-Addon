@@ -157,6 +157,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: feed `handleIncomingEmail` a message with a 2.5 MB image part, against a D1 mock that rejects values over 2,000,000 bytes. Assert the stored message says an attachment was dropped, and that `console.error` was called.
 
 ### BA-005 The support-email audit call has its arguments in the wrong order (and never runs)
+- Status: Fixed in 5c6a00a
 - Category: dead-code
 - Severity / confidence: P3 / High
 - Where: src/admin/59_support-emails.js:556-559
@@ -211,6 +212,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: in `tests/media-app-sync.test.mjs`, seed 600 Nuvio plays and fetch the `nuvio-watch-history` catalog row with a D1 mock counting `prepare` calls; assert the count does not grow with the number of plays.
 
 ### BA-008 Bare `catch {}` blocks hide errors with no log line
+- Status: Fixed in BA008SHA
 - Category: bug
 - Severity / confidence: P3 / High that they exist; Low that any one hides a live bug today
 - Where: 203 `try` blocks in backend files whose `catch` is empty or comment-only and wraps 4+ lines of code. The full list is in the appendix. Per file: `25_` 45, `26_` 39, `07_` 28, `02_` 26, `03_` 22, `05_` 16, `06_` 10, others ≤2.

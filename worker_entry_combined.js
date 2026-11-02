@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ff54e556b6";
+const WORKER_BUILD = "ff29f0fabc";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -17877,8 +17877,11 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           // above and mayReadTrackedShelf (02_http-and-creator-utils.js).
           trackOwner,
         };
-      } catch {
-        // fall through to legacy decode below
+      } catch (e) {
+        // fall through to legacy decode below. Logged: an error reading a
+        // stored install link otherwise looks like "link not found" with
+        // nothing in the logs (BA-008).
+        console.error("resolveConfig: reading a stored install link failed; falling back to the legacy decode", e);
       }
     }
   }
@@ -97457,7 +97460,9 @@ function generateSearchVariations(query) {
                   } catch {}
                 });
               }
-            } catch {}
+            } catch (e) {
+              console.error("/api/trakt-my-private-lists: the Continue Watching / Up Next block failed; the shelf is left out", e);
+            }
 
             const continueWatchingEntry = {
               name: "Trakt Continue Watching",
@@ -98340,7 +98345,9 @@ function generateSearchVariations(query) {
               }
             }
           }
-        } catch {}
+        } catch (e) {
+          console.error("/api/mdblist-my-lists: the Airing / Up Next block failed; the shelf is left out", e);
+        }
 
         const upNextCard = {
           name: "MDBList Up Next",
@@ -103250,8 +103257,10 @@ function generateSearchVariations(query) {
               }
             }
           }
-        } catch {
-          // Merge is best-effort -- never block the save over it.
+        } catch (e) {
+          // Merge is best-effort -- never block the save over it. It is logged
+          // because a failure here means plays were not put back (BA-008).
+          console.error("/api/creator/sync/save-tracking: the rescue merge from the stored record failed", e);
         }
 
         // SECONDARY MERGE: the dedicated scrobble-queue key. It is written by
@@ -103309,8 +103318,9 @@ function generateSearchVariations(query) {
               body.continueWatching = mergedCw;
             }
           }
-        } catch {
-          // Best-effort
+        } catch (e) {
+          // Best-effort, but logged (BA-008).
+          console.error("/api/creator/sync/save-tracking: the rescue merge from the scrobble queue failed", e);
         }
       } else {
         // An intentional removal skips both merges above: it is the browser

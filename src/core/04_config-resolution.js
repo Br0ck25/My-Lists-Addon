@@ -151,8 +151,11 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           // above and mayReadTrackedShelf (02_http-and-creator-utils.js).
           trackOwner,
         };
-      } catch {
-        // fall through to legacy decode below
+      } catch (e) {
+        // fall through to legacy decode below. Logged: an error reading a
+        // stored install link otherwise looks like "link not found" with
+        // nothing in the logs (BA-008).
+        console.error("resolveConfig: reading a stored install link failed; falling back to the legacy decode", e);
       }
     }
   }

@@ -4050,8 +4050,10 @@
               }
             }
           }
-        } catch {
-          // Merge is best-effort -- never block the save over it.
+        } catch (e) {
+          // Merge is best-effort -- never block the save over it. It is logged
+          // because a failure here means plays were not put back (BA-008).
+          console.error("/api/creator/sync/save-tracking: the rescue merge from the stored record failed", e);
         }
 
         // SECONDARY MERGE: the dedicated scrobble-queue key. It is written by
@@ -4109,8 +4111,9 @@
               body.continueWatching = mergedCw;
             }
           }
-        } catch {
-          // Best-effort
+        } catch (e) {
+          // Best-effort, but logged (BA-008).
+          console.error("/api/creator/sync/save-tracking: the rescue merge from the scrobble queue failed", e);
         }
       } else {
         // An intentional removal skips both merges above: it is the browser
