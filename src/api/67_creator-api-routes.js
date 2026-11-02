@@ -1187,7 +1187,7 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
     ? body.baseItemIds.filter((id) => typeof id === "string" || typeof id === "number").map(String)
     : null;
 
-  const existing = await creatorListSaveReadExisting(env, ctx, auth, slug, editingSlug, listsOnly, onlyAccount, now, listExpected);
+  const existing = await creatorListSaveReadExisting(env, ctx, { auth, slug, editingSlug, listsOnly, onlyAccount, now, listExpected });
   if (existing.response) return existing.response;
   const { createdAt, likes, storedUpdatedAt } = existing;
   // Strictly newer than what is stored, not merely Date.now().
@@ -1198,9 +1198,9 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   // write from a current one and the stale one wins. Same reasoning, and
   // the same helper, as the sync blobs: see nextSyncVersion.
   const updatedAt = nextSyncVersion(storedUpdatedAt);
-  if (env.DB && !listsOnly) await creatorListSaveD1Row(env, auth, slug, name, type, visibility, itemsJson, likes, createdAt, updatedAt, order);
+  if (env.DB && !listsOnly) await creatorListSaveD1Row(env, { auth, slug, name, type, visibility, itemsJson, likes, createdAt, updatedAt, order });
 
-  const { kvPayload, savedAnswer } = creatorListSavePayload(url, auth, slug, name, type, items, visibility, likes, createdAt, updatedAt, sourceUrl, synced, lastSyncedAt, baseItemIds, existing);
+  const { kvPayload, savedAnswer } = creatorListSavePayload({ url, auth, slug, name, type, items, visibility, likes, createdAt, updatedAt, sourceUrl, synced, lastSyncedAt, baseItemIds, existing });
 
   // FF_V2_LISTS_ONLY: this record into v2 (its details, items by diff,
   // its place at the end of the order when it is new), and nothing into
@@ -1246,7 +1246,7 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
 }
 
 // The stored record and the answer of a list save, with the sourceUrl/sync fields falling back to the stored ones (a step of creatorApiListsSave).
-function creatorListSavePayload(url, auth, slug, name, type, items, visibility, likes, createdAt, updatedAt, sourceUrl, synced, lastSyncedAt, baseItemIds, existing) {
+function creatorListSavePayload({ url, auth, slug, name, type, items, visibility, likes, createdAt, updatedAt, sourceUrl, synced, lastSyncedAt, baseItemIds, existing }) {
   const { existingSourceUrl, existingSynced, existingLastSyncedAt, existingBaseItemIds } = existing;
   const finalSourceUrl = (sourceUrl !== null) ? sourceUrl : existingSourceUrl;
   const finalSynced = (synced !== null) ? synced : (finalSourceUrl ? existingSynced : false);
@@ -1359,7 +1359,7 @@ async function creatorListSaveSlug(env, auth, name, editingSlug, order, listsOnl
 
 // Reads the record being edited and applies the expectedUpdatedAt conflict guard (a step of creatorApiListsSave).
 // Returns { response } on a conflict, otherwise what the save needs to know about the stored record.
-async function creatorListSaveReadExisting(env, ctx, auth, slug, editingSlug, listsOnly, onlyAccount, now, listExpected) {
+async function creatorListSaveReadExisting(env, ctx, { auth, slug, editingSlug, listsOnly, onlyAccount, now, listExpected }) {
   const existingRaw = !editingSlug ? null
     : (listsOnly ? await listsV2GetRecordRaw(env, onlyAccount, slug) : await getCreatorList(env, auth.username, slug));
   let createdAt = now;
@@ -1401,7 +1401,7 @@ async function creatorListSaveReadExisting(env, ctx, auth, slug, editingSlug, li
 }
 
 // The D1 row of a list save, with the one retry after a creator backfill (a step of creatorApiListsSave).
-async function creatorListSaveD1Row(env, auth, slug, name, type, visibility, itemsJson, likes, createdAt, updatedAt, order) {
+async function creatorListSaveD1Row(env, { auth, slug, name, type, visibility, itemsJson, likes, createdAt, updatedAt, order }) {
   try {
     const listId = `${auth.username}:${slug}`;
     await env.DB.prepare(
