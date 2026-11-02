@@ -9,9 +9,9 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const src = fs.readFileSync(path.join(ROOT, "src/core/03_trakt-headers.js"), "utf8");
+const src = fs.readFileSync(path.join(ROOT, "src/core/81_trakt-headers.js"), "utf8");
 const m = src.match(/function traktHeaders\([\s\S]*?\n}\n/);
-assert.ok(m, "traktHeaders is defined at the top level of 03_trakt-headers.js");
+assert.ok(m, "traktHeaders is defined at the top level of 81_trakt-headers.js");
 const sandbox = { ADDON_VERSION: "9.9.9", TRAKT_CLIENT_ID: "site-id" };
 vm.createContext(sandbox);
 vm.runInContext(m[0], sandbox);

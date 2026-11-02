@@ -27,7 +27,7 @@ Scope: code quality, architecture, technical debt, dead code, duplication, depen
 | Bug found during CQ-01: scrobble user filter answered 500 | **fixed** | 64_media-server-scrobble.js, tests/scrobble-user-filter.test.mjs |
 | CQ-19 scope-check blind spot | **done**: window.* exports read from the AST; a typeof only excuses a read in the same or an enclosing function | tools/scope_check.mjs, tests/scope-check.test.mjs |
 | CQ-13 pin CI actions to SHAs | **done** (checkout 4.4.0, setup-node 4.4.0, setup-python 5.6.0, upload-artifact 4.6.2; Dependabot keeps them current) | .github/workflows/*.yml, OPERATIONS |
-| CQ-05 shared Trakt headers | **done**: `traktHeaders(accessToken, apiKey)` in `src/core/03_trakt-headers.js`; 30 of 36 copies replaced, 6 left on purpose (different User-Agent, no Content-Type, or User-Agent from a local variable). Header count 36 → 7 (6 left + the helper) | tests/trakt-headers.test.mjs |
+| CQ-05 shared Trakt headers | **done**: `traktHeaders(accessToken, apiKey)` in `src/core/81_trakt-headers.js`; 30 of 36 copies replaced, 6 left on purpose (different User-Agent, no Content-Type, or User-Agent from a local variable). Header count 36 → 7 (6 left + the helper) | tests/trakt-headers.test.mjs |
 | CQ-04 step 2 second continue-watching implementation | **stopped for an owner decision**: the shelf and the website list differ in four cases; comparison test committed, differences marked `todo` | tests/continue-watching-parity.test.mjs |
 | CQ-09 flags | blocked on CQ-17 data | |
 
