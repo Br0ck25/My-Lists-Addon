@@ -2138,7 +2138,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -4960,7 +4960,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
@@ -8557,6 +8557,8 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/admin/65_admin-api-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/admin/65_admin-api-routes.js"), "utf8"),
     // The /api/creator/ account and lists routes moved here out of handleFetch (CQ-01), one function each.
     "src/api/67_creator-api-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/67_creator-api-routes.js"), "utf8"),
+    // Reorder and the tracking save moved here out of handleFetch (CQ-01), one function each.
+    "src/api/68_creator-api-account-and-save-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/68_creator-api-account-and-save-routes.js"), "utf8"),
   };
 
   // Every place in the storage-owning files that names a custom-list key,
@@ -8589,8 +8591,9 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/core/02_http-and-creator-utils.js :: purgeCreatorData",
     "src/api/63_subtitles-track.js :: recordSubtitlesPlay",
     "src/api/67_creator-api-routes.js :: creatorApiListsSave",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/reorder",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/save-tracking",
+    "src/api/68_creator-api-account-and-save-routes.js :: creatorApiListsReorder",
+    // The Watchlist mirror of /api/creator/sync/save-tracking (a helper of creatorApiSyncSaveTracking, split for the 150-line limit).
+    "src/api/68_creator-api-account-and-save-routes.js :: creatorTrackingWriteWatchlist",
   ];
   // Touches one without changing anything a browser needs told about. Each
   // entry is a claim someone has to re-justify if this list ever grows.
