@@ -706,11 +706,11 @@ async function creatorListPageOrFeed(request, env, ctx, url, path, m) {
       }
     }
   }
-  return creatorListPageOrFeedRender(request, env, ctx, url, path, username, listName, listData, isCreatorList);
+  return creatorListPageOrFeedRender(request, env, ctx, { url, path, username, listName, listData, isCreatorList });
 }
 
 // The rest of creatorListPageOrFeed, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function creatorListPageOrFeedRender(request, env, ctx, url, path, username, listName, listData, isCreatorList) {
+async function creatorListPageOrFeedRender(request, env, ctx, { url, path, username, listName, listData, isCreatorList }) {
   if (!listData) {
     return json({ ok: false, error: "No list found at that address." }, 404);
   }

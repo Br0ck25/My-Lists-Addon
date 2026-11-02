@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "49f1fb8409";
+const WORKER_BUILD = "e4b6c9f1e2";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -115682,11 +115682,11 @@ async function creatorListPageOrFeed(request, env, ctx, url, path, m) {
       }
     }
   }
-  return creatorListPageOrFeedRender(request, env, ctx, url, path, username, listName, listData, isCreatorList);
+  return creatorListPageOrFeedRender(request, env, ctx, { url, path, username, listName, listData, isCreatorList });
 }
 
 // The rest of creatorListPageOrFeed, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function creatorListPageOrFeedRender(request, env, ctx, url, path, username, listName, listData, isCreatorList) {
+async function creatorListPageOrFeedRender(request, env, ctx, { url, path, username, listName, listData, isCreatorList }) {
   if (!listData) {
     return json({ ok: false, error: "No list found at that address." }, 404);
   }
@@ -115956,11 +115956,11 @@ async function apiPreview(request, env, ctx, url, path) {
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
     skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
   }
-  return apiPreviewLoad(request, env, ctx, url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId);
+  return apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId });
 }
 
 // The rest of apiPreview, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiPreviewLoad(request, env, ctx, url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId) {
+async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId }) {
   // Unauthenticated and heavyweight: each call can fan out to TMDB /
   // Trakt / MDBList. Same IP-keyed bucket as create/restore/feedback --
   // 240/minute provides sufficient budget for browsing multi-card

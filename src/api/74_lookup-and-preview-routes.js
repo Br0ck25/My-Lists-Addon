@@ -141,11 +141,11 @@ async function apiPreview(request, env, ctx, url, path) {
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
     skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
   }
-  return apiPreviewLoad(request, env, ctx, url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId);
+  return apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId });
 }
 
 // The rest of apiPreview, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiPreviewLoad(request, env, ctx, url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId) {
+async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId }) {
   // Unauthenticated and heavyweight: each call can fan out to TMDB /
   // Trakt / MDBList. Same IP-keyed bucket as create/restore/feedback --
   // 240/minute provides sufficient budget for browsing multi-card
