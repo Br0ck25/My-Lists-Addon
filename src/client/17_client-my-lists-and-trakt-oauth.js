@@ -2338,7 +2338,7 @@ async function startStremioConnect() {
     box.style.display = '';
   }
   let ticks = 0;
-  mediaAppUiPoll = setInterval(async function () {
+  mediaAppUiPoll = setInterval(skipWhileBusy(async function () {
     ticks++;
     if (ticks > 200) {
       stopStremioLinkPoll();
@@ -2346,7 +2346,7 @@ async function startStremioConnect() {
       return;
     }
     await mediaAppUiStremioPoll(link.code);
-  }, 3000);
+  }), 3000);
 }
 
 async function submitNuvioLogin() {
