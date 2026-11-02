@@ -60,6 +60,13 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Safer checks and pinned CI tools (built 2026-11-02, stamp a3fee60b71)
+
+No change for users. Two safety improvements to the build checks.
+
+- **The "does every name exist" check is stricter.** It used to let a missing name through if the same name existed somewhere else in the code, which is how a moved function that lost one of its inputs could slip past the quick check. It now only accepts names that are really global, and it has its own tests. The real code passes with nothing flagged, and removing one input from a real function now makes the quick check fail.
+- **CI tools are pinned.** The GitHub Actions the checks use are now locked to exact versions (not just "version 4"), so a changed upstream action cannot alter our checks unnoticed. Dependabot still proposes updates.
+
 ## Internal tidy-up of the remaining routes (built 2026-11-02, stamp a3fee60b71)
 
 No change for users. This finishes CQ-01 (splitting the huge `handleFetch` function into smaller files): the routes that were still inside it have moved out.

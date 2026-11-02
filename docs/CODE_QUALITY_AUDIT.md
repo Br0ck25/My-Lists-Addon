@@ -25,7 +25,9 @@ Scope: code quality, architecture, technical debt, dead code, duplication, depen
 | CQ-10 compatibility date | **repo done** (all wrangler files = 2026-07-27, OPERATIONS §32 flag table); owner sets the staging dashboard date and checks staging | |
 | CQ-01 split `handleFetch` | **done**: 15,494 → 227 lines; routes in `src/api/62_`–`80_` and `src/admin/65_`–`66_`; verified by four replay scripts (~2,900 requests) identical before/after every commit | |
 | Bug found during CQ-01: scrobble user filter answered 500 | **fixed** | 64_media-server-scrobble.js, tests/scrobble-user-filter.test.mjs |
-| CQ-05, CQ-04 step 2, CQ-13 | optional, not started | |
+| CQ-19 scope-check blind spot | **done**: window.* exports read from the AST; a typeof only excuses a read in the same or an enclosing function | tools/scope_check.mjs, tests/scope-check.test.mjs |
+| CQ-13 pin CI actions to SHAs | **done** (checkout 4.4.0, setup-node 4.4.0, setup-python 5.6.0, upload-artifact 4.6.2; Dependabot keeps them current) | .github/workflows/*.yml, OPERATIONS |
+| CQ-05, CQ-04 step 2 | optional, not started | |
 | CQ-09 flags | blocked on CQ-17 data | |
 
 ### New follow-ups found while doing the work
