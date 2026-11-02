@@ -2417,15 +2417,31 @@ async function readKofiLastDelivery(env) {
   }
 }
 
-// What is stored, as it is read: always complete, whatever was written.
-async function readSupportGoal(env) {
-  let stored = null;
+// The goal's settings record as KV holds it, or null when none was ever
+// saved. Unlike readSupportGoal this does NOT turn a failure into "nothing
+// saved": a KV read that throws, or a record that is not readable JSON, throws
+// from here. A caller that writes the record back (the Ko-fi webhook, the
+// admin save) has to be able to tell "empty" from "could not read", or it
+// writes defaults over the real goal and switch (BA-001). `lenientParse` is for
+// the admin save, which has to be able to repair an unreadable record by
+// saving over it.
+async function readSupportGoalSettings(env, { lenientParse = false } = {}) {
+  const raw = env && env.CONFIGS ? await env.CONFIGS.get(SUPPORT_GOAL_KEY) : null;
+  if (!raw) return null;
+  let parsed = null;
   try {
-    const raw = env && env.CONFIGS ? await env.CONFIGS.get(SUPPORT_GOAL_KEY) : null;
-    stored = raw ? JSON.parse(raw) : null;
-  } catch {
-    stored = null;
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    if (lenientParse) return null;
+    throw e;
   }
+  if (parsed && typeof parsed === "object") return parsed;
+  if (lenientParse) return null;
+  throw new Error("support goal record is not an object");
+}
+
+// A stored settings record shaped into a complete one, whatever was written.
+function shapeSupportGoal(stored) {
   const s = stored && typeof stored === "object" ? stored : {};
   const num = (v, max) => (Number.isFinite(v) && v >= 0 ? Math.min(max, Math.round(v * 100) / 100) : 0);
   return {
@@ -2439,6 +2455,76 @@ async function readSupportGoal(env) {
       ? { at: s.lastPayment.at, amount: s.lastPayment.amount }
       : null,
   };
+}
+
+// Where the month's total lives once D1 is bound (BA-001): one `stats` row per
+// billing month, in whole cents, bumped with an atomic ON CONFLICT add. KV has
+// no atomic add, so a total kept in the settings record lost a payment
+// whenever two writes crossed. A month that has no row yet is simply 0, which
+// is how the bar starts over on the 9th without anything resetting it.
+const KOFI_RAISED_KIND = "kofi:raised:";
+// One row per Ko-fi message id already counted. It is written in the same
+// batch as the bump, so "seen" and "counted" are one step.
+const KOFI_LEDGER_KIND = "kofi:msg:";
+
+async function readKofiRaisedCents(env, month) {
+  if (!env || !env.DB) return null;
+  try {
+    const row = await env.DB.prepare("SELECT n FROM stats WHERE kind = ? AND day = 'total'").bind(KOFI_RAISED_KIND + month).first();
+    return row && Number.isFinite(Number(row.n)) ? Number(row.n) : null;
+  } catch (e) {
+    console.error("readKofiRaisedCents: could not read the month's total from D1", e);
+    return null;
+  }
+}
+
+// What is stored, as it is read: always complete, whatever was written. The
+// settings come from KV; with D1 bound the month's amount comes from D1.
+async function readSupportGoal(env) {
+  let stored = null;
+  try {
+    stored = await readSupportGoalSettings(env);
+  } catch {
+    stored = null;
+  }
+  return await withKofiRaisedFromD1(env, shapeSupportGoal(stored));
+}
+
+// A shaped record with the month's amount taken from D1 when D1 has it.
+async function withKofiRaisedFromD1(env, shaped) {
+  const month = supportGoalMonth();
+  const cents = await readKofiRaisedCents(env, month);
+  if (cents === null) return shaped;
+  return { ...shaped, raised: Math.min(SUPPORT_GOAL_MAX * 10, Math.round(cents) / 100), raisedMonth: month };
+}
+
+// Adds one payment to the month's total in D1, once per message id. Returns
+// true when this call did the counting and false when the id was already in the
+// ledger. Three statements in one batch (one transaction):
+//   1. seed the month's row from the amount a KV-only deployment had already
+//      collected (a no-op when the row exists, and 0 when there is nothing),
+//   2. INSERT OR IGNORE the ledger row, which changes a row only the first time,
+//   3. add the cents only if statement 2 changed a row (changes() = 1).
+async function countKofiPaymentInD1(env, settings, messageId, amount, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const cents = Math.round(amount * 100);
+  const carried = settings.raisedMonth === month ? Math.round(settings.raised * 100) : 0;
+  const insertIgnore = "INSERT OR IGNORE INTO stats (kind, day, n) VALUES (?, 'total', ?)";
+  const res = await env.DB.batch([
+    env.DB.prepare(insertIgnore).bind(KOFI_RAISED_KIND + month, carried),
+    env.DB.prepare(insertIgnore).bind(KOFI_LEDGER_KIND + messageId, cents),
+    env.DB.prepare(
+      "INSERT INTO stats (kind, day, n) SELECT ?, 'total', ? WHERE changes() = 1 ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n"
+    ).bind(KOFI_RAISED_KIND + month, cents),
+  ]);
+  return Number(res && res[1] && res[1].meta && res[1].meta.changes) === 1;
+}
+
+// The admin typed an amount: it replaces the month's total (not adds to it).
+async function setKofiRaisedInD1(env, raised, now = new Date()) {
+  await env.DB.prepare(
+    "INSERT INTO stats (kind, day, n) VALUES (?, 'total', ?) ON CONFLICT(kind, day) DO UPDATE SET n = excluded.n"
+  ).bind(KOFI_RAISED_KIND + supportGoalMonth(now), Math.round(raised * 100)).run();
 }
 
 // One Ko-fi payment (the webhook's `data` object) as a dollar amount to count,

@@ -5,7 +5,7 @@ import { loadClient } from "./client-harness.mjs";
 // The Ko-fi support strip: a monthly goal and the amount given so far, set in
 // the admin page and shown at the top of Catalogs.
 
-const { makeKv, makeEnv, call } = await import("./harness.mjs");
+const { makeKv, makeEnv, makeD1, call } = await import("./harness.mjs");
 
 async function adminCookie(env) {
   const login = await call(env, "/admin/login", { method: "POST", form: { key: env.ADMIN_KEY } });
@@ -201,6 +201,140 @@ describe("support goal: Ko-fi's webhook adds payments by itself", () => {
     const site = (await call(makeEnv({}), "/")).text;
     assert.ok(site.includes("https://ko-fi.com/mylistsaddon"));
     assert.equal(site.includes("buymeacoffee.com"), false);
+  });
+});
+
+// BA-001: the month's total used to live in one KV record, read, added to and
+// written back by the webhook and by the admin save. KV has no atomic add, so
+// two payments close together lost one, and a failed read made the webhook
+// write "enabled: false, raised: this one payment" over everything. With D1
+// bound the total is an atomic counter (cents, one row per month) and the
+// payment's message id is recorded in the same batch, so "seen" and "counted"
+// are one step.
+describe("support goal: the total is an atomic counter in D1 (BA-001)", () => {
+  const TOKEN = "kofi-test-token-123";
+  let n = 1000;
+  const payment = (over = {}) => ({
+    verification_token: TOKEN, message_id: `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
+    timestamp: new Date().toISOString(), type: "Donation", is_public: true, from_name: "Someone",
+    amount: "5.00", currency: "USD", ...over,
+  });
+  const send = (env, data) => call(env, "/api/kofi-webhook", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: "https://ko-fi.com" },
+    rawBody: new URLSearchParams({ data: JSON.stringify(data) }).toString(),
+  });
+  const total = async (env) => (await call(env, "/api/support-goal")).body.raised;
+  async function setup() {
+    const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), KOFI_VERIFICATION_TOKEN: TOKEN });
+    const cookie = await adminCookie(env);
+    await call(env, "/admin/api/support-goal", { method: "POST", cookie, json: { enabled: true, goal: 60 } });
+    return { env, cookie };
+  }
+  const rawKv = (env) => env.CONFIGS._store.get("support:goal:v1");
+
+  it("adds two different payments that arrive at the same moment", async () => {
+    const { env } = await setup();
+    // Both webhook calls read the KV settings before either has written
+    // anything: the second read waits at a gate until the first has arrived.
+    let arrived = 0;
+    let open;
+    const gate = new Promise((r) => { open = r; });
+    env.CONFIGS._hooks.beforeGet = async (key) => {
+      if (key !== "support:goal:v1") return;
+      if (++arrived >= 2) open();
+      await gate;
+    };
+    const [a, b] = await Promise.all([
+      send(env, payment({ amount: "5.00" })),
+      send(env, payment({ amount: "7.25" })),
+    ]);
+    env.CONFIGS._hooks.beforeGet = null;
+    assert.equal(a.status, 200);
+    assert.equal(b.status, 200);
+    assert.equal(await total(env), 12.25, "neither payment replaced the other");
+  });
+
+  it("counts a payment once, even when Ko-fi sends it twice at once", async () => {
+    const { env } = await setup();
+    const p = payment({ amount: "10" });
+    const rs = await Promise.all([send(env, p), send(env, p), send(env, p)]);
+    assert.deepEqual(rs.map((r) => r.status), [200, 200, 200]);
+    assert.equal(rs.filter((r) => r.body.counted === true).length, 1, "exactly one delivery did the counting");
+    assert.equal(await total(env), 10);
+    assert.equal((await send(env, p)).body.duplicate, true, "and a later retry is told it is a duplicate");
+    assert.equal(await total(env), 10);
+  });
+
+  it("stores whole cents, so adding never drifts", async () => {
+    const { env } = await setup();
+    for (const amount of ["0.10", "0.20", "0.30"]) await send(env, payment({ amount }));
+    assert.equal(await total(env), 0.6);
+    const row = await env.DB.prepare("SELECT n FROM stats WHERE kind LIKE 'kofi:raised:%' AND day = 'total'").first();
+    assert.equal(row.n, 60, "60 cents, an integer");
+  });
+
+  it("a failed settings read answers 503 and changes nothing, so Ko-fi retries", async () => {
+    const { env } = await setup();
+    await send(env, payment({ amount: "20" }));
+    const settingsBefore = rawKv(env);
+    let failures = 1;
+    env.CONFIGS._hooks.beforeGet = async (key) => {
+      if (key === "support:goal:v1" && failures-- > 0) throw new Error("KV read failed");
+    };
+    const p = payment({ amount: "9" });
+    const r = await send(env, p);
+    assert.notEqual(r.status, 200, "Ko-fi must see a failure so it sends the payment again");
+    assert.equal(rawKv(env), settingsBefore, "the goal and the on/off switch are not rewritten");
+    env.CONFIGS._hooks.beforeGet = null;
+    assert.equal(await total(env), 20, "and the total has not been touched");
+    // The retry then counts it.
+    assert.equal((await send(env, p)).body.counted, true);
+    assert.equal(await total(env), 29);
+  });
+
+  it("an unreadable settings record is not overwritten with defaults either", async () => {
+    const { env } = await setup();
+    env.CONFIGS._store.set("support:goal:v1", "{not json");
+    const r = await send(env, payment({ amount: "9" }));
+    assert.notEqual(r.status, 200);
+    assert.equal(rawKv(env), "{not json");
+  });
+
+  it("keeps the manual amount the admin types, and adds payments on top of it", async () => {
+    const { env, cookie } = await setup();
+    await call(env, "/admin/api/support-goal", { method: "POST", cookie, json: { raised: 20 } });
+    assert.equal(await total(env), 20, "the typed amount shows on the public strip");
+    assert.equal((await call(env, "/admin/api/support-goal", { cookie })).body.raised, 20);
+    await send(env, payment({ amount: "5" }));
+    assert.equal(await total(env), 25);
+    await call(env, "/admin/api/support-goal", { method: "POST", cookie, json: { raised: 3 } });
+    assert.equal(await total(env), 3, "typing a lower amount replaces it");
+  });
+
+  it("saving only the goal does not touch the total", async () => {
+    const { env, cookie } = await setup();
+    await send(env, payment({ amount: "8" }));
+    await call(env, "/admin/api/support-goal", { method: "POST", cookie, json: { goal: 90 } });
+    const pub = (await call(env, "/api/support-goal")).body;
+    assert.deepEqual([pub.goal, pub.raised], [90, 8]);
+  });
+
+  it("starts the next month at 0, whatever last month's row says", async () => {
+    const { env } = await setup();
+    await env.DB.prepare("INSERT INTO stats (kind, day, n) VALUES ('kofi:raised:2000-01', 'total', 999900)").run();
+    assert.equal(await total(env), 0);
+  });
+
+  it("carries on from the total a KV-only deployment had already collected this month", async () => {
+    const { env, cookie } = await setup();
+    await call(env, "/admin/api/support-goal", { method: "POST", cookie, json: { raised: 42 } });
+    // Put the world back to how it was before D1 held the total: KV has the
+    // amount, D1 has no row for the month.
+    await env.DB.prepare("DELETE FROM stats WHERE kind LIKE 'kofi:raised:%'").run();
+    assert.equal(await total(env), 42, "read from the KV record until D1 has its own");
+    await send(env, payment({ amount: "5" }));
+    assert.equal(await total(env), 47, "the first payment is added to it, not to nothing");
   });
 });
 

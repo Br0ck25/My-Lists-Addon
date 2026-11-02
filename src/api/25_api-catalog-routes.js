@@ -651,11 +651,42 @@ async function handleFetch(request, env, ctx) {
         await recordKofiDelivery(env, amount === null ? "not-counted" : "bad-message-id", { authed: true, type: data.type, currency: data.currency });
         return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
       }
-      const seenKey = `kofi:msg:${messageId}`;
-      if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
-      const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
-      await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
-      await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      // The goal's settings are read first, and a read that fails is a failure
+      // the sender sees: Ko-fi retries until it gets a 200, and counting from
+      // "nothing saved" would write defaults over the real goal (BA-001).
+      let settings;
+      try {
+        settings = shapeSupportGoal(await readSupportGoalSettings(env));
+      } catch (e) {
+        console.error("/api/kofi-webhook: could not read the support goal settings; Ko-fi will retry", e);
+        return json({ ok: false, error: "Try again." }, 503, { "Cache-Control": "no-store" });
+      }
+      if (env.DB) {
+        // D1 is bound: the month's total is an atomic counter and the message
+        // id goes in the ledger in the same batch (countKofiPaymentInD1).
+        let counted;
+        try {
+          counted = await countKofiPaymentInD1(env, settings, messageId, amount);
+        } catch (e) {
+          console.error("/api/kofi-webhook: could not count the payment in D1; Ko-fi will retry", e);
+          return json({ ok: false, error: "Try again." }, 503, { "Cache-Control": "no-store" });
+        }
+        if (!counted) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+        try {
+          const nowMs = Date.now();
+          await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify({ ...settings, lastPayment: { at: nowMs, amount }, updatedAt: nowMs }));
+        } catch (e) {
+          // Only the "last payment" note for the admin page; the payment is counted.
+          console.error("/api/kofi-webhook: counted, but could not save the last-payment note", e);
+        }
+      } else {
+        // No D1 (a KV-only copy): the old read-add-write on the settings record.
+        const seenKey = `kofi:msg:${messageId}`;
+        if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+        const next = addKofiPaymentToSupportGoal(settings, amount);
+        await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
+        await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      }
       await recordKofiDelivery(env, "counted", { authed: true, type: data.type, currency: data.currency });
       return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }

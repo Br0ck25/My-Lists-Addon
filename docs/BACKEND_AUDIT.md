@@ -94,6 +94,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: `tests/support-goal.test.mjs`. (a) Send two different valid webhooks with `Promise.all` against a KV mock whose `get` returns the pre-write value to both; assert the total is the sum of both. (b) Make the KV `get` throw once; assert the stored goal and total are unchanged and the response is not 200.
 
 ### BA-002 Support replies are marked "sent" when nothing was sent (no `EMAIL` binding)
+- Status: Fixed in 42b219e
 - Category: bug
 - Severity / confidence: P2 / High
 - Where: src/admin/59_support-emails.js:515-530 (`sendSupportEmailReply`), 645-658 (`composeNewSupportEmail`)

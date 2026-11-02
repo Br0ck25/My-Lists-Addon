@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4556d9c925";
+const WORKER_BUILD = "bc3bce3ef0";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -13411,15 +13411,31 @@ async function readKofiLastDelivery(env) {
   }
 }
 
-// What is stored, as it is read: always complete, whatever was written.
-async function readSupportGoal(env) {
-  let stored = null;
+// The goal's settings record as KV holds it, or null when none was ever
+// saved. Unlike readSupportGoal this does NOT turn a failure into "nothing
+// saved": a KV read that throws, or a record that is not readable JSON, throws
+// from here. A caller that writes the record back (the Ko-fi webhook, the
+// admin save) has to be able to tell "empty" from "could not read", or it
+// writes defaults over the real goal and switch (BA-001). `lenientParse` is for
+// the admin save, which has to be able to repair an unreadable record by
+// saving over it.
+async function readSupportGoalSettings(env, { lenientParse = false } = {}) {
+  const raw = env && env.CONFIGS ? await env.CONFIGS.get(SUPPORT_GOAL_KEY) : null;
+  if (!raw) return null;
+  let parsed = null;
   try {
-    const raw = env && env.CONFIGS ? await env.CONFIGS.get(SUPPORT_GOAL_KEY) : null;
-    stored = raw ? JSON.parse(raw) : null;
-  } catch {
-    stored = null;
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    if (lenientParse) return null;
+    throw e;
   }
+  if (parsed && typeof parsed === "object") return parsed;
+  if (lenientParse) return null;
+  throw new Error("support goal record is not an object");
+}
+
+// A stored settings record shaped into a complete one, whatever was written.
+function shapeSupportGoal(stored) {
   const s = stored && typeof stored === "object" ? stored : {};
   const num = (v, max) => (Number.isFinite(v) && v >= 0 ? Math.min(max, Math.round(v * 100) / 100) : 0);
   return {
@@ -13433,6 +13449,76 @@ async function readSupportGoal(env) {
       ? { at: s.lastPayment.at, amount: s.lastPayment.amount }
       : null,
   };
+}
+
+// Where the month's total lives once D1 is bound (BA-001): one `stats` row per
+// billing month, in whole cents, bumped with an atomic ON CONFLICT add. KV has
+// no atomic add, so a total kept in the settings record lost a payment
+// whenever two writes crossed. A month that has no row yet is simply 0, which
+// is how the bar starts over on the 9th without anything resetting it.
+const KOFI_RAISED_KIND = "kofi:raised:";
+// One row per Ko-fi message id already counted. It is written in the same
+// batch as the bump, so "seen" and "counted" are one step.
+const KOFI_LEDGER_KIND = "kofi:msg:";
+
+async function readKofiRaisedCents(env, month) {
+  if (!env || !env.DB) return null;
+  try {
+    const row = await env.DB.prepare("SELECT n FROM stats WHERE kind = ? AND day = 'total'").bind(KOFI_RAISED_KIND + month).first();
+    return row && Number.isFinite(Number(row.n)) ? Number(row.n) : null;
+  } catch (e) {
+    console.error("readKofiRaisedCents: could not read the month's total from D1", e);
+    return null;
+  }
+}
+
+// What is stored, as it is read: always complete, whatever was written. The
+// settings come from KV; with D1 bound the month's amount comes from D1.
+async function readSupportGoal(env) {
+  let stored = null;
+  try {
+    stored = await readSupportGoalSettings(env);
+  } catch {
+    stored = null;
+  }
+  return await withKofiRaisedFromD1(env, shapeSupportGoal(stored));
+}
+
+// A shaped record with the month's amount taken from D1 when D1 has it.
+async function withKofiRaisedFromD1(env, shaped) {
+  const month = supportGoalMonth();
+  const cents = await readKofiRaisedCents(env, month);
+  if (cents === null) return shaped;
+  return { ...shaped, raised: Math.min(SUPPORT_GOAL_MAX * 10, Math.round(cents) / 100), raisedMonth: month };
+}
+
+// Adds one payment to the month's total in D1, once per message id. Returns
+// true when this call did the counting and false when the id was already in the
+// ledger. Three statements in one batch (one transaction):
+//   1. seed the month's row from the amount a KV-only deployment had already
+//      collected (a no-op when the row exists, and 0 when there is nothing),
+//   2. INSERT OR IGNORE the ledger row, which changes a row only the first time,
+//   3. add the cents only if statement 2 changed a row (changes() = 1).
+async function countKofiPaymentInD1(env, settings, messageId, amount, now = new Date()) {
+  const month = supportGoalMonth(now);
+  const cents = Math.round(amount * 100);
+  const carried = settings.raisedMonth === month ? Math.round(settings.raised * 100) : 0;
+  const insertIgnore = "INSERT OR IGNORE INTO stats (kind, day, n) VALUES (?, 'total', ?)";
+  const res = await env.DB.batch([
+    env.DB.prepare(insertIgnore).bind(KOFI_RAISED_KIND + month, carried),
+    env.DB.prepare(insertIgnore).bind(KOFI_LEDGER_KIND + messageId, cents),
+    env.DB.prepare(
+      "INSERT INTO stats (kind, day, n) SELECT ?, 'total', ? WHERE changes() = 1 ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n"
+    ).bind(KOFI_RAISED_KIND + month, cents),
+  ]);
+  return Number(res && res[1] && res[1].meta && res[1].meta.changes) === 1;
+}
+
+// The admin typed an amount: it replaces the month's total (not adds to it).
+async function setKofiRaisedInD1(env, raised, now = new Date()) {
+  await env.DB.prepare(
+    "INSERT INTO stats (kind, day, n) VALUES (?, 'total', ?) ON CONFLICT(kind, day) DO UPDATE SET n = excluded.n"
+  ).bind(KOFI_RAISED_KIND + supportGoalMonth(now), Math.round(raised * 100)).run();
 }
 
 // One Ko-fi payment (the webhook's `data` object) as a dollar amount to count,
@@ -91389,11 +91475,42 @@ async function handleFetch(request, env, ctx) {
         await recordKofiDelivery(env, amount === null ? "not-counted" : "bad-message-id", { authed: true, type: data.type, currency: data.currency });
         return json({ ok: true, counted: false }, 200, { "Cache-Control": "no-store" });
       }
-      const seenKey = `kofi:msg:${messageId}`;
-      if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
-      const next = addKofiPaymentToSupportGoal(await readSupportGoal(env), amount);
-      await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
-      await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      // The goal's settings are read first, and a read that fails is a failure
+      // the sender sees: Ko-fi retries until it gets a 200, and counting from
+      // "nothing saved" would write defaults over the real goal (BA-001).
+      let settings;
+      try {
+        settings = shapeSupportGoal(await readSupportGoalSettings(env));
+      } catch (e) {
+        console.error("/api/kofi-webhook: could not read the support goal settings; Ko-fi will retry", e);
+        return json({ ok: false, error: "Try again." }, 503, { "Cache-Control": "no-store" });
+      }
+      if (env.DB) {
+        // D1 is bound: the month's total is an atomic counter and the message
+        // id goes in the ledger in the same batch (countKofiPaymentInD1).
+        let counted;
+        try {
+          counted = await countKofiPaymentInD1(env, settings, messageId, amount);
+        } catch (e) {
+          console.error("/api/kofi-webhook: could not count the payment in D1; Ko-fi will retry", e);
+          return json({ ok: false, error: "Try again." }, 503, { "Cache-Control": "no-store" });
+        }
+        if (!counted) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+        try {
+          const nowMs = Date.now();
+          await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify({ ...settings, lastPayment: { at: nowMs, amount }, updatedAt: nowMs }));
+        } catch (e) {
+          // Only the "last payment" note for the admin page; the payment is counted.
+          console.error("/api/kofi-webhook: counted, but could not save the last-payment note", e);
+        }
+      } else {
+        // No D1 (a KV-only copy): the old read-add-write on the settings record.
+        const seenKey = `kofi:msg:${messageId}`;
+        if (await env.CONFIGS.get(seenKey)) return json({ ok: true, counted: false, duplicate: true }, 200, { "Cache-Control": "no-store" });
+        const next = addKofiPaymentToSupportGoal(settings, amount);
+        await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next));
+        await env.CONFIGS.put(seenKey, "1", { expirationTtl: 40 * 86400 });
+      }
       await recordKofiDelivery(env, "counted", { authed: true, type: data.type, currency: data.currency });
       return json({ ok: true, counted: true }, 200, { "Cache-Control": "no-store" });
     }
@@ -106196,15 +106313,28 @@ function generateSearchVariations(query) {
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
-      const stored = await readSupportGoal(env);
+      let stored;
       if (request.method === "POST") {
+        // A save writes the whole record back, so a KV read that fails must
+        // stop it, not turn into "nothing was saved" (BA-001). An unreadable
+        // record can still be saved over.
+        try {
+          stored = await withKofiRaisedFromD1(env, shapeSupportGoal(await readSupportGoalSettings(env, { lenientParse: true })));
+        } catch (e) {
+          console.error("/admin/api/support-goal: could not read the saved settings", e);
+          return json({ ok: false, error: "Could not read the saved settings. Try again." }, 503);
+        }
         let body = {};
         try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
         const next = applySupportGoalUpdate(stored, body);
         if (next.error) return json({ ok: false, error: next.error }, 400);
+        // A typed amount is the month's total itself: with D1 bound it goes
+        // where the webhook adds to it.
+        if (env.DB && body && body.raised !== undefined) await setKofiRaisedInD1(env, next.value.raised);
         await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next.value));
         return json({ ok: true, ...publicSupportGoal(next.value), goal: next.value.goal, raised: next.value.raised, enabled: next.value.enabled }, 200, { "Cache-Control": "no-store" });
       }
+      stored = await readSupportGoal(env);
       const month = supportGoalMonth();
       return json({
         ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month,

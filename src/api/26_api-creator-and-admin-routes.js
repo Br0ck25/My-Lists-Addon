@@ -7113,15 +7113,28 @@
       const authed = await isAdminRequest(request, env);
       if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
       if (!env || !env.CONFIGS) return json({ ok: false, error: "No CONFIGS namespace is bound." });
-      const stored = await readSupportGoal(env);
+      let stored;
       if (request.method === "POST") {
+        // A save writes the whole record back, so a KV read that fails must
+        // stop it, not turn into "nothing was saved" (BA-001). An unreadable
+        // record can still be saved over.
+        try {
+          stored = await withKofiRaisedFromD1(env, shapeSupportGoal(await readSupportGoalSettings(env, { lenientParse: true })));
+        } catch (e) {
+          console.error("/admin/api/support-goal: could not read the saved settings", e);
+          return json({ ok: false, error: "Could not read the saved settings. Try again." }, 503);
+        }
         let body = {};
         try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
         const next = applySupportGoalUpdate(stored, body);
         if (next.error) return json({ ok: false, error: next.error }, 400);
+        // A typed amount is the month's total itself: with D1 bound it goes
+        // where the webhook adds to it.
+        if (env.DB && body && body.raised !== undefined) await setKofiRaisedInD1(env, next.value.raised);
         await env.CONFIGS.put(SUPPORT_GOAL_KEY, JSON.stringify(next.value));
         return json({ ok: true, ...publicSupportGoal(next.value), goal: next.value.goal, raised: next.value.raised, enabled: next.value.enabled }, 200, { "Cache-Control": "no-store" });
       }
+      stored = await readSupportGoal(env);
       const month = supportGoalMonth();
       return json({
         ok: true, enabled: stored.enabled, goal: stored.goal, raised: stored.raisedMonth === month ? stored.raised : 0, month,
