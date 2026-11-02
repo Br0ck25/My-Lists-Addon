@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e80ac204a6";
+const WORKER_BUILD = "8044ee42e0";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -23991,13 +23991,7 @@ async function fetchTrakt(entry, skip = 0, traktKey = "", accessToken = "", env 
     parsed.user
   )}/lists/${encodeURIComponent(parsed.list)}/items${kindPath}?limit=${PAGE_SIZE}&page=${page}&extended=full`;
 
-  const headers = {
-    "Content-Type": "application/json",
-    "trakt-api-version": "2",
-    "trakt-api-key": traktKey,
-    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-  };
-  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  const headers = traktHeaders(accessToken, traktKey);
 
   const userHash = accessToken ? safeUserHash(accessToken, parsed.user) : "public";
   const cacheKey = `user_cache:trakt:list:v2:${parsed.user}:${parsed.list}:${itemKind || "all"}:${skip}:${userHash}`;
@@ -24088,13 +24082,7 @@ async function fetchTraktWatchlist(entry, skip = 0, traktKey = "", accessToken =
     providerLabel: "Trakt Watchlist",
     fetchFn: async () => {
       const res = await fetchTraktWithRetry(src, {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": traktKey,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken, traktKey),
         cf: { cacheTtl: 0, cacheEverything: false },
       });
       if (!res.ok) {
@@ -24237,13 +24225,7 @@ async function fetchTraktHistory(entry, skip = 0, traktKey = "", accessToken = "
     providerLabel: "Trakt History",
     fetchFn: async () => {
       const res = await fetchTraktWithRetry(src, {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": traktKey,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken, traktKey),
         cf: { cacheTtl: 0, cacheEverything: false },
       });
       if (!res.ok) {
@@ -24290,13 +24272,7 @@ async function fetchTraktAiringNext(entry, skip = 0, traktKey = "", accessToken 
     kvTtlSec: 3600,
     providerLabel: "Trakt Airing Next",
     fetchFn: async () => {
-      const headers = {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": traktKey,
-        Authorization: `Bearer ${accessToken}`,
-        "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-      };
+      const headers = traktHeaders(accessToken, traktKey);
 
       const d0 = new Date();
       const today = d0.toISOString().slice(0, 10);
@@ -24721,13 +24697,7 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
     kvTtlSec: 600,
     providerLabel: "Trakt Continue Watching",
     fetchFn: async () => {
-      const headers = {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": traktKey,
-        Authorization: `Bearer ${accessToken}`,
-        "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-      };
+      const headers = traktHeaders(accessToken, traktKey);
       const [pbRes, watchedRes, hProgRes, hDroppedRes, hResetRes] = await Promise.all([
         fetchTraktWithRetry(`https://api.trakt.tv/sync/playback${typePath}?limit=50`, {
           headers,
