@@ -87,7 +87,7 @@ async function apiSave(request, env, ctx, path) {
 
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -332,7 +332,7 @@ async function apiListLiveSave(request, env, ctx) {
   }
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -385,7 +385,7 @@ async function apiListLiveSave(request, env, ctx) {
 async function apiListsLike(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let likeBody;
-  try { likeBody = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+  try { likeBody = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
   const likeUser = String(likeBody.username || "").toLowerCase().trim();
   const likeSlug = String(likeBody.slug || "").toLowerCase().trim();
   const likeUnlike = likeBody.action === "unlike";
@@ -508,7 +508,7 @@ async function apiListsLikeExternal(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -590,7 +590,7 @@ async function apiListsLikeExternal(request, env, ctx, path) {
 async function apiDetailsBatch(request, env, ctx) {
   let reqBody;
   try {
-    reqBody = await request.json();
+    reqBody = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -663,7 +663,7 @@ async function apiDetails(request, env, ctx, url) {
   let reqBody;
   if (request.method === "POST") {
     try {
-      reqBody = await request.json();
+      reqBody = await readJsonObject(request);
     } catch {
       reqBody = {};
     }

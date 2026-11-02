@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "110a7407a8";
+const WORKER_BUILD = "b444d8fb09";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -121689,7 +121689,7 @@ async function apiSave(request, env, ctx, path) {
 
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -121934,7 +121934,7 @@ async function apiListLiveSave(request, env, ctx) {
   }
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -121987,7 +121987,7 @@ async function apiListLiveSave(request, env, ctx) {
 async function apiListsLike(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let likeBody;
-  try { likeBody = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+  try { likeBody = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
   const likeUser = String(likeBody.username || "").toLowerCase().trim();
   const likeSlug = String(likeBody.slug || "").toLowerCase().trim();
   const likeUnlike = likeBody.action === "unlike";
@@ -122110,7 +122110,7 @@ async function apiListsLikeExternal(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122192,7 +122192,7 @@ async function apiListsLikeExternal(request, env, ctx, path) {
 async function apiDetailsBatch(request, env, ctx) {
   let reqBody;
   try {
-    reqBody = await request.json();
+    reqBody = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122265,7 +122265,7 @@ async function apiDetails(request, env, ctx, url) {
   let reqBody;
   if (request.method === "POST") {
     try {
-      reqBody = await request.json();
+      reqBody = await readJsonObject(request);
     } catch {
       reqBody = {};
     }
