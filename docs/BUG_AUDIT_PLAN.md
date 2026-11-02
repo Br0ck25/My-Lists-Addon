@@ -1,6 +1,6 @@
 # Bug, logic, error-handling, race, leak, crash, regression and edge-case audit, with a fix plan (handoff to Sonnet 5.5)
 
-Audited 2026-11-02, read-only. Nothing in `src/` was changed.
+Audited 2026-11-02 in two passes, read-only. Nothing in `src/` was changed. The second pass closed the gaps the first one listed (see "Second pass" near the end) and found BUG-09.
 Baseline: `bash verify.sh -q` passes every build, syntax and scope step. Tests: 3,119 run, 3,113 pass, 1 fail, 5 todo. The one failure is the known cold-catalog p95 timing budget (`tests/load-performance.test.mjs`) on a shared VM. Do not loosen it.
 
 **How this audit was done (so you know what it does and does not cover).** The code is 123k lines, so it was not read line by line. I used:
@@ -42,6 +42,26 @@ Admin routes that 500: `/admin/api/channel-moderate`, `/admin/api/delete-creator
 4. Write one new test `tests/null-body.test.mjs` that loops over every POST route in `tests/route-access.json` (skip `:param` routes and routes that need unconfigured secrets, which correctly answer 503), sends `null`, `[]`, `"x"` and `5`, and asserts the status is below 500. The fuzz script in the scratchpad is the model. This test must fail on today's code.
 
 **Regression risk.** Medium, because it touches many routes. Tests that post `{}` or an array on purpose must keep passing. Run the whole suite after each file, not only at the end.
+
+---
+
+### BUG-09 (High, crash): one `null` channel entry breaks the whole web page, and sync spreads it to every device
+**Evidence (reproduced in a real browser).** Playwright loaded `/` with a single saved key changed at a time (all 90 `myListAddon:*` keys, five bad shapes each). Two keys crash the page at startup:
+- `myListAddon:localMergedChannels` = `{"a":null}` (or `[null]`) → `Cannot read properties of null (reading 'updatedAt')`, then `(reading 'mergedId')`
+- `myListAddon:localChannels` = `{"a":null}` (or `[null]`) → `Cannot read properties of null (reading 'name')`
+
+Both throw inside `renderChannelMergeList` (`src/client/20_client-channel-builder.js:13253`), which runs from a top-level call while the page script loads. An exception there stops the **rest of the page script from running**, so every tab is broken, not just Channels. Every other key and shape (invalid JSON, `"str"`, `0`, `[]`, `{}`, objects missing fields) loaded with no page error.
+
+**Why it is High, not an edge case.** `/api/creator/sync/save-channels` (`src/api/69_creator-api-sync-routes.js:117-121`) stores `body.channels` and `body.mergedChannels` as given. It only checks that each is an object, and an array passes that check too. So a single bad entry written by any device (an old version, a crash mid-edit, a bug elsewhere) is saved to the account and loaded by every signed-in device, which then cannot use the site at all. Clearing site data does not fix it, because the next sync brings the entry back.
+
+**Root cause.** `loadLocalChannels` (line 500) and `loadLocalMergedChannels` (line 12876) check that the whole map is an object, but never check its values. Callers then read `entry.name`, `entry.updatedAt` and `entry.mergedId` directly.
+
+**Fix (two parts, two commits, test first for each).**
+1. Client: in `loadLocalChannels` and `loadLocalMergedChannels`, return only the entries whose value is a non-null, non-array object. Do it once in these two loaders, not at each of the ~20 `renderChannelMergeList` callers. If an array is stored, treat it as `{}`. Test: the client harness (`tests/client-harness.mjs`; see `tests/channel-combine.client.test.mjs` for a model) sets each key to `{"a":null,"b":{...valid...}}`, calls `renderChannelMergeList()`, and asserts no throw and that the valid entry still renders.
+2. Server: in `creatorApiSyncSaveChannels`, drop entries that are not plain objects, and treat an array as `{}`, before writing the blob. Test: save `{channels:{a:null,b:{name:"B"}}}` with `sync/save-channels`, load it with `sync/load`, and assert only `b` comes back.
+3. Do not try to repair blobs that are already stored. Part 1 makes them harmless when they are read.
+
+**Regression risk.** Low. Valid entries are unchanged. Check that `ensureAllChannelsSyncedFromRows` still adds channels that rows refer to, by running `tests/channel-*.test.mjs` and `tests/client*.test.mjs`.
 
 ---
 
@@ -100,6 +120,7 @@ KV has no compare-and-set, so two isolates can each read the same list and the s
 **Evidence.** Checked every module-level `Map`/`Set` in the Worker. Almost all evict (`.delete`, `.clear`, or a size cap). These do not:
 - `RPDB_BACKOFF` and `RPDB_USAGE` (`05_catalog-core.js` lines 1446 and 1447), keyed by a hash of each user's RPDB key. They grow by one entry per distinct key for the life of the isolate.
 - `_betterPosterVariantNoted` (line 1354), keyed by poster variant, a small finite set.
+- Browser: `_betterPosterReadyUrls` (`src/client/19_client-search-and-likes.js:494`) gains one URL string per poster shown and is never cleared during the page's lifetime. It stays small (strings only); leave it unless a long-session memory complaint appears.
 
 **Impact.** Very low: a Worker isolate is recycled often and the key sets are small. This is a hygiene item, not a leak that will ever matter at the current scale.
 
@@ -123,17 +144,26 @@ KV has no compare-and-set, so two isolates can each read the same list and the s
 - **Unconfigured features** (OAuth sign-in, Ko-fi webhook, jobs queue) answer 503 with a clear message, which is correct.
 - **Rate-limit and session paths** read as sound (atomic spend-then-release in `reserveRateLimit`; 10-second revocation window documented as SESS-001).
 
+### Second pass (same day): the gaps from the first pass, now checked
+- **Path-parameter routes:** 35 route shapes (manifest, catalog with `skip`/`genre` extras, meta, stream, subtitles, `/i/<token>/…`, every `/lists/<source>/…`, `/channel(s)/…`, `/rpdb/…`, `/bp/…`, `/api/{installs,connections,imports,likes,lists,creator}/…`, `/u/…`, `/configure`, `/poster/…`), each with 15 bad segments (empty, `%00`, broken UTF-8, `..`, `%2F%2F`, a 3,000-character value, emoji, quotes, `null`, `-1`) and 5 methods, signed in and out. That was 5,250 requests: 200/302/401/404 only, **no 5xx**.
+- **Query strings on every public/account route:** non-numeric, negative and huge `limit`/`page`/`skip`, `%00`, path traversal, repeated keys, a metadata-IP URL. 840 requests, **no 5xx**.
+- **Queue consumer:** every one of the registered job types with 8 payload shapes (`null`, array, string, number, wrong-typed fields, unknown account, a real account), plus 5 malformed message bodies. All 125 were handled; none threw and none looped on retry.
+- **Cron:** four cron schedules, run with every KV key overwritten by invalid JSON or `null`. No throw; the only log lines were the expected "network blocked" provider failures.
+- **Email handler:** empty message, null fields, garbage MIME. No throw.
+- **Browser:** each saved key alone, five bad shapes each (450 page loads), plus each app tab with all keys corrupted together. This found BUG-09 and nothing else.
+- **Regression (CQ-20 refactor):** an AST scan of all 63 functions that take a destructured settings object, checked against every call site. No call passes a misspelled key, and every key a caller leaves out has a default or a `||` fallback in the function. The five `todo` tests are the known server/client parity differences and audit #12, not new failures.
+
 ## Not verified (be honest with the owner)
-- Routes with a path parameter (`/lists/:slug`, `/i/:token/...`, and similar) were not fuzzed.
-- The scheduled (cron) and queue-consumer paths were read, not fuzzed.
-- The browser UI was not driven: Playwright was not usable in this run, so the client findings (BUG-06) come from reading the code.
-- Behaviour against the real Cloudflare runtime, real D1 limits and real provider outages was not exercised; the harness uses stubs and real SQLite.
+- Behaviour against the real Cloudflare runtime, real D1 limits and real provider outages; the harness uses stubs and real SQLite.
+- Browser flows that need a click sequence (drag-and-drop, editing a list, OAuth pop-ups). The browser pass covered page load and tab switching only.
+- Live Nuvio/Stremio device behaviour (already listed as outstanding in `docs/HANDOFF.md`).
 
 ## Fix order
-1. BUG-01 (largest, user-visible in logs; ship file by file).
-2. BUG-02 and BUG-03 (small, independent, each with a test).
-3. BUG-06 (small client fix).
-4. BUG-05 and BUG-04 (low value; do only if the change stays a few lines).
-5. BUG-08 as an investigation first, BUG-07 only if trivial.
+1. BUG-09 (one bad synced entry breaks the site on every device; small fix).
+2. BUG-01 (largest, user-visible in logs; ship file by file).
+3. BUG-02 and BUG-03 (small, independent, each with a test).
+4. BUG-06 (small client fix).
+5. BUG-05 and BUG-04 (low value; do only if the change stays a few lines).
+6. BUG-08 as an investigation first, BUG-07 only if trivial.
 
 Questions for the owner (product decisions, do not build without a yes): should bulk import also resolve series, not only movies (BUG-02)? Should the shared poster/variant lists move from KV to D1 to close the lost-update window (BUG-04)?
