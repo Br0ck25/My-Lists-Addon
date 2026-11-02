@@ -479,7 +479,7 @@ async function adminApiDeleteCreatorList(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -797,7 +797,7 @@ async function adminApiChannelModerate(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-storage" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -1036,7 +1036,7 @@ async function adminApiExportKvToR2(request, env) {
   if (!env.BLOBS) return json({ ok: false, error: "No R2 BLOBS binding. Cannot export." }, 500);
 
   let body;
-  try { body = await request.json(); } catch { body = {}; }
+  try { body = await readJsonObject(request); } catch { body = {}; }
   const prefix = typeof body.prefix === "string" ? body.prefix.trim() : "";
   if (!prefix) return json({ ok: false, error: "prefix is required." }, 400);
   if (/[*?]/.test(prefix)) {
