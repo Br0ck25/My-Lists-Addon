@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b444d8fb09";
+const WORKER_BUILD = "d581b83641";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -122319,7 +122319,7 @@ async function apiSessionSignIn(request, env, ctx, path) {
   if (!env || !env.DB) return json({ ok: false, error: "Database unavailable." }, 503);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122488,7 +122488,7 @@ async function apiMeSessionsRevoke(request, env) {
   }
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {}
 
   const currentHash = request.session ? request.session.idHash : null;
@@ -122557,7 +122557,7 @@ async function apiChannelSharePublish(request, env, ctx, url, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Sharing isn't available on this add-on." }, 503);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122757,7 +122757,7 @@ async function apiChannelLike(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122842,7 +122842,7 @@ async function apiChannelAdded(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: true });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: true });
   }
@@ -122886,7 +122886,7 @@ async function apiChannelMine(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: true, channels: [] });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122910,7 +122910,7 @@ async function apiChannelUnpublish(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Sharing isn't available on this add-on." }, 503);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
