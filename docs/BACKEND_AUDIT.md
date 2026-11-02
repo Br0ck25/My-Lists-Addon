@@ -174,6 +174,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: none needed beyond the existing audit tests. Optionally, assert in `tests/admin-actions.test.mjs` that a reply produces exactly one audit row.
 
 ### BA-006 A TMDB detail cache write is not handed to `waitUntil`
+- Status: Fixed in BA006SHA
 - Category: performance
 - Severity / confidence: P3 / Medium
 - Where: src/catalog/07_source-fetchers-tmdb-simkl.js:493-496 (`fetchTmdbDetailsUncoalesced`)

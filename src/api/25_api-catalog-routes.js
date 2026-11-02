@@ -1983,7 +1983,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
             if (!rawTmdbId) return;
             const kind = (m.type === "series" || m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv") ? "tv" : "movie";
             try {
-              const details = await fetchTmdbDetails(rawTmdbId, kind, effectiveTmdbKey, env);
+              const details = await fetchTmdbDetails(rawTmdbId, kind, effectiveTmdbKey, env, ctx);
               if (details && typeof details.vote_average === "number" && details.vote_average > 0) {
                 m.vote_average = details.vote_average;
                 m.rating = details.vote_average;
@@ -2751,7 +2751,7 @@ function generateSearchVariations(query) {
         // Always the shared key -- 2 outbound TMDB calls per request.
         ctx.waitUntil(bumpStatBy(env, "apiuse:tmdb", 2));
         const [details, showRes] = await Promise.all([
-          fetchTmdbDetails(tmdbId, "tv", TMDB_API_KEY, env),
+          fetchTmdbDetails(tmdbId, "tv", TMDB_API_KEY, env, ctx),
           fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${encodeURIComponent(TMDB_API_KEY)}&append_to_response=episode_groups`, {
             headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
             cf: { cacheTtl: 3600, cacheEverything: true },

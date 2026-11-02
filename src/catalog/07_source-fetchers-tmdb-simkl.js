@@ -390,17 +390,17 @@ async function enrichTrailers(metas, type, apiKey) {
 // Include the API key in the short-lived in-flight identity so failed credentials
 // cannot borrow another request. Entries are removed on both success and failure.
 const TMDB_DETAILS_IN_FLIGHT = new Map();
-async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null) {
+async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null, ctx = null) {
   const key = JSON.stringify([String(tmdbId || ""), kind, apiKey]);
   const existing = TMDB_DETAILS_IN_FLIGHT.get(key);
   if (existing) return await existing;
-  const pending = fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env);
+  const pending = fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env, ctx);
   TMDB_DETAILS_IN_FLIGHT.set(key, pending);
   try { return await pending; }
   finally { TMDB_DETAILS_IN_FLIGHT.delete(key); }
 }
 
-async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null) {
+async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null, ctx = null) {
   let cleanTmdbId = String(tmdbId || "").trim();
   while (cleanTmdbId.startsWith("tmdb:")) {
     cleanTmdbId = cleanTmdbId.slice(5).trim();
@@ -491,8 +491,12 @@ async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null) {
 
   // Persist to Cloudflare KV for 30 days so no other worker or edge ever re-queries this ID
   if (env && env.CONFIGS && imdbId) {
+    // Handed to waitUntil when there is a ctx, so a response that finishes
+    // first cannot cancel it; awaited when there is not (BA-006).
     try {
-      env.CONFIGS.put(`tmdbdetail_v2:${kind}:${cleanTmdbId}`, JSON.stringify(result), { expirationTtl: 2592000 }).catch(() => {});
+      const put = Promise.resolve(env.CONFIGS.put(`tmdbdetail_v2:${kind}:${cleanTmdbId}`, JSON.stringify(result), { expirationTtl: 2592000 })).catch(() => {});
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(put);
+      else await put;
     } catch {}
   }
   return result;
@@ -924,7 +928,7 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
         return true;
       }) : windowItems;
       const resolved = await mapWithConcurrency(uniqueItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
-        const details = await fetchTmdbDetails(it.id, wantKind, apiKey, env);
+        const details = await fetchTmdbDetails(it.id, wantKind, apiKey, env, ctx);
         if (!details.imdbId) return null;
         if (applyDigitalFilter && details.hasDigitalRelease === false) return null;
         return mapTmdbItem(it, details.imdbId, entry.type, details.videos, details);
@@ -4516,7 +4520,7 @@ async function searchCatalogMetas(query, type, skip, apiKey, env, ctx, origin) {
   const resolved = await mapWithConcurrency(candidates, 8, async (item) => {
     let imdbId = null;
     try {
-      const details = await fetchTmdbDetails(item.id, kind, effectiveKey, env);
+      const details = await fetchTmdbDetails(item.id, kind, effectiveKey, env, ctx);
       if (details && details.imdbId) imdbId = details.imdbId;
     } catch {}
 

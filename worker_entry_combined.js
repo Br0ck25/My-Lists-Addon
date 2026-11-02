@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ff29f0fabc";
+const WORKER_BUILD = "c909ed995b";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -25248,17 +25248,17 @@ async function enrichTrailers(metas, type, apiKey) {
 // Include the API key in the short-lived in-flight identity so failed credentials
 // cannot borrow another request. Entries are removed on both success and failure.
 const TMDB_DETAILS_IN_FLIGHT = new Map();
-async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null) {
+async function fetchTmdbDetails(tmdbId, kind, apiKey, env = null, ctx = null) {
   const key = JSON.stringify([String(tmdbId || ""), kind, apiKey]);
   const existing = TMDB_DETAILS_IN_FLIGHT.get(key);
   if (existing) return await existing;
-  const pending = fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env);
+  const pending = fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env, ctx);
   TMDB_DETAILS_IN_FLIGHT.set(key, pending);
   try { return await pending; }
   finally { TMDB_DETAILS_IN_FLIGHT.delete(key); }
 }
 
-async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null) {
+async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null, ctx = null) {
   let cleanTmdbId = String(tmdbId || "").trim();
   while (cleanTmdbId.startsWith("tmdb:")) {
     cleanTmdbId = cleanTmdbId.slice(5).trim();
@@ -25349,8 +25349,12 @@ async function fetchTmdbDetailsUncoalesced(tmdbId, kind, apiKey, env = null) {
 
   // Persist to Cloudflare KV for 30 days so no other worker or edge ever re-queries this ID
   if (env && env.CONFIGS && imdbId) {
+    // Handed to waitUntil when there is a ctx, so a response that finishes
+    // first cannot cancel it; awaited when there is not (BA-006).
     try {
-      env.CONFIGS.put(`tmdbdetail_v2:${kind}:${cleanTmdbId}`, JSON.stringify(result), { expirationTtl: 2592000 }).catch(() => {});
+      const put = Promise.resolve(env.CONFIGS.put(`tmdbdetail_v2:${kind}:${cleanTmdbId}`, JSON.stringify(result), { expirationTtl: 2592000 })).catch(() => {});
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(put);
+      else await put;
     } catch {}
   }
   return result;
@@ -25782,7 +25786,7 @@ async function fetchTmdbChart(entry, skip, apiKey, chartKey, region, hideNonDigi
         return true;
       }) : windowItems;
       const resolved = await mapWithConcurrency(uniqueItems, TMDB_DETAIL_RESOLVE_CONCURRENCY, async (it) => {
-        const details = await fetchTmdbDetails(it.id, wantKind, apiKey, env);
+        const details = await fetchTmdbDetails(it.id, wantKind, apiKey, env, ctx);
         if (!details.imdbId) return null;
         if (applyDigitalFilter && details.hasDigitalRelease === false) return null;
         return mapTmdbItem(it, details.imdbId, entry.type, details.videos, details);
@@ -29374,7 +29378,7 @@ async function searchCatalogMetas(query, type, skip, apiKey, env, ctx, origin) {
   const resolved = await mapWithConcurrency(candidates, 8, async (item) => {
     let imdbId = null;
     try {
-      const details = await fetchTmdbDetails(item.id, kind, effectiveKey, env);
+      const details = await fetchTmdbDetails(item.id, kind, effectiveKey, env, ctx);
       if (details && details.imdbId) imdbId = details.imdbId;
     } catch {}
 
@@ -92810,7 +92814,7 @@ Sitemap: ${url.origin}/sitemap.xml`;
             if (!rawTmdbId) return;
             const kind = (m.type === "series" || m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv") ? "tv" : "movie";
             try {
-              const details = await fetchTmdbDetails(rawTmdbId, kind, effectiveTmdbKey, env);
+              const details = await fetchTmdbDetails(rawTmdbId, kind, effectiveTmdbKey, env, ctx);
               if (details && typeof details.vote_average === "number" && details.vote_average > 0) {
                 m.vote_average = details.vote_average;
                 m.rating = details.vote_average;
@@ -93578,7 +93582,7 @@ function generateSearchVariations(query) {
         // Always the shared key -- 2 outbound TMDB calls per request.
         ctx.waitUntil(bumpStatBy(env, "apiuse:tmdb", 2));
         const [details, showRes] = await Promise.all([
-          fetchTmdbDetails(tmdbId, "tv", TMDB_API_KEY, env),
+          fetchTmdbDetails(tmdbId, "tv", TMDB_API_KEY, env, ctx),
           fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${encodeURIComponent(TMDB_API_KEY)}&append_to_response=episode_groups`, {
             headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
             cf: { cacheTtl: 3600, cacheEverything: true },

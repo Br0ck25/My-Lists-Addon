@@ -354,6 +354,51 @@ describe("streaming service rows", () => {
     assert.equal(failures, 2);
   });
 
+  // BA-006: the 30-day detail cache write used to be fired and forgotten, so a
+  // response that finished first could cancel it and the title was asked of TMDB again.
+  describe("the 30-day TMDB detail cache write is not left to chance", () => {
+    function slowKv(log) {
+      return {
+        get: async () => null,
+        put: (key, value) => new Promise((resolve) => setTimeout(() => { log.push(key); resolve(); }, 20)),
+      };
+    }
+    function respond(isolated) {
+      isolated.sandbox.fetch = async () => new Response(JSON.stringify({ external_ids: { imdb_id: "tt0000077" } }), { status: 200 });
+    }
+
+    it("is handed to ctx.waitUntil when a ctx is given, and the caller does not wait for it", async () => {
+      const isolated = loadServer();
+      respond(isolated);
+      const written = [];
+      const waited = [];
+      const ctx = { waitUntil: (p) => waited.push(p) };
+      const details = await isolated.sandbox.fetchTmdbDetails(77, "movie", "key-ba6a", { CONFIGS: slowKv(written) }, ctx);
+      assert.equal(details.imdbId, "tt0000077");
+      assert.equal(waited.length, 1, "the write was given to waitUntil");
+      assert.deepEqual(written, [], "the caller was not held up by the write");
+      await Promise.all(waited);
+      assert.deepEqual(written, ["tmdbdetail_v2:movie:77"]);
+    });
+
+    it("is finished before the call returns when there is no ctx to hand it to", async () => {
+      const isolated = loadServer();
+      respond(isolated);
+      const written = [];
+      await isolated.sandbox.fetchTmdbDetails(78, "movie", "key-ba6b", { CONFIGS: slowKv(written) });
+      assert.deepEqual(written, ["tmdbdetail_v2:movie:78"]);
+    });
+
+    it("a failing cache write never fails the lookup", async () => {
+      const isolated = loadServer();
+      respond(isolated);
+      const kv = { get: async () => null, put: async () => { throw new Error("KV down"); } };
+      const ctx = { waitUntil: (p) => p.catch(() => {}) };
+      assert.equal((await isolated.sandbox.fetchTmdbDetails(79, "movie", "key-ba6c", { CONFIGS: kv }, ctx)).imdbId, "tt0000077");
+      assert.equal((await isolated.sandbox.fetchTmdbDetails(80, "movie", "key-ba6d", { CONFIGS: kv })).imdbId, "tt0000077");
+    });
+  });
+
   it("refuses partial or malformed Discover pages for the new rows", async () => {
     const isolated = loadServer();
     isolated.sandbox.fetch = async (url) => {
