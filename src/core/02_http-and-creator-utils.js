@@ -5994,6 +5994,7 @@ async function getCreatorList(env, username, slug) {
   return null;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isEpisodeAired; tests/server-client-parity.test.mjs keeps them equal.
 function isEpisodeAired(airDateStr) {
   if (!airDateStr) return false;
   const parts = String(airDateStr).split(/[-T\s]/);
@@ -6009,6 +6010,7 @@ function isEpisodeAired(airDateStr) {
   return d.getTime() < today.getTime();
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isGenericEpisodeTitle; tests/server-client-parity.test.mjs keeps them equal.
 function isGenericEpisodeTitle(title, episodeNum) {
   if (!title || typeof title !== "string") return true;
   const t = title.trim();
@@ -6108,6 +6110,7 @@ function formatAirTimeLabel(time, timezone) {
   return zone ? (clock + " " + zone) : clock;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:formatAirDateBadge; tests/server-client-parity.test.mjs keeps them equal.
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
   const parts = String(airDateStr).split(/[-T\s]/);

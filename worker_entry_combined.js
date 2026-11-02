@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5d83ad2321";
+const WORKER_BUILD = "ba4d923ba2";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -9831,6 +9831,7 @@ async function getCreatorList(env, username, slug) {
   return null;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isEpisodeAired; tests/server-client-parity.test.mjs keeps them equal.
 function isEpisodeAired(airDateStr) {
   if (!airDateStr) return false;
   const parts = String(airDateStr).split(/[-T\s]/);
@@ -9846,6 +9847,7 @@ function isEpisodeAired(airDateStr) {
   return d.getTime() < today.getTime();
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isGenericEpisodeTitle; tests/server-client-parity.test.mjs keeps them equal.
 function isGenericEpisodeTitle(title, episodeNum) {
   if (!title || typeof title !== "string") return true;
   const t = title.trim();
@@ -9945,6 +9947,7 @@ function formatAirTimeLabel(time, timezone) {
   return zone ? (clock + " " + zone) : clock;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:formatAirDateBadge; tests/server-client-parity.test.mjs keeps them equal.
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
   const parts = String(airDateStr).split(/[-T\s]/);
@@ -18455,6 +18458,7 @@ function publicChannelRowPayload(s) {
   return (p && typeof p === "object" && !Array.isArray(p)) ? p : null;
 }
 
+// Twin of src/client/16_client-row-core.js:isPublicChannelRow; tests/server-client-parity.test.mjs keeps them equal.
 function isPublicChannelRow(s) {
   const p = publicChannelRowPayload(s);
   if (!p) return false;
@@ -19517,6 +19521,7 @@ function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomTe
 </svg>`;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isAdultOrNsfw; tests/server-client-parity.test.mjs keeps them equal.
 function isAdultOrNsfw(item) {
   if (!item) return false;
   if (item.adult === true || item.isAdult === true) return true;
@@ -19617,6 +19622,7 @@ function generateSafePosterSvg({ title, year, type, certification }) {
 </svg>`;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:getSafePosterUrl; tests/server-client-parity.test.mjs keeps them equal.
 function getSafePosterUrl(origin, { title, year, type, certification }) {
   const params = new URLSearchParams();
   if (title) params.set("title", title);
@@ -42130,6 +42136,7 @@ function rowNeedsAccount(url) {
 
 // A storyline or an Explore Channels listing, added as it is. Mirrors
 // isPublicChannelRow (04_config-resolution.js).
+// Twin of src/core/04_config-resolution.js:isPublicChannelRow; tests/server-client-parity.test.mjs keeps them equal.
 function isPublicChannelRow(s) {
   let p = null;
   try {
@@ -48286,6 +48293,7 @@ function deleteCustomCollection(id) {
   }
 }
 
+// Twin of src/api/61_media-app-sync.js:extractNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function extractNuvioCollections(raw) {
   let val = raw;
   if (typeof val === 'string') {
@@ -48340,6 +48348,7 @@ function stripMediaSuffix(str) {
   return String(str).replace(re, '').replace(re, '').trim();
 }
 
+// Twin of src/api/61_media-app-sync.js:addNewNuvioCollection; tests/server-client-parity.test.mjs keeps them equal.
 function addNewNuvioCollection(existing, incoming, options) {
   const opts = options || {};
   const existingArr = extractNuvioCollections(existing);
@@ -48394,6 +48403,7 @@ function addNewNuvioCollection(existing, incoming, options) {
   return cleanedExisting.concat(newCols);
 }
 
+// Twin of src/api/61_media-app-sync.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function mergeNuvioCollections(existing, incoming) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
@@ -48718,6 +48728,7 @@ function syncCollectionsToNuvio() {
 
 // These are IDs that My Lists itself uses when creating Nuvio collections.
 // Titles and catalog addon IDs are not proof of who created a collection.
+// Twin of src/api/61_media-app-sync.js:isMyListsNuvioCollectionId; tests/server-client-parity.test.mjs keeps them equal.
 function isMyListsNuvioCollectionId(id) {
   const value = String(id || '');
   return value === 'my-lists-collections' || value === 'my-lists-addon' || value.indexOf('col_mylists_') === 0;
@@ -51399,6 +51410,7 @@ function isAdultContentFilterEnabled() {
   return false;
 }
 
+// Twin of src/catalog/05_catalog-core.js:isAdultOrNsfw; tests/server-client-parity.test.mjs keeps them equal.
 function isAdultOrNsfw(item) {
   if (!item) return false;
   if (item.adult === true || item.isAdult === true) return true;
@@ -51420,6 +51432,7 @@ function isAdultOrNsfw(item) {
   return false;
 }
 
+// Twin of src/catalog/05_catalog-core.js:getSafePosterUrl; tests/server-client-parity.test.mjs keeps them equal.
 function getSafePosterUrl(item) {
   const safeOrigin = typeof ORIGIN !== 'undefined' ? ORIGIN : '';
   const safeTitle = (item && (item.title || item.name || item.showTitle)) || '';
@@ -53843,6 +53856,7 @@ document.addEventListener('click', async (e) => {
 // updateContinueWatching (21_client-custom-list-builder.js) and
 // markShowWatched (also 21) to exclude future episodes from "fully
 // watched" detection and from what Mark Whole Show Watched fetches.
+// Twin of src/core/02_http-and-creator-utils.js:isEpisodeAired; tests/server-client-parity.test.mjs keeps them equal.
 function isEpisodeAired(ep) {
   if (!ep) return false;
   const dateStr = (typeof ep === 'string') ? ep : (ep.air_date || ep.airDate || '');
@@ -53861,6 +53875,7 @@ function isEpisodeAired(ep) {
   return airDate.getTime() < today.getTime();
 }
 
+// Twin of src/core/02_http-and-creator-utils.js:isGenericEpisodeTitle; tests/server-client-parity.test.mjs keeps them equal.
 function isGenericEpisodeTitle(title, episodeNum) {
   if (!title || typeof title !== 'string') return true;
   const t = title.trim();
@@ -54215,6 +54230,7 @@ function watchItemAirDateBadgeHtml(it) {
 }
 window.watchItemAirDateBadgeHtml = watchItemAirDateBadgeHtml;
 
+// Twin of src/core/02_http-and-creator-utils.js:formatAirDateBadge; tests/server-client-parity.test.mjs keeps them equal.
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
   const parts = String(airDateStr).split(/[-T\\s]/);
@@ -121574,6 +121590,7 @@ function mediaAppSyncSummary(row) {
   };
 }
 
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:extractNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function extractNuvioCollections(raw) {
   let val = raw;
   if (typeof val === "string") {
@@ -121623,11 +121640,13 @@ function extractNuvioCollections(raw) {
 
 // My Lists owns these collection IDs; catalog sources or display names alone
 // do not identify the collection creator.
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:isMyListsNuvioCollectionId; tests/server-client-parity.test.mjs keeps them equal.
 function isMyListsNuvioCollectionId(id) {
   const value = String(id || "");
   return value === "my-lists-collections" || value === "my-lists-addon" || value.startsWith("col_mylists_");
 }
 
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:addNewNuvioCollection; tests/server-client-parity.test.mjs keeps them equal.
 function addNewNuvioCollection(existing, incoming, options = {}) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
@@ -121717,6 +121736,7 @@ function mergeIntoNuvioCollection(existing, incoming, targetId) {
   return existingArr.map((c, i) => (i === idx ? target : c));
 }
 
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function mergeNuvioCollections(existing, incoming) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);

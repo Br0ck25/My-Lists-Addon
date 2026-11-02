@@ -669,6 +669,7 @@ function publicChannelRowPayload(s) {
   return (p && typeof p === "object" && !Array.isArray(p)) ? p : null;
 }
 
+// Twin of src/client/16_client-row-core.js:isPublicChannelRow; tests/server-client-parity.test.mjs keeps them equal.
 function isPublicChannelRow(s) {
   const p = publicChannelRowPayload(s);
   if (!p) return false;

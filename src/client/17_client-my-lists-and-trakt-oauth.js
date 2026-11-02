@@ -4414,6 +4414,7 @@ function deleteCustomCollection(id) {
   }
 }
 
+// Twin of src/api/61_media-app-sync.js:extractNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function extractNuvioCollections(raw) {
   let val = raw;
   if (typeof val === 'string') {
@@ -4468,6 +4469,7 @@ function stripMediaSuffix(str) {
   return String(str).replace(re, '').replace(re, '').trim();
 }
 
+// Twin of src/api/61_media-app-sync.js:addNewNuvioCollection; tests/server-client-parity.test.mjs keeps them equal.
 function addNewNuvioCollection(existing, incoming, options) {
   const opts = options || {};
   const existingArr = extractNuvioCollections(existing);
@@ -4522,6 +4524,7 @@ function addNewNuvioCollection(existing, incoming, options) {
   return cleanedExisting.concat(newCols);
 }
 
+// Twin of src/api/61_media-app-sync.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function mergeNuvioCollections(existing, incoming) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
@@ -4846,6 +4849,7 @@ function syncCollectionsToNuvio() {
 
 // These are IDs that My Lists itself uses when creating Nuvio collections.
 // Titles and catalog addon IDs are not proof of who created a collection.
+// Twin of src/api/61_media-app-sync.js:isMyListsNuvioCollectionId; tests/server-client-parity.test.mjs keeps them equal.
 function isMyListsNuvioCollectionId(id) {
   const value = String(id || '');
   return value === 'my-lists-collections' || value === 'my-lists-addon' || value.indexOf('col_mylists_') === 0;
