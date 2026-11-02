@@ -32,6 +32,13 @@ async function preview(env, url, type) {
 function easternDay(ms = Date.now()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 }
+// Calendar "yesterday" (not now - 24h, which repeats today during the last
+// hour of the 25-hour clocks-go-back day).
+function easternYesterday() {
+  const d = new Date(easternDay() + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
 
 describe("My Lists Addon Most Watched catalog", () => {
   it("ranks titles by how often they were watched, split into movies and shows", async () => {
@@ -104,7 +111,7 @@ describe("My Lists Addon Most Watched catalog", () => {
     // Midnight: every watch recorded so far becomes yesterday's, and the
     // snapshot is yesterday's too.
     async function nextDay(env) {
-      const yesterday = easternDay(Date.now() - 864e5);
+      const yesterday = easternYesterday();
       env.DB._db.prepare("UPDATE stats SET day = ? WHERE kind LIKE 'evt:watched:%' AND day = ?").run(yesterday, easternDay());
       const snap = JSON.parse(await env.CONFIGS.get(KEY));
       snap.day = yesterday;

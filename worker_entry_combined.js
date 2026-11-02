@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4a403ac54b";
+const WORKER_BUILD = "46ced621c7";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -11004,6 +11004,15 @@ function easternDateKey(date) {
   }).format(date);
 }
 
+// Eastern calendar date n days before nowMs. Calendar arithmetic, not
+// nowMs - n * 24h: Eastern days are 23 or 25 hours long on the two DST change
+// days, where the 24h subtraction repeats one date and skips another.
+function easternDateKeyDaysAgo(nowMs, n) {
+  const d = new Date(easternDateKey(new Date(nowMs)) + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 function statsToday() {
   return easternDateKey(new Date());
 }
@@ -11694,7 +11703,7 @@ async function d1CountsByKindPrefix(env, prefix, window, candidateCap) {
   } else {
     const days = window === "today" ? 1 : parseInt(window, 10) || 7;
     const nowMs = Date.now();
-    const oldest = easternDateKey(new Date(nowMs - (days - 1) * 86400000));
+    const oldest = easternDateKeyDaysAgo(nowMs, days - 1);
     const newest = easternDateKey(new Date(nowMs));
     rows = await env.DB.prepare(
       "SELECT kind, SUM(n) AS total FROM stats WHERE kind >= ? AND kind < ? AND day >= ? AND day <= ? GROUP BY kind ORDER BY total DESC LIMIT ?"
@@ -11750,7 +11759,7 @@ async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
     const nowMs = Date.now();
     const dateKeys = [];
     for (let i = 0; i < days; i++) {
-      dateKeys.push(easternDateKey(new Date(nowMs - i * 86400000)));
+      dateKeys.push(easternDateKeyDaysAgo(nowMs, i));
     }
     // Union of every title id that had any activity anywhere in this window.
     const indexResults = await Promise.all(dateKeys.map((d) => env.CONFIGS.get(`evtdayindex:${eventType}:${d}`)));
@@ -11999,7 +12008,7 @@ async function computeSearchLeaderboard(env, window) {
   const nowMs = Date.now();
   const dateKeys = [];
   for (let i = 0; i < days; i++) {
-    dateKeys.push(easternDateKey(new Date(nowMs - i * 86400000)));
+    dateKeys.push(easternDateKeyDaysAgo(nowMs, i));
   }
 
   // Union of every query that had any activity anywhere in this window,
@@ -13669,7 +13678,7 @@ async function renderAdminDashboard(env) {
   // Requests that still sent the Account Key where the session would do
   // (Release 19): today, and the last 7 days.
   let authKeyWeek = 0;
-  for (let i = 0; i < 7; i++) authKeyWeek += Number(authKeyByDay[easternDateKey(new Date(Date.now() - i * 86400000))]) || 0;
+  for (let i = 0; i < 7; i++) authKeyWeek += Number(authKeyByDay[easternDateKeyDaysAgo(Date.now(), i)]) || 0;
   const authKeyToday = Number(authKeyByDay[today]) || 0;
 
   // Walks the last 30 calendar days explicitly (rather than just listing
@@ -13680,7 +13689,7 @@ async function renderAdminDashboard(env) {
   const rows = [];
   const nowMs = Date.now();
   for (let i = 0; i < 30; i++) {
-    const key = easternDateKey(new Date(nowMs - i * 86400000));
+    const key = easternDateKeyDaysAgo(nowMs, i);
     rows.push(`<tr><td>${key}</td><td>${pvByDay[key] || 0}</td><td>${inByDay[key] || 0}</td><td>${ppByDay[key] || 0}</td></tr>`);
   }
 
@@ -106226,7 +106235,7 @@ function generateSearchVariations(query) {
         const byDay = await loadStatsByDay(env, `apiuse:${d.name}`);
         let last24h = 0, last7d = 0, last30d = 0;
         for (let i = 0; i < 30; i++) {
-          const count = byDay[easternDateKey(new Date(nowMs - i * 86400000))] || 0;
+          const count = byDay[easternDateKeyDaysAgo(nowMs, i)] || 0;
           if (i < 1) last24h += count;
           if (i < 7) last7d += count;
           last30d += count;

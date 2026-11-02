@@ -7039,7 +7039,7 @@
         const byDay = await loadStatsByDay(env, `apiuse:${d.name}`);
         let last24h = 0, last7d = 0, last30d = 0;
         for (let i = 0; i < 30; i++) {
-          const count = byDay[easternDateKey(new Date(nowMs - i * 86400000))] || 0;
+          const count = byDay[easternDateKeyDaysAgo(nowMs, i)] || 0;
           if (i < 1) last24h += count;
           if (i < 7) last7d += count;
           last30d += count;
