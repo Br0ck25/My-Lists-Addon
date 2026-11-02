@@ -1288,6 +1288,17 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0023", kind: "table", name: "media_app_sync",
     consequence: "Connecting a Stremio or Nuvio account answers \"isn't available right now\", and nothing is pulled from them. Nothing else changes.",
+  },  {
+    migration: "0024", kind: "column", table: "scrobble_tokens", name: "token_hash",
+    consequence: "Media-server webhook tokens stay stored as plain text in D1 and KV instead of as a hash. Webhooks keep working.",
+  },
+  {
+    migration: "0024", kind: "column", table: "scrobble_tokens", name: "token_enc",
+    consequence: "Media-server webhook tokens stay stored as plain text in D1 and KV instead of encrypted. Webhooks keep working.",
+  },
+  {
+    migration: "0024", kind: "index", name: "idx_scrobble_tokens_hash",
+    consequence: "Looking up a webhook token by its hash scans the whole scrobble_tokens table. Slower, not broken.",
   },
 ];
 

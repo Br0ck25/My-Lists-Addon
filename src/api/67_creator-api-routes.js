@@ -582,7 +582,7 @@ async function creatorApiScrobbleToken(request, env, ctx, path) {
   if (!auth.ok) {
     return authFailureResponse(auth);
   }
-  const token = await getOrCreateScrobbleToken(env, auth.username, body.rotate === true);
+  const token = await getOrCreateScrobbleTokenSecure(env, auth.username, body.rotate === true);
   if (!token) return json({ ok: false, error: "Could not issue a webhook token." }, 500);
   return json({ ok: true, token }, 200, { "Cache-Control": "no-store" });
 }

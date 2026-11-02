@@ -139,7 +139,7 @@ async function authenticateScrobbleRequest(url, env) {
   let authForm = "";
 
   if (scrobbleToken) {
-    const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
+    const tokenUser = await usernameForScrobbleTokenSecure(env, scrobbleToken);
     // An account in the middle of deletion has a tombstone before its token
     // is purged. The key and config forms below already check it; without
     // this a ping in that window wrote tracking the purge then had to
