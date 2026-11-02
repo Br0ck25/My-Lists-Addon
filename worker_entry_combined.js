@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a3fee60b71";
+const WORKER_BUILD = "e80ac204a6";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -17787,6 +17787,21 @@ ${UTILITY_CSS}
 // configs are virtually always much longer than that (even a single list's
 // JSON encodes to well over 100 characters), so length alone reliably
 // tells the two apart without needing a prefix.
+// The header block every Trakt call sends (CQ-05). Authorization is added only
+// when there is a token; apiKey is the site's Trakt app id unless the caller
+// brings the person's own. Kept beside fetchTraktWithRetry
+// (02_http-and-creator-utils.js), in its own file because that one is over the
+// size baseline and may only shrink.
+function traktHeaders(accessToken, apiKey = TRAKT_CLIENT_ID) {
+  const headers = {
+    "Content-Type": "application/json",
+    "trakt-api-version": "2",
+    "trakt-api-key": apiKey,
+    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
+  };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return headers;
+}
 const SHORT_ID_LENGTH = 12;
 
 // Stored install configs live under a namespace like every other key.
