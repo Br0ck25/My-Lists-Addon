@@ -60,6 +60,14 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Size rule for functions and files (built 2026-11-02, stamp 4fe457f88f)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-18). Nothing you see on the site changes.
+
+- **New code may not grow big.** A new function over 150 lines, or a new source file over 3,000 lines, now fails the tests (`tests/size-budget.test.mjs`).
+- **The things already over the limit are listed, not fixed** (`tests/size-budget.json`: 30 functions and 15 files, `handleFetch` is the biggest). Each may only get smaller: if one grows the test fails, and when one drops under the limit the test asks you to remove it from the list. `node tests/size-budget.test.mjs --update` lowers the numbers for you but never raises one.
+- **How I proved it works:** I added a 160-line function and the test failed; I added one line to `handleFetch` and it failed; both were reverted.
+
 ## Wizard route removed, twin-function guard, shared Trakt helper (built 2026-11-02, stamp 4fe457f88f)
 
 From `docs/CODE_QUALITY_AUDIT.md` (CQ-08 finish, CQ-03, CQ-04 step 1); each is one commit. Nothing you see on the site changes.

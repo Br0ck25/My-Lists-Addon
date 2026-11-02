@@ -54,6 +54,7 @@ Every change to what the user sees (buttons, colours, spacing, text sizes, modal
 - **UI contract:** `node tests/ui-contract.mjs` (CI job `ui-contract`) fails when a shared component's computed look changes. Accept an intended change with `--update` and keep the `tests/ui-contract.json` diff in the commit.
 - **Pre-commit hook:** `git config core.hooksPath .githooks` (once per clone).
 - **Release:** bump `WORKER_RELEASE` and add the entry to `docs/RELEASES.md`. Protection settings and the PR checklist: `docs/REPO_PROTECTION.md`, `.github/pull_request_template.md`.
+- **Size limits:** new functions ≤ 150 lines and source files ≤ 3,000 lines. `tests/size-budget.test.mjs` fails on anything new over the limit or any listed item that grew; `tests/size-budget.json` may only shrink (`node tests/size-budget.test.mjs --update` lowers it, never raises it).
 - Never skip, disable or loosen a test to get green. If a guard is wrong, change the guard and say why in the commit.
 
 ---

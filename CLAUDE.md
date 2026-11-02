@@ -15,6 +15,7 @@
 9. **Unrelated dead code:** mention it, don't delete it. Remove only what your own change made unused.
 10. **Tests check why, not just what.** A new test must fail if the business logic changes. For a bug, write the failing test first, then make it pass.
 11. **Multi-step work:** state a short plan with a check after each step.
+12. **Size limits:** functions ≤ 150 lines, source files ≤ 3,000 lines for new code; `tests/size-budget.test.mjs` enforces it and the baseline in `tests/size-budget.json` may only shrink (`node tests/size-budget.test.mjs --update` lowers it, never raises it).
 
 ## Finding code cheaply
 - "Which file?": read `docs/FILE-INDEX.md` (5KB, one line per source file).
