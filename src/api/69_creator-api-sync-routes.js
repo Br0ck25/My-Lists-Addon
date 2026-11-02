@@ -306,6 +306,7 @@ async function creatorApiSyncLoad(request, env, ctx, path) {
       data = null;
     }
   }
+  if (data && data.keys) data.keys = await openSyncKeys(env, auth.username, data.keys);
   if (d1UserLists) {
     if (!data) {
       data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };

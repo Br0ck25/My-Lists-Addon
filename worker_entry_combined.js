@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "96246598ab";
+const WORKER_BUILD = "c4dcdeab93";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -5577,54 +5577,10 @@ function creatorLookupHashKey(username) {
   return `creatorlookuphash:${username}`;
 }
 
-// SEC-01: removes the unsalted SHA-256 copies (D1 rows and KV keys) of one
-// account's key but leaves accounts.key_lookup_hmac alone. deleteCreatorKeyLookup
-// clears the HMAC too, which is wrong once the HMAC is what the account uses.
-async function deleteLegacyCreatorKeyLookup(env, username) {
-  if (!env || !username) return;
-  if (env.DB) {
-    try {
-      await env.DB.prepare("DELETE FROM creator_key_lookups WHERE username = ?").bind(username).run();
-    } catch (dbErr) {
-      console.error("D1 delete error (deleteLegacyCreatorKeyLookup):", dbErr);
-    }
-  }
-  if (env.CONFIGS) {
-    try {
-      const oldHash = await env.CONFIGS.get(creatorLookupHashKey(username));
-      if (oldHash) await env.CONFIGS.delete(creatorKeyLookupKey(oldHash));
-      await env.CONFIGS.delete(creatorLookupHashKey(username));
-    } catch (kvErr) {
-      console.error("KV delete error (deleteLegacyCreatorKeyLookup):", kvErr);
-    }
-  }
-}
-
-// Writes the peppered HMAC to the account row. True only when a row changed,
-// so a caller never drops the legacy copy for an account that has no HMAC.
-async function writeKeyLookupHmac(env, key, username) {
-  if (!env || !env.DB || !env.LOOKUP_PEPPER) return false;
-  try {
-    const hmac = await hmacLookupKey(key, env);
-    if (!hmac) return false;
-    const res = await env.DB.prepare(
-      "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
-    ).bind(hmac, username).run();
-    return Boolean(res && res.meta && res.meta.changes > 0);
-  } catch (hmacErr) {
-    console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
-    return false;
-  }
-}
-
 async function storeCreatorKeyLookup(env, key, username) {
   if (!env || !key || !username) return;
-  // SEC-01: with the pepper set and the HMAC stored, the unsalted SHA-256 copy
-  // is not written at all, and any older one for this account is removed.
-  if (await writeKeyLookupHmac(env, key, username)) {
-    await deleteLegacyCreatorKeyLookup(env, username);
-    return;
-  }
+  // SEC-01: HMAC stored -> no unsalted SHA-256 copy (see writeKeyLookupHmac).
+  if (await writeKeyLookupHmac(env, key, username)) return deleteLegacyCreatorKeyLookup(env, username);
   const lookupHash = await creatorKeyLookupHash(key);
   if (!lookupHash) return;
   const now = Date.now();
@@ -13077,7 +13033,6 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
   "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
-  "/admin/api/key-lookup-cleanup": "admin.accounts.drop-legacy-key-lookups",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
 };
 const ADMIN_AUDIT_GET_MUTATORS = new Set();
@@ -93183,6 +93138,33 @@ async function connectionSuppliedConfigFields(env, accountId) {
   }
   return fields;
 }
+// SEC-02: the provider keys and tokens of the cloud-sync blob (creatorsync:<name>.keys)
+// are stored as { enc: "<encryptToken(JSON)>" } when TOKEN_ENCRYPTION_KEY is set,
+// bound to the account name. openSyncKeys also accepts the old plain object, so
+// nothing has to be migrated: a blob is sealed the next time it is saved. With no
+// encryption key both functions pass the plain object through, as before.
+function syncKeysContext(username) {
+  return "creatorsync:" + String(username || "");
+}
+
+async function sealSyncKeys(env, username, keys) {
+  if (!keys || typeof keys !== "object" || !Object.keys(keys).length || !hasTokenEncryptionKey(env)) return keys;
+  return { enc: await encryptToken(JSON.stringify(keys), env, syncKeysContext(username)) };
+}
+
+// Always a plain object. A sealed value that cannot be opened (key removed from
+// the ring, copied from another account) reads as empty rather than throwing.
+async function openSyncKeys(env, username, stored) {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+  if (typeof stored.enc !== "string") return stored;
+  try {
+    const plain = JSON.parse(await decryptToken(stored.enc, env, syncKeysContext(username)));
+    return plain && typeof plain === "object" && !Array.isArray(plain) ? plain : {};
+  } catch (err) {
+    console.error("Could not open the sealed sync keys:", err && err.message);
+    return {};
+  }
+}
 
 // --- Media: one row per movie or show (Phase 3b, P3b-2) ----------------------
 //
@@ -105088,6 +105070,46 @@ async function cleanLegacyKeyLookups(env, { cursor, limit, apply } = {}) {
   }
   return out;
 }
+
+// SEC-01: removes the unsalted SHA-256 copies (D1 rows and KV keys) of one
+// account's key but leaves accounts.key_lookup_hmac alone. deleteCreatorKeyLookup
+// clears the HMAC too, which is wrong once the HMAC is what the account uses.
+async function deleteLegacyCreatorKeyLookup(env, username) {
+  if (!env || !username) return;
+  if (env.DB) {
+    try {
+      await env.DB.prepare("DELETE FROM creator_key_lookups WHERE username = ?").bind(username).run();
+    } catch (dbErr) {
+      console.error("D1 delete error (deleteLegacyCreatorKeyLookup):", dbErr);
+    }
+  }
+  if (env.CONFIGS) {
+    try {
+      const oldHash = await env.CONFIGS.get(creatorLookupHashKey(username));
+      if (oldHash) await env.CONFIGS.delete(creatorKeyLookupKey(oldHash));
+      await env.CONFIGS.delete(creatorLookupHashKey(username));
+    } catch (kvErr) {
+      console.error("KV delete error (deleteLegacyCreatorKeyLookup):", kvErr);
+    }
+  }
+}
+
+// Writes the peppered HMAC to the account row. True only when a row changed,
+// so a caller never drops the legacy copy for an account that has no HMAC.
+async function writeKeyLookupHmac(env, key, username) {
+  if (!env || !env.DB || !env.LOOKUP_PEPPER) return false;
+  try {
+    const hmac = await hmacLookupKey(key, env);
+    if (!hmac) return false;
+    const res = await env.DB.prepare(
+      "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
+    ).bind(hmac, username).run();
+    return Boolean(res && res.meta && res.meta.changes > 0);
+  } catch (hmacErr) {
+    console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
+    return false;
+  }
+}
 // --- Shared channels no account owns ------------------------------------------
 //
 // Shares used to need no account, so some channel links were minted with no
@@ -108183,8 +108205,9 @@ async function authenticateScrobbleRequest(url, env) {
       const rawSync = await env.CONFIGS.get(`creatorsync:${authUser}`);
       if (rawSync) {
         const syncObj = JSON.parse(rawSync);
-        if (syncObj && syncObj.keys && syncObj.keys.tmdbKey) {
-          effectiveTmdbKey = String(syncObj.keys.tmdbKey).trim();
+        const syncKeys = syncObj && syncObj.keys ? await openSyncKeys(env, authUser, syncObj.keys) : null;
+        if (syncKeys && syncKeys.tmdbKey) {
+          effectiveTmdbKey = String(syncKeys.tmdbKey).trim();
         }
       }
     } catch {}
@@ -112504,7 +112527,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
     try {
       const current = JSON.parse(currentRaw);
       currentUpdatedAt = Number(current.updatedAt) || 0;
-      currentKeys = current.keys && typeof current.keys === "object" ? current.keys : null;
+      currentKeys = current.keys && typeof current.keys === "object" ? await openSyncKeys(env, auth.username, current.keys) : null;
       if (expectedUpdatedAt !== null && currentUpdatedAt > expectedUpdatedAt) {
         // Purely for visibility -- this was previously invisible even
         // to us; now it's at least countable on the admin dashboard.
@@ -112536,7 +112559,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
 
   const blob = {
     config: Array.isArray(body.config) ? body.config : [],
-    keys: mergedKeys,
+    keys: await sealSyncKeys(env, auth.username, mergedKeys),
     collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
     likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
     hiddenLists: Array.isArray(body.hiddenLists) ? body.hiddenLists.map(String) : [],
@@ -113456,6 +113479,7 @@ async function creatorApiSyncLoad(request, env, ctx, path) {
       data = null;
     }
   }
+  if (data && data.keys) data.keys = await openSyncKeys(env, auth.username, data.keys);
   if (d1UserLists) {
     if (!data) {
       data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };

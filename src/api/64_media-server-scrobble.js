@@ -174,8 +174,9 @@ async function authenticateScrobbleRequest(url, env) {
       const rawSync = await env.CONFIGS.get(`creatorsync:${authUser}`);
       if (rawSync) {
         const syncObj = JSON.parse(rawSync);
-        if (syncObj && syncObj.keys && syncObj.keys.tmdbKey) {
-          effectiveTmdbKey = String(syncObj.keys.tmdbKey).trim();
+        const syncKeys = syncObj && syncObj.keys ? await openSyncKeys(env, authUser, syncObj.keys) : null;
+        if (syncKeys && syncKeys.tmdbKey) {
+          effectiveTmdbKey = String(syncKeys.tmdbKey).trim();
         }
       }
     } catch {}
