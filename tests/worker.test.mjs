@@ -2138,7 +2138,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -4960,7 +4960,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
@@ -9254,7 +9254,7 @@ describe("the last open items from the 2026-09-05 audit", () => {
     const admin = fs.readFileSync(path.join(REPO_ROOT, "src/admin/03_admin.js"), "utf8");
     assert.match(admin, /KV has no atomic increment/,
       "bumpStat's KV path is lossy on purpose; the D1 branch is the answer for anyone who needs exact counters");
-    const routes = fs.readFileSync(path.join(REPO_ROOT, "src/api/25_api-catalog-routes.js"), "utf8");
+    const routes = fs.readFileSync(path.join(REPO_ROOT, "src/api/78_save-and-like-routes.js"), "utf8"); // the /api/save and /api/lists/like routes (and their comments) moved here out of handleFetch (CQ-01)
     assert.match(routes, /The id IS somebody's install\s*\n\s*\/\/ URL/,
       "no TTL on /api/save: expiring it breaks a live install months later");
     assert.match(routes, /\/api\/publish-list was removed in 1\.5\.3/,
