@@ -29,11 +29,13 @@ Scope: code quality, architecture, technical debt, dead code, duplication, depen
 | CQ-13 pin CI actions to SHAs | **done** (checkout 4.4.0, setup-node 4.4.0, setup-python 5.6.0, upload-artifact 4.6.2; Dependabot keeps them current) | .github/workflows/*.yml, OPERATIONS |
 | CQ-05 shared Trakt headers | **done**: `traktHeaders(accessToken, apiKey)` in `src/core/81_trakt-headers.js`; 30 of 36 copies replaced, 6 left on purpose (different User-Agent, no Content-Type, or User-Agent from a local variable). Header count 36 → 7 (6 left + the helper) | tests/trakt-headers.test.mjs |
 | CQ-04 step 2 second continue-watching implementation | **stopped for an owner decision**: the shelf and the website list differ in four cases; comparison test committed, differences marked `todo` | tests/continue-watching-parity.test.mjs |
+| CQ-20 long parameter lists | **done**: all 21 top-level functions in `src/api/` and `src/admin/` with more than 8 parameters now take the leading `request, env, ctx` they already started with plus one destructured object; none left. 8 commits, replay byte-identical each time | 62_–77_ in `src/api/` |
 | CQ-09 flags | blocked on CQ-17 data | |
 
 ### New follow-ups found while doing the work
 - **CQ-19 Scope-check blind spot.** `tools/scope_check.mjs` accepts a free name if the same name is assigned bare or `typeof`-guarded anywhere in the bundle, so a moved function that uses `m` without receiving it passed `verify.sh --fast` (the replay caught it). Make the check per-function for names that are not real globals, with a test that reproduces the miss first.
 - **CQ-20 Long parameter lists from the mechanical split.** Some helpers take many positional parameters (e.g. `stremioCatalogRowFetch` in 70_ has 35). Behaviour is exact, but readability suffers. Optional tidy: pass one settings object, one function per commit, replay-verified. Needs an owner yes (rule 2).
+  **Status (2026-11-02): done** (owner approved). See the Progress table.
 - **Dispatcher styles.** Slices 1–4 use `async` dispatchers; slices 5–6 use plain functions returning a promise or `null` (keeps the catalog hot path free of extra awaits). Both are correct; leave as is.
 - Line references to `25_`/`26_` in this document and `docs/BACKEND_AUDIT.md` are now historical (the code moved); use `docs/FUNCTION-MAP.md` to find a symbol.
 

@@ -60,6 +60,13 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Internal tidy-up of long function inputs (built 2026-11-02, stamp 5506978fac)
+
+No change for users. This is CQ-20.
+
+- **Internal tidy-up, no change for users:** 21 helper functions in the API routes took between 9 and 35 separate inputs in a fixed order, which made them easy to mix up and hard to read. Each now takes the same values as one named group, so a call reads like `stremioCatalogRowFetch(env, ctx, { url, config, type, ... })`. Nothing else was touched. The file `src/core/03_trakt-headers.js` was also renamed to `81_trakt-headers.js` so that no two source files share a number.
+- **Proof:** the same ~2,900 requests used for the route split (152 + 261 + 1,230 + 1,299) and the 93 captured Trakt requests gave byte-identical answers and left the same stored data before and after every change.
+
 ## One Trakt header helper, and a check that the two "continue watching" lists agree (built 2026-11-02, stamp d8334b8811)
 
 No change for users. Two tidy-ups.
