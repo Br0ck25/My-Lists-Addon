@@ -60,6 +60,15 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Code clean-up: dead code removed, notes corrected (built 2026-11-02, stamp 14ed796970)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-06, CQ-07, CQ-08, CQ-11, CQ-12); each is one commit. Nothing you see on the site changes.
+
+- **The old catalog "Quick List Wizard" code is gone** (CQ-08), as you asked. It had no screen left. Its tests were removed with it because the feature was deleted, not to get the tests green. The server address it called (`/api/wizard-channel-shows`) is still there; it was not part of this job.
+- **Three tiny pass-through functions removed** (CQ-06, CQ-07): `escapeHtmlSupport`, `loadPremadeCollectionsBtn` and `onCollectionsSearchKey`. Each only called another function, and nothing else used them.
+- **Notes and comments corrected** (CQ-11, CQ-12): the AI instructions now all say to check work with `bash verify.sh -q`, the file range is `00_` to `61_`, and a stale "27 sources" count and a leftover `/mnt/project` hint were fixed.
+- **Checked, no change needed** (CQ-16 follow-up): the Most Watched chart's "today" check already uses the New York date, so it is not affected by the clock-change problem.
+
 ## Day counts on clock-change days, and where the Account Key comes from (built 2026-11-02, stamp 524aaa0a8d)
 
 From `docs/CODE_QUALITY_AUDIT.md` (CQ-16 and CQ-17, steps 1 to 3); each step is one commit.
