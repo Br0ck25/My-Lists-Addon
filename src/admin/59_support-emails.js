@@ -43,11 +43,6 @@ function base64ToBytesSupport(b64) {
   return base64ToUint8(String(b64 || "").replace(/\s+/g, ''));
 }
 
-// Uses shared escapeHtmlServer from 02_http-and-creator-utils.js.
-function escapeHtmlSupport(str) {
-  return escapeHtmlServer(str);
-}
-
 
 function ensureImageFilename(filename, mimeType) {
   const extMap = {
@@ -509,7 +504,7 @@ async function sendSupportEmailReply(env, { threadId, text, html, attachments, c
 
   const outboundRfcId = '<reply-' + now + '-' + Math.random().toString(36).slice(2, 8) + '@mylistsaddon.com>';
   const cleanText = String(text).trim();
-  const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
+  const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlServer(cleanText) + '</p>';
 
   // Process attachments for sending and storage
   const outgoingAttachments = [];
@@ -641,7 +636,7 @@ async function composeNewSupportEmail(env, { toEmail, customerName, subject, tex
   const cleanSubject = String(subject).trim();
   const cleanText = String(text).trim();
   const cleanName = customerName ? String(customerName).trim() : '';
-  const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlSupport(cleanText) + '</p>';
+  const cleanHtml = html ? String(html).trim() : '<p style="font-family:sans-serif;font-size:15px;line-height:1.5;color:#222;white-space:pre-wrap;">' + escapeHtmlServer(cleanText) + '</p>';
   const outboundRfcId = '<out-' + now + '-' + Math.random().toString(36).slice(2, 8) + '@mylistsaddon.com>';
 
   // Process attachments
