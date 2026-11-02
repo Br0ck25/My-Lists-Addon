@@ -60,6 +60,11 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Plex/Jellyfin/Emby user filter fix, and admin routes tidied (built 2026-11-02, stamp df3fdc41f0)
+
+- **Fix you can see:** if you set the scrobble webhook to accept only some Plex/Jellyfin/Emby users (or to block pings with no username), a ping from someone not on the list used to make the server answer with an error (500). It now answers "ignored" as intended, and the ignored ping shows in the account's last-ping details. Pings from allowed users behave exactly as before. A new test (`tests/scrobble-user-filter.test.mjs`) covers both cases and failed with the 500 before the fix.
+- **Internal tidy-up, no change for users:** the admin dashboard's `/admin/api/` routes (38 of them: creators, trending, search index, creator lists, channels, feedback, support emails, analytics, support goal, site notice, New on Streaming, channel presets, sessions and audit log) moved out of `handleFetch` into `src/admin/65_admin-api-routes.js` and `src/admin/66_admin-api-feedback-and-tools-routes.js`, one function per route, with the same checks in the same order. `handleFetch` went from 14,211 to 12,389 lines. Proof: the same 257 admin requests (signed out, wrong cookie, signed in) gave the same answers and left the same stored data before and after each of the three moves.
+
 ## Internal tidy-up: three big pieces moved out of the main request function (built 2026-11-02, stamp c2a64453fb)
 
 No change for users. This is the first step of CQ-01 (splitting the huge `handleFetch` function into smaller files).
