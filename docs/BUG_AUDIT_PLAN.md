@@ -171,3 +171,22 @@ KV has no compare-and-set, so two isolates can each read the same list and the s
 6. BUG-08 as an investigation first, BUG-07 only if trivial.
 
 Owner decisions (2026-11-02): **yes**, the bulk import resolves series too (BUG-02 step 4). **No**, the shared poster lists stay on KV (BUG-04).
+
+
+## Progress (2026-11-02)
+
+| Item | Status | Note |
+|---|---|---|
+| BUG-09 client | Done | Both loaders keep only object entries (`tests/bad-channel-entry.client.test.mjs`). |
+| BUG-09 server | Done | `sync/save-channels` drops non-object entries (`tests/sync-channels-shape.test.mjs`). |
+| BUG-01 | Done | `readJsonObject` throws on a non-object body, so each route's existing `try/catch` gives its normal 400 (a different shape from the plan's "returns null", chosen so each site is a one-word change). `44_jobs-queue` needed no change; `73_` has no `request.json()`. `tests/null-body.test.mjs` covers all static POST routes. |
+| BUG-02 steps 1-3 | Done | Per-item try/catch, `String()` title, non-object item skipped (`tests/bulk-resolve.test.mjs`). |
+| BUG-02 step 4 | Done | Series use TMDB TV search and external ids; the client matches by `title|year|type` (`bulkResolveKey`). |
+| BUG-03 | Done | `|| 50` and `|| 0`; `limit=0` now means 50. |
+| BUG-06 | Done | `skipWhileBusy` wraps the Trakt poll. The Stremio poll was not changed (no failing test written for it). |
+| BUG-05 | Partly | Customer session write now uses `waitUntil`. The admin session write was skipped: its caller has no `ctx` and there are five callers. |
+| BUG-04 | Done (small) | Failed variant write is retried; same-line notes at the other sites. Poster lists stay on KV. |
+| BUG-08 | Closed, no change | Every bare `fetch(` is the Worker's own guard (`02_http-and-creator-utils.js`, `fetch(input, init)`): 30 s default timeout plus the provider breaker. Covered by the P2-6 tests in `tests/worker.test.mjs`. |
+| BUG-07 | Done | The two RPDB maps are capped at 1,000. The other two maps were left, as the plan says. |
+
+Notes: new small helpers live in their own files (`03_json-object-body.js`, `20_client-channel-entry-filter.js`, `17_client-skip-while-busy.js`, `18_client-bulk-resolve-key.js`) because `tests/size-budget.test.mjs` does not let the files they would have gone into grow. Full verify: 3,141 tests, 3,135 pass, 5 todo, 1 fail (the known cold-catalog latency budget).
