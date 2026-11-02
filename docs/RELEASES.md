@@ -60,6 +60,15 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Poster "AIRED" badge, blank Nuvio collection names, matching Cloudflare date (built 2026-11-02, stamp 70d3a6e9b3)
+
+Three owner decisions from 2026-11-02.
+
+- **Posters in Stremio and Nuvio now say AIRED for a day that has already passed** (they used to say TODAY, which was wrong). Today still says TODAY and tomorrow TOMORROW. A season-finale poster for a past date reads "FINALE: AIRED". The web page is unchanged on purpose: it still shows nothing for a past date.
+- **A Nuvio collection whose name is only "(Movies)" or similar is now called "My Lists Collections"**, the same as the web page already did, instead of getting an empty name.
+- **The Cloudflare runtime date in the repo files is now 2026-07-27**, the same as production. Staging and self-hosted copies move up to it. I checked every Cloudflare change between the two dates against what the code uses; none affects us (list in `docs/OPERATIONS.md`, section 32). Staging reads its date from the dashboard, so set it to 2026-07-27 there too and run the deploy checklist.
+- **How I proved the first two:** the new tests failed before each change and pass after.
+
 ## Size rule for functions and files (built 2026-11-02, stamp 4fe457f88f)
 
 From `docs/CODE_QUALITY_AUDIT.md` (CQ-18). Nothing you see on the site changes.
