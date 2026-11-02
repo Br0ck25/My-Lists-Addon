@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b3ab1fab82";
+const WORKER_BUILD = "ef944331d5";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -107952,7 +107952,7 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   }
 
   // 4. Resolve IDs via TMDB if needed
-  const resolvedIds = await resolveScrobbleIds(mediaType, imdbId, tmdbId, showTitle, title, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey);
+  const resolvedIds = await resolveScrobbleIds({ mediaType, imdbId, tmdbId, showTitle, title, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey });
   imdbId = resolvedIds.imdbId;
   tmdbId = resolvedIds.tmdbId;
   const searchFoundPoster = resolvedIds.searchFoundPoster;
@@ -107962,7 +107962,7 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   // 5. Execute Watch Record
   let matched = "no";
   try {
-    matched = await recordScrobblePlay(env, ctx, authUser, server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey);
+    matched = await recordScrobblePlay(env, ctx, { authUser, server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey });
   } catch (err) {
     matched = `error (${server}): ` + (err && err.message ? err.message : String(err));
   }
@@ -108287,7 +108287,7 @@ async function loadScrobbleFilterSettings(url, env, authUser) {
 }
 
 // Step 4: find the IMDb / TMDB ids the payload did not carry.
-async function resolveScrobbleIds(mediaType, imdbId, tmdbId, showTitle, title, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey) {
+async function resolveScrobbleIds({ mediaType, imdbId, tmdbId, showTitle, title, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey }) {
   //
   // A Plex episode whose show has no id Plex shares (see the Guid comment
   // above): TMDB's /find turns the show's TheTVDB id, or the episode's own
@@ -108358,7 +108358,7 @@ async function resolveScrobbleIds(mediaType, imdbId, tmdbId, showTitle, title, p
 }
 
 // Step 5: write the play into the account's tracking record.
-async function recordScrobblePlay(env, ctx, authUser, server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey) {
+async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey }) {
   let matched = "no";
   const syncKey = `creatorsynctracking:${authUser}`;
   let blob = null;
@@ -108380,11 +108380,11 @@ async function recordScrobblePlay(env, ctx, authUser, server, mediaType, title, 
   blob.dismissedContinueWatching = blob.dismissedContinueWatching && typeof blob.dismissedContinueWatching === "object" ? blob.dismissedContinueWatching : {};
 
   if (mediaType === "series") {
-    const played = await recordScrobbleEpisodePlay(blob, env, ctx, server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey);
+    const played = await recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey });
     matched = played.matched;
     imdbId = played.imdbId;
   } else {
-    const played = await recordScrobbleMoviePlay(blob, env, ctx, server, title, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey);
+    const played = await recordScrobbleMoviePlay(blob, env, ctx, { server, title, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey });
     matched = played.matched;
     imdbId = played.imdbId;
   }
@@ -108410,7 +108410,7 @@ async function recordScrobblePlay(env, ctx, authUser, server, mediaType, title, 
 }
 
 // The series branch of step 5.
-async function recordScrobbleEpisodePlay(blob, env, ctx, server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey) {
+async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey }) {
   const seasonNum = season != null ? season : 1;
   const episodeNum = episode != null ? episode : 1;
 
@@ -108524,7 +108524,7 @@ async function recordScrobbleEpisodePlay(blob, env, ctx, server, title, showTitl
 }
 
 // The movie branch of step 5.
-async function recordScrobbleMoviePlay(blob, env, ctx, server, title, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey) {
+async function recordScrobbleMoviePlay(blob, env, ctx, { server, title, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey }) {
   // Movie
   let movieTitle = title;
   let moviePoster = "";
