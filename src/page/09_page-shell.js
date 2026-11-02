@@ -5299,7 +5299,7 @@ ${appShellMobileNavHtml}
         var cDisp = localStorage.getItem('myListAddon:creatorDisplayName') || cName;
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
-          if (cName && cKey) {
+          if (cName && (cKey || localStorage.getItem('myListAddon:keyForgotten') === String(cName).toLowerCase())) {
             var disp = cDisp || cName || 'Account';
             var init = (disp.charAt(0) || 'U').toUpperCase();
             cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '" title="Signed in as ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '"><span class="header-avatar-initial">' + String(init).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</span></button>';

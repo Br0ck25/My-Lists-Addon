@@ -199,3 +199,13 @@ describe("SEC-03: a browser that has forgotten the key still works", () => {
     assert.equal(store.getItem("myListAddon:creatorName"), null);
   });
 });
+
+describe("SEC-03: the header avatar painted before the bundle loads", () => {
+  it("shows a forgotten-key browser as signed in", async () => {
+    const { renderPage } = await import("./client-harness.mjs");
+    const html = renderPage();
+    const block = html.slice(html.indexOf("var cName = localStorage.getItem('myListAddon:creatorName')"));
+    const condition = block.slice(0, block.indexOf("{\n")).split("\n").pop() + block.slice(block.indexOf("if (cName"), block.indexOf("var disp"));
+    assert.match(condition, /keyForgotten/, "the pre-paint check must also accept a forgotten key");
+  });
+});
