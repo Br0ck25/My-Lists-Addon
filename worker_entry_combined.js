@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e2061a2e61";
+const WORKER_BUILD = "561dbe521e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -39564,9 +39564,9 @@ function creatorSessionHeldFor() {
   }
 }
 
-function noteCreatorSession(res) {
-  const who = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('X-MLA-Session') : null;
-  if (!who) return;
+function noteCreatorSession(res, keyless) {
+  const who = readSessionHeaders(res);
+  if (!who) { if (keyless && res && res.status === 401) creatorSessionEnded(); return; }
   try {
     localStorage.setItem(CREATOR_SESSION_SEEN_KEY, String(who).toLowerCase());
   } catch (e) {}
@@ -39591,7 +39591,7 @@ async function creatorApiFetch(url, init) {
   const name = body && typeof body === 'object' && !Array.isArray(body) && body.creatorName ? String(body.creatorName).toLowerCase() : '';
   if (!name || !body.creatorKey || creatorSessionHeldFor() !== name) {
     const res = await fetch(url, init);
-    noteCreatorSession(res);
+    noteCreatorSession(res, !!name && !body.creatorKey);
     return res;
   }
   const withoutKey = Object.assign({}, body);
@@ -40714,7 +40714,7 @@ var activeCreator = (function() {
     const name = localStorage.getItem('myListAddon:creatorName');
     const key = localStorage.getItem('myListAddon:creatorKey');
     const disp = localStorage.getItem('myListAddon:creatorDisplayName') || name;
-    if (name && key) return { creatorName: name, displayName: disp };
+    if (name && (key || creatorKeyForgottenFor(name))) return { creatorName: name, displayName: disp };
   } catch (e) {}
   return null;
 })();
@@ -42094,7 +42094,7 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
 function isSignedIn() {
   if (typeof activeCreator === 'undefined' || !activeCreator) return false;
   try {
-    return !!localStorage.getItem('myListAddon:creatorKey');
+    return !!localStorage.getItem('myListAddon:creatorKey') || creatorKeyForgotten();
   } catch (e) {
     return false;
   }
@@ -42435,7 +42435,7 @@ function feedbackCreatorAuth() {
   } catch (e) {
     key = '';
   }
-  if (!key) return { creatorName: null, creatorKey: null };
+  if (!key && !creatorKeyForgottenFor(name)) return { creatorName: null, creatorKey: null };
   return { creatorName: name, creatorKey: key };
 }
 
@@ -43862,6 +43862,140 @@ document.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 
+// --- Forgetting the Account Key once the session holds the sign-in (SEC-03) ---------
+//
+// The Account Key used to stay in localStorage for good: a permanent password for
+// any script or extension running on the page, or the next person on a shared
+// computer. Behind FF_FORGET_KEY (off unless the server sends X-MLA-Forget-Key: 1
+// next to X-MLA-Session), a browser that holds a working session stops keeping it:
+//
+//   * myListAddon:creatorKey is removed; the name stays, and myListAddon:keyForgotten
+//     records the account, so the page starts signed in from the name plus the
+//     session marker (myListAddon:sessionFor, 16_client-row-core.js).
+//   * requests then carry the name and no key, and the HttpOnly session cookie
+//     signs them (every account route accepts that: tests/session-only-routes.test.mjs).
+//     Sessions renew while used, so a regular visitor never types the key again.
+//   * when the session ends (30 days away, signed out, revoked) a request answers
+//     401 and the existing sign-in prompt opens; the key is never resent.
+//   * before the key is forgotten for the first time the person is told to keep it
+//     somewhere safe (with the key on screen), and offered a recovery answer if
+//     they have none. If they do not confirm, the key stays and they are asked
+//     again on the next visit.
+//   * where storage or cookies are blocked, creatorSessionHeldFor() is '' and
+//     nothing changes.
+//
+// Plain strings are used inside the functions, not constants: activeCreator
+// (16_client-row-core.js) calls creatorKeyForgottenFor while the page is still
+// loading, before any constant declared in a later file exists.
+
+var forgetKeyServerAllows = false;
+var forgetKeyRunning = false;
+var forgetKeyDeclined = false;
+var creatorSessionEndedShown = false;
+
+// The X-MLA-Session value of an answer (null when absent); also notes whether the
+// server wants keys forgotten.
+function readSessionHeaders(res) {
+  const h = res && res.headers && typeof res.headers.get === 'function' ? res.headers : null;
+  if (!h) return null;
+  if (h.get('X-MLA-Forget-Key') === '1') forgetKeyServerAllows = true;
+  return h.get('X-MLA-Session');
+}
+
+// True when this browser forgot the key for this account and still holds its session.
+function creatorKeyForgottenFor(name) {
+  try {
+    const n = String(name || '').toLowerCase();
+    return !!n && localStorage.getItem('myListAddon:keyForgotten') === n && localStorage.getItem('myListAddon:sessionFor') === n;
+  } catch (e) {
+    return false;
+  }
+}
+
+// The same, for the account this browser is signed in as.
+function creatorKeyForgotten() {
+  try {
+    return creatorKeyForgottenFor(localStorage.getItem('myListAddon:creatorName'));
+  } catch (e) {
+    return false;
+  }
+}
+
+function forgetKeyNoticeMessage(key, hasRecoveryAnswer) {
+  return 'Your Account Key is ' + key + '\\n\\nKeep it somewhere safe, like a password manager. This browser is about to stop storing it, ' +
+    'so you stay signed in for as long as you keep using the site, and you will need the key to sign in again after that or on another device.' +
+    (hasRecoveryAnswer ? '' : '\\n\\nYou have no recovery answer yet. Set one in Settings so you can get back in if you lose the key.');
+}
+
+// Called when the account has loaded (markCreatorSyncLoaded) and after every answer
+// that carries the headers. Does nothing unless the server asked for it, a session is
+// confirmed for this account, and the person has been told.
+async function maybeForgetCreatorKey() {
+  if (!forgetKeyServerAllows || forgetKeyRunning || forgetKeyDeclined) return;
+  let name = '';
+  let key = '';
+  try {
+    name = (localStorage.getItem('myListAddon:creatorName') || '').toLowerCase();
+    key = localStorage.getItem('myListAddon:creatorKey') || '';
+  } catch (e) {
+    return;
+  }
+  if (!name || !key || creatorSessionHeldFor() !== name) return;
+  forgetKeyRunning = true;
+  try {
+    const hasAnswer = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
+    const confirmed = await appShellDialog({
+      title: 'Keep your Account Key safe',
+      message: forgetKeyNoticeMessage(key, hasAnswer),
+      confirmLabel: 'I have saved it',
+      cancelLabel: 'Not now',
+    });
+    if (!confirmed) {
+      forgetKeyDeclined = true;
+      return;
+    }
+    // The person may have signed out or switched account while the dialog was open.
+    if ((localStorage.getItem('myListAddon:creatorName') || '').toLowerCase() !== name || creatorSessionHeldFor() !== name) return;
+    localStorage.setItem('myListAddon:keyForgotten', name);
+    localStorage.removeItem('myListAddon:creatorKey');
+  } catch (e) {
+    // Storage failed part-way: the key is removed only after the marker is written.
+  } finally {
+    forgetKeyRunning = false;
+  }
+}
+
+// A request that carried no key (the key was forgotten) was refused: the session is
+// gone. Show the existing sign-in prompt, with the username filled in.
+function creatorSessionEnded() {
+  if (creatorSessionEndedShown || !creatorKeyForgotten()) return;
+  creatorSessionEndedShown = true;
+  let name = '';
+  try {
+    name = localStorage.getItem('myListAddon:creatorName') || '';
+    localStorage.removeItem('myListAddon:keyForgotten');
+    localStorage.removeItem('myListAddon:sessionFor');
+  } catch (e) {}
+  activeCreator = null;
+  if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') appShellState.set({ account: null });
+  if (typeof renderCreatorProfileBar === 'function') renderCreatorProfileBar();
+  if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
+  openRestoreModal();
+  const nameInput = document.getElementById('restoreNameInput');
+  if (nameInput) nameInput.value = name;
+  showToast('You were signed out. Sign in with your Account Key.', 'info');
+  setTimeout(function () { creatorSessionEndedShown = false; }, 5000);
+}
+
+// The two markers a forgotten-key browser signs in from, written again after
+// clearLocalAccountData has wiped them (account reset on this or another device).
+function rememberForgottenKey(name) {
+  try {
+    const n = String(name || '').toLowerCase();
+    localStorage.setItem('myListAddon:keyForgotten', n);
+    localStorage.setItem('myListAddon:sessionFor', n);
+  } catch (e) {}
+}
 // --- "Your MDBList/Trakt Lists" ----------------------------------------------
 //
 // Once a key (and, for Trakt, a username) is entered above, shows every
@@ -49859,7 +49993,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
     // Persist to creator account if signed in
     if (typeof activeCreator !== 'undefined' && activeCreator) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      if (creatorKey) {
+      if (creatorKey || creatorKeyForgotten()) {
         const body = {
           creatorName: activeCreator.creatorName,
           creatorKey: creatorKey,
@@ -56203,7 +56337,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
   if (payload.creatorSlug && !isWatchlist) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey');
     const creatorName = localStorage.getItem('myListAddon:creatorName');
-    if (creatorKey && creatorName && name) {
+    if ((creatorKey || creatorKeyForgotten()) && creatorName && name) {
       try {
         const creatorListMeta = (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData))
           ? lastCreatorListsData.find((l) => l.slug === payload.creatorSlug)
@@ -71141,7 +71275,7 @@ async function saveLocalCustomListEdit(name) {
   let mirror = null;
   if (typeof activeCreator !== 'undefined' && activeCreator) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-    if (creatorKey) {
+    if (creatorKey || creatorKeyForgotten()) {
       // A whole-list replacement of a list that already exists on the server:
       // exactly what the server's expectedUpdatedAt guard is for, and one of
       // the three slug-bearing call sites that never armed it. Routed through
@@ -75198,7 +75332,7 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 async function uploadLocalListPayloadToAccount(payload) {
   if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return { ok: false, error: 'signed-out' };
+  if (!creatorKey && !creatorKeyForgotten()) return { ok: false, error: 'signed-out' };
   const list = payload || {};
   const body = {
     creatorName: activeCreator.creatorName,
@@ -75401,7 +75535,7 @@ function renderAccountKeySection() {
     '<div class="u-mt-6px">' +
       '<div class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700 u-mb-6px">Account Key</div>' +
       '<div class="account-key-group">' +
-        '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
+        '<div class="creator-key-display" id="accountKeyDisplay">' + (key ? '\u2022'.repeat(Math.max(8, key.length)) : 'Not stored in this browser') + '</div>' +
         '<div class="account-key-actions">' +
           '<button type="button" class="secondary lc-btn" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
           '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
@@ -75482,7 +75616,7 @@ async function submitSetRecoveryAnswer() {
     return;
   }
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) {
+  if (!creatorKey && !creatorKeyForgotten()) {
     errBox.innerHTML = '<p class="testresult err">Account Key missing. Please sign in again.</p>';
     return;
   }
@@ -75539,7 +75673,7 @@ async function openResetAccountModal() {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
       const creatorName = activeCreator.creatorName;
       const displayName = activeCreator.displayName;
-      if (!creatorKey) return;
+      if (!creatorKey && !creatorKeyForgotten()) return;
 
       // Stop anything in flight from re-uploading what we are about to clear.
       window._suppressCreatorSync = true;
@@ -75578,7 +75712,7 @@ async function openResetAccountModal() {
         activeCreator = { creatorName: creatorName, displayName: displayName };
         localStorage.setItem('myListAddon:creatorName', creatorName);
         localStorage.setItem('myListAddon:creatorDisplayName', displayName || creatorName);
-        localStorage.setItem('myListAddon:creatorKey', creatorKey);
+        if (creatorKey) localStorage.setItem('myListAddon:creatorKey', creatorKey); else rememberForgottenKey(creatorName);
         // Written AFTER clearLocalAccountData, which removes every myListAddon:
         // key including this one. Without it this browser would meet its own
         // reset on the next load and wipe itself a second time.
@@ -75695,10 +75829,10 @@ function toggleAccountKeyVisibility() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   const isHidden = btn.textContent === 'Show Key';
   if (isHidden) {
-    display.textContent = key;
+    display.textContent = key || 'Not stored in this browser';
     btn.textContent = 'Hide Key';
   } else {
-    display.textContent = '\u2022'.repeat(Math.max(8, key.length));
+    display.textContent = key ? '\u2022'.repeat(Math.max(8, key.length)) : 'Not stored in this browser';
     btn.textContent = 'Show Key';
   }
 }
@@ -76065,7 +76199,7 @@ async function fetchScrobbleToken(rotate) {
   if (!activeCreator || !activeCreator.creatorName) return '';
   let creatorKey = '';
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
-  if (!creatorKey) return '';
+  if (!creatorKey && !creatorKeyForgotten()) return '';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-token', {
       method: 'POST',
@@ -76314,7 +76448,7 @@ async function refreshTrackPlaybackStatus() {
 
 async function copyAccountKey() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!key) return;
+  if (!key) { showToast('This browser no longer stores your Account Key. Use the copy you saved.', 'info'); return; }
   const copied = await copyTextToClipboard(key, {
     toastMessage: 'Key copied to clipboard! \u2713'
   });
@@ -76746,7 +76880,7 @@ function proceedToLoginWithUsername(username, key) {
 async function tryAutoRestoreCreatorProfile() {
   const name = localStorage.getItem('myListAddon:creatorName');
   const key = localStorage.getItem('myListAddon:creatorKey');
-  if (!name || !key) return;
+  if (!name || (!key && !creatorKeyForgottenFor(name))) return;
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
@@ -76901,7 +77035,7 @@ function applyRemoteAccountReset(serverResetAt) {
   const displayName = activeCreator.displayName;
   let creatorKey = '';
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
 
   window._suppressCreatorSync = true;
   try {
@@ -76910,7 +77044,7 @@ function applyRemoteAccountReset(serverResetAt) {
     try {
       localStorage.setItem('myListAddon:creatorName', creatorName);
       localStorage.setItem('myListAddon:creatorDisplayName', displayName || creatorName);
-      localStorage.setItem('myListAddon:creatorKey', creatorKey);
+      if (creatorKey) localStorage.setItem('myListAddon:creatorKey', creatorKey); else rememberForgottenKey(creatorName);
     } catch (e) {}
     rememberAccountResetAt(serverResetAt);
     if (typeof renderCreatorProfileBar === 'function') renderCreatorProfileBar();
@@ -77135,7 +77269,7 @@ function markCreatorSyncLoaded() {
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   if (_creatorSyncGateTimer) { clearTimeout(_creatorSyncGateTimer); _creatorSyncGateTimer = null; }
   _creatorSyncLoadedFor = activeCreator.creatorName;
-  flushDeferredSyncPushes();
+  flushDeferredSyncPushes(); maybeForgetCreatorKey();
 }
 window.markCreatorSyncLoaded = markCreatorSyncLoaded;
 
@@ -77276,7 +77410,7 @@ async function pushChannelsSync() {
   if (window._suppressCreatorSync) return;
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen.
   if (!creatorSyncGateOpen()) { deferSyncPush('channels'); return; }
@@ -77350,7 +77484,7 @@ async function pushCreatorSync() {
   if (window._suppressCreatorSync) return;
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen. This is the config blob: the catalog rows, which is
   // where "my list rows came back after opening the phone" came from.
@@ -77571,7 +77705,7 @@ async function pushTrackingSync(opts) {
   if (window._suppressCreatorSync) return;
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds. This endpoint
   // replaces Watch History and Continue Watching wholesale, and the timers
   // that start the page (refreshAiringNext at 600ms,
@@ -77759,7 +77893,7 @@ async function loadCreatorSync(opts) {
   const isBackgroundResume = !!(opts && opts.background);
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Who this load is for. Checked again after the await, because signing in as
   // someone else calls clearLocalAccountData() and then starts a fresh load --
   // and this one is still in flight. Measured: signing in as alice and then
@@ -79287,7 +79421,7 @@ async function undoListDelete(snap, rows) {
   if (!snap) return;
   clearCreatorListDeletion(snap.slug);
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (typeof activeCreator !== 'undefined' && activeCreator && creatorKey) {
+  if (typeof activeCreator !== 'undefined' && activeCreator && (creatorKey || creatorKeyForgotten())) {
     const out = await saveCreatorListWithBaseline({
       slug: snap.slug, name: snap.name, type: snap.type, items: snap.items, visibility: snap.visibility,
       sourceUrl: snap.sourceUrl, synced: snap.synced, lastSyncedAt: snap.lastSyncedAt, baseItemIds: snap.baseItemIds,
@@ -79538,7 +79672,7 @@ let _uploadingMissingLists = false;
 let _missingListUploadRounds = 0;
 const MISSING_LIST_UPLOAD_MAX_ROUNDS = 5;
 async function uploadMissingLocalListsToAccount(lists, creatorKey) {
-  if (_uploadingMissingLists || !activeCreator || !creatorKey || !lists || !lists.length) return 0;
+  if (_uploadingMissingLists || !activeCreator || (!creatorKey && !creatorKeyForgotten()) || !lists || !lists.length) return 0;
   if (_missingListUploadRounds >= MISSING_LIST_UPLOAD_MAX_ROUNDS) return 0;
   _uploadingMissingLists = true;
   _missingListUploadRounds++;
@@ -79871,7 +80005,7 @@ async function renderCreatorDashboard(options) {
         // being re-created on the account.
         if (listTombstones[l.creatorSlug || l.slug] || listTombstones[k]) return;
         localRestoredCustomLists.push(l);
-        if (activeCreator && creatorKey) needUploading.push(l);
+        if (activeCreator && (creatorKey || creatorKeyForgotten())) needUploading.push(l);
       }
     });
     // A render that finds everything already on the account is the signal
@@ -80572,7 +80706,7 @@ if (_creatorDashEl) {
       // If signed into creator, also delete from server if it exists
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        if (creatorKey) {
+        if (creatorKey || creatorKeyForgotten()) {
           // Fire-and-forget: if this never lands the list survives on the
           // account while being gone locally, which is precisely what the
           // backfill must not undo.
@@ -81760,7 +81894,7 @@ async function handleForegroundResumeSync() {
 
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
 
   // Defer slightly so tab switch and UI clicks are completely instant and smooth
   if (_foregroundSyncTimer) clearTimeout(_foregroundSyncTimer);
@@ -86773,7 +86907,7 @@ async function pushPresetsDirectly(presetsMap) {
   if (window._suppressCreatorSync) return { ok: false, error: null };
   if (!activeCreator) return { ok: false, error: null };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return { ok: false, error: null };
+  if (!creatorKey && !creatorKeyForgotten()) return { ok: false, error: null };
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen (22_client-creator-profile.js). Presets are a full
   // overwrite like everything else here, so a cold start pushing this
@@ -91464,6 +91598,7 @@ export default {
       if (request && request.account && (p.startsWith("/api/creator/") || CREATOR_SESSION_PATH_PREFIXES.some((x) => p.startsWith(x)))) {
         secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
         // SEC-03 step 0: a session renewed by this request gets its cookie renewed too.
+        if (isForgetKeyEnabled(env)) secured.headers.set("X-MLA-Forget-Key", "1");
         const renewalCookie = sessionCookieRenewal(request);
         if (renewalCookie && !secured.headers.has("Set-Cookie")) secured.headers.set("Set-Cookie", renewalCookie);
       }
@@ -107782,6 +107917,15 @@ function sessionCookieRenewal(request) {
   if (!/(?:^|;\s*)mla_session=/.test(cookieHeader)) return null;
   const token = extractSessionToken(request);
   return token ? buildSessionCookieHeader(token) : null;
+}
+
+// --- FF_FORGET_KEY (SEC-03) -----------------------------------------------------------
+//
+// When set to 1, every answer that confirms a session (X-MLA-Session) also says
+// X-MLA-Forget-Key: 1, and a page that has seen both stops keeping the Account
+// Key in this browser (16_client-forget-key.js). Off by default.
+function isForgetKeyEnabled(env) {
+  return Boolean(env) && (env.FF_FORGET_KEY === "1" || env.FF_FORGET_KEY === "true" || env.FF_FORGET_KEY === true);
 }
 // Auto-track Playback ping from the /:config/subtitles/... route, moved out of handleFetch (CQ-01).
 

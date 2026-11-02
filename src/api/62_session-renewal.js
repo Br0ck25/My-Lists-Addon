@@ -32,3 +32,12 @@ function sessionCookieRenewal(request) {
   const token = extractSessionToken(request);
   return token ? buildSessionCookieHeader(token) : null;
 }
+
+// --- FF_FORGET_KEY (SEC-03) -----------------------------------------------------------
+//
+// When set to 1, every answer that confirms a session (X-MLA-Session) also says
+// X-MLA-Forget-Key: 1, and a page that has seen both stops keeping the Account
+// Key in this browser (16_client-forget-key.js). Off by default.
+function isForgetKeyEnabled(env) {
+  return Boolean(env) && (env.FF_FORGET_KEY === "1" || env.FF_FORGET_KEY === "true" || env.FF_FORGET_KEY === true);
+}

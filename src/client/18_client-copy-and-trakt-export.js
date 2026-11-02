@@ -441,7 +441,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
     // Persist to creator account if signed in
     if (typeof activeCreator !== 'undefined' && activeCreator) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      if (creatorKey) {
+      if (creatorKey || creatorKeyForgotten()) {
         const body = {
           creatorName: activeCreator.creatorName,
           creatorKey: creatorKey,

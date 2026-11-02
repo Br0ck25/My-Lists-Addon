@@ -915,7 +915,7 @@ async function pushPresetsDirectly(presetsMap) {
   if (window._suppressCreatorSync) return { ok: false, error: null };
   if (!activeCreator) return { ok: false, error: null };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return { ok: false, error: null };
+  if (!creatorKey && !creatorKeyForgotten()) return { ok: false, error: null };
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen (22_client-creator-profile.js). Presets are a full
   // overwrite like everything else here, so a cold start pushing this
