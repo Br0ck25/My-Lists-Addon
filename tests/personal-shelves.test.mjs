@@ -98,7 +98,7 @@ describe("Remove duplicate items across lists leaves personal shelves alone", ()
 // copy of the same rule. Two copies of one rule drift, so this pins them.
 describe("the personal-shelf rule is the same on both sides", () => {
   function loadWorkerFn() {
-    const src = readFileSync(new URL("../00_constants.js", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../src/core/00_constants.js", import.meta.url), "utf8");
     const consts = src.match(/const PERSONAL_SHELF_URL_PREFIXES[\s\S]*?\];/)[0];
     const start = src.indexOf("function isPersonalShelfUrl");
     let i = src.indexOf("{", start), depth = 0;
@@ -112,7 +112,7 @@ describe("the personal-shelf rule is the same on both sides", () => {
   // The page's copy lives inside a template literal, so one level of
   // backslash escaping is stripped before a browser ever sees it.
   function loadClientFn() {
-    const src = readFileSync(new URL("../23_client-list-management.js", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../src/client/23_client-list-management.js", import.meta.url), "utf8");
     const start = src.indexOf("function isPersonalShelfUrlClient");
     let i = src.indexOf("{", start), depth = 0;
     for (; i < src.length; i++) {

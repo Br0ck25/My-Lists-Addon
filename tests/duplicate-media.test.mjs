@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { call, makeD1, makeEnv } from "./harness.mjs";
 
-// Two media rows for one title (findDuplicateMedia, 29_media.js): the count the
+// Two media rows for one title (findDuplicateMedia, src/data/29_media.js): the count the
 // admin runs before any merge. It must find a title stored once by its IMDb id
 // and once by its TMDB id, count what sits on each copy, leave two different
 // films that share a name and year alone, and change nothing.
@@ -66,7 +66,7 @@ describe("Check duplicate titles (admin, read-only)", () => {
   });
 });
 
-// The merge (mergeDuplicateMedia, 29_media.js). Name and year are not enough
+// The merge (mergeDuplicateMedia, src/data/29_media.js). Name and year are not enough
 // (two films called Alone came out in 2020), so a pair is only what TMDB
 // confirms: the stub's TMDB id belongs to the IMDb id another row holds.
 function mergeEnv() {
@@ -164,7 +164,7 @@ describe("media.retry merges a new duplicate the recommendations job made", () =
     const sb = { console, URL, URLSearchParams, TextEncoder, TextDecoder, Response, Headers, Request, crypto: globalThis.crypto };
     sb.globalThis = sb;
     vm.createContext(sb);
-    for (const rel of ["00_constants.js", "29_media.js", "36_activity-db.js"]) {
+    for (const rel of ["src/core/00_constants.js", "src/data/29_media.js", "src/data/36_activity-db.js"]) {
       vm.runInContext(fs.readFileSync(new URL(`../${rel}`, import.meta.url), "utf8"), sb, { filename: rel });
     }
     const env = mergeEnv();

@@ -20,7 +20,7 @@
 // (CI does this in the "ui-contract" job; locally set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 // if a Chromium is already installed.)
 //
-// Add a component here when you add one to DESIGN_SYSTEM.md section 3.
+// Add a component here when you add one to docs/DESIGN_SYSTEM.md section 3.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
@@ -28,7 +28,7 @@ import { makeEnv, makeD1, makeKv, call } from "./harness.mjs";
 
 const CONTRACT_FILE = new URL("./ui-contract.json", import.meta.url);
 
-// name -> markup (class names are the ones DESIGN_SYSTEM.md section 3 documents)
+// name -> markup (class names are the ones docs/DESIGN_SYSTEM.md section 3 documents)
 const COMPONENTS = {
   "button (bare)": `<button type="button">Label</button>`,
   "btn-primary": `<button type="button" class="btn-primary">Label</button>`,
@@ -122,7 +122,7 @@ for (const key of new Set([...Object.keys(saved), ...Object.keys(sorted)])) {
 }
 if (problems.length) {
   console.error(`ui-contract: ${problems.length} difference(s) from tests/ui-contract.json\n  ` + problems.slice(0, 60).join("\n  "));
-  console.error("\nIf the new look is intended (and DESIGN_SYSTEM.md says so), run: node tests/ui-contract.mjs --update");
+  console.error("\nIf the new look is intended (and docs/DESIGN_SYSTEM.md says so), run: node tests/ui-contract.mjs --update");
   process.exit(1);
 }
 console.log(`ui-contract: ${Object.keys(sorted).length} component states match tests/ui-contract.json`);

@@ -331,18 +331,18 @@ docs/RELEASES.md. The `stats` table is **kept**: it is where the admin dashboard
 
 After Phase 10 is complete and no remaining migration job can be triggered:
 
-Remove from `26_api-creator-and-admin-routes.js`:
+Remove from `src/api/26_api-creator-and-admin-routes.js`:
 - `/admin/api/migrate-d1` route and its handler (FT-16)
 - `/admin/api/migrate-day-counts` route and its handler
 - `/admin/api/backfill-trending` route and its handler (FT-42)
 - `/admin/api/rebuild-search-index` and `/admin/api/rebuild-public-index` routes and handlers
 
-**Keep `ensureTrackingMigrated`** (`05_catalog-core.js`) and its call sites. P10-4 emptied it once
+**Keep `ensureTrackingMigrated`** (`src/catalog/05_catalog-core.js`) and its call sites. P10-4 emptied it once
 (2026-10-01); that let `/api/creator/sync/save` erase the watch history of any account whose
 tracking still sat inside its `creatorsync:` record. It was restored on 2026-10-04 and goes only
 together with the `creatorsync:` tracking fields themselves (see P10-3, Step 3).
 
-Remove from `03_admin.js`:
+Remove from `src/admin/03_admin.js`:
 - `migrateGenreDecadeStatsIfNeeded` function definition and its call site
 - `backfillCreatorLastActive` function definition and its call site (BE-M19)
 

@@ -101,10 +101,10 @@ const hostileOpts = {
     { id: 'e1', name: XSS_SCRIPT, url: 'tmdb:chart:popular', type: 'movie', enabled: true, group: XSS_SCRIPT },
   ],
   initialKeys: {
-    // Rendered into value="..." attributes (15_tab-settings-html.js).
+    // Rendered into value="..." attributes (src/page/15_tab-settings-html.js).
     tmdbKey: XSS_ATTR, mdblistKey: XSS_ATTR, traktKey: XSS_ATTR,
     traktUsername: XSS_ATTR, simklKey: XSS_ATTR,
-    // Rendered into the inline <script> preamble (16_client-row-core.js).
+    // Rendered into the inline <script> preamble (src/client/16_client-row-core.js).
     traktAccessToken: XSS_SCRIPT, mdblistAccessToken: XSS_SCRIPT,
     simklAccessToken: XSS_SCRIPT, simklUsername: XSS_SCRIPT,
   },

@@ -154,10 +154,10 @@ describe("P5-7: token.refresh", () => {
     // The page asks once per load (warnAboutLapsedConnections, 17_), after
     // picking up a fresh connection.
     const fs = globalThis.process.getBuiltinModule("node:fs");
-    const src = fs.readFileSync(new URL("../17_client-my-lists-and-trakt-oauth.js", import.meta.url), "utf8");
+    const src = fs.readFileSync(new URL("../src/client/17_client-my-lists-and-trakt-oauth.js", import.meta.url), "utf8");
     assert.match(src, /async function warnAboutLapsedConnections\(\)/);
     assert.match(src, /c\.status !== 'ok'/);
-    const boot = fs.readFileSync(new URL("../24_client-backup-restore-presets.js", import.meta.url), "utf8");
+    const boot = fs.readFileSync(new URL("../src/client/24_client-backup-restore-presets.js", import.meta.url), "utf8");
     assert.match(boot, /warnAboutLapsedConnections\(\);/);
   });
 });

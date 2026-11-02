@@ -1,4 +1,4 @@
-// The Stremio and Nuvio cards in Settings (17_client-my-lists-and-trakt-oauth.js).
+// The Stremio and Nuvio cards in Settings (src/client/17_client-my-lists-and-trakt-oauth.js).
 // The page holds no token for either: it sends the sign-in once and then only
 // reads and changes the server's settings row.
 import assert from "node:assert/strict";

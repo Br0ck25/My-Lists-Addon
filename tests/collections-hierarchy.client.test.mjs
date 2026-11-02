@@ -8,7 +8,7 @@ const folder = (id, name, extra = {}) => ({ id, name, lists: [{ name: "Saved lis
 
 describe("collections contain folders", () => {
   it("removes only the redundant Nuvio Collections panel", () => {
-    const markup = readFileSync(new URL("../12_tab-custom-lists.js", import.meta.url), "utf8");
+    const markup = readFileSync(new URL("../src/page/12_tab-custom-lists.js", import.meta.url), "utf8");
     assert.ok(!markup.includes('id="collectionsMediaAppsPanel"'));
     for (const action of ["syncCollectionsToNuvio", "pullCollectionsFromNuvio", "exportNuvioCollectionsJson", "openImportNuvioModal"]) assert.ok(markup.includes(action));
   });
@@ -229,7 +229,7 @@ describe('collection-first creation and whole premade collections', () => {
   });
 
   it('uses collection creation at page level and folder creation only inside each collection', () => {
-    const markup = readFileSync(new URL('../12_tab-custom-lists.js', import.meta.url), 'utf8');
+    const markup = readFileSync(new URL('../src/page/12_tab-custom-lists.js', import.meta.url), 'utf8');
     assert.ok(markup.includes('>My Collections</h2>'));
     assert.ok(markup.includes('data-act="openCreateCollectionGroupModal">+ Create collection'));
     assert.ok(!markup.includes('data-act="openCreateCollectionModal">+ Create folder'));

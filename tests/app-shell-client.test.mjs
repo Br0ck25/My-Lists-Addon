@@ -901,7 +901,7 @@ describe("collections subnav and website lists picker", () => {
     const sandbox = { console, URL, URLSearchParams, atob, btoa, Uint8Array, TextDecoder, TextEncoder, Response, Headers, Request, crypto: globalThis.crypto };
     sandbox.globalThis = sandbox;
     vm.createContext(sandbox);
-    for (const f of ["00_constants.js", "02_http-and-creator-utils.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js", "08_quickadd-chart-data.js"]) {
+    for (const f of ["src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js", "src/catalog/08_quickadd-chart-data.js"]) {
       const src = fs.readFileSync(path.join(repoRoot, f), "utf8");
       vm.runInContext(src, sandbox, { filename: f });
     }

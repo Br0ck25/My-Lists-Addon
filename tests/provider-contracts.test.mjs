@@ -17,7 +17,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 import { call, freshIsolate, makeEnv, nextIp } from "./harness.mjs";
-import { checkRequired, loadFixtures, LIVE_SECRETS, pickPath, runLiveCheck } from "../provider_live_check.mjs";
+import { checkRequired, loadFixtures, LIVE_SECRETS, pickPath, runLiveCheck } from "../tools/provider_live_check.mjs";
+import { listSources } from "./sources.mjs";
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURES = loadFixtures();
@@ -42,10 +43,10 @@ function loadSourceFunctions(...relFiles) {
   return sandbox;
 }
 
-const registry = loadSourceFunctions("00_constants.js", "04_config-resolution.js");
+const registry = loadSourceFunctions("src/core/00_constants.js", "src/core/04_config-resolution.js");
 const ADAPTERS = vm.runInContext("PROVIDER_ADAPTERS", registry);
-const SERVER_SOURCES = fs.readdirSync(REPO_ROOT)
-  .filter((f) => /^\d\d_.*\.js$/.test(f) && !/^(09|1\d|2[0-4])_/.test(f))
+const SERVER_SOURCES = listSources(REPO_ROOT)
+  .filter((f) => /(?:^|\/)\d\d_.*\.js$/.test(f) && !/^(09|1\d|2[0-4])_/.test(f))
   .map((f) => fs.readFileSync(path.join(REPO_ROOT, f), "utf8"))
   .join("\n");
 
@@ -299,7 +300,7 @@ describe("P4-5: provider contract fixtures", () => {
   // read them.
   describe("the other providers", () => {
     function sandboxWithFixtures() {
-      const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "07_source-fetchers-tmdb-simkl.js");
+      const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
       const router = fixtureRouter();
       // After loading: 02_'s own fetch guard would otherwise call itself here.
       sb.fetch = router.handler;

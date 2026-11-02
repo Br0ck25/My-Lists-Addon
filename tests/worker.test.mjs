@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { D1_MAX_BOUND_PARAMS, accountProof, awaitFreshRateWindow, call, createUser, freshIsolate, hasPublicIndex, isPublicIndexKey, lapseCreatorTombstone, makeD1, makeEnv, makeKv, nextIp, publicIndexEntries, publicIndexSnapshot, runScheduledTick, seedAnonPublishedList, worker } from "./harness.mjs";
+import { listSources } from "./sources.mjs";
 
 // Likes, channel adds and shares need an account (docs/DECISIONS.md D-6).
 // Most of the tests below were written when a signed-out visitor voted as a
@@ -48,7 +49,7 @@ async function adminCookie(env) {
 // helper function directly without needing the whole Worker/KV/D1
 // environment. Only works for a file whose top-level code is real,
 // standalone JS (00-08, 25-26); files 09-24 are raw string content
-// embedded inside 09_page-shell.js's own giant template literal (the
+// embedded inside src/page/09_page-shell.js's own giant template literal (the
 // served page's inline <script>) and reference client-only globals
 // (window, document, ...) at their own top level, so they throw here --
 // see loadOneClientFunction below for those instead, and tools/render_check.js
@@ -77,7 +78,7 @@ function loadSourceFunctions(...relFiles) {
 }
 
 // Files 09-24's own text is embedded as STRING CONTENT inside
-// 09_page-shell.js's outer template literal (renderBuilder's giant
+// src/page/09_page-shell.js's outer template literal (renderBuilder's giant
 // backtick string -- see that file's own build-time concatenation
 // comment), so by the time a real browser parses any of this code, it
 // has already passed through one round of template-literal string-escape
@@ -970,9 +971,9 @@ describe("audit fix: the cron connects the API key globals too", () => {
 // parameter from rendering the same page twice). So a channel collapsed to one
 // poster per distinct show, and adding episodes changed nothing.
 describe("bug: My Channels See All showed one item per show, not per episode", () => {
-  const channelItemId = loadOneClientFunction("20_client-channel-builder.js", "channelItemId");
+  const channelItemId = loadOneClientFunction("src/client/20_client-channel-builder.js", "channelItemId");
 
-  // Exactly how appendItems (23_client-list-management.js) dedupes.
+  // Exactly how appendItems (src/client/23_client-list-management.js) dedupes.
   function afterGridDedupe(items) {
     const seen = new Set();
     const kept = [];
@@ -1016,7 +1017,7 @@ describe("bug: My Channels See All showed one item per show, not per episode", (
   it("uses the show:season:episode shape every other consumer already expects", () => {
     const id = channelItemId({ imdbId: "tt0386676", showName: "The Office", season: 2, episode: 7 }, 0);
     assert.equal(id, "tt0386676:2:7");
-    // The poster click handler (19_client-search-and-likes.js) and
+    // The poster click handler (src/client/19_client-search-and-likes.js) and
     // openItemDetailsModal (23_) both recover the show by splitting on the
     // first colon -- for tt-prefixed and numeric TMDB ids alike.
     assert.equal(id.split(":")[0], "tt0386676");
@@ -1366,7 +1367,7 @@ describe("account lifecycle", () => {
     // land just after it and put its key back -- and `creatorsync:{u}` carries
     // the account's own provider API keys. Holding the username until any such
     // straggler has finished is what stops the next registrant inheriting it.
-    // See the tombstone comment in 02_http-and-creator-utils.js.
+    // See the tombstone comment in src/core/02_http-and-creator-utils.js.
     const tooSoon = await call(env, "/api/creator/create", {
       method: "POST",
       json: { creatorName: "alicedel" },
@@ -2063,15 +2064,15 @@ describe("D-8: a signed-out install link carries public lists only", () => {
   // signed-out visitor either builds something the save then refuses, or is
   // stopped from adding something the save would have taken.
   it("the builder page and the server draw the line in the same place", () => {
-    const serverSb = loadSourceFunctions("00_constants.js", "04_config-resolution.js");
+    const serverSb = loadSourceFunctions("src/core/00_constants.js", "src/core/04_config-resolution.js");
     const server = serverSb.entryAccountRequirement;
     // The page gets the server's own prefix list rendered into it.
     const prefixes = vm.runInContext("PERSONAL_SHELF_URL_PREFIXES", serverSb);
-    const isPersonalShelfSourceLine = loadOneClientFunction("16_client-row-core.js", "isPersonalShelfSourceLine", {
+    const isPersonalShelfSourceLine = loadOneClientFunction("src/client/16_client-row-core.js", "isPersonalShelfSourceLine", {
       URL, PERSONAL_SHELF_URL_PREFIXES: prefixes,
     });
-    const isPublicChannelRow = loadOneClientFunction("16_client-row-core.js", "isPublicChannelRow");
-    const client = loadOneClientFunction("16_client-row-core.js", "rowNeedsAccount", { isPersonalShelfSourceLine, isPublicChannelRow });
+    const isPublicChannelRow = loadOneClientFunction("src/client/16_client-row-core.js", "isPublicChannelRow");
+    const client = loadOneClientFunction("src/client/16_client-row-core.js", "rowNeedsAccount", { isPersonalShelfSourceLine, isPublicChannelRow });
     const ch = (p) => "channel:v1:" + JSON.stringify(p);
     const cases = [
       ...PUBLIC_ROWS, ...PERSONAL_ROWS.map(([u]) => u),
@@ -2133,7 +2134,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["25_api-catalog-routes.js", "26_api-creator-and-admin-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -2200,7 +2201,7 @@ describe("Trakt device code: a rate limit is handed back, not slept on", () => {
 // P2-10. The counter-family reads take a key range, not `LIKE 'prefix%'`,
 // which the (kind, day) primary key cannot serve.
 describe("P2-10: stats prefix reads use the primary key", () => {
-  const { statKindRange } = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "03_admin.js");
+  const { statKindRange } = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/admin/03_admin.js");
 
   it("bounds a prefix exactly, underscores and all", () => {
     const db = makeD1();
@@ -2213,7 +2214,7 @@ describe("P2-10: stats prefix reads use the primary key", () => {
   });
 
   it("lets the windowed leaderboard seek its prefix instead of reading every counter in the window", () => {
-    const src = fs.readFileSync(path.join(REPO_ROOT, "03_admin.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/admin/03_admin.js"), "utf8");
     const m = src.match(/"(SELECT kind, SUM\(n\) AS total FROM stats WHERE kind >= \? AND kind < \?[^"]*)"/);
     assert.ok(m, "the windowed query reads a kind range");
     const db = makeD1();
@@ -2226,10 +2227,10 @@ describe("P2-10: stats prefix reads use the primary key", () => {
 });
 
 // P2-7. Every log line the Worker writes goes through redactForLog, via the
-// module-level `console` at the top of 00_constants.js.
+// module-level `console` at the top of src/core/00_constants.js.
 describe("P2-7: logs never carry a secret", () => {
   it("masks keys and tokens in URLs, Bearer tokens and Creator Keys", () => {
-    const { redactForLog } = loadSourceFunctions("00_constants.js");
+    const { redactForLog } = loadSourceFunctions("src/core/00_constants.js");
     assert.equal(
       redactForLog("GET https://api.themoviedb.org/3/tv/1?api_key=SECRET&language=en"),
       "GET https://api.themoviedb.org/3/tv/1?api_key=[redacted]&language=en",
@@ -2241,7 +2242,7 @@ describe("P2-7: logs never carry a secret", () => {
   });
 
   it("masks credential fields in objects and headers, and keeps a KV key name readable", () => {
-    const sb = loadSourceFunctions("00_constants.js");
+    const sb = loadSourceFunctions("src/core/00_constants.js");
     const out = sb.redactForLog({
       key: "creator:alice", tmdbKey: "T1", traktAccessToken: "T2", creatorKey: "T3",
       Authorization: "Bearer T4", nested: { api_key: "T5", url: "https://x/?token=T6" },
@@ -2255,7 +2256,7 @@ describe("P2-7: logs never carry a secret", () => {
   });
 
   it("redacts an Error's message and stack but keeps its name", () => {
-    const { redactForLog } = loadSourceFunctions("00_constants.js");
+    const { redactForLog } = loadSourceFunctions("src/core/00_constants.js");
     const err = new TypeError("fetch failed for https://api.trakt.tv/x?access_token=T8");
     const out = redactForLog(err);
     assert.equal(out.name, "TypeError");
@@ -2263,7 +2264,7 @@ describe("P2-7: logs never carry a secret", () => {
   });
 
   it("routes the file's own console through it, to whatever console is current", () => {
-    const sb = loadSourceFunctions("00_constants.js");
+    const sb = loadSourceFunctions("src/core/00_constants.js");
     const seen = [];
     sb.console = { error: (...a) => seen.push(a), warn: (...a) => seen.push(a), log() {}, info() {}, debug() {} };
     vm.runInContext(`console.error("TMDB failed:", "https://api.themoviedb.org/3/x?api_key=LEAKED1");
@@ -2301,7 +2302,7 @@ describe("P2-3: JSON is no-store unless a route opts in to caching", () => {
   });
 
   it("makes a success no-store unless the route opts in", () => {
-    const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
+    const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js");
     sb.Response = Response;
     const cc = (res) => res.headers.get("cache-control");
     assert.equal(cc(sb.json({ ok: true, lists: [] })), "no-store", "a route that says nothing is not cached");
@@ -2371,12 +2372,12 @@ describe("P2-6: an outbound call that sets no timeout still gets one", () => {
   });
 });
 
-// P2-8. One install-config schema (INSTALL_CONFIG_FIELDS, 00_constants.js)
+// P2-8. One install-config schema (INSTALL_CONFIG_FIELDS, src/core/00_constants.js)
 // drives /api/save, resolveConfig, decodeConfig, the configure page and the
 // builder's save body. Every field is round-tripped here, so a field added to
 // the schema is covered the moment it exists.
 describe("P2-8: every install setting survives a save, from one schema", () => {
-  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
   const FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).map((f) => ({ ...f }));
   const ROW = { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" };
   // A value for each field that is NOT its default, so it has to be stored.
@@ -2556,7 +2557,7 @@ describe("My Channels does not quietly adopt a storyline or Explore row", () => 
       rowFor({ channelId: "ch-explore", shareCode: "ABC", catalogOnly: true, name: "Listed", items: [] }),
       rowFor({ channelId: "ch-mine", name: "Mine", items: [] }),
     ];
-    const sync = loadOneClientFunction("20_client-channel-builder.js", "ensureAllChannelsSyncedFromRows", {
+    const sync = loadOneClientFunction("src/client/20_client-channel-builder.js", "ensureAllChannelsSyncedFromRows", {
       document: { querySelectorAll: () => rows },
       loadLocalChannels: () => ({}),
       saveLocalChannelsMap: (m) => { saved = m; },
@@ -2578,10 +2579,10 @@ describe("My Channels does not quietly adopt a storyline or Explore row", () => 
     // isStorylineChannelInCatalog is the storyline-shaped name for the one
     // helper every channel button asks (isChannelInConfig), so it is loaded
     // with it -- the seam is the wrap, not a second copy of the needle.
-    const isChannelInConfig = loadOneClientFunction("20_client-channel-builder.js", "isChannelInConfig", {
+    const isChannelInConfig = loadOneClientFunction("src/client/20_client-channel-builder.js", "isChannelInConfig", {
       document: { querySelectorAll: () => urls }, String,
     });
-    const inCatalog = loadOneClientFunction("20_client-channel-builder.js", "isStorylineChannelInCatalog", {
+    const inCatalog = loadOneClientFunction("src/client/20_client-channel-builder.js", "isStorylineChannelInCatalog", {
       isChannelInConfig,
     });
     assert.equal(inCatalog("channel-movie_mcu_infinity_saga"), true);
@@ -2715,7 +2716,7 @@ describe("harness: the test D1 enforces D1's limits", () => {
 
 // Two Phase 1 correctness fixes that are easy to regress without noticing.
 describe("Phase 1: catalog ids and badge days", () => {
-  const fns = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "05_catalog-core.js");
+  const fns = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/catalog/05_catalog-core.js");
 
   // A TMDB id used to get "tt" glued on, so "550" became "tt550" -- a real,
   // unrelated IMDb title -- and "tmdb:680" became "tttmdb:680".
@@ -2844,7 +2845,7 @@ describe("request metrics (Analytics Engine)", () => {
   });
 
   it("groups by route, not by install id or list", () => {
-    const { routeFamily } = loadSourceFunctions("02_http-and-creator-utils.js");
+    const { routeFamily } = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     assert.equal(routeFamily("/Ab12Cd34/manifest.json"), "stremio:manifest");
     assert.equal(routeFamily("/Ab12Cd34/catalog/movie/x.json"), "stremio:catalog");
     assert.equal(routeFamily("/Ab12Cd34/configure"), "stremio:configure");
@@ -3189,8 +3190,8 @@ describe("list URL query-string handling", () => {
   // test can't tell "correctly detected, then failed for an unrelated
   // reason" apart from "misdetected", since /api/preview collapses every
   // failure to one generic error message before it reaches the client.
-  const configFns = loadSourceFunctions("04_config-resolution.js");
-  const guessNameFromUrl = loadOneClientFunction("19_client-search-and-likes.js", "guessNameFromUrl");
+  const configFns = loadSourceFunctions("src/core/04_config-resolution.js");
+  const guessNameFromUrl = loadOneClientFunction("src/client/19_client-search-and-likes.js", "guessNameFromUrl");
 
   it("guessNameFromUrl strips a trailing query string instead of using it as the guessed name", () => {
     // The exact reported bug: a trailing slash before the "?" put the
@@ -3217,7 +3218,7 @@ describe("list URL query-string handling", () => {
     assert.equal(guessNameFromUrl("https://mdblist.com/lists/someone/television-classics"), "Television Classics");
   });
 
-  it("guessNameFromUrl's title-case regex must stay double-escaped (\\\\b\\\\w) to survive being embedded in 09_page-shell.js's own template literal", () => {
+  it("guessNameFromUrl's title-case regex must stay double-escaped (\\\\b\\\\w) to survive being embedded in src/page/09_page-shell.js's own template literal", () => {
     // This is the actual reported bug behind "it names it like this imdb
     // top rated movies" resurfacing later as "HD documentary movies 1980
     // to today" (only the acronym step ran; every other word stayed
@@ -3225,7 +3226,7 @@ describe("list URL query-string handling", () => {
     // actually matched anything") swapped a correctly *double*-escaped
     // regex for a single-escaped one, believing the double escaping was
     // the bug. It wasn't: this file's own text is embedded as string
-    // content inside 09_page-shell.js's outer template literal, so it
+    // content inside src/page/09_page-shell.js's outer template literal, so it
     // passes through one round of backslash escape-cooking (see
     // cookTemplateLiteralEscapes's own comment above) before a browser
     // ever parses it as code. A single \b\w survives that pass as a
@@ -3250,7 +3251,7 @@ describe("list URL query-string handling", () => {
     // object -- it's built inside a separate vm realm, whose Object
     // prototype differs from this test file's own, which trips
     // deepStrictEqual's own-realm check even when every field matches.
-    const parseListSearchIntent = loadOneClientFunction("19_client-search-and-likes.js", "parseListSearchIntent");
+    const parseListSearchIntent = loadOneClientFunction("src/client/19_client-search-and-likes.js", "parseListSearchIntent");
     const mdb = parseListSearchIntent("mdblist trending movies");
     assert.equal(mdb.term, "trending movies");
     assert.equal(mdb.source, "MDBList");
@@ -3321,7 +3322,7 @@ describe("custom list catalog pagination (imported list See All)", () => {
   // a Custom List through /api/preview with an advancing skip, so this is
   // a plain server-side pagination bug, testable directly against the real
   // source file (00-08 is real standalone JS, see loadSourceFunctions).
-  const catalogFns = loadSourceFunctions("05_catalog-core.js");
+  const catalogFns = loadSourceFunctions("src/catalog/05_catalog-core.js");
 
   function makeMovieItems(n) {
     const items = [];
@@ -3381,16 +3382,16 @@ describe("a catalog row never keeps a raw URL as its own name", () => {
   // mobile, a long unbroken URL forced the See All header's like/+Add
   // buttons off the edge of the screen, since they share a flex row with
   // the title (see #detailTitle's own min-width: 0 fix in
-  // 09_page-shell.js). addRow now falls back to guessNameFromUrl for a
+  // src/page/09_page-shell.js). addRow now falls back to guessNameFromUrl for a
   // URL-shaped name so a raw URL never reaches the DOM as a "name" at all.
   function makeMockDiv() {
     return { className: "", dataset: {}, classList: { add: () => {} }, innerHTML: "", querySelector: () => null };
   }
 
   it("addRow substitutes a humanized name when the given name is itself a URL", () => {
-    const guessNameFromUrl = loadOneClientFunction("19_client-search-and-likes.js", "guessNameFromUrl");
+    const guessNameFromUrl = loadOneClientFunction("src/client/19_client-search-and-likes.js", "guessNameFromUrl");
     let createdDiv = null;
-    const addRow = loadOneClientFunction("16_client-row-core.js", "addRow", {
+    const addRow = loadOneClientFunction("src/client/16_client-row-core.js", "addRow", {
       guessNameFromUrl,
       escapeHtml: (s) => String(s == null ? "" : s),
       escapeAttr: (s) => String(s == null ? "" : s),
@@ -3426,9 +3427,9 @@ describe("a catalog row never keeps a raw URL as its own name", () => {
   });
 
   it("addRow leaves an already-real name untouched", () => {
-    const guessNameFromUrl = loadOneClientFunction("19_client-search-and-likes.js", "guessNameFromUrl");
+    const guessNameFromUrl = loadOneClientFunction("src/client/19_client-search-and-likes.js", "guessNameFromUrl");
     let createdDiv = null;
-    const addRow = loadOneClientFunction("16_client-row-core.js", "addRow", {
+    const addRow = loadOneClientFunction("src/client/16_client-row-core.js", "addRow", {
       guessNameFromUrl,
       escapeHtml: (s) => String(s == null ? "" : s),
       escapeAttr: (s) => String(s == null ? "" : s),
@@ -3465,9 +3466,9 @@ describe("custom list Movies/Shows tab filtering (imported list See All)", () =>
   const movieItem = { imdbId: "tt1000000", title: "Some Movie", type: "movie", year: 2020 };
   const formatWatchItemLabel = (it) => ({ title: it.title, subtitle: "" });
 
-  it("Your Custom Lists' View button: a plain movie gets no showId (22_client-creator-profile.js)", () => {
+  it("Your Custom Lists' View button: a plain movie gets no showId (src/client/22_client-creator-profile.js)", () => {
     const mapper = loadInlineItemMapper(
-      "22_client-creator-profile.js",
+      "src/client/22_client-creator-profile.js",
       "const sample = rawListItems.map((it) => {",
       0,
       {
@@ -3484,9 +3485,9 @@ describe("custom list Movies/Shows tab filtering (imported list See All)", () =>
     assert.equal(mapped.showId, null, "a plain movie must not get a truthy showId");
   });
 
-  it("openListDetailsPage's customlist:v1: derivation: a plain movie gets no showId (23_client-list-management.js)", () => {
+  it("openListDetailsPage's customlist:v1: derivation: a plain movie gets no showId (src/client/23_client-list-management.js)", () => {
     const mapper = loadInlineItemMapper(
-      "23_client-list-management.js",
+      "src/client/23_client-list-management.js",
       "const itemsToProcess = isCw ? (typeof dedupeContinueWatchingItems === 'function' ? dedupeContinueWatchingItems(rawItems) : rawItems) : rawItems;\n          const sample = itemsToProcess.map((it) => {",
       0,
       {
@@ -3506,7 +3507,7 @@ describe("custom list Movies/Shows tab filtering (imported list See All)", () =>
   it("a genuine show item still keeps its showId (both call sites)", () => {
     const showItem = { showId: "tt2000000", showTitle: "Some Show", type: "series", id: "tt2000000:1:1" };
     const creatorMapper = loadInlineItemMapper(
-      "22_client-creator-profile.js",
+      "src/client/22_client-creator-profile.js",
       "const sample = rawListItems.map((it) => {",
       0,
       {
@@ -3533,7 +3534,7 @@ describe("list-details grid never renders a duplicate page (defense in depth)", 
   it("a page that repeats already-seen ids is not concatenated into the grid a second time", () => {
     const seenItemIds = new Set();
     const winState = { _currentListDetailsAllItems: [] };
-    const appendItems = loadOneClientFunction("23_client-list-management.js", "appendItems", {
+    const appendItems = loadOneClientFunction("src/client/23_client-list-management.js", "appendItems", {
       seenItemIds,
       window: winState,
       annotatePersonalItem: (it) => it,
@@ -3574,7 +3575,7 @@ describe("list-details See All scrolls smoothly through a large multi-page list"
     const renderCalls = [];
     const appendCalls = [];
     const winState = {};
-    const appendItems = loadOneClientFunction("23_client-list-management.js", "appendItems", {
+    const appendItems = loadOneClientFunction("src/client/23_client-list-management.js", "appendItems", {
       seenItemIds: new Set(),
       window: winState,
       annotatePersonalItem: (it) => it,
@@ -3602,7 +3603,7 @@ describe("liked lists feed: this add-on's own lists", () => {
     let renderedLists = null;
     const fetchedUrls = [];
     const makeContainer = () => ({ innerHTML: "", dataset: {}, children: [], innerText: "" });
-    const renderLikedListsFeed = loadOneClientFunction("19_client-search-and-likes.js", "renderLikedListsFeed", {
+    const renderLikedListsFeed = loadOneClientFunction("src/client/19_client-search-and-likes.js", "renderLikedListsFeed", {
       ORIGIN: "https://example.test",
       document: { getElementById: (id) => (id === "likedListsFeed" ? makeContainer() : null) },
       getLikedListsSet: () => new Set(["alice/my-list"]),
@@ -3638,7 +3639,7 @@ describe("liked lists feed: this add-on's own lists", () => {
   it("falls back gracefully when the liked list was deleted/unpublished since (unit)", async () => {
     let renderedLists = null;
     const makeContainer = () => ({ innerHTML: "", dataset: {}, children: [], innerText: "" });
-    const renderLikedListsFeed = loadOneClientFunction("19_client-search-and-likes.js", "renderLikedListsFeed", {
+    const renderLikedListsFeed = loadOneClientFunction("src/client/19_client-search-and-likes.js", "renderLikedListsFeed", {
       ORIGIN: "https://example.test",
       document: { getElementById: (id) => (id === "likedListsFeed" ? makeContainer() : null) },
       getLikedListsSet: () => new Set(["alice/gone-list"]),
@@ -3658,7 +3659,7 @@ describe("liked lists feed: this add-on's own lists", () => {
 describe("delete-account confirmation", () => {
   it("client sends the confirm:'DELETE' the server requires (unit)", async () => {
     let capturedBody = null;
-    const handleDeleteAccount = loadOneClientFunction("22_client-creator-profile.js", "handleDeleteAccount", {
+    const handleDeleteAccount = loadOneClientFunction("src/client/22_client-creator-profile.js", "handleDeleteAccount", {
       ORIGIN: "https://example.test",
       activeCreator: { creatorName: "alicedelete", displayName: "Alice" },
       document: { getElementById: () => null },
@@ -4049,12 +4050,12 @@ describe("audit fix 8: handlePosterImgError works for every call site's markup",
   }
   function load() {
     const doc = { createElement: (t) => makeEl(t) };
-    return loadOneClientFunction("23_client-list-management.js", "handlePosterImgError", {
+    return loadOneClientFunction("src/client/23_client-list-management.js", "handlePosterImgError", {
       document: doc,
       ORIGIN: "https://example.test",
       fetch: () => Promise.reject(new Error("no network")),
       showPosterPlaceholderFor: loadOneClientFunction(
-        "23_client-list-management.js", "showPosterPlaceholderFor", { document: doc }
+        "src/client/23_client-list-management.js", "showPosterPlaceholderFor", { document: doc }
       ),
     });
   }
@@ -4306,12 +4307,12 @@ describe("audit fix 5: shared-key fan-out endpoints are bounded", () => {
   it("client chunks bulk-resolve to exactly the size the server accepts", () => {
     // The chunk size is interpolated from the same server constant the
     // route validates against, so the two cannot drift apart.
-    const src = fs.readFileSync(path.join(REPO_ROOT, "18_client-copy-and-trakt-export.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/client/18_client-copy-and-trakt-export.js"), "utf8");
     assert.match(src, /const CHUNK = \$\{BULK_RESOLVE_ITEMS_MAX\};/,
       "the client chunk size must come from BULK_RESOLVE_ITEMS_MAX, not a hardcoded number");
-    const constants = fs.readFileSync(path.join(REPO_ROOT, "00_constants.js"), "utf8");
+    const constants = fs.readFileSync(path.join(REPO_ROOT, "src/core/00_constants.js"), "utf8");
     const m = constants.match(/const BULK_RESOLVE_ITEMS_MAX = (\d+);/);
-    assert.ok(m, "BULK_RESOLVE_ITEMS_MAX should be defined in 00_constants.js");
+    assert.ok(m, "BULK_RESOLVE_ITEMS_MAX should be defined in src/core/00_constants.js");
     // ~2 TMDB calls per item must stay well inside Cloudflare's 1,000
     // subrequests per invocation.
     assert.ok(Number(m[1]) * 2 < 900, "the cap must leave subrequest headroom");
@@ -4530,7 +4531,7 @@ describe("admin feedback: a failed write says what failed", () => {
   it("leaves no feedback write that drops the error it caught", () => {
     // The defect was structural: four catches that bound `e` and never used
     // it. This is what stops a fifth being added the same way.
-    const sources = ["25_api-catalog-routes.js", "26_api-creator-and-admin-routes.js"];
+    const sources = ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"];
     for (const rel of sources) {
       const src = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
       let from = 0;
@@ -4559,8 +4560,8 @@ describe("admin feedback: a failed write says what failed", () => {
 // containers beside it to decide whether the feed had already loaded. That
 // test was true from the first paint, so the loader never ran.
 describe("Lists -> Liked: the feed loads without being asked twice", () => {
-  const markup = fs.readFileSync(path.join(REPO_ROOT, "12_tab-custom-lists.js"), "utf8");
-  const core = fs.readFileSync(path.join(REPO_ROOT, "16_client-row-core.js"), "utf8");
+  const markup = fs.readFileSync(path.join(REPO_ROOT, "src/page/12_tab-custom-lists.js"), "utf8");
+  const core = fs.readFileSync(path.join(REPO_ROOT, "src/client/16_client-row-core.js"), "utf8");
   // Anchored inside switchListsSubmenu specifically: switchTab earlier in the
   // same file has its own `if (name === ...)` chain, so an unanchored search
   // finds that one and silently tests nothing.
@@ -4588,7 +4589,7 @@ describe("Lists -> Liked: the feed loads without being asked twice", () => {
     // renderLikedListsFeed returns early when the liked count it last
     // rendered still matches and the container is not mid-load. The caller's
     // job is to call it, not to second-guess it.
-    const feed = fs.readFileSync(path.join(REPO_ROOT, "19_client-search-and-likes.js"), "utf8");
+    const feed = fs.readFileSync(path.join(REPO_ROOT, "src/client/19_client-search-and-likes.js"), "utf8");
     const fn = feed.slice(feed.indexOf("async function renderLikedListsFeed"));
     assert.match(fn.slice(0, 1200), /if \(!forceRefresh && container\.dataset\.likedCount === String\(likedUrls\.length\)/,
       "the loader's own guard is what makes the unconditional call cheap");
@@ -4617,9 +4618,9 @@ describe("Lists -> Liked: the feed loads without being asked twice", () => {
 });
 
 describe("Catalogs -> Quick Add: every section is a card with a subtitle", () => {
-  const catalogs = fs.readFileSync(path.join(REPO_ROOT, "10_tab-search-add.js"), "utf8");
-  const channels = fs.readFileSync(path.join(REPO_ROOT, "13_tab-channels.js"), "utf8");
-  const shell = fs.readFileSync(path.join(REPO_ROOT, "09_page-shell.js"), "utf8");
+  const catalogs = fs.readFileSync(path.join(REPO_ROOT, "src/page/10_tab-search-add.js"), "utf8");
+  const channels = fs.readFileSync(path.join(REPO_ROOT, "src/page/13_tab-channels.js"), "utf8");
+  const shell = fs.readFileSync(path.join(REPO_ROOT, "src/page/09_page-shell.js"), "utf8");
   const count = (src, re) => (src.match(re) || []).length;
 
   it("gives every section a card, a title and a subtitle -- one of each", () => {
@@ -4678,7 +4679,7 @@ describe("audit fix 14: every env var the code requires is documented", () => {
     const wrangler = fs.readFileSync(path.join(REPO_ROOT, "wrangler.toml"), "utf8");
     const docs = ops + "\n" + wrangler;
     const used = new Set();
-    for (const f of fs.readdirSync(REPO_ROOT).filter((n) => /^\d\d_.*\.js$/.test(n))) {
+    for (const f of listSources(REPO_ROOT).filter((n) => /(?:^|\/)\d\d_.*\.js$/.test(n))) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/\benv\.([A-Z][A-Z0-9_]+)/g)) used.add(m[1]);
     }
@@ -4753,7 +4754,7 @@ describe("audit fix 9: stat counters are atomic when D1 is bound", () => {
 
 describe("audit fix 13: outbound requests are bounded by a timeout", () => {
   it("wires a timeout signal into the shared fetch helper", async () => {
-    const sandbox = loadSourceFunctions("02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     let sawSignal = false;
     sandbox.fetch = async (_url, opts) => { sawSignal = !!(opts && opts.signal); return { status: 200 }; };
     sandbox.AbortSignal = { timeout: (ms) => ({ __timeoutMs: ms }) };
@@ -4762,7 +4763,7 @@ describe("audit fix 13: outbound requests are bounded by a timeout", () => {
   });
 
   it("leaves a caller's own signal alone", async () => {
-    const sandbox = loadSourceFunctions("02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     const mine = { mine: true };
     let seen = null;
     sandbox.fetch = async (_url, opts) => { seen = opts.signal; return { status: 200 }; };
@@ -4772,7 +4773,7 @@ describe("audit fix 13: outbound requests are bounded by a timeout", () => {
   });
 
   it("still works where AbortSignal.timeout is unavailable", async () => {
-    const sandbox = loadSourceFunctions("02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     let called = false;
     sandbox.fetch = async () => { called = true; return { status: 200 }; };
     // No AbortSignal in this sandbox at all -- the capability is probed,
@@ -4782,7 +4783,7 @@ describe("audit fix 13: outbound requests are bounded by a timeout", () => {
   });
 
   it("turns a hung upstream into a rejection so the stale fallback can serve", async () => {
-    const sandbox = loadSourceFunctions("02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     // loadSourceFunctions' sandbox is deliberately minimal; the Workers
     // runtime provides these.
     sandbox.setTimeout = setTimeout;
@@ -4795,7 +4796,7 @@ describe("audit fix 13: outbound requests are bounded by a timeout", () => {
   });
 
   it("passes a value straight through when it settles in time", async () => {
-    const sandbox = loadSourceFunctions("02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     sandbox.setTimeout = setTimeout;
     sandbox.clearTimeout = clearTimeout;
     assert.equal(await sandbox.withTimeout(Promise.resolve("ok"), 1000, "TMDB"), "ok");
@@ -4906,7 +4907,7 @@ describe("audit fix 12: deleting an account leaves nothing behind", () => {
 
 
 describe("audit fix 7: error messages are useful but cannot carry a secret", () => {
-  const load = () => loadSourceFunctions("02_http-and-creator-utils.js").safeErrorMessage;
+  const load = () => loadSourceFunctions("src/core/02_http-and-creator-utils.js").safeErrorMessage;
 
   it("keeps the genuinely useful upstream message", () => {
     const safeErrorMessage = load();
@@ -4955,7 +4956,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["25_api-catalog-routes.js", "26_api-creator-and-admin-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
@@ -5177,13 +5178,13 @@ describe("watch history See All: removing an item does not rebuild the grid", ()
     };
   }
   function load(dom, win, grouped) {
-    return loadOneClientFunction("23_client-list-management.js", "updateWatchHistoryGridAfterRemoval", {
+    return loadOneClientFunction("src/client/23_client-list-management.js", "updateWatchHistoryGridAfterRemoval", {
       document: dom.document,
       window: win,
       localStorage: { getItem: (k) => (k === "myListAddon:watchHistoryGroupShows" ? (grouped ? "true" : "false") : null) },
-      watchHistoryTileCount: loadOneClientFunction("23_client-list-management.js", "watchHistoryTileCount", {
-        watchHistoryPassesFilter: loadOneClientFunction("23_client-list-management.js", "watchHistoryPassesFilter", {
-          watchHistoryGridType: loadOneClientFunction("23_client-list-management.js", "watchHistoryGridType"),
+      watchHistoryTileCount: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryTileCount", {
+        watchHistoryPassesFilter: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryPassesFilter", {
+          watchHistoryGridType: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryGridType"),
         }),
       }),
     });
@@ -5313,7 +5314,7 @@ describe("watch history See All: the remove handler stops rebuilding the grid", 
     const map = { "watch-history": { items: [{ id: "tt1" }, { id: "tt2" }] } };
     const win = {};
     const detailTab = { hidden: false };
-    const remove = loadOneClientFunction("22_client-creator-profile.js", "removeWatchHistoryItemDirect", {
+    const remove = loadOneClientFunction("src/client/22_client-creator-profile.js", "removeWatchHistoryItemDirect", {
       window: win,
       document: { getElementById: (id) => (id === "content-list-details" ? detailTab : null) },
       loadLocalCustomLists: () => map,
@@ -5369,12 +5370,12 @@ describe("watch history: grouped show tiles remove from Watch History", () => {
       _watchHistoryFilter: opts.filter || "all",
       _watchHistorySort: "recent",
     };
-    const render = loadOneClientFunction("23_client-list-management.js", "renderWatchHistoryGrid", {
+    const render = loadOneClientFunction("src/client/23_client-list-management.js", "renderWatchHistoryGrid", {
       document: { getElementById: (id) => els[id] || null },
       window: win,
       localStorage: { getItem: (k) => (k === "myListAddon:watchHistoryGroupShows" ? (opts.grouped ? "true" : "false") : null) },
       formatWatchItemLabel: (it) => ({ title: it.title || it.name || "", subtitle: "" }),
-      watchHistoryGridType: loadOneClientFunction("23_client-list-management.js", "watchHistoryGridType"),
+      watchHistoryGridType: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryGridType"),
       renderPosterGridChunked: (_grid, items) => { captured = items; },
     });
     render();
@@ -5399,7 +5400,7 @@ describe("watch history: grouped show tiles remove from Watch History", () => {
   it("removing that tile clears every watched episode of the show", () => {
     const map = { "watch-history": { items: HISTORY.slice() } };
     const win = {};
-    const remove = loadOneClientFunction("22_client-creator-profile.js", "removeWatchHistoryItemDirect", {
+    const remove = loadOneClientFunction("src/client/22_client-creator-profile.js", "removeWatchHistoryItemDirect", {
       window: win,
       document: { getElementById: () => null },
       loadLocalCustomLists: () => map,
@@ -5424,9 +5425,9 @@ describe("watch history: grouped show tiles remove from Watch History", () => {
   });
 
   it("agrees with watchHistoryTileCount about how many tiles there are", () => {
-    const count = loadOneClientFunction("23_client-list-management.js", "watchHistoryTileCount", {
-      watchHistoryPassesFilter: loadOneClientFunction("23_client-list-management.js", "watchHistoryPassesFilter", {
-        watchHistoryGridType: loadOneClientFunction("23_client-list-management.js", "watchHistoryGridType"),
+    const count = loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryTileCount", {
+      watchHistoryPassesFilter: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryPassesFilter", {
+        watchHistoryGridType: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryGridType"),
       }),
     });
     for (const grouped of [false, true]) {
@@ -6521,7 +6522,7 @@ describe("free-tier removal: one cron tick does all of its work", () => {
     const names = ["BULK_RESOLVE_SUBREQUEST_BUDGET", "DETAILS_BATCH_SUBREQUEST_BUDGET", "CRON_SUBREQUEST_BUDGET",
       "CRON_EPISODE_CHECK_FETCHES", "CRON_CHART_WARM_FETCHES", "CRON_EPISODE_CHECK_SHARE",
       "CRON_NEW_ON_STREAMING_SHARE", "CRON_AIRING_NEXT_SHARE", "CRON_BETTER_POSTER_SHARE"];
-    for (const f of fs.readdirSync(REPO_ROOT).filter((n) => /^\d\d_.*\.js$/.test(n))) {
+    for (const f of listSources(REPO_ROOT).filter((n) => /(?:^|\/)\d\d_.*\.js$/.test(n))) {
       const code = fs.readFileSync(path.join(REPO_ROOT, f), "utf8")
         .split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
       for (const n of names) {
@@ -6751,7 +6752,7 @@ describe("AIII fix: the low-severity cleanup", () => {
   it("no longer ships runListSearch", async () => {
     // The only function in the client bundle with neither an identifier
     // reference nor an inline-handler reference.
-    const src = fs.readFileSync(path.join(REPO_ROOT, "19_client-search-and-likes.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/client/19_client-search-and-likes.js"), "utf8");
     assert.ok(!/function runListSearch/.test(src), "dead function is back");
   });
 });
@@ -7538,8 +7539,8 @@ describe("P3: hygiene findings", () => {
     // In the real build these are one concatenated module, so getDailySeed
     // sees easternDateKey by hoisting. Recreate that here by evaluating both
     // files into one sandbox.
-    const src02 = fs.readFileSync(path.join(REPO_ROOT, "02_http-and-creator-utils.js"), "utf8");
-    const src03 = fs.readFileSync(path.join(REPO_ROOT, "03_admin.js"), "utf8");
+    const src02 = fs.readFileSync(path.join(REPO_ROOT, "src/core/02_http-and-creator-utils.js"), "utf8");
+    const src03 = fs.readFileSync(path.join(REPO_ROOT, "src/admin/03_admin.js"), "utf8");
     const grab = (src, name) => {
       const start = src.indexOf(`function ${name}`);
       let i = src.indexOf("{", start), d = 0;
@@ -7653,7 +7654,7 @@ describe("Test-suite blind spots named by the audit", () => {
   // which past the bound was a slug that WAS taken, so publishing wrote
   // straight over someone's existing list.
   it("pickFreeSlug returns empty rather than a taken slug when it runs out", async () => {
-    const src = fs.readFileSync(path.join(REPO_ROOT, "02_http-and-creator-utils.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/core/02_http-and-creator-utils.js"), "utf8");
     const grab = (name) => {
       let start = src.indexOf(`function ${name}`);
       // Keep a leading `async`, or the extracted body loses its await.
@@ -7929,7 +7930,7 @@ describe("N11: verifying a Creator Key is bounded, not free", () => {
   // back undefined and the loop below would silently run zero times.
   const CAP = Number(
     /const CREATOR_AUTH_VERIFY_PER_MINUTE = (\d+)/.exec(
-      fs.readFileSync(path.join(REPO_ROOT, "00_constants.js"), "utf8"),
+      fs.readFileSync(path.join(REPO_ROOT, "src/core/00_constants.js"), "utf8"),
     )[1],
   );
   assert.ok(Number.isFinite(CAP) && CAP > 0, "could not read the verification cap");
@@ -8045,7 +8046,7 @@ describe("test-suite blind spots the audit's mutation testing found", () => {
   // M9 -- the numbered scan's exact bound was never pinned, so an off-by-one
   // in how many candidates it tries went unnoticed.
   it("M9: slug allocation tries every numbered candidate before falling back", async () => {
-    const { pickFreeSlug } = loadSourceFunctions("02_http-and-creator-utils.js");
+    const { pickFreeSlug } = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     const tried = [];
     const slug = await pickFreeSlug("movies", async (candidate) => {
       tried.push(candidate);
@@ -8131,10 +8132,10 @@ describe("audit II §11.1: a provider answering 200 with nothing must not erase 
     // Emptiness is only suspicious for a cache the PROVIDER owns. Someone who
     // clears their own Trakt watchlist must not be shown the items they just
     // deleted, so the per-user fetchers deliberately do not opt in.
-    const src = fs.readFileSync(path.join(REPO_ROOT, "06_source-fetchers-mdblist-trakt.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/catalog/06_source-fetchers-mdblist-trakt.js"), "utf8");
     assert.ok(!/refuseEmptyOverwrite/.test(src),
       "the per-user Trakt/MDBList caches must not refuse an empty result");
-    const shared = fs.readFileSync(path.join(REPO_ROOT, "07_source-fetchers-tmdb-simkl.js"), "utf8");
+    const shared = fs.readFileSync(path.join(REPO_ROOT, "src/catalog/07_source-fetchers-tmdb-simkl.js"), "utf8");
     const optedIn = (shared.match(/refuseEmptyOverwrite: true/g) || []).length;
     assert.equal(optedIn, 4,
       "the four shared chart/collection caches should opt in (Simkl, Trakt, TMDB charts and TMDB collections)");
@@ -8544,8 +8545,8 @@ describe("R5: concurrent list creation does not lose the user's ordering", () =>
 // Watchlist and looks nothing like a list edit.
 describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
   const SRC = {
-    "02_http-and-creator-utils.js": fs.readFileSync(path.join(REPO_ROOT, "02_http-and-creator-utils.js"), "utf8"),
-    "26_api-creator-and-admin-routes.js": fs.readFileSync(path.join(REPO_ROOT, "26_api-creator-and-admin-routes.js"), "utf8"),
+    "src/core/02_http-and-creator-utils.js": fs.readFileSync(path.join(REPO_ROOT, "src/core/02_http-and-creator-utils.js"), "utf8"),
+    "src/api/26_api-creator-and-admin-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/26_api-creator-and-admin-routes.js"), "utf8"),
   };
 
   // Every place in the two storage-owning files that names a custom-list key,
@@ -8574,25 +8575,25 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
 
   // Touches a custom-list key AND changes it, so it must bump the stamp.
   const MUTATORS = [
-    "02_http-and-creator-utils.js :: deleteCreatorLists",
-    "02_http-and-creator-utils.js :: purgeCreatorData",
-    "26_api-creator-and-admin-routes.js :: handleSubtitlesTrack",
-    "26_api-creator-and-admin-routes.js :: /api/creator/lists/save",
-    "26_api-creator-and-admin-routes.js :: /api/creator/lists/reorder",
-    "26_api-creator-and-admin-routes.js :: /api/creator/sync/save-tracking",
+    "src/core/02_http-and-creator-utils.js :: deleteCreatorLists",
+    "src/core/02_http-and-creator-utils.js :: purgeCreatorData",
+    "src/api/26_api-creator-and-admin-routes.js :: handleSubtitlesTrack",
+    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/save",
+    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/reorder",
+    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/save-tracking",
   ];
   // Touches one without changing anything a browser needs told about. Each
   // entry is a claim someone has to re-justify if this list ever grows.
   const NON_MUTATORS = {
-    "02_http-and-creator-utils.js :: getCreatorList": "reads one record",
-    "02_http-and-creator-utils.js :: readAccountWatchlist": "reads the Watchlist's list record to pick its newest copy; writes nothing",
-    "02_http-and-creator-utils.js :: removeLegacyListLeftovers": "removes a deleted list's leftover legacy record with FF_V2_LISTS_ONLY; its only caller, deleteCreatorLists, bumps",
-    "26_api-creator-and-admin-routes.js :: /admin/api/creator-lists": "enumerates one creator's records for the admin browse; changes nothing",
-    "26_api-creator-and-admin-routes.js :: /api/creator/lists": "self-heals the order key on a read; the same response already carries the healed order",
-    "26_api-creator-and-admin-routes.js :: /api/creator/sync/load": "reads the order key",
-    "26_api-creator-and-admin-routes.js :: /api/search-published-lists": "reads published records",
-    "26_api-creator-and-admin-routes.js :: /admin/api/backfill-trending": "reads to build the trending set",
-    "26_api-creator-and-admin-routes.js :: /admin/api/delete-creator-list": "delegates to deleteCreatorLists, which bumps",
+    "src/core/02_http-and-creator-utils.js :: getCreatorList": "reads one record",
+    "src/core/02_http-and-creator-utils.js :: readAccountWatchlist": "reads the Watchlist's list record to pick its newest copy; writes nothing",
+    "src/core/02_http-and-creator-utils.js :: removeLegacyListLeftovers": "removes a deleted list's leftover legacy record with FF_V2_LISTS_ONLY; its only caller, deleteCreatorLists, bumps",
+    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/creator-lists": "enumerates one creator's records for the admin browse; changes nothing",
+    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists": "self-heals the order key on a read; the same response already carries the healed order",
+    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/load": "reads the order key",
+    "src/api/26_api-creator-and-admin-routes.js :: /api/search-published-lists": "reads published records",
+    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/backfill-trending": "reads to build the trending set",
+    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/delete-creator-list": "delegates to deleteCreatorLists, which bumps",
   };
 
   it("every place that mutates a custom-list key bumps the stamp", () => {
@@ -9114,7 +9115,7 @@ describe("a Trakt list reports its real size, not its first page's length", () =
   it("still reads a payload cached before the total was carried with it", async () => {
     // The cached value is now { items, totalItems }; every entry written
     // before this shipped is a bare array, and those stay valid for a day.
-    const sandbox = loadSourceFunctions("06_source-fetchers-mdblist-trakt.js");
+    const sandbox = loadSourceFunctions("src/catalog/06_source-fetchers-mdblist-trakt.js");
     const legacy = [{ movie: { title: "Old", ids: { imdb: "tt1" } } }];
     assert.deepEqual(sandbox.traktPayloadItems(legacy), legacy, "a bare array is still the items");
     assert.equal(sandbox.traktPayloadTotal(legacy), null, "and carries no total, as before");
@@ -9132,7 +9133,7 @@ describe("a Trakt list reports its real size, not its first page's length", () =
     // an object with two keys where an array used to be -- which would have
     // read as "not empty" and let a blank upstream reply overwrite the last
     // good chart.
-    const sandbox = loadSourceFunctions("02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     assert.equal(sandbox.isEmptyPayload({ items: [], totalItems: 0 }), true);
     assert.equal(sandbox.isEmptyPayload({ items: [1], totalItems: 1 }), false);
     assert.equal(sandbox.isEmptyPayload([]), true);
@@ -9140,7 +9141,7 @@ describe("a Trakt list reports its real size, not its first page's length", () =
   });
 
   it("mapTraktItems resolves season and episode entities to show IMDb or TMDB ID", () => {
-    const sandbox = loadSourceFunctions("06_source-fetchers-mdblist-trakt.js");
+    const sandbox = loadSourceFunctions("src/catalog/06_source-fetchers-mdblist-trakt.js");
     const rawItems = [
       { type: "season", season: { number: 2, ids: { trakt: 10 } }, show: { title: "Show One", year: 2023, ids: { imdb: "tt1000", tmdb: 500 } } },
       { type: "episode", episode: { season: 1, number: 5, ids: { trakt: 20 } }, show: { title: "Show Two", year: 2024, ids: { tmdb: 600 } } },
@@ -9157,7 +9158,7 @@ describe("a Trakt list reports its real size, not its first page's length", () =
   });
 
   it("mapTmdbItem preserves tmdb:<id> when imdbId is unavailable", () => {
-    const sandbox = loadSourceFunctions("07_source-fetchers-tmdb-simkl.js");
+    const sandbox = loadSourceFunctions("src/catalog/07_source-fetchers-tmdb-simkl.js");
     const it = { id: 309880, title: "Tunnel Warfare", poster_path: "/img.jpg", release_date: "2020-01-01" };
     const mapped = sandbox.mapTmdbItem(it, "tmdb:309880", "movie");
     assert.equal(mapped.id, "tmdb:309880");
@@ -9194,7 +9195,7 @@ describe("the last open items from the 2026-09-05 audit", () => {
   // and timingSafeEqualHex answers from the length before its constant-time
   // loop runs.
   it("compares the admin key without answering from its length", async () => {
-    const sandbox = loadSourceFunctions("02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
     sandbox.crypto = globalThis.crypto;
     sandbox.TextEncoder = TextEncoder;
     assert.equal(await sandbox.timingSafeEqualSecret("hunter2", "hunter2"), true);
@@ -9204,7 +9205,7 @@ describe("the last open items from the 2026-09-05 audit", () => {
     assert.equal(await sandbox.timingSafeEqualSecret("", ""), true);
     assert.equal(await sandbox.timingSafeEqualSecret(undefined, ""), true);
 
-    const src = fs.readFileSync(path.join(REPO_ROOT, "26_api-creator-and-admin-routes.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/api/26_api-creator-and-admin-routes.js"), "utf8");
     assert.match(src, /timingSafeEqualSecret\(submittedKey, env\.ADMIN_KEY\)/,
       "the admin login must use the length-blind comparison");
     assert.doesNotMatch(src, /timingSafeEqualHex\([^)]*ADMIN_KEY/,
@@ -9225,10 +9226,10 @@ describe("the last open items from the 2026-09-05 audit", () => {
   // are the kind that gets silently undone by someone tidying up. The comment
   // IS the decision -- if it goes, the reasoning goes with it.
   it("keeps the reasoning for the two accepted limitations where the code is", () => {
-    const admin = fs.readFileSync(path.join(REPO_ROOT, "03_admin.js"), "utf8");
+    const admin = fs.readFileSync(path.join(REPO_ROOT, "src/admin/03_admin.js"), "utf8");
     assert.match(admin, /KV has no atomic increment/,
       "bumpStat's KV path is lossy on purpose; the D1 branch is the answer for anyone who needs exact counters");
-    const routes = fs.readFileSync(path.join(REPO_ROOT, "25_api-catalog-routes.js"), "utf8");
+    const routes = fs.readFileSync(path.join(REPO_ROOT, "src/api/25_api-catalog-routes.js"), "utf8");
     assert.match(routes, /The id IS somebody's install\s*\n\s*\/\/ URL/,
       "no TTL on /api/save: expiring it breaks a live install months later");
     assert.match(routes, /\/api\/publish-list was removed in 1\.5\.3/,
@@ -9402,9 +9403,9 @@ describe("1.5.3: the admin dashboard reads those counters back out of D1", () =>
 // directly: "Popular Lists and Curated has a refresh button and the others
 // does not."
 describe("Discover: every sub-nav pill gets a header and a Refresh button", () => {
-  const tab = fs.readFileSync(path.join(REPO_ROOT, "11_tab-quick-add.js"), "utf8").replace(/\r\n/g, "\n");
-  const core = fs.readFileSync(path.join(REPO_ROOT, "16_client-row-core.js"), "utf8").replace(/\r\n/g, "\n");
-  const shell = fs.readFileSync(path.join(REPO_ROOT, "09_page-shell.js"), "utf8").replace(/\r\n/g, "\n");
+  const tab = fs.readFileSync(path.join(REPO_ROOT, "src/page/11_tab-quick-add.js"), "utf8").replace(/\r\n/g, "\n");
+  const core = fs.readFileSync(path.join(REPO_ROOT, "src/client/16_client-row-core.js"), "utf8").replace(/\r\n/g, "\n");
+  const shell = fs.readFileSync(path.join(REPO_ROOT, "src/page/09_page-shell.js"), "utf8").replace(/\r\n/g, "\n");
 
   it("gives the shared discoverListsFeed its own header and Refresh button", () => {
     const before = tab.slice(0, tab.indexOf('id="discoverListsFeed"'));
@@ -9441,7 +9442,7 @@ describe("Discover: every sub-nav pill gets a header and a Refresh button", () =
 
     const titles = core.slice(core.indexOf("const DISCOVER_FEED_TITLES"));
     const obj = titles.slice(0, titles.indexOf("};") + 2);
-    // Every pill 11_tab-quick-add.js wires to filterDiscoverShelves, other
+    // Every pill src/page/11_tab-quick-add.js wires to filterDiscoverShelves, other
     // than popular/curated (which get their own header, not this one), must
     // have a title here -- a pill added to the sub-nav without one falls
     // back to "All" silently instead of failing a test.
@@ -10091,10 +10092,10 @@ describe("Phase 4: Split sync blobs into relational D1 tables", () => {
     saveCreatorUserListsD1,
     readCreatorUserListsD1,
     fetchAutoTrackedCatalog,
-  } = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "05_catalog-core.js");
+  } = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/05_catalog-core.js");
 
   // A personal shelf is only served to a caller that has proved it owns the
-  // account -- see mayReadTrackedShelf (02_http-and-creator-utils.js). These
+  // account -- see mayReadTrackedShelf (src/core/02_http-and-creator-utils.js). These
   // tests are about what the D1 read returns, so they say who they are; the
   // test right below is the one that checks what happens when they do not.
   const asOwner = (u) => ({ verifiedOwner: u });
@@ -10662,7 +10663,7 @@ describe("Phase 4: Split sync blobs into relational D1 tables", () => {
 });
 
 describe("Anime Unpacking: restoring multi-season division for compressed anime shows", () => {
-  const tmdbFns = loadSourceFunctions("07_source-fetchers-tmdb-simkl.js");
+  const tmdbFns = loadSourceFunctions("src/catalog/07_source-fetchers-tmdb-simkl.js");
 
   it("pickDefaultEpisodeGroupId selects 'Seasons' for MASHLE (TMDB 204832)", () => {
     const mashleGroups = [
@@ -11187,7 +11188,7 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
     }));
     // A personal shelf is private unless its owner opted it in or the caller
     // proves it owns the account -- see mayReadTrackedShelf
-    // (02_http-and-creator-utils.js). This test is about which FIELDS survive
+    // (src/core/02_http-and-creator-utils.js). This test is about which FIELDS survive
     // the mapping, so it takes the opt-in route; the gate itself is covered in
     // "a personal shelf is not served to a caller that has proved nothing".
     await env.CONFIGS.put("creatorshare:alice", JSON.stringify({ "continue-watching": true }));
@@ -11263,10 +11264,10 @@ describe("Anime Unpacking: restoring multi-season division for compressed anime 
 });
 
 describe("worker: adult content filter & safe poster generator", () => {
-  // decodeConfig reads its fields through INSTALL_CONFIG_FIELDS (00_constants.js).
-  const httpUtils = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
-  const configFns = loadSourceFunctions("04_config-resolution.js");
-  const catalogFns = loadSourceFunctions("05_catalog-core.js");
+  // decodeConfig reads its fields through INSTALL_CONFIG_FIELDS (src/core/00_constants.js).
+  const httpUtils = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js");
+  const configFns = loadSourceFunctions("src/core/04_config-resolution.js");
+  const catalogFns = loadSourceFunctions("src/catalog/05_catalog-core.js");
 
   it("serves SVG safe poster at /api/safe-poster with valid headers", async () => {
     const env = makeEnv();
@@ -11336,7 +11337,7 @@ describe("worker: adult content filter & safe poster generator", () => {
   // "Remove duplicate items across lists" -- the real Stremio/Nuvio catalog
   // route, not just the decode. A config's first list of a type is served
   // untouched; every list after it loses whatever id an earlier same-type
-  // list already has (dedupeAcrossListEntries, 05_catalog-core.js). Built
+  // list already has (dedupeAcrossListEntries, src/catalog/05_catalog-core.js). Built
   // from customlist:v1: entries specifically: that source embeds its items
   // directly in the url and needs no network fetch at all, so what each
   // route call returns is exactly and only what this test put there.
@@ -11461,7 +11462,7 @@ describe("worker: adult content filter & safe poster generator", () => {
       airingNext: [],
     }));
     // Personal shelves are private unless opted in -- see mayReadTrackedShelf
-    // (02_http-and-creator-utils.js). This test is about poster filtering, not
+    // (src/core/02_http-and-creator-utils.js). This test is about poster filtering, not
     // about who may read the shelf.
     await env.CONFIGS.put("creatorshare:alice", JSON.stringify({ "continue-watching": true }));
 
@@ -11633,7 +11634,7 @@ describe("Title Search resilience (word variations and fuzzy fallback)", () => {
 // season stored as the string "0"): `<show>:1:1`, i.e. that show's series
 // premiere, under the title of the episode we meant.
 describe("worker: channel video ids are real stream requests", () => {
-  const channelFns = loadSourceFunctions("05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js");
+  const channelFns = loadSourceFunctions("src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
 
   function channelMeta(items, extra = {}, opts = {}) {
     const payload = { channelId: "ch1", name: "Test Channel", items, ...extra };
@@ -12353,7 +12354,7 @@ describe("worker: channel video ids are real stream requests", () => {
 });
 
 // TMDB has no episode air time at all, so the hour behind every "Airs Tuesday"
-// comes from TVmaze (fetchShowAirTime, 07_source-fetchers-tmdb-simkl.js).
+// comes from TVmaze (fetchShowAirTime, src/catalog/07_source-fetchers-tmdb-simkl.js).
 // These pin down what is asked of it, what is made of the answer, and that a
 // show it has never heard of -- or a streaming service with no slot -- degrades
 // to the date alone rather than to a guess.
@@ -12363,7 +12364,7 @@ describe("worker: channel video ids are real stream requests", () => {
 // which is exactly why air times shipped and then did not appear.
 describe("worker: the details cache key tracks the payload shape", () => {
   it("carries a shape version that a field change can move", async () => {
-    const src = fs.readFileSync(path.join(REPO_ROOT, "07_source-fetchers-tmdb-simkl.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/catalog/07_source-fetchers-tmdb-simkl.js"), "utf8");
     const declared = /const ITEM_DETAILS_SHAPE = "(v\d+)"/.exec(src);
     assert.ok(declared, "ITEM_DETAILS_SHAPE must be declared");
     assert.match(src, /tmdb:itemdetails:\$\{ITEM_DETAILS_SHAPE\}:/,
@@ -12379,7 +12380,7 @@ describe("worker: the details cache key tracks the payload shape", () => {
 
 describe("worker: episode air times", () => {
   function loadAirTimeSource(fetchStub) {
-    const sandbox = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "07_source-fetchers-tmdb-simkl.js");
+    const sandbox = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
     sandbox.fetch = fetchStub;
     return sandbox;
   }
@@ -12491,7 +12492,7 @@ describe("worker: episode air times", () => {
 // with nothing. These pin down what the add-on does, and deliberately does
 // NOT do, about it.
 describe("worker: a movie inside a channel", () => {
-  const channelFns = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js");
+  const channelFns = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
 
   const MOVIE = { kind: "movie", imdbId: "tt0133093", title: "The Matrix", year: 1999 };
   const EPISODE = { kind: "episode", imdbId: "tt0108778", season: 5, episode: 13, title: "Friends S5E13" };
@@ -13032,7 +13033,7 @@ describe("worker: re-sharing a channel you published", () => {
 });
 
 describe("worker: the generated channel poster", () => {
-  const posterFns = loadSourceFunctions("05_catalog-core.js");
+  const posterFns = loadSourceFunctions("src/catalog/05_catalog-core.js");
 
   // Every non-text element rendered in Nuvio and every <text> did not, while
   // Stremio drew the lot -- the signature of a rasterizer that resolves no
@@ -13081,7 +13082,7 @@ describe("worker: the generated channel poster", () => {
 // stuck on season 1 forever -- the Worker re-checks each show the channel
 // carries, in the background, and folds in whatever has aired since.
 describe("worker: channels that keep up with their shows", () => {
-  const newEpFns = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js");
+  const newEpFns = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
 
   const ep = (over = {}) => ({ kind: "episode", imdbId: "tt700", season: 1, episode: 1, ...over });
 
@@ -13258,7 +13259,7 @@ describe("worker: the channel lineup endpoint", () => {
     const over = { items, dailyRotate: true, rotateShows: 3, rotateEpisodes: 2 };
     const fromEndpoint = await lineup(env, over);
     const entry = { id: "ch1", type: "series", name: "Block Party", url: channelUrl(over) };
-    const channelFns = loadSourceFunctions("05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js");
+    const channelFns = loadSourceFunctions("src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
     const meta = await channelFns.buildChannelMeta(entry, "https://example.com");
     // Joined, not deep-compared: meta.videos comes from the vm realm
     // loadSourceFunctions evaluates in, and a strict deepEqual against an
@@ -13962,7 +13963,7 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
   // The specific names only: in a codebase where every file shares one scope,
   // a bare top-level `encrypt` / `decrypt` is a collision waiting to happen.
   const { encryptToken: encrypt, decryptToken: decrypt, encryptToken, decryptToken, hmacLookupKey } =
-    loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
+    loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js");
 
   // Deterministic 32-byte test keys (base64)
   const key1Bytes = new Uint8Array(32).fill(0x01);
@@ -14107,7 +14108,7 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
   });
 
   it("has no generic top-level encrypt / decrypt names", () => {
-    const src = fs.readFileSync(path.join(REPO_ROOT, "02_http-and-creator-utils.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/core/02_http-and-creator-utils.js"), "utf8");
     assert.ok(!/^(async )?function (encrypt|decrypt)\(/m.test(src));
     assert.ok(!/typeof env !== "undefined"/.test(src), "no lookups of a module-level env that does not exist");
   });
@@ -14115,8 +14116,8 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
 
 describe("P3a-3: accounts backfill (migrate.accounts)", () => {
   const { backfillAccounts, reconcileAccounts } = loadSourceFunctions(
-    "00_constants.js",
-    "02_http-and-creator-utils.js"
+    "src/core/00_constants.js",
+    "src/core/02_http-and-creator-utils.js"
   );
 
   async function getAdminCookie(env) {
@@ -14321,8 +14322,8 @@ describe("P3a-4: sessions API and authentication", () => {
     clearSessionCache,
     hashCreatorKey,
   } = loadSourceFunctions(
-    "00_constants.js",
-    "02_http-and-creator-utils.js"
+    "src/core/00_constants.js",
+    "src/core/02_http-and-creator-utils.js"
   );
   const PBKDF2_ITERATIONS = 100000;
 
@@ -14773,8 +14774,8 @@ describe("P3a-4: sessions API and authentication", () => {
 
 describe("P3a-5: CSRF middleware", () => {
   const { verifyCsrf } = loadSourceFunctions(
-    "00_constants.js",
-    "02_http-and-creator-utils.js"
+    "src/core/00_constants.js",
+    "src/core/02_http-and-creator-utils.js"
   );
 
   it("rejects cross-origin text/plain POST to /api/lists/like with 403 (acceptance criterion)", async () => {
@@ -14956,8 +14957,8 @@ describe("P3a-6: creator routes dual auth (session or key-in-body)", () => {
     buildSessionCookieHeader,
     clearSessionCache,
   } = loadSourceFunctions(
-    "00_constants.js",
-    "02_http-and-creator-utils.js"
+    "src/core/00_constants.js",
+    "src/core/02_http-and-creator-utils.js"
   );
 
   beforeEach(() => {
@@ -15418,8 +15419,8 @@ describe("P3a-7: blind index v2 (key_lookup_hmac and legacy fallback)", () => {
     hashCreatorKey,
     createSession,
   } = loadSourceFunctions(
-    "00_constants.js",
-    "02_http-and-creator-utils.js"
+    "src/core/00_constants.js",
+    "src/core/02_http-and-creator-utils.js"
   );
 
   const testPepper = "test_lookup_pepper_secret_value_32_bytes";
@@ -15875,7 +15876,7 @@ describe("P3a review: the accounts row follows the creator profile", () => {
     const env = makeEnv({ DB: makeD1() });
     const u = await createUser(env, "drifted");
     // Simulate drift: the mirror holds some other key's hash.
-    const { hashCreatorKey } = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js");
+    const { hashCreatorKey } = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js");
     const staleKey = "MYL-STAL-EKEY-2222";
     await env.DB.prepare(
       "INSERT INTO accounts (username, display_name, key_hash, created_at) VALUES ('drifted', 'drifted', ?, 1000) " +
@@ -15985,7 +15986,7 @@ describe("P3a review: the accounts row follows the creator profile", () => {
     // request, so its call sites inherit it. That it does is asserted right
     // here and again in tests/app-shell-client.test.mjs -- a body-less DELETE
     // is still a mutation, and forgetting that made signing out answer 403.
-    const shellSource = fs.readFileSync(path.join(REPO_ROOT, "24_client-backup-restore-presets.js"), "utf8");
+    const shellSource = fs.readFileSync(path.join(REPO_ROOT, "src/client/24_client-backup-restore-presets.js"), "utf8");
     const helperStart = shellSource.indexOf("async function appShellApiFetch(");
     assert.ok(helperStart !== -1, "appShellApiFetch should exist");
     const helperEnd = shellSource.indexOf("function appShellApiMessage(", helperStart);
@@ -15998,7 +15999,7 @@ describe("P3a review: the accounts row follows the creator profile", () => {
     // ...and for a DELETE with no body too, which is how signing out is sent.
     assert.ok(/DELETE/.test(helperBody), "a body-less DELETE is still a mutation");
 
-    const files = fs.readdirSync(REPO_ROOT).filter((f) => /^(0[0-9]|1[0-9]|2[0-4])_.*\.js$/.test(f));
+    const files = listSources(REPO_ROOT).filter((f) => /(?:^|\/)(0[0-9]|1[0-9]|2[0-4])_.*\.js$/.test(f));
     const offenders = [];
     for (const f of files) {
       const lines = fs.readFileSync(path.join(REPO_ROOT, f), "utf8").split(/\r?\n/);
@@ -16021,7 +16022,7 @@ describe("P3a review: the accounts row follows the creator profile", () => {
 // v2 links (/i/{token}) are created, edited, rotated and revoked through
 // /api/installs.
 describe("P3a-8: installs", () => {
-  const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
   const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
   const SECRET_FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).filter((f) => f.secret).map((f) => f.name);
 
@@ -16051,7 +16052,7 @@ describe("P3a-8: installs", () => {
   // Returned as plain data: each sandbox is its own realm, and a strict
   // comparison would otherwise fail on the prototypes alone.
   async function freshResolve(id, env, opts) {
-    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env, opts)));
   }
 
@@ -16503,7 +16504,7 @@ describe("P3a-8: installs", () => {
 describe("P3a-8: undoing the install move", () => {
   const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
   async function freshResolve(id, env) {
-    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env)));
   }
 
@@ -16836,9 +16837,9 @@ describe("P3a-9: provider connections", () => {
   });
 
   it("the page picks up a server-kept connection, and removes the server's copy on disconnect", () => {
-    const init = fs.readFileSync(path.join(REPO_ROOT, "24_client-backup-restore-presets.js"), "utf8");
+    const init = fs.readFileSync(path.join(REPO_ROOT, "src/client/24_client-backup-restore-presets.js"), "utf8");
     assert.match(init, /pickUpServerConnection\(\)/);
-    const oauth = fs.readFileSync(path.join(REPO_ROOT, "17_client-my-lists-and-trakt-oauth.js"), "utf8");
+    const oauth = fs.readFileSync(path.join(REPO_ROOT, "src/client/17_client-my-lists-and-trakt-oauth.js"), "utf8");
     for (const p of ["Trakt", "Mdblist", "Simkl", "Tmdb"]) {
       const body = oauth.slice(oauth.indexOf(`function disconnect${p}() {`)).split("\n}\n")[0];
       assert.match(body, new RegExp(`forgetServerConnection\\('${p.toLowerCase()}'\\)`), `disconnect${p}`);
@@ -16908,7 +16909,7 @@ describe("P3a-10: catalogs use the owner's connections", () => {
     assert.equal(r.headers.get("location"), "https://example.test/?connected=trakt");
   }
   async function freshResolve(id, env) {
-    const fresh = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env)));
   }
   const watchlistRow = { id: "tw", name: "Watchlist", type: "movie", url: "trakt:watchlist" };
@@ -17090,7 +17091,7 @@ describe("P3a-10: catalogs use the owner's connections", () => {
   it("when another request already renewed it, uses that token instead of marking the connection broken", async () => {
     const realFetch = globalThis.fetch;
     try {
-      const sb = loadSourceFunctions("00_constants.js", "02_http-and-creator-utils.js", "04_config-resolution.js", "27_installs.js", "28_connections.js");
+      const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
       let env;
       let accountId;
       const seen = stubTrakt({

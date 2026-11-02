@@ -22,14 +22,15 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadClient } from "./client-harness.mjs";
+import { listSources } from "./sources.mjs";
 
 const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-// 03_admin.js is the /admin page, P6-10's job. Every other split file is
+// src/admin/03_admin.js is the /admin page, P6-10's job. Every other split file is
 // either the client bundle (09_..24_) or the Worker.
 function clientSources() {
-  return fs.readdirSync(REPO_ROOT)
-    .filter((f) => /^(0[9]|1[0-9]|2[0-4])_/.test(f))
+  return listSources(REPO_ROOT)
+    .filter((f) => /(?:^|\/)(0[9]|1[0-9]|2[0-4])_/.test(f))
     .map((f) => ({ file: f, text: fs.readFileSync(path.join(REPO_ROOT, f), "utf8") }));
 }
 

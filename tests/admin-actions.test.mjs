@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { call, createUser, makeEnv } from "./harness.mjs";
 
 const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const ADMIN_SRC = fs.readFileSync(path.join(REPO_ROOT, "03_admin.js"), "utf8");
+const ADMIN_SRC = fs.readFileSync(path.join(REPO_ROOT, "src/admin/03_admin.js"), "utf8");
 
 // The dashboard, through the real request path: sign in, then ask for /admin.
 // (Same helper tests/worker.test.mjs uses for every admin route.)
@@ -172,7 +172,7 @@ describe("P6-10: the /admin dashboard names its actions", () => {
     assert.deepEqual(inlineHandlers(dashboardHtml), []);
     assert.deepEqual(inlineHandlers(signedOutHtml), []);
     // The source too: the markup the dashboard builds for itself lives in
-    // strings inside 03_admin.js, where a reintroduced attribute would be
+    // strings inside src/admin/03_admin.js, where a reintroduced attribute would be
     // invisible to a check that only reads the rendered page.
     assert.deepEqual(inlineHandlers(ADMIN_SRC), []);
   });
@@ -202,7 +202,7 @@ describe("P6-10: the /admin dashboard names its actions", () => {
     const sandbox = { console, URL, URLSearchParams, atob, btoa, Uint8Array, TextDecoder, TextEncoder, Response, Headers, Request, crypto: globalThis.crypto };
     sandbox.globalThis = sandbox;
     vm.createContext(sandbox);
-    for (const file of ["00_constants.js", "02_http-and-creator-utils.js", "03_admin.js"]) {
+    for (const file of ["src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/admin/03_admin.js"]) {
       vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, file), "utf8"), sandbox, { filename: file });
     }
     assert.equal(typeof sandbox.adminActArgs, "function");

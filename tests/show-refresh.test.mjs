@@ -1,5 +1,5 @@
 // P5-3: show.refresh keeps show_schedule current, and the shelves worked out
-// from it (39_activity-shelves.js) stay right as time passes. Driven through
+// from it (src/data/39_activity-shelves.js) stay right as time passes. Driven through
 // the real Worker (cron tick + queue), with TMDB and TVmaze faked.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -18,7 +18,7 @@ function loadShelves() {
   const sandbox = { console, URL, TextEncoder, TextDecoder, crypto: globalThis.crypto, Response, Headers, Request, Intl };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const rel of ["00_constants.js", "02_http-and-creator-utils.js", "29_media.js", "30_lists-backfill.js", "34_lists-v2-bridge.js", "36_activity-db.js", "39_activity-shelves.js"]) {
+  for (const rel of ["src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/data/29_media.js", "src/data/30_lists-backfill.js", "src/data/34_lists-v2-bridge.js", "src/data/36_activity-db.js", "src/data/39_activity-shelves.js"]) {
     vm.runInContext(read(rel), sandbox, { filename: rel });
   }
   return sandbox;

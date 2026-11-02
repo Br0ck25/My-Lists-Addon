@@ -495,10 +495,10 @@ describe("the shell's Imports screen", () => {
 
   it("agrees with the server about how many rows one import can hold", async () => {
     // The screen reads and trims the file itself, so its ceiling has to be the
-    // server's (IMPORT_ROWS_MAX, 49_imports.js) and not a number of its own.
-    const source = fs.readFileSync(new URL("../49_imports.js", import.meta.url), "utf8");
+    // server's (IMPORT_ROWS_MAX, src/jobs/49_imports.js) and not a number of its own.
+    const source = fs.readFileSync(new URL("../src/jobs/49_imports.js", import.meta.url), "utf8");
     const match = source.match(/const IMPORT_ROWS_MAX = (\d+);/);
-    assert.ok(match, "IMPORT_ROWS_MAX should be declared in 49_imports.js");
+    assert.ok(match, "IMPORT_ROWS_MAX should be declared in src/jobs/49_imports.js");
     const client = loadImportsClient();
     assert.equal(client.get("APP_SHELL_IMPORT_ROWS_MAX"), Number(match[1]));
   });

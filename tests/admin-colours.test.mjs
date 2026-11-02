@@ -1,4 +1,4 @@
-// The admin pages carry their own stylesheet (03_admin.js), so the guards that
+// The admin pages carry their own stylesheet (src/admin/03_admin.js), so the guards that
 // read /app.css never saw them (AI_UI_RULES: no `transition: all`; contrast
 // >= 4.5:1, never white text straight on --color-danger or the brand colour).
 //

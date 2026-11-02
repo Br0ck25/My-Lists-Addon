@@ -24,7 +24,7 @@ function extractFunction(src, name) {
 
 // The Worker's own copy, evaluated on its own.
 function workerSplit() {
-  const src = readFileSync(new URL("../05_catalog-core.js", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../src/catalog/05_catalog-core.js", import.meta.url), "utf8");
   const roman = src.match(/const CHANNEL_PART_ROMAN = \{[^}]*\};/)[0];
   const body = [
     roman,

@@ -28,8 +28,8 @@ function extractConst(src, name) {
 }
 
 function load() {
-  const src00 = readFileSync(new URL("../00_constants.js", import.meta.url), "utf8");
-  const src05 = readFileSync(new URL("../05_catalog-core.js", import.meta.url), "utf8");
+  const src00 = readFileSync(new URL("../src/core/00_constants.js", import.meta.url), "utf8");
+  const src05 = readFileSync(new URL("../src/catalog/05_catalog-core.js", import.meta.url), "utf8");
 
   const consts = [
     extractConst(src00, "BETTER_POSTERS_ORIGIN"),
@@ -531,7 +531,7 @@ describe("Better Posters on the website", () => {
 });
 
 // The client half of the same round trip. The POST body in generate()
-// (24_client-backup-restore-presets.js) is an allowlist too, so a key missing
+// (src/client/24_client-backup-restore-presets.js) is an allowlist too, so a key missing
 // there never leaves the browser -- the website would show Better Posters
 // working while every app kept the plain artwork.
 describe("Better Posters is sent to /api/save", () => {

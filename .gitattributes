@@ -20,7 +20,7 @@
 # has to be LF on every platform for the build to be reproducible.
 * text=auto eol=lf
 
-# Generated -- `python3 build.py` from header.js + the numbered sources.
+# Generated -- `python3 build.py` from src/header.js + the numbered sources.
 # Never edit it by hand; CI rebuilds it and fails on drift. Marked generated so
 # GitHub collapses its 3.3MB by default in reviews, where it is noise next to
 # the sources it was built from.

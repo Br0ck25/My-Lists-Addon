@@ -8,7 +8,7 @@ import { call, makeEnv } from "./harness.mjs";
 // shell, whatever the cookie or the variable says, and a link that still
 // carries ?ff_new_ui= is sent on without it.
 
-// APP_SHELL_TABS (00_constants.js), as the routes rather than the ids: this is
+// APP_SHELL_TABS (src/core/00_constants.js), as the routes rather than the ids: this is
 // what the server must answer and what the nav must link to.
 const VIEWS = [
   { path: "/catalogs", subs: ["all", "quickadd", "bulk"] },
@@ -156,7 +156,7 @@ describe("the new interface is the only page (the classic page retired)", () => 
     const randomizerAt = shell.text.indexOf("<span>Daily Randomizer</span>");
     assert.ok(rowsAt > 0 && rowsAt < editorAt && editorAt < randomizerAt, "the toggle should sit between the rows and the Daily Randomizer");
     // The CSS that hides it is in the shared stylesheet (/app.css is lifted
-    // out of the page -- 25_api-catalog-routes.js), not inline in the HTML.
+    // out of the page -- src/api/25_api-catalog-routes.js), not inline in the HTML.
     const css = await call(env, "/app.css");
     assert.ok(css.text.includes('#legacyDedupePanel { display: none; }'));
     // A first-time visitor is given the eight demo rows.

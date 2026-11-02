@@ -1,4 +1,4 @@
-// The scrobble queue (56_scrobble-queue.js): a recent play removed from Watch
+// The scrobble queue (src/jobs/56_scrobble-queue.js): a recent play removed from Watch
 // History or Continue Watching stays removed, through the real Worker with
 // TMDB faked. It used to come straight back on the next load, because
 // sync/load merged creatorscrobblequeue:{user} in whatever the record said.

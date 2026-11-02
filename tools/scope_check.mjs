@@ -7,10 +7,10 @@
 // looking, in the source, like it is right there. Three live bugs came from
 // exactly that, and every one of them was silent:
 //
-//   isShow    25_api-catalog-routes.js  -> /lists/curated/<slug> threw a
+//   isShow    src/api/25_api-catalog-routes.js  -> /lists/curated/<slug> threw a
 //                                          ReferenceError and answered HTTP 500
 //                                          on EVERY request, for months
-//   clientId  25_api-catalog-routes.js  -> the Trakt OAuth callback's /users/me
+//   clientId  src/api/25_api-catalog-routes.js  -> the Trakt OAuth callback's /users/me
 //                                          lookup threw before fetch was even
 //                                          called; the surrounding catch ate it,
 //                                          so browser logins silently never

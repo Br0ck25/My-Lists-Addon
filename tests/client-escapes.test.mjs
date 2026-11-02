@@ -18,6 +18,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadClient, renderPage } from "./client-harness.mjs";
+import { listSources } from "./sources.mjs";
 
 const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -27,10 +28,10 @@ const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Worker expression spliced into the page, so its escapes are the Worker's.
 function pageCodeLines() {
   const out = [];
-  const files = fs.readdirSync(REPO_ROOT).filter((f) => /^(09|1[0-9]|2[0-4])_.*\.js$/.test(f)).sort();
+  const files = listSources(REPO_ROOT).filter((f) => /(?:^|\/)(09|1[0-9]|2[0-4])_.*\.js$/.test(f)).sort();
   for (const file of files) {
     const lines = fs.readFileSync(path.join(REPO_ROOT, file), "utf8").split("\n");
-    let inPage = file !== "09_page-shell.js";
+    let inPage = file !== "src/page/09_page-shell.js";
     lines.forEach((line, i) => {
       if (!inPage && line.startsWith("function renderBuilder(")) inPage = true;
       if (!inPage) return;

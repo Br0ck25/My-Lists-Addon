@@ -118,8 +118,8 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 1. Add `migrations/NNNN_description.sql`. Make it additive (new tables, columns and indexes only) and safe to run twice (`IF NOT EXISTS`).
 2. End it with `INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES ('NNNN', CAST(strftime('%s','now') AS INTEGER) * 1000);`.
 3. Add the same objects to `schema.sql`, plus `('NNNN', 0)` to its ledger seed. The drift test fails if the two disagree.
-4. Add the migration's tables, indexes and columns to `D1_SCHEMA_MANIFEST` in `00_constants.js`.
-5. If the code **needs** the migration, raise `REQUIRED_SCHEMA_VERSION` in `00_constants.js` in the same change. Until the migration is applied, the deployed Worker then refuses API writes with a 503 "My Lists is being updated" instead of failing quietly. **Always apply the migration before deploying.**
+4. Add the migration's tables, indexes and columns to `D1_SCHEMA_MANIFEST` in `src/core/00_constants.js`.
+5. If the code **needs** the migration, raise `REQUIRED_SCHEMA_VERSION` in `src/core/00_constants.js` in the same change. Until the migration is applied, the deployed Worker then refuses API writes with a 503 "My Lists is being updated" instead of failing quietly. **Always apply the migration before deploying.**
 
 ### The activity database (Phase 3c)
 
@@ -209,7 +209,7 @@ Undo needs the same `TOKEN_ENCRYPTION_KEY`. Without that key the moved keys cann
 
 ## 9. Copying lists into the new list tables (P3b-3)
 
-> **Retired (2026-10-11).** The copy was done on the live site. Its buttons and `/admin/api/lists-backfill/*` and `/admin/api/migrate-accounts` routes were removed from the dashboard. The copy code (`30_lists-backfill.js`) stays only because the v2 tests build their data with it; the steps below are history.
+> **Retired (2026-10-11).** The copy was done on the live site. Its buttons and `/admin/api/lists-backfill/*` and `/admin/api/migrate-accounts` routes were removed from the dashboard. The copy code (`src/data/30_lists-backfill.js`) stays only because the v2 tests build their data with it; the steps below are history.
 
 Phase 3b moves lists, likes and channels into proper D1 tables. The first part copies every existing list into them. **It only copies.** The lists people use today are not changed, and nothing on the site reads the copies until `FF_V2_LISTS_READ` is turned on (§10). So running it changes nothing a visitor sees.
 
@@ -281,7 +281,7 @@ What it copies: every account's lists (with their order, items and likes), the o
 
 ## 12. Copying watch history into the activity database (P3c-3)
 
-> **Retired (2026-10-11).** The copy was done on the live site. Its button and `/admin/api/activity-backfill/*` routes were removed. `37_activity-backfill.js` stays because the hourly `activity.copy-new` job uses it for new accounts; the steps below are history.
+> **Retired (2026-10-11).** The copy was done on the live site. Its button and `/admin/api/activity-backfill/*` routes were removed. `src/data/37_activity-backfill.js` stays because the hourly `activity.copy-new` job uses it for new accounts; the steps below are history.
 
 Phase 3c moves watch history and show progress into their own database, `mylists-activity` (binding `DB_ACTIVITY`, §2 and §4). The first part copies what every account has. **It only copies.** The history people see today is not changed, and nothing on the site reads the copy yet, so running it changes nothing a visitor sees.
 
@@ -446,7 +446,7 @@ A link that still carries `?ff_new_ui=` (a bookmark, an old post) is sent to the
 
 **Nothing to configure.** Unlike P6-1 to P6-7, this one is not behind the new-UI cookie: it is the page's own markup and this browser's own storage, so it reaches every visitor once the new `worker_entry_combined.js` is deployed. Nothing in the dashboard, no migration and no variable.
 
-- **Every control names its action.** The buttons, boxes and lists in the builder no longer carry a line of JavaScript in the markup; a single listener runs them (`appActDispatch`, `16_client-row-core.js`). If a control ever "does nothing" in the new build, the browser console says `Action failed: <name>` (once per name) instead of failing silently, and `verify.sh`/`tools/html_checks.py` fail the build if a name does not exist in the bundle.
+- **Every control names its action.** The buttons, boxes and lists in the builder no longer carry a line of JavaScript in the markup; a single listener runs them (`appActDispatch`, `src/client/16_client-row-core.js`). If a control ever "does nothing" in the new build, the browser console says `Action failed: <name>` (once per name) instead of failing silently, and `verify.sh`/`tools/html_checks.py` fail the build if a name does not exist in the bundle.
 - **No more browser pop-ups.** A message that used to be an `alert()` is now the app's own toast, bottom centre; anything that needed a yes/no is the app's own dialog.
 - **Provider keys are no longer re-saved in the browser.** A Trakt, MDBList, Simkl or TMDB key or token lives in memory while the page is open, is read from the old stored copy if one is there, and the stored copy is cleaned up once the account (signed in) hands the same value back. Consequence to know: if a visitor is **not signed in** and pastes a key, it works for that visit but is not kept for the next one — signing in is what saves it. The Creator Key itself is untouched (it is what signs this browser in; it moves in P6-9).
 - **Nothing to undo** if the deploy has to be rolled back: the previous file re-stores what the old page stored.
@@ -480,7 +480,7 @@ What remains: a list built while signed out still lives in this browser (`myList
 - **Where you can see the reports:** Workers Logs (Observability → Logs), filtered on `[csp]` — one line per distinct violation per isolate, e.g. `[csp] refused: csp-violation require-trusted-types-for https://example.test`. If the Analytics Engine binding (`ANALYTICS`) is set, each report also writes one data point indexed `csp:<kind>`, which is where counts belong. Nothing is stored per report: the endpoint writes no KV and no D1.
 - **The reports are off unless you ask for them** (release branch, Release 10): set the Worker variable **`FF_CSP_TT_REPORT`** to `1` to send them, and delete it again when done. They are browser-generated POSTs, one per `innerHTML` assignment a page makes, and since P7-3 each one spends a D1 rate-limit write, so they belong on for an hour of work on the sinks, not on every visit. The switch touches only the report-only header; the enforced policy is the same either way.
 - **The endpoint's guardrails** (`handleCspReport`, `02_`): anonymous by necessity (a browser sends these with no cookie and no `Origin`, and a content type of `application/csp-report` or `application/reports+json`, which is why the CSRF check exempts it); answers `204` to everything, including junk and oversized bodies; caps a body at 8 KB (`CSP_REPORT_MAX_BYTES`); rate-limits per IP at 60 a minute (`CSP_REPORT_MAX_PER_MINUTE`); and keeps only the *origin* of a `blocked-uri` (a blocked URL can carry the payload that caused it, and the line goes to logs).
-- **The vendored zip reader** is `FFLATE_UMD_JS` in `01_icon-asset.js`, served at `/vendor/fflate-0.8.2.js` with `Cache-Control: public, max-age=31536000, immutable` and an `ETag` (the version is in the path, so a bump is a new URL and no browser can hold a stale copy). The service worker caches it beside `/app.js` and `/app.css`, so a zip import no longer needs the network. To update it: `npm pack fflate@<version>`, replace the raw string and the two constants, run the tests (`tests/csp.test.mjs` pins the SHA-256 of the exact bytes).
+- **The vendored zip reader** is `FFLATE_UMD_JS` in `src/core/01_icon-asset.js`, served at `/vendor/fflate-0.8.2.js` with `Cache-Control: public, max-age=31536000, immutable` and an `ETag` (the version is in the path, so a bump is a new URL and no browser can hold a stale copy). The service worker caches it beside `/app.js` and `/app.css`, so a zip import no longer needs the network. To update it: `npm pack fflate@<version>`, replace the raw string and the two constants, run the tests (`tests/csp.test.mjs` pins the SHA-256 of the exact bytes).
 - **Nothing to undo** if the deploy is rolled back: the previous file serves the previous header and the CDN script tag.
 
 ## 25. Cloudflare Access on the admin dashboard (P7-2)
@@ -530,7 +530,7 @@ What remains: a list built while signed out still lives in this browser (`myList
 - **Where to look when you wonder whether a limit is biting:** Workers Logs, filtered on `[ratelimit]`. To see the counters themselves, run this in the D1 Console (read-only):
   `SELECT scope, datetime(window_start / 1000, 'unixepoch') AS window, count FROM rate_counters ORDER BY window_start DESC LIMIT 30;`
   A row disappears once its window is a day old. Nothing in the dashboard shows these; they are operational counters, not statistics.
-- **Setting a limit** means editing the constant the call site names (`CSP_REPORT_MAX_PER_MINUTE`, `DETAILS_BATCH_IDS_PER_MINUTE`, `BULK_RESOLVE_ITEMS_PER_MINUTE`, `ADMIN_LOGIN_MAX_FAILURES_PER_DAY`, …) in `00_constants.js` and redeploying — there is deliberately no per-deployment variable for any of them, because a limit nobody can see in the code is a limit nobody can reason about. The one exception is §6's WAF rules, which are dashboard edits.
+- **Setting a limit** means editing the constant the call site names (`CSP_REPORT_MAX_PER_MINUTE`, `DETAILS_BATCH_IDS_PER_MINUTE`, `BULK_RESOLVE_ITEMS_PER_MINUTE`, `ADMIN_LOGIN_MAX_FAILURES_PER_DAY`, …) in `src/core/00_constants.js` and redeploying — there is deliberately no per-deployment variable for any of them, because a limit nobody can see in the code is a limit nobody can reason about. The one exception is §6's WAF rules, which are dashboard edits.
 - **Nothing to undo** if you roll the deploy back: the previous file writes `ratelimit:` KV keys again and ignores the table. The table itself is harmless without the code (it is only rows of `bucket:key` and counts, and it is not read or written by anything else), and the index is one of the ones `schema.sql` provisions.
 
 ## 27. D1 Read Replication (P8-1)

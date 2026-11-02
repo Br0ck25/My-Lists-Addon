@@ -1,5 +1,5 @@
 // "Enable media server user filtering" (renderTrackPlaybackSection,
-// 22_client-creator-profile.js): unticking it with names still in the list
+// src/client/22_client-creator-profile.js): unticking it with names still in the list
 // has to stay unticked. Having names saved used to switch the box on at every
 // redraw -- and every sync load redraws the section -- while the server, which
 // reads the saved choice, had filtering off.

@@ -47,10 +47,10 @@ const CHANNEL_PRESET_NETWORK_IDS_FOR_TEST = ["129", "2", "80", "174", "4", "56",
 // preset check compared the server's (capped-at-200) preset against
 // CHANNEL_POOL_MAX_ITEMS (5000), which a preset can never reach, so every
 // click fell through to a client-built pool with no cap of its own -- see
-// "New on Streaming" sibling entry and 20_client-channel-builder.js
+// "New on Streaming" sibling entry and src/client/20_client-channel-builder.js
 // for the full story. These tests cover the server half of the fix: the
 // shared preset builder (buildNetworkChannelPreset,
-// 07_source-fetchers-tmdb-simkl.js), its KV cache, and the daily cron
+// src/catalog/07_source-fetchers-tmdb-simkl.js), its KV cache, and the daily cron
 // prewarm that is meant to keep a Quick Add click from ever paying for a
 // live TMDB build.
 
@@ -248,7 +248,7 @@ describe("daily channel preset prewarm (cron)", () => {
     try {
       await runScheduledTick(env);
       // Cursor starts at 0 -> CHANNEL_PRESET_NETWORKS[0] is A&E, networkId "129"
-      // (00_constants.js) -- first in the same order as the Quick Add buttons.
+      // (src/core/00_constants.js) -- first in the same order as the Quick Add buttons.
       const cached = await kv.get("channel:preset:v2:129");
       assert.ok(cached, "the first tick must warm the first network in the list");
       assert.equal(JSON.parse(cached).items.length, 4);
@@ -269,7 +269,7 @@ describe("daily channel preset prewarm (cron)", () => {
       await runScheduledTick(env);
       await runScheduledTick(env);
       // A&E (129), ABC (2), Adult Swim (80) -- the first three entries in
-      // CHANNEL_PRESET_NETWORKS (00_constants.js), in order.
+      // CHANNEL_PRESET_NETWORKS (src/core/00_constants.js), in order.
       assert.ok(await kv.get("channel:preset:v2:129"), "network 1 must be warm");
       assert.ok(await kv.get("channel:preset:v2:2"), "network 2 must be warm");
       assert.ok(await kv.get("channel:preset:v2:80"), "network 3 must be warm");
@@ -313,7 +313,7 @@ describe("quickAddChannel's cached-preset gate (client)", () => {
   // match again by accident -- so this still has to compare against a real,
   // reachable bar (CHANNEL_PRESET_MIN_ITEMS), not the pool ceiling itself.
   it("still gates on a real bar, not the (now reachable) 5000-item pool ceiling", () => {
-    const src = fs.readFileSync(path.join(REPO_ROOT, "20_client-channel-builder.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/client/20_client-channel-builder.js"), "utf8");
     assert.match(
       src,
       /data\.channel\.items\.length >= CHANNEL_PRESET_MIN_ITEMS/,
@@ -331,7 +331,7 @@ describe("quickAddChannel's cached-preset gate (client)", () => {
   // the pool to 5,000 would silently reopen the "too large to save" bug
   // rather than actually fix it as the smaller 200-item pool happened to.
   it("saves a small presetNetworkId pointer for the catalog row, not the pool", () => {
-    const src = fs.readFileSync(path.join(REPO_ROOT, "20_client-channel-builder.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/client/20_client-channel-builder.js"), "utf8");
     assert.match(
       src,
       /presetNetworkId:\s*networkId/,
@@ -342,7 +342,7 @@ describe("quickAddChannel's cached-preset gate (client)", () => {
 
 describe("Quick Add network channels stay resolvable and small end to end", () => {
   it("channelSourceItems resolves a presetNetworkId pointer to the full cached pool", async () => {
-    const sb = loadSourceFunctions("00_constants.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js");
+    const sb = loadSourceFunctions("src/core/00_constants.js", "src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
     const items600 = Array.from({ length: 600 }, (_, i) => ({
       kind: "episode", imdbId: "tt" + (i % 30), season: 1, episode: i, showName: "Show " + (i % 30), epName: "Ep " + i, title: "t", released: "2024-01-01",
     }));
@@ -360,7 +360,7 @@ describe("Quick Add network channels stay resolvable and small end to end", () =
   });
 
   it("buildChannelMeta serves a real episode list for a presetNetworkId channel with zero TMDB calls", async () => {
-    const sb = loadSourceFunctions("00_constants.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js");
+    const sb = loadSourceFunctions("src/core/00_constants.js", "src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
     const items = Array.from({ length: 50 }, (_, i) => ({
       kind: "episode", imdbId: "tt900" + (i % 5), season: 1, episode: (i % 10) + 1, showName: "Show " + (i % 5), epName: "Ep " + i, title: "t", released: "2024-01-01",
     }));
@@ -379,7 +379,7 @@ describe("Quick Add network channels stay resolvable and small end to end", () =
   });
 
   it("fetchChannelCatalog renders a pointer channel's tile with no env/KV at all", () => {
-    const sb = loadSourceFunctions("00_constants.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js");
+    const sb = loadSourceFunctions("src/core/00_constants.js", "src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
     const pointerPayload = {
       channelId: "user-ch-3", name: "NBC", presetNetworkId: "6", shuffle: false, dailyRotate: true,
       poster: "https://example.com/api/channel-logo?path=/nbc.png", backdrop: "https://example.com/api/channel-logo?path=/nbc.png",

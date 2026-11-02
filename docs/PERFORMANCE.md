@@ -10,12 +10,12 @@ This document records the performance architecture, latency budgets, load test s
 
 | Path / Step | Target (`PERFORMANCE_AUDIT.md` §5) | Measured In-Process Baseline | Measured Edge / HTTP Baseline | Status | Key Mechanism |
 |---|---|---|---|---|---|
-| **Cache API / Isolate Memo Hit** (materialized row) | **< 5 ms** | **0.2 – 0.8 ms** (p95: 0.6 ms) | **2 – 8 ms** | Met | In-memory LRU memos (`BADGED_POSTER_CACHE`, `PER_USER_CACHE_MAP`) and KV materialized row snapshots (`54_materializer.js`) |
-| **Cold KV Install Snapshot + Chart Snapshot** (cold colo) | **< 40 ms** at p95 | **8 – 18 ms** (p95: 15.2 ms) | **22 – 35 ms** | Met | KV-backed install configuration and chart snapshot prewarming (`42_`, `48_chart-refresh.js`) |
-| **Personal Shelf** (indexed D1 queries on read replica) | **< 60 ms** at p95 | **4 – 12 ms** (p95: 11.4 ms) | **18 – 42 ms** | Met | D1 Read Replication via `env.DB.withSession(bookmark)` (`02_`, `39_activity-shelves.js`, `P8-1`) |
+| **Cache API / Isolate Memo Hit** (materialized row) | **< 5 ms** | **0.2 – 0.8 ms** (p95: 0.6 ms) | **2 – 8 ms** | Met | In-memory LRU memos (`BADGED_POSTER_CACHE`, `PER_USER_CACHE_MAP`) and KV materialized row snapshots (`src/jobs/54_materializer.js`) |
+| **Cold KV Install Snapshot + Chart Snapshot** (cold colo) | **< 40 ms** at p95 | **8 – 18 ms** (p95: 15.2 ms) | **22 – 35 ms** | Met | KV-backed install configuration and chart snapshot prewarming (`42_`, `src/catalog/48_chart-refresh.js`) |
+| **Personal Shelf** (indexed D1 queries on read replica) | **< 60 ms** at p95 | **4 – 12 ms** (p95: 11.4 ms) | **18 – 42 ms** | Met | D1 Read Replication via `env.DB.withSession(bookmark)` (`02_`, `src/data/39_activity-shelves.js`, `P8-1`) |
 | **Provider Live Call** (connected account rows only) | **< 800 ms** with timeout + stale fallback | **< 100 ms** (stale fallback) / **< 800 ms** (live) | **< 800 ms** | Met | Provider circuit breakers (`21_`), 30 s default fetch timeout (`OUTBOUND_DEFAULT_TIMEOUT_MS`, `02_`), and background job queue (`JOBS`) |
 | **Scrobble Burst** (50 concurrent webhooks / pings) | **< 100 ms** at p95, 0% errors | **25 – 45 ms** (p95: 42.1 ms) | **40 – 75 ms** | Met | Scoped scrobble token (`?st=`, `P7-6`), event-row tracking, and background queue processing |
-| **Directory Depth** (keyset cursor paging across 20+ pages) | **< 50 ms** at p95, constant-time $O(1)$ | **0.8 – 2.5 ms** (p95: 1.8 ms) | **15 – 32 ms** | Met | Keyset cursor pagination over partial indexes (`lists_directory_order`, migration `0016`, `33_lists-directory.js`) |
+| **Directory Depth** (keyset cursor paging across 20+ pages) | **< 50 ms** at p95, constant-time $O(1)$ | **0.8 – 2.5 ms** (p95: 1.8 ms) | **15 – 32 ms** | Met | Keyset cursor pagination over partial indexes (`lists_directory_order`, migration `0016`, `src/api/33_lists-directory.js`) |
 
 ---
 
@@ -79,7 +79,7 @@ Cross-reference of findings from `PERFORMANCE_AUDIT.md`:
 | **PF-B6** | BetterPosters waits up to 55 s on btttr.cc | Outbound HTTP stalls request | **Resolved (P5-9):** R2 caching (`BLOBS`) + background job `poster.fetch` with stale-while-revalidate. |
 | **PF-B7** | `readCreatorTrackingD1` unbounded SELECT | Large result sets on every sync | **Resolved (P3c-1):** Keyset paginated history; activity database separation (`DB_ACTIVITY`). |
 | **PF-B8** | `applyLikeVote` reads all voters (up to 5,000) | Full ledger rewritten per like | **Resolved (P3b-5):** Normalized `likes` table + atomic counter increments. |
-| **PF-B9** | Directory `json_array_length` + OFFSET paging | Quadratic table scans on deep pages | **Resolved (P3b-6):** Stored `item_count`, keyset cursor pagination (`33_lists-directory.js`). |
+| **PF-B9** | Directory `json_array_length` + OFFSET paging | Quadratic table scans on deep pages | **Resolved (P3b-6):** Stored `item_count`, keyset cursor pagination (`src/api/33_lists-directory.js`). |
 | **PF-B10**| Stats `LIKE 'prefix%'` cannot use index | Full index scan per stat query | **Resolved (P2-10):** Range predicates (`kind >= ? AND kind < ?`) using primary key index. |
 | **PF-B11**| `attachEventMeta` binds 401 parameters | Exceeds D1 bound parameter limit | **Resolved:** the lookup is chunked at 90 ids per statement. |
 | **PF-B12**| FTS updates delete by unindexed column | Full FTS scan per save/delete | **Resolved (P3b-1):** External-content FTS table `lists_fts2` with `content_rowid=id`. |

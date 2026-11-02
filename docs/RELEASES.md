@@ -60,6 +60,12 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Repo layout (2026-11-02, no code change)
+
+- The 62 numbered sources and `header.js` moved into `src/` in groups: `core`, `admin`, `catalog`, `page`, `client`, `api`, `data`, `jobs`. `build.py` orders by the `NN_` prefix, not the folder, and the built Worker is byte-identical (same stamp as before the move).
+- The check and generator scripts are in `tools/`; the guides, `FILE-INDEX.md`, `FUNCTION-MAP.md` and `SELF-HOSTING.md` are in `docs/`. `CLAUDE.md`, `AGENTS.md`, `README.md` and `LICENSE` stay at the root.
+- Tests that scan "every source file" use `tests/sources.mjs`. The "no `src/`" rule was removed from `CLAUDE.md`.
+
 ## Admin dashboard makeover (built 2026-11-02, stamp 5146a18fa5)
 
 - **Five groups instead of three:** Overview (Traffic, Install sources, API usage), Insights (Trending, Searches, Catalogs & lists, Playback & audience), People (Creator accounts, Feedback, Support emails), Content (New on Streaming, Channel presets), Site (Support goal, Site notice, Maintenance). Tab ids are unchanged, so old `#links` still work.

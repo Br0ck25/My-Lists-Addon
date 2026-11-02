@@ -1,4 +1,4 @@
-// Deleting one of your own lists (22_client-creator-profile.js).
+// Deleting one of your own lists (src/client/22_client-creator-profile.js).
 //
 //   * The delete is confirmed, then it can be undone for a few seconds, the way
 //     removing a row already can (AI_UI_RULES: reversible deletes use an undo

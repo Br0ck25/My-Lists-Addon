@@ -1,5 +1,5 @@
 // Liking one of this add-on's own lists from a heart built for external lists
-// (19_client-search-and-likes.js). The Discover cards and the list details
+// (src/client/19_client-search-and-likes.js). The Discover cards and the list details
 // page give every list the external heart, which posts to
 // /api/lists/like-external -- and that refuses anything but MDBList, Trakt,
 // TMDB, Simkl and Letterboxd links: "Could Not Update Like -- That URL can't
@@ -38,7 +38,7 @@ describe("own lists behind an external heart", () => {
   });
 
   it("the click handler sends an own list's external heart down the own-list path", () => {
-    const src = fs.readFileSync(path.join(REPO_ROOT, "19_client-search-and-likes.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/client/19_client-search-and-likes.js"), "utf8");
     const at = src.indexOf("let likeBtn = e.target.closest('.searchLikeBtn');");
     assert.ok(at >= 0, "the own-list like branch moved");
     const branch = src.slice(at, src.indexOf("/api/lists/like'", at));

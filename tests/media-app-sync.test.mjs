@@ -1,4 +1,4 @@
-// Stremio and Nuvio accounts (61_media-app-sync.js): connect, then pull the
+// Stremio and Nuvio accounts (src/api/61_media-app-sync.js): connect, then pull the
 // real watch history and Continue Watching into the activity database.
 //
 // Through the real Worker, with both services faked. The fakes follow the

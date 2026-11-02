@@ -222,7 +222,7 @@ describe("P3b-1: the lists v2 schema", () => {
   });
 });
 
-// --- P3b-2: the media resolver (29_media.js) ----------------------------------
+// --- P3b-2: the media resolver (src/data/29_media.js) ----------------------------------
 //
 // Loaded into a sandbox with a fake TMDB, over the real-SQLite D1 from the
 // harness (which enforces D1's 100-parameter limit). Values made inside the
@@ -234,7 +234,7 @@ function loadMedia() {
   const sandbox = { console, URL, URLSearchParams, TextEncoder, TextDecoder, Response, Headers, Request, crypto: globalThis.crypto };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const rel of ["00_constants.js", "29_media.js"]) {
+  for (const rel of ["src/core/00_constants.js", "src/data/29_media.js"]) {
     vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
   }
   return sandbox;
@@ -523,7 +523,7 @@ describe("P3b-2: the media resolver", () => {
   });
 });
 
-// --- P3b-3: copying the legacy lists into v2 (30_lists-backfill.js) -----------
+// --- P3b-3: copying the legacy lists into v2 (src/data/30_lists-backfill.js) -----------
 //
 // Through the real Worker: the fixture is built with the site's own routes
 // (so the legacy records have exactly the shape production writes), copied by
@@ -543,7 +543,7 @@ function loadBackfillFns() {
   const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js"]) {
+  for (const rel of ["src/core/00_constants.js", "src/data/29_media.js", "src/data/30_lists-backfill.js"]) {
     vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
   }
   return sandbox;
@@ -870,7 +870,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
     const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
     sandbox.globalThis = sandbox;
     vm.createContext(sandbox);
-    for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js"]) {
+    for (const rel of ["src/core/00_constants.js", "src/data/29_media.js", "src/data/30_lists-backfill.js"]) {
       vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
     }
     const meter = { ops: 0 };
@@ -895,7 +895,7 @@ describe("P3b-3: copying the legacy lists into v2", () => {
   });
 });
 
-// --- P3b-4: the list API (31_lists-api.js) -------------------------------------
+// --- P3b-4: the list API (src/api/31_lists-api.js) -------------------------------------
 //
 // Owner, someone else, and nobody, for every route. Sessions come from
 // POST /api/session, as the Phase 6 pages will get them.
@@ -1144,7 +1144,7 @@ describe("P3b-4: the list API", () => {
     const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
     sandbox.globalThis = sandbox;
     vm.createContext(sandbox);
-    for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js", "31_lists-api.js"]) {
+    for (const rel of ["src/core/00_constants.js", "src/data/29_media.js", "src/data/30_lists-backfill.js", "src/api/31_lists-api.js"]) {
       vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
     }
     const env = { DB: makeD1() };
@@ -1180,7 +1180,7 @@ describe("P3b-4: the list API", () => {
   });
 });
 
-// --- P3b-5: the likes API (32_likes-api.js) ------------------------------------
+// --- P3b-5: the likes API (src/api/32_likes-api.js) ------------------------------------
 
 describe("P3b-5: the likes API", () => {
   async function likesSetup() {
@@ -1236,7 +1236,7 @@ describe("P3b-5: the likes API", () => {
     const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
     sandbox.globalThis = sandbox;
     vm.createContext(sandbox);
-    for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js", "31_lists-api.js", "32_likes-api.js"]) {
+    for (const rel of ["src/core/00_constants.js", "src/data/29_media.js", "src/data/30_lists-backfill.js", "src/api/31_lists-api.js", "src/api/32_likes-api.js"]) {
       vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
     }
     const env = { DB: makeD1() };
@@ -1311,7 +1311,7 @@ describe("P3b-5: the likes API", () => {
   });
 });
 
-// --- P3b-6: the directory and search on v2 (33_lists-directory.js) -------------
+// --- P3b-6: the directory and search on v2 (src/api/33_lists-directory.js) -------------
 //
 // One fixture, read twice: through the legacy paths (flag off) and through v2
 // after the backfill has copied it (flag on). The answers must agree. 130
@@ -1485,7 +1485,7 @@ function loadBridgeFns() {
   const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const rel of ["00_constants.js", "29_media.js", "30_lists-backfill.js", "33_lists-directory.js", "34_lists-v2-bridge.js"]) {
+  for (const rel of ["src/core/00_constants.js", "src/data/29_media.js", "src/data/30_lists-backfill.js", "src/api/33_lists-directory.js", "src/data/34_lists-v2-bridge.js"]) {
     vm.runInContext(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"), sandbox, { filename: rel });
   }
   return sandbox;

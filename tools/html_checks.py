@@ -48,7 +48,7 @@ print(f"  no duplicate top-level declarations ({len(decls)} functions)")
 # --- inline on*= handlers resolve to a function that exists ---
 # The CSP deliberately allows 'unsafe-inline' on script-src because this app
 # drives its UI from inline onclick=/onchange= attributes (see
-# securityHeaders, 02_http-and-creator-utils.js). That is a reasonable trade
+# securityHeaders, src/core/02_http-and-creator-utils.js). That is a reasonable trade
 # only if those handlers actually resolve: a typo'd or deleted function is a
 # ReferenceError the moment someone clicks it, and nothing else in this
 # pipeline would notice -- node --check sees the page as a string, and the
@@ -127,7 +127,7 @@ print(f"  inline handlers resolve ({len(handler_calls)} distinct functions, "
       f"{sum(handler_calls.values())} call sites)")
 
 # Both pages converted. The builder page's controls are run by appActDispatch
-# (16_client-row-core.js, P6-8); /admin does not load that bundle, so it
+# (src/client/16_client-row-core.js, P6-8); /admin does not load that bundle, so it
 # carries its own copy of the same contract -- adminActDispatch and
 # adminActAttr in its own script (P6-10). The attribute names match on
 # purpose, so this check and the data-act one below cover both pages.
@@ -143,7 +143,7 @@ if handler_calls:
 #
 # Neither page carries inline on*= handlers any more: each control names its
 # action in data-act and a single delegated listener runs it -- appActDispatch
-# (16_client-row-core.js) on the builder page, adminActDispatch in the admin
+# (src/client/16_client-row-core.js) on the builder page, adminActDispatch in the admin
 # page's own script, which does not load that bundle. That removes the last
 # reason script-src needed 'unsafe-inline' for the client half, but it also
 # moves the failure mode rather than deleting it -- a renamed function used to
@@ -212,7 +212,7 @@ if 'hostile' in tag:
     if XSS_SCRIPT_MARK + '</script' in html:
         problems.append(f"{XSS_SCRIPT_MARK}</script survived: a caller-supplied value ENDS the inline <script> "
                         "element. Everything after it is parsed as HTML -> stored XSS. "
-                        "Interpolate through jsonForScript() (02_http-and-creator-utils.js), not JSON.stringify()")
+                        "Interpolate through jsonForScript() (src/core/02_http-and-creator-utils.js), not JSON.stringify()")
     if XSS_ATTR_MARK + '"' in html:
         problems.append(f'{XSS_ATTR_MARK}" survived: a caller-supplied value ENDS its HTML attribute -> XSS via '
                         'an injected event handler. Wrap the interpolation in escapeHtmlServer()')
@@ -286,7 +286,7 @@ print(f"  CSS brace balance OK ({len(styles)} blocks, {tot_o} pairs)")
 # is fine; it is the BROWSER that decides not to run it), so it is checked
 # directly, on every render, and on the placeholder rather than a nonce --
 # render_check renders with the same placeholder the Worker stores and the
-# boundary substitutes (CSP_NONCE_PLACEHOLDER, 00_constants.js).
+# boundary substitutes (CSP_NONCE_PLACEHOLDER, src/core/00_constants.js).
 #
 # <script src=...> needs nothing (script-src 'self' covers it), and neither
 # does a block that is split out to /app.js or /app.css before it is served --

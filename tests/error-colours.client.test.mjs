@@ -12,9 +12,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { loadClient } from "./client-harness.mjs";
+import { listSources } from "./sources.mjs";
 
 const ROOT = new URL("../", import.meta.url);
-const sources = () => readdirSync(ROOT).filter((f) => /^(header|\d\d_.*)\.js$/.test(f));
+const sources = () => listSources(ROOT, { header: true }).filter((f) => /(?:^|\/)(header|\d\d_.*)\.js$/.test(f));
 
 describe("error text on the channel logo URL", () => {
   function run(value) {

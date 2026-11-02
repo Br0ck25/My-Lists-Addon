@@ -54,16 +54,16 @@ describe("/api/track-install", () => {
     // Read from the sources, so a new category added to the builder without
     // being added to the known list fails here instead of becoming "Other".
     const labels = new Set(["Custom"]);
-    const q08 = read("08_quickadd-chart-data.js");
-    const q16 = read("16_client-row-core.js");
-    const q20 = read("20_client-channel-builder.js");
-    const q19 = read("19_client-search-and-likes.js");
+    const q08 = read("src/catalog/08_quickadd-chart-data.js");
+    const q16 = read("src/client/16_client-row-core.js");
+    const q20 = read("src/client/20_client-channel-builder.js");
+    const q19 = read("src/client/19_client-search-and-likes.js");
     for (const m of q08.matchAll(/buildStreamingRowsHtml\([^;]*?,\s*"[^"]*",\s*"([^"]+)"\)/g)) labels.add(m[1]);
     for (const m of q16.matchAll(/buildAddAllPairsCallsJs\([A-Z_0-9]+,\s*"([^"]+)"/g)) labels.add(m[1]);
     for (const m of q08.matchAll(/"([A-Za-z ]+)"\]\)\}">\+ (?:Movies|Shows)/g)) labels.add(m[1]);
     for (const m of q20.matchAll(/addRow\([^;]*?,\s*true,\s*'([^']+)'/g)) labels.add(m[1]);
     for (const m of q19.matchAll(/addRow\([^;]*?,\s*true,\s*'([^']+)'/g)) labels.add(m[1]);
-    for (const f of ["17_client-my-lists-and-trakt-oauth.js", "22_client-creator-profile.js", "23_client-list-management.js", "24_client-backup-restore-presets.js"]) {
+    for (const f of ["src/client/17_client-my-lists-and-trakt-oauth.js", "src/client/22_client-creator-profile.js", "src/client/23_client-list-management.js", "src/client/24_client-backup-restore-presets.js"]) {
       for (const m of read(f).matchAll(/addRow\([^;]*?,\s*true,\s*'([^']+)'/g)) labels.add(m[1]);
     }
     assert.ok(labels.size >= 14, "the scan found only " + [...labels].join(", "));

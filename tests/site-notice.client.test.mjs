@@ -1,4 +1,4 @@
-// The site notice (initSiteNotice / openSiteNotice, 16_client-row-core.js).
+// The site notice (initSiteNotice / openSiteNotice, src/client/16_client-row-core.js).
 //
 // The public site may close on 2026-11-08 unless donations cover its costs, and
 // every visitor -- signed in or not -- has to be told, with a way to donate and

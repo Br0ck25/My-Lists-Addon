@@ -59,7 +59,7 @@ async function runPeriodic(env, type) {
 }
 
 describe("P5-10: nos.sweep's quota ledger in D1", () => {
-  const sb = loadSourceFunctions("44_jobs-queue.js", "45_jobs-dispatcher.js", "53_more-jobs.js");
+  const sb = loadSourceFunctions("src/jobs/44_jobs-queue.js", "src/jobs/45_jobs-dispatcher.js", "src/jobs/53_more-jobs.js");
   const month = new Date().toISOString().slice(0, 7);
 
   it("starts from the KV ledger, so nothing already spent this month is forgotten", async () => {

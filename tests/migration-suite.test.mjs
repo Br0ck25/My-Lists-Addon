@@ -223,7 +223,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
   // ---------------------------------------------------------------------------
   // 3. Lists & Likes Migration
   // ---------------------------------------------------------------------------
-  describe("3. Custom Lists & Likes Backfill (migrate.lists / 30_lists-backfill.js)", () => {
+  describe("3. Custom Lists & Likes Backfill (migrate.lists / src/data/30_lists-backfill.js)", () => {
     it("preserves 100% of lists, items, and likes with exact ordering and conflict resolution", async () => {
       const restoreTmdb = withFakeTmdb(MIGRATION_TMDB_FIXTURES);
       try {
@@ -376,7 +376,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
   // ---------------------------------------------------------------------------
   // 4. Virtual Channels v2 Backfill & Lineup Invariants
   // ---------------------------------------------------------------------------
-  describe("4. Channels v2 Backfill & Lineup Invariants (35_channels-v2.js)", () => {
+  describe("4. Channels v2 Backfill & Lineup Invariants (src/data/35_channels-v2.js)", () => {
     it("migrates channels, generates R2 blob pools, and preserves identical lineups for identical date seeds", async () => {
       const restoreTmdb = withFakeTmdb(MIGRATION_TMDB_FIXTURES);
       try {
@@ -485,7 +485,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
   // ---------------------------------------------------------------------------
   // 5. Activity Database Backfill
   // ---------------------------------------------------------------------------
-  describe("5. Watch History & Activity Backfill (migrate.activity / 37_activity-backfill.js)", () => {
+  describe("5. Watch History & Activity Backfill (migrate.activity / src/data/37_activity-backfill.js)", () => {
     it("merges the three tracking sources, deduplicates twin scrobbles, preserves show states, and enables v2 shelves", async () => {
       const env = makeEnv({
         DB: makeD1(),
@@ -598,7 +598,7 @@ describe("P9-2: Migration Test Suite with Production Fixtures", () => {
   // ---------------------------------------------------------------------------
   // 6. Install Secrets Migration
   // ---------------------------------------------------------------------------
-  describe("6. Install Secrets Migration (27_installs.js & install_secrets)", () => {
+  describe("6. Install Secrets Migration (src/api/27_installs.js & install_secrets)", () => {
     it("migrates plaintext keys into encrypted install_secrets, purges KV credentials, and maintains manifest integrity", async () => {
       const env = makeEnv({
         DB: makeD1(),

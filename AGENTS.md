@@ -13,10 +13,10 @@ This file defines the mandatory rules and protocols for all AI agents working in
 ---
 
 ## 2. The Golden Rule: Build System Workflow
-- **NEVER directly edit, and avoid opening, `worker_entry_combined.js`** (5MB, generated). To find code, read `FILE-INDEX.md`, then grep `FUNCTION-MAP.md` and read only that source file's range.
+- **NEVER directly edit, and avoid opening, `worker_entry_combined.js`** (5MB, generated). To find code, read `docs/FILE-INDEX.md`, then grep `docs/FUNCTION-MAP.md` and read only that source file's range.
 - **ALWAYS edit the split source files**:
-  - `header.js`
-  - `00_constants.js` through the highest-numbered file (currently `58_`; `build.py` picks up every `NN_*.js`)
+  - `src/header.js`
+  - `src/<group>/NN_*.js`: every numbered file under `src/` (`core`, `admin`, `catalog`, `page`, `client`, `api`, `data`, `jobs`); `build.py` picks up every `NN_*.js` and orders by the `NN_` prefix, not the folder
 - **Rebuild and verify after ANY file change**:
   ```bash
   python build.py
@@ -32,19 +32,19 @@ This file defines the mandatory rules and protocols for all AI agents working in
    - Do NOT introduce npm build systems (Vite, Rollup, Webpack) or change the single-file deployment model.
 2. **Minimal Diffs**: Make targeted changes strictly necessary to fulfill the user's request.
 3. **No Unsolicited Modernization**: Keep existing Vanilla JS idioms. Do not convert functions to class syntax or vice-versa unless explicitly requested.
-4. **Scope Awareness**: Because all numbered files (every `NN_*.js`, currently `00_` to `58_`) concatenate into one outer scope in `worker_entry_combined.js`, never introduce duplicate top-level variable names across different files.
+4. **Scope Awareness**: Because all numbered files (every `NN_*.js` under `src/`) concatenate into one outer scope in `worker_entry_combined.js`, never introduce duplicate top-level variable names across different files.
 
 ---
 
 ## UI Changes Must Follow the Design System
-Every change to what the user sees (buttons, colours, spacing, text sizes, modals, toasts, lists, wording) must follow **`AI_UI_RULES.md`** (one page, read it first) and **`DESIGN_SYSTEM.md`** (full spec, with copy-paste recipes). Do not rely on memory of how the UI looks.
-- **Reuse before you build.** Use the existing button, card, pill, modal and toast classes/functions listed in `DESIGN_SYSTEM.md` §3. Never invent a new button style.
-- **Tokens only.** Colours, radii, shadows, spacing, font sizes, z-index and durations come from `DESIGN_TOKENS_CSS` (`00_constants.js`). No hex/rgba literals, no odd pixel values.
-- **Adding a button:** pick the variant (`.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, or `.lc-btn` inside a card), use `<button type="button" data-act="…">`, add an `aria-label` if it is icon-only, and cover hover, focus, disabled, loading and dark mode. Recipe in `DESIGN_SYSTEM.md` §10.
+Every change to what the user sees (buttons, colours, spacing, text sizes, modals, toasts, lists, wording) must follow **`docs/AI_UI_RULES.md`** (one page, read it first) and **`docs/DESIGN_SYSTEM.md`** (full spec, with copy-paste recipes). Do not rely on memory of how the UI looks.
+- **Reuse before you build.** Use the existing button, card, pill, modal and toast classes/functions listed in `docs/DESIGN_SYSTEM.md` §3. Never invent a new button style.
+- **Tokens only.** Colours, radii, shadows, spacing, font sizes, z-index and durations come from `DESIGN_TOKENS_CSS` (`src/core/00_constants.js`). No hex/rgba literals, no odd pixel values.
+- **Adding a button:** pick the variant (`.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, or `.lc-btn` inside a card), use `<button type="button" data-act="…">`, add an `aria-label` if it is icon-only, and cover hover, focus, disabled, loading and dark mode. Recipe in `docs/DESIGN_SYSTEM.md` §10.
 - **Inline `style=""`:** only for properties a script toggles (`display`, `width`, `height`, ...). Anything else is a class. Never put a colour `u-*` helper on an element a script colours (`*Status`, `*Hint`, `*State`).
 - **Wording:** a movie is never a "show" or an "episode"; each count is stated once.
-- **Check:** `node --test tests/*.test.mjs` includes `tests/design-system.test.mjs`, which fails on token, breakpoint, z-index, contrast-pairing, hex-literal and add-button drift. If you add a token or variant, update `DESIGN_SYSTEM.md` in the same change.
-- **Humans and AIs follow the same rules.** If a rule gets in the way, change the rule in `DESIGN_SYSTEM.md` and the test, not just your own file.
+- **Check:** `node --test tests/*.test.mjs` includes `tests/design-system.test.mjs`, which fails on token, breakpoint, z-index, contrast-pairing, hex-literal and add-button drift. If you add a token or variant, update `docs/DESIGN_SYSTEM.md` in the same change.
+- **Humans and AIs follow the same rules.** If a rule gets in the way, change the rule in `docs/DESIGN_SYSTEM.md` and the test, not just your own file.
 
 ---
 
@@ -122,4 +122,4 @@ When finishing your turn or when the user warns that credits/session limits are 
    git add -A
    git commit -m "feat/fix: <clear description of changes>"
    ```
-3. Update `HANDOFF.md` at the project root: current state, next steps, what must not be undone. Keep it short; replace stale items instead of appending.
+3. Update `docs/HANDOFF.md` at the project root: current state, next steps, what must not be undone. Keep it short; replace stale items instead of appending.

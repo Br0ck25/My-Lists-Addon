@@ -1,7 +1,7 @@
 # DESIGN_SYSTEM.md — My Lists Addon UI standard
 
 > **Audience: AI assistants (and humans) adding or changing UI.** Follow every rule here. Where this file says "legacy", do **not** copy it.
-> Source of truth: the **tokens** are one constant, `DESIGN_TOKENS_CSS` in `00_constants.js`, shared by the app (`09_page-shell.js`), the admin pages (`03_admin.js`) and the backup guide (`24_…`). The component CSS is the app stylesheet in `09_page-shell.js` (between `/*MYLISTS_APP_CSS_START*/` and `/*MYLISTS_APP_CSS_END*/`). The 2026-10-06 audit's remediation has been applied (see §9 for what is left). Search for selectors; line numbers drift.
+> Source of truth: the **tokens** are one constant, `DESIGN_TOKENS_CSS` in `src/core/00_constants.js`, shared by the app (`src/page/09_page-shell.js`), the admin pages (`src/admin/03_admin.js`) and the backup guide (`24_…`). The component CSS is the app stylesheet in `src/page/09_page-shell.js` (between `/*MYLISTS_APP_CSS_START*/` and `/*MYLISTS_APP_CSS_END*/`). The 2026-10-06 audit's remediation has been applied (see §9 for what is left). Search for selectors; line numbers drift.
 > Edit the numbered source files only, never `worker_entry_combined.js`. After any change run `python build.py`, `python tools/check_sync.py`, `node --check worker_entry_combined.js`, `node --test tests/*.test.mjs` (see `CLAUDE.md`).
 
 ---
@@ -12,7 +12,7 @@ My Lists Addon is a mobile-first web app for building and managing Stremio / Nuv
 
 Stack facts that constrain every change:
 - Vanilla JS in template literals; no framework, no build tool beyond `build.py`.
-- One shared stylesheet for the main app (`09_page-shell.js`) and **one shared token constant** (`DESIGN_TOKENS_CSS`, `00_constants.js`) used by the app, the admin pages (`03_admin.js` ×2) and the backup/restore guide (`24_client-backup-restore-presets.js`).
+- One shared stylesheet for the main app (`src/page/09_page-shell.js`) and **one shared token constant** (`DESIGN_TOKENS_CSS`, `src/core/00_constants.js`) used by the app, the admin pages (`src/admin/03_admin.js` ×2) and the backup/restore guide (`src/client/24_client-backup-restore-presets.js`).
 - Strict CSP: every inline `<style>`/`<script>` carries `nonce="${CSP_NONCE_PLACEHOLDER}"`. Never write `</script>` unescaped inside a script string.
 - Dark mode = class `dark-theme` on `<html>` (`document.documentElement`), set from `localStorage.theme` or `prefers-color-scheme`. There is no `@media (prefers-color-scheme)` CSS.
 - Icons are inline SVG. No icon font, no sprite file, no external fonts.
@@ -21,7 +21,7 @@ Stack facts that constrain every change:
 
 ## 2. Tokens
 
-All tokens live in `:root` (light) and `:root.dark-theme` (dark) in `09_page-shell.js` (~lines 294–472). **Use the semantic `--color-*` names in new code.** The short aliases (`--accent`, `--text`, `--muted`, `--surface`, `--border`…) resolve to the same values and are used heavily in existing CSS (e.g. `--accent` ×95); they are accepted when editing an existing rule that already uses them, but do not introduce new ones.
+All tokens live in `:root` (light) and `:root.dark-theme` (dark) in `src/page/09_page-shell.js` (~lines 294–472). **Use the semantic `--color-*` names in new code.** The short aliases (`--accent`, `--text`, `--muted`, `--surface`, `--border`…) resolve to the same values and are used heavily in existing CSS (e.g. `--accent` ×95); they are accepted when editing an existing rule that already uses them, but do not introduce new ones.
 
 ### 2.1 Colours
 
@@ -124,17 +124,17 @@ transition: background-color var(--duration-base) var(--ease), color var(--durat
 
 ### 2.6 Helper classes (`u-*`)
 
-`UTILITY_CSS` (`00_constants.js`) holds generated one-declaration helpers named `u-<property>-<value>` (e.g. `u-mt-10px`, `u-c-v_muted`). They replaced repeated inline `style=""` in page markup and in the JS-built markup. Each carries `!important` **on purpose**: an inline style beat every component rule (e.g. `input[readonly]`, `.modal-card input`), and a plain class would not. This is the one sanctioned use of `!important` for new code. `UTILITY_CSS` is emitted **before** the component CSS (right after the tokens), so it still loses to a component rule that is itself `!important` — again exactly like an inline style did. Reuse an existing helper for a one-off spacing/colour tweak; build a real component class for anything that recurs or has states. Never put layout-toggled properties (`display`, `visibility`, `width`, `height`, `transform`) in a helper: JS toggles those inline.
+`UTILITY_CSS` (`src/core/00_constants.js`) holds generated one-declaration helpers named `u-<property>-<value>` (e.g. `u-mt-10px`, `u-c-v_muted`). They replaced repeated inline `style=""` in page markup and in the JS-built markup. Each carries `!important` **on purpose**: an inline style beat every component rule (e.g. `input[readonly]`, `.modal-card input`), and a plain class would not. This is the one sanctioned use of `!important` for new code. `UTILITY_CSS` is emitted **before** the component CSS (right after the tokens), so it still loses to a component rule that is itself `!important` — again exactly like an inline style did. Reuse an existing helper for a one-off spacing/colour tweak; build a real component class for anything that recurs or has states. Never put layout-toggled properties (`display`, `visibility`, `width`, `height`, `transform`) in a helper: JS toggles those inline.
 
 ### 2.7 Adding a token
 
-Edit `DESIGN_TOKENS_CSS` in `00_constants.js` (both `:root` and `:root.dark-theme`), then document it here. Do not define `:root` variables in any page's own `<style>`.
+Edit `DESIGN_TOKENS_CSS` in `src/core/00_constants.js` (both `:root` and `:root.dark-theme`), then document it here. Do not define `:root` variables in any page's own `<style>`.
 
 ---
 
 ## 3. Component specs
 
-General rule: **reuse a class below; never write a new button/card/badge style.** All of these are in `09_page-shell.js`.
+General rule: **reuse a class below; never write a new button/card/badge style.** All of these are in `src/page/09_page-shell.js`.
 
 ### 3.1 Buttons
 
@@ -229,7 +229,7 @@ Global `input, select, textarea` (~line 3440): full width, `padding 11px 14px`, 
 
 ### 3.6 Modals and dialogs
 
-Always create modals with `showModal(innerHtml, extraClass)` (`16_client-row-core.js` ~2243): it builds `.modal-overlay > .modal-card`, sets `role="dialog"`, `aria-modal`, `aria-labelledby` (first `h2/h3`), traps Tab, closes on Escape/backdrop, restores focus, locks scroll. **Do not hand-build overlays.** For yes/no confirmation use `await appShellDialog({ title, message, confirmLabel, cancelLabel })` (`24_client-backup-restore-presets.js` ~2785); it resolves `true`/`false`.
+Always create modals with `showModal(innerHtml, extraClass)` (`src/client/16_client-row-core.js` ~2243): it builds `.modal-overlay > .modal-card`, sets `role="dialog"`, `aria-modal`, `aria-labelledby` (first `h2/h3`), traps Tab, closes on Escape/backdrop, restores focus, locks scroll. **Do not hand-build overlays.** For yes/no confirmation use `await appShellDialog({ title, message, confirmLabel, cancelLabel })` (`src/client/24_client-backup-restore-presets.js` ~2785); it resolves `true`/`false`.
 
 - `.modal-card`: `--color-bg-elevated`, 1px `--border-strong`, `--radius-xl`, padding 22px, `max-width 440px`, `max-height 90vh`, `--shadow-lg`. Wide variant `.modal-card-wide` (1100px / 95vw).
 - Close affordance: `button.modal-close-x` (top-right) and/or a Cancel button.
@@ -249,7 +249,7 @@ Pass `destructive: true` for removals/resets: the confirm button becomes `.btn-d
 
 ### 3.7 Toasts, alerts, banners
 
-- **Toast:** `showToast(message, type = 'info', { duration = 3000, actionText, onAction })` (`16_client-row-core.js`). Types: `'info' | 'success' | 'error' | 'undo'`. Styled: `.app-toast--success` (green border + ✓), `--error` (red border + !), `--info` (blue "i"), `--undo` (plain, with an Undo button). Background is `--color-bg-elevated`, so it needs no dark override. One toast at a time. `role="alert"` for errors, `status` otherwise.
+- **Toast:** `showToast(message, type = 'info', { duration = 3000, actionText, onAction })` (`src/client/16_client-row-core.js`). Types: `'info' | 'success' | 'error' | 'undo'`. Styled: `.app-toast--success` (green border + ✓), `--error` (red border + !), `--info` (blue "i"), `--undo` (plain, with an Undo button). Background is `--color-bg-elevated`, so it needs no dark override. One toast at a time. `role="alert"` for errors, `status` otherwise.
 - **Undo:** `showUndoToast(message)` (8s, "Undo" action) — the safety net for destructive list actions instead of a confirm dialog.
 - **Inline result text:** `.testresult.ok | .err | .pending`.
 - **Banners/notices:** `.channel-crossover-banner`, `.app-shell-muted` (muted hint paragraph, also the loading-text style), `.live-preview-shelf-status`. There is no generic alert/banner component.
@@ -339,7 +339,7 @@ Observed conventions (enforce for new copy):
 13. **DO** use `data-act="…"` + the existing delegated handler for clicks. **DON'T** add inline `onclick` or `<script>` handlers in markup.
 14. **DO** use `<button type="button">` and add `aria-label` to every icon-only control. **DON'T** use `<div onclick>` for controls.
 15. **DO** keep `:focus-visible` rings. **DON'T** write `outline: none` without a replacement.
-16. **DO** put new CSS in the shared stylesheet in `09_page-shell.js`, near the component it extends. **DON'T** add `style="…"` attributes for anything that repeats (1,825 inline styles exist; that's debt, not a pattern).
+16. **DO** put new CSS in the shared stylesheet in `src/page/09_page-shell.js`, near the component it extends. **DON'T** add `style="…"` attributes for anything that repeats (1,825 inline styles exist; that's debt, not a pattern).
 17. **DO** avoid `!important`. **DON'T** add more (336 exist, mostly fighting specificity). Fix specificity instead; the only accepted uses are the focus ring and `[hidden]`/initial-tab FOUC rules.
 18. **DO** write both a mobile (≤640px) and desktop (≥641px) check for any new layout. **DON'T** introduce new breakpoints.
 19. **DO** write sentence-case copy, verb-first buttons, "Could not …" errors. **DON'T** use "OK"/"Yes"/"Submit", "Failed to", emoji, or ALL CAPS.
@@ -353,7 +353,7 @@ Observed conventions (enforce for new copy):
 
 ## 8. New feature checklist (do in order, before writing UI)
 
-1. **Search first.** `grep` this file's class names and `09_page-shell.js` for an existing component that fits (button, `.panel`, `.list-card`, `.subnav-pill`, `.testresult`, `showModal`, `showToast`). Reuse it exactly.
+1. **Search first.** `grep` this file's class names and `src/page/09_page-shell.js` for an existing component that fits (button, `.panel`, `.list-card`, `.subnav-pill`, `.testresult`, `showModal`, `showToast`). Reuse it exactly.
 2. **Tokens only.** Every colour, radius, shadow, space and font size comes from §2. If a token is missing, add it to both `:root` and `:root.dark-theme` and to this file.
 3. **Pick the right container** (§4): `.panel` inside a `.tab-panel`; poster grids use the existing grid classes.
 4. **Pick the right feedback** (§5): toast vs undo vs `appShellDialog` vs `.testresult`.
@@ -379,7 +379,7 @@ Still open. Do not copy these; fix them opportunistically:
 | # | Deviation | Where | Do instead |
 |---|---|---|---|
 | 1 | About 556 inline `style="…"` attributes remain, but they now hold only what must stay inline: properties that scripts toggle (`display`, `width`, `height`, `position`, `opacity`, `z-index`, `pointer-events`), and the colour of status/hint elements that scripts recolour (`#…Status`, `#…Hint`, `#…State`). Everything else (about 1,600 declarations) moved to `u-*` helpers; a before/after comparison of the running app showed zero differences | `03_`–`24_` | Keep script-toggled properties inline; never put a colour helper on an element a script colours (a guard test enforces it) |
-| 2 | About 241 `!important` remain in component CSS: the first-paint `data-initial-*` rules and the `hide-*` badge switches (intentional), the global focus ring and disabled state (accessibility safeguards), the add/remove and quick-add buttons (they deliberately override inline colours that scripts set), and storyline/poster/drag/`.shelf-header`/bottom-nav rules. 67 declarations on rules that could be exercised were removed and verified identical; a wider removal was tried and reverted because it changed how the add/remove buttons render | `09_page-shell.js` | Fix specificity case by case, and re-run the live comparison |
+| 2 | About 241 `!important` remain in component CSS: the first-paint `data-initial-*` rules and the `hide-*` badge switches (intentional), the global focus ring and disabled state (accessibility safeguards), the add/remove and quick-add buttons (they deliberately override inline colours that scripts set), and storyline/poster/drag/`.shelf-header`/bottom-nav rules. 67 declarations on rules that could be exercised were removed and verified identical; a wider removal was tried and reverted because it changed how the add/remove buttons render | `src/page/09_page-shell.js` | Fix specificity case by case, and re-run the live comparison |
 | 3 | (Resolved) no hex colours remain in component CSS; third-party brand colours and the Stremio/Nuvio/Wako gradients are tokens (`--brand-*`) in `DESIGN_TOKENS_CSS`, and `tests/design-system.test.mjs` requires none | — | — |
 | 4 | (Resolved) add/remove list buttons now share `.list-add-btn`; `tests/design-system.test.mjs` fails if a builder omits it. `.btn-ghost`/`.btn-danger` remain the target for new code | — | — |
 | 5 | Controls under 44px keep their look and rely on the invisible hit-area extension (≤640px) | `.lc-btn`, `.subnav-pill`, header icon buttons | — |
@@ -416,14 +416,14 @@ Class list: `lc-btn list-add-btn` + `secondary`/`primary` + the legacy name your
 ### 10.6 Add or change text, labels and counts
 - Sentence case, verb-first buttons, "Could not …" errors (§6).
 - **A count is stated once.** A card's first line carries status and rules ("published", "hides watched"); the counts line carries the numbers.
-- **Name each thing for what it is:** movies are movies, series are shows, episodes are episodes. A movie is never a "show" or an "episode" (`channelDraftSummary` / `channelSummaryLine` in `20_client-channel-builder.js` are the model). When a list can hold several kinds and the kind is unknown, say "items".
+- **Name each thing for what it is:** movies are movies, series are shows, episodes are episodes. A movie is never a "show" or an "episode" (`channelDraftSummary` / `channelSummaryLine` in `src/client/20_client-channel-builder.js` are the model). When a list can hold several kinds and the kind is unknown, say "items".
 - Singular/plural: "1 movie", "2 movies".
 
 ### 10.6b Add a badge or label on top of a poster or card
 Tiles are only about 100px wide on a phone. Use `--font-size-3xs` (tiny overlay labels) or `--font-size-2xs`, tight padding (`--space-0-5 --space-1`), and keep the label on one line (`white-space: nowrap; text-overflow: ellipsis`); do not wrap it. Snapping a size to the scale must never make an overlay bigger than it was; check it at 360–390px width.
 
 ### 10.7 Add a colour, size or token
-Do not. Use an existing token. If none fits, add one to `DESIGN_TOKENS_CSS` (`00_constants.js`) for **both** light and dark, then document it in §2 of this file. `tests/design-system.test.mjs` rejects hex literals in component CSS.
+Do not. Use an existing token. If none fits, add one to `DESIGN_TOKENS_CSS` (`src/core/00_constants.js`) for **both** light and dark, then document it in §2 of this file. `tests/design-system.test.mjs` rejects hex literals in component CSS.
 
 ### 10.8 Add a one-off spacing or colour tweak
 Reuse a `u-*` helper from `UTILITY_CSS` (e.g. `u-mt-10px`, `u-c-v_muted`). A helper that does not exist yet is generated by the same pattern (`u-<property>-<value>`); if it will be reused, make a real component class instead. Properties a script toggles (`display`, `width`, `height`, `position`, `opacity`) stay inline.

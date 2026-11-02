@@ -159,7 +159,7 @@ function mask(text, secrets) {
 // The GraphQL query the Worker really sends, read from its source, so the
 // nightly check asks JustWatch exactly what production asks.
 function workerJustWatchQuery() {
-  const src = fs.readFileSync(path.join(REPO_ROOT, "07_source-fetchers-tmdb-simkl.js"), "utf8");
+  const src = fs.readFileSync(path.join(REPO_ROOT, "src/catalog/07_source-fetchers-tmdb-simkl.js"), "utf8");
   const m = /const JUSTWATCH_NEW_TITLES_QUERY = `([\s\S]*?)`;/.exec(src);
   return m ? m[1] : "";
 }

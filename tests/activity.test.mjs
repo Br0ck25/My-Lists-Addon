@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { activityBackfillStep, activityBackfillStatus, call, createUser, drainQueue, freshIsolate, makeD1, makeEnv, makeQueue, runScheduledTick } from "./harness.mjs";
 
 // Phase 3c: watch history and progress in their own database, DB_ACTIVITY
-// (migrations/activity/, schema_activity.sql, 36_activity-db.js).
+// (migrations/activity/, schema_activity.sql, src/data/36_activity-db.js).
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
@@ -20,7 +20,7 @@ function loadActivity() {
   const sandbox = { console: { ...console, error: (...a) => errors.push(a.join(" ")) } };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(read("36_activity-db.js"), sandbox, { filename: "36_activity-db.js" });
+  vm.runInContext(read("src/data/36_activity-db.js"), sandbox, { filename: "src/data/36_activity-db.js" });
   sandbox.errors = errors;
   return sandbox;
 }
@@ -174,7 +174,7 @@ describe("P3c-2: the show schedule, recommendations and daily title counts", () 
     const names = [...MIGRATION_0017.matchAll(/CREATE (?:TABLE|INDEX) IF NOT EXISTS (\w+)/g)].map((m) => m[1]);
     const sb = { console };
     vm.createContext(sb);
-    vm.runInContext(`${read("00_constants.js")}\nglobalThis.__m = D1_SCHEMA_MANIFEST;`, sb);
+    vm.runInContext(`${read("src/core/00_constants.js")}\nglobalThis.__m = D1_SCHEMA_MANIFEST;`, sb);
     const listed = sb.__m.filter((e) => e.migration === "0017").map((e) => e.name);
     assert.deepEqual([...listed].sort(), [...names].sort());
   });
@@ -226,7 +226,7 @@ describe("P3c-2: the show schedule, recommendations and daily title counts", () 
   });
 });
 
-// --- P3c-3: the activity backfill, migrate.activity (37_activity-backfill.js) --
+// --- P3c-3: the activity backfill, migrate.activity (src/data/37_activity-backfill.js) --
 
 const H = 60 * 60 * 1000;
 const T0 = Date.UTC(2026, 0, 10, 20, 0, 0);
@@ -515,7 +515,7 @@ describe("P3c-3: the copy can only copy", () => {
     const sandbox = { console };
     sandbox.globalThis = sandbox;
     vm.createContext(sandbox);
-    vm.runInContext(read("37_activity-backfill.js"), sandbox, { filename: "37_activity-backfill.js" });
+    vm.runInContext(read("src/data/37_activity-backfill.js"), sandbox, { filename: "src/data/37_activity-backfill.js" });
     return sandbox;
   }
   const fakeDb = () => ({ prepare: (sql) => ({ sql, bind() { return this; }, run: async () => ({}), all: async () => ({ results: [] }), first: async () => null }), batch: async () => [] });
@@ -541,14 +541,14 @@ describe("P3c-3: the copy can only copy", () => {
   });
 });
 
-// --- P3c-4: recording a play (38_activity-scrobble.js) ------------------------
+// --- P3c-4: recording a play (src/data/38_activity-scrobble.js) ------------------------
 
 function loadScrobble() {
   const sandbox = { console, URL, TextEncoder, crypto: globalThis.crypto, fetch: async () => new Response("{}", { status: 404 }) };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext("function trackingShowKey(r){const s=String(r==null?'':r);if(!s)return '';if(s.startsWith('tmdb:')){const p=s.split(':');return p.length>=2?p[0]+':'+p[1]:s;}return s.split(':')[0];}", sandbox);
-  for (const rel of ["00_constants.js", "29_media.js", "36_activity-db.js", "37_activity-backfill.js", "38_activity-scrobble.js"]) {
+  for (const rel of ["src/core/00_constants.js", "src/data/29_media.js", "src/data/36_activity-db.js", "src/data/37_activity-backfill.js", "src/data/38_activity-scrobble.js"]) {
     vm.runInContext(read(rel), sandbox, { filename: rel });
   }
   return sandbox;
@@ -638,13 +638,13 @@ describe("P3c-4: recording a play in the activity database", () => {
   });
 
   it("the ping and the webhook routes call it after their legacy write", () => {
-    const src = read("26_api-creator-and-admin-routes.js");
+    const src = read("src/api/26_api-creator-and-admin-routes.js");
     assert.match(src, /saveCreatorTrackingD1\(env, auth\.username, blob, false\);\s*\}\s*\/\/[^\n]*\n[^\n]*\n\s*await recordActivityPlay\(env, auth\.username, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "ping"\)/);
     assert.match(src, /recordActivityPlay\(env, authUser, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "webhook"\)/);
   });
 });
 
-// --- P3c-5: the shelves (39_activity-shelves.js) -------------------------------
+// --- P3c-5: the shelves (src/data/39_activity-shelves.js) -------------------------------
 
 // Results from the sandbox, as plain data (arrays made in another realm are
 // never deepStrictEqual to ours).
@@ -654,7 +654,7 @@ function loadShelves() {
   const sandbox = { console, URL, TextEncoder, TextDecoder, crypto: globalThis.crypto, Response, Headers, Request, Intl };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const rel of ["00_constants.js", "02_http-and-creator-utils.js", "29_media.js", "30_lists-backfill.js", "34_lists-v2-bridge.js", "36_activity-db.js", "39_activity-shelves.js"]) {
+  for (const rel of ["src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/data/29_media.js", "src/data/30_lists-backfill.js", "src/data/34_lists-v2-bridge.js", "src/data/36_activity-db.js", "src/data/39_activity-shelves.js"]) {
     vm.runInContext(read(rel), sandbox, { filename: rel });
   }
   return sandbox;
@@ -1079,7 +1079,7 @@ describe("FF_SHOW_SCHEDULE: the legacy shelf sweeps pass over accounts served fr
 // records a play as a title and an episode number -- so every episode showed as
 // "Episode N" with the show poster, and the record stopped at the newest 5,000
 // plays. The names now live once per episode in media_episodes (migration
-// 0020, 29_media.js), written by the plays, a website save and the history
+// 0020, src/data/29_media.js), written by the plays, a website save and the history
 // copy; and the record holds every play, as the legacy record did.
 
 describe("Watch History from the activity database: episode names, and every play", () => {

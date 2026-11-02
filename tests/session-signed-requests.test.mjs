@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 
 import { call, createUser, makeD1, makeEnv, makeKv } from "./harness.mjs";
 import { loadClient } from "./client-harness.mjs";
+import { listSources } from "./sources.mjs";
 
 describe("the server: a session signs a save in place of the key", () => {
   async function setup() {
@@ -142,7 +143,7 @@ describe("the page: creatorApiFetch", () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const root = path.resolve(import.meta.dirname, "..");
-    const files = fs.readdirSync(root).filter((f) => /^(09|1\d|2[0-4])_.*\.js$/.test(f));
+    const files = listSources(root).filter((f) => /(?:^|\/)(09|1\d|2[0-4])_.*\.js$/.test(f));
     const direct = [];
     for (const f of files) {
       fs.readFileSync(path.join(root, f), "utf8").split(/\r?\n/).forEach((line, i) => {

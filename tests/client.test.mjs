@@ -959,7 +959,7 @@ describe("client: a resumed device does not re-add what another device removed",
 // page's ------------------------------------------------------------------
 //
 // /api/preview reports totalItems whenever the source can supply one (see
-// its own comment, 25_api-catalog-routes.js), but renderLivePreview's shelf
+// its own comment, src/api/25_api-catalog-routes.js), but renderLivePreview's shelf
 // cache and openLivePreviewSeeAll's handoff to openListDetailsPage both
 // dropped it on the floor -- so a See All page for a >100-item list opened
 // showing "100 items" (the first preview page's length) and only corrected
@@ -2915,7 +2915,7 @@ describe("client: browsing a show's seasons in the Channel Builder", () => {
 
   it("lists a show's Specials as a season button, alongside all its regular seasons", async () => {
     // /api/show-seasons now hands Specials back appended after the regular
-    // seasons (see 25_api-catalog-routes.js), so the season grid just
+    // seasons (see src/api/25_api-catalog-routes.js), so the season grid just
     // renders whatever it is given -- this pins that it does, in order.
     const client = seasonsClient([
       { season: 1, name: "Season 1", episodeCount: 6 },
@@ -3118,7 +3118,7 @@ describe("client: Storylines, Sagas & Universes rating badges", () => {
   // field guesses imdb-vs-tmdb from the id's shape -- every id here is an
   // imdb "tt..." id, so every badge came out data-rating-type="imdb". This
   // site forces IMDb-typed badges hidden unconditionally (hide-badge-imdb-
-  // rating, 23_client-list-management.js -- only a TMDB-vs-none choice is a
+  // rating, src/client/23_client-list-management.js -- only a TMDB-vs-none choice is a
   // real setting here), so every badge existed in the DOM and rendered
   // completely invisible. The harness cannot exercise the DOM patch itself
   // (see the top of this describe block), but it can pin the exact call
@@ -3144,7 +3144,7 @@ describe("client: Storylines, Sagas & Universes rating badges", () => {
   // shipped: the badge became visible, but as a colored top-left overlay on
   // the poster -- inconsistent with every other poster tile in the app,
   // which shows its rating as a plain inline star+number in the year line
-  // (Discover's loadPosterSlot, 19_client-search-and-likes.js). The grid's
+  // (Discover's loadPosterSlot, src/client/19_client-search-and-likes.js). The grid's
   // rating slot must live in the year line, not inside the poster image
   // wrapper, and applyStorylineRatingBadges must only ever fill it with
   // formatRatingSpanHtml's plain star+number, never a colored rating-badge div.
@@ -3251,10 +3251,10 @@ describe("client: Storylines, Sagas & Universes rating badges", () => {
 });
 
 // The Storylines & Universes grid's own "Customize" button (loadStorylineToDraft,
-// 20_client-channel-builder.js) loads a saga's items into an editable draft
+// src/client/20_client-channel-builder.js) loads a saga's items into an editable draft
 // before adding it. Every list on Discover and in Search gets the same idea,
 // pointed at the Custom List Builder instead (loadListToCustomListDraft,
-// 21_client-custom-list-builder.js), since these lists are plain movie/show
+// src/client/21_client-custom-list-builder.js), since these lists are plain movie/show
 // catalogs rather than episode-level channel programming.
 describe("client: Customize button on Discover and Search lists", () => {
   it("render5PosterListsFeed (Discover shelves, Popular Lists, Liked Lists) gives every card a Customize button", () => {
@@ -5461,9 +5461,9 @@ describe("client: a channel's broadcast schedule and smart rules", () => {
 // quickAddChannel saves a Quick Add channel's real weight (up to
 // CHANNEL_POOL_MAX_ITEMS episodes) only in the shared server cache, and
 // writes a small presetNetworkId POINTER into the catalog row -- see that
-// constant's own comment (20_client-channel-builder.js) for the full design.
+// constant's own comment (src/client/20_client-channel-builder.js) for the full design.
 // The first version of that pointer carried NO items of its own at all, on
-// the theory that channelSourceItems (05_catalog-core.js) would always
+// the theory that channelSourceItems (src/catalog/05_catalog-core.js) would always
 // resolve the real pool server-side. That missed something: a long list of
 // OTHER places in this codebase read a channel row's own `.items` directly,
 // as a local shortcut, entirely independent of that server resolution --
@@ -5537,7 +5537,7 @@ describe("client: a Quick Add channel row stays usable without its local copy", 
     const localChannel = Object.values(local).find((c) => c.name === "TNT");
     assert.equal(localChannel.items.length, 4000);
     // presetNetworkId rides along on the local copy too, not just the row's
-    // pointer -- channelsForCloudSync (22_client-creator-profile.js) needs it
+    // pointer -- channelsForCloudSync (src/client/22_client-creator-profile.js) needs it
     // there to recognize this channel's pool already lives in the shared
     // server cache and skip re-uploading it whole to this account's cloud
     // channels blob.
@@ -5730,7 +5730,7 @@ describe("client: Quick Add channel cloud sync stays small, and never shrinks wh
   });
 
   it("editing and saving a preset-backed channel clears presetNetworkId, so a curated trim can never be overwritten back to the full preset", () => {
-    // channelSourceItems (05_catalog-core.js) always prefers presetNetworkId's
+    // channelSourceItems (src/catalog/05_catalog-core.js) always prefers presetNetworkId's
     // generic network lineup over a channel's own items -- the saved
     // catalog row already drops this field the moment a channel goes
     // through saveChannel (nothing in that payload writes it back), so a
@@ -7642,8 +7642,8 @@ describe("client: trakt disconnected, channel publishing, toggle persistence, an
 
   it("removes shuffle-now from play order dropdowns", async () => {
     const fs = await import("node:fs");
-    const chanHtml = fs.readFileSync("13_tab-channels.js", "utf8");
-    const customHtml = fs.readFileSync("12_tab-custom-lists.js", "utf8");
+    const chanHtml = fs.readFileSync("src/page/13_tab-channels.js", "utf8");
+    const customHtml = fs.readFileSync("src/page/12_tab-custom-lists.js", "utf8");
     assert.doesNotMatch(chanHtml, /<option value="shuffle-now">/);
     assert.doesNotMatch(customHtml, /<option value="shuffle-now">/);
   });
@@ -7677,7 +7677,7 @@ describe("client: trakt disconnected, channel publishing, toggle persistence, an
 describe("client: My Catalogs sub-heading and poster rating badges", () => {
   it("My Catalogs tab includes the muted sub-heading under Live Preview & Editor", async () => {
     const fs = await import("node:fs");
-    const catalogsHtml = fs.readFileSync("10_tab-search-add.js", "utf8");
+    const catalogsHtml = fs.readFileSync("src/page/10_tab-search-add.js", "utf8");
     assert.match(catalogsHtml, /Catalogs and lists you've added to your add-on\. Reorder, edit, and preview your active shelves\./);
   });
 
@@ -7899,7 +7899,7 @@ describe("client: My Catalogs sub-heading and poster rating badges", () => {
 
   it("IMDb rating option is removed and TMDb rating toggle is present in Settings HTML", async () => {
     const fs = await import("node:fs");
-    const settingsHtml = fs.readFileSync("15_tab-settings-html.js", "utf8");
+    const settingsHtml = fs.readFileSync("src/page/15_tab-settings-html.js", "utf8");
     assert.doesNotMatch(settingsHtml, /Removed from Airing Next/);
     assert.doesNotMatch(settingsHtml, /removedAiringNextSettingsSection/);
     assert.doesNotMatch(settingsHtml, /IMDb Ratings/);
@@ -7912,11 +7912,11 @@ describe("client: My Catalogs sub-heading and poster rating badges", () => {
 describe("client: Simkl removal, Up Next / Trakt CW badges, Trakt attribution, Hidden Lists", () => {
   it("settings HTML and CSS include toggles for Trakt Continue Watching and MDBList Up Next badges", async () => {
     const fs = await import("node:fs");
-    const settingsHtml = fs.readFileSync("15_tab-settings-html.js", "utf8");
+    const settingsHtml = fs.readFileSync("src/page/15_tab-settings-html.js", "utf8");
     assert.match(settingsHtml, /id="badgeTraktContinueWatchingCheckbox"/);
     assert.match(settingsHtml, /id="badgeMdblistUpNextCheckbox"/);
 
-    const pageShell = fs.readFileSync("09_page-shell.js", "utf8");
+    const pageShell = fs.readFileSync("src/page/09_page-shell.js", "utf8");
     assert.match(pageShell, /body\.hide-trakt-continue-watching-badges/);
     assert.match(pageShell, /body\.hide-mdblist-up-next-badges/);
   });
@@ -8136,7 +8136,7 @@ describe("client: Trakt Continue Watching and Airing Next live preview and fallb
     // disagree with what "My Lists" itself showed for the very same list,
     // since the two sources can each have items the other lacks. It now
     // prefers the cached sample outright whenever one is available (see
-    // getFallbackShelfSample's callers in 23_client-list-management.js),
+    // getFallbackShelfSample's callers in src/client/23_client-list-management.js),
     // falling through to the live sample only when nothing is cached yet.
     const cachedItems = Array.from({ length: 12 }, (_, i) => ({
       id: `tt${1000 + i}`,

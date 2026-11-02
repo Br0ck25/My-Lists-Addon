@@ -34,7 +34,7 @@ import { awaitFreshRateWindow, call, createUser, freshIsolate, makeD1, makeEnv, 
 //      serves: the fallback is the isolate's memory, which is looser across
 //      isolates but never unlimited.
 
-const RESET_BUDGET = 5; // RESET_KEY_ACCOUNT_MAX_FAILURES (00_constants.js)
+const RESET_BUDGET = 5; // RESET_KEY_ACCOUNT_MAX_FAILURES (src/core/00_constants.js)
 
 describe("P7-3: rate limits are D1 counters, not KV slots", () => {
   const rateKeys = (kv) => [...kv._store.keys()].filter((k) => k.startsWith("ratelimit:"));

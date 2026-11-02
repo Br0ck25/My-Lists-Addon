@@ -5,10 +5,10 @@ import { makeKv, makeD1, makeEnv, call, createUser, listsBackfillStep } from "./
 // The public site's "every list is live" (Br0ck25/My-Lists #76 and #77,
 // ported onto this repository in Release 1) over the v2 list tables.
 //
-// readLiveCreatorList (05_catalog-core.js) is what a Custom List catalog row
+// readLiveCreatorList (src/catalog/05_catalog-core.js) is what a Custom List catalog row
 // and its shelf title read. Once FF_V2_LISTS_READ is on and the account's
 // copy has finished, it reads the v2 tables (listsV2LiveListRecord,
-// 34_lists-v2-bridge.js); with FF_V2_LISTS_ONLY the legacy creatorlist: keys
+// src/data/34_lists-v2-bridge.js); with FF_V2_LISTS_ONLY the legacy creatorlist: keys
 // are no longer written, so the v2 tables are the only place an edit can be
 // seen. The rule stays the legacy one: a public list to anyone, a private one
 // only to a reader that proved it owns the account.
@@ -51,7 +51,7 @@ async function saveFaves(env, user, items, visibility, name = "Faves") {
 // wrong one it only names it, which must never be enough for a private list.
 // (A wrong key rather than none: a link saved before keys were stamped, with
 // no key at all, is honoured by LEGACY_UNVERIFIED_CONFIG_SHELVES, a separate
-// and deliberate rule -- see 00_constants.js.)
+// and deliberate rule -- see src/core/00_constants.js.)
 async function installLink(env, id, user, { proven }) {
   const cfg = {
     trackCreatorName: user.creatorName,

@@ -1,17 +1,18 @@
-// Guards for DESIGN_SYSTEM.md: the standards that can be checked by machine.
+// Guards for docs/DESIGN_SYSTEM.md: the standards that can be checked by machine.
 // If one of these fails, fix the CSS (use a token) rather than the test; if a
 // new token or colour is genuinely needed, add it to DESIGN_TOKENS_CSS
-// (00_constants.js) and to DESIGN_SYSTEM.md first.
+// (src/core/00_constants.js) and to docs/DESIGN_SYSTEM.md first.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeEnv, call } from "./harness.mjs";
+import { listSources } from "./sources.mjs";
 
 // The generated u-* helpers (UTILITY_CSS) are faithful copies of what used to be
 // inline style="" values, literals included, so the checks below look at the
-// component CSS only. DESIGN_SYSTEM.md section 9 lists the literals they carry.
+// component CSS only. docs/DESIGN_SYSTEM.md section 9 lists the literals they carry.
 async function appCss() {
   const env = makeEnv();
   const res = await call(env, "/app.css");
@@ -73,7 +74,7 @@ describe("design system: shared stylesheet", () => {
     const rules = css.replace(/:root(\.dark-theme)?\s*\{[^}]*\}/g, "");
     const hex = [...rules.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((m) => m[0].toLowerCase());
     // Provider brand colours, platform gradients and the support strip are
-    // the documented exceptions (DESIGN_SYSTEM.md section 9).
+    // the documented exceptions (docs/DESIGN_SYSTEM.md section 9).
     assert.deepEqual(hex, [], "hard-coded hex colours in component CSS; use a token (DESIGN_TOKENS_CSS)");
   });
 
@@ -124,14 +125,14 @@ describe("design system: text on the brand fill is readable in both themes", () 
 });
 
 describe("design system: add/remove list buttons share one class", () => {
-  // The add/remove button look lives in `.list-add-btn` rules (09_page-shell.js).
+  // The add/remove button look lives in `.list-add-btn` rules (src/page/09_page-shell.js).
   // A button built with one of the legacy names but without the shared class
   // would silently lose its styling, so every place that builds one must carry it.
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const legacy = /\b(localListAddToConfigBtn|creatorListAddToConfigBtn|myListAddBtn|searchAddBtn|curatedAddBtn|channelAddBtn|customListAddBtn|detailAddBtn)\b/;
   it("every button that is built with a legacy add-button name also has list-add-btn", () => {
     const missing = [];
-    for (const f of fs.readdirSync(root).filter((n) => /^\d\d_.*\.js$/.test(n))) {
+    for (const f of listSources(root).filter((n) => /(?:^|\/)\d\d_.*\.js$/.test(n))) {
       fs.readFileSync(path.join(root, f), "utf8").split("\n").forEach((line, i) => {
         const builds = /<button[^>]*class="[^"]*\blc-btn\b/.test(line) || /'lc-btn (secondary )?customListAddBtn'/.test(line);
         if (builds && legacy.test(line) && !/list-add-btn/.test(line)) missing.push(`${f}:${i + 1}`);
@@ -148,7 +149,7 @@ describe("design system: helpers must not block colours that scripts set at runt
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   it("no *Status / *Hint / *State element carries a colour helper", () => {
     const bad = [];
-    for (const f of fs.readdirSync(root).filter((n) => /^\d\d_.*\.js$/.test(n) && !n.startsWith("00_"))) {
+    for (const f of listSources(root).filter((n) => /(?:^|\/)\d\d_.*\.js$/.test(n) && !n.includes("/00_"))) {
       const src = fs.readFileSync(path.join(root, f), "utf8");
       for (const m of src.matchAll(/<[a-z0-9]+\s[^<>]*\sid="([A-Za-z0-9_]*(?:Status|Hint|State)|copyUrlBtn|detailAddBtn)"[^<>]*>/g)) {
         if (/class="[^"]*\bu-(?:c|bg|bgc|bdc)-/.test(m[0])) bad.push(`${f}: #${m[1]}`);
@@ -164,15 +165,15 @@ describe("design system: the rules reach everyone who changes the UI", () => {
   it("CLAUDE.md, AGENTS.md and README.md point to the UI rules", () => {
     for (const f of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
       const text = read(f);
-      assert.match(text, /AI_UI_RULES\.md/, `${f} must reference AI_UI_RULES.md`);
-      assert.match(text, /DESIGN_SYSTEM\.md/, `${f} must reference DESIGN_SYSTEM.md`);
+      assert.match(text, /AI_UI_RULES\.md/, `${f} must reference docs/AI_UI_RULES.md`);
+      assert.match(text, /DESIGN_SYSTEM\.md/, `${f} must reference docs/DESIGN_SYSTEM.md`);
     }
   });
-  it("AI_UI_RULES.md stays short enough to paste into a prompt", () => {
-    assert.ok(read("AI_UI_RULES.md").trimEnd().split("\n").length <= 40);
+  it("docs/AI_UI_RULES.md stays short enough to paste into a prompt", () => {
+    assert.ok(read("docs/AI_UI_RULES.md").trimEnd().split("\n").length <= 40);
   });
-  it("DESIGN_SYSTEM.md keeps its recipes for buttons and wording", () => {
-    const text = read("DESIGN_SYSTEM.md");
+  it("docs/DESIGN_SYSTEM.md keeps its recipes for buttons and wording", () => {
+    const text = read("docs/DESIGN_SYSTEM.md");
     assert.match(text, /### 10\.1 Add a button/);
     assert.match(text, /### 10\.6 Add or change text, labels and counts/);
   });

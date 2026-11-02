@@ -1,6 +1,6 @@
 // The build stamp: /admin shows which pasted file is live, so the owner can
 // tell whether the Worker in Cloudflare is the code that passed the checks.
-// build.py fills in WORKER_BUILD (00_constants.js) from a hash of the sources.
+// build.py fills in WORKER_BUILD (src/core/00_constants.js) from a hash of the sources.
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +13,7 @@ const read = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf
 
 describe("build stamp", () => {
   it("the source keeps exactly one placeholder for build.py to fill in", () => {
-    assert.equal(read("00_constants.js").split('"__BUILD_STAMP__"').length - 1, 1);
+    assert.equal(read("src/core/00_constants.js").split('"__BUILD_STAMP__"').length - 1, 1);
   });
 
   it("the combined Worker carries a 10-character stamp and no placeholder", () => {
@@ -23,12 +23,12 @@ describe("build stamp", () => {
   });
 
   it("/admin prints it beside the release", () => {
-    assert.ok(read("03_admin.js").includes('<span id="workerBuild">(build ${WORKER_BUILD})</span>'));
+    assert.ok(read("src/admin/03_admin.js").includes('<span id="workerBuild">(build ${WORKER_BUILD})</span>'));
   });
 
   it("/admin shows the day it was built in place of a hand-kept release number", () => {
-    assert.ok(read("03_admin.js").includes('<span id="workerRelease">Built ${WORKER_BUILD_DATE}</span>'));
-    assert.equal(read("00_constants.js").split('"__BUILD_DATE__"').length - 1, 1);
+    assert.ok(read("src/admin/03_admin.js").includes('<span id="workerRelease">Built ${WORKER_BUILD_DATE}</span>'));
+    assert.equal(read("src/core/00_constants.js").split('"__BUILD_DATE__"').length - 1, 1);
     assert.match(read("worker_entry_combined.js"), /^const WORKER_BUILD_DATE = "\d{4}-\d{2}-\d{2}";$/m);
   });
 

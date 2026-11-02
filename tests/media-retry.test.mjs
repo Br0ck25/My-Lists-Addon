@@ -1,4 +1,4 @@
-// media.retry (55_media-retry.js): the titles the list and history copies
+// media.retry (src/jobs/55_media-retry.js): the titles the list and history copies
 // could not place at TMDB are asked about again, hourly, through the real
 // Worker and queue with TMDB faked.
 import { describe, it } from "node:test";

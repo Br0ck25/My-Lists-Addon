@@ -6,8 +6,8 @@ import { readFileSync } from "node:fs";
 // fragments rather than exports, so the functions under test are sliced out of
 // their source file and evaluated with the constants they close over.
 function loadNewOnStreamingHelpers() {
-  const src00 = readFileSync(new URL("../00_constants.js", import.meta.url), "utf8");
-  const src07 = readFileSync(new URL("../07_source-fetchers-tmdb-simkl.js", import.meta.url), "utf8");
+  const src00 = readFileSync(new URL("../src/core/00_constants.js", import.meta.url), "utf8");
+  const src07 = readFileSync(new URL("../src/catalog/07_source-fetchers-tmdb-simkl.js", import.meta.url), "utf8");
 
   const names = [
     "newOnStreamingProvider",

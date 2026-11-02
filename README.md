@@ -149,7 +149,7 @@ This project is developed as a modular JavaScript application running on Cloudfl
 - **Python 3** (used by the bundle assembly and verification scripts)
 
 ### Building the Bundle
-The application source is modularized across ES modules (`00_constants.js` onward; `build.py` picks up every `NN_*.js`). To compile them into `worker_entry_combined.js`:
+The application source is modularized across ES modules (`src/core/00_constants.js` onward; `build.py` picks up every `NN_*.js`). To compile them into `worker_entry_combined.js`:
 
 ```bash
 # Using Python
@@ -188,7 +188,7 @@ node tools/check_bundle_budget.mjs
 
 ## Contributing: UI changes
 
-Anyone (human or AI) changing buttons, colours, spacing, text or wording follows [`AI_UI_RULES.md`](AI_UI_RULES.md) (one page) and [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) (full spec, with recipes for adding a button, card, modal or toast). The design tokens live in one place (`DESIGN_TOKENS_CSS` in `00_constants.js`), and `tests/design-system.test.mjs` fails the build when the rules are broken.
+Anyone (human or AI) changing buttons, colours, spacing, text or wording follows [`docs/AI_UI_RULES.md`](docs/AI_UI_RULES.md) (one page) and [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) (full spec, with recipes for adding a button, card, modal or toast). The design tokens live in one place (`DESIGN_TOKENS_CSS` in `src/core/00_constants.js`), and `tests/design-system.test.mjs` fails the build when the rules are broken.
 
 ---
 

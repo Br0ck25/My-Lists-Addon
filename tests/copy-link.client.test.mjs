@@ -1,4 +1,4 @@
-// Copying the install link (copyLink, 24_client-backup-restore-presets.js).
+// Copying the install link (copyLink, src/client/24_client-backup-restore-presets.js).
 //
 // It is the core action of the page. It called navigator.clipboard.writeText
 // with no guard, so where there is no clipboard API (a page served over http,

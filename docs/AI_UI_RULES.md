@@ -1,12 +1,12 @@
 # AI_UI_RULES.md — paste into CLAUDE.md / system prompt
 
-Full detail: `DESIGN_SYSTEM.md` (read it before adding or changing any UI). Main CSS lives in `09_page-shell.js`.
+Full detail: `DESIGN_SYSTEM.md` (read it before adding or changing any UI). Main CSS lives in `src/page/09_page-shell.js`.
 
 **Look:** iOS-style, compact, utility-first. System fonts, blue `#0066D6` accent, pill buttons, white cards on grey (light) / black (dark). Dark mode = class `dark-theme` on `<html>`.
 
 **Always**
 1. Reuse existing components first: `.btn-primary/.btn-secondary/.btn-ghost/.btn-danger` (`.btn-sm/-lg`), `.lc-btn` (compact, in cards only), `.panel`, `.list-card`, `.subnav-pill`, `.tab-btn`, `.testresult`, `.ui-toggle`.
-2. Tokens only (one definition, `DESIGN_TOKENS_CSS` in `00_constants.js`): `var(--color-*)`, `--radius-*`, `--shadow-*`, `--space-*`, `--font-size-*`, `--z-*`, `--duration-*`. White text on a fill = `--color-brand-fill` + `--color-on-brand`. Never hard-code hex/rgba, never add new radii, font sizes or odd spacing (5/7/9/11/13px).
+2. Tokens only (one definition, `DESIGN_TOKENS_CSS` in `src/core/00_constants.js`): `var(--color-*)`, `--radius-*`, `--shadow-*`, `--space-*`, `--font-size-*`, `--z-*`, `--duration-*`. White text on a fill = `--color-brand-fill` + `--color-on-brand`. Never hard-code hex/rgba, never add new radii, font sizes or odd spacing (5/7/9/11/13px).
 3. Buttons/tabs/pills are pill-shaped (`--radius-pill`); inputs are `--radius-sm`, 16px font, 44px high; panels/cards are `--radius` 14px.
 4. Modals: `showModal()`. Confirmations: `appShellDialog()`. Feedback: `showToast(msg,'success'|'error'|'info')`; reversible deletes: `showUndoToast`. Never `alert/confirm/prompt`, never hand-built overlays or toasts.
 5. Every new UI needs default, hover, `:focus-visible`, disabled, loading, empty and error states, in light and dark mode.

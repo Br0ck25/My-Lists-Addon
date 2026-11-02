@@ -1,4 +1,4 @@
-// The premade streaming collections' browse rows (STREAMING_ROWS, 08_quickadd-chart-data.js).
+// The premade streaming collections' browse rows (STREAMING_ROWS, src/catalog/08_quickadd-chart-data.js).
 // The rule that matters: a row on a service's collection only ever holds titles that are
 // INCLUDED with that service (TMDB with_watch_providers + flatrate), never another service's.
 import { describe, it } from "node:test";
@@ -16,7 +16,7 @@ function loadServer() {
   const sandbox = { console, URL, URLSearchParams, atob, btoa, Uint8Array, TextDecoder, TextEncoder, Response, Headers, Request, crypto: globalThis.crypto };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const f of ["00_constants.js", "02_http-and-creator-utils.js", "05_catalog-core.js", "07_source-fetchers-tmdb-simkl.js", "08_quickadd-chart-data.js"]) {
+  for (const f of ["src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/05_catalog-core.js", "src/catalog/07_source-fetchers-tmdb-simkl.js", "src/catalog/08_quickadd-chart-data.js"]) {
     vm.runInContext(fs.readFileSync(path.join(root, f), "utf8"), sandbox, { filename: f });
   }
   // const declarations are not properties of the context: read them through a script.

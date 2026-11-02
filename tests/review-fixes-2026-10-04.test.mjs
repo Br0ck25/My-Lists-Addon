@@ -1,6 +1,6 @@
 // Fixes from the 2026-10-04 review of the Phase 8-10 work.
 //
-//  - ensureTrackingMigrated (05_catalog-core.js) was emptied by P10-4. An
+//  - ensureTrackingMigrated (src/catalog/05_catalog-core.js) was emptied by P10-4. An
 //    account whose tracking still sat inside creatorsync:{username} then lost
 //    it on its first autosave, because /api/creator/sync/save writes that record
 //    without the tracking fields.

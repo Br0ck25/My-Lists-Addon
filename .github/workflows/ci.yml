@@ -127,15 +127,15 @@ jobs:
       # tools/gen_map.py is deterministic, so the committed map should always be
       # exactly what it produces. Without this check it silently rotted --
       # 26% of its line numbers pointed at the wrong line.
-      - name: FUNCTION-MAP.md is current
+      - name: docs/FUNCTION-MAP.md is current
         run: |
           python3 tools/gen_map.py > /dev/null
-          if ! git diff --ignore-cr-at-eol --quiet -- FUNCTION-MAP.md; then
-            git diff --ignore-cr-at-eol -- FUNCTION-MAP.md
-            echo "FUNCTION-MAP.md is stale — run: python3 tools/gen_map.py"
+          if ! git diff --ignore-cr-at-eol --quiet -- docs/FUNCTION-MAP.md; then
+            git diff --ignore-cr-at-eol -- docs/FUNCTION-MAP.md
+            echo "docs/FUNCTION-MAP.md is stale — run: python3 tools/gen_map.py"
             exit 1
           fi
-          echo "FUNCTION-MAP.md matches source"
+          echo "docs/FUNCTION-MAP.md matches source"
 
       # P8-3: Bundle budget check -- ensure the first-view JS bundle (/app.js)
       # stays strictly under the 150 KB gzip budget to protect initial page load.

@@ -8,8 +8,8 @@
 /schema_activity.sql       @Br0ck25
 /migrations/               @Br0ck25
 /tests/route-access.json   @Br0ck25
-/03_admin.js               @Br0ck25
-/26_api-creator-and-admin-routes.js @Br0ck25
+/src/admin/03_admin.js               @Br0ck25
+/src/api/26_api-creator-and-admin-routes.js @Br0ck25
 /CLAUDE.md                 @Br0ck25
 /AGENTS.md                 @Br0ck25
-/DESIGN_SYSTEM.md          @Br0ck25
+/docs/DESIGN_SYSTEM.md          @Br0ck25

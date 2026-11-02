@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { fireListeners, loadClient, requestsTo } from "./client-harness.mjs";
 
 // A poster that fails to load is looked up again by the title it belongs to
-// (handlePosterImgError, 23_client-list-management.js). The mini tiles on
+// (handlePosterImgError, src/client/23_client-list-management.js). The mini tiles on
 // Discover, My Lists, creator profiles and the Curated cards all sit inside a
 // .list-card whose data-name is the LIST's name -- and the handler used to
 // take that card before the tile's own data. Seen on the site: The Simpsons
@@ -49,7 +49,7 @@ function fallbackQuery(client) {
 describe("a failed poster is looked up by its own title, not its list's", () => {
   it("Discover's list cards: the tile's show, not the card's name", async () => {
     const client = loadWithFallback({ ok: true, poster: "https://images.metahub.space/poster/medium/tt0096697/img" });
-    // loadPosterSlot's markup (19_client-search-and-likes.js).
+    // loadPosterSlot's markup (src/client/19_client-search-and-likes.js).
     const card = el("list-card", { name: "Hulu", type: "series", listType: "series", url: "tmdb:chart:hulu" });
     const slot = el("list-card-posters", {}, card);
     const tile = el("list-card-mini-poster-tile", { name: "Hulu", url: "tmdb:chart:hulu", type: "series" }, slot);

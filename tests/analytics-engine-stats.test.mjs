@@ -30,7 +30,7 @@ function loadSourceFunctions(...relFiles) {
   return sandbox;
 }
 
-const adminFns = loadSourceFunctions("00_constants.js", "01_icon-asset.js", "02_http-and-creator-utils.js", "03_admin.js");
+const adminFns = loadSourceFunctions("src/core/00_constants.js", "src/core/01_icon-asset.js", "src/core/02_http-and-creator-utils.js", "src/admin/03_admin.js");
 const { bumpStatBy, recordSearchQuery, computeLeaderboard } = adminFns;
 // A top-level const is not a property of the sandbox; read it from its scope.
 

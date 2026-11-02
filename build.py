@@ -1,22 +1,23 @@
 # Python equivalent of build.ps1: header + numbered split files, byte-exact.
 #
 # The header used to be recovered by searching the EXISTING combined file for
-# the current contents of 00_constants.js and keeping everything before it.
-# That made the build self-referential: editing 00_constants.js broke the
+# the current contents of src/core/00_constants.js and keeping everything before it.
+# That made the build self-referential: editing src/core/00_constants.js broke the
 # search, and the build then refused to run at all ("could not locate
-# 00_constants.js inside the existing combined file"). It also meant the
+# src/core/00_constants.js inside the existing combined file"). It also meant the
 # header had no source file, so a direct edit to it inside the generated
-# Worker was invisible to the CI drift check. It now comes from header.js
+# Worker was invisible to the CI drift check. It now comes from src/header.js
 # like every other input.
 #
 # assemble() is what tools/check_sync.py compares the committed Worker against, so
 # the two cannot disagree about how the file is made.
 import datetime
 import glob
+import os
 import hashlib
 import re
 
-# The one place in the sources that carries it: WORKER_BUILD in 00_constants.js.
+# The one place in the sources that carries it: WORKER_BUILD in src/core/00_constants.js.
 STAMP_PLACEHOLDER = b'"__BUILD_STAMP__"'
 # And the day it was built: WORKER_BUILD_DATE, shown on /admin in place of a
 # release number someone had to raise by hand. It is the day the code last
@@ -40,8 +41,8 @@ def build_date(stamp, existing='worker_entry_combined.js'):
 
 def assemble():
     """Return (worker bytes with the build stamp filled in, the stamp)."""
-    out = bytearray(open('header.js', 'rb').read())
-    for f in sorted(glob.glob('[0-9][0-9]_*.js')):
+    out = bytearray(open('src/header.js', 'rb').read())
+    for f in sorted(glob.glob('src/*/[0-9][0-9]_*.js'), key=os.path.basename):
         data = open(f, 'rb').read()
         out += data
         # LF, not CRLF. This separator only fires for a source that does not end
@@ -52,9 +53,9 @@ def assemble():
         if not data.endswith(b'\n'):
             out += b'\n'
     if out.count(STAMP_PLACEHOLDER) != 1:
-        raise SystemExit("build stamp placeholder must appear exactly once (WORKER_BUILD in 00_constants.js)")
+        raise SystemExit("build stamp placeholder must appear exactly once (WORKER_BUILD in src/core/00_constants.js)")
     if out.count(DATE_PLACEHOLDER) != 1:
-        raise SystemExit("build date placeholder must appear exactly once (WORKER_BUILD_DATE in 00_constants.js)")
+        raise SystemExit("build date placeholder must appear exactly once (WORKER_BUILD_DATE in src/core/00_constants.js)")
     # Hash of the sources as written, line endings normalised, so the stamp is
     # the same on every platform.
     stamp = hashlib.sha256(bytes(out).replace(b'\r\n', b'\n')).hexdigest()[:10]
@@ -65,6 +66,6 @@ def assemble():
 if __name__ == '__main__':
     data, stamp = assemble()
     open('worker_entry_combined.js', 'wb').write(data)
-    print("header bytes:", len(open('header.js', 'rb').read()))
+    print("header bytes:", len(open('src/header.js', 'rb').read()))
     print("combined bytes:", len(data))
     print("build stamp:", stamp, "built", build_date(stamp), "(shown on /admin after you paste this file)")

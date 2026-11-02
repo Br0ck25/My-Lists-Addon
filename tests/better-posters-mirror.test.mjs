@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { makeKv, makeD1, makeEnv, call, runScheduledTick } from "./harness.mjs";
 
 // The Worker's own copy of BetterPosters artwork (serveBetterPoster,
-// 05_catalog-core.js). btttr.cc answers from its CDN in a fraction of a second
+// src/catalog/05_catalog-core.js). btttr.cc answers from its CDN in a fraction of a second
 // for anything drawn lately, and from an origin that took 40-50s (or 504'd)
 // for anything else -- so the site now fetches each poster from btttr.cc once
 // and serves it from here after that.

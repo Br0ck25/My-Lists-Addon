@@ -1,4 +1,4 @@
-// getCreator (02_http-and-creator-utils.js) reads an account from D1 and keeps
+// getCreator (src/core/02_http-and-creator-utils.js) reads an account from D1 and keeps
 // a copy in KV as a fallback for the day D1 errors. It used to write that copy
 // on EVERY read: each catalog request for a signed-in install, and each call to
 // /api/creator/*, was one billed KV write of a record that had not changed

@@ -1,7 +1,7 @@
 // Phase 4: the provider layer.
 //
 // P4-1 replaced detectSource's if/else and fetchCatalog's matching if/else
-// with one table, CATALOG_SOURCES (04_config-resolution.js), and the provider
+// with one table, CATALOG_SOURCES (src/core/04_config-resolution.js), and the provider
 // adapters built from it. It is meant to change nothing a person can see, so
 // the tests below keep a FROZEN copy of the two old chains (as they were on
 // main before P4-1) and hold the registry to them: the same name for every
@@ -176,7 +176,7 @@ const SOURCE_CORPUS = [
 ];
 
 describe("P4-1: the provider registry", () => {
-  const sb = loadSourceFunctions("00_constants.js", "04_config-resolution.js", "05_catalog-core.js");
+  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/04_config-resolution.js", "src/catalog/05_catalog-core.js");
   const CATALOG_SOURCES = vm.runInContext("CATALOG_SOURCES", sb);
   const PROVIDER_ADAPTERS = vm.runInContext("PROVIDER_ADAPTERS", sb);
   const STREMIO_LIVE_ROW_SOURCES = vm.runInContext("STREMIO_LIVE_ROW_SOURCES", sb);
@@ -606,8 +606,8 @@ describe("P4-3: chart snapshots", () => {
   // 42_ on its own is a whole isolate's worth of snapshot state; each test
   // loads its own. Its clock is the sandbox's Date, moved by the test.
   function loadSnapshots() {
-    // 00_constants.js too: the snapshot key checks a region against REGION_OPTIONS.
-    const sb = loadSourceFunctions("00_constants.js", "42_chart-snapshots.js");
+    // src/core/00_constants.js too: the snapshot key checks a region against REGION_OPTIONS.
+    const sb = loadSourceFunctions("src/core/00_constants.js", "src/catalog/42_chart-snapshots.js");
     sb.__clock = 1_800_000_000_000;
     vm.runInContext("Date.now = () => globalThis.__clock;", sb);
     return sb;
@@ -798,7 +798,7 @@ describe("P4-3: chart snapshots", () => {
   });
 
   it("only provider charts carry a snapshot rule in the registry", () => {
-    const reg = loadSourceFunctions("00_constants.js", "04_config-resolution.js");
+    const reg = loadSourceFunctions("src/core/00_constants.js", "src/core/04_config-resolution.js");
     const sources = vm.runInContext("CATALOG_SOURCES", reg);
     const withRule = [...sources.filter((s) => s.snapshot).map((s) => s.name)].sort();
     assert.deepEqual(withRule, ["simkl-chart", "tmdb-chart", "tmdb-genre", "tmdb-hidden-gems", "tmdb-holiday", "tmdb-kids", "tmdb-top10", "trakt-chart"]);
@@ -844,7 +844,7 @@ describe("P4-3: chart snapshots", () => {
 
 describe("P4-2: canonical catalog ids", () => {
   const on = (extra = {}) => ({ FF_CANONICAL_IDS: "1", ...extra });
-  const load = () => loadSourceFunctions("29_media.js", "43_catalog-ids.js");
+  const load = () => loadSourceFunctions("src/data/29_media.js", "src/catalog/43_catalog-ids.js");
   const ids = (metas) => Array.from(metas, (m) => m.id);
   const now = 1_790_000_000_000;
   async function mediaDb(rows) {

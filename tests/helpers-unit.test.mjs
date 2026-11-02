@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 // files they are defined in and eval just those functions in a sandbox.
 
 function loadHelpers() {
-  const src02 = readFileSync(new URL("../02_http-and-creator-utils.js", import.meta.url), "utf8");
+  const src02 = readFileSync(new URL("../src/core/02_http-and-creator-utils.js", import.meta.url), "utf8");
   const names = [
     "normalizeCreatorDisplayName",
     "normalizeListVisibility",
@@ -127,7 +127,7 @@ describe("URL allowlists", () => {
   });
 });
 
-// Every *_BYTES_MAX ceiling in 00_constants.js is a byte budget -- KV value
+// Every *_BYTES_MAX ceiling in src/core/00_constants.js is a byte budget -- KV value
 // size, and D1's 2,000,000-byte maximum string size. All four guards measured
 // with String.prototype.length, which counts UTF-16 code units. This is the
 // one-line difference.

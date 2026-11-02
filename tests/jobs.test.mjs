@@ -275,7 +275,7 @@ describe("P5-1: the job queue", () => {
   });
 
   describe("enqueueJob and enqueueJobs", () => {
-    const sb = loadSourceFunctions("44_jobs-queue.js");
+    const sb = loadSourceFunctions("src/jobs/44_jobs-queue.js");
     const run = (src) => vm.runInContext(src, sb);
     // Objects made in the sandbox have its prototypes; compare them as data.
     const plain = (o) => JSON.parse(JSON.stringify(o));
@@ -345,7 +345,7 @@ describe("makeQueue", () => {
   });
 });
 
-// --- P5-2: the dispatcher (45_jobs-dispatcher.js) ------------------------------
+// --- P5-2: the dispatcher (src/jobs/45_jobs-dispatcher.js) ------------------------------
 
 // Every periodic job, in the order they are defined (and first sent), with
 // its period: the cron's own work every tick, then the show schedule (P5-3).
@@ -677,7 +677,7 @@ describe("P5-2: the cron tick only dispatches", () => {
 describe("P5-2: one-off jobs", () => {
   const plain = (o) => JSON.parse(JSON.stringify(o));
   function setup(behavior, { maxAttempts = 3, queue = true } = {}) {
-    const sb = loadSourceFunctions("44_jobs-queue.js", "45_jobs-dispatcher.js");
+    const sb = loadSourceFunctions("src/jobs/44_jobs-queue.js", "src/jobs/45_jobs-dispatcher.js");
     const seen = [];
     sb.defineDurableJob("test.work", {
       maxAttempts,

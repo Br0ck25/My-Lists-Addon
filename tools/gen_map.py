@@ -35,10 +35,10 @@ ROUTE_PATTERNS = [
     (re.compile(r'^\s*m\s*=\s*path\.match\(\s*/(.+?)/[gimsuy]*\s*\)'), lambda m: "re:" + m.group(1)),
 ]
 
-files = sorted(glob.glob('[0-9][0-9]_*.js'))
+files = sorted(glob.glob('src/*/[0-9][0-9]_*.js'), key=os.path.basename)
 rows, routes = [], []
 for f in files:
-    n = int(f[:2])
+    n = int(os.path.basename(f)[:2])
     for i, line in enumerate(open(f, encoding='utf-8', errors='replace'), 1):
         m = FN.match(line)
         if m: rows.append((m.group(1), f, i))
@@ -60,8 +60,8 @@ for name, f, i in sorted(rows, key=lambda r: r[0].lower()):
 
 # newline='\n': on Windows, text mode would otherwise write CRLF and the
 # committed LF map would look stale (see .gitattributes).
-open('FUNCTION-MAP.md', 'w', encoding='utf-8', newline='\n').write('\n'.join(out) + '\n')
-print(f'FUNCTION-MAP.md: {len(rows)} symbols, {len(set(routes))} routes, {os.path.getsize("FUNCTION-MAP.md"):,} bytes')
+open('docs/FUNCTION-MAP.md', 'w', encoding='utf-8', newline='\n').write('\n'.join(out) + '\n')
+print(f'FUNCTION-MAP.md: {len(rows)} symbols, {len(set(routes))} routes, {os.path.getsize("docs/FUNCTION-MAP.md"):,} bytes')
 
 # FILE-INDEX.md: one line per source file (size, symbol count, its banner), so
 # "which file?" is answered by reading ~6KB instead of the 170KB map above.
@@ -74,5 +74,5 @@ for f in files:
     text = open(f, encoding='utf-8', errors='replace').read().splitlines()
     banner = next((re.sub(r'^//\s*-*\s*|\s*-+\s*$', '', l) for l in text if l.startswith('// ---')), '')
     idx.append(f'| {f} | {len(text)} | {count.get(f, 0)} | {banner[:70]} |')
-open('FILE-INDEX.md', 'w', encoding='utf-8', newline='\n').write('\n'.join(idx) + '\n')
-print(f'FILE-INDEX.md: {os.path.getsize("FILE-INDEX.md"):,} bytes')
+open('docs/FILE-INDEX.md', 'w', encoding='utf-8', newline='\n').write('\n'.join(idx) + '\n')
+print(f'FILE-INDEX.md: {os.path.getsize("docs/FILE-INDEX.md"):,} bytes')

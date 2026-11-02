@@ -12,7 +12,7 @@
 //   page         the admin page shell, which shows the sign-in form
 //   static       assets and manifests
 //
-// Admin routes check their login one by one (isAdminRequest, 03_admin.js), so a
+// Admin routes check their login one by one (isAdminRequest, src/admin/03_admin.js), so a
 // new one that forgets the check is the mistake this file exists to catch.
 //
 // Adding a route: add its line to route-access.json with the right class. If it
@@ -29,10 +29,11 @@ globalThis.fetch = async () => {
 };
 
 import { makeEnv, makeD1, makeKv, call } from "./harness.mjs";
+import { listSources } from "./sources.mjs";
 
 const ROOT = new URL("../", import.meta.url);
-const SOURCES = readdirSync(ROOT)
-  .filter((f) => /^\d\d_.*\.js$/.test(f))
+const SOURCES = listSources(ROOT)
+  .filter((f) => /(?:^|\/)\d\d_.*\.js$/.test(f))
   .map((f) => readFileSync(new URL(f, ROOT), "utf8"))
   .join("\n");
 const MANIFEST = JSON.parse(readFileSync(new URL("route-access.json", import.meta.url), "utf8"));
@@ -93,7 +94,7 @@ const REGEX_ROUTES = {
 
 // The scans take the source text as an argument so the test below can prove
 // they see a route written either way. They matched only double quotes, so a
-// route compared with single quotes (59_support-emails.js does) was invisible.
+// route compared with single quotes (src/admin/59_support-emails.js does) was invisible.
 const Q = `(["'])(\\/[^"']*)\\1`;
 const scanExactRoutes = (src) => [...new Set([...src.matchAll(new RegExp(`(?:path|pathname|p)\\s*===\\s*${Q}`, "g"))].map((m) => m[2]))].sort();
 // Any prefix test on the request path, not only /admin and /api: /lists/,

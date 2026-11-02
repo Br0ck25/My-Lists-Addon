@@ -1,4 +1,4 @@
-// Settings > Support: "Delete chat history" (16_client-row-core.js).
+// Settings > Support: "Delete chat history" (src/client/16_client-row-core.js).
 //
 // It is confirmed first (it cannot be undone: the threads are removed on the
 // server too), sends this device's thread ids plus the account name AND key

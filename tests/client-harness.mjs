@@ -230,7 +230,7 @@ export function loadClient(opts = {}) {
     _listeners: [],
     addEventListener(type, fn, capture) { sandbox._listeners.push({ type, fn, capture: !!capture }); },
     removeEventListener() {}, dispatchEvent: () => true,
-    // Viewport and scrolling. lockBackgroundScroll (16_client-row-core.js) reads
+    // Viewport and scrolling. lockBackgroundScroll (src/client/16_client-row-core.js) reads
     // and restores the scroll position around every modal, so without these the
     // stub throws on any test that opens one -- which is most of them now.
     // Fixed numbers rather than 0 so the scrollbar-width compensation

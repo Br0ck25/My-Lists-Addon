@@ -1,5 +1,5 @@
 // A title TMDB has no entry for yet still opens (titleDetailsWithoutTmdb,
-// 57_title-details-fallback.js). New on Streaming lists titles by IMDb id the
+// src/catalog/57_title-details-fallback.js). New on Streaming lists titles by IMDb id the
 // day a service adds them, and some are too new for TMDB: The Devil's Mark
 // (tt39833082) and Full Figured Flings (tt35457754) on the site, 2026-10-01.
 // Opening one said "Not found or TMDB error".
