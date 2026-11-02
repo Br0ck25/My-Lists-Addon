@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "d36c0a349b";
+const WORKER_BUILD = "ff7ef686f6";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -112074,7 +112074,7 @@ async function handleCreatorApiAccountAndSaveRoutes(request, env, ctx, url, path
 async function creatorApiListsDelete(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112106,7 +112106,7 @@ async function creatorApiListsDelete(request, env, ctx, path) {
 async function creatorApiListsReorder(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112174,7 +112174,7 @@ async function creatorApiAccountReset(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Database not configured." }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112225,7 +112225,7 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Database not configured." }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112285,7 +112285,7 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
 async function creatorApiSyncSave(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112454,7 +112454,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
 async function creatorApiSyncSaveTracking(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }

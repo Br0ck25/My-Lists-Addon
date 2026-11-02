@@ -19,7 +19,7 @@ async function handleCreatorApiAccountAndSaveRoutes(request, env, ctx, url, path
 async function creatorApiListsDelete(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -51,7 +51,7 @@ async function creatorApiListsDelete(request, env, ctx, path) {
 async function creatorApiListsReorder(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -119,7 +119,7 @@ async function creatorApiAccountReset(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Database not configured." }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -170,7 +170,7 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Database not configured." }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -230,7 +230,7 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
 async function creatorApiSyncSave(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -399,7 +399,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
 async function creatorApiSyncSaveTracking(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
