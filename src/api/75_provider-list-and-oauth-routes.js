@@ -305,12 +305,7 @@ async function apiTraktPopularLists(env, ctx, url) {
       fetchFn: async () => {
         const src = "https://api.trakt.tv/lists/popular?limit=30";
         const res = await fetchTraktWithRetry(src, {
-          headers: {
-            "Content-Type": "application/json",
-            "trakt-api-version": "2",
-            "trakt-api-key": traktKey,
-            "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-          },
+          headers: traktHeaders(null, traktKey),
           cf: { cacheTtl: 3600, cacheEverything: true },
         });
         if (!res.ok) {
@@ -387,12 +382,7 @@ async function apiTraktMyLists(env, ctx, url) {
   try {
     const src = `https://api.trakt.tv/users/${encodeURIComponent(username)}/lists`;
     const res = await fetchTraktWithRetry(src, {
-      headers: {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": traktKey,
-        "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-      },
+      headers: traktHeaders(null, traktKey),
       cf: { cacheTtl: 300, cacheEverything: true },
     });
     if (!res.ok) {
@@ -435,15 +425,15 @@ async function apiTraktMyLists(env, ctx, url) {
     try {
       const [wlRes, wShowsRes, wlShowsRes] = await Promise.all([
         fetchTraktWithRetry(`https://api.trakt.tv/users/${encodeURIComponent(username)}/watchlist?limit=1&page=1`, {
-          headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": traktKey, "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+          headers: traktHeaders(null, traktKey),
           cf: { cacheTtl: 120, cacheEverything: false },
         }).catch(() => null),
         fetchTraktWithRetry(`https://api.trakt.tv/users/${encodeURIComponent(username)}/watched/shows?extended=noseasons`, {
-          headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": traktKey, "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+          headers: traktHeaders(null, traktKey),
           cf: { cacheTtl: 120, cacheEverything: false },
         }).catch(() => null),
         fetchTraktWithRetry(`https://api.trakt.tv/users/${encodeURIComponent(username)}/watchlist/shows?limit=50`, {
-          headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": traktKey, "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+          headers: traktHeaders(null, traktKey),
           cf: { cacheTtl: 120, cacheEverything: false },
         }).catch(() => null),
       ]);
@@ -734,12 +724,7 @@ async function apiTraktDeviceCode(request, env) {
   try {
     let res = await fetch("https://api.trakt.tv/oauth/device/code", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": clientId,
-        "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-      },
+      headers: traktHeaders(null, clientId),
       body: JSON.stringify({ client_id: clientId }),
     });
 
@@ -782,12 +767,7 @@ async function apiTraktDeviceToken(request, env) {
   try {
     const res = await fetch("https://api.trakt.tv/oauth/device/token", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": clientId,
-        "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-      },
+      headers: traktHeaders(null, clientId),
       body: JSON.stringify({
         code,
         client_id: clientId,
