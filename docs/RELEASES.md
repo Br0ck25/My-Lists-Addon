@@ -60,6 +60,15 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Trakt Continue Watching: the website list and the Stremio/Nuvio shelf now agree (built 2026-11-02, stamp eb36cbf5de)
+
+What you will notice, in plain words (owner decisions of 2026-11-02, CQ-04):
+
+- **Website list (Settings > My Lists > Trakt Continue Watching):** a paused episode is now filed under its show, the same as in Stremio/Nuvio, even when Trakt gives that episode its own IMDB id. A show Trakt pauses under an upper-case or differently written id (or only matched by its slug) no longer shows up twice, once as the paused episode and once as a "next episode".
+- **Both lists now look at your 40 most recently watched shows** for a "next episode" row. The Stremio/Nuvio shelf used to look at 15, so a heavy watcher may see more rows there. Each show costs Trakt one request, so if Trakt ever starts refusing requests (429 or Cloudflare 1015), lower `TRAKT_CONTINUE_NEXT_EPISODE_SHOWS` in `src/core/00_constants.js`. That change is its own commit and can be reverted alone.
+- **Kept as is:** a show Trakt knows only by its Trakt id still appears in the website list but not in the Stremio/Nuvio shelf (Stremio cannot open it). A test now pins this on purpose.
+- **Proof:** `tests/continue-watching-parity.test.mjs` has no open differences left; each fix was written as a failing test first. The ~2,900 replay requests and 93 Trakt header captures are byte-identical before and after.
+
 ## Internal tidy-up of long function inputs (built 2026-11-02, stamp 5506978fac)
 
 No change for users. This is CQ-20.
