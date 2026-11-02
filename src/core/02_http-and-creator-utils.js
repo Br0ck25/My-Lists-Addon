@@ -1605,10 +1605,9 @@ async function resolveSession(request, env, ctx) {
     if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
     if (row.deleted_at != null || (row.status && row.status !== "active")) return null;
 
-    // Throttle last_seen_at update (at most once every 5 minutes per session)
-    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
-      (ctx || { waitUntil() {} }).waitUntil(env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {}));
-    }
+    // last_seen_at refresh and sliding expiry, at most every 5 minutes (62_session-renewal.js)
+    const renewed = renewSessionIfDue(env, ctx, row, now);
+    if (renewed) request._sessionRenewed = true;
 
     const account = {
       id: row.id,
@@ -1628,7 +1627,7 @@ async function resolveSession(request, env, ctx) {
       accountId: row.account_id,
       createdAt: row.session_created_at,
       lastSeenAt: row.last_seen_at,
-      expiresAt: row.expires_at,
+      expiresAt: renewed ? now + SESSION_TTL_MS : row.expires_at,
       userAgent: row.user_agent,
     };
 

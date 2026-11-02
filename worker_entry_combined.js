@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9fb10ccd96";
+const WORKER_BUILD = "e2061a2e61";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -5463,10 +5463,9 @@ async function resolveSession(request, env, ctx) {
     if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
     if (row.deleted_at != null || (row.status && row.status !== "active")) return null;
 
-    // Throttle last_seen_at update (at most once every 5 minutes per session)
-    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
-      (ctx || { waitUntil() {} }).waitUntil(env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {}));
-    }
+    // last_seen_at refresh and sliding expiry, at most every 5 minutes (62_session-renewal.js)
+    const renewed = renewSessionIfDue(env, ctx, row, now);
+    if (renewed) request._sessionRenewed = true;
 
     const account = {
       id: row.id,
@@ -5486,7 +5485,7 @@ async function resolveSession(request, env, ctx) {
       accountId: row.account_id,
       createdAt: row.session_created_at,
       lastSeenAt: row.last_seen_at,
-      expiresAt: row.expires_at,
+      expiresAt: renewed ? now + SESSION_TTL_MS : row.expires_at,
       userAgent: row.user_agent,
     };
 
@@ -91464,6 +91463,9 @@ export default {
       const p = new URL(request && request.url ? request.url : "https://x/").pathname;
       if (request && request.account && (p.startsWith("/api/creator/") || CREATOR_SESSION_PATH_PREFIXES.some((x) => p.startsWith(x)))) {
         secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
+        // SEC-03 step 0: a session renewed by this request gets its cookie renewed too.
+        const renewalCookie = sessionCookieRenewal(request);
+        if (renewalCookie && !secured.headers.has("Set-Cookie")) secured.headers.set("Set-Cookie", renewalCookie);
       }
     } catch {
       // Never affects the response.
@@ -107746,6 +107748,40 @@ async function creatorKeyAuthAccepted(request, env, ctx, { path, creatorKey, via
     displayName: profile.displayName,
     hasRecoveryAnswer: Boolean(profile.recoveryAnswerHash),
   };
+}
+// --- Sliding sessions (SEC-03, step 0) ----------------------------------------------
+//
+// A session used to expire 30 days after sign-in whatever happened in between.
+// Now a session that is in use is renewed: at most every 5 minutes, together with
+// the last_seen_at refresh, expires_at moves to now + SESSION_TTL_MS, and the
+// response to an /api/creator/ request carries the same cookie again with a fresh
+// Max-Age so the browser's copy moves too. Someone who visits regularly never has
+// to sign in again; someone away for 30 days does.
+//
+// Only a live session is renewed: revoked, expired and deleted-account sessions
+// are refused by resolveSession before this runs, and the UPDATE below also
+// requires revoked_at IS NULL, so a request racing a sign-out cannot undo it.
+
+const SESSION_RENEW_AFTER_MS = 5 * 60 * 1000;
+
+// True when this request renews the session (the write itself is handed to waitUntil).
+function renewSessionIfDue(env, ctx, row, now) {
+  if (typeof row.last_seen_at !== "number" || now - row.last_seen_at <= SESSION_RENEW_AFTER_MS) return false;
+  const write = env.DB.prepare(
+    "UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id_hash = ? AND revoked_at IS NULL"
+  ).bind(now, now + SESSION_TTL_MS, row.id_hash).run().catch(() => {});
+  (ctx || { waitUntil() {} }).waitUntil(write);
+  return true;
+}
+
+// The Set-Cookie value that renews the browser's copy, or null when this request
+// did not renew or did not come with the cookie (a Bearer token has no cookie).
+function sessionCookieRenewal(request) {
+  if (!request || !request._sessionRenewed) return null;
+  const cookieHeader = request.headers.get("Cookie") || request.headers.get("cookie") || "";
+  if (!/(?:^|;\s*)mla_session=/.test(cookieHeader)) return null;
+  const token = extractSessionToken(request);
+  return token ? buildSessionCookieHeader(token) : null;
 }
 // Auto-track Playback ping from the /:config/subtitles/... route, moved out of handleFetch (CQ-01).
 

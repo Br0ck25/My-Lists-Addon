@@ -39,7 +39,7 @@
   "src/client/22_client-creator-profile.js": 7075,
   "src/client/23_client-list-management.js": 3974,
   "src/client/24_client-backup-restore-presets.js": 4886,
-  "src/core/02_http-and-creator-utils.js": 7144,
+  "src/core/02_http-and-creator-utils.js": 7142,
   "src/page/09_page-shell.js": 5796
  }
 }
