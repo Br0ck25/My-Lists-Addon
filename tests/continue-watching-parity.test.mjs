@@ -139,14 +139,15 @@ describe("Trakt continue watching: shelf (fetchTraktContinueWatching) vs list ro
     assert.deepEqual(route, shelf);
   });
 
-  it("agree on a show Trakt knows only by its Trakt id", { todo: "DIFFERENT: with no IMDB or TMDB id the shelf drops the row (Stremio cannot open it) but the list route keeps it under its Trakt id." }, async () => {
+  // owner chose to keep this, 2026-11-02: the two lists intentionally differ here.
+  it("differ on purpose for a show Trakt knows only by its Trakt id (shelf drops it, website list keeps it)", async () => {
     const bare = { title: "Bare", year: 2011, ids: { trakt: 42 } };
     const { shelf, route } = await both({
       watched: [{ last_watched_at: "2024-06-01T00:00:00Z", show: bare }],
       progress: { 42: nextEp(1, 2) },
     });
-    assert.deepEqual(shelf, []);
-    assert.deepEqual(route, shelf);
+    assert.deepEqual(shelf, [], "Stremio cannot open a title without an IMDB or TMDB id, so the shelf drops it");
+    assert.deepEqual(route, ["42:1:2"], "the website list keeps it under its Trakt id so it can still be imported");
   });
 
   it("agree that a show paused under an upper-case IMDB id is not repeated as 'next episode'", async () => {
