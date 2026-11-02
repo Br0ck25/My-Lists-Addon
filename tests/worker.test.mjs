@@ -8551,9 +8551,11 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
   const SRC = {
     "src/core/02_http-and-creator-utils.js": fs.readFileSync(path.join(REPO_ROOT, "src/core/02_http-and-creator-utils.js"), "utf8"),
     "src/api/26_api-creator-and-admin-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/26_api-creator-and-admin-routes.js"), "utf8"),
+    // The Auto-track Playback ping moved here out of handleFetch (CQ-01).
+    "src/api/63_subtitles-track.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/63_subtitles-track.js"), "utf8"),
   };
 
-  // Every place in the two storage-owning files that names a custom-list key,
+  // Every place in the storage-owning files that names a custom-list key,
   // grouped by the route or function it sits in.
   function listKeyBlocks() {
     const key = /`(creatorlist(?:order)?:[^`]*)`/g;
@@ -8581,7 +8583,7 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
   const MUTATORS = [
     "src/core/02_http-and-creator-utils.js :: deleteCreatorLists",
     "src/core/02_http-and-creator-utils.js :: purgeCreatorData",
-    "src/api/26_api-creator-and-admin-routes.js :: handleSubtitlesTrack",
+    "src/api/63_subtitles-track.js :: recordSubtitlesPlay",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/save",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/reorder",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/save-tracking",
