@@ -12,7 +12,7 @@ My Lists Addon is a single **Cloudflare Worker** (`worker_entry_combined.js`) se
 request — catalog rows, web UI, API, admin dashboard, scrobble webhooks, and background jobs. The
 Worker is deployed by **pasting the built file into the Cloudflare dashboard**; there is no
 `wrangler deploy` for production. The build is produced by `python build.py` concatenating 50+
-numbered source files (`src/core/00_constants.js` through `src/jobs/58_activity-copy-new.js`).
+numbered source files (`src/core/00_constants.js` through `src/api/61_media-app-sync.js`).
 
 ---
 
@@ -99,6 +99,29 @@ The queue consumer (`mylists-jobs`) runs these recurring jobs:
 
 | Job | Cadence | What it does |
 |---|---|---|
+| `cron.episodes` | Every cron tick (5 min) | Checks for new episode airings |
+| `cron.airing-next` | Every cron tick | Updates Airing Next shelves |
+| `nos.sweep` | Every cron tick | New on Streaming sweep and episode bumps |
+| `cron.charts` | Every cron tick | Refreshes chart snapshots |
+| `cron.better-posters` | Every cron tick | Fetches Better Poster images |
+| `cron.housekeeping` | Every cron tick | Runs the D1 schema check and prunes username tombstones |
+| `chart.refresh` | Hourly | Rebuilds recently-used chart pages (`chart.refresh-pages` is its one-off follow-up) |
+| `show.watchers` | Hourly | Counts who watches each show |
+| `show.refresh` | Hourly | Refreshes show schedule data (`show.refresh-batch` is its one-off follow-up) |
+| `shelf.shadow` | Hourly | Shadow-compares v1/v2 Continue Watching/Airing Next |
+| `recs.build` | Hourly | Rebuilds per-account recommendations (`recs.build-account` per account) |
+| `media.retry` | Hourly | Retries unresolved media ID lookups |
+| `activity.copy-new` | Hourly | Copies new legacy watch activity into the activity database |
+| `mediaapp.sync` | Hourly | Starts a Stremio/Nuvio sync for each connected account (`mediaapp.sync-account`) |
+| `channel.presets` | Daily | Rebuilds the preset channels (`channel.pool.build` per network) |
+| `token.refresh` | Daily | Refreshes expiring OAuth tokens |
+| `rollup.daily` | Daily | Fills the D1 `title_daily_stats` table |
+
+One-off jobs, started by a request rather than a clock: `account.purge` (removes a deleted account's data), `import.resolve` (list imports) and `poster.fetch`.
+
+"Every cron tick" means every five minutes by the schedule in `wrangler.selfhost.toml` and `OPERATIONS.md` section 3; `wrangler.toml` uses six. Either works.
+
+---|---|---|
 | `cron.episodes` | Every 5 min | Checks for new episode airings |
 | `cron.airing-next` | Every 5 min | Updates Airing Next shelves |
 | `cron.charts` | Every 5 min | Refreshes chart snapshots |
@@ -132,7 +155,7 @@ After any source change, all five commands must pass before deploying.
 ## Source File Map
 
 Source files are concatenated in numeric order. Client-side JS (`09_` – `24_`) is embedded in
-the page HTML by `renderBuilder()`. Server-only files (`00_` – `08_`, `25_` – `58_`) run only in
+the page HTML by `renderBuilder()`. Server-only files (`00_` – `08_`, `25_` – `61_`) run only in
 the Worker process.
 
 Where to look first (file names are descriptive; `ls *.js` shows the rest):

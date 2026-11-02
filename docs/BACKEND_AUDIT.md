@@ -260,7 +260,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: the new stale check in `tests/route-access.test.mjs` fails on today's tree and passes after the two lines go.
 
 ### BA-011 Small dead code
-- Status: Fixed in BA011SHA
+- Status: Fixed in 37f2484
 - Category: dead-code
 - Severity / confidence: P3 / High
 - Where / evidence: see the "Dead code" table below. Each entry was found by a token count over all of `src/` (client and page files included, comment-only mentions ignored) and confirmed with `grep -rwn <name> src tests tools`.
@@ -270,6 +270,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: `bash verify.sh -q` (scope check) stays green after each removal.
 
 ### BA-012 Docs and comments that disagree with the code
+- Status: Fixed in BA012SHA
 - Category: docs
 - Severity / confidence: P3 / High
 - docs/ARCHITECTURE.md:102-113, the jobs table:

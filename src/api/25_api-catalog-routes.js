@@ -991,11 +991,11 @@ async function handleFetch(request, env, ctx) {
           isConfigureMode: true,
         })),
         // The one builder page that deliberately keeps no-store rather than
-        // moving to an ETag like the rest: this variant renders the user's
-        // own API keys (TMDB/MDBList/Trakt) straight into the HTML, and
-        // no-store is what keeps that out of the browser's on-disk cache
-        // and out of any intermediary. Saving a round trip is not worth
-        // writing somebody's keys to disk.
+        // moving to an ETag like the rest: this variant renders the install
+        // link's own rows into the HTML (its API keys are no longer part of
+        // that -- see nonSecretInstallConfigFields above), and no-store keeps
+        // a page built for one link out of the browser's on-disk cache and
+        // out of any intermediary.
         { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
       );
     }
