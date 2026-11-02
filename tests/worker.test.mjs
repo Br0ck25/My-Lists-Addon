@@ -8553,6 +8553,8 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/api/26_api-creator-and-admin-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/26_api-creator-and-admin-routes.js"), "utf8"),
     // The Auto-track Playback ping moved here out of handleFetch (CQ-01).
     "src/api/63_subtitles-track.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/63_subtitles-track.js"), "utf8"),
+    // The /admin/api/ routes moved here out of handleFetch (CQ-01), one function each.
+    "src/admin/65_admin-api-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/admin/65_admin-api-routes.js"), "utf8"),
   };
 
   // Every place in the storage-owning files that names a custom-list key,
@@ -8594,12 +8596,12 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/core/02_http-and-creator-utils.js :: getCreatorList": "reads one record",
     "src/core/02_http-and-creator-utils.js :: readAccountWatchlist": "reads the Watchlist's list record to pick its newest copy; writes nothing",
     "src/core/02_http-and-creator-utils.js :: removeLegacyListLeftovers": "removes a deleted list's leftover legacy record with FF_V2_LISTS_ONLY; its only caller, deleteCreatorLists, bumps",
-    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/creator-lists": "enumerates one creator's records for the admin browse; changes nothing",
+    "src/admin/65_admin-api-routes.js :: adminApiCreatorLists": "enumerates one creator's records for the admin browse; changes nothing",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists": "self-heals the order key on a read; the same response already carries the healed order",
     "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/load": "reads the order key",
     "src/api/26_api-creator-and-admin-routes.js :: /api/search-published-lists": "reads published records",
-    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/backfill-trending": "reads to build the trending set",
-    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/delete-creator-list": "delegates to deleteCreatorLists, which bumps",
+    "src/admin/65_admin-api-routes.js :: adminApiBackfillTrending": "reads to build the trending set",
+    "src/admin/65_admin-api-routes.js :: adminApiDeleteCreatorList": "delegates to deleteCreatorLists, which bumps",
   };
 
   it("every place that mutates a custom-list key bumps the stamp", () => {
