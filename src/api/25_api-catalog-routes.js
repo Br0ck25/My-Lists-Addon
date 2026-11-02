@@ -7830,7 +7830,15 @@ function generateSearchVariations(query) {
           return json({ ok: false, error: "A configuration can only carry personal shelves for one account." }, 400);
         }
         const claimed = [...namedCreators][0];
-        const saveAuth = await authenticateCreator(claimed, body.trackCreatorKey || "");
+        // A session for the claimed account signs this save; the key is then
+        // only checked, because it is stored in the link for playback
+        // tracking (see "trackCreatorKey" below). Without a session the key
+        // signs the save, as before. Either way it is counted as "trackkey"
+        // on /admin, and a wrong key is refused.
+        const trackKey = body.trackCreatorKey || "";
+        const sessionHeld = !!(request.account && String(request.account.username || "").toLowerCase() === claimed);
+        let saveAuth = await authenticateCreator(claimed, sessionHeld ? "" : trackKey, "trackkey");
+        if (saveAuth.ok && sessionHeld && trackKey) saveAuth = await authenticateCreator(claimed, trackKey, "trackkey");
         if (!saveAuth.ok) {
           if (saveAuth.throttled) return authFailureResponse(saveAuth);
           return json({

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "40e03cf712";
+const WORKER_BUILD = "524aaa0a8d";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -98721,7 +98721,15 @@ function generateSearchVariations(query) {
           return json({ ok: false, error: "A configuration can only carry personal shelves for one account." }, 400);
         }
         const claimed = [...namedCreators][0];
-        const saveAuth = await authenticateCreator(claimed, body.trackCreatorKey || "");
+        // A session for the claimed account signs this save; the key is then
+        // only checked, because it is stored in the link for playback
+        // tracking (see "trackCreatorKey" below). Without a session the key
+        // signs the save, as before. Either way it is counted as "trackkey"
+        // on /admin, and a wrong key is refused.
+        const trackKey = body.trackCreatorKey || "";
+        const sessionHeld = !!(request.account && String(request.account.username || "").toLowerCase() === claimed);
+        let saveAuth = await authenticateCreator(claimed, sessionHeld ? "" : trackKey, "trackkey");
+        if (saveAuth.ok && sessionHeld && trackKey) saveAuth = await authenticateCreator(claimed, trackKey, "trackkey");
         if (!saveAuth.ok) {
           if (saveAuth.throttled) return authFailureResponse(saveAuth);
           return json({
@@ -99392,9 +99400,16 @@ function generateSearchVariations(query) {
           : heldSessionFor === v.normalized ? "withsession"
           : heldSessionFor ? "othersession"
           : "nocookie";
-        ctx.waitUntil(bumpStat(env, "authkey"));
-        ctx.waitUntil(bumpStat(env, authKeyPathKind(keyPathPrefix)));
-        ctx.waitUntil(bumpStat(env, "authkey:why:" + why));
+        if (why === "trackkey" && heldSessionFor === v.normalized) {
+          // The session already signed this save and the key is only being
+          // checked as the link's stored credential: not a key sign-in, so
+          // the total and the path stay put.
+          ctx.waitUntil(bumpStat(env, "authkey:why:trackkey"));
+        } else {
+          ctx.waitUntil(bumpStat(env, "authkey"));
+          ctx.waitUntil(bumpStat(env, authKeyPathKind(keyPathPrefix)));
+          ctx.waitUntil(bumpStat(env, "authkey:why:" + why));
+        }
       }
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.

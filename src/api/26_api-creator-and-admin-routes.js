@@ -126,9 +126,16 @@
           : heldSessionFor === v.normalized ? "withsession"
           : heldSessionFor ? "othersession"
           : "nocookie";
-        ctx.waitUntil(bumpStat(env, "authkey"));
-        ctx.waitUntil(bumpStat(env, authKeyPathKind(keyPathPrefix)));
-        ctx.waitUntil(bumpStat(env, "authkey:why:" + why));
+        if (why === "trackkey" && heldSessionFor === v.normalized) {
+          // The session already signed this save and the key is only being
+          // checked as the link's stored credential: not a key sign-in, so
+          // the total and the path stay put.
+          ctx.waitUntil(bumpStat(env, "authkey:why:trackkey"));
+        } else {
+          ctx.waitUntil(bumpStat(env, "authkey"));
+          ctx.waitUntil(bumpStat(env, authKeyPathKind(keyPathPrefix)));
+          ctx.waitUntil(bumpStat(env, "authkey:why:" + why));
+        }
       }
       // Fire-and-forget, not awaited -- see touchCreatorLastSeen's own
       // comment for why this is throttled and safe to never wait on.
