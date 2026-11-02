@@ -354,7 +354,7 @@ const PERIODIC_EVERY = {
   "cron.better-posters": 4 * 60000, "cron.housekeeping": 4 * 60000,
   "show.watchers": 3600000, "show.refresh": 3600000,
   "shelf.shadow": 3600000, "chart.refresh": 3600000, "token.refresh": 24 * 3600000,
-  "channel.presets": 24 * 3600000, "recs.build": 3600000, "rollup.daily": 24 * 3600000,
+  "channel.presets": 24 * 3600000, "recs.build": 3600000, "rollup.daily": 24 * 3600000, "sessions.purge": 24 * 3600000,
   "media.retry": 3600000, "activity.copy-new": 3600000, "mediaapp.sync": 3600000,
 };
 const CRON_JOBS = Object.keys(PERIODIC_EVERY);
