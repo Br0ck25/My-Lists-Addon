@@ -60,6 +60,14 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Internal tidy-up: three big pieces moved out of the main request function (built 2026-11-02, stamp c2a64453fb)
+
+No change for users. This is the first step of CQ-01 (splitting the huge `handleFetch` function into smaller files).
+
+- **Three pieces moved to their own files, unchanged:** the check that a request really comes from a signed-in creator (`src/api/62_creator-auth.js`), the Stremio/Nuvio "this just started playing" ping (`src/api/63_subtitles-track.js`), and the Plex/Jellyfin/Emby webhook (`src/api/64_media-server-scrobble.js`). `handleFetch` is about 1,300 lines shorter (15,494 to 14,211).
+- **How I proved nothing changed:** before and after each move I sent the same 120 requests (creator sign-in with a key and with a session, wrong keys, the too-many-attempts block, playback pings, every webhook form including the retired ones) and compared the answer and everything stored. All identical. The full test run passes except the known cold-catalog timing test.
+- **One old bug found and left alone on purpose:** when a webhook ping is turned away by the "only these Plex/Jellyfin users" filter, the server answers with an error (500) instead of the intended "ignored" reply. It was like that before this change. Say the word and I will fix it separately.
+
 ## Poster "AIRED" badge, blank Nuvio collection names, matching Cloudflare date (built 2026-11-02, stamp 70d3a6e9b3)
 
 Three owner decisions from 2026-11-02.
