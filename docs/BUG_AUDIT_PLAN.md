@@ -74,7 +74,11 @@ Both throw inside `renderChannelMergeList` (`src/client/20_client-channel-builde
 1. Wrap the body of the per-item `async` function in `try { ... } catch { return null; }`.
 2. Coerce the title with `String(item && item.title || "").trim()` and skip a non-object item.
 3. Test (fails first): the three inputs above return 200, and `resolved` contains the good item.
-4. Leave movie-only search (`/search/movie`) alone. Whether series should resolve is a product decision (rule 8). Mention it to the owner, do not build it.
+4. **Series lookup (owner said yes, 2026-11-02).** Today a show with no IMDb id in an imported file (Trakt, Simkl, IMDb CSV and similar; `src/client/18_client-copy-and-trakt-export.js` around lines 1525 and 1603) is searched as a *movie*. Usually it is not found, but when a movie shares the title and year, the show is given that movie's IMDb id and the wrong poster. Fix, as its own commit after steps 1 to 3:
+   - Client (`bulkResolveInChunks` callers): send each item's `type` with its title and year, and match results back by `title|year|type`, not `title|year`.
+   - Server: when `item.type === "series"`, use TMDB `/search/tv` with `first_air_date_year`, then `/tv/{id}/external_ids`, and return `name`/`first_air_date` as the title and year. Return the `type` so the client can match it. Movies stay exactly as they are, and an item with no type is still treated as a movie, so older clients keep working.
+   - TMDB call counting and the per-minute item budget are unchanged: a series costs the same two calls as a movie.
+   - Tests (fail first): a series item resolves through the TV endpoints; a series with the same title and year as a movie gets the show's id, not the movie's; a movie item still uses `/search/movie`.
 
 ---
 
@@ -96,7 +100,7 @@ KV has no compare-and-set, so two isolates can each read the same list and the s
 
 **Impact.** Low to medium and self-healing: these are caches and hints (poster ids to retry, variants seen), and the next request re-adds the entry. A lost tracking-record field is the worst case and is why that sweep re-reads. No financial or account data is involved (that is BA-001).
 
-**Fix (smallest safe).** Do not add locking. For the two caches: in `noteBetterPosterVariant`, move the `_betterPosterVariantNoted.set(key, now)` to after a successful `put`, so a failed write retries sooner. For the rest, add a one-line comment at each site stating the lost update is accepted and why. Rewriting these to D1 is a larger job and is a product/architecture decision (rule 8): list it for the owner, do not do it.
+**Fix (smallest safe).** Do not add locking. For the two caches: in `noteBetterPosterVariant`, move the `_betterPosterVariantNoted.set(key, now)` to after a successful `put`, so a failed write retries sooner. For the rest, add a one-line comment at each site stating the lost update is accepted and why. **Owner decision (2026-11-02): stay on KV, do not move these to D1.** A lost entry only means a poster is fetched again later; moving them would add D1 writes on a busy path and a migration, for no visible gain to users.
 
 ---
 
@@ -166,4 +170,4 @@ KV has no compare-and-set, so two isolates can each read the same list and the s
 5. BUG-05 and BUG-04 (low value; do only if the change stays a few lines).
 6. BUG-08 as an investigation first, BUG-07 only if trivial.
 
-Questions for the owner (product decisions, do not build without a yes): should bulk import also resolve series, not only movies (BUG-02)? Should the shared poster/variant lists move from KV to D1 to close the lost-update window (BUG-04)?
+Owner decisions (2026-11-02): **yes**, the bulk import resolves series too (BUG-02 step 4). **No**, the shared poster lists stay on KV (BUG-04).
