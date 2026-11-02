@@ -149,13 +149,22 @@ describe("Trakt continue watching: shelf (fetchTraktContinueWatching) vs list ro
     assert.deepEqual(route, shelf);
   });
 
-  it("agree that a show paused under an upper-case IMDB id is not repeated as 'next episode'", { todo: "DIFFERENT: the shelf lowercases IMDB ids (and also matches on slug) when deciding a show is already in playback; the list route compares IMDB ids exactly, so a show Trakt pauses as TT8 but lists as tt8 appears twice in the website list." }, async () => {
+  it("agree that a show paused under an upper-case IMDB id is not repeated as 'next episode'", async () => {
     const { shelf, route } = await both({
       playback: [{ id: 80, type: "episode", progress: 10, paused_at: PAST, show: { title: "Show 8", year: 2010, ids: { imdb: "TT8", slug: "show-8" } }, episode: { season: 1, number: 2, title: "e" } }],
       watched: [{ last_watched_at: "2024-06-01T00:00:00Z", show: { title: "Show 8", year: 2010, ids: { trakt: 8, imdb: "tt8", tmdb: 5008, slug: "show-8" } } }],
       progress: { 8: nextEp(1, 3) },
     });
     assert.deepEqual(shelf, ["TT8:1:2"], "the shelf shows the paused episode once");
+    assert.deepEqual(route, shelf);
+  });
+  it("agree that a show paused under one id is matched to the watched list by its slug alone", async () => {
+    const { shelf, route } = await both({
+      playback: [{ id: 90, type: "episode", progress: 10, paused_at: PAST, show: { title: "Show 9", year: 2010, ids: { tmdb: 6009, slug: "show-9" } }, episode: { season: 1, number: 2, title: "e" } }],
+      watched: [{ last_watched_at: "2024-06-01T00:00:00Z", show: { title: "Show 9", year: 2010, ids: { trakt: 9, imdb: "tt9", tmdb: 5009, slug: "show-9" } } }],
+      progress: { 9: nextEp(1, 3) },
+    });
+    assert.deepEqual(shelf, ["tmdb:6009:1:2"], "the shelf shows the paused episode once");
     assert.deepEqual(route, shelf);
   });
 });

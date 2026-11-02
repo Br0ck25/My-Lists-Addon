@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2a3fdb4518";
+const WORKER_BUILD = "e5c9967459";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -120376,8 +120376,10 @@ async function apiTraktMyPrivateListsContinueWatchingBlock(accessToken, continue
           const tmdbId = ids.tmdb || show.ids?.tmdb || mov.ids?.tmdb || "";
           const traktId = ids.trakt || show.ids?.trakt || mov.ids?.trakt || null;
           if (traktId) seenShowIds.add(String(traktId));
-          if (imdbId) seenShowIds.add(String(imdbId));
+          // Same keys as the shelf: IMDB ids lower-cased, plus the slug.
+          if (imdbId) seenShowIds.add(String(imdbId).toLowerCase());
           if (tmdbId) seenShowIds.add(String(tmdbId));
+          if (ids.slug) seenShowIds.add(String(ids.slug).toLowerCase());
           const bestId = imdbId || (tmdbId ? `tmdb:${tmdbId}` : String(it.id));
           const sNum = isEp ? (ep.season != null ? ep.season : 1) : null;
           const eNum = isEp ? (ep.number != null ? ep.number : 1) : null;
@@ -120477,8 +120479,9 @@ async function apiTraktMyPrivateListsContinueWatching(accessToken, continueWatch
         const ids = it.show.ids;
         if (traktIsHiddenShow(hiddenShowKeys, it.show, ids)) return false;
         const hasPb = (ids.trakt && seenShowIds.has(String(ids.trakt))) ||
-                      (ids.imdb && seenShowIds.has(String(ids.imdb))) ||
-                      (ids.tmdb && seenShowIds.has(String(ids.tmdb)));
+                      (ids.imdb && seenShowIds.has(String(ids.imdb).toLowerCase())) ||
+                      (ids.tmdb && seenShowIds.has(String(ids.tmdb))) ||
+                      (ids.slug && seenShowIds.has(String(ids.slug).toLowerCase()));
         return !hasPb;
       })
       .slice(0, 40);

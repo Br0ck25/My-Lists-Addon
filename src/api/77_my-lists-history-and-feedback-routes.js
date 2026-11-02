@@ -235,8 +235,10 @@ async function apiTraktMyPrivateListsContinueWatchingBlock(accessToken, continue
           const tmdbId = ids.tmdb || show.ids?.tmdb || mov.ids?.tmdb || "";
           const traktId = ids.trakt || show.ids?.trakt || mov.ids?.trakt || null;
           if (traktId) seenShowIds.add(String(traktId));
-          if (imdbId) seenShowIds.add(String(imdbId));
+          // Same keys as the shelf: IMDB ids lower-cased, plus the slug.
+          if (imdbId) seenShowIds.add(String(imdbId).toLowerCase());
           if (tmdbId) seenShowIds.add(String(tmdbId));
+          if (ids.slug) seenShowIds.add(String(ids.slug).toLowerCase());
           const bestId = imdbId || (tmdbId ? `tmdb:${tmdbId}` : String(it.id));
           const sNum = isEp ? (ep.season != null ? ep.season : 1) : null;
           const eNum = isEp ? (ep.number != null ? ep.number : 1) : null;
@@ -336,8 +338,9 @@ async function apiTraktMyPrivateListsContinueWatching(accessToken, continueWatch
         const ids = it.show.ids;
         if (traktIsHiddenShow(hiddenShowKeys, it.show, ids)) return false;
         const hasPb = (ids.trakt && seenShowIds.has(String(ids.trakt))) ||
-                      (ids.imdb && seenShowIds.has(String(ids.imdb))) ||
-                      (ids.tmdb && seenShowIds.has(String(ids.tmdb)));
+                      (ids.imdb && seenShowIds.has(String(ids.imdb).toLowerCase())) ||
+                      (ids.tmdb && seenShowIds.has(String(ids.tmdb))) ||
+                      (ids.slug && seenShowIds.has(String(ids.slug).toLowerCase()));
         return !hasPb;
       })
       .slice(0, 40);
