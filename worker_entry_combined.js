@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "eb36cbf5de";
+const WORKER_BUILD = "62cb9d7d6f";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -5417,7 +5417,7 @@ async function createSession(env, accountId, userAgent = null) {
   };
 }
 
-async function resolveSession(request, env) {
+async function resolveSession(request, env, ctx) {
   const token = extractSessionToken(request);
   if (!token) return null;
   const idHash = await hashSessionToken(token);
@@ -5454,7 +5454,7 @@ async function resolveSession(request, env) {
 
     // Throttle last_seen_at update (at most once every 5 minutes per session)
     if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
-      env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {});
+      (ctx || { waitUntil() {} }).waitUntil(env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {}));
     }
 
     const account = {
@@ -12931,7 +12931,7 @@ async function resolveAdminSession(env, cookieValue) {
     // At most one write an hour per browser: last_seen_at is a convenience,
     // not a security property, and D1 writes are the scarce thing here.
     if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 60 * 60 * 1000) {
-      env.DB.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE id = ?").bind(now, id).run().catch(() => {});
+      await env.DB.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE id = ?").bind(now, id).run().catch(() => {}); // awaited: no ctx here, and it runs at most hourly
     }
     return { id: row.id, actor: row.actor, expiresAt: row.expires_at };
   } catch (e) {
@@ -17797,6 +17797,18 @@ ${UTILITY_CSS}
 // configs are virtually always much longer than that (even a single list's
 // JSON encodes to well over 100 characters), so length alone reliably
 // tells the two apart without needing a prefix.
+// Parses a JSON request body and THROWS unless it is a plain object. `null`,
+// `[]`, `"x"` and `5` are valid JSON, so a bare `request.json()` succeeds on
+// them and the next `body.field` read crashes with a 500. Used inside the
+// existing try/catch around the body parse, so every route answers with the
+// same "Invalid JSON body." 400 it already gives for broken JSON.
+async function readJsonObject(request) {
+  const parsed = await request.json();
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new SyntaxError("JSON body must be an object.");
+  }
+  return parsed;
+}
 const SHORT_ID_LENGTH = 12;
 
 // Stored install configs live under a namespace like every other key.
@@ -19955,7 +19967,7 @@ async function flushBetterPosterRetries(env, force) {
     for (const [path, at] of add) {
       if (!list[path]) { list[path] = { at }; changed = true; }
     }
-    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now)));
+    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now))); // read-modify-write: a concurrent isolate's addition can be lost; accepted (the poster is queued again when it is next missed)
   } catch {}
 }
 
@@ -20100,8 +20112,8 @@ async function noteBetterPosterVariant(env, bp) {
     if (now - (Number(seen[key]) || 0) < 86400 * 1000) return;
     seen[key] = now;
     for (const k of Object.keys(seen)) if (now - Number(seen[k]) > BETTER_POSTER_VARIANT_TTL_MS) delete seen[k];
-    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen));
-  } catch {}
+    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen)); // read-modify-write: a concurrent isolate's entry can be lost; accepted (it is re-added on its next request)
+  } catch { _betterPosterVariantNoted.delete(key); } // a failed write is retried on the next call
 }
 
 // The styles used within BETTER_POSTER_VARIANT_TTL_MS, as posters for one
@@ -20235,7 +20247,7 @@ async function rpdbUsage(env, key, hash) {
       const raw = await env.CONFIGS.get(kvKey);
       const kv = raw ? JSON.parse(raw) : null;
       if (kv && Number.isFinite(kv.req) && Number.isFinite(kv.limit) && now - kv.at < RPDB_USAGE_TTL_SECONDS * 1000) {
-        RPDB_USAGE.set(hash, kv);
+        if (RPDB_USAGE.size >= 1000) RPDB_USAGE.clear(); RPDB_USAGE.set(hash, kv);
         return kv;
       }
     }
@@ -20246,7 +20258,7 @@ async function rpdbUsage(env, key, hash) {
     const data = await res.json();
     if (!data || !Number.isFinite(data.req) || !Number.isFinite(data.limit)) return null;
     const usage = { req: data.req, limit: data.limit, at: now };
-    RPDB_USAGE.set(hash, usage);
+    if (RPDB_USAGE.size >= 1000) RPDB_USAGE.clear(); RPDB_USAGE.set(hash, usage);
     if (env && env.CONFIGS) await env.CONFIGS.put(kvKey, JSON.stringify(usage), { expirationTtl: RPDB_USAGE_TTL_SECONDS * 2 }).catch(() => {});
     return usage;
   } catch {
@@ -20276,7 +20288,7 @@ async function rpdbFetchUpstream(env, ctx, key, hash, imdbId) {
       if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
         // A refused key and a spent or struggling service are both left alone
         // for a while rather than asked again poster by poster.
-        RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
+        if (RPDB_BACKOFF.size >= 1000) RPDB_BACKOFF.clear(); RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
         return null;
       }
       const contentType = res.headers.get("content-type") || "";
@@ -29736,7 +29748,7 @@ async function refreshAiringNextSweep(env, ctx) {
         const previousStamp = Number(target.updatedAt) || 0;
         target.airingNext = items;
         target.updatedAt = Math.max(Date.now(), previousStamp + 1);
-        await env.CONFIGS.put(trackingKey, JSON.stringify(target));
+        await env.CONFIGS.put(trackingKey, JSON.stringify(target)); // the fresh read above leaves a one-round-trip gap (no compare-and-set in KV); accepted, and airingNext is rebuilt every cycle
         if (env.DB) await saveAiringNextD1(env, username, items, target.updatedAt, previousStamp);
       }
       const ttlSec = Math.round(AIRING_NEXT_SERVER_REFRESH_MS / 1000);
@@ -30077,7 +30089,7 @@ async function rememberSharedPosterIds(env, ids) {
     const prev = raw ? JSON.parse(raw) : [];
     const merged = [...new Set([...ids, ...(Array.isArray(prev) ? prev : [])])].slice(0, SHARED_POSTER_IDS_MAX);
     if (JSON.stringify(merged) === raw) return;
-    await env.CONFIGS.put(SHARED_POSTER_IDS_KEY, JSON.stringify(merged));
+    await env.CONFIGS.put(SHARED_POSTER_IDS_KEY, JSON.stringify(merged)); // read-modify-write: a concurrent isolate's ids can be lost; accepted (a charting title is re-added on its next request)
   } catch {}
 }
 
@@ -30120,7 +30132,7 @@ async function retryMissedBetterPosters(env, fetchCap) {
     try {
       const latest = readBetterPosterRetries(await env.CONFIGS.get(BETTER_POSTER_RETRY_KEY));
       for (const path of gone) delete latest[path];
-      await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(latest, Date.now())));
+      await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(latest, Date.now()))); // the re-read above narrows the window but KV has no compare-and-set; a lost addition is accepted (re-queued on the next miss)
     } catch {}
   }
   if (done) console.log(`[Cron] BetterPosters: ${done} of ${due.length} missed poster(s) fetched on retry.`);
@@ -44822,7 +44834,7 @@ async function startTraktDeviceLogin(retried) {
 
     if (_traktDevicePollTimer) clearInterval(_traktDevicePollTimer);
 
-    _traktDevicePollTimer = setInterval(async () => {
+    _traktDevicePollTimer = setInterval(skipWhileBusy(async () => {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
@@ -44873,7 +44885,7 @@ async function startTraktDeviceLogin(retried) {
           if (statusEl) statusEl.innerText = pollData.error;
         }
       } catch (e) {}
-    }, intervalSec * 1000);
+    }), intervalSec * 1000);
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
@@ -46191,7 +46203,7 @@ async function startStremioConnect() {
     box.style.display = '';
   }
   let ticks = 0;
-  mediaAppUiPoll = setInterval(async function () {
+  mediaAppUiPoll = setInterval(skipWhileBusy(async function () {
     ticks++;
     if (ticks > 200) {
       stopStremioLinkPoll();
@@ -46199,7 +46211,7 @@ async function startStremioConnect() {
       return;
     }
     await mediaAppUiStremioPoll(link.code);
-  }, 3000);
+  }), 3000);
 }
 
 async function submitNuvioLogin() {
@@ -49389,6 +49401,22 @@ window.pushCollectionGroupToNuvio = pushCollectionGroupToNuvio;
 window.pushPremadeCollectionToNuvio = pushPremadeCollectionToNuvio;
 window.pushLinkedNuvioCollection = pushLinkedNuvioCollection;
 window.deleteNuvioCollection = deleteNuvioCollection;
+// Wraps a timer callback so a tick that arrives while the previous run is still
+// waiting (a slow fetch) is skipped instead of starting a second request.
+function skipWhileBusy(fn) {
+  let busy = false;
+  return async function () {
+    if (busy) return;
+    busy = true;
+    try { return await fn.apply(this, arguments); } finally { busy = false; }
+  };
+}
+// The key an import row and its /api/bulk-resolve answer are matched by. The
+// type is part of it: a movie and a show with the same title and year must not
+// share an IMDb id. A missing type (an older server's answer) means a movie.
+function bulkResolveKey(title, year, type) {
+  return (String(title || '') + '|' + (year || '') + '|' + (type === 'series' ? 'series' : 'movie')).toLowerCase();
+}
 async function fetchAllItemsForList(listUrl, type, btn, progressLabel) {
   const keys = (typeof collectKeys === 'function') ? collectKeys() : {};
   const items = [];
@@ -50998,11 +51026,11 @@ async function runUnifiedListImport() {
         const resolvedAll = await bulkResolveInChunks(toResolve);
         const resolvedMap = new Map();
         resolvedAll.forEach(r => {
-          if (r.title) resolvedMap.set((r.title + '|' + (r.year || '')).toLowerCase(), r);
+          if (r.title) resolvedMap.set(bulkResolveKey(r.title, r.year, r.type), r);
         });
         rawItems.forEach(it => {
           if (!it.imdbId && it.title) {
-            const found = resolvedMap.get((it.title + '|' + it.year).toLowerCase());
+            const found = resolvedMap.get(bulkResolveKey(it.title, it.year, it.type));
             if (found && found.imdbId) {
               it.imdbId = found.imdbId;
               it.id = found.imdbId;
@@ -57276,7 +57304,7 @@ function loadLocalChannels() {
     if (!str) {
       try { str = localStorage.getItem(LOCAL_CHANNELS_KEY); } catch (e) {}
     }
-    const map = JSON.parse(str || '{}');
+    const map = objectEntriesOnly(JSON.parse(str || '{}'));
     if (map && typeof map === 'object') {
       for (const ch of Object.values(map)) {
         if (ch && Array.isArray(ch.items)) {
@@ -69645,7 +69673,7 @@ function loadLocalMergedChannels() {
     const raw = localStorage.getItem(LOCAL_MERGED_CHANNELS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return (parsed && typeof parsed === 'object') ? parsed : {};
+    return objectEntriesOnly(parsed);
   } catch (e) {
     return {};
   }
@@ -70133,6 +70161,16 @@ function renderChannelMergeList() {
 
 
 
+// A saved channel map keeps only object values. One null or non-object entry
+// (for example one synced from another device) must not break the page.
+function objectEntriesOnly(map) {
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return {};
+  for (const k of Object.keys(map)) {
+    const v = map[k];
+    if (!v || typeof v !== 'object' || Array.isArray(v)) delete map[k];
+  }
+  return map;
+}
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
@@ -91144,7 +91182,7 @@ async function handleFetch(request, env, ctx) {
     if (csrfErr) return csrfErr;
 
     // Resolve session if mla_session cookie or Bearer token is present
-    const sessionAuth = await resolveSession(request, env);
+    const sessionAuth = await resolveSession(request, env, ctx);
     if (sessionAuth) {
       request.account = sessionAuth.account;
       request.session = sessionAuth.session;
@@ -102708,7 +102746,7 @@ async function handleImportsApi(request, env, url, path) {
       if (request.method !== "POST") return json({ ok: false, error: "Not found." }, 404);
       let body;
       try {
-        body = await request.json();
+        body = await readJsonObject(request);
       } catch {
         return json({ ok: false, error: "Invalid JSON body." }, 400);
       }
@@ -102758,7 +102796,7 @@ async function handleImportsApi(request, env, url, path) {
       if (row.status !== "done") return json({ ok: false, error: "The import is still running." }, 409);
       let body;
       try {
-        body = await request.json();
+        body = await readJsonObject(request);
       } catch {
         return json({ ok: false, error: "Invalid JSON body." }, 400);
       }
@@ -103050,7 +103088,7 @@ async function handleAccountDeleteApi(request, env, url, path) {
   if (!env || !env.DB || !env.CONFIGS) return json({ ok: false, error: "Accounts aren't available right now." }, 503);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     body = {};
   }
@@ -104803,8 +104841,8 @@ async function handleSupportEmailsApi(path, request, env) {
   if (path === '/admin/api/support-emails/threads' && request.method === 'GET') {
     const status = url.searchParams.get('status') || 'all';
     const query = (url.searchParams.get('q') || '').trim();
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
-    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
 
     try {
       let sql = 'SELECT * FROM support_threads';
@@ -104905,7 +104943,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/reply
   if (path === '/admin/api/support-emails/reply' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request).catch(() => ({}));
       const result = await sendSupportEmailReply(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -104916,7 +104954,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/compose
   if (path === '/admin/api/support-emails/compose' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request).catch(() => ({}));
       const result = await composeNewSupportEmail(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -104927,7 +104965,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/status
   if (path === '/admin/api/support-emails/status' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request).catch(() => ({}));
       const { threadId, status } = body || {};
       if (!threadId || !['open', 'replied', 'closed', 'spam'].includes(status)) {
         return json({ ok: false, error: 'Invalid threadId or status.' }, 400);
@@ -104944,7 +104982,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/delete
   if (path === '/admin/api/support-emails/delete' && request.method === 'POST') {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request).catch(() => ({}));
       const threadId = body && body.threadId;
       if (!threadId) return json({ ok: false, error: 'Thread ID required.' }, 400);
 
@@ -109085,7 +109123,7 @@ async function adminApiDeleteCreatorList(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -109403,7 +109441,7 @@ async function adminApiChannelModerate(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-storage" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -109642,7 +109680,7 @@ async function adminApiExportKvToR2(request, env) {
   if (!env.BLOBS) return json({ ok: false, error: "No R2 BLOBS binding. Cannot export." }, 500);
 
   let body;
-  try { body = await request.json(); } catch { body = {}; }
+  try { body = await readJsonObject(request); } catch { body = {}; }
   const prefix = typeof body.prefix === "string" ? body.prefix.trim() : "";
   if (!prefix) return json({ ok: false, error: "prefix is required." }, 400);
   if (/[*?]/.test(prefix)) {
@@ -109830,7 +109868,7 @@ async function adminApiFeedbackReply(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -109897,7 +109935,7 @@ async function adminApiFeedbackStatus(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -109941,7 +109979,7 @@ async function adminApiFeedbackEdit(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -109993,7 +110031,7 @@ async function adminApiFeedbackDelete(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110146,7 +110184,7 @@ async function adminApiSupportGoal(request, env, url) {
       return json({ ok: false, error: "Could not read the saved settings. Try again." }, 503);
     }
     let body = {};
-    try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+    try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
     const next = applySupportGoalUpdate(stored, body);
     if (next.error) return json({ ok: false, error: next.error }, 400);
     // A typed amount is the month's total itself: with D1 bound it goes
@@ -110176,7 +110214,7 @@ async function adminApiSiteNotice(request, env) {
   const stored = await readSiteNotice(env);
   if (request.method === "POST") {
     let body = {};
-    try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+    try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
     if (body && body.reset === true) {
       await env.CONFIGS.delete(SITE_NOTICE_KEY);
       return json({ ok: true, ...(await readSiteNotice(env)), defaults: DEFAULT_SITE_NOTICE }, 200, { "Cache-Control": "no-store" });
@@ -110213,7 +110251,7 @@ async function adminApiNewOnStreamingSweep(request, env, ctx) {
   if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -110285,7 +110323,7 @@ async function adminApiNewOnStreamingAdd(request, env) {
   if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -110352,7 +110390,7 @@ async function adminApiChannelPresetsClear(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -110383,7 +110421,7 @@ async function adminApiChannelPresetsRebuild(request, env, ctx, url) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -110428,7 +110466,7 @@ async function adminApiResetCreatorKey(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110501,7 +110539,7 @@ async function adminApiRevokeAdminSession(request, env) {
   if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {}
   if (body && body.all === true) {
     const revoked = await revokeAllAdminSessions(env);
@@ -110576,7 +110614,7 @@ async function handleCreatorApiAccountRoutes(request, env, ctx, url, path) {
 async function creatorApiTrackStatus(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110603,7 +110641,7 @@ async function creatorApiTrackStatus(request, env, ctx, path) {
 async function creatorApiScrobbleSeenUsers(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110643,7 +110681,7 @@ async function creatorApiCreate(request, env, ctx) {
   }
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110798,7 +110836,7 @@ async function creatorApiResetKey(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110925,7 +110963,7 @@ async function creatorApiRecoveryAnswer(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110960,7 +110998,7 @@ async function creatorApiForgotUsername(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -111105,7 +111143,7 @@ async function creatorApiScrobbleToken(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -111149,7 +111187,7 @@ async function creatorApiRestore(request, env, ctx, path) {
 
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -111192,7 +111230,7 @@ async function creatorApiRestore(request, env, ctx, path) {
 async function creatorApiLists(request, env, ctx, url, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -111551,7 +111589,7 @@ async function creatorApiListsItems(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -111633,7 +111671,7 @@ async function creatorApiListsItems(request, env, ctx, path) {
 async function creatorApiListsSave(request, env, ctx, url, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112050,7 +112088,7 @@ async function handleCreatorApiAccountAndSaveRoutes(request, env, ctx, url, path
 async function creatorApiListsDelete(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112082,7 +112120,7 @@ async function creatorApiListsDelete(request, env, ctx, path) {
 async function creatorApiListsReorder(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112150,7 +112188,7 @@ async function creatorApiAccountReset(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Database not configured." }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112201,7 +112239,7 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Database not configured." }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112261,7 +112299,7 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
 async function creatorApiSyncSave(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112430,7 +112468,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
 async function creatorApiSyncSaveTracking(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -113026,7 +113064,7 @@ async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
 async function creatorApiSyncSavePresets(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -113079,7 +113117,7 @@ async function creatorApiSyncSavePresets(request, env, ctx, path) {
 async function creatorApiSyncSaveChannels(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -113104,9 +113142,19 @@ async function creatorApiSyncSaveChannels(request, env, ctx, path) {
       // Unreadable -- nothing coherent to protect; write normally.
     }
   }
+  // Keep only plain-object entries; an array counts as empty. One null entry
+  // saved here would be loaded by every device and break its page.
+  const plainObjectEntries = (map) => {
+    const out = {};
+    if (!map || typeof map !== "object" || Array.isArray(map)) return out;
+    for (const [k, v] of Object.entries(map)) {
+      if (v && typeof v === "object" && !Array.isArray(v)) out[k] = v;
+    }
+    return out;
+  };
   const channelsBlob = {
-    channels: body.channels && typeof body.channels === "object" ? body.channels : {},
-    mergedChannels: body.mergedChannels && typeof body.mergedChannels === "object" ? body.mergedChannels : {},
+    channels: plainObjectEntries(body.channels),
+    mergedChannels: plainObjectEntries(body.mergedChannels),
     updatedAt: nextSyncVersion(channelsCurrentUpdatedAt),
   };
   const serialized = JSON.stringify(channelsBlob);
@@ -113150,7 +113198,7 @@ async function creatorApiSyncSaveChannels(request, env, ctx, path) {
 async function creatorApiSyncMeta(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -113250,7 +113298,7 @@ async function creatorApiSyncMeta(request, env, ctx, path) {
 async function creatorApiSyncLoad(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -113593,7 +113641,7 @@ async function creatorSyncLoadMergeQueue(env, auth, data) {
 async function creatorApiSyncLike(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -113660,7 +113708,7 @@ async function creatorApiSyncShareTracking(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -115871,7 +115919,7 @@ async function apiTrackInstall(request, env, ctx) {
   }
   ctx.waitUntil(bumpStat(env, "installs"));
   try {
-    const body = await request.json();
+    const body = await readJsonObject(request);
     if (body && body.groups && typeof body.groups === "object") {
       // Known categories under their own name, the rest together as Other.
       const counted = new Map();
@@ -115915,7 +115963,7 @@ async function apiPreview(request, env, ctx, url, path) {
   if (request.method === "POST") {
     let reqBody;
     try {
-      reqBody = await request.json();
+      reqBody = await readJsonObject(request);
     } catch {
       reqBody = {};
     }
@@ -116899,7 +116947,7 @@ async function apiChannelPreset(env, ctx, url) {
 async function apiChannelLineup(request, env, ctx, url) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -117402,7 +117450,7 @@ function handleProviderListRoutes(request, env, ctx, url, path) {
 async function apiImdbIds(request, env, ctx) {
   let idBody;
   try {
-    idBody = await request.json();
+    idBody = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -117451,7 +117499,7 @@ async function apiImdbIds(request, env, ctx) {
 async function apiRecommendations(request, env, ctx) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -118074,7 +118122,7 @@ async function apiTraktOauthCallback(request, env, url) {
 // the fallback.
 async function apiTraktDeviceCode(request, env) {
   let body = {};
-  try { body = await request.json(); } catch {}
+  try { body = await readJsonObject(request); } catch {}
   const userKey = String(body.traktKey || body.clientId || "").trim();
   const clientId = userKey || TRAKT_CLIENT_ID || (env && env.TRAKT_CLIENT_ID) || "";
   if (!clientId) return json({ ok: false, error: "Trakt Client ID is not configured. Add your Trakt Client ID in Settings." }, 400);
@@ -118113,7 +118161,7 @@ async function apiTraktDeviceCode(request, env) {
 // /api/trakt/device/token -> polls for authorization of device code
 async function apiTraktDeviceToken(request, env) {
   let body = {};
-  try { body = await request.json(); } catch {}
+  try { body = await readJsonObject(request); } catch {}
   const code = String(body.code || "").trim();
   const userKey = String(body.traktKey || body.clientId || "").trim();
   const clientId = userKey || TRAKT_CLIENT_ID || (env && env.TRAKT_CLIENT_ID) || "";
@@ -118471,7 +118519,7 @@ async function apiSimklMyLists(request, env, url) {
   let manualKey = "";
   if (request.method === "POST") {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       if (body.token) token = body.token;
       if (body.simklKey) manualKey = body.simklKey;
     } catch {}
@@ -118667,7 +118715,7 @@ function handleExternalListRoutes(request, env, ctx, url, path) {
 async function apiExternalListItemMutate(request, env, path) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -119174,7 +119222,7 @@ async function apiExternalListMutateMdblistCustom({ action, listId, token, heade
 async function apiExternalSyncHistory(request, env) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -119494,7 +119542,7 @@ async function apiExternalSyncHistoryMdblist(body, provider, items, parseWatchIt
 async function apiExternalListCreate(request, env) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -119680,7 +119728,7 @@ async function apiExternalListCreateMdblist(body, provider, name, description, p
 async function apiExternalListDelete(request, env) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -119935,7 +119983,7 @@ async function apiTmdbMyLists(request, env, url) {
 
   if (request.method === "POST") {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       if (body.sessionId) sessionId = body.sessionId;
       if (body.accountId) accountId = body.accountId;
       if (body.tmdbKey) manualKey = body.tmdbKey;
@@ -120180,7 +120228,7 @@ function handleMyListsAndFeedbackRoutes(request, env, ctx, url, path) {
 async function apiTraktMyPrivateLists(request, env, ctx) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -120577,7 +120625,7 @@ async function apiTraktMyPrivateListsContinueWatching(accessToken, continueWatch
 async function apiTraktHistoryRaw(request, env, ctx) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -120627,7 +120675,7 @@ async function apiFeedback(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -120857,7 +120905,7 @@ async function apiFeedbackThreads(request, env, ctx, url, path) {
   let creatorKey = null;
   if (request.method === "POST") {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       if (Array.isArray(body.threadIds)) threadIds = body.threadIds.map((t) => String(t).trim()).filter(Boolean);
       if (body.creatorName) creatorName = String(body.creatorName).trim().toLowerCase();
       if (body.creatorKey) creatorKey = String(body.creatorKey);
@@ -120975,7 +121023,7 @@ async function apiFeedbackDelete(request, env, ctx, path) {
     return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { "Cache-Control": "no-store" });
   }
   let body = null;
-  try { body = await request.json(); } catch {}
+  try { body = await readJsonObject(request); } catch {}
   body = body && typeof body === "object" ? body : {};
   const threadIds = Array.isArray(body.threadIds) ? body.threadIds.map((t) => String(t).trim()).filter(Boolean).slice(0, 30) : [];
   let owner = null;
@@ -121040,7 +121088,7 @@ async function apiFeedbackDelete(request, env, ctx, path) {
 async function apiTrackSearch(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: true });
   let body;
-  try { body = await request.json(); } catch { return json({ ok: true }); }
+  try { body = await readJsonObject(request); } catch { return json({ ok: true }); }
   // recordSearchQuery keys `searchquery:{q}:days` on the query text
   // itself, so like /api/track-event this is an unauthenticated write
   // whose key name comes from the caller. Same per-IP bucket, same
@@ -121063,7 +121111,7 @@ async function apiTrackEvent(request, env, ctx, url) {
   if (!env || !env.CONFIGS) return json({ ok: true });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: true });
   }
@@ -121433,7 +121481,7 @@ async function apiMdblistMyListsAiringItems(mdblistAiringCandidates, rawAiringIt
 // /api/mdblist-history-raw (POST) { apikey, accessToken, username? } -> { ok, items }
 async function apiMdblistHistoryRaw(request) {
   let body;
-  try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+  try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
   const apikey = String(body.apikey || "").trim();
   const accessToken = String(body.accessToken || "").trim();
   let username = String(body.username || "").trim();
@@ -121655,7 +121703,7 @@ async function apiSave(request, env, ctx, path) {
 
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -121900,7 +121948,7 @@ async function apiListLiveSave(request, env, ctx) {
   }
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -121953,7 +122001,7 @@ async function apiListLiveSave(request, env, ctx) {
 async function apiListsLike(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let likeBody;
-  try { likeBody = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+  try { likeBody = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
   const likeUser = String(likeBody.username || "").toLowerCase().trim();
   const likeSlug = String(likeBody.slug || "").toLowerCase().trim();
   const likeUnlike = likeBody.action === "unlike";
@@ -122076,7 +122124,7 @@ async function apiListsLikeExternal(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122158,7 +122206,7 @@ async function apiListsLikeExternal(request, env, ctx, path) {
 async function apiDetailsBatch(request, env, ctx) {
   let reqBody;
   try {
-    reqBody = await request.json();
+    reqBody = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122231,7 +122279,7 @@ async function apiDetails(request, env, ctx, url) {
   let reqBody;
   if (request.method === "POST") {
     try {
-      reqBody = await request.json();
+      reqBody = await readJsonObject(request);
     } catch {
       reqBody = {};
     }
@@ -122285,7 +122333,7 @@ async function apiSessionSignIn(request, env, ctx, path) {
   if (!env || !env.DB) return json({ ok: false, error: "Database unavailable." }, 503);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122454,7 +122502,7 @@ async function apiMeSessionsRevoke(request, env) {
   }
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {}
 
   const currentHash = request.session ? request.session.idHash : null;
@@ -122523,7 +122571,7 @@ async function apiChannelSharePublish(request, env, ctx, url, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Sharing isn't available on this add-on." }, 503);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122723,7 +122771,7 @@ async function apiChannelLike(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122808,7 +122856,7 @@ async function apiChannelAdded(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: true });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: true });
   }
@@ -122852,7 +122900,7 @@ async function apiChannelMine(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: true, channels: [] });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -122876,7 +122924,7 @@ async function apiChannelUnpublish(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "Sharing isn't available on this add-on." }, 503);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -123207,12 +123255,21 @@ async function apiBulkResolve(request, env, ctx) {
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
       const promises = batch.map(async (item) => {
-        const q = (item.title || "").trim();
+        // One bad title or one failed TMDB call must not lose the whole batch.
+        try {
+        if (!item || typeof item !== "object") return null;
+        const q = String(item.title || "").trim();
         const y = item.year ? parseInt(item.year, 10) : null;
         if (!q) return null;
 
+        // A show is searched as a show: searched as a movie, a movie with the
+        // same title and year would hand over its IMDb id and poster. An item
+        // with no type is a movie, so older clients behave as before.
+        const isSeries = item.type === "series";
+        const kind = isSeries ? "tv" : "movie";
+
         // Step 1: Search TMDB
-        const searchSrc = `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(TMDB_API_KEY)}&query=${encodeURIComponent(q)}&include_adult=false${y ? '&primary_release_year=' + y : ''}`;
+        const searchSrc = `https://api.themoviedb.org/3/search/${kind}?api_key=${encodeURIComponent(TMDB_API_KEY)}&query=${encodeURIComponent(q)}&include_adult=false${y ? (isSeries ? '&first_air_date_year=' : '&primary_release_year=') + y : ''}`;
         tmdbCallCount++;
         const searchRes = await fetch(searchSrc, {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
@@ -123224,7 +123281,7 @@ async function apiBulkResolve(request, env, ctx) {
         if (!match) return null;
 
         // Step 2: Get External IDs to find IMDB id
-        const extSrc = `https://api.themoviedb.org/3/movie/${match.id}/external_ids?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
+        const extSrc = `https://api.themoviedb.org/3/${kind}/${match.id}/external_ids?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
         tmdbCallCount++;
         const extRes = await fetch(extSrc, {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
@@ -123234,13 +123291,19 @@ async function apiBulkResolve(request, env, ctx) {
         const extData = await extRes.json();
 
         if (extData.imdb_id) {
+          const matchTitle = isSeries ? (match.name || match.original_name) : (match.title || match.original_title);
+          const matchDate = isSeries ? match.first_air_date : match.release_date;
           return {
-            title: match.title || match.original_title || item.title,
-            year: match.release_date ? match.release_date.substring(0, 4) : item.year,
+            title: matchTitle || item.title,
+            year: matchDate ? matchDate.substring(0, 4) : item.year,
             imdbId: extData.imdb_id,
+            type: isSeries ? "series" : "movie",
           };
         }
         return null;
+        } catch {
+          return null;
+        }
       });
 
       const results = await Promise.all(promises);

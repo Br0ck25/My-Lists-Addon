@@ -1930,7 +1930,7 @@ async function resolveAdminSession(env, cookieValue) {
     // At most one write an hour per browser: last_seen_at is a convenience,
     // not a security property, and D1 writes are the scarce thing here.
     if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 60 * 60 * 1000) {
-      env.DB.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE id = ?").bind(now, id).run().catch(() => {});
+      await env.DB.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE id = ?").bind(now, id).run().catch(() => {}); // awaited: no ctx here, and it runs at most hourly
     }
     return { id: row.id, actor: row.actor, expiresAt: row.expires_at };
   } catch (e) {

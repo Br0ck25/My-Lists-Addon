@@ -45,7 +45,7 @@ async function handleCreatorApiAccountRoutes(request, env, ctx, url, path) {
 async function creatorApiTrackStatus(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -72,7 +72,7 @@ async function creatorApiTrackStatus(request, env, ctx, path) {
 async function creatorApiScrobbleSeenUsers(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -112,7 +112,7 @@ async function creatorApiCreate(request, env, ctx) {
   }
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -267,7 +267,7 @@ async function creatorApiResetKey(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -394,7 +394,7 @@ async function creatorApiRecoveryAnswer(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -429,7 +429,7 @@ async function creatorApiForgotUsername(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -574,7 +574,7 @@ async function creatorApiScrobbleToken(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -618,7 +618,7 @@ async function creatorApiRestore(request, env, ctx, path) {
 
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -661,7 +661,7 @@ async function creatorApiRestore(request, env, ctx, path) {
 async function creatorApiLists(request, env, ctx, url, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -1020,7 +1020,7 @@ async function creatorApiListsItems(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -1102,7 +1102,7 @@ async function creatorApiListsItems(request, env, ctx, path) {
 async function creatorApiListsSave(request, env, ctx, url, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }

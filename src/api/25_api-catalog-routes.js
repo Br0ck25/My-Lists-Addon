@@ -437,7 +437,7 @@ async function handleFetch(request, env, ctx) {
     if (csrfErr) return csrfErr;
 
     // Resolve session if mla_session cookie or Bearer token is present
-    const sessionAuth = await resolveSession(request, env);
+    const sessionAuth = await resolveSession(request, env, ctx);
     if (sessionAuth) {
       request.account = sessionAuth.account;
       request.session = sessionAuth.session;

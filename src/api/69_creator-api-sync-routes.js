@@ -37,7 +37,7 @@ async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
 async function creatorApiSyncSavePresets(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -90,7 +90,7 @@ async function creatorApiSyncSavePresets(request, env, ctx, path) {
 async function creatorApiSyncSaveChannels(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -115,9 +115,19 @@ async function creatorApiSyncSaveChannels(request, env, ctx, path) {
       // Unreadable -- nothing coherent to protect; write normally.
     }
   }
+  // Keep only plain-object entries; an array counts as empty. One null entry
+  // saved here would be loaded by every device and break its page.
+  const plainObjectEntries = (map) => {
+    const out = {};
+    if (!map || typeof map !== "object" || Array.isArray(map)) return out;
+    for (const [k, v] of Object.entries(map)) {
+      if (v && typeof v === "object" && !Array.isArray(v)) out[k] = v;
+    }
+    return out;
+  };
   const channelsBlob = {
-    channels: body.channels && typeof body.channels === "object" ? body.channels : {},
-    mergedChannels: body.mergedChannels && typeof body.mergedChannels === "object" ? body.mergedChannels : {},
+    channels: plainObjectEntries(body.channels),
+    mergedChannels: plainObjectEntries(body.mergedChannels),
     updatedAt: nextSyncVersion(channelsCurrentUpdatedAt),
   };
   const serialized = JSON.stringify(channelsBlob);
@@ -161,7 +171,7 @@ async function creatorApiSyncSaveChannels(request, env, ctx, path) {
 async function creatorApiSyncMeta(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -261,7 +271,7 @@ async function creatorApiSyncMeta(request, env, ctx, path) {
 async function creatorApiSyncLoad(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -604,7 +614,7 @@ async function creatorSyncLoadMergeQueue(env, auth, data) {
 async function creatorApiSyncLike(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -671,7 +681,7 @@ async function creatorApiSyncShareTracking(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }

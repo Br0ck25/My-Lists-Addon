@@ -119,7 +119,7 @@ async function adminApiFeedbackReply(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -186,7 +186,7 @@ async function adminApiFeedbackStatus(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -230,7 +230,7 @@ async function adminApiFeedbackEdit(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -282,7 +282,7 @@ async function adminApiFeedbackDelete(request, env) {
   if (!env || (!env.CONFIGS && !env.DB)) return json({ ok: false, error: "Feedback storage isn't configured on this deployment." });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -435,7 +435,7 @@ async function adminApiSupportGoal(request, env, url) {
       return json({ ok: false, error: "Could not read the saved settings. Try again." }, 503);
     }
     let body = {};
-    try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+    try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
     const next = applySupportGoalUpdate(stored, body);
     if (next.error) return json({ ok: false, error: next.error }, 400);
     // A typed amount is the month's total itself: with D1 bound it goes
@@ -465,7 +465,7 @@ async function adminApiSiteNotice(request, env) {
   const stored = await readSiteNotice(env);
   if (request.method === "POST") {
     let body = {};
-    try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
+    try { body = await readJsonObject(request); } catch { return json({ ok: false, error: "Invalid JSON body." }, 400); }
     if (body && body.reset === true) {
       await env.CONFIGS.delete(SITE_NOTICE_KEY);
       return json({ ok: true, ...(await readSiteNotice(env)), defaults: DEFAULT_SITE_NOTICE }, 200, { "Cache-Control": "no-store" });
@@ -502,7 +502,7 @@ async function adminApiNewOnStreamingSweep(request, env, ctx) {
   if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -574,7 +574,7 @@ async function adminApiNewOnStreamingAdd(request, env) {
   if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -641,7 +641,7 @@ async function adminApiChannelPresetsClear(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -672,7 +672,7 @@ async function adminApiChannelPresetsRebuild(request, env, ctx, url) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch (e) {
     body = {};
   }
@@ -717,7 +717,7 @@ async function adminApiResetCreatorKey(request, env) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -790,7 +790,7 @@ async function adminApiRevokeAdminSession(request, env) {
   if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {}
   if (body && body.all === true) {
     const revoked = await revokeAllAdminSessions(env);

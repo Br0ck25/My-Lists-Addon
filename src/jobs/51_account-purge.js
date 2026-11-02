@@ -155,7 +155,7 @@ async function handleAccountDeleteApi(request, env, url, path) {
   if (!env || !env.DB || !env.CONFIGS) return json({ ok: false, error: "Accounts aren't available right now." }, 503);
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     body = {};
   }

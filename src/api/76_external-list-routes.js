@@ -27,7 +27,7 @@ function handleExternalListRoutes(request, env, ctx, url, path) {
 async function apiExternalListItemMutate(request, env, path) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -534,7 +534,7 @@ async function apiExternalListMutateMdblistCustom({ action, listId, token, heade
 async function apiExternalSyncHistory(request, env) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -854,7 +854,7 @@ async function apiExternalSyncHistoryMdblist(body, provider, items, parseWatchIt
 async function apiExternalListCreate(request, env) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -1040,7 +1040,7 @@ async function apiExternalListCreateMdblist(body, provider, name, description, p
 async function apiExternalListDelete(request, env) {
   let body = {};
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -1295,7 +1295,7 @@ async function apiTmdbMyLists(request, env, url) {
 
   if (request.method === "POST") {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       if (body.sessionId) sessionId = body.sessionId;
       if (body.accountId) accountId = body.accountId;
       if (body.tmdbKey) manualKey = body.tmdbKey;

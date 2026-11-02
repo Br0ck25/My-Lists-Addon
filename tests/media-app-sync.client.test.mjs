@@ -182,6 +182,34 @@ describe("Stremio and Nuvio cards", () => {
     assert.match(requestsTo(c, "/api/v2/read")[0].url, /code=L5YR/);
   });
 
+  // link/complete runs the first history pull before it answers, which easily
+  // outlasts the 3-second tick. A second tick then saw the same authKey and
+  // connected again: two pulls at once, each counting the account as a new
+  // watcher of the same shows (show_schedule.watcher_count +2 instead of +1).
+  it("does not hand the authKey over twice while the first hand-over is still running", async () => {
+    let release;
+    const c = loadClient({
+      signedIn: true,
+      routes: linkRoutes({
+        "/api/v2/read": () => ({ json: { result: { authKey: "KEY-FROM-STREMIO" } } }),
+        "/api/connections/stremio/link/complete": async () => {
+          await new Promise((r) => { release = r; });
+          return { json: { ok: true, status: "connected", username: "a@b.test" } };
+        },
+        "/api/connections/stremio/settings": () => ({ json: { ok: true, connected: true, status: "ok", username: "a@b.test", sync: { pull: true } } }),
+      }),
+    });
+    const ticks = [];
+    c.set("setInterval", (fn) => { ticks.push(fn); return ticks.length; });
+    await c.call("startStremioConnect");
+    const first = ticks[0]();            // approved: the hand-over is still running
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    const second = ticks[0]();           // the next tick arrives meanwhile
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    assert.equal(requestsTo(c, "/api/connections/stremio/link/complete").length, 1, "connected once, not twice");
+    release(); await first; await second;
+  });
+
   it("keeps waiting while Stremio says the code is not approved yet", async () => {
     const c = loadClient({ signedIn: true, routes: linkRoutes({ "/api/v2/read": () => ({ json: { error: { code: 101, message: "Invalid or expired token" } } }) }) });
     const done = await c.call("mediaAppUiStremioPoll", "L5YR");

@@ -296,12 +296,21 @@ async function apiBulkResolve(request, env, ctx) {
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
       const promises = batch.map(async (item) => {
-        const q = (item.title || "").trim();
+        // One bad title or one failed TMDB call must not lose the whole batch.
+        try {
+        if (!item || typeof item !== "object") return null;
+        const q = String(item.title || "").trim();
         const y = item.year ? parseInt(item.year, 10) : null;
         if (!q) return null;
 
+        // A show is searched as a show: searched as a movie, a movie with the
+        // same title and year would hand over its IMDb id and poster. An item
+        // with no type is a movie, so older clients behave as before.
+        const isSeries = item.type === "series";
+        const kind = isSeries ? "tv" : "movie";
+
         // Step 1: Search TMDB
-        const searchSrc = `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(TMDB_API_KEY)}&query=${encodeURIComponent(q)}&include_adult=false${y ? '&primary_release_year=' + y : ''}`;
+        const searchSrc = `https://api.themoviedb.org/3/search/${kind}?api_key=${encodeURIComponent(TMDB_API_KEY)}&query=${encodeURIComponent(q)}&include_adult=false${y ? (isSeries ? '&first_air_date_year=' : '&primary_release_year=') + y : ''}`;
         tmdbCallCount++;
         const searchRes = await fetch(searchSrc, {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
@@ -313,7 +322,7 @@ async function apiBulkResolve(request, env, ctx) {
         if (!match) return null;
 
         // Step 2: Get External IDs to find IMDB id
-        const extSrc = `https://api.themoviedb.org/3/movie/${match.id}/external_ids?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
+        const extSrc = `https://api.themoviedb.org/3/${kind}/${match.id}/external_ids?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
         tmdbCallCount++;
         const extRes = await fetch(extSrc, {
           headers: { "User-Agent": `my-lists-addon/${ADDON_VERSION}` },
@@ -323,13 +332,19 @@ async function apiBulkResolve(request, env, ctx) {
         const extData = await extRes.json();
 
         if (extData.imdb_id) {
+          const matchTitle = isSeries ? (match.name || match.original_name) : (match.title || match.original_title);
+          const matchDate = isSeries ? match.first_air_date : match.release_date;
           return {
-            title: match.title || match.original_title || item.title,
-            year: match.release_date ? match.release_date.substring(0, 4) : item.year,
+            title: matchTitle || item.title,
+            year: matchDate ? matchDate.substring(0, 4) : item.year,
             imdbId: extData.imdb_id,
+            type: isSeries ? "series" : "movie",
           };
         }
         return null;
+        } catch {
+          return null;
+        }
       });
 
       const results = await Promise.all(promises);

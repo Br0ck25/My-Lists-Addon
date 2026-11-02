@@ -1224,7 +1224,7 @@ async function flushBetterPosterRetries(env, force) {
     for (const [path, at] of add) {
       if (!list[path]) { list[path] = { at }; changed = true; }
     }
-    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now)));
+    if (changed) await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(list, now))); // read-modify-write: a concurrent isolate's addition can be lost; accepted (the poster is queued again when it is next missed)
   } catch {}
 }
 
@@ -1369,8 +1369,8 @@ async function noteBetterPosterVariant(env, bp) {
     if (now - (Number(seen[key]) || 0) < 86400 * 1000) return;
     seen[key] = now;
     for (const k of Object.keys(seen)) if (now - Number(seen[k]) > BETTER_POSTER_VARIANT_TTL_MS) delete seen[k];
-    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen));
-  } catch {}
+    await env.CONFIGS.put(BETTER_POSTER_VARIANTS_KEY, JSON.stringify(seen)); // read-modify-write: a concurrent isolate's entry can be lost; accepted (it is re-added on its next request)
+  } catch { _betterPosterVariantNoted.delete(key); } // a failed write is retried on the next call
 }
 
 // The styles used within BETTER_POSTER_VARIANT_TTL_MS, as posters for one
@@ -1504,7 +1504,7 @@ async function rpdbUsage(env, key, hash) {
       const raw = await env.CONFIGS.get(kvKey);
       const kv = raw ? JSON.parse(raw) : null;
       if (kv && Number.isFinite(kv.req) && Number.isFinite(kv.limit) && now - kv.at < RPDB_USAGE_TTL_SECONDS * 1000) {
-        RPDB_USAGE.set(hash, kv);
+        if (RPDB_USAGE.size >= 1000) RPDB_USAGE.clear(); RPDB_USAGE.set(hash, kv);
         return kv;
       }
     }
@@ -1515,7 +1515,7 @@ async function rpdbUsage(env, key, hash) {
     const data = await res.json();
     if (!data || !Number.isFinite(data.req) || !Number.isFinite(data.limit)) return null;
     const usage = { req: data.req, limit: data.limit, at: now };
-    RPDB_USAGE.set(hash, usage);
+    if (RPDB_USAGE.size >= 1000) RPDB_USAGE.clear(); RPDB_USAGE.set(hash, usage);
     if (env && env.CONFIGS) await env.CONFIGS.put(kvKey, JSON.stringify(usage), { expirationTtl: RPDB_USAGE_TTL_SECONDS * 2 }).catch(() => {});
     return usage;
   } catch {
@@ -1545,7 +1545,7 @@ async function rpdbFetchUpstream(env, ctx, key, hash, imdbId) {
       if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
         // A refused key and a spent or struggling service are both left alone
         // for a while rather than asked again poster by poster.
-        RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
+        if (RPDB_BACKOFF.size >= 1000) RPDB_BACKOFF.clear(); RPDB_BACKOFF.set(hash, Date.now() + RPDB_BACKOFF_SECONDS * 1000);
         return null;
       }
       const contentType = res.headers.get("content-type") || "";

@@ -45,7 +45,7 @@ function handleProviderListRoutes(request, env, ctx, url, path) {
 async function apiImdbIds(request, env, ctx) {
   let idBody;
   try {
-    idBody = await request.json();
+    idBody = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -94,7 +94,7 @@ async function apiImdbIds(request, env, ctx) {
 async function apiRecommendations(request, env, ctx) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -717,7 +717,7 @@ async function apiTraktOauthCallback(request, env, url) {
 // the fallback.
 async function apiTraktDeviceCode(request, env) {
   let body = {};
-  try { body = await request.json(); } catch {}
+  try { body = await readJsonObject(request); } catch {}
   const userKey = String(body.traktKey || body.clientId || "").trim();
   const clientId = userKey || TRAKT_CLIENT_ID || (env && env.TRAKT_CLIENT_ID) || "";
   if (!clientId) return json({ ok: false, error: "Trakt Client ID is not configured. Add your Trakt Client ID in Settings." }, 400);
@@ -756,7 +756,7 @@ async function apiTraktDeviceCode(request, env) {
 // /api/trakt/device/token -> polls for authorization of device code
 async function apiTraktDeviceToken(request, env) {
   let body = {};
-  try { body = await request.json(); } catch {}
+  try { body = await readJsonObject(request); } catch {}
   const code = String(body.code || "").trim();
   const userKey = String(body.traktKey || body.clientId || "").trim();
   const clientId = userKey || TRAKT_CLIENT_ID || (env && env.TRAKT_CLIENT_ID) || "";
@@ -1114,7 +1114,7 @@ async function apiSimklMyLists(request, env, url) {
   let manualKey = "";
   if (request.method === "POST") {
     try {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       if (body.token) token = body.token;
       if (body.simklKey) manualKey = body.simklKey;
     } catch {}

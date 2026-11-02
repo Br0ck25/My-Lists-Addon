@@ -509,7 +509,7 @@ function loadLocalChannels() {
     if (!str) {
       try { str = localStorage.getItem(LOCAL_CHANNELS_KEY); } catch (e) {}
     }
-    const map = JSON.parse(str || '{}');
+    const map = objectEntriesOnly(JSON.parse(str || '{}'));
     if (map && typeof map === 'object') {
       for (const ch of Object.values(map)) {
         if (ch && Array.isArray(ch.items)) {
@@ -12878,7 +12878,7 @@ function loadLocalMergedChannels() {
     const raw = localStorage.getItem(LOCAL_MERGED_CHANNELS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return (parsed && typeof parsed === 'object') ? parsed : {};
+    return objectEntriesOnly(parsed);
   } catch (e) {
     return {};
   }

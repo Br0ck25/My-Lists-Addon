@@ -4833,7 +4833,7 @@ async function refreshAiringNextSweep(env, ctx) {
         const previousStamp = Number(target.updatedAt) || 0;
         target.airingNext = items;
         target.updatedAt = Math.max(Date.now(), previousStamp + 1);
-        await env.CONFIGS.put(trackingKey, JSON.stringify(target));
+        await env.CONFIGS.put(trackingKey, JSON.stringify(target)); // the fresh read above leaves a one-round-trip gap (no compare-and-set in KV); accepted, and airingNext is rebuilt every cycle
         if (env.DB) await saveAiringNextD1(env, username, items, target.updatedAt, previousStamp);
       }
       const ttlSec = Math.round(AIRING_NEXT_SERVER_REFRESH_MS / 1000);
@@ -5174,7 +5174,7 @@ async function rememberSharedPosterIds(env, ids) {
     const prev = raw ? JSON.parse(raw) : [];
     const merged = [...new Set([...ids, ...(Array.isArray(prev) ? prev : [])])].slice(0, SHARED_POSTER_IDS_MAX);
     if (JSON.stringify(merged) === raw) return;
-    await env.CONFIGS.put(SHARED_POSTER_IDS_KEY, JSON.stringify(merged));
+    await env.CONFIGS.put(SHARED_POSTER_IDS_KEY, JSON.stringify(merged)); // read-modify-write: a concurrent isolate's ids can be lost; accepted (a charting title is re-added on its next request)
   } catch {}
 }
 
@@ -5217,7 +5217,7 @@ async function retryMissedBetterPosters(env, fetchCap) {
     try {
       const latest = readBetterPosterRetries(await env.CONFIGS.get(BETTER_POSTER_RETRY_KEY));
       for (const path of gone) delete latest[path];
-      await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(latest, Date.now())));
+      await env.CONFIGS.put(BETTER_POSTER_RETRY_KEY, JSON.stringify(trimBetterPosterRetries(latest, Date.now()))); // the re-read above narrows the window but KV has no compare-and-set; a lost addition is accepted (re-queued on the next miss)
     } catch {}
   }
   if (done) console.log(`[Cron] BetterPosters: ${done} of ${due.length} missed poster(s) fetched on retry.`);

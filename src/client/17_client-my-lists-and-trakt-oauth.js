@@ -969,7 +969,7 @@ async function startTraktDeviceLogin(retried) {
 
     if (_traktDevicePollTimer) clearInterval(_traktDevicePollTimer);
 
-    _traktDevicePollTimer = setInterval(async () => {
+    _traktDevicePollTimer = setInterval(skipWhileBusy(async () => {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
@@ -1020,7 +1020,7 @@ async function startTraktDeviceLogin(retried) {
           if (statusEl) statusEl.innerText = pollData.error;
         }
       } catch (e) {}
-    }, intervalSec * 1000);
+    }), intervalSec * 1000);
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
@@ -2338,7 +2338,7 @@ async function startStremioConnect() {
     box.style.display = '';
   }
   let ticks = 0;
-  mediaAppUiPoll = setInterval(async function () {
+  mediaAppUiPoll = setInterval(skipWhileBusy(async function () {
     ticks++;
     if (ticks > 200) {
       stopStremioLinkPoll();
@@ -2346,7 +2346,7 @@ async function startStremioConnect() {
       return;
     }
     await mediaAppUiStremioPoll(link.code);
-  }, 3000);
+  }), 3000);
 }
 
 async function submitNuvioLogin() {
