@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "eb36cbf5de";
+const WORKER_BUILD = "fbe061adf0";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -57264,6 +57264,17 @@ function normalizeChannelItemFromStorage(it) {
   };
 }
 
+// A saved channel map keeps only object values. One null or non-object entry
+// (for example one synced from another device) must not break the page.
+function objectEntriesOnly(map) {
+  const out = {};
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return out;
+  for (const [k, v] of Object.entries(map)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = v;
+  }
+  return out;
+}
+
 function loadLocalChannels() {
   try {
     if (_memoryChannelsMap && typeof _memoryChannelsMap === 'object' && Object.keys(_memoryChannelsMap).length > 0) {
@@ -57276,7 +57287,7 @@ function loadLocalChannels() {
     if (!str) {
       try { str = localStorage.getItem(LOCAL_CHANNELS_KEY); } catch (e) {}
     }
-    const map = JSON.parse(str || '{}');
+    const map = objectEntriesOnly(JSON.parse(str || '{}'));
     if (map && typeof map === 'object') {
       for (const ch of Object.values(map)) {
         if (ch && Array.isArray(ch.items)) {
@@ -69645,7 +69656,7 @@ function loadLocalMergedChannels() {
     const raw = localStorage.getItem(LOCAL_MERGED_CHANNELS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return (parsed && typeof parsed === 'object') ? parsed : {};
+    return objectEntriesOnly(parsed);
   } catch (e) {
     return {};
   }
