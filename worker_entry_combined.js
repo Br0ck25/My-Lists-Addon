@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a2eb8b2957";
+const WORKER_BUILD = "5506978fac";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -120266,7 +120266,7 @@ async function apiTraktMyPrivateLists(request, env, ctx) {
         let continueWatchingCandidates = [];
         let wData = [];
         await apiTraktMyPrivateListsContinueWatchingBlock(accessToken, continueWatchingCandidates, wData);
-        return apiTraktMyPrivateListsEntries(env, ctx, accessToken, me, meSlug, rawLists, watchlistEntry, historyEntry, continueWatchingCandidates);
+        return apiTraktMyPrivateListsEntries(env, ctx, { accessToken, me, meSlug, rawLists, watchlistEntry, historyEntry, continueWatchingCandidates });
       }
     });
 
@@ -120279,7 +120279,7 @@ async function apiTraktMyPrivateLists(request, env, ctx) {
 }
 
 // The rest of the callback inside apiTraktMyPrivateLists, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiTraktMyPrivateListsEntries(env, ctx, accessToken, me, meSlug, rawLists, watchlistEntry, historyEntry, continueWatchingCandidates) {
+async function apiTraktMyPrivateListsEntries(env, ctx, { accessToken, me, meSlug, rawLists, watchlistEntry, historyEntry, continueWatchingCandidates }) {
   const continueWatchingEntry = {
     name: "Trakt Continue Watching",
     slug: "continue-watching",
@@ -120665,11 +120665,11 @@ async function apiFeedback(request, env, ctx, path) {
       return json({ ok: false, error: "You've sent a few messages today -- please try again tomorrow." });
     }
   }
-  return apiFeedbackThreadReply(request, env, message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount);
+  return apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount });
 }
 
 // The rest of apiFeedback, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiFeedbackThreadReply(request, env, message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount) {
+async function apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount }) {
   // If replying to an existing thread
   if (threadId) {
     let entry = null;
@@ -120768,11 +120768,11 @@ async function apiFeedbackThreadReply(request, env, message, category, contact, 
       return json({ ok: false, error: safeErrorMessage(e, "Could not save your reply right now. Please try again in a moment.") }, 500);
     }
   }
-  return apiFeedbackNewEntry(request, env, message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount);
+  return apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount });
 }
 
 // The rest of apiFeedback, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiFeedbackNewEntry(request, env, message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount) {
+async function apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount }) {
   // New Thread
   //
   // The id is a capability: /api/feedback/threads hands the whole thread
