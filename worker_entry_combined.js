@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1234615946";
+const WORKER_BUILD = "245907776f";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -104831,8 +104831,8 @@ async function handleSupportEmailsApi(path, request, env) {
   if (path === '/admin/api/support-emails/threads' && request.method === 'GET') {
     const status = url.searchParams.get('status') || 'all';
     const query = (url.searchParams.get('q') || '').trim();
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
-    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
 
     try {
       let sql = 'SELECT * FROM support_threads';
