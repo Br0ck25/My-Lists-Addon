@@ -13,16 +13,6 @@
       return authenticateCreatorFor(request, env, ctx, path, creatorNameRaw, creatorKey, via);
     }
 
-    // The playback ping: see handleSubtitlesTrackFor (63_subtitles-track.js).
-    async function handleSubtitlesTrack(configParam, stremioType, id, env, request) {
-      return handleSubtitlesTrackFor(configParam, stremioType, id, env, request, ctx, path);
-    }
-
-    // The media-server webhook: see handleMediaServerScrobbleFor (64_media-server-scrobble.js).
-    async function handleMediaServerScrobble(request, url, env, ctx) {
-      return handleMediaServerScrobbleFor(request, url, env, ctx);
-    }
-
     // --- Sessions API (Phase 3a: P3a-4) ------------------------------------
 
     // POST /api/session  { username, key } -> { ok, account }
