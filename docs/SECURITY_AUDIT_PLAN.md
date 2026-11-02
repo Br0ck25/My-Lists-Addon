@@ -81,7 +81,10 @@ Test: with an encryption key set, after a save the raw KV value contains no toke
 
 **Question for the owner (changes what users see).** Once a browser has a working session, should the site forget the Account Key in that browser? Then, when the session ends (30 days, sign-out, revoked), the person would type their key again to sign back in. Today they never have to.
 
-**Fix, if yes.**
+**Decision (owner, 2026-11-02): yes, forget the key, AND make sessions renew while they are used,** so someone who visits regularly never has to retype the key. Only people who sign out, are signed out, or stay away for 30 days type it again.
+
+**Fix.**
+0. *Sliding sessions first (its own commit, own test, no flag needed).* Today `expires_at` is fixed at sign-in (`createSession`, `02_:1549`) and the cookie's `Max-Age` is 30 days from issue (`buildSessionCookieHeader`). In `resolveSession`, inside the existing at-most-every-5-minutes `last_seen_at` update, also set `expires_at = now + SESSION_TTL_MS`, and make the response carry a fresh `Set-Cookie` (`buildSessionCookieHeader(token)`) at that same moment, so the browser cookie is renewed too (find where the `X-MLA-Session` header is added to `/api/creator/` answers and add the cookie there when `resolveSession` reports it renewed). Revoked, expired or deleted-account sessions must never be renewed. Test: a session used on day 29 is still valid on day 50; a session not used for 31 days is refused; a revoked one is not revived by a request.
 1. When the server confirms a session for this account (the `X-MLA-Session` header handling in `16_`), remove `myListAddon:creatorKey` and keep `creatorName` plus a "signed in by session" marker. `activeCreator` (`16_:1224`) must treat "name + session marker" as signed in.
 2. On a 401 from a session-only request, show the existing sign-in prompt instead of resending the key.
 2b. Before the key is forgotten in a browser for the first time, tell the person once to keep their Account Key somewhere safe, and offer to set a recovery answer if they have none (`hasRecoveryAnswer` is already sent to the page). Reuse the existing notice/toast components and copy style (`docs/AI_UI_RULES.md`); no new styles.
