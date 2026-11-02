@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a4f090f704";
+const WORKER_BUILD = "9fb10ccd96";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -22119,12 +22119,12 @@ function sharedChannelString(value, max) {
   return String(value == null ? "" : value).trim().slice(0, max);
 }
 
-// Only http(s) art is kept. A shared channel's poster is rendered straight
-// into an <img>, so a "javascript:" or "data:" URL from a stranger has no
-// business surviving the trip.
+// Only https art is kept (SEC-08), on any host. A shared channel's poster is rendered
+// straight into an <img> by everyone who adds it: "javascript:", "data:" and plain
+// http:// from a stranger have no business surviving the trip.
 function sharedChannelImageUrl(value) {
   const url = sharedChannelString(value, 600);
-  return /^https?:\/\//i.test(url) ? url : "";
+  try { return new URL(url).protocol === "https:" ? url : ""; } catch { return ""; }
 }
 
 function sanitizeSharedChannelItem(raw) {
@@ -58166,8 +58166,8 @@ function applyChannelPosterUrl() {
     return;
   }
 
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
+  if (url.protocol !== 'https:') {
+    if (status) { status.textContent = 'Only https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;
