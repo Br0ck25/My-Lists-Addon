@@ -229,7 +229,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: for save-tracking, `tests/scrobble-queue.test.mjs` already covers the rescue. Add a case whose stored record has a `watchHistory` item of `null`, and assert both that the queued plays survive the save and that `console.error` was not called.
 
 ### BA-009 Two account-keyed tables rely on the foreign-key cascade, unlike the rest of account deletion
-- Status: Fixed in BA009SHA
+- Status: Fixed in 53c6293
 - Category: bug (defence in depth)
 - Severity / confidence: P3 / Medium
 - Where: schema.sql:334-346 and migrations/0023_media_app_sync.sql:20 (`media_app_sync`), schema_activity.sql:93-98 (`watch_event_sources`); deletion in src/core/02_http-and-creator-utils.js:1467-1508 (`deleteAccountRow`) and src/jobs/51_account-purge.js
@@ -240,6 +240,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: `tests/account-purge.test.mjs`. Create an account with a `media_app_sync` row and a `watch_event_sources` row, run the purge against a D1 mock with foreign keys off, and assert both rows are gone.
 
 ### BA-010 The audit-action map and the route-access test still list retired admin routes
+- Status: Fixed in BA010SHA
 - Category: dead-code
 - Severity / confidence: P3 / High
 - Where: src/admin/03_admin.js:1971-1974, :1980, :1982; tests/route-access.test.mjs:45, :48

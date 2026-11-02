@@ -42,10 +42,8 @@ const MANIFEST = JSON.parse(readFileSync(new URL("route-access.json", import.met
 // covered by its own suite; this list makes a NEW prefix a conscious decision.
 const PREFIXES = {
   "/admin/": "admin pages and API: every /admin/api/* route is listed individually above",
-  "/admin/api/activity-backfill/": "admin, tests/activity.test.mjs",
   "/admin/api/installs/": "admin, tests/admin-actions.test.mjs",
   "/admin/api/jobs/": "admin, tests/jobs.test.mjs",
-  "/admin/api/lists-backfill/": "admin, tests/lists-v2.test.mjs",
   "/api/": "the API as a whole",
   "/api/connections/": "account, tests/security-suite.test.mjs",
   "/api/creator/": "account, listed individually above",
@@ -127,9 +125,13 @@ describe("route access inventory", () => {
     }
   });
 
-  it("every route matched by prefix is known", () => {
+  it("every route matched by prefix is known, and none is stale", () => {
     const unknown = sourcePrefixes.filter((p) => !(p in PREFIXES));
     assert.deepEqual(unknown, [], "a new prefix route needs a line in PREFIXES above and its own access tests");
+    // Wider than the scan above on purpose: some prefix tests are written on a
+    // local (`p.startsWith("/api/me/")`), which the scan above does not list.
+    const stale = Object.keys(PREFIXES).filter((p) => !new RegExp(`\\.startsWith\\((["'\`])${p.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&")}\\1`).test(SOURCES));
+    assert.deepEqual(stale, [], "remove these from PREFIXES: no source matches them any more");
   });
 
   it("every route matched by a regular expression is known, and none is stale", () => {

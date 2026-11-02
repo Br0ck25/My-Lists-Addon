@@ -1968,18 +1968,13 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/new-on-streaming/sweep": "admin.new-on-streaming.sweep",
   "/admin/api/new-on-streaming/add": "admin.new-on-streaming.add",
   "/admin/api/installs/restore": "admin.installs.undo-move",
-  "/admin/api/lists-backfill/step": "admin.backfill.lists",
-  "/admin/api/lists-backfill/restart": "admin.backfill.lists.restart",
-  "/admin/api/activity-backfill/step": "admin.backfill.activity",
-  "/admin/api/activity-backfill/restart": "admin.backfill.activity.restart",
   "/admin/api/jobs/ping": "admin.jobs.test",
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
   "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
-  "/admin/api/revoke-all-admin-sessions": "admin.session.revoke-all",
 };
-const ADMIN_AUDIT_GET_MUTATORS = new Set(["/admin/api/migrate-accounts"]);
+const ADMIN_AUDIT_GET_MUTATORS = new Set();
 // Body fields worth keeping. Nothing else is read, so a field this list does
 // not name cannot end up in the log -- including, deliberately, any key or
 // token an admin form might carry. `slugs` is here for the delete flows.
