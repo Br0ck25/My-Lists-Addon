@@ -2,9 +2,8 @@
  "functions": {
   "src/admin/59_support-emails.js::handleSupportEmailsApi": 166,
   "src/admin/59_support-emails.js::parseMimeEmail": 194,
-  "src/api/25_api-catalog-routes.js::handleFetch": 14859,
+  "src/api/25_api-catalog-routes.js::handleFetch": 14211,
   "src/api/25_api-catalog-routes.js::handleFetch>fetchFn#2": 412,
-  "src/api/26_api-creator-and-admin-routes.js::handleFetch>handleMediaServerScrobble": 651,
   "src/api/27_installs.js::handleInstallsApiRoutes": 152,
   "src/api/31_lists-api.js::handleListsApiRoutes": 156,
   "src/api/61_media-app-sync.js::handleMediaAppRoute": 410,
@@ -32,7 +31,7 @@
  "files": {
   "src/admin/03_admin.js": 6798,
   "src/api/25_api-catalog-routes.js": 8219,
-  "src/api/26_api-creator-and-admin-routes.js": 7186,
+  "src/api/26_api-creator-and-admin-routes.js": 6538,
   "src/catalog/05_catalog-core.js": 4713,
   "src/catalog/07_source-fetchers-tmdb-simkl.js": 5470,
   "src/client/16_client-row-core.js": 4376,
