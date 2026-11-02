@@ -186,7 +186,9 @@ describe("formatAirDateBadge: past dates differ on purpose (owner decision 2026-
 
 // Random ids ("col_mylists_" + 6 random characters) are the one thing that
 // differs run to run, so they are masked. Ids the input supplies are kept.
-const maskIds = (v) => JSON.parse(JSON.stringify(v), (k, x) => (typeof x === "string" && /^col_mylists_[a-z0-9]{1,6}$/.test(x) && x.length <= 18 && !/^col_mylists_(keep|own|fixed|g\d)/.test(x) ? "col_mylists_<random>" : x));
+// Every random collection id ("col_mylists_" + up to 6 base-36 chars) is masked.
+// No input id in these cases has that shape, so stable ids are still compared.
+const maskIds = (v) => JSON.parse(JSON.stringify(v), (k, x) => (typeof x === "string" && /^col_mylists_[a-z0-9]{1,6}$/.test(x) ? "col_mylists_<random>" : x));
 
 const folderA = { id: "f1", title: "Action", catalogSources: [{ addonId: "a", type: "movie", catalogId: "x", name: "Top (Movies)" }] };
 const folderB = { id: "f2", title: "Drama", catalogSources: [{ addonId: "a", type: "series", catalogId: "y", title: "Best (Shows)" }] };
