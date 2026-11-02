@@ -106,17 +106,15 @@ For every non-trivial change, leave a meaningful verification using the smallest
 Before reporting a task complete or handing off to another agent, run:
 ```bash
 python build.py
-python tools/check_sync.py
-node --check worker_entry_combined.js
-python tools/gen_map.py
-node --test tests/*.test.mjs
+bash verify.sh -q   # build, syntax, scope check and every test
+python tools/gen_map.py   # only if functions were added, removed or moved
 ```
 
 ---
 
 ## 5. Handoff Protocol (Switching Between AIs)
 When finishing your turn or when the user warns that credits/session limits are approaching:
-1. Ensure the code builds and passes syntax checks: `python build.py` & `node --check worker_entry_combined.js`.
+1. Ensure the code builds and passes syntax checks: `python build.py` & `bash verify.sh -q`.
 2. Commit your working changes to Git:
    ```bash
    git add -A

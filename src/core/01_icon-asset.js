@@ -1,4 +1,4 @@
-// --- icon (placeholder, replace via /mnt/project source if needed) --------
+// --- icon --------------------------------------------------------------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
   "t7+3SrfoqnfJcpEbxsa9YBvcwOAYG4ypgQBJCGBCSQiEloQQCCXUUAyxKQZjcJGNbMuyLUtWl67K" +

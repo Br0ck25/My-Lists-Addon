@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "487f0153ac";
+const WORKER_BUILD = "14ed796970";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -2391,7 +2391,7 @@ const UTILITY_CSS = `
 .u-ws-nowrap{white-space:nowrap !important}
 .u-ws-pre_wrap{white-space:pre-wrap !important}
 `;
-// --- icon (placeholder, replace via /mnt/project source if needed) --------
+// --- icon --------------------------------------------------------------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
   "t7+3SrfoqnfJcpEbxsa9YBvcwOAYG4ypgQBJCGBCSQiEloQQCCXUUAyxKQZjcJGNbMuyLUtWl67K" +

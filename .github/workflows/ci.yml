@@ -50,7 +50,7 @@ jobs:
 
       # `node --check` above proves the file PARSES. It says nothing about
       # whether the names in it exist, and this codebase is unusually exposed
-      # to that gap: 27 sources are concatenated into ONE scope, so a const
+      # to that gap: every numbered source is concatenated into ONE scope, so a const
       # declared inside one route's block is invisible to the next route's
       # block while looking, in the source, like it is right there.
       #
