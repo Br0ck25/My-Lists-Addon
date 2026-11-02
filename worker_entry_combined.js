@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cd830db5e0";
+const WORKER_BUILD = "487f0153ac";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -47588,10 +47588,6 @@ function saveCustomCollections(collections) {
   } catch (e) {}
 }
 
-function loadPremadeCollectionsBtn() {
-  addAllPremadeCollections();
-}
-
 window._collectionDraft = { id: null, name: '', description: '', lists: [] };
 window._expandedCollectionFolders = new Set();
 
@@ -49333,10 +49329,6 @@ async function searchCollections() {
   } catch (err) {
     box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Could not search collections. Please try again.</small></p>';
   }
-}
-
-function onCollectionsSearchKey() {
-  searchCollections();
 }
 
 function toggleCollectionAdd(name, url, isAdded) {

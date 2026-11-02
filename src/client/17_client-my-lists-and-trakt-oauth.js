@@ -3716,10 +3716,6 @@ function saveCustomCollections(collections) {
   } catch (e) {}
 }
 
-function loadPremadeCollectionsBtn() {
-  addAllPremadeCollections();
-}
-
 window._collectionDraft = { id: null, name: '', description: '', lists: [] };
 window._expandedCollectionFolders = new Set();
 
@@ -5461,10 +5457,6 @@ async function searchCollections() {
   } catch (err) {
     box.innerHTML = '<p class="u-mt-10px u-c-v_muted"><small>Could not search collections. Please try again.</small></p>';
   }
-}
-
-function onCollectionsSearchKey() {
-  searchCollections();
 }
 
 function toggleCollectionAdd(name, url, isAdded) {
