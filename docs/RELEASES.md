@@ -60,6 +60,17 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Wizard route removed, twin-function guard, shared Trakt helper (built 2026-11-02, stamp 4fe457f88f)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-08 finish, CQ-03, CQ-04 step 1); each is one commit. Nothing you see on the site changes.
+
+- **The last piece of the old catalog list wizard is gone.** The server address `/api/wizard-channel-shows` had no caller left, so it was removed with its entry in the route list, because the feature was deleted at your request.
+- **A new test keeps the page and the server in step** (`tests/server-client-parity.test.mjs`). Ten rules exist twice, once in the server and once in the page: the adult filter, safe poster address, "has this episode aired", generic episode titles, air-date badge, three Nuvio collection helpers, the collection-id check and public channel rows. The test feeds both copies the same inputs and fails if they differ. Each copy now has a one-line "Twin of" note. I proved the test works by breaking one copy three times and watching it fail.
+- **Seven places where the two copies already disagree** are marked "todo" in that test and were not fixed (they need your decision). They are listed in the commit message and in the report.
+- **The theme toggle** exists twice too, but in two different pages (the main app and the guide), so one does not override the other.
+- **Trakt "hidden show" check now lives in one place** (`traktIsHiddenShow`), used by both Continue Watching and the private-lists route. It has its own small test.
+
+
 ## Code clean-up: dead code removed, notes corrected (built 2026-11-02, stamp 14ed796970)
 
 From `docs/CODE_QUALITY_AUDIT.md` (CQ-06, CQ-07, CQ-08, CQ-11, CQ-12); each is one commit. Nothing you see on the site changes.
