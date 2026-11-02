@@ -229,6 +229,7 @@ function isAdultContentFilterEnabled() {
   return false;
 }
 
+// Twin of src/catalog/05_catalog-core.js:isAdultOrNsfw; tests/server-client-parity.test.mjs keeps them equal.
 function isAdultOrNsfw(item) {
   if (!item) return false;
   if (item.adult === true || item.isAdult === true) return true;
@@ -250,6 +251,7 @@ function isAdultOrNsfw(item) {
   return false;
 }
 
+// Twin of src/catalog/05_catalog-core.js:getSafePosterUrl; tests/server-client-parity.test.mjs keeps them equal.
 function getSafePosterUrl(item) {
   const safeOrigin = typeof ORIGIN !== 'undefined' ? ORIGIN : '';
   const safeTitle = (item && (item.title || item.name || item.showTitle)) || '';
@@ -2673,6 +2675,7 @@ document.addEventListener('click', async (e) => {
 // updateContinueWatching (21_client-custom-list-builder.js) and
 // markShowWatched (also 21) to exclude future episodes from "fully
 // watched" detection and from what Mark Whole Show Watched fetches.
+// Twin of src/core/02_http-and-creator-utils.js:isEpisodeAired; tests/server-client-parity.test.mjs keeps them equal.
 function isEpisodeAired(ep) {
   if (!ep) return false;
   const dateStr = (typeof ep === 'string') ? ep : (ep.air_date || ep.airDate || '');
@@ -2691,6 +2694,7 @@ function isEpisodeAired(ep) {
   return airDate.getTime() < today.getTime();
 }
 
+// Twin of src/core/02_http-and-creator-utils.js:isGenericEpisodeTitle; tests/server-client-parity.test.mjs keeps them equal.
 function isGenericEpisodeTitle(title, episodeNum) {
   if (!title || typeof title !== 'string') return true;
   const t = title.trim();
@@ -3045,6 +3049,7 @@ function watchItemAirDateBadgeHtml(it) {
 }
 window.watchItemAirDateBadgeHtml = watchItemAirDateBadgeHtml;
 
+// Twin of src/core/02_http-and-creator-utils.js:formatAirDateBadge; tests/server-client-parity.test.mjs keeps them equal.
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
   const parts = String(airDateStr).split(/[-T\\s]/);

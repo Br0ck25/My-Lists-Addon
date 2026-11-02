@@ -1223,6 +1223,7 @@ function mediaAppSyncSummary(row) {
   };
 }
 
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:extractNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function extractNuvioCollections(raw) {
   let val = raw;
   if (typeof val === "string") {
@@ -1272,11 +1273,13 @@ function extractNuvioCollections(raw) {
 
 // My Lists owns these collection IDs; catalog sources or display names alone
 // do not identify the collection creator.
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:isMyListsNuvioCollectionId; tests/server-client-parity.test.mjs keeps them equal.
 function isMyListsNuvioCollectionId(id) {
   const value = String(id || "");
   return value === "my-lists-collections" || value === "my-lists-addon" || value.startsWith("col_mylists_");
 }
 
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:addNewNuvioCollection; tests/server-client-parity.test.mjs keeps them equal.
 function addNewNuvioCollection(existing, incoming, options = {}) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
@@ -1289,7 +1292,7 @@ function addNewNuvioCollection(existing, incoming, options = {}) {
   // Build the incoming collections with unique IDs and clean titles
   const newCols = incomingArr.map((inCol) => {
     const rawName = (incomingArr.length === 1 && options.collectionName) || inCol.title || inCol.name || "My Lists Collections";
-    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim();
+    const colName = rawName.replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim() || "My Lists Collections";
     const colId = inCol.id && !cleanedExisting.some((e) => e.id === inCol.id)
       ? inCol.id
       : "col_mylists_" + Math.random().toString(36).slice(2, 8);
@@ -1366,6 +1369,7 @@ function mergeIntoNuvioCollection(existing, incoming, targetId) {
   return existingArr.map((c, i) => (i === idx ? target : c));
 }
 
+// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
 function mergeNuvioCollections(existing, incoming) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);

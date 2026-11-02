@@ -2633,6 +2633,7 @@ function rowNeedsAccount(url) {
 
 // A storyline or an Explore Channels listing, added as it is. Mirrors
 // isPublicChannelRow (04_config-resolution.js).
+// Twin of src/core/04_config-resolution.js:isPublicChannelRow; tests/server-client-parity.test.mjs keeps them equal.
 function isPublicChannelRow(s) {
   let p = null;
   try {

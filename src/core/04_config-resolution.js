@@ -669,6 +669,7 @@ function publicChannelRowPayload(s) {
   return (p && typeof p === "object" && !Array.isArray(p)) ? p : null;
 }
 
+// Twin of src/client/16_client-row-core.js:isPublicChannelRow; tests/server-client-parity.test.mjs keeps them equal.
 function isPublicChannelRow(s) {
   const p = publicChannelRowPayload(s);
   if (!p) return false;
@@ -870,12 +871,7 @@ async function searchTraktLists(query, traktKeyOverride) {
     throw new Error("Trakt lists are temporarily unavailable. Please try again later.");
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    "trakt-api-version": "2",
-    "trakt-api-key": traktKey,
-    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-  };
+  const headers = traktHeaders(null, traktKey);
 
   const requests = [
     fetchTraktWithRetry(`https://api.trakt.tv/search/list?query=${encodeURIComponent(q)}&limit=30`, {

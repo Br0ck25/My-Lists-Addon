@@ -213,6 +213,8 @@ It prints your address. The settings of Step 10 and the schedule of Step 11 are 
 
 **Updating to a newer version:** copy the new `worker_entry_combined.js` over the Worker's code (Step 7) and deploy, or run `git pull` and `npx wrangler deploy -c wrangler.selfhost.toml`. When a release adds a file to [`migrations/`](migrations/), paste that file into the `my-lists-db` Console **before** deploying. `SELECT version FROM schema_migrations ORDER BY version;` shows what is already applied; run only the files after it, in order.
 
+**Runtime version (compatibility date):** `wrangler.selfhost.toml` now says `compatibility_date = "2026-07-27"` (it was `2024-01-01`), so a copy you deploy from the terminal runs on the same Cloudflare runtime version as the public site. The Cloudflare changes between those two dates do not affect this project; the one to know about is that `Authorization` headers are dropped if a request follows a redirect to a different website, which none of the services this add-on calls rely on. The full list, with a yes/no for each, is in [`docs/OPERATIONS.md`](docs/OPERATIONS.md) section 32. If you deployed through the dashboard (Method A), the date is under Worker → **Settings → Runtime**; it needs no change.
+
 **Backing up your own copy:** use **Download Backup File** in Settings now and then. D1 also keeps 30 days of point-in-time recovery (database → **Time Travel**).
 
 **Sharing it:** anyone with your address can create an account on it. Share it only with people you want to pay for.

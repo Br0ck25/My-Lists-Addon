@@ -152,7 +152,6 @@
   "/api/trakt/device/token": "integration",
   "/api/trakt/oauth/callback": "integration",
   "/api/trakt/oauth/start": "integration",
-  "/api/wizard-channel-shows": "public",
   "/app-features.js": "static",
   "/app.css": "static",
   "/app.js": "static",

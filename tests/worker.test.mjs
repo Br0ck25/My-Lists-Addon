@@ -2138,7 +2138,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js", "src/api/80_shell-admin-entry-and-bulk-resolve-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -4535,7 +4535,7 @@ describe("admin feedback: a failed write says what failed", () => {
   it("leaves no feedback write that drops the error it caught", () => {
     // The defect was structural: four catches that bound `e` and never used
     // it. This is what stops a fifth being added the same way.
-    const sources = ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"];
+    const sources = ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js"];
     for (const rel of sources) {
       const src = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
       let from = 0;
@@ -4960,7 +4960,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js", "src/api/80_shell-admin-entry-and-bulk-resolve-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
@@ -8551,9 +8551,21 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
   const SRC = {
     "src/core/02_http-and-creator-utils.js": fs.readFileSync(path.join(REPO_ROOT, "src/core/02_http-and-creator-utils.js"), "utf8"),
     "src/api/26_api-creator-and-admin-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/26_api-creator-and-admin-routes.js"), "utf8"),
+    // The Auto-track Playback ping moved here out of handleFetch (CQ-01).
+    "src/api/63_subtitles-track.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/63_subtitles-track.js"), "utf8"),
+    // The /admin/api/ routes moved here out of handleFetch (CQ-01), one function each.
+    "src/admin/65_admin-api-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/admin/65_admin-api-routes.js"), "utf8"),
+    // The /api/creator/ account and lists routes moved here out of handleFetch (CQ-01), one function each.
+    "src/api/67_creator-api-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/67_creator-api-routes.js"), "utf8"),
+    // Reorder and the tracking save moved here out of handleFetch (CQ-01), one function each.
+    "src/api/68_creator-api-account-and-save-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/68_creator-api-account-and-save-routes.js"), "utf8"),
+    // sync/load moved here out of handleFetch (CQ-01).
+    "src/api/69_creator-api-sync-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/69_creator-api-sync-routes.js"), "utf8"),
+    // /api/search-published-lists moved here out of handleFetch (CQ-01).
+    "src/api/73_public-list-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/73_public-list-routes.js"), "utf8"),
   };
 
-  // Every place in the two storage-owning files that names a custom-list key,
+  // Every place in the storage-owning files that names a custom-list key,
   // grouped by the route or function it sits in.
   function listKeyBlocks() {
     const key = /`(creatorlist(?:order)?:[^`]*)`/g;
@@ -8581,10 +8593,11 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
   const MUTATORS = [
     "src/core/02_http-and-creator-utils.js :: deleteCreatorLists",
     "src/core/02_http-and-creator-utils.js :: purgeCreatorData",
-    "src/api/26_api-creator-and-admin-routes.js :: handleSubtitlesTrack",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/save",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists/reorder",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/save-tracking",
+    "src/api/63_subtitles-track.js :: recordSubtitlesPlay",
+    "src/api/67_creator-api-routes.js :: creatorApiListsSave",
+    "src/api/68_creator-api-account-and-save-routes.js :: creatorApiListsReorder",
+    // The Watchlist mirror of /api/creator/sync/save-tracking (a helper of creatorApiSyncSaveTracking, split for the 150-line limit).
+    "src/api/68_creator-api-account-and-save-routes.js :: creatorTrackingWriteWatchlist",
   ];
   // Touches one without changing anything a browser needs told about. Each
   // entry is a claim someone has to re-justify if this list ever grows.
@@ -8592,12 +8605,20 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/core/02_http-and-creator-utils.js :: getCreatorList": "reads one record",
     "src/core/02_http-and-creator-utils.js :: readAccountWatchlist": "reads the Watchlist's list record to pick its newest copy; writes nothing",
     "src/core/02_http-and-creator-utils.js :: removeLegacyListLeftovers": "removes a deleted list's leftover legacy record with FF_V2_LISTS_ONLY; its only caller, deleteCreatorLists, bumps",
-    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/creator-lists": "enumerates one creator's records for the admin browse; changes nothing",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/lists": "self-heals the order key on a read; the same response already carries the healed order",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/creator/sync/load": "reads the order key",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/search-published-lists": "reads published records",
-    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/backfill-trending": "reads to build the trending set",
-    "src/api/26_api-creator-and-admin-routes.js :: /admin/api/delete-creator-list": "delegates to deleteCreatorLists, which bumps",
+    "src/admin/65_admin-api-routes.js :: adminApiCreatorLists": "enumerates one creator's records for the admin browse; changes nothing",
+    "src/api/67_creator-api-routes.js :: creatorApiLists": "self-heals the order key on a read; the same response already carries the healed order",
+    // creatorApiLists and creatorApiListsSave were split into helpers for the 150-line limit (CQ-01);
+    // the helpers below hold the keys their parent used to hold.
+    "src/api/67_creator-api-routes.js :: creatorListsReadOrder": "reads the order key for the lists read; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListsOrphanSweep": "lists the record keys the order lost for the lists read; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveReadOrder": "reads the order key for a list save; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveSlug": "checks which slugs are taken; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveAddToOrder": "adds the just-saved slug to the order key; its only caller, creatorApiListsSave, bumps the stamp right after",
+    "src/api/69_creator-api-sync-routes.js :: creatorApiSyncLoad": "reads the order key",
+    // /lists/<user>/<slug> (creatorListPageOrFeed) followed /api/search-published-lists in 26_, so this entry was always about the public list page; it moved with the route (CQ-01).
+    "src/api/73_public-list-routes.js :: creatorListPageOrFeed": "reads published records",
+    "src/admin/65_admin-api-routes.js :: adminApiBackfillTrending": "reads to build the trending set",
+    "src/admin/65_admin-api-routes.js :: adminApiDeleteCreatorList": "delegates to deleteCreatorLists, which bumps",
   };
 
   it("every place that mutates a custom-list key bumps the stamp", () => {
@@ -9209,7 +9230,7 @@ describe("the last open items from the 2026-09-05 audit", () => {
     assert.equal(await sandbox.timingSafeEqualSecret("", ""), true);
     assert.equal(await sandbox.timingSafeEqualSecret(undefined, ""), true);
 
-    const src = fs.readFileSync(path.join(REPO_ROOT, "src/api/26_api-creator-and-admin-routes.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/api/80_shell-admin-entry-and-bulk-resolve-routes.js"), "utf8"); // POST /admin/login moved here out of handleFetch (CQ-01)
     assert.match(src, /timingSafeEqualSecret\(submittedKey, env\.ADMIN_KEY\)/,
       "the admin login must use the length-blind comparison");
     assert.doesNotMatch(src, /timingSafeEqualHex\([^)]*ADMIN_KEY/,
@@ -9233,7 +9254,7 @@ describe("the last open items from the 2026-09-05 audit", () => {
     const admin = fs.readFileSync(path.join(REPO_ROOT, "src/admin/03_admin.js"), "utf8");
     assert.match(admin, /KV has no atomic increment/,
       "bumpStat's KV path is lossy on purpose; the D1 branch is the answer for anyone who needs exact counters");
-    const routes = fs.readFileSync(path.join(REPO_ROOT, "src/api/25_api-catalog-routes.js"), "utf8");
+    const routes = fs.readFileSync(path.join(REPO_ROOT, "src/api/78_save-and-like-routes.js"), "utf8"); // the /api/save and /api/lists/like routes (and their comments) moved here out of handleFetch (CQ-01)
     assert.match(routes, /The id IS somebody's install\s*\n\s*\/\/ URL/,
       "no TTL on /api/save: expiring it breaks a live install months later");
     assert.match(routes, /\/api\/publish-list was removed in 1\.5\.3/,

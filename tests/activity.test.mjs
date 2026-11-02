@@ -638,8 +638,12 @@ describe("P3c-4: recording a play in the activity database", () => {
   });
 
   it("the ping and the webhook routes call it after their legacy write", () => {
-    const src = read("src/api/26_api-creator-and-admin-routes.js");
-    assert.match(src, /saveCreatorTrackingD1\(env, auth\.username, blob, false\);\s*\}\s*\/\/[^\n]*\n[^\n]*\n\s*await recordActivityPlay\(env, auth\.username, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "ping"\)/);
+    // The ping and the webhook moved out of handleFetch into 63_subtitles-track.js
+    // and 64_media-server-scrobble.js (CQ-01); the
+    // order it is checking, the legacy write and then the activity write, is unchanged.
+    const pingSrc = read("src/api/63_subtitles-track.js");
+    const src = read("src/api/64_media-server-scrobble.js"); // the webhook moved too
+    assert.match(pingSrc, /saveCreatorTrackingD1\(env, auth\.username, blob, false\);\s*\}\s*\/\/[^\n]*\n[^\n]*\n\s*await recordActivityPlay\(env, auth\.username, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "ping"\)/);
     assert.match(src, /recordActivityPlay\(env, authUser, activityPlayFromLegacyEntry\(blob\.watchHistory\[0\]\), "webhook"\)/);
   });
 });

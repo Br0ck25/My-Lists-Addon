@@ -38,7 +38,7 @@ node --check worker_entry_combined.js && echo "  OK"
 echo
 echo "=== 3b. every identifier resolves ==="
 # node --check above proves the file PARSES. It says nothing about whether the
-# names in it exist -- and with 27 sources sharing one scope, a const declared
+# names in it exist -- and with every numbered source sharing one scope, a const declared
 # in one route's block looks, in the source, like it is available in the next
 # one's. Three live bugs came from exactly that (isShow, clientId, listName),
 # two of them hidden behind a bare catch. See tools/scope_check.mjs.

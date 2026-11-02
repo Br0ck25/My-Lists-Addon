@@ -60,6 +60,109 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Trakt Continue Watching: the website list and the Stremio/Nuvio shelf now agree (built 2026-11-02, stamp eb36cbf5de)
+
+What you will notice, in plain words (owner decisions of 2026-11-02, CQ-04):
+
+- **Website list (Settings > My Lists > Trakt Continue Watching):** a paused episode is now filed under its show, the same as in Stremio/Nuvio, even when Trakt gives that episode its own IMDB id. A show Trakt pauses under an upper-case or differently written id (or only matched by its slug) no longer shows up twice, once as the paused episode and once as a "next episode".
+- **Both lists now look at your 40 most recently watched shows** for a "next episode" row. The Stremio/Nuvio shelf used to look at 15, so a heavy watcher may see more rows there. Each show costs Trakt one request, so if Trakt ever starts refusing requests (429 or Cloudflare 1015), lower `TRAKT_CONTINUE_NEXT_EPISODE_SHOWS` in `src/core/00_constants.js`. That change is its own commit and can be reverted alone.
+- **Kept as is:** a show Trakt knows only by its Trakt id still appears in the website list but not in the Stremio/Nuvio shelf (Stremio cannot open it). A test now pins this on purpose.
+- **Proof:** `tests/continue-watching-parity.test.mjs` has no open differences left; each fix was written as a failing test first. The ~2,900 replay requests and 93 Trakt header captures are byte-identical before and after.
+
+## Internal tidy-up of long function inputs (built 2026-11-02, stamp 5506978fac)
+
+No change for users. This is CQ-20.
+
+- **Internal tidy-up, no change for users:** 21 helper functions in the API routes took between 9 and 35 separate inputs in a fixed order, which made them easy to mix up and hard to read. Each now takes the same values as one named group, so a call reads like `stremioCatalogRowFetch(env, ctx, { url, config, type, ... })`. Nothing else was touched. The file `src/core/03_trakt-headers.js` was also renamed to `81_trakt-headers.js` so that no two source files share a number.
+- **Proof:** the same ~2,900 requests used for the route split (152 + 261 + 1,230 + 1,299) and the 93 captured Trakt requests gave byte-identical answers and left the same stored data before and after every change.
+
+## One Trakt header helper, and a check that the two "continue watching" lists agree (built 2026-11-02, stamp d8334b8811)
+
+No change for users. Two tidy-ups.
+
+- **One place writes the Trakt request headers.** 30 of the 36 hand-written copies now call `traktHeaders(token, key)`, so a future change to the headers (a new version, a new User-Agent) is made once. What Trakt receives is unchanged. Six were left alone on purpose: the web sign-in step and two username lookups (they send `my-list-addon/1.4`, and one adds `Accept`), the Delete List call (sends no Content-Type), the provider-check and token-refresh calls in the connections code (they take the User-Agent from a local variable). The browser-side copy in the page code is also separate.
+- **A new test compares the two "continue watching" lists.** The Stremio/Nuvio shelf and the "Trakt Continue Watching" list on the website are built by two separate pieces of code. The test gives both the same Trakt answers. They agree on the basics (paused episodes and movies, hidden shows left out, next episode of a started show, not-yet-aired episodes). They differ in four edge cases, now recorded in the test as "to do" so the owner can decide which side is right; nothing was changed.
+
+## Safer checks and pinned CI tools (built 2026-11-02, stamp a3fee60b71)
+
+No change for users. Two safety improvements to the build checks.
+
+- **The "does every name exist" check is stricter.** It used to let a missing name through if the same name existed somewhere else in the code, which is how a moved function that lost one of its inputs could slip past the quick check. It now only accepts names that are really global, and it has its own tests. The real code passes with nothing flagged, and removing one input from a real function now makes the quick check fail.
+- **CI tools are pinned.** The GitHub Actions the checks use are now locked to exact versions (not just "version 4"), so a changed upstream action cannot alter our checks unnoticed. Dependabot still proposes updates.
+
+## Internal tidy-up of the remaining routes (built 2026-11-02, stamp a3fee60b71)
+
+No change for users. This finishes CQ-01 (splitting the huge `handleFetch` function into smaller files): the routes that were still inside it have moved out.
+
+- **Internal tidy-up, no change for users:** everything the Stremio, Nuvio and Wako apps call (install links, catalog rows, details, the playback ping, the media-server webhook), the web app's pages and images, public lists and channels, the Trakt, MDBList, Simkl and TMDB sign-in and list routes, feedback, saving and liking lists, sign-in sessions and the admin sign-in now each live in their own small, numbered file. The big function that used to hold all of them (about 9,400 lines) is now 227 lines: it only does the checks every request needs and then asks each group in turn, in the same order as before.
+- **Proof:** the same 1,299 requests to those routes (every kind of install link, catalog row, poster and OAuth step, with signed-in, signed-out, wrong-input and unknown-path cases, plus the earlier 1,230 + 152 + 261 for account, sign-in and admin routes) gave byte-identical answers, headers, outgoing provider calls and stored data before and after every step. Catalog rows read the same amount from storage as before.
+
+## Internal tidy-up of account routes (built 2026-11-02, stamp 5377ccd95f)
+
+No change for users. This is the fourth step of CQ-01 (splitting the huge `handleFetch` function into smaller files).
+
+- **Internal tidy-up, no change for users:** the account routes under `/api/creator/` (23 of them: sign-up and sign-in checks, forgotten username and key reset, scrobble token, your lists and list saving, reordering and deleting, account reset and delete, and all the sync routes for tracking, presets, channels, likes and sharing) moved out of `handleFetch` into `src/api/67_creator-api-routes.js`, `src/api/68_creator-api-account-and-save-routes.js` and `src/api/69_creator-api-sync-routes.js`, one function per route, with the same sign-in checks and the same "someone else saved first" protections in the same order. A few very long routes were cut into smaller steps, still run in the same order. `handleFetch` went from 12,389 to 9,407 lines.
+- **Proof:** the same 1,230 requests to those routes (signed out, wrong key, right key, signed-in session, saves including an out-of-date save, reset and delete of throwaway accounts, unknown paths and wrong methods) gave the same answers and left the same stored data as the code from before this step, and the same after each of the three moves. The earlier 152-request and 261-request checks also still match.
+
+## Plex/Jellyfin/Emby user filter fix, and admin routes tidied (built 2026-11-02, stamp df3fdc41f0)
+
+- **Fix you can see:** if you set the scrobble webhook to accept only some Plex/Jellyfin/Emby users (or to block pings with no username), a ping from someone not on the list used to make the server answer with an error (500). It now answers "ignored" as intended, and the ignored ping shows in the account's last-ping details. Pings from allowed users behave exactly as before. A new test (`tests/scrobble-user-filter.test.mjs`) covers both cases and failed with the 500 before the fix.
+- **Internal tidy-up, no change for users:** the admin dashboard's `/admin/api/` routes (38 of them: creators, trending, search index, creator lists, channels, feedback, support emails, analytics, support goal, site notice, New on Streaming, channel presets, sessions and audit log) moved out of `handleFetch` into `src/admin/65_admin-api-routes.js` and `src/admin/66_admin-api-feedback-and-tools-routes.js`, one function per route, with the same checks in the same order. `handleFetch` went from 14,211 to 12,389 lines. Proof: the same 257 admin requests (signed out, wrong cookie, signed in) gave the same answers and left the same stored data before and after each of the three moves.
+
+## Internal tidy-up: three big pieces moved out of the main request function (built 2026-11-02, stamp c2a64453fb)
+
+No change for users. This is the first step of CQ-01 (splitting the huge `handleFetch` function into smaller files).
+
+- **Three pieces moved to their own files, unchanged:** the check that a request really comes from a signed-in creator (`src/api/62_creator-auth.js`), the Stremio/Nuvio "this just started playing" ping (`src/api/63_subtitles-track.js`), and the Plex/Jellyfin/Emby webhook (`src/api/64_media-server-scrobble.js`). `handleFetch` is about 1,300 lines shorter (15,494 to 14,211).
+- **How I proved nothing changed:** before and after each move I sent the same 120 requests (creator sign-in with a key and with a session, wrong keys, the too-many-attempts block, playback pings, every webhook form including the retired ones) and compared the answer and everything stored. All identical. The full test run passes except the known cold-catalog timing test.
+- **One old bug found and left alone on purpose:** when a webhook ping is turned away by the "only these Plex/Jellyfin users" filter, the server answers with an error (500) instead of the intended "ignored" reply. It was like that before this change. Say the word and I will fix it separately.
+
+## Poster "AIRED" badge, blank Nuvio collection names, matching Cloudflare date (built 2026-11-02, stamp 70d3a6e9b3)
+
+Three owner decisions from 2026-11-02.
+
+- **Posters in Stremio and Nuvio now say AIRED for a day that has already passed** (they used to say TODAY, which was wrong). Today still says TODAY and tomorrow TOMORROW. A season-finale poster for a past date reads "FINALE: AIRED". The web page is unchanged on purpose: it still shows nothing for a past date.
+- **A Nuvio collection whose name is only "(Movies)" or similar is now called "My Lists Collections"**, the same as the web page already did, instead of getting an empty name.
+- **The Cloudflare runtime date in the repo files is now 2026-07-27**, the same as production. Staging and self-hosted copies move up to it. I checked every Cloudflare change between the two dates against what the code uses; none affects us (list in `docs/OPERATIONS.md`, section 32). Staging reads its date from the dashboard, so set it to 2026-07-27 there too and run the deploy checklist.
+- **How I proved the first two:** the new tests failed before each change and pass after.
+
+## Size rule for functions and files (built 2026-11-02, stamp 4fe457f88f)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-18). Nothing you see on the site changes.
+
+- **New code may not grow big.** A new function over 150 lines, or a new source file over 3,000 lines, now fails the tests (`tests/size-budget.test.mjs`).
+- **The things already over the limit are listed, not fixed** (`tests/size-budget.json`: 30 functions and 15 files, `handleFetch` is the biggest). Each may only get smaller: if one grows the test fails, and when one drops under the limit the test asks you to remove it from the list. `node tests/size-budget.test.mjs --update` lowers the numbers for you but never raises one.
+- **How I proved it works:** I added a 160-line function and the test failed; I added one line to `handleFetch` and it failed; both were reverted.
+
+## Wizard route removed, twin-function guard, shared Trakt helper (built 2026-11-02, stamp 4fe457f88f)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-08 finish, CQ-03, CQ-04 step 1); each is one commit. Nothing you see on the site changes.
+
+- **The last piece of the old catalog list wizard is gone.** The server address `/api/wizard-channel-shows` had no caller left, so it was removed with its entry in the route list, because the feature was deleted at your request.
+- **A new test keeps the page and the server in step** (`tests/server-client-parity.test.mjs`). Ten rules exist twice, once in the server and once in the page: the adult filter, safe poster address, "has this episode aired", generic episode titles, air-date badge, three Nuvio collection helpers, the collection-id check and public channel rows. The test feeds both copies the same inputs and fails if they differ. Each copy now has a one-line "Twin of" note. I proved the test works by breaking one copy three times and watching it fail.
+- **Seven places where the two copies already disagree** are marked "todo" in that test and were not fixed (they need your decision). They are listed in the commit message and in the report.
+- **The theme toggle** exists twice too, but in two different pages (the main app and the guide), so one does not override the other.
+- **Trakt "hidden show" check now lives in one place** (`traktIsHiddenShow`), used by both Continue Watching and the private-lists route. It has its own small test.
+
+
+## Code clean-up: dead code removed, notes corrected (built 2026-11-02, stamp 14ed796970)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-06, CQ-07, CQ-08, CQ-11, CQ-12); each is one commit. Nothing you see on the site changes.
+
+- **The old catalog "Quick List Wizard" code is gone** (CQ-08), as you asked. It had no screen left. Its tests were removed with it because the feature was deleted, not to get the tests green. The server address it called (`/api/wizard-channel-shows`) is still there; it was not part of this job.
+- **Three tiny pass-through functions removed** (CQ-06, CQ-07): `escapeHtmlSupport`, `loadPremadeCollectionsBtn` and `onCollectionsSearchKey`. Each only called another function, and nothing else used them.
+- **Notes and comments corrected** (CQ-11, CQ-12): the AI instructions now all say to check work with `bash verify.sh -q`, the file range is `00_` to `61_`, and a stale "27 sources" count and a leftover `/mnt/project` hint were fixed.
+- **Checked, no change needed** (CQ-16 follow-up): the Most Watched chart's "today" check already uses the New York date, so it is not affected by the clock-change problem.
+
+## Day counts on clock-change days, and where the Account Key comes from (built 2026-11-02, stamp 524aaa0a8d)
+
+From `docs/CODE_QUALITY_AUDIT.md` (CQ-16 and CQ-17, steps 1 to 3); each step is one commit.
+
+- **"N days ago" is now right on the two days a year the clocks change** (CQ-16). On those days one date was shown twice and another was skipped, so the /admin day-by-day table, the 7-day Account Key total, the API-use totals and the Most Watched windows could be off. Nothing else changes on other days.
+- **The Account Key counter now says where the key came from** (CQ-17). The total is unchanged, so the history still compares. Each request is also counted by path and by reason: no session, a session for another account, a session for the same account sent together with the key (this one should fall to about 0), or an install-link save.
+- **/admin, Creators tab:** the label now reads "Requests that sent the Account Key today" (it counted more than saves), and a new "Where the key came from (7 days)" section lists the reasons and the paths. Read it for a week after the deploy: a lot of "No session" on `/api/creator/sync/` means old open tabs or blocked browser storage; a path no page uses means an outside caller.
+- **Making an install link with a personal shelf is now signed by the sign-in session** when there is one, so it no longer counts as an Account Key use. The key is still checked (a wrong one is still refused) and still stored in the link, because playback tracking on those links needs it. These checks are counted apart as "Install-link save".
+
 ## Repo layout (2026-11-02, no code change)
 
 - The 62 numbered sources and `header.js` moved into `src/` in groups: `core`, `admin`, `catalog`, `page`, `client`, `api`, `data`, `jobs`. `build.py` orders by the `NN_` prefix, not the folder, and the built Worker is byte-identical (same stamp as before the move).

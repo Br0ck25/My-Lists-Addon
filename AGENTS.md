@@ -54,6 +54,7 @@ Every change to what the user sees (buttons, colours, spacing, text sizes, modal
 - **UI contract:** `node tests/ui-contract.mjs` (CI job `ui-contract`) fails when a shared component's computed look changes. Accept an intended change with `--update` and keep the `tests/ui-contract.json` diff in the commit.
 - **Pre-commit hook:** `git config core.hooksPath .githooks` (once per clone).
 - **Release:** bump `WORKER_RELEASE` and add the entry to `docs/RELEASES.md`. Protection settings and the PR checklist: `docs/REPO_PROTECTION.md`, `.github/pull_request_template.md`.
+- **Size limits:** new functions ≤ 150 lines and source files ≤ 3,000 lines. `tests/size-budget.test.mjs` fails on anything new over the limit or any listed item that grew; `tests/size-budget.json` may only shrink (`node tests/size-budget.test.mjs --update` lowers it, never raises it).
 - Never skip, disable or loosen a test to get green. If a guard is wrong, change the guard and say why in the commit.
 
 ---
@@ -106,17 +107,15 @@ For every non-trivial change, leave a meaningful verification using the smallest
 Before reporting a task complete or handing off to another agent, run:
 ```bash
 python build.py
-python tools/check_sync.py
-node --check worker_entry_combined.js
-python tools/gen_map.py
-node --test tests/*.test.mjs
+bash verify.sh -q   # build, syntax, scope check and every test
+python tools/gen_map.py   # only if functions were added, removed or moved
 ```
 
 ---
 
 ## 5. Handoff Protocol (Switching Between AIs)
 When finishing your turn or when the user warns that credits/session limits are approaching:
-1. Ensure the code builds and passes syntax checks: `python build.py` & `node --check worker_entry_combined.js`.
+1. Ensure the code builds and passes syntax checks: `python build.py` & `bash verify.sh -q`.
 2. Commit your working changes to Git:
    ```bash
    git add -A

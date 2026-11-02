@@ -13,6 +13,16 @@ const WORKER_BUILD_DATE = "__BUILD_DATE__";
 // after pasting, compare it with what `python build.py` printed.
 const WORKER_BUILD = "__BUILD_STAMP__";
 
+// --- Trakt Continue Watching: how many shows get a "next episode" check -------
+//
+// Both the Stremio/Nuvio shelf (fetchTraktContinueWatching) and the website's
+// "Trakt Continue Watching" list (/api/trakt-my-private-lists) look at this many
+// of the most recently watched shows for an unwatched "next episode" row.
+// Each show costs one Trakt `progress/watched` request (5 at a time), and the
+// shelf's cache is fresh for only 30 s. If Trakt starts refusing requests
+// (HTTP 429 or a Cloudflare 1015 block), lower this number.
+const TRAKT_CONTINUE_NEXT_EPISODE_SHOWS = 40;
+
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
 // Every console call in the Worker goes through here. This top-level `console`

@@ -537,13 +537,7 @@ async function fetchTrakt(entry, skip = 0, traktKey = "", accessToken = "", env 
     parsed.user
   )}/lists/${encodeURIComponent(parsed.list)}/items${kindPath}?limit=${PAGE_SIZE}&page=${page}&extended=full`;
 
-  const headers = {
-    "Content-Type": "application/json",
-    "trakt-api-version": "2",
-    "trakt-api-key": traktKey,
-    "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-  };
-  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  const headers = traktHeaders(accessToken, traktKey);
 
   const userHash = accessToken ? safeUserHash(accessToken, parsed.user) : "public";
   const cacheKey = `user_cache:trakt:list:v2:${parsed.user}:${parsed.list}:${itemKind || "all"}:${skip}:${userHash}`;
@@ -634,13 +628,7 @@ async function fetchTraktWatchlist(entry, skip = 0, traktKey = "", accessToken =
     providerLabel: "Trakt Watchlist",
     fetchFn: async () => {
       const res = await fetchTraktWithRetry(src, {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": traktKey,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken, traktKey),
         cf: { cacheTtl: 0, cacheEverything: false },
       });
       if (!res.ok) {
@@ -783,13 +771,7 @@ async function fetchTraktHistory(entry, skip = 0, traktKey = "", accessToken = "
     providerLabel: "Trakt History",
     fetchFn: async () => {
       const res = await fetchTraktWithRetry(src, {
-        headers: {
-          "Content-Type": "application/json",
-          "trakt-api-version": "2",
-          "trakt-api-key": traktKey,
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-        },
+        headers: traktHeaders(accessToken, traktKey),
         cf: { cacheTtl: 0, cacheEverything: false },
       });
       if (!res.ok) {
@@ -836,13 +818,7 @@ async function fetchTraktAiringNext(entry, skip = 0, traktKey = "", accessToken 
     kvTtlSec: 3600,
     providerLabel: "Trakt Airing Next",
     fetchFn: async () => {
-      const headers = {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": traktKey,
-        Authorization: `Bearer ${accessToken}`,
-        "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-      };
+      const headers = traktHeaders(accessToken, traktKey);
 
       const d0 = new Date();
       const today = d0.toISOString().slice(0, 10);
@@ -1224,6 +1200,21 @@ async function fetchMdblistUpNext(entry, skip = 0, mdblistKey = "", mdblistAcces
   });
 }
 
+// Whether a show or movie is on the account's hidden set (progress-hidden,
+// dropped or reset on Trakt). Shared by fetchTraktContinueWatching and the
+// /api/trakt-my-private-lists route; hiddenShowKeys holds Trakt ids, lowercased
+// IMDB ids and slugs, TMDB ids and lowercased titles.
+function traktIsHiddenShow(hiddenShowKeys, sObj, idObj) {
+  if (!sObj && !idObj) return false;
+  const ids = idObj || (sObj && sObj.ids) || {};
+  if (ids.trakt && hiddenShowKeys.has(String(ids.trakt))) return true;
+  if (ids.imdb && hiddenShowKeys.has(String(ids.imdb).toLowerCase())) return true;
+  if (ids.tmdb && hiddenShowKeys.has(String(ids.tmdb))) return true;
+  if (ids.slug && hiddenShowKeys.has(String(ids.slug).toLowerCase())) return true;
+  if (sObj && sObj.title && hiddenShowKeys.has(String(sObj.title).toLowerCase().trim())) return true;
+  return false;
+}
+
 // Pulls the connected account's Trakt Continue Watching / Playback sessions
 async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", accessToken = "", env = null, ctx = null) {
   if (!accessToken) {
@@ -1252,13 +1243,7 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
     kvTtlSec: 600,
     providerLabel: "Trakt Continue Watching",
     fetchFn: async () => {
-      const headers = {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": traktKey,
-        Authorization: `Bearer ${accessToken}`,
-        "User-Agent": `my-list-addon/${ADDON_VERSION}`,
-      };
+      const headers = traktHeaders(accessToken, traktKey);
       const [pbRes, watchedRes, hProgRes, hDroppedRes, hResetRes] = await Promise.all([
         fetchTraktWithRetry(`https://api.trakt.tv/sync/playback${typePath}?limit=50`, {
           headers,
@@ -1309,17 +1294,6 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
         }
       }
 
-      function isHiddenShow(sObj, idObj) {
-        if (!sObj && !idObj) return false;
-        const ids = idObj || (sObj && sObj.ids) || {};
-        if (ids.trakt && hiddenShowKeys.has(String(ids.trakt))) return true;
-        if (ids.imdb && hiddenShowKeys.has(String(ids.imdb).toLowerCase())) return true;
-        if (ids.tmdb && hiddenShowKeys.has(String(ids.tmdb))) return true;
-        if (ids.slug && hiddenShowKeys.has(String(ids.slug).toLowerCase())) return true;
-        if (sObj && sObj.title && hiddenShowKeys.has(String(sObj.title).toLowerCase().trim())) return true;
-        return false;
-      }
-
       const rawPb = (pbRes && pbRes.ok) ? await pbRes.json().catch(() => []) : [];
       const playbackItems = (Array.isArray(rawPb) ? rawPb : []).filter((it) => {
         if (!it) return false;
@@ -1328,7 +1302,7 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
         const mov = it.movie || {};
         const inner = isEp ? show : mov;
         const ids = (isEp ? (show.ids || it.episode?.ids) : mov.ids) || {};
-        return !isHiddenShow(inner, ids);
+        return !traktIsHiddenShow(hiddenShowKeys, inner, ids);
       });
 
       const seenShowIds = new Set();
@@ -1353,14 +1327,14 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
         const candidates = sorted
           .filter((it) => {
             const ids = (it.show && it.show.ids) || {};
-            if (isHiddenShow(it.show, ids)) return false;
+            if (traktIsHiddenShow(hiddenShowKeys, it.show, ids)) return false;
             const hasPb = (ids.trakt && seenShowIds.has(String(ids.trakt))) ||
                           (ids.imdb && seenShowIds.has(String(ids.imdb).toLowerCase())) ||
                           (ids.tmdb && seenShowIds.has(String(ids.tmdb))) ||
                           (ids.slug && seenShowIds.has(String(ids.slug).toLowerCase()));
             return !hasPb;
           })
-          .slice(0, 15);
+          .slice(0, TRAKT_CONTINUE_NEXT_EPISODE_SHOWS);
 
         const progResults = [];
         await mapWithConcurrency(candidates, 5, async (c) => {

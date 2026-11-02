@@ -23,6 +23,15 @@ function easternDateKey(date) {
   }).format(date);
 }
 
+// Eastern calendar date n days before nowMs. Calendar arithmetic, not
+// nowMs - n * 24h: Eastern days are 23 or 25 hours long on the two DST change
+// days, where the 24h subtraction repeats one date and skips another.
+function easternDateKeyDaysAgo(nowMs, n) {
+  const d = new Date(easternDateKey(new Date(nowMs)) + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 function statsToday() {
   return easternDateKey(new Date());
 }
@@ -713,7 +722,7 @@ async function d1CountsByKindPrefix(env, prefix, window, candidateCap) {
   } else {
     const days = window === "today" ? 1 : parseInt(window, 10) || 7;
     const nowMs = Date.now();
-    const oldest = easternDateKey(new Date(nowMs - (days - 1) * 86400000));
+    const oldest = easternDateKeyDaysAgo(nowMs, days - 1);
     const newest = easternDateKey(new Date(nowMs));
     rows = await env.DB.prepare(
       "SELECT kind, SUM(n) AS total FROM stats WHERE kind >= ? AND kind < ? AND day >= ? AND day <= ? GROUP BY kind ORDER BY total DESC LIMIT ?"
@@ -769,7 +778,7 @@ async function computeLeaderboard(env, eventType, window, mediaTypeFilter) {
     const nowMs = Date.now();
     const dateKeys = [];
     for (let i = 0; i < days; i++) {
-      dateKeys.push(easternDateKey(new Date(nowMs - i * 86400000)));
+      dateKeys.push(easternDateKeyDaysAgo(nowMs, i));
     }
     // Union of every title id that had any activity anywhere in this window.
     const indexResults = await Promise.all(dateKeys.map((d) => env.CONFIGS.get(`evtdayindex:${eventType}:${d}`)));
@@ -1018,7 +1027,7 @@ async function computeSearchLeaderboard(env, window) {
   const nowMs = Date.now();
   const dateKeys = [];
   for (let i = 0; i < days; i++) {
-    dateKeys.push(easternDateKey(new Date(nowMs - i * 86400000)));
+    dateKeys.push(easternDateKeyDaysAgo(nowMs, i));
   }
 
   // Union of every query that had any activity anywhere in this window,
@@ -1572,6 +1581,67 @@ async function readSourceGroupTotals(env) {
     }
   }
   return readStatTotalsByPrefix({ CONFIGS: env.CONFIGS }, "sourcegroup:");
+}
+
+// Counts of the "authkey:" breakdown (CQ-17) summed over the given Eastern
+// day keys, as { "authkey:api-save": n, "authkey:why:nocookie": n, ... }.
+// With D1 it is one range query; without it, one loadStatsByDay per kind.
+async function loadAuthKeyBreakdown(env, dateKeys) {
+  const sums = {};
+  if (!env || !env.CONFIGS) return sums;
+  if (env.DB) {
+    try {
+      const [lo, hi] = statKindRange("authkey:");
+      const marks = dateKeys.map(() => "?").join(",");
+      const { results } = await env.DB.prepare(
+        "SELECT kind, SUM(n) AS total FROM stats WHERE kind >= ? AND kind < ? AND day IN (" + marks + ") GROUP BY kind"
+      ).bind(lo, hi, ...dateKeys).all();
+      for (const row of results || []) sums[row.kind] = Number(row.total) || 0;
+      return sums;
+    } catch (e) {
+      // Table missing or D1 unavailable -- fall through to the KV counters.
+    }
+  }
+  const kinds = CREATOR_SESSION_PATH_PREFIXES.map(authKeyPathKind).concat(AUTHKEY_REASON_ROWS.map((r) => r[0]));
+  await Promise.all(kinds.map(async (kind) => {
+    const byDay = await loadStatsByDay(env, kind);
+    sums[kind] = dateKeys.reduce((n, d) => n + (Number(byDay[d]) || 0), 0);
+  }));
+  return sums;
+}
+
+// The reasons authenticateCreator records, in the order /admin lists them,
+// with the wording the owner reads.
+const AUTHKEY_REASON_ROWS = [
+  ["authkey:why:nocookie", "No session on the request"],
+  ["authkey:why:othersession", "Session for a different account"],
+  ["authkey:why:withsession", "Session for the same account sent too (should be 0)"],
+  ["authkey:why:trackkey", "Install-link save"],
+];
+
+// The two small tables under the Account Key numbers: one row per path that
+// sent the key, one row per reason. Only paths with a count are listed.
+function authKeyBreakdownHtml(sums) {
+  const pathRows = CREATOR_SESSION_PATH_PREFIXES
+    .map((prefix) => [prefix, Number(sums[authKeyPathKind(prefix)]) || 0])
+    .filter((r) => r[1] > 0)
+    .map((r) => `<tr><td>${escapeHtmlServer(r[0])}</td><td>${r[1]}</td></tr>`);
+  const reasonRows = AUTHKEY_REASON_ROWS
+    .map((r) => `<tr><td>${escapeHtmlServer(r[1])}</td><td>${Number(sums[r[0]]) || 0}</td></tr>`);
+  return `<h2 class="admin-section-title">Where the key came from (7 days)</h2>
+    <p class="admin-hint">By reason, then by path. A path only appears once it has sent the key.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Reason</th><th>Requests</th></tr>
+        ${reasonRows.join("")}
+      </table>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Path</th><th>Requests</th></tr>
+        ${pathRows.join("") || '<tr><td colspan="2">None in the last 7 days.</td></tr>'}
+      </table>
+    </div>`;
 }
 
 // Reads every stats:{kind}:YYYY-MM-DD entry via a prefix list (there's no
@@ -2667,7 +2737,7 @@ async function renderAdminDashboard(env) {
   const [
     totalPV, todayPV, totalIN, todayIN, totalPP, todayPP,
     pvByDay, inByDay, ppByDay,
-    creatorResult, sourceGroupResult, authKeyByDay
+    creatorResult, sourceGroupResult, authKeyByDay, authKeySums
   ] = await Promise.all([
     readStatCount(env, "pageviews", "total"),
     readStatCount(env, "pageviews", today),
@@ -2684,11 +2754,12 @@ async function renderAdminDashboard(env) {
     listAllKeys(env.CONFIGS, "creator:"),
     listAllKeys(env.CONFIGS, "stats:sourcegroup:"),
     loadStatsByDay(env, "authkey"),
+    loadAuthKeyBreakdown(env, Array.from({ length: 7 }, (_, i) => easternDateKeyDaysAgo(Date.now(), i))),
   ]);
   // Requests that still sent the Account Key where the session would do
   // (Release 19): today, and the last 7 days.
   let authKeyWeek = 0;
-  for (let i = 0; i < 7; i++) authKeyWeek += Number(authKeyByDay[easternDateKey(new Date(Date.now() - i * 86400000))]) || 0;
+  for (let i = 0; i < 7; i++) authKeyWeek += Number(authKeyByDay[easternDateKeyDaysAgo(Date.now(), i)]) || 0;
   const authKeyToday = Number(authKeyByDay[today]) || 0;
 
   // Walks the last 30 calendar days explicitly (rather than just listing
@@ -2699,7 +2770,7 @@ async function renderAdminDashboard(env) {
   const rows = [];
   const nowMs = Date.now();
   for (let i = 0; i < 30; i++) {
-    const key = easternDateKey(new Date(nowMs - i * 86400000));
+    const key = easternDateKeyDaysAgo(nowMs, i);
     rows.push(`<tr><td>${key}</td><td>${pvByDay[key] || 0}</td><td>${inByDay[key] || 0}</td><td>${ppByDay[key] || 0}</td></tr>`);
   }
 
@@ -2959,9 +3030,10 @@ ${UTILITY_CSS}
   <div class="admin-tab-panel" data-admin-panel="creators">
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value">${totalCreatorCount}</div><div class="stat-label">Creator accounts</div></div>
-      <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Saves that sent the Account Key today</div></div>
+      <div class="stat-card"><div class="stat-value">${authKeyToday}</div><div class="stat-label">Requests that sent the Account Key today</div></div>
       <div class="stat-card"><div class="stat-value">${authKeyWeek}</div><div class="stat-label">Same, last 7 days</div></div>
     </div>
+    ${authKeyBreakdownHtml(authKeySums)}
     <div class="admin-toolbar">
       <input type="search" id="creatorSearchInput" placeholder="Search every username or display name" aria-label="Search creator accounts" autocomplete="off" data-act="onCreatorSearchInput" data-act-on="input">
       <select class="admin-select" id="creatorPageSize" aria-label="Accounts per page" data-act="changeCreatorPageSize">

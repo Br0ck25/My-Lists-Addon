@@ -1331,6 +1331,13 @@ const CREATOR_SESSION_PATH_PREFIXES = [
   "/api/channel/unpublish",
 ];
 
+// The stats kind that counts key-signed requests for one entry of the list
+// above ("/api/creator/sync/" -> "authkey:api-creator-sync"). One place, so
+// the counter in authenticateCreator and the /admin table agree.
+function authKeyPathKind(prefix) {
+  return "authkey:" + String(prefix).replace(/^\/|\/$/g, "").replace(/\//g, "-");
+}
+
 // --- Session management (P3a-4) -------------------------------------------
 const SESSION_COOKIE_NAME = "mla_session";
 const SESSION_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
@@ -5987,6 +5994,7 @@ async function getCreatorList(env, username, slug) {
   return null;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isEpisodeAired; tests/server-client-parity.test.mjs keeps them equal.
 function isEpisodeAired(airDateStr) {
   if (!airDateStr) return false;
   const parts = String(airDateStr).split(/[-T\s]/);
@@ -6002,6 +6010,7 @@ function isEpisodeAired(airDateStr) {
   return d.getTime() < today.getTime();
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isGenericEpisodeTitle; tests/server-client-parity.test.mjs keeps them equal.
 function isGenericEpisodeTitle(title, episodeNum) {
   if (!title || typeof title !== "string") return true;
   const t = title.trim();
@@ -6101,6 +6110,7 @@ function formatAirTimeLabel(time, timezone) {
   return zone ? (clock + " " + zone) : clock;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:formatAirDateBadge; tests/server-client-parity.test.mjs keeps them equal.
 function formatAirDateBadge(airDateStr) {
   if (!airDateStr) return '';
   const parts = String(airDateStr).split(/[-T\s]/);
@@ -6116,7 +6126,7 @@ function formatAirDateBadge(airDateStr) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (diffDays <= 0) return 'TODAY';
+  if (diffDays <= 0) return diffDays < 0 ? 'AIRED' : 'TODAY'; // past = AIRED on posters only (owner, 2026-11-02)
   if (diffDays === 1) return 'TOMORROW';
   if (diffDays > 1 && diffDays < 7) {
     const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];

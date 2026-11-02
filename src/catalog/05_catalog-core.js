@@ -795,6 +795,7 @@ function generateBadgedPosterSvg({ posterUrl, airDateText, airTimeText, bottomTe
 </svg>`;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:isAdultOrNsfw; tests/server-client-parity.test.mjs keeps them equal.
 function isAdultOrNsfw(item) {
   if (!item) return false;
   if (item.adult === true || item.isAdult === true) return true;
@@ -895,6 +896,7 @@ function generateSafePosterSvg({ title, year, type, certification }) {
 </svg>`;
 }
 
+// Twin of src/client/19_client-search-and-likes.js:getSafePosterUrl; tests/server-client-parity.test.mjs keeps them equal.
 function getSafePosterUrl(origin, { title, year, type, certification }) {
   const params = new URLSearchParams();
   if (title) params.set("title", title);

@@ -17,7 +17,7 @@
 # to get past the error. Keep deploying by pasting unless you mean to move.
 name = "my-lists-addon"
 main = "worker_entry_combined.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-07-27"
 # Variables set in the dashboard survive a `wrangler deploy` (they would
 # otherwise be replaced by [vars]).
 keep_vars = true
@@ -267,7 +267,7 @@ crons = ["*/6 * * * *"]
 [env.staging]
 name = "my-lists-addon-staging"
 main = "worker_entry_combined.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-07-27"
 routes = [
   { pattern = "staging.mylistsaddon.com/*", zone_name = "mylistsaddon.com" }
 ]
