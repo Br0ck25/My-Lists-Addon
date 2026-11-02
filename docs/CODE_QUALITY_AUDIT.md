@@ -20,14 +20,15 @@ Scope: code quality, architecture, technical debt, dead code, duplication, depen
 | CQ-08 wizard (client + `/api/wizard-channel-shows`) | **done** | |
 | CQ-06, CQ-07, CQ-11/12 | **done** | |
 | CQ-03 parity test | **done**; owner decisions applied: poster badge "AIRED" for past dates, blank Nuvio collection name → "My Lists Collections". Remaining known differences are `todo` cases (getSafePosterUrl type/title, options.backdropImageUrl) | tests/server-client-parity.test.mjs |
-| CQ-04 step 1 shared `traktIsHiddenShow` | **done** (step 2 not started) | 06_ |
+| CQ-04 step 1 shared `traktIsHiddenShow` | **done** (step 2: see below) | 06_ |
 | CQ-18 size ratchet | **done** (rule 12 in CLAUDE.md) | tests/size-budget.test.mjs |
 | CQ-10 compatibility date | **repo done** (all wrangler files = 2026-07-27, OPERATIONS §32 flag table); owner sets the staging dashboard date and checks staging | |
 | CQ-01 split `handleFetch` | **done**: 15,494 → 227 lines; routes in `src/api/62_`–`80_` and `src/admin/65_`–`66_`; verified by four replay scripts (~2,900 requests) identical before/after every commit | |
 | Bug found during CQ-01: scrobble user filter answered 500 | **fixed** | 64_media-server-scrobble.js, tests/scrobble-user-filter.test.mjs |
 | CQ-19 scope-check blind spot | **done**: window.* exports read from the AST; a typeof only excuses a read in the same or an enclosing function | tools/scope_check.mjs, tests/scope-check.test.mjs |
 | CQ-13 pin CI actions to SHAs | **done** (checkout 4.4.0, setup-node 4.4.0, setup-python 5.6.0, upload-artifact 4.6.2; Dependabot keeps them current) | .github/workflows/*.yml, OPERATIONS |
-| CQ-05, CQ-04 step 2 | optional, not started | |
+| CQ-05 shared Trakt headers | **done**: `traktHeaders(accessToken, apiKey)` in `src/core/03_trakt-headers.js`; 30 of 36 copies replaced, 6 left on purpose (different User-Agent, no Content-Type, or User-Agent from a local variable). Header count 36 → 7 (6 left + the helper) | tests/trakt-headers.test.mjs |
+| CQ-04 step 2 second continue-watching implementation | **stopped for an owner decision**: the shelf and the website list differ in four cases; comparison test committed, differences marked `todo` | tests/continue-watching-parity.test.mjs |
 | CQ-09 flags | blocked on CQ-17 data | |
 
 ### New follow-ups found while doing the work
@@ -191,12 +192,16 @@ Steps:
 Check: `node --test tests/server-client-parity.test.mjs`, then `bash verify.sh -q`.
 
 ### CQ-04 Trakt "continue watching" logic copied into a route
+**Step 2 status (2026-11-02): stopped for an owner decision.** The route builds richer candidates for the website's list and is not a copy: it differs from the shelf in four cases (episode ids vs show ids when Trakt gives an episode its own IMDB id; 40 vs 15 up-next shows; shows with only a Trakt id kept vs dropped; IMDB id case and slug when matching paused shows). Details are the `todo` cases in tests/continue-watching-parity.test.mjs.
+
 - `fetchTraktContinueWatching` (`src/catalog/06_source-fetchers-mdblist-trakt.js:1228`, 256 lines) and the `fetchFn` inside `/api/trakt-my-private-lists` (`src/api/25_api-catalog-routes.js:6301`, 423 lines) both build `hiddenShowKeys` and define a nested `isHiddenShow` that is identical line for line (06_:1312 and 25_:6474), plus similar playback and watched-progress handling.
 - Step 1 (Tier 2, safe): lift `isHiddenShow(hiddenShowKeys, sObj, idObj)` to a single top-level helper next to `fetchTraktContinueWatching` in `06_`, and call it from both places. Check that the name is free first: `grep -rnw traktIsHiddenShow src`. Pick an unused name like that one.
 - Step 2 (ask the owner): find out why the route rebuilds the candidates instead of calling `fetchTraktContinueWatching`, which may be for counts or a preview. If the outputs should match, the route should call the shared function. Write the parity test first.
 - Tests: grep `tests/` for `trakt-my-private-lists` and `continue` and run those files.
 
 ### CQ-05 Trakt header boilerplate (36 copies)
+**Status (2026-11-02): done.** See the Progress table. Helper takes an optional second argument (the person's own Trakt app id) and omits Authorization without a token, which let the 6 sites without a token and the 5 with their own key use it too.
+
 - Every Trakt call writes out `Content-Type`, `trakt-api-version: "2"`, `trakt-api-key: TRAKT_CLIENT_ID`, `Authorization: Bearer …` and `User-Agent: my-list-addon/${ADDON_VERSION}`.
 - Add `traktHeaders(accessToken)` next to `fetchTraktWithRetry` (check the name is free). Replace the copies **one file per commit**, and only where the object is byte-for-byte the same set of keys. Leave any call site that adds or omits a header.
 - Check: `grep -c '"trakt-api-version": "2"' src -r` goes down. Run the Trakt-related tests and `bash verify.sh -q`.

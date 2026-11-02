@@ -60,6 +60,13 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## One Trakt header helper, and a check that the two "continue watching" lists agree (built 2026-11-02, stamp d8334b8811)
+
+No change for users. Two tidy-ups.
+
+- **One place writes the Trakt request headers.** 30 of the 36 hand-written copies now call `traktHeaders(token, key)`, so a future change to the headers (a new version, a new User-Agent) is made once. What Trakt receives is unchanged. Six were left alone on purpose: the web sign-in step and two username lookups (they send `my-list-addon/1.4`, and one adds `Accept`), the Delete List call (sends no Content-Type), the provider-check and token-refresh calls in the connections code (they take the User-Agent from a local variable). The browser-side copy in the page code is also separate.
+- **A new test compares the two "continue watching" lists.** The Stremio/Nuvio shelf and the "Trakt Continue Watching" list on the website are built by two separate pieces of code. The test gives both the same Trakt answers. They agree on the basics (paused episodes and movies, hidden shows left out, next episode of a started show, not-yet-aired episodes). They differ in four edge cases, now recorded in the test as "to do" so the owner can decide which side is right; nothing was changed.
+
 ## Safer checks and pinned CI tools (built 2026-11-02, stamp a3fee60b71)
 
 No change for users. Two safety improvements to the build checks.
