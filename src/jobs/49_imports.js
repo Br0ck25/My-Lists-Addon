@@ -202,7 +202,7 @@ async function handleImportsApi(request, env, url, path) {
       if (request.method !== "POST") return json({ ok: false, error: "Not found." }, 404);
       let body;
       try {
-        body = await request.json();
+        body = await readJsonObject(request);
       } catch {
         return json({ ok: false, error: "Invalid JSON body." }, 400);
       }
@@ -252,7 +252,7 @@ async function handleImportsApi(request, env, url, path) {
       if (row.status !== "done") return json({ ok: false, error: "The import is still running." }, 409);
       let body;
       try {
-        body = await request.json();
+        body = await readJsonObject(request);
       } catch {
         return json({ ok: false, error: "Invalid JSON body." }, 400);
       }
