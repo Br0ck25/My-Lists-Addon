@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "fd8c375265";
+const WORKER_BUILD = "62cb9d7d6f";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -12931,7 +12931,7 @@ async function resolveAdminSession(env, cookieValue) {
     // At most one write an hour per browser: last_seen_at is a convenience,
     // not a security property, and D1 writes are the scarce thing here.
     if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 60 * 60 * 1000) {
-      env.DB.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE id = ?").bind(now, id).run().catch(() => {});
+      await env.DB.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE id = ?").bind(now, id).run().catch(() => {}); // awaited: no ctx here, and it runs at most hourly
     }
     return { id: row.id, actor: row.actor, expiresAt: row.expires_at };
   } catch (e) {
