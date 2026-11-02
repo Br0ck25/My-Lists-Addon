@@ -157,7 +157,7 @@ async function recordSubtitlesPlay(env, ctx, auth, stremioType, imdbId, season, 
   // actually fix the collision instead of just moving it later.
   if (recordEpisode || recordMovie) {
     let alreadyWatched = false;
-    await writeSubtitlesPlayRecord(env, auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie);
+    await writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie });
 
     if (recordEpisode) {
       const epLabel = recordEpisode.showTitle;
@@ -310,7 +310,7 @@ async function resolveSubtitlesPlayRecord(stremioType, imdbId, season, episode, 
 }
 
 // The read-modify-write of the account's tracking blob, retried a bounded number of times.
-async function writeSubtitlesPlayRecord(env, auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie) {
+async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
   const MAX_ATTEMPTS = 3;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let blob = null;

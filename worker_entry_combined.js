@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5a3173b48f";
+const WORKER_BUILD = "b3ab1fab82";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -107512,7 +107512,7 @@ async function recordSubtitlesPlay(env, ctx, auth, stremioType, imdbId, season, 
   // actually fix the collision instead of just moving it later.
   if (recordEpisode || recordMovie) {
     let alreadyWatched = false;
-    await writeSubtitlesPlayRecord(env, auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie);
+    await writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie });
 
     if (recordEpisode) {
       const epLabel = recordEpisode.showTitle;
@@ -107665,7 +107665,7 @@ async function resolveSubtitlesPlayRecord(stremioType, imdbId, season, episode, 
 }
 
 // The read-modify-write of the account's tracking blob, retried a bounded number of times.
-async function writeSubtitlesPlayRecord(env, auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie) {
+async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
   const MAX_ATTEMPTS = 3;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let blob = null;
