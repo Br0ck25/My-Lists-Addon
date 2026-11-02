@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "505f94f8b5";
+const WORKER_BUILD = "d36c0a349b";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -4681,6 +4681,19 @@ async function readJsonBody(request) {
   } catch {
     return null;
   }
+}
+
+// Parses a JSON request body and THROWS unless it is a plain object. `null`,
+// `[]`, `"x"` and `5` are valid JSON, so a bare `request.json()` succeeds on
+// them and the next `body.field` read crashes with a 500. Used inside the
+// existing try/catch around the body parse, so every route answers with the
+// same "Invalid JSON body." 400 it already gives for broken JSON.
+async function readJsonObject(request) {
+  const parsed = await request.json();
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new SyntaxError("JSON body must be an object.");
+  }
+  return parsed;
 }
 
 // Turns an exception into something safe to hand back to a caller, and logs
@@ -110587,7 +110600,7 @@ async function handleCreatorApiAccountRoutes(request, env, ctx, url, path) {
 async function creatorApiTrackStatus(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110614,7 +110627,7 @@ async function creatorApiTrackStatus(request, env, ctx, path) {
 async function creatorApiScrobbleSeenUsers(request, env, ctx, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110654,7 +110667,7 @@ async function creatorApiCreate(request, env, ctx) {
   }
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110809,7 +110822,7 @@ async function creatorApiResetKey(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110936,7 +110949,7 @@ async function creatorApiRecoveryAnswer(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -110971,7 +110984,7 @@ async function creatorApiForgotUsername(request, env, ctx) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -111116,7 +111129,7 @@ async function creatorApiScrobbleToken(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -111160,7 +111173,7 @@ async function creatorApiRestore(request, env, ctx, path) {
 
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -111203,7 +111216,7 @@ async function creatorApiRestore(request, env, ctx, path) {
 async function creatorApiLists(request, env, ctx, url, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     if (request.account && isSessionsEnabled(env)) {
       body = {};
@@ -111562,7 +111575,7 @@ async function creatorApiListsItems(request, env, ctx, path) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" }, 500);
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
@@ -111644,7 +111657,7 @@ async function creatorApiListsItems(request, env, ctx, path) {
 async function creatorApiListsSave(request, env, ctx, url, path) {
   let body;
   try {
-    body = await request.json();
+    body = await readJsonObject(request);
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
