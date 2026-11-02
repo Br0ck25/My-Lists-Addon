@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "afa994ac69";
+const WORKER_BUILD = "96246598ab";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -13077,6 +13077,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
   "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
+  "/admin/api/key-lookup-cleanup": "admin.accounts.drop-legacy-key-lookups",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
 };
 const ADMIN_AUDIT_GET_MUTATORS = new Set();
@@ -105030,6 +105031,63 @@ async function handleSupportEmailsApi(path, request, env) {
 
   return json({ ok: false, error: 'Endpoint not found.' }, 404);
 }
+// --- Old Account Key fingerprints (SEC-01) ---------------------------------------
+//
+// Before the peppered blind index, every key create/reset wrote an unsalted
+// SHA-256 fingerprint of the Account Key: a creator_key_lookups row and two KV
+// keys (keylookup:<hash>, creatorlookuphash:<name>). Someone holding a copy of
+// those can test key guesses against every account at once, so accounts that
+// already have accounts.key_lookup_hmac do not need them. /admin/api/key-lookup-cleanup
+// counts them (the default) and removes them in batches, only when told to and
+// only with the confirmation phrase.
+//
+// Accounts WITHOUT an HMAC are never touched: their legacy copy is the only way
+// forgot-username finds them without scanning every account with PBKDF2. They
+// lose it by signing in once with LOOKUP_PEPPER set (see storeCreatorKeyLookup).
+
+const KEY_LOOKUP_CLEANUP_CONFIRM = "delete legacy key lookups";
+const KEY_LOOKUP_CLEANUP_BATCH = 50;
+const KEY_LOOKUP_CLEANUP_BATCH_MAX = 200;
+
+async function accountHasLegacyKeyLookup(env, username) {
+  if (env.DB) {
+    const row = await env.DB.prepare("SELECT 1 AS one FROM creator_key_lookups WHERE username = ? LIMIT 1").bind(username).first();
+    if (row) return true;
+  }
+  if (env.CONFIGS && (await env.CONFIGS.get(creatorLookupHashKey(username)))) return true;
+  return false;
+}
+
+// One batch. `cursor` is the previous call's `next` (an accounts.id); `done` is
+// true when every account with an HMAC has been looked at.
+async function cleanLegacyKeyLookups(env, { cursor, limit, apply } = {}) {
+  if (!env || !env.DB) return { ok: false, error: "no-database" };
+  const n = Math.max(1, Math.min(KEY_LOOKUP_CLEANUP_BATCH_MAX, Number(limit) || KEY_LOOKUP_CLEANUP_BATCH));
+  const out = { ok: true, apply: !!apply, scanned: 0, withLegacy: 0, cleaned: 0, next: null, done: true };
+  let rows;
+  try {
+    const res = await env.DB.prepare(
+      "SELECT id, username FROM accounts WHERE key_lookup_hmac IS NOT NULL AND id > ? ORDER BY id LIMIT ?"
+    ).bind(Math.max(0, Number(cursor) || 0), n).all();
+    rows = (res && res.results) || [];
+  } catch (err) {
+    if (/no such column/i.test(String((err && err.message) || err))) return { ok: false, error: "The accounts table has no key_lookup_hmac column yet." };
+    throw err;
+  }
+  out.scanned = rows.length;
+  for (const r of rows) {
+    if (!(await accountHasLegacyKeyLookup(env, r.username))) continue;
+    out.withLegacy++;
+    if (!apply) continue;
+    await deleteLegacyCreatorKeyLookup(env, r.username);
+    out.cleaned++;
+  }
+  if (rows.length === n) {
+    out.next = rows[rows.length - 1].id;
+    out.done = false;
+  }
+  return out;
+}
 // --- Shared channels no account owns ------------------------------------------
 //
 // Shares used to need no account, so some channel links were minted with no
@@ -108695,6 +108753,7 @@ async function handleAdminApiRoutes(request, env, ctx, url, path) {
   if (path === "/admin/api/published-channels" && request.method === "GET") return adminApiPublishedChannels(request, env, url);
   if (path === "/admin/api/channel-moderate" && request.method === "POST") return adminApiChannelModerate(request, env);
   if (path === "/admin/api/channel-ownerless" && request.method === "POST") return adminApiChannelOwnerless(request, env);
+  if (path === "/admin/api/key-lookup-cleanup" && request.method === "POST") return adminApiKeyLookupCleanup(request, env);
   if (path === "/admin/api/migrate-day-counts" && request.method === "POST") return adminApiMigrateDayCounts(request, env);
   if (path === "/admin/api/export-kv-to-r2" && request.method === "POST") return adminApiExportKvToR2(request, env);
   return null;
@@ -109589,6 +109648,34 @@ async function adminApiChannelOwnerless(request, env) {
   let result;
   try {
     result = await removeOwnerlessChannels(env, { cursor: body.cursor, limit: body.limit, apply });
+  } catch (e) {
+    return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+  }
+  return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/key-lookup-cleanup  (POST)  { cursor?, limit?, apply?, confirm? }
+//   -> { ok, apply, scanned, withLegacy, cleaned, next, done }
+// SEC-01: removes the old unsalted Account Key fingerprints of accounts that
+// already have the peppered HMAC (see 60_key-lookup-cleanup.js). A count by
+// default; with apply it cleans this batch, and only when `confirm` is the
+// confirmation phrase. Run it again with `next` as `cursor` until `done`.
+async function adminApiKeyLookupCleanup(request, env) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  let body = {};
+  try {
+    body = (await request.json()) || {};
+  } catch {
+    body = {};
+  }
+  const apply = body.apply === true;
+  if (apply && body.confirm !== KEY_LOOKUP_CLEANUP_CONFIRM) {
+    return json({ ok: false, error: `To delete, send confirm: "${KEY_LOOKUP_CLEANUP_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+  }
+  let result;
+  try {
+    result = await cleanLegacyKeyLookups(env, { cursor: body.cursor, limit: body.limit, apply });
   } catch (e) {
     return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
   }

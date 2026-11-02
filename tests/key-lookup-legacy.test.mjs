@@ -99,3 +99,62 @@ describe("SEC-01 step 2: a legacy-only account is cleaned up on its next sign-in
     assert.equal(f.body.username, "legacyforgot", JSON.stringify(f.body));
   });
 });
+
+describe("SEC-01 step 3: admin job removes legacy copies for accounts that already have the HMAC", () => {
+  const CONFIRM = "delete legacy key lookups";
+  async function adminCookie(env) {
+    const r = await call(env, "/admin/login", { method: "POST", form: { key: env.ADMIN_KEY } });
+    return ((r.headers.get("set-cookie") || "").match(/^([^=]+=[^;]+)/) || [])[1];
+  }
+  const post = (env, cookie, json) => call(env, "/admin/api/key-lookup-cleanup", { method: "POST", cookie, json });
+
+  // "covered" has the HMAC plus a leftover legacy copy; "waiting" has only the legacy copy.
+  async function seed() {
+    const db = makeD1();
+    const kv = makeKv();
+    const plain = makeEnv({ DB: db, CONFIGS: kv });
+    const covered = await createUser(plain, "covered");
+    const waiting = await createUser(plain, "waiting");
+    const env = makeEnv({ DB: db, CONFIGS: kv, LOOKUP_PEPPER: PEPPER });
+    await db.prepare("UPDATE accounts SET key_lookup_hmac = 'abc' WHERE username = 'covered'").run();
+    return { db, kv, env, covered, waiting };
+  }
+
+  it("needs the admin login", async () => {
+    const { env } = await seed();
+    const r = await call(env, "/admin/api/key-lookup-cleanup", { method: "POST", json: {} });
+    assert.equal(r.status, 401);
+  });
+
+  it("a dry run counts and changes nothing", async () => {
+    const { db, kv, env } = await seed();
+    const r = await post(env, await adminCookie(env), {});
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.equal(r.body.apply, false);
+    assert.equal(r.body.withLegacy, 1);
+    assert.equal((await legacyRows(db)).length, 2);
+    assert.equal(legacyKvKeys(kv).length, 4);
+  });
+
+  it("applying needs the confirmation phrase", async () => {
+    const { env, db } = await seed();
+    const r = await post(env, await adminCookie(env), { apply: true });
+    assert.equal(r.status, 400);
+    assert.equal((await legacyRows(db)).length, 2);
+  });
+
+  it("applying removes the legacy copy of accounts with an HMAC and keeps the others", async () => {
+    const { db, kv, env, waiting } = await seed();
+    const r = await post(env, await adminCookie(env), { apply: true, confirm: CONFIRM });
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.equal(r.body.cleaned, 1);
+    assert.equal(r.body.done, true);
+    const rows = await legacyRows(db);
+    assert.deepEqual(rows.map((x) => x.username), ["waiting"], "the account without an HMAC keeps its only lookup");
+    assert.ok(kv._store.has("creatorlookuphash:waiting"));
+    assert.ok(!kv._store.has("creatorlookuphash:covered"));
+    assert.equal(await db.prepare("SELECT key_lookup_hmac h FROM accounts WHERE username='covered'").first().then((x) => x.h), "abc", "the HMAC is untouched");
+    const f = await call(env, "/api/creator/forgot-username", { method: "POST", json: { creatorKey: waiting.creatorKey } });
+    assert.equal(f.body.username, "waiting");
+  });
+});

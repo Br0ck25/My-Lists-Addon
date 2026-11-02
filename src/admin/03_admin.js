@@ -2042,6 +2042,7 @@ const ADMIN_AUDIT_ACTIONS = {
   "/admin/api/jobs/shelf-shadow-now": "admin.jobs.shelf-compare",
   "/admin/api/jobs/duplicate-media-merge": "admin.media.merge-duplicates",
   "/admin/api/channel-ownerless": "admin.channels.delete-ownerless",
+  "/admin/api/key-lookup-cleanup": "admin.accounts.drop-legacy-key-lookups",
   "/admin/api/revoke-admin-session": "admin.session.revoke",
 };
 const ADMIN_AUDIT_GET_MUTATORS = new Set();
