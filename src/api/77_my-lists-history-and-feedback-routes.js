@@ -343,7 +343,7 @@ async function apiTraktMyPrivateListsContinueWatching(accessToken, continueWatch
                       (ids.slug && seenShowIds.has(String(ids.slug).toLowerCase()));
         return !hasPb;
       })
-      .slice(0, 40);
+      .slice(0, TRAKT_CONTINUE_NEXT_EPISODE_SHOWS);
 
     await mapWithConcurrency(candidates, 5, async (c) => {
       const show = c.show;

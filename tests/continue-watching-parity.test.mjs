@@ -129,14 +129,17 @@ describe("Trakt continue watching: shelf (fetchTraktContinueWatching) vs list ro
     assert.deepEqual(route, shelf);
   });
 
-  it("agree on how many 'next episode' rows a long watched history gives", { todo: "DIFFERENT: the shelf looks at the 15 most recently watched shows, the list route at the 40 most recent, so a heavy watcher sees up to 15 rows on the shelf but up to 40 in the website list." }, async () => {
-    const many = Array.from({ length: 20 }, (_, i) => 100 + i);
+  it("agree on how many 'next episode' rows a long watched history gives (the 40 most recently watched shows)", async () => {
+    const many = Array.from({ length: 50 }, (_, i) => 100 + i);
     const { shelf, route } = await both({
-      watched: many.map((n, i) => watched(n, `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`)),
+      watched: many.map((n, i) => watched(n, `2024-01-01T00:00:${String(i).padStart(2, "0")}Z`)),
       progress: Object.fromEntries(many.map((n) => [n, nextEp(1, 2)])),
     });
-    assert.equal(shelf.length, 15, "the mock really gives the shelf its cap");
+    assert.equal(shelf.length, 40, "the shelf checks the 40 newest watched shows");
+    assert.equal(route.length, 40, "the website list checks the same 40");
     assert.deepEqual(route, shelf);
+    assert.equal(shelf[0], "tt149:1:2", "newest watch first");
+    assert.ok(!shelf.includes("tt109:1:2"), "the 41st newest show is not checked");
   });
 
   // owner chose to keep this, 2026-11-02: the two lists intentionally differ here.

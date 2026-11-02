@@ -34,7 +34,17 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e5c9967459";
+const WORKER_BUILD = "eb36cbf5de";
+
+// --- Trakt Continue Watching: how many shows get a "next episode" check -------
+//
+// Both the Stremio/Nuvio shelf (fetchTraktContinueWatching) and the website's
+// "Trakt Continue Watching" list (/api/trakt-my-private-lists) look at this many
+// of the most recently watched shows for an unwatched "next episode" row.
+// Each show costs one Trakt `progress/watched` request (5 at a time), and the
+// shelf's cache is fresh for only 30 s. If Trakt starts refusing requests
+// (HTTP 429 or a Cloudflare 1015 block), lower this number.
+const TRAKT_CONTINUE_NEXT_EPISODE_SHOWS = 40;
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -24768,7 +24778,7 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
                           (ids.slug && seenShowIds.has(String(ids.slug).toLowerCase()));
             return !hasPb;
           })
-          .slice(0, 15);
+          .slice(0, TRAKT_CONTINUE_NEXT_EPISODE_SHOWS);
 
         const progResults = [];
         await mapWithConcurrency(candidates, 5, async (c) => {
@@ -120484,7 +120494,7 @@ async function apiTraktMyPrivateListsContinueWatching(accessToken, continueWatch
                       (ids.slug && seenShowIds.has(String(ids.slug).toLowerCase()));
         return !hasPb;
       })
-      .slice(0, 40);
+      .slice(0, TRAKT_CONTINUE_NEXT_EPISODE_SHOWS);
 
     await mapWithConcurrency(candidates, 5, async (c) => {
       const show = c.show;

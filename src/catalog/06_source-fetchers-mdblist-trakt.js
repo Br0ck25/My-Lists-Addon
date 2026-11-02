@@ -1334,7 +1334,7 @@ async function fetchTraktContinueWatching(entry, skip = 0, traktKey = "", access
                           (ids.slug && seenShowIds.has(String(ids.slug).toLowerCase()));
             return !hasPb;
           })
-          .slice(0, 15);
+          .slice(0, TRAKT_CONTINUE_NEXT_EPISODE_SHOWS);
 
         const progResults = [];
         await mapWithConcurrency(candidates, 5, async (c) => {
