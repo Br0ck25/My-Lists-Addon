@@ -1,12 +1,23 @@
 // Creator Key and session check behind every authenticated creator route (moved out of handleFetch, CQ-01)
 
 // Moved out of handleFetch unchanged apart from the captured request, env,
-// ctx and path becoming parameters. handleFetch keeps a one-line
-// authenticateCreator(name, key, via) wrapper so no call site changed.
+// ctx and path becoming parameters. Every caller passes them in (the one-line
+// authenticateCreator wrapper handleFetch kept is gone: its last caller moved).
 // Split in two only for the 150-line limit: this first half decides whether
 // the caller is who they say; creatorKeyAuthAccepted below records the
 // key-sign-in counters and issues the session cookie once they are.
 
+// --- Creator Profile system --------------------------------------------
+//
+// No accounts, no email, no passwords -- a Creator Profile is just a
+// chosen name plus a randomly generated Creator Key (see
+// generateCreatorKey), with only a salted hash of that key ever stored
+// (see hashCreatorKey/verifyCreatorKey above). There's no session or
+// token issued on "login" either: every authenticated request below
+// re-sends the creatorName + creatorKey and gets re-verified against
+// the stored hash each time, which is what "no authentication system"
+// means here in practice -- simple, stateless, and nothing to expire
+// or revoke separately from the key itself.
 async function authenticateCreatorFor(request, env, ctx, path, creatorNameRaw, creatorKey, via) {
   if (!env || !env.CONFIGS) return { ok: false, error: "no-kv" };
 

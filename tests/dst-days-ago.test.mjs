@@ -51,7 +51,7 @@ describe("easternDateKeyDaysAgo is DST-safe", () => {
   }
 
   it("no call site goes back to subtracting 24h multiples", () => {
-    const api = ["src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/73_public-list-routes.js", "src/api/79_session-and-channel-routes.js"].map((f) => fs.readFileSync(path.join(REPO_ROOT, f), "utf8")).join("\n");
+    const api = ["src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/73_public-list-routes.js", "src/api/79_session-and-channel-routes.js", "src/api/80_shell-admin-entry-and-bulk-resolve-routes.js"].map((f) => fs.readFileSync(path.join(REPO_ROOT, f), "utf8")).join("\n");
     for (const [name, src] of [["03_admin.js", src03], ["26_api", api]]) {
       assert.doesNotMatch(src, /easternDateKey\(new Date\([^)]*86400000/, `${name} still builds N-days-ago from 86,400,000 ms`);
     }

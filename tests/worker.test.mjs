@@ -2138,7 +2138,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js", "src/api/80_shell-admin-entry-and-bulk-resolve-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -4960,7 +4960,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js", "src/api/74_lookup-and-preview-routes.js", "src/api/75_provider-list-and-oauth-routes.js", "src/api/76_external-list-routes.js", "src/api/77_my-lists-history-and-feedback-routes.js", "src/api/78_save-and-like-routes.js", "src/api/79_session-and-channel-routes.js", "src/api/80_shell-admin-entry-and-bulk-resolve-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
@@ -9230,7 +9230,7 @@ describe("the last open items from the 2026-09-05 audit", () => {
     assert.equal(await sandbox.timingSafeEqualSecret("", ""), true);
     assert.equal(await sandbox.timingSafeEqualSecret(undefined, ""), true);
 
-    const src = fs.readFileSync(path.join(REPO_ROOT, "src/api/26_api-creator-and-admin-routes.js"), "utf8");
+    const src = fs.readFileSync(path.join(REPO_ROOT, "src/api/80_shell-admin-entry-and-bulk-resolve-routes.js"), "utf8"); // POST /admin/login moved here out of handleFetch (CQ-01)
     assert.match(src, /timingSafeEqualSecret\(submittedKey, env\.ADMIN_KEY\)/,
       "the admin login must use the length-blind comparison");
     assert.doesNotMatch(src, /timingSafeEqualHex\([^)]*ADMIN_KEY/,

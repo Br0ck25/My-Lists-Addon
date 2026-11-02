@@ -2,7 +2,7 @@
  "functions": {
   "src/admin/59_support-emails.js::handleSupportEmailsApi": 166,
   "src/admin/59_support-emails.js::parseMimeEmail": 194,
-  "src/api/25_api-catalog-routes.js::handleFetch": 537,
+  "src/api/25_api-catalog-routes.js::handleFetch": 227,
   "src/api/27_installs.js::handleInstallsApiRoutes": 152,
   "src/api/31_lists-api.js::handleListsApiRoutes": 156,
   "src/api/61_media-app-sync.js::handleMediaAppRoute": 410,

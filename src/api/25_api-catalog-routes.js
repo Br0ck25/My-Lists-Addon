@@ -473,34 +473,10 @@ async function handleFetch(request, env, ctx) {
     const accountDeleteResponse = await handleAccountDeleteApi(request, env, url, path);
     if (accountDeleteResponse) return accountDeleteResponse;
 
-    if (path === "/" || path === "") {
-      ctx.waitUntil(bumpStat(env, "pageviews"));
-      // Memoized per origin and answered with a 304 when the browser
-      // already holds this exact build -- see htmlPageResponse and
-      // renderBuilderCached (02_http-and-creator-utils.js). Previously this
-      // rebuilt and resent ~1.6MB on every navigation, with no validator at
-      // all, which also left the browser free to heuristically cache a copy
-      // it had no way to check.
-      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
-    }
-
-    // The new UI shell's own paths (Phase 6, P6-1): /catalogs, /lists,
-    // /channels, /discover, /search, /settings and a sub-tab below any of them
-    // (/settings/account, /catalogs/quickadd).
-    //
-    // Exact paths only: /lists/<slug> and /channels/<user>/<slug> are share
-    // links and keep their own routes below.
-    if (APP_SHELL_PATHS.has(path)) {
-      ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
-    }
-    for (const shellTab of APP_SHELL_TABS) {
-      if (path.indexOf(shellTab.path + "/") !== 0) continue;
-      const shellSub = path.slice(shellTab.path.length + 1);
-      if (shellTab.subs.indexOf(shellSub) === -1) continue;
-      ctx.waitUntil(bumpStat(env, "pageviews"));
-      return await htmlPageResponse(request, renderPageCached(request, url.origin, {}));
-    }
+    // The home page, the app shell paths and the shell sub-tab pages, at their original place. Returns a Response promise, or null.
+    // -- 80_shell-admin-entry-and-bulk-resolve-routes.js.
+    const appShellResponse = handleAppShellRoutes(request, env, ctx, url, path);
+    if (appShellResponse) return appShellResponse;
 
     // /icon.png, poster placeholders, /bp/, /rpdb/, support goal, site notice, Ko-fi webhook, RPDB check, Better Posters warm-up and poster badge, at their original place. Returns a Response promise, or null.
     // -- 71_poster-and-support-routes.js.
