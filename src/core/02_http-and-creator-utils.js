@@ -186,6 +186,9 @@ function securityHeaders(nonce, env) {
       "frame-src https://www.youtube.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
+      // A form may only post back to this site, so markup that slips past an
+      // escape cannot send what someone types to another host (BA-003).
+      "form-action 'self'",
       "object-src 'none'",
       "worker-src 'self'",
     ].join("; "),

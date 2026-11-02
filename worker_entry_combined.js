@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7dd96738be";
+const WORKER_BUILD = "4fede535f1";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -4023,6 +4023,9 @@ function securityHeaders(nonce, env) {
       "frame-src https://www.youtube.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
+      // A form may only post back to this site, so markup that slips past an
+      // escape cannot send what someone types to another host (BA-003).
+      "form-action 'self'",
       "object-src 'none'",
       "worker-src 'self'",
     ].join("; "),
@@ -17136,7 +17139,7 @@ ${UTILITY_CSS}
         const unreadClass = (t.unread > 0) ? ' unread' : '';
         const statusClass = t.status || 'open';
         const dateStr = new Date(t.last_message_at || t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        const sender = t.customer_name ? (t.customer_name + ' &lt;' + t.customer_email + '&gt;') : t.customer_email;
+        const sender = t.customer_name ? (escapeHtmlAdmin(t.customer_name) + ' &lt;' + escapeHtmlAdmin(t.customer_email) + '&gt;') : escapeHtmlAdmin(t.customer_email);
 
         return '<div class="support-thread-card' + activeClass + unreadClass + '" data-act="selectSupportEmailThread" data-act-args="' + adminActAttr([t.id]) + '">' +
           '<div class="u-jc-space_between u-ai-center u-mb-4px" style="display:flex;">' +
@@ -17343,11 +17346,11 @@ ${UTILITY_CSS}
                     const szStr = att.size ? (' (' + Math.round(att.size / 1024) + ' KB)') : '';
                     return '<div style="width:130px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column;">' +
                       '<div style="width:100%; height:80px; overflow:hidden; cursor:zoom-in; background:var(--panel-strong); position:relative;" title="Click to view larger" data-act="openSupportMessageAttachmentLightbox" data-act-args="' + adminActAttr([m.id, attIdx]) + '">' +
-                        '<img src="' + (att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:100%; object-fit:cover; display:block;" loading="lazy">' +
+                        '<img src="' + escapeHtmlAdmin(att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:100%; object-fit:cover; display:block;" loading="lazy">' +
                       '</div>' +
                       '<div class="u-jc-space_between u-ai-center u-p-4px_6px" style="display:flex; gap:4px; border-top:1px solid var(--border); background:var(--surface);">' +
                         '<span class="u-fs-v_font_size_xs u-to-ellipsis u-ov-hidden u-ws-nowrap u-c-v_text u-flex-1" title="' + escapeHtmlAdmin(fn + szStr) + '">' + escapeHtmlAdmin(fn) + '</span>' +
-                        '<a href="' + (att.dataUrl || '#') + '" download="' + escapeHtmlAdmin(fn) + '" target="_blank" rel="noopener noreferrer" style="color:var(--muted); display:inline-flex; align-items:center; text-decoration:none; padding:2px;" title="Download ' + escapeHtmlAdmin(fn) + '">' +
+                        '<a href="' + escapeHtmlAdmin(att.dataUrl || '#') + '" download="' + escapeHtmlAdmin(fn) + '" target="_blank" rel="noopener noreferrer" style="color:var(--muted); display:inline-flex; align-items:center; text-decoration:none; padding:2px;" title="Download ' + escapeHtmlAdmin(fn) + '">' +
                           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
                         '</a>' +
                       '</div>' +
@@ -119670,7 +119673,7 @@ function parseMimeEmail(rawText, headers) {
         const mimeType = ctMatch ? ctMatch[1].trim().toLowerCase() : '';
         const isHtml = mimeType === 'text/html';
         const isPlain = mimeType === 'text/plain';
-        const isImage = mimeType.startsWith('image/') || /\.(?:png|jpe?g|gif|webp|svg|bmp)$/i.test(partHeader);
+        const isImage = /^image\/[a-z0-9.+-]+$/.test(mimeType) || /\.(?:png|jpe?g|gif|webp|svg|bmp)$/i.test(partHeader);
         const isBase64 = /content-transfer-encoding:\s*base64/i.test(partHeader);
         const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(partHeader);
 
@@ -119683,12 +119686,15 @@ function parseMimeEmail(rawText, headers) {
           const isInline = /content-disposition:\s*inline/i.test(partHeader) || Boolean(cid);
 
           const base64Clean = partBody.replace(/\s+/g, '');
-          if (base64Clean) {
-            const dataUrl = 'data:' + (mimeType || 'image/png') + ';base64,' + base64Clean;
+          // Only real base64 becomes a data: URL, and only under a real image
+          // type: both end up inside an attribute on the admin page.
+          const safeMime = /^image\/[a-z0-9.+-]+$/.test(mimeType) ? mimeType : 'image/png';
+          if (base64Clean && /^[A-Za-z0-9+/=]+$/.test(base64Clean)) {
+            const dataUrl = 'data:' + safeMime + ';base64,' + base64Clean;
             result.attachments.push({
               id: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
               filename: filename,
-              mimeType: mimeType || 'image/png',
+              mimeType: safeMime,
               dataUrl: dataUrl,
               size: Math.round(base64Clean.length * 0.75),
               cid: cid,

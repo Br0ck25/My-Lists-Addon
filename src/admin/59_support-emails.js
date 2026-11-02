@@ -198,7 +198,7 @@ function parseMimeEmail(rawText, headers) {
         const mimeType = ctMatch ? ctMatch[1].trim().toLowerCase() : '';
         const isHtml = mimeType === 'text/html';
         const isPlain = mimeType === 'text/plain';
-        const isImage = mimeType.startsWith('image/') || /\.(?:png|jpe?g|gif|webp|svg|bmp)$/i.test(partHeader);
+        const isImage = /^image\/[a-z0-9.+-]+$/.test(mimeType) || /\.(?:png|jpe?g|gif|webp|svg|bmp)$/i.test(partHeader);
         const isBase64 = /content-transfer-encoding:\s*base64/i.test(partHeader);
         const isQp = /content-transfer-encoding:\s*quoted-printable/i.test(partHeader);
 
@@ -211,12 +211,15 @@ function parseMimeEmail(rawText, headers) {
           const isInline = /content-disposition:\s*inline/i.test(partHeader) || Boolean(cid);
 
           const base64Clean = partBody.replace(/\s+/g, '');
-          if (base64Clean) {
-            const dataUrl = 'data:' + (mimeType || 'image/png') + ';base64,' + base64Clean;
+          // Only real base64 becomes a data: URL, and only under a real image
+          // type: both end up inside an attribute on the admin page.
+          const safeMime = /^image\/[a-z0-9.+-]+$/.test(mimeType) ? mimeType : 'image/png';
+          if (base64Clean && /^[A-Za-z0-9+/=]+$/.test(base64Clean)) {
+            const dataUrl = 'data:' + safeMime + ';base64,' + base64Clean;
             result.attachments.push({
               id: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
               filename: filename,
-              mimeType: mimeType || 'image/png',
+              mimeType: safeMime,
               dataUrl: dataUrl,
               size: Math.round(base64Clean.length * 0.75),
               cid: cid,

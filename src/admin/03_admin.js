@@ -6145,7 +6145,7 @@ ${UTILITY_CSS}
         const unreadClass = (t.unread > 0) ? ' unread' : '';
         const statusClass = t.status || 'open';
         const dateStr = new Date(t.last_message_at || t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        const sender = t.customer_name ? (t.customer_name + ' &lt;' + t.customer_email + '&gt;') : t.customer_email;
+        const sender = t.customer_name ? (escapeHtmlAdmin(t.customer_name) + ' &lt;' + escapeHtmlAdmin(t.customer_email) + '&gt;') : escapeHtmlAdmin(t.customer_email);
 
         return '<div class="support-thread-card' + activeClass + unreadClass + '" data-act="selectSupportEmailThread" data-act-args="' + adminActAttr([t.id]) + '">' +
           '<div class="u-jc-space_between u-ai-center u-mb-4px" style="display:flex;">' +
@@ -6352,11 +6352,11 @@ ${UTILITY_CSS}
                     const szStr = att.size ? (' (' + Math.round(att.size / 1024) + ' KB)') : '';
                     return '<div style="width:130px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column;">' +
                       '<div style="width:100%; height:80px; overflow:hidden; cursor:zoom-in; background:var(--panel-strong); position:relative;" title="Click to view larger" data-act="openSupportMessageAttachmentLightbox" data-act-args="' + adminActAttr([m.id, attIdx]) + '">' +
-                        '<img src="' + (att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:100%; object-fit:cover; display:block;" loading="lazy">' +
+                        '<img src="' + escapeHtmlAdmin(att.dataUrl || '') + '" alt="' + escapeHtmlAdmin(fn) + '" style="width:100%; height:100%; object-fit:cover; display:block;" loading="lazy">' +
                       '</div>' +
                       '<div class="u-jc-space_between u-ai-center u-p-4px_6px" style="display:flex; gap:4px; border-top:1px solid var(--border); background:var(--surface);">' +
                         '<span class="u-fs-v_font_size_xs u-to-ellipsis u-ov-hidden u-ws-nowrap u-c-v_text u-flex-1" title="' + escapeHtmlAdmin(fn + szStr) + '">' + escapeHtmlAdmin(fn) + '</span>' +
-                        '<a href="' + (att.dataUrl || '#') + '" download="' + escapeHtmlAdmin(fn) + '" target="_blank" rel="noopener noreferrer" style="color:var(--muted); display:inline-flex; align-items:center; text-decoration:none; padding:2px;" title="Download ' + escapeHtmlAdmin(fn) + '">' +
+                        '<a href="' + escapeHtmlAdmin(att.dataUrl || '#') + '" download="' + escapeHtmlAdmin(fn) + '" target="_blank" rel="noopener noreferrer" style="color:var(--muted); display:inline-flex; align-items:center; text-decoration:none; padding:2px;" title="Download ' + escapeHtmlAdmin(fn) + '">' +
                           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
                         '</a>' +
                       '</div>' +
