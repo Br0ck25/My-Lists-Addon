@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "245907776f";
+const WORKER_BUILD = "bce21c96c1";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -44834,7 +44834,7 @@ async function startTraktDeviceLogin(retried) {
 
     if (_traktDevicePollTimer) clearInterval(_traktDevicePollTimer);
 
-    _traktDevicePollTimer = setInterval(async () => {
+    _traktDevicePollTimer = setInterval(skipWhileBusy(async () => {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
@@ -44885,7 +44885,7 @@ async function startTraktDeviceLogin(retried) {
           if (statusEl) statusEl.innerText = pollData.error;
         }
       } catch (e) {}
-    }, intervalSec * 1000);
+    }), intervalSec * 1000);
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
@@ -49401,6 +49401,16 @@ window.pushCollectionGroupToNuvio = pushCollectionGroupToNuvio;
 window.pushPremadeCollectionToNuvio = pushPremadeCollectionToNuvio;
 window.pushLinkedNuvioCollection = pushLinkedNuvioCollection;
 window.deleteNuvioCollection = deleteNuvioCollection;
+// Wraps a timer callback so a tick that arrives while the previous run is still
+// waiting (a slow fetch) is skipped instead of starting a second request.
+function skipWhileBusy(fn) {
+  let busy = false;
+  return async function () {
+    if (busy) return;
+    busy = true;
+    try { return await fn.apply(this, arguments); } finally { busy = false; }
+  };
+}
 // The key an import row and its /api/bulk-resolve answer are matched by. The
 // type is part of it: a movie and a show with the same title and year must not
 // share an IMDb id. A missing type (an older server's answer) means a movie.

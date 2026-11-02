@@ -71,6 +71,33 @@ describe("Connect Trakt with a code: asked from the browser first", () => {
     await ticks[0]();
     assert.match(client.document.getElementById("traktDevicePollingStatus").innerText, /Trakt is answering slowly/);
   });
+
+  it("does not start a second check while the first is still waiting for Trakt", async () => {
+    let inFlight = 0, maxInFlight = 0, release;
+    const client = traktClient({
+      "/oauth/device/code": () => ({ json: CODE }),
+      "/api/trakt/device/token": async () => {
+        inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => { release = r; });
+        inFlight--;
+        return { json: { ok: false, pending: true } };
+      },
+    });
+    const ticks = [];
+    client.set("setInterval", (fn) => { ticks.push(fn); return ticks.length; });
+    await client.call("startTraktDeviceLogin");
+    const first = ticks[0]();            // a slow check, still waiting
+    await new Promise((r) => setImmediate(r));
+    const second = ticks[0]();           // the next tick arrives meanwhile
+    await new Promise((r) => setImmediate(r));
+    assert.equal(maxInFlight, 1, "a check that outlasts the interval must not be doubled");
+    release(); await first; await second;
+    // And once it has finished, the next tick checks again.
+    const third = ticks[0]();
+    await new Promise((r) => setImmediate(r));
+    assert.equal(requestsTo(client, "/api/trakt/device/token").length, 2);
+    release(); await third;
+  });
 });
 
 describe("Connect Trakt with a code: the Worker's fallback says what Trakt said", () => {

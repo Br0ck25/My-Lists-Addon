@@ -969,7 +969,7 @@ async function startTraktDeviceLogin(retried) {
 
     if (_traktDevicePollTimer) clearInterval(_traktDevicePollTimer);
 
-    _traktDevicePollTimer = setInterval(async () => {
+    _traktDevicePollTimer = setInterval(skipWhileBusy(async () => {
       if (Date.now() > expiresAt) {
         clearInterval(_traktDevicePollTimer);
         _traktDevicePollTimer = null;
@@ -1020,7 +1020,7 @@ async function startTraktDeviceLogin(retried) {
           if (statusEl) statusEl.innerText = pollData.error;
         }
       } catch (e) {}
-    }, intervalSec * 1000);
+    }), intervalSec * 1000);
 
   } catch (err) {
     if (codeEl) codeEl.innerText = 'ERROR';
