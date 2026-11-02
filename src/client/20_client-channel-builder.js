@@ -497,17 +497,6 @@ function normalizeChannelItemFromStorage(it) {
   };
 }
 
-// A saved channel map keeps only object values. One null or non-object entry
-// (for example one synced from another device) must not break the page.
-function objectEntriesOnly(map) {
-  const out = {};
-  if (!map || typeof map !== 'object' || Array.isArray(map)) return out;
-  for (const [k, v] of Object.entries(map)) {
-    if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = v;
-  }
-  return out;
-}
-
 function loadLocalChannels() {
   try {
     if (_memoryChannelsMap && typeof _memoryChannelsMap === 'object' && Object.keys(_memoryChannelsMap).length > 0) {

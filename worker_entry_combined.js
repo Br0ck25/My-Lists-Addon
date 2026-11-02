@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "41cdea3f24";
+const WORKER_BUILD = "cb93d6d1a1";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -4681,19 +4681,6 @@ async function readJsonBody(request) {
   } catch {
     return null;
   }
-}
-
-// Parses a JSON request body and THROWS unless it is a plain object. `null`,
-// `[]`, `"x"` and `5` are valid JSON, so a bare `request.json()` succeeds on
-// them and the next `body.field` read crashes with a 500. Used inside the
-// existing try/catch around the body parse, so every route answers with the
-// same "Invalid JSON body." 400 it already gives for broken JSON.
-async function readJsonObject(request) {
-  const parsed = await request.json();
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new SyntaxError("JSON body must be an object.");
-  }
-  return parsed;
 }
 
 // Turns an exception into something safe to hand back to a caller, and logs
@@ -17810,6 +17797,18 @@ ${UTILITY_CSS}
 // configs are virtually always much longer than that (even a single list's
 // JSON encodes to well over 100 characters), so length alone reliably
 // tells the two apart without needing a prefix.
+// Parses a JSON request body and THROWS unless it is a plain object. `null`,
+// `[]`, `"x"` and `5` are valid JSON, so a bare `request.json()` succeeds on
+// them and the next `body.field` read crashes with a 500. Used inside the
+// existing try/catch around the body parse, so every route answers with the
+// same "Invalid JSON body." 400 it already gives for broken JSON.
+async function readJsonObject(request) {
+  const parsed = await request.json();
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new SyntaxError("JSON body must be an object.");
+  }
+  return parsed;
+}
 const SHORT_ID_LENGTH = 12;
 
 // Stored install configs live under a namespace like every other key.
@@ -57277,17 +57276,6 @@ function normalizeChannelItemFromStorage(it) {
   };
 }
 
-// A saved channel map keeps only object values. One null or non-object entry
-// (for example one synced from another device) must not break the page.
-function objectEntriesOnly(map) {
-  const out = {};
-  if (!map || typeof map !== 'object' || Array.isArray(map)) return out;
-  for (const [k, v] of Object.entries(map)) {
-    if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = v;
-  }
-  return out;
-}
-
 function loadLocalChannels() {
   try {
     if (_memoryChannelsMap && typeof _memoryChannelsMap === 'object' && Object.keys(_memoryChannelsMap).length > 0) {
@@ -70157,6 +70145,16 @@ function renderChannelMergeList() {
 
 
 
+// A saved channel map keeps only object values. One null or non-object entry
+// (for example one synced from another device) must not break the page.
+function objectEntriesOnly(map) {
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return {};
+  for (const k of Object.keys(map)) {
+    const v = map[k];
+    if (!v || typeof v !== 'object' || Array.isArray(v)) delete map[k];
+  }
+  return map;
+}
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
@@ -104929,8 +104927,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/reply
   if (path === '/admin/api/support-emails/reply' && request.method === 'POST') {
     try {
-      let body;
-      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
+      const body = await readJsonObject(request).catch(() => ({}));
       const result = await sendSupportEmailReply(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -104941,8 +104938,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/compose
   if (path === '/admin/api/support-emails/compose' && request.method === 'POST') {
     try {
-      let body;
-      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
+      const body = await readJsonObject(request).catch(() => ({}));
       const result = await composeNewSupportEmail(env, body);
       return json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' });
     } catch (e) {
@@ -104953,8 +104949,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/status
   if (path === '/admin/api/support-emails/status' && request.method === 'POST') {
     try {
-      let body;
-      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
+      const body = await readJsonObject(request).catch(() => ({}));
       const { threadId, status } = body || {};
       if (!threadId || !['open', 'replied', 'closed', 'spam'].includes(status)) {
         return json({ ok: false, error: 'Invalid threadId or status.' }, 400);
@@ -104971,8 +104966,7 @@ async function handleSupportEmailsApi(path, request, env) {
   // POST /admin/api/support-emails/delete
   if (path === '/admin/api/support-emails/delete' && request.method === 'POST') {
     try {
-      let body;
-      try { body = await readJsonObject(request); } catch { return jsonInvalidBody({ 'Cache-Control': 'no-store' }); }
+      const body = await readJsonObject(request).catch(() => ({}));
       const threadId = body && body.threadId;
       if (!threadId) return json({ ok: false, error: 'Thread ID required.' }, 400);
 
