@@ -2138,7 +2138,7 @@ describe("P1-T2: no route hands a stored secret to an unproven caller", () => {
     needles.set(u.creatorKey, "Creator Key");
 
     const routes = new Set();
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       for (const m of src.matchAll(/(?:path|pathname|url\.pathname) === "(\/[^"]*)"/g)) routes.add(m[1]);
     }
@@ -4960,7 +4960,7 @@ describe("audit fix 7: error messages are useful but cannot carry a secret", () 
   });
 
   it("no route still returns a raw exception message", () => {
-    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js"]) {
+    for (const f of ["src/api/25_api-catalog-routes.js", "src/api/26_api-creator-and-admin-routes.js", "src/api/67_creator-api-routes.js", "src/api/68_creator-api-account-and-save-routes.js", "src/api/69_creator-api-sync-routes.js", "src/api/70_stremio-routes.js", "src/api/71_poster-and-support-routes.js", "src/api/72_static-asset-routes.js", "src/api/73_public-list-routes.js"]) {
       const src = fs.readFileSync(path.join(REPO_ROOT, f), "utf8");
       assert.doesNotMatch(src, /String\((?:err|e)\.message \|\| (?:err|e)\)/,
         `${f} still returns a raw exception message; use safeErrorMessage()`);
@@ -8561,6 +8561,8 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/api/68_creator-api-account-and-save-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/68_creator-api-account-and-save-routes.js"), "utf8"),
     // sync/load moved here out of handleFetch (CQ-01).
     "src/api/69_creator-api-sync-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/69_creator-api-sync-routes.js"), "utf8"),
+    // /api/search-published-lists moved here out of handleFetch (CQ-01).
+    "src/api/73_public-list-routes.js": fs.readFileSync(path.join(REPO_ROOT, "src/api/73_public-list-routes.js"), "utf8"),
   };
 
   // Every place in the storage-owning files that names a custom-list key,
@@ -8613,7 +8615,8 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/api/67_creator-api-routes.js :: creatorListSaveSlug": "checks which slugs are taken; writes nothing",
     "src/api/67_creator-api-routes.js :: creatorListSaveAddToOrder": "adds the just-saved slug to the order key; its only caller, creatorApiListsSave, bumps the stamp right after",
     "src/api/69_creator-api-sync-routes.js :: creatorApiSyncLoad": "reads the order key",
-    "src/api/26_api-creator-and-admin-routes.js :: /api/search-published-lists": "reads published records",
+    // /lists/<user>/<slug> (creatorListPageOrFeed) followed /api/search-published-lists in 26_, so this entry was always about the public list page; it moved with the route (CQ-01).
+    "src/api/73_public-list-routes.js :: creatorListPageOrFeed": "reads published records",
     "src/admin/65_admin-api-routes.js :: adminApiBackfillTrending": "reads to build the trending set",
     "src/admin/65_admin-api-routes.js :: adminApiDeleteCreatorList": "delegates to deleteCreatorLists, which bumps",
   };
