@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-02";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e35e1bed99";
+const WORKER_BUILD = "df3fdc41f0";
 
 // --- Logs never carry a secret (S-14, task P2-7) -----------------------------
 //
@@ -99585,69 +99585,9 @@ function generateSearchVariations(query) {
       return json({ ok: true, creatorName: v.normalized, displayName: profile.displayName, creatorKey }, 200, { "Cache-Control": "no-store" });
     }
 
-    // /admin/api/reset-creator-key  (POST)  { username } -> { ok, creatorKey }
-    // Admin-only. There's no email or password on a Creator Profile (see
-    // authenticateCreator's own comment above), so a lost key can never be
-    // recovered -- only a hash of it is ever stored. This is a reset, not
-    // a recovery: it generates a brand-new key the same way signup does,
-    // overwrites the stored hash, and hands the plaintext key back exactly
-    // once, same as /api/creator/create does. The old key stops working
-    // the instant this runs -- anywhere it was in use (other devices,
-    // scrobble webhook URLs that embed it) breaks until updated with the
-    // new one. This endpoint has no way to confirm the requester actually
-    // is the creator in question; that verification is left entirely to
-    // the admin using it, out of band, before calling it.
-    if (path === "/admin/api/reset-creator-key" && request.method === "POST") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return json({ ok: false, error: "Invalid JSON body." }, 400);
-      }
-      const v = validateCreatorUsername(body.username);
-      if (!v.ok) return json({ ok: false, error: "Unknown creator." });
-      const raw = await getCreator(env, v.normalized);
-      if (!raw) return json({ ok: false, error: "Unknown creator." });
-      let profile;
-      try {
-        profile = JSON.parse(raw);
-      } catch {
-        return json({ ok: false, error: "Could not read that creator's profile." });
-      }
-      const creatorKey = generateCreatorKey();
-      const keyHash = await hashCreatorKey(creatorKey);
-
-      // Same contract as /api/creator/reset-key above: D1 has to be either
-      // updated or unable to answer with the old hash before KV is touched.
-      // See rotateCreatorKeyHashInD1 (02_http-and-creator-utils.js).
-      const d1Rotation = await rotateCreatorKeyHashInD1(env, v.normalized, keyHash);
-      if (!d1Rotation.ok) {
-        return json({
-          ok: false,
-          error: "Couldn't reset that key right now. Please try again in a moment -- the creator's existing key still works.",
-        }, 503);
-      }
-
-      // The previous key must stop working on a warm isolate the instant
-      // it is rotated -- see invalidateCreatorAuthMemo's own comment.
-      invalidateCreatorAuthMemo();
-
-      // Written unconditionally, not only when D1 missed. getCreator()
-      // falls back to D1, so leaving KV holding an older key_hash than D1
-      // means two different valid passwords for one account depending on
-      // which store answers. Both stores always get the same hash.
-      await env.CONFIGS.put(
-        `creator:${v.normalized}`,
-        JSON.stringify({ ...profile, keyHash })
-      );
-      await storeCreatorKeyLookup(env, creatorKey, v.normalized);
-      // Signed out everywhere, for the same reason as the self-service reset.
-      await revokeSessionsForUsername(env, v.normalized);
-      return json({ ok: true, creatorKey }, 200, { "Cache-Control": "no-store" });
-    }
+    // POST /admin/api/reset-creator-key -- 66_admin-api-feedback-and-tools-routes.js.
+    const adminApiResetKeyResponse = await handleAdminApiResetKeyRoute(request, env, ctx, url, path);
+    if (adminApiResetKeyResponse) return adminApiResetKeyResponse;
 
     // /api/creator/recovery-answer  (POST)  { creatorName, creatorKey, recoveryAnswer } -> { ok, hasRecoveryAnswer }
     // Authenticated self-service. Allows an existing creator to set or update
@@ -103428,53 +103368,9 @@ function generateSearchVariations(query) {
       });
     }
 
-    // /admin/api/admin-sessions  (GET) -> { ok, sessions }
-    // The browsers signed in to this dashboard right now. P7-2: before this,
-    // "who is signed in" had no answer at all -- the cookie was self-contained.
-    if (path === "/admin/api/admin-sessions" && request.method === "GET") {
-      const identity = await resolveAdminIdentity(request, env);
-      if (!identity) return json({ ok: false, error: "Not authorized." }, 401);
-      const result = await listAdminSessions(env, 50);
-      return json({ ...result, current: identity.session ? identity.session.id : null, via: identity.via }, 200, { "Cache-Control": "no-store" });
-    }
-
-    // /admin/api/revoke-admin-session  (POST) { id } -> { ok, revoked }
-    // Signs one browser out without rotating ADMIN_KEY. `all: true` signs every
-    // browser out, which is what a lost laptop or a shared password needs.
-    if (path === "/admin/api/revoke-admin-session" && request.method === "POST") {
-      const identity = await resolveAdminIdentity(request, env);
-      if (!identity) return json({ ok: false, error: "Not authorized." }, 401);
-      if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
-      let body = {};
-      try {
-        body = await request.json();
-      } catch {}
-      if (body && body.all === true) {
-        const revoked = await revokeAllAdminSessions(env);
-        await recordAdminAudit(env, request, identity.actor, "admin.session.revoke-all",
-          { detail: JSON.stringify({ revoked: revoked }) }, 200);
-        return json({ ok: true, revoked: revoked }, 200, { "Cache-Control": "no-store" });
-      }
-      const id = String((body && body.id) || "").trim();
-      if (!/^[0-9a-f]{32}$/.test(id)) return json({ ok: false, error: "Unknown session." }, 400);
-      const revoked = await revokeAdminSessionById(env, id);
-      await recordAdminAudit(env, request, identity.actor, "admin.session.revoke",
-        { target: id, detail: JSON.stringify({ id: id, revoked: revoked }) }, 200);
-      return json({ ok: true, revoked: revoked, self: !!(identity.session && identity.session.id === id) }, 200, { "Cache-Control": "no-store" });
-    }
-
-    // /admin/api/audit?limit=100  (GET) -> { ok, entries }
-    // The admin audit log (P7-2, migration 0018): logins, logouts and every
-    // mutating admin request, newest first. Read-only; nothing here is writable
-    // through the API, because a log that can be edited from the same dashboard
-    // it records is not a log.
-    if (path === "/admin/api/audit" && request.method === "GET") {
-      const authed = await isAdminRequest(request, env);
-      if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
-      const limit = parseInt(url.searchParams.get("limit") || "100", 10) || 100;
-      const result = await listAdminAudit(env, limit);
-      return json(result, 200, { "Cache-Control": "no-store" });
-    }
+    // /admin/api/admin-sessions, /revoke-admin-session, /audit -- 66_admin-api-feedback-and-tools-routes.js.
+    const adminApiSessionResponse = await handleAdminApiSessionRoutes(request, env, ctx, url, path);
+    if (adminApiSessionResponse) return adminApiSessionResponse;
 
     // POST only. A logout that answers a GET is a state change any page can
     // trigger with an <img src>, and while the session cookie is SameSite=Strict
@@ -122663,4 +122559,133 @@ async function adminApiChannelPresetsRebuild(request, env, ctx, url) {
   } catch (err) {
     return json({ ok: false, error: safeErrorMessage(err) });
   }
+}
+
+// The two admin routes that sit apart from the rest in handleFetch: the creator key reset
+// (early, among the creator routes) and the sign-in sessions and audit log (after /admin/login).
+
+// POST /admin/api/reset-creator-key, called where it sat among the creator routes. Returns a Response, or null.
+async function handleAdminApiResetKeyRoute(request, env, ctx, url, path) {
+  if (path === "/admin/api/reset-creator-key" && request.method === "POST") return adminApiResetCreatorKey(request, env);
+  return null;
+}
+
+// /admin/api/reset-creator-key  (POST)  { username } -> { ok, creatorKey }
+// Admin-only. There's no email or password on a Creator Profile (see
+// authenticateCreator's own comment above), so a lost key can never be
+// recovered -- only a hash of it is ever stored. This is a reset, not
+// a recovery: it generates a brand-new key the same way signup does,
+// overwrites the stored hash, and hands the plaintext key back exactly
+// once, same as /api/creator/create does. The old key stops working
+// the instant this runs -- anywhere it was in use (other devices,
+// scrobble webhook URLs that embed it) breaks until updated with the
+// new one. This endpoint has no way to confirm the requester actually
+// is the creator in question; that verification is left entirely to
+// the admin using it, out of band, before calling it.
+async function adminApiResetCreatorKey(request, env) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: "Invalid JSON body." }, 400);
+  }
+  const v = validateCreatorUsername(body.username);
+  if (!v.ok) return json({ ok: false, error: "Unknown creator." });
+  const raw = await getCreator(env, v.normalized);
+  if (!raw) return json({ ok: false, error: "Unknown creator." });
+  let profile;
+  try {
+    profile = JSON.parse(raw);
+  } catch {
+    return json({ ok: false, error: "Could not read that creator's profile." });
+  }
+  const creatorKey = generateCreatorKey();
+  const keyHash = await hashCreatorKey(creatorKey);
+
+  // Same contract as /api/creator/reset-key above: D1 has to be either
+  // updated or unable to answer with the old hash before KV is touched.
+  // See rotateCreatorKeyHashInD1 (02_http-and-creator-utils.js).
+  const d1Rotation = await rotateCreatorKeyHashInD1(env, v.normalized, keyHash);
+  if (!d1Rotation.ok) {
+    return json({
+      ok: false,
+      error: "Couldn't reset that key right now. Please try again in a moment -- the creator's existing key still works.",
+    }, 503);
+  }
+
+  // The previous key must stop working on a warm isolate the instant
+  // it is rotated -- see invalidateCreatorAuthMemo's own comment.
+  invalidateCreatorAuthMemo();
+
+  // Written unconditionally, not only when D1 missed. getCreator()
+  // falls back to D1, so leaving KV holding an older key_hash than D1
+  // means two different valid passwords for one account depending on
+  // which store answers. Both stores always get the same hash.
+  await env.CONFIGS.put(
+    `creator:${v.normalized}`,
+    JSON.stringify({ ...profile, keyHash })
+  );
+  await storeCreatorKeyLookup(env, creatorKey, v.normalized);
+  // Signed out everywhere, for the same reason as the self-service reset.
+  await revokeSessionsForUsername(env, v.normalized);
+  return json({ ok: true, creatorKey }, 200, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/admin-sessions, /revoke-admin-session and /audit, called where they sat after /admin/login. Returns a Response, or null.
+async function handleAdminApiSessionRoutes(request, env, ctx, url, path) {
+  if (path === "/admin/api/admin-sessions" && request.method === "GET") return adminApiAdminSessions(request, env);
+  if (path === "/admin/api/revoke-admin-session" && request.method === "POST") return adminApiRevokeAdminSession(request, env);
+  if (path === "/admin/api/audit" && request.method === "GET") return adminApiAudit(request, env, url);
+  return null;
+}
+
+// /admin/api/admin-sessions  (GET) -> { ok, sessions }
+// The browsers signed in to this dashboard right now. P7-2: before this,
+// "who is signed in" had no answer at all -- the cookie was self-contained.
+async function adminApiAdminSessions(request, env) {
+  const identity = await resolveAdminIdentity(request, env);
+  if (!identity) return json({ ok: false, error: "Not authorized." }, 401);
+  const result = await listAdminSessions(env, 50);
+  return json({ ...result, current: identity.session ? identity.session.id : null, via: identity.via }, 200, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/revoke-admin-session  (POST) { id } -> { ok, revoked }
+// Signs one browser out without rotating ADMIN_KEY. `all: true` signs every
+// browser out, which is what a lost laptop or a shared password needs.
+async function adminApiRevokeAdminSession(request, env) {
+  const identity = await resolveAdminIdentity(request, env);
+  if (!identity) return json({ ok: false, error: "Not authorized." }, 401);
+  if (!env || !env.DB) return json({ ok: false, error: "No D1 database binding 'DB'." }, 503);
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {}
+  if (body && body.all === true) {
+    const revoked = await revokeAllAdminSessions(env);
+    await recordAdminAudit(env, request, identity.actor, "admin.session.revoke-all",
+      { detail: JSON.stringify({ revoked: revoked }) }, 200);
+    return json({ ok: true, revoked: revoked }, 200, { "Cache-Control": "no-store" });
+  }
+  const id = String((body && body.id) || "").trim();
+  if (!/^[0-9a-f]{32}$/.test(id)) return json({ ok: false, error: "Unknown session." }, 400);
+  const revoked = await revokeAdminSessionById(env, id);
+  await recordAdminAudit(env, request, identity.actor, "admin.session.revoke",
+    { target: id, detail: JSON.stringify({ id: id, revoked: revoked }) }, 200);
+  return json({ ok: true, revoked: revoked, self: !!(identity.session && identity.session.id === id) }, 200, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/audit?limit=100  (GET) -> { ok, entries }
+// The admin audit log (P7-2, migration 0018): logins, logouts and every
+// mutating admin request, newest first. Read-only; nothing here is writable
+// through the API, because a log that can be edited from the same dashboard
+// it records is not a log.
+async function adminApiAudit(request, env, url) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  const limit = parseInt(url.searchParams.get("limit") || "100", 10) || 100;
+  const result = await listAdminAudit(env, limit);
+  return json(result, 200, { "Cache-Control": "no-store" });
 }
