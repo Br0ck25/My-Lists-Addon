@@ -191,6 +191,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: in `tests/providers.test.mjs`, call `fetchTmdbDetails` with a fake `ctx` whose `waitUntil` records promises, and assert one recorded promise writes `tmdbdetail_v2:`.
 
 ### BA-007 The Nuvio and Stremio "Watch History" rows read the whole history on every fetch
+- Status: Skipped — the row's `skip` and page size are applied in the `autotrack` source's `fetchPage` (src/core/04_config-resolution.js), after `fetchAutoTrackedCatalog` has read, type-filtered (movie/series), de-duplicated (series) and adult-filtered the whole list, and it sets `page.totalItems = items.length`. Paging the read in D1 would change the type filter, the series de-duplication and `totalItems`, so it is a wider refactor and a visible behaviour change, not a one-line swap to `watchHistoryPage` (plan rule 8).
 - Category: performance
 - Severity / confidence: P3 / Medium (call chain traced; cost not measured on a large account; this is the path for the row in Stremio/Nuvio and for /api/preview)
 - Where: src/catalog/05_catalog-core.js:2694-2698, src/data/39_activity-shelves.js:477-490 (`watchHistoryAll`)
@@ -212,7 +213,7 @@ BA-011 (small dead code, see the table) and BA-012 (docs drift) follow; neither 
 - Test that would prove it: in `tests/media-app-sync.test.mjs`, seed 600 Nuvio plays and fetch the `nuvio-watch-history` catalog row with a D1 mock counting `prepare` calls; assert the count does not grow with the number of plays.
 
 ### BA-008 Bare `catch {}` blocks hide errors with no log line
-- Status: Fixed in BA008SHA
+- Status: Fixed in 03a03a1
 - Category: bug
 - Severity / confidence: P3 / High that they exist; Low that any one hides a live bug today
 - Where: 203 `try` blocks in backend files whose `catch` is empty or comment-only and wraps 4+ lines of code. The full list is in the appendix. Per file: `25_` 45, `26_` 39, `07_` 28, `02_` 26, `03_` 22, `05_` 16, `06_` 10, others ≤2.
