@@ -2628,7 +2628,7 @@ async function htmlPageResponse(request, fullHtml, extraHeaders) {
 }
 
 // --- Per-User Cache & Circuit Breaker Shield ---------------------------------
-// Safe in-memory LRU cache with rolling window and Stale-If-Error degradation.
+// Safe in-memory LRU cache (a hit refreshes recency) with rolling window and Stale-If-Error degradation.
 // Ensures bearer-authenticated user data is safely isolated and never leaks between users.
 const PER_USER_CACHE_MAP = new Map();
 const PER_USER_CACHE_MAX_ENTRIES = 1000;
@@ -2658,29 +2658,45 @@ function safeUserHash(token = "", username = "") {
   return a + b;
 }
 
+// Catalog previews (one small entry per title) live in their own bounded map so
+// a cold home screen cannot push every user's provider responses out of the main
+// one. Same get/set shape; the key prefix picks the map.
+const PREVIEW_CACHE_MAP = new Map();
+const PREVIEW_CACHE_MAX_ENTRIES = 5000;
+const PREVIEW_CACHE_KEY_PREFIX = "catalog-preview:";
+
+function perUserCacheFor(key) {
+  return String(key).startsWith(PREVIEW_CACHE_KEY_PREFIX)
+    ? { map: PREVIEW_CACHE_MAP, max: PREVIEW_CACHE_MAX_ENTRIES }
+    : { map: PER_USER_CACHE_MAP, max: PER_USER_CACHE_MAX_ENTRIES };
+}
+
 function getPerUserCache(key) {
   if (!key) return null;
-  const entry = PER_USER_CACHE_MAP.get(key);
+  const { map } = perUserCacheFor(key);
+  const entry = map.get(key);
   if (!entry) return null;
   const now = Date.now();
-  if (now <= entry.freshUntil) {
-    return { data: entry.data, isFresh: true, isStale: false };
-  }
   if (now <= entry.staleUntil) {
-    return { data: entry.data, isFresh: false, isStale: true };
+    // Least recently used: a hit moves the key to the newest position.
+    map.delete(key);
+    map.set(key, entry);
+    return { data: entry.data, isFresh: now <= entry.freshUntil, isStale: now > entry.freshUntil };
   }
-  PER_USER_CACHE_MAP.delete(key);
+  map.delete(key);
   return null;
 }
 
 function setPerUserCache(key, data, freshTtlSec = 60, staleTtlSec = 1800) {
   if (!key || data === undefined || data === null) return;
-  if (PER_USER_CACHE_MAP.size >= PER_USER_CACHE_MAX_ENTRIES) {
-    const oldestKey = PER_USER_CACHE_MAP.keys().next().value;
-    if (oldestKey) PER_USER_CACHE_MAP.delete(oldestKey);
+  const { map, max } = perUserCacheFor(key);
+  map.delete(key);
+  if (map.size >= max) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey) map.delete(oldestKey);
   }
   const now = Date.now();
-  PER_USER_CACHE_MAP.set(key, {
+  map.set(key, {
     data,
     freshUntil: now + freshTtlSec * 1000,
     staleUntil: now + staleTtlSec * 1000,
