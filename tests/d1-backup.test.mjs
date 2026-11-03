@@ -12,6 +12,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
+import os from "node:os";
+import * as backup from "../.github/scripts/d1-backup.mjs";
 import {
   dumpDatabase, rowStatements, chunkForLiterals, sqlLiteral, d1ApiQuery, readSchema, MAX_STATEMENT_BYTES,
 } from "../.github/scripts/d1-backup.mjs";
@@ -256,5 +258,75 @@ describe("d1-backup-verify: a kept backup must restore", () => {
       const r = await verifyDump(fileLines, counts);
       assert.equal(r.ok, true, `${schemaFile}: ${r.problems.join("; ")}`);
     }
+  });
+});
+
+// DB-02: the dump is a series of reads, not a snapshot. A sign-up between the
+// read of `accounts` and the read of `sessions` puts a session in the file
+// whose account is not, the restore check refuses it, and that day's backup
+// fails. One more dump, made straight away, is consistent.
+describe("a sign-up while the backup runs (DB-02)", () => {
+  // The live schema, with a sign-up landing once `accounts` has been read
+  // and before `sessions` is, on the first `signups` dumps only.
+  function racingDb(signups) {
+    const db = new DatabaseSync(":memory:");
+    db.exec(fs.readFileSync(path.join(ROOT, "schema.sql"), "utf8"));
+    db.prepare("INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (1, 'ann', 'Ann', 'h', 1)").run();
+    let n = 0;
+    let raced = 0;
+    const query = async (sql, params = []) => {
+      if (/FROM "sessions"/.test(sql) && !params.length && raced < signups) {
+        raced++;
+        n++;
+        db.prepare("INSERT INTO accounts (id, username, display_name, key_hash, created_at) VALUES (?, ?, 'New', 'h', 2)").run(100 + n, "new" + n);
+        db.prepare("INSERT INTO sessions (id_hash, account_id, created_at, last_seen_at, expires_at) VALUES (?, ?, 2, 2, 3)").run("s" + n, 100 + n);
+      }
+      return queryOf(db)(sql, params);
+    };
+    return { db, query, raced: () => raced };
+  }
+
+  const tmpFile = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "d1b-")), "dump.sql");
+
+  it("one dump taken during a sign-up does not restore", async () => {
+    const { verifyDump } = await import("../.github/scripts/d1-backup-verify.mjs");
+    const { query } = racingDb(1);
+    const lines = [];
+    const counts = await dumpDatabase(query, (l) => lines.push(l), { now: new Date(0) });
+    const r = await verifyDump(lines.join("\n").split("\n"), counts);
+    assert.equal(r.ok, false);
+    assert.match(r.problems.join(" "), /FOREIGN KEY constraint failed/);
+  });
+
+  it("dumps again once, and keeps a file that restores", async () => {
+    const { verifyDump } = await import("../.github/scripts/d1-backup-verify.mjs");
+    const { query, raced } = racingDb(1);
+    const out = tmpFile();
+    const logged = [];
+    const counts = await backup.dumpUntilRestorable(query, out, { now: new Date(0), log: (m) => logged.push(m) });
+    assert.equal(raced(), 1, "the first dump met the sign-up");
+    assert.match(logged.join(" "), /again/);
+    const r = await verifyDump(fs.readFileSync(out, "utf8").split("\n"), counts);
+    assert.equal(r.ok, true, r.problems.join("; "));
+    assert.equal(counts.sessions, 1);
+  });
+
+  it("still fails the run when the second dump does not restore either", async () => {
+    const { query } = racingDb(2);
+    await assert.rejects(backup.dumpUntilRestorable(query, tmpFile(), { now: new Date(0), log: () => {} }), /FOREIGN KEY constraint failed/);
+  });
+
+  it("does not dump again for any other reason a file does not restore", async () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT); INSERT INTO t VALUES (1, 'a');");
+    let schemaReads = 0;
+    const query = async (sql, params = []) => {
+      if (/sqlite_schema/.test(sql)) schemaReads++;
+      // A table SQLite cannot create, as a stand-in for any other problem.
+      if (/sqlite_schema/.test(sql)) return [{ type: "table", name: "t", tbl_name: "t", sql: "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT) BROKEN" }];
+      return queryOf(db)(sql, params);
+    };
+    await assert.rejects(backup.dumpUntilRestorable(query, tmpFile(), { now: new Date(0), log: () => {} }), /refused/);
+    assert.equal(schemaReads, 1);
   });
 });

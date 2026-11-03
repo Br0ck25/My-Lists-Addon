@@ -26,7 +26,9 @@
 //     node .github/scripts/d1-backup.mjs <database id> <output .sql>
 
 import fs from "node:fs";
+import readline from "node:readline";
 import { pathToFileURL } from "node:url";
+import { verifyDump } from "./d1-backup-verify.mjs";
 
 // D1 refuses a statement over 100,000 bytes. Kept well under it.
 export const MAX_STATEMENT_BYTES = 90000;
@@ -194,6 +196,37 @@ export async function dumpDatabase(query, write, { label = "D1 database", now = 
   return counts;
 }
 
+// Only a row whose parent row was added after the parent's table was read
+// (audit DB-02): the refused statement, and the counts it puts out.
+function isReadRace(problems) {
+  return problems.some((p) => /FOREIGN KEY constraint failed/.test(p))
+    && problems.every((p) => /FOREIGN KEY constraint failed/.test(p) || /rows restored, \d+ read from D1$/.test(p));
+}
+
+// dumpDatabase into `output`, checked the way d1-backup-verify.mjs checks the
+// kept file. The dump reads one table after another, not one snapshot, so a
+// sign-up or a play between two reads can leave a child row without its
+// parent (audit DB-02); that dump is made once more straight away. Any other
+// problem, or the same one twice, throws. Returns the row counts.
+export async function dumpUntilRestorable(query, output, { label, now, attempts = 2, log = console.log } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    const fd = fs.openSync(output, "w");
+    let counts;
+    try {
+      counts = await dumpDatabase(query, (line) => fs.writeSync(fd, line + "\n"), { label, now });
+    } finally {
+      fs.closeSync(fd);
+    }
+    const lines = readline.createInterface({ input: fs.createReadStream(output, "utf8"), crlfDelay: Infinity });
+    const r = await verifyDump(lines, counts);
+    if (r.ok) return counts;
+    if (attempt >= attempts || !isReadRace(r.problems)) {
+      throw new Error(`the dump does not restore: ${r.problems.join("; ")}`);
+    }
+    log(`A row was added while the dump ran, without its parent (${r.problems[0]}). Dumping again.`);
+  }
+}
+
 // The D1 query API, as a function of (sql, params) -> rows. Spaced out to
 // stay under Cloudflare's API limit (1,200 requests in five minutes), and
 // retried on the errors that are worth retrying.
@@ -240,17 +273,12 @@ async function main() {
     process.exit(2);
   }
   const query = d1ApiQuery({ accountId, databaseId, token });
-  const fd = fs.openSync(output, "w");
-  try {
-    const counts = await dumpDatabase(query, (line) => fs.writeSync(fd, line + "\n"), { label: `D1 database ${databaseId.slice(0, 8)}...` });
-    const total = Object.values(counts).reduce((a, b) => a + b, 0);
-    console.log(`Read ${Object.keys(counts).length} tables, ${total} rows.`);
-    for (const [name, n] of Object.entries(counts)) console.log(`  ${name}: ${n}`);
-    // What d1-backup-verify.mjs checks the restored copy against.
-    fs.writeFileSync(`${output}.counts.json`, JSON.stringify(counts));
-  } finally {
-    fs.closeSync(fd);
-  }
+  const counts = await dumpUntilRestorable(query, output, { label: `D1 database ${databaseId.slice(0, 8)}...` });
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  console.log(`Read ${Object.keys(counts).length} tables, ${total} rows.`);
+  for (const [name, n] of Object.entries(counts)) console.log(`  ${name}: ${n}`);
+  // What d1-backup-verify.mjs checks the restored copy against.
+  fs.writeFileSync(`${output}.counts.json`, JSON.stringify(counts));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
