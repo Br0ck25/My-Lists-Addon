@@ -1,5 +1,5 @@
 # Keep synced collection rows off the Nuvio home screen (2026-11-03)
-Status: waiting for owner
+Status: building
 Model: claude-opus-5-5 (as configured for the session)
 
 ## Request
@@ -34,20 +34,24 @@ toggle would turn them to hidden"
    showed after adding lists and pressing Update Nuvio.
    *Recommended:* none, this is a fact question. (b) would be a separate bug
    to investigate before building.
+   **Owner:** this was an old prompt used as an example; the toggle was known.
 2. Should Update Nuvio remember each collection's hide choice, so lists
    added later stay hidden too?
    *Recommended:* yes. It closes the gap above and needs no new control.
+   **Owner:** yes.
 3. Should people be able to change the choice after syncing?
    *Recommended:* yes. Add the same toggle to the synced collection's edit
    window; it takes effect on the next Update Nuvio, and switching it off
    shows the rows again.
+   **Owner:** yes.
 4. Default for new syncs: keep **off** (rows show, as today), or switch to
    **on**?
    *Recommended:* keep off and keep remembering the last choice. Changing the
    default would change the home screen for people who expect rows there.
+   **Owner:** keep off.
 
 ## Approved plan
-Not approved yet. Proposed (assuming the recommended answers):
+Approved by the owner on 2026-11-03 (all recommendations accepted).
 1. Save the hide choice with each synced collection when it is first pushed.
 2. Update Nuvio (whole collection or one folder) sends the saved choice, so
    new lists follow it.

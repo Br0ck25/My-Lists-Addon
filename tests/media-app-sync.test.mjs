@@ -2103,6 +2103,49 @@ describe("Nuvio collections push: install modes", () => {
     }
   });
 
+  // Update Nuvio used to skip home settings, so a list added to a "hidden"
+  // collection later showed on the Nuvio home screen. The saved choice is now
+  // sent, and only this collection's own rows change.
+  it("applies the collection's saved home-row choice on a whole-collection update, and only to its own rows", async () => {
+    const target = { ...STREAMING, folders: [] };
+    const elsewhere = { key: "app.my-list.collections:movie:elsewhere", addon_id: "app.my-list.collections", type: "movie", catalog_id: "elsewhere", enabled: true, order: 0, is_collection: false };
+    for (const hidden of [true, false]) {
+      const { post, seen } = await collectionLifecycleState([target, OTHER], { homeRows: [{ settings_json: { items: [elsewhere] } }] });
+      const updated = { ...target, folders: [{ id: "own", title: "Own", catalogSources: [{ addonId: "app.my-list", catalogId: "added-later", type: "movie" }] }] };
+      const result = await post({ installMode: "update-collection", targetCollectionId: target.id, expectedCollection: target, updatedCollection: updated,
+        collectionLists: [{ catalogId: "added-later", url: "tmdb:popular", name: "Added later", type: "movie" }], hideHomeCatalogs: hidden });
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.equal(result.body.homeVisibilityUpdated, true);
+      const items = seen.homePushed.p_settings_json.items;
+      assert.equal(items.find((i) => i.key === "app.my-list.collections:movie:added-later").enabled, !hidden);
+      assert.deepEqual(items.find((i) => i.key === elsewhere.key), elsewhere, "another collection's row is untouched");
+    }
+  });
+
+  it("rejects a non-boolean home-row choice on a whole-collection update before writing anything", async () => {
+    const { post, seen } = await collectionLifecycleState();
+    const result = await post({ installMode: "update-collection", targetCollectionId: STREAMING.id, expectedCollection: STREAMING, updatedCollection: STREAMING, hideHomeCatalogs: "yes" });
+    assert.equal(result.status, 400);
+    assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("does not change the collection when Nuvio home settings cannot be read", async () => {
+    const { post, seen } = await collectionLifecycleState(undefined, { homeReadFails: true });
+    const result = await post({ installMode: "update-collection", targetCollectionId: STREAMING.id, expectedCollection: STREAMING, updatedCollection: STREAMING, hideHomeCatalogs: true });
+    assert.equal(result.status, 502);
+    assert.equal(seen.collectionsPushed, undefined);
+  });
+
+  it("applies the home-row choice to the updated folder's rows on a single-folder update", async () => {
+    const mine = { ...STREAMING, id: "my-lists-collections", folders: [{ id: "f1", title: "F1", catalogSources: [] }] };
+    const { post, seen } = await collectionLifecycleState([mine, OTHER]);
+    const updated = { id: "f1", title: "F1", catalogSources: [{ addonId: "app.my-list", catalogId: "new-list", type: "series" }] };
+    const result = await post({ installMode: "update-folder", targetCollectionId: mine.id, folderId: "f1", expectedFolder: mine.folders[0], updatedFolder: updated,
+      collections: [updated], collectionLists: [{ catalogId: "new-list", url: "tmdb:popular", name: "New", type: "series" }], hideHomeCatalogs: true });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.equal(seen.homePushed.p_settings_json.items.find((i) => i.key === "app.my-list.collections:series:new-list").enabled, false);
+  });
+
   it("maintains the independent Collections addon on whole updates and keeps it on remote deletion", async () => {
     const regular = { url: "https://example.test/home/manifest.json", name: "My Lists", enabled: true, sort_order: 3 };
     const target = { ...STREAMING, folders: [] };
