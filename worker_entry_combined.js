@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b9ffabf842";
+const WORKER_BUILD = "67fa6e88d0";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -114894,14 +114894,19 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
     return jsonPublic({ metas }, 200, { "Cache-Control": metas.previewIncomplete ? "public, max-age=30" : "public, max-age=3600, stale-while-revalidate=86400" });
   }
 
+  // Only a request with no install config needs the chart/collection lookup up
+  // front. With a config, a row it lists is served from the config, and a row it
+  // does not list reaches the same two lookups below (entryIndex < 0).
   let unconfiguredEntry = null;
-  if (typeof findChartOrCollectionEntry === "function") {
-    unconfiguredEntry = findChartOrCollectionEntry(id, type);
-  }
-  if (!unconfiguredEntry && env && env.CONFIGS) {
-    try {
-      unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
-    } catch {}
+  if (!config) {
+    if (typeof findChartOrCollectionEntry === "function") {
+      unconfiguredEntry = findChartOrCollectionEntry(id, type);
+    }
+    if (!unconfiguredEntry && env && env.CONFIGS) {
+      try {
+        unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+      } catch {}
+    }
   }
   if (!config && !unconfiguredEntry) return jsonPublic({ metas: [] });
 
