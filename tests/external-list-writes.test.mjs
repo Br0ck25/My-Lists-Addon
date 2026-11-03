@@ -170,6 +170,17 @@ describe("add and remove an item on a provider list", () => {
 });
 
 describe("the remove direction of history, favorites and custom lists", () => {
+  it("Trakt: removing from the collection or from a custom list uses the remove address (it must not add)", async () => {
+    const sent = stubFetch();
+    const base = { provider: "trakt", traktAccessToken: "TT", action: "remove", ...MATRIX };
+    await post("/api/external-list/item-mutate", { ...base, target: "collection" });
+    await post("/api/external-list/item-mutate", { ...base, target: "custom", listId: "my list", traktUsername: "bob" });
+    assert.deepEqual(sent.map((r) => r.url), [
+      "https://api.trakt.tv/sync/collection/remove",
+      "https://api.trakt.tv/users/bob/lists/my%20list/items/remove",
+    ]);
+  });
+
   it("Simkl: removing a watched item goes to history/remove, not history", async () => {
     const sent = stubFetch();
     await post("/api/external-list/item-mutate", { provider: "simkl", simklAccessToken: "ST", simklKey: "SK", target: "history", action: "remove", ...MATRIX });
