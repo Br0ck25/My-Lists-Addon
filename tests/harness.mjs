@@ -29,6 +29,21 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// No real network from the suite (audit TEST-11). Importing the harness swaps
+// global fetch for one that refuses every host except example.test, so a test
+// that forgets to stub a provider fails loudly instead of sending a request to
+// TMDB or Cinemeta and passing by taking the "provider failed" path. Tests that
+// need an answer assign their own stub over this one, as before. `realFetch` is
+// kept for the rare place that genuinely needs the network.
+export const realFetch = globalThis.fetch;
+globalThis.fetch = async function blockedFetch(input, init) {
+  const raw = typeof input === "string" ? input : (input && input.url) || String(input);
+  let host = "";
+  try { host = new URL(raw).hostname; } catch {}
+  if (host !== "example.test") throw new Error(`network blocked in tests: ${raw}`);
+  return realFetch(input, init);
+};
+
 if (!globalThis.caches) {
   globalThis.caches = {
     default: { match: async () => null, put: async () => {} },
