@@ -1,5 +1,7 @@
 # Bug and logic audit checklist
 
+**Not in this audit:** security holes (security audit); slow code (performance); outbound timeouts and retries (api); settings that do not follow a person to another device (product).
+
 | Area | What it examines | How to check |
 |---|---|---|
 | Crashes and error handling | Requests or pages that throw instead of failing politely | Fuzz every route with `null`, `[]`, `"x"`, `5`, `{}`, wrong types and invalid JSON, signed in and out; list every 5xx. Unguarded `JSON.parse`, property reads on possibly-null values |
@@ -7,6 +9,7 @@
 | Edge cases and boundaries | Empty lists, huge lists, missing fields, unicode, limits | Hand-test limits and empties with a script against the built app |
 | Time and dates | Time zones, DST, "N days ago", expiry | Every date calculation; anything assuming a fixed offset or 24-hour days |
 | Races and lost updates | Read-modify-write without a guard, overlapping jobs | Shared records changed by more than one request or job; timers that can overlap |
+| Fails partway | Multi-step actions that stop halfway | Actions that write to two places (D1 and KV, our server and Nuvio/Trakt): what is left behind if the second write fails, and can the person recover? |
 | Duplicate processing | The same job, payment, or event handled twice | Retries, queue redelivery, double clicks, webhooks sent twice |
 | Leaks | Caches, maps, timers or listeners that grow forever | Module-level maps without a cap; listeners added on every render |
 | State consistency | Two copies of the same data that drift apart | Client vs server copies, caches vs source tables |

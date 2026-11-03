@@ -1,6 +1,10 @@
 # Database and data audit checklist
-Production data is not reachable from a cloud session. Work from the schema,
-migrations and code; build a local SQLite copy from them to test queries.
+Covers every place data is kept: the SQL databases, key-value storage and
+file storage. Work from the schema, migrations and code; build a local SQLite
+copy from them to test queries.
+
+**Not in this audit:** who may read which data (security audit); measuring hot-path speed (performance). This audit owns indexes and query plans.
+**Cannot be checked from a cloud session** (list under "Not covered"): production data, and a real restore. Check the backup workflow and written steps, and say plainly that no restore was tested.
 
 | Area | What it examines | How to check |
 |---|---|---|
@@ -12,3 +16,4 @@ migrations and code; build a local SQLite copy from them to test queries.
 | Migrations | Broken, incomplete, or unsafe migrations | Apply all migrations in order to an empty SQLite DB; compare to the schema files; look for destructive steps and ones that can't be re-run |
 | Query Efficiency | Inefficient database access | `EXPLAIN QUERY PLAN` for hot queries; missing indexes; SELECT * on wide tables; queries inside loops |
 | Data Consistency | Whether different parts of the application agree | Same data in D1, KV, caches and the browser: who wins, and can they drift apart for good? |
+| Key-value and file storage | Data kept outside the SQL databases (Cloudflare KV, R2) | What lives there; keys that grow forever; expiry (TTL); reads that can be stale for a while after a write; whether backups cover it |

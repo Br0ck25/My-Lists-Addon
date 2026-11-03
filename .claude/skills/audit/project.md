@@ -23,6 +23,16 @@ bugs). For UI audits also `docs/AI_UI_RULES.md`. For deployment audits also
   `tests/load-performance.test.mjs`. Record it; do not report it as new.
 - Playwright and Chromium are pre-installed in the cloud session (for UI and
   end-to-end checks). Do not install them again.
+- Run the app for Playwright: `node dev/server.mjs` (after `python build.py`),
+  then open http://127.0.0.1:8787. It runs the real Worker with a local SQLite
+  database and in-memory KV; admin key `test-admin-secret`. Every call to an
+  outside service (TMDB, Trakt, Nuvio...) gets an empty answer, so lists and
+  catalogs show no titles there: that is the test server, not a bug.
+
+## Out of reach from a cloud session
+The live site and its data, the Cloudflare dashboard, secret values, real
+phones and TVs, and the Stremio, Nuvio and Wako apps. List what needed them
+under "Not covered", and turn owner-only checks into short steps for them.
 
 ## Finding code
 - Never open `worker_entry_combined.js` (5 MB, generated from `src/`).

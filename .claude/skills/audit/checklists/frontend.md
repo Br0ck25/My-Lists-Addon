@@ -3,6 +3,9 @@ Use Playwright against the locally built app (see project.md). A movie is
 never a "show" or "episode". Judge against `docs/AI_UI_RULES.md` and
 `docs/DESIGN_SYSTEM.md`, not personal taste.
 
+**Not in this audit:** whether whole features work end to end (product audit); page speed (performance).
+**Cannot be checked from a cloud session** (list under "Not covered"): real phones, TVs and the Stremio, Nuvio and Wako apps. Emulate sizes and remote-control keys in Playwright instead.
+
 | Area | What it examines | How to check |
 |---|---|---|
 | Error States | How the application handles failures | Make the API fail (network off, 500, slow) and see what each page shows; bad saved browser data must not break the page |

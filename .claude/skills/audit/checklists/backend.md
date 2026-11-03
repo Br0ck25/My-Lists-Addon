@@ -1,6 +1,8 @@
 # Backend audit checklist
 Server code only. Read client code only to find callers and request shapes.
 
+**Not in this audit:** browser code and UI (frontend audit); contracts with Stremio/Nuvio/Wako and outside services in depth (api); schema and migrations (database); deep security review (security). Note anything obvious from those in one line under "Unverified hunches".
+
 | Area | What it examines | How to check |
 |---|---|---|
 | Business logic | Server rules that do the wrong thing | Read the most-used routes and jobs first |

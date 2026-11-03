@@ -1,5 +1,6 @@
 # Code-quality audit checklist
-Out of scope: security and correctness (other audits cover them).
+
+**Not in this audit:** security (security audit) and correctness (bugs, backend).
 
 | Area | What it examines | How to check |
 |---|---|---|
