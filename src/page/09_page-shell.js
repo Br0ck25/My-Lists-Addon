@@ -5386,7 +5386,7 @@ ${appShellMobileNavHtml}
     </div>
   </div>
 
-  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createListModalTitle">Create List</h2>
@@ -5441,7 +5441,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Create Collection Folder Modal -->
-  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create folder</h2>
@@ -5523,7 +5523,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import Nuvio Collections Modal -->
-  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Nuvio Collections</h2>
@@ -5549,7 +5549,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Sync to Nuvio / Add to Profile Modal -->
-  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="syncNuvioModalTitle">Add to Profile</h2>
@@ -5608,7 +5608,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Add Catalog Modal -->
-  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">New Catalog</h2>
@@ -5647,7 +5647,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import List Modal -->
-  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import List from Link</h2>
@@ -5674,7 +5674,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import Channel Modal -->
-  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-440px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Channel</h2>
@@ -5724,7 +5724,7 @@ ${appShellMobileNavHtml}
     </div>
   </div>
 
-  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-maxh-85vh" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <div>
@@ -5744,7 +5744,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Trakt Device Activation Modal -->
-  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index:10002; position:fixed; inset:0;">
+  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-24px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-ta-center" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Connect Trakt</h2>

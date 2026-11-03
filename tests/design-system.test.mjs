@@ -85,6 +85,15 @@ describe("design system: shared stylesheet", () => {
     assert.ok(z("z-toast") > z("z-modal"));
   });
 
+  it("no static pop-up form carries its own z-index, so dialogs opened from it (errors, confirms) stack above it", async () => {
+    // UI-01: forms with an inline z-index:10001 sat above the --z-modal layer that
+    // showModal()/showAppNoticeModal() use, hiding the "Could Not Save" message.
+    const res = await call(makeEnv(), "/");
+    assert.equal(res.status, 200);
+    const bad = [...res.text.matchAll(/<div id="(\w+)" class="modal-overlay[^>]*style="[^"]*z-index\s*:\s*\d+/g)].map((m) => m[1]);
+    assert.deepEqual(bad, [], "modal-overlay forms with a numeric inline z-index; use the --z-modal layer");
+  });
+
   it("white text sits on --color-brand-fill, never straight on --color-brand", async () => {
     const css = await appCss();
     const bad = [...css.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]).filter((b) =>
