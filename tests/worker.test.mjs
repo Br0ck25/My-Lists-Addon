@@ -7242,6 +7242,14 @@ describe("A15: a fresh schema.sql and a migrated database must be the same shape
     for (const t of tables(fresh)) {
       assert.deepEqual(cols(fresh, t), cols(migrated, t), `${t} differs between the two provisioning paths`);
     }
+
+    // Audit DB-04: a database made from schema.sql must record every
+    // migration from 0014 (the ledger's own) on, or someone following
+    // docs/OPERATIONS.md §4 reads it as never applied.
+    const seeded = new Set(fresh.prepare("SELECT version FROM schema_migrations").all().map((r) => r.version));
+    const sinceLedger = migrationFiles.map((f) => f.slice(0, 4)).filter((v) => v >= "0014");
+    assert.deepEqual(sinceLedger.filter((v) => !seeded.has(v)), [],
+      "schema.sql's ledger seed is missing these migrations");
   });
 });
 

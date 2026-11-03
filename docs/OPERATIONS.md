@@ -123,6 +123,8 @@ Adding a binding before the code that uses it is harmless. Removing a binding th
 4. Add the migration's tables, indexes and columns to `D1_SCHEMA_MANIFEST` in `src/core/00_constants.js`.
 5. If the code **needs** the migration, raise `REQUIRED_SCHEMA_VERSION` in `src/core/00_constants.js` in the same change. Until the migration is applied, the deployed Worker then refuses API writes with a 503 "My Lists is being updated" instead of failing quietly. **Always apply the migration before deploying.**
 
+**0022 and 0023 do not record themselves** (they were written without step 2's line, audit DB-04). A database that had them applied by hand shows no `0022`/`0023` row in `SELECT version FROM schema_migrations`; that does not mean they are missing. `/admin` → *Check schema* looks for their columns, indexes and tables instead. Applied migration files are never edited, so nothing needs re-running.
+
 ### The activity database (Phase 3c)
 
 `DB_ACTIVITY` is a second D1 database with its own migrations, in `migrations/activity/` (`A0001`, `A0002`, ...). Run those in the **activity database's** Console, never in the main one, and the main ones never there. A fresh activity database can take `schema_activity.sql` instead. It has its own `schema_migrations` ledger.
