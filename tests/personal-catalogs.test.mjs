@@ -16,7 +16,7 @@ import { makeEnv, makeD1 } from "./harness.mjs";
 // the end (the same trick continue-watching-parity.test.mjs uses).
 const bundle = readFileSync(new URL("../worker_entry_combined.js", import.meta.url), "utf8");
 const tmpFile = `${tmpdir()}/mla-personal-${process.pid}-${Date.now()}.mjs`;
-writeFileSync(tmpFile, bundle + "\nexport const __p = { fetchTraktHistory, mapTraktHistoryItems, fetchMdblistWatchlist, fetchMdblistHistory };\n");
+writeFileSync(tmpFile, bundle + "\nexport const __p = { fetchTraktHistory, mapTraktHistoryItems, fetchMdblistWatchlist, fetchMdblistHistory, fetchMdblistUpNext, fetchMdblistAiringNext,\n  setTmdbDetails: (fn) => { fetchTmdbItemDetails = fn; } };\n");
 const { __p } = await import(pathToFileURL(tmpFile).href).finally(() => unlinkSync(tmpFile));
 
 const realFetch = globalThis.fetch;
@@ -126,5 +126,61 @@ describe("MDBList rows", () => {
     assert.deepEqual(Array.from(metas, (m) => m.id), ["tt0903747"]);
     assert.equal(sent[0].url.searchParams.get("mediatype"), "show");
     await assert.rejects(() => __p.fetchMdblistHistory({ type: "movie" }, 0, "", ""), /needs your connected MDBList account or API key/);
+  });
+});
+
+describe("MDBList Up Next and Airing Next rows", () => {
+  const UPNEXT = [
+    { id: 2, title: "Breaking Bad", year: 2008, imdb_id: "tt0903747", poster: "/bb.jpg", next_episode: { season: 2, episode: 5, title: "Breakage", air_date: "2026-03-05" } },
+    { id: 3, title: "Only TMDB Show", year: 2020, tmdb_id: 555, next_episode: { season: 1, episode: 1 } },
+  ];
+
+  it("up next: asks MDBList with the user's key and returns one series meta per show, named with the next episode", async () => {
+    const sent = stub((url) => (url.pathname === "/upnext" ? [200, UPNEXT] : null));
+    const metas = await __p.fetchMdblistUpNext({ type: "series" }, 0, `MK${++seq}`, "", "", makeEnv({ DB: makeD1() }), { waitUntil() {} });
+    assert.equal(sent[0].url.searchParams.get("apikey"), `MK${seq}`);
+    assert.deepEqual(Array.from(metas, (m) => [m.id, m.type, m.name]), [
+      ["tt0903747", "series", "Breaking Bad S2E5 \u2014 Breakage"],
+      ["tmdb:555", "series", "Only TMDB Show S1E1"],
+    ]);
+    assert.equal(metas[0].poster, "https://image.tmdb.org/t/p/w500/bb.jpg", "a relative poster path becomes a full TMDB image address");
+    assert.equal(metas[0].description, "Next Episode: S2E5 \u2014 Breakage \u00b7 Airs 2026-03-05");
+  });
+
+  it("up next: with neither key nor account it says what to connect and asks MDBList for nothing; a refusal names the status", async () => {
+    const sent = stub(() => [200, UPNEXT]);
+    await assert.rejects(() => __p.fetchMdblistUpNext({ type: "series" }, 0, "", ""), /needs your connected MDBList account or API key/);
+    assert.equal(sent.length, 0);
+    stub(() => [401, {}]);
+    await assert.rejects(() => __p.fetchMdblistUpNext({ type: "series" }, 0, `MK${++seq}`, "", "", makeEnv({ DB: makeD1() }), { waitUntil() {} }), /HTTP 401.*API key/);
+  });
+
+  it("airing next: keeps only shows with a scheduled next episode, soonest first, with the episode in the description", async () => {
+    const watched = { shows: [
+      { id: 1, title: "Later Show", release_year: 2020, imdb_id: "tt1111111", mediatype: "show" },
+      { id: 2, title: "Sooner Show", release_year: 2021, imdb_id: "tt2222222", mediatype: "show" },
+      { id: 3, title: "Ended Show", release_year: 2010, imdb_id: "tt3333333", mediatype: "show" },
+    ] };
+    stub((url) => (url.pathname === "/sync/watched" ? [200, url.searchParams.get("mediatype") === "show" ? watched : {}] : (url.pathname === "/watchlist" ? [200, {}] : null)));
+    const details = {
+      tt1111111: { nextEpisodeAirDate: "2099-06-01", nextEpisodeSeasonNumber: 3, nextEpisodeNumber: 4 },
+      tt2222222: { nextEpisodeAirDate: "2099-01-01", nextEpisodeSeasonNumber: 1, nextEpisodeNumber: 1 },
+      tt3333333: { title: "Ended Show" },
+    };
+    __p.setTmdbDetails(async (id) => details[id] || null);
+    const metas = await __p.fetchMdblistAiringNext({ type: "series" }, 0, `MK${++seq}`, "", "tmdb-key", makeEnv({ DB: makeD1() }), { waitUntil() {} });
+    assert.deepEqual(Array.from(metas, (m) => [m.id, m.name, m.airDate]), [
+      ["tt2222222", "Sooner Show", "2099-01-01"],
+      ["tt1111111", "Later Show", "2099-06-01"],
+    ]);
+    assert.equal(metas[0].isSeasonPremiere, true);
+    assert.equal(metas[1].isSeasonPremiere, false);
+    assert.equal(metas[1].description, "Next Episode: S03E04 \u00b7 Airs 2099-06-01");
+  });
+
+  it("airing next: with neither key nor account it says what to connect", async () => {
+    const sent = stub(() => [200, {}]);
+    await assert.rejects(() => __p.fetchMdblistAiringNext({ type: "series" }, 0, "", ""), /needs your connected MDBList account or API key/);
+    assert.equal(sent.length, 0);
   });
 });
