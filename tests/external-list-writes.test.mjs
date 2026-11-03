@@ -169,6 +169,29 @@ describe("add and remove an item on a provider list", () => {
   });
 });
 
+describe("the remove direction of history, favorites and custom lists", () => {
+  it("Simkl: removing a watched item goes to history/remove, not history", async () => {
+    const sent = stubFetch();
+    await post("/api/external-list/item-mutate", { provider: "simkl", simklAccessToken: "ST", simklKey: "SK", target: "history", action: "remove", ...MATRIX });
+    assert.deepEqual(sent.map((r) => r.url), ["https://api.simkl.com/sync/history/remove"]);
+    assert.deepEqual(sent[0].body, { movies: [{ ids: { imdb: "tt0133093", tmdb: 603 }, title: "The Matrix" }] });
+  });
+
+  it("TMDB: removing a favorite sends favorite:false (it must not re-add it)", async () => {
+    const sent = stubFetch();
+    const base = { provider: "tmdb", tmdbKey: "K", tmdbSessionId: "SESS", tmdbAccountId: "77", target: "favorite", ...MATRIX };
+    await call(makeEnv({ TMDB_API_KEY: "K" }), "/api/external-list/item-mutate", { method: "POST", json: { ...base, action: "remove" } });
+    assert.equal(sent[0].url, "https://api.themoviedb.org/3/account/77/favorite?api_key=K&session_id=SESS");
+    assert.deepEqual(sent[0].body, { media_type: "movie", media_id: 603, favorite: false });
+  });
+
+  it("MDBList: removing from a custom list uses the remove address, not add", async () => {
+    const sent = stubFetch();
+    await post("/api/external-list/item-mutate", { provider: "mdblist", mdblistKey: "MK", target: "custom", listId: "123", action: "remove", ...MATRIX });
+    assert.deepEqual(sent.map((r) => r.url), ["https://api.mdblist.com/lists/123/items/remove?apikey=MK"]);
+  });
+});
+
 describe("create and delete a list on a provider", () => {
   it("Trakt create posts the name and privacy and returns the list address; delete uses DELETE", async () => {
     const sent = stubFetch((url, req) => (req.method === "POST" ? [201, { ids: { trakt: 55, slug: "date-night" }, name: "Date night", privacy: "public", user: { ids: { slug: "bob" } } }] : [204, null]));
