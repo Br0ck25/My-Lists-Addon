@@ -30,6 +30,27 @@ describe("RPDB per-isolate maps stay bounded", () => {
     assert.ok(m.RPDB_USAGE.size > 0, "the newest entries are kept");
   });
 
+  it("RPDB_USAGE also stays bounded when the entries come from live RPDB answers, not KV (TEST-13)", async () => {
+    // A new key takes the live-answer branch first. The KV case above never
+    // reaches it, so removing the cap there used to leave this file green.
+    const m = await load();
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      assert.match(String(input && input.url ? input.url : input), /\/requests$/, "only the usage call is expected");
+      return Response.json({ req: 1, limit: 100 });
+    };
+    try {
+      for (let i = 0; i < 1100; i++) {
+        const u = await m.rpdbUsage({ CONFIGS: makeKv() }, "k", "live" + i);
+        assert.equal(u.limit, 100);
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    assert.ok(m.RPDB_USAGE.size <= 1000, "size was " + m.RPDB_USAGE.size);
+    assert.ok(m.RPDB_USAGE.size > 0, "the newest entries are kept");
+  });
+
   it("RPDB_BACKOFF does not grow past its cap", async () => {
     const m = await load();
     const realFetch = globalThis.fetch;
