@@ -60,12 +60,12 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
-## Anonymous likes are removed (built 2026-11-03, stamp 3222869070)
+## Anonymous likes are removed (built 2026-11-03, stamp 72bd529dd9)
 
 Your decision of 2026-11-02 (D-37, replaces D-9): the likes people cast while signed out, before D-6, are deleted, and every like total goes down by the votes removed. Each total then equals the signed-in likes behind it.
 
 - **Some lists, outside lists and channels will show fewer likes**, and some may move in the "popular" and "liked" orders. That is expected. Channel "added" counts, the lists and channels themselves, and every signed-in like are untouched.
-- **Nothing happens until you run it.** New admin call `/admin/api/anonymous-likes-purge`: a count first (the default), then a confirmed delete, in batches. Steps are in `docs/OPERATIONS.md` §33 ("Removing the old anonymous likes"). Running it again changes nothing.
+- **Nothing happens until you run it.** New admin call `/admin/api/anonymous-likes-purge`: a count first (the default), then a confirmed delete, in batches. Steps are in `docs/OPERATIONS.md` §33 ("Removing the old anonymous likes"). Running it again changes nothing, and it can be re-run after a failure part-way without lowering any total twice.
 - A signed-out visitor still gets "sign in to like" and nothing is stored for them. The IP-based voter id is no longer made anywhere, and the optional `LIKE_VOTER_PEPPER` setting from the earlier security entry is gone.
 
 ---

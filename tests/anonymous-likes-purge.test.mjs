@@ -230,6 +230,76 @@ describe("D-37: /admin/api/anonymous-likes-purge", () => {
   });
 });
 
+// An interrupted run must be finishable: each total is lowered once, by the votes
+// that were on the target before the first run, whatever step failed.
+describe("D-37: the purge can be re-run after a failure part-way through a target", () => {
+  const likeState = async (env) => {
+    const snap = await snapshot(env);
+    return { ...snap, kv: snap.kv.filter(([k]) => /likevoters:|^externallike:|^channelshare:|^creatorlist:|^publishedlist:|^index:publicchannels/.test(k)).map(([k, v]) => [k, k === "index:publicchannels" ? JSON.stringify(JSON.parse(v).entries) : v.replace(/"publishedAt":\d+/, "")]) };
+  };
+  const markers = (env) => [...env.CONFIGS._store.keys()].filter((k) => k.startsWith("anonlikespurge:"));
+
+  // One pass over every batch, whatever the status: a failed batch still says where to go on.
+  async function passIgnoringFailures(env, cookie) {
+    let cursor;
+    const failed = [];
+    for (let i = 0; i < 200; i++) {
+      const r = await call(env, ROUTE, { method: "POST", cookie, json: { apply: true, confirm: CONFIRM, limit: 3, ...(cursor ? { cursor } : {}) } });
+      failed.push(...((r.body && r.body.failed) || []));
+      if (r.body.done) return failed;
+      cursor = r.body.next;
+    }
+    throw new Error("did not finish");
+  }
+
+  const faults = [
+    ["the KV record total of a list", (e) => { e.CONFIGS._hooks.beforePut = (k) => { if (k === "creatorlist:alice:top") throw new Error("kv down"); }; }],
+    ["the KV ledger of a list", (e) => { e.CONFIGS._hooks.beforePut = (k) => { if (k === "listlikevoters:alice:top") throw new Error("kv down"); }; }],
+    ["the KV ledger of an outside list (deleted when empty)", (e) => { e.CONFIGS._hooks.beforeDelete = (k) => { if (k === "extlikevoters:H2") throw new Error("kv down"); }; }],
+    ["the channel directory row", (e) => { e.CONFIGS._hooks.beforePut = (k) => { if (k === "index:publicchannels") throw new Error("kv down"); }; }],
+    ["the channel record total", (e) => { e.CONFIGS._hooks.beforePut = (k) => { if (k === "channelshare:CH1") throw new Error("kv down"); }; }],
+    ["the D1 total of a list", (e) => e.DB.failWhen((sql) => /UPDATE creator_lists/.test(sql))],
+    ["the D1 rows of a list", (e) => e.DB.failWhen((sql) => /DELETE FROM list_likes/.test(sql))],
+    ["the D1 total of an anonymous published list", (e) => e.DB.failWhen((sql) => /UPDATE published_lists/.test(sql))],
+    ["the new-table total of a list", (e) => e.DB.failWhen((sql) => /UPDATE lists SET like_count/.test(sql))],
+    ["the new-table rows of a channel", (e) => e.DB.failWhen((sql) => /DELETE FROM likes/.test(sql))],
+  ];
+
+  for (const [name, inject] of faults) {
+    it(`a failure on ${name}, then a normal run, ends exactly like one clean run; a third run changes nothing`, async () => {
+      const clean = await seed();
+      await runAll(clean.env, clean.cookie, { apply: true, confirm: CONFIRM });
+
+      const { env, cookie } = await seed();
+      inject(env);
+      const failed = await passIgnoringFailures(env, cookie);
+      assert.ok(failed.length > 0, "the injected failure was hit");
+      env.CONFIGS._hooks.beforePut = null;
+      env.CONFIGS._hooks.beforeDelete = null;
+      env.DB.failWhen(null);
+      await runAll(env, cookie, { apply: true, confirm: CONFIRM });
+      await runAll(env, cookie, { apply: true, confirm: CONFIRM }); // an extra run is harmless
+      assert.deepEqual(await likeState(env), await likeState(clean.env));
+      assert.deepEqual(markers(env), [], "no progress record is left behind");
+      const after = await snapshot(env);
+      const third = await runAll(env, cookie, { apply: true, confirm: CONFIRM });
+      assert.deepEqual(await snapshot(env), after);
+      for (const k of ["legacyVotes", "v2Votes"]) assert.equal(third[k] || 0, 0, k);
+    });
+  }
+
+  it("a failure on the last step of a list is still counted by a dry run, once", async () => {
+    const { env, cookie } = await seed();
+    env.CONFIGS._hooks.beforePut = (k) => { if (k === "listlikevoters:alice:top") throw new Error("kv down"); };
+    await passIgnoringFailures(env, cookie);
+    env.CONFIGS._hooks.beforePut = null;
+    const dry = await runAll(env, cookie, {});
+    assert.equal(dry.legacyVotes, 3, "alice:top still has its three votes to finish, counted once");
+    assert.equal(dry.legacyTargets, 1);
+    assert.equal(dry.v2Votes || 0, 0);
+  });
+});
+
 describe("D-37: nothing creates or restores an anonymous vote", () => {
   it("a signed-out like request gets 401 and stores nothing", async () => {
     const { env } = await seed();

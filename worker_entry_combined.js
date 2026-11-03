@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "3222869070";
+const WORKER_BUILD = "72bd529dd9";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -105630,72 +105630,122 @@ async function anonLikesD1Voters(env, listId) {
   }
 }
 
-// Lowers the "likes" of one KV record by `n` (never below 0). A missing or
-// unreadable record is left alone.
-async function anonLikesLowerKvRecord(env, key, n) {
+// --- Progress records (safe to re-run) ---------------------------------------
+//
+// Lowering a total is not repeatable, and a target is changed in several places
+// (KV records, D1, the ledger) that cannot be written as one. So before the first
+// write to a target a record is saved in KV (anonlikespurge:...) holding the number
+// of votes to take off and what each total was BEFORE. A total is then set to
+// max(0, before - n) only while it still equals `before`: run again after a failure
+// and a total that was already lowered no longer matches, so it is left alone.
+// The votes themselves are removed last, because they are how a target is found
+// again; the record is deleted when the target is finished.
+
+const ANON_LIKES_PURGE_MARKER = "anonlikespurge:";
+
+async function anonLikesReadMarker(env, key) {
   const raw = await env.CONFIGS.get(key);
-  if (!raw) return;
-  let rec;
+  if (!raw) return null;
   try {
-    rec = JSON.parse(raw);
+    const m = JSON.parse(raw);
+    return m && Number.isFinite(m.n) ? m : null;
   } catch {
-    return;
+    return null;
   }
-  if (!rec || typeof rec !== "object") return;
-  const cur = Number(rec.likes) || 0;
-  const next = Math.max(0, cur - n);
-  if (next === cur) return;
-  rec.likes = next;
-  await env.CONFIGS.put(key, JSON.stringify(rec));
 }
 
-// The store-specific totals of one target, lowered by `n`.
-async function anonLikesLowerTotals(env, listId, n) {
+function anonLikesRecordKey(listId) {
   const rest = listId.slice(listId.indexOf(":") + 1);
-  if (listId.startsWith("c:")) {
-    await anonLikesLowerKvRecord(env, `creatorlist:${rest}`, n);
-  } else if (listId.startsWith("a:")) {
-    await anonLikesLowerKvRecord(env, `publishedlist:user:${rest}`, n);
-  } else if (listId.startsWith("ext:")) {
-    await anonLikesLowerKvRecord(env, `externallike:${rest}`, n);
-  } else if (listId.startsWith("ch:")) {
-    await anonLikesLowerKvRecord(env, `channelshare:${rest}`, n);
+  if (listId.startsWith("c:")) return `creatorlist:${rest}`;
+  if (listId.startsWith("a:")) return `publishedlist:user:${rest}`;
+  if (listId.startsWith("ext:")) return `externallike:${rest}`;
+  if (listId.startsWith("ch:")) return `channelshare:${rest}`;
+  return "";
+}
+
+async function anonLikesKvLikes(env, key) {
+  const raw = key ? await env.CONFIGS.get(key) : null;
+  if (!raw) return null;
+  try {
+    const rec = JSON.parse(raw);
+    return rec && typeof rec === "object" ? Number(rec.likes) || 0 : null;
+  } catch {
+    return null;
+  }
+}
+
+// What each old-store total of one target is right now (null: there is none).
+async function anonLikesTotalsBefore(env, listId) {
+  const rest = listId.slice(listId.indexOf(":") + 1);
+  const before = { rec: await anonLikesKvLikes(env, anonLikesRecordKey(listId)), idx: null, d1: null };
+  if (listId.startsWith("ch:")) {
     const entry = (await readPublicChannelIndex(env)).find((e) => e && e.code === rest);
-    if (entry && Math.max(0, (Number(entry.likes) || 0) - n) !== (Number(entry.likes) || 0)) {
-      await updatePublicChannelIndexEntry(env, rest, { likes: Math.max(0, (Number(entry.likes) || 0) - n) });
-    }
+    if (entry) before.idx = Number(entry.likes) || 0;
+  }
+  const table = listId.startsWith("c:") ? ["creator_lists", "likes", "id"] : listId.startsWith("a:") ? ["published_lists", "likes", "slug"] : null;
+  if (table && env.DB) {
+    const row = await env.DB.prepare(`SELECT ${table[1]} AS n FROM ${table[0]} WHERE ${table[2]} = ?`).bind(rest).first();
+    if (row) before.d1 = Number(row.n) || 0;
+  }
+  return before;
+}
+
+// Sets every old-store total of one target to max(0, before - n), each only while
+// it still holds `before`.
+async function anonLikesLowerTotals(env, listId, before, n) {
+  const rest = listId.slice(listId.indexOf(":") + 1);
+  const key = anonLikesRecordKey(listId);
+  if (before.rec !== null && (await anonLikesKvLikes(env, key)) === before.rec && before.rec !== Math.max(0, before.rec - n)) {
+    const rec = JSON.parse(await env.CONFIGS.get(key));
+    rec.likes = Math.max(0, before.rec - n);
+    await env.CONFIGS.put(key, JSON.stringify(rec));
+  }
+  if (before.idx !== null) {
+    const entry = (await readPublicChannelIndex(env)).find((e) => e && e.code === rest);
+    const target = Math.max(0, before.idx - n);
+    if (entry && (Number(entry.likes) || 0) === before.idx && target !== before.idx) await updatePublicChannelIndexEntry(env, rest, { likes: target });
+  }
+  if (before.d1 !== null && env.DB) {
+    const table = listId.startsWith("c:") ? ["creator_lists", "likes", "id"] : ["published_lists", "likes", "slug"];
+    await env.DB.prepare(`UPDATE ${table[0]} SET ${table[1]} = ? WHERE ${table[2]} = ? AND ${table[1]} = ?`)
+      .bind(Math.max(0, before.d1 - n), rest, before.d1).run();
   }
 }
 
 // One old-store target: counts its anonymous votes (the union of the KV ledger
-// and list_likes) and, with `apply`, removes them and lowers its totals by that
-// number. D1 goes first, in one batch, so its rows and its totals move together.
+// and list_likes) and, with `apply`, lowers its totals by that number and then
+// removes the votes. A progress record from an interrupted run is picked up: its
+// `n` is the number to take off, not what is left.
 async function anonLikesPurgeLegacyTarget(env, listId, ledgerKey, apply, out) {
+  const markerKey = `${ANON_LIKES_PURGE_MARKER}legacy:${listId}`;
+  const marker = await anonLikesReadMarker(env, markerKey);
   const kvAnon = new Set((await readLikeVotersFromKv(env, ledgerKey)).filter(isAnonymousLikeVoter));
   const d1Anon = new Set(await anonLikesD1Voters(env, listId));
   const anon = new Set([...kvAnon, ...d1Anon]);
   out.scanned++;
-  if (!anon.size) return;
+  if (!anon.size) {
+    if (marker && apply) await env.CONFIGS.delete(markerKey); // finished, only the record was left
+    return;
+  }
+  const n = marker ? marker.n : anon.size;
   out.legacyTargets++;
   out.kvVotes += kvAnon.size;
   out.d1Votes += d1Anon.size;
-  out.legacyVotes += anon.size;
+  out.legacyVotes += n;
   if (!apply) return;
   try {
-    const rest = listId.slice(listId.indexOf(":") + 1);
-    if (env.DB) {
-      const stmts = [];
-      if (d1Anon.size) stmts.push(env.DB.prepare("DELETE FROM list_likes WHERE list_id = ? AND substr(voter_id, 1, 2) = 'a:'").bind(listId));
-      if (listId.startsWith("c:")) stmts.push(env.DB.prepare("UPDATE creator_lists SET likes = max(0, likes - ?) WHERE id = ?").bind(anon.size, rest));
-      if (listId.startsWith("a:")) stmts.push(env.DB.prepare("UPDATE published_lists SET likes = max(0, likes - ?) WHERE slug = ?").bind(anon.size, rest));
-      if (stmts.length) await env.DB.batch(stmts);
+    const saved = marker || { n, before: await anonLikesTotalsBefore(env, listId) };
+    if (!marker) await env.CONFIGS.put(markerKey, JSON.stringify(saved));
+    await anonLikesLowerTotals(env, listId, saved.before, saved.n);
+    if (d1Anon.size && env.DB) {
+      await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ? AND substr(voter_id, 1, 2) = 'a:'").bind(listId).run();
     }
     if (kvAnon.size) {
       const kept = (await readLikeVotersFromKv(env, ledgerKey)).filter((v) => !isAnonymousLikeVoter(v));
       if (kept.length) await env.CONFIGS.put(ledgerKey, JSON.stringify([...new Set(kept)]));
       else await env.CONFIGS.delete(ledgerKey);
     }
-    await anonLikesLowerTotals(env, listId, anon.size);
+    await env.CONFIGS.delete(markerKey);
   } catch (e) {
     out.failed.push(ledgerKey);
     console.error("anonymous-likes-purge failed for", ledgerKey, e);
@@ -105752,14 +105802,29 @@ async function anonLikesPurgeV2Phase(env, inner, n, apply, out) {
   for (const r of rows) {
     out.scanned++;
     out.v2Targets++;
-    out.v2Votes += Number(r.n) || 0;
+    const markerKey = `${ANON_LIKES_PURGE_MARKER}v2:${r.target_type}:${r.target_id}`;
+    const marker = await anonLikesReadMarker(env, markerKey);
+    const count = marker ? marker.n : Number(r.n) || 0;
+    out.v2Votes += count;
     if (!apply) continue;
     try {
-      const stmts = [env.DB.prepare("DELETE FROM likes WHERE target_type = ? AND target_id = ? AND substr(voter, 1, 2) = 'a:'").bind(r.target_type, r.target_id)];
-      // changes() is the row count of the DELETE just before it.
-      if (r.target_type === "list") stmts.push(env.DB.prepare("UPDATE lists SET like_count = max(0, like_count - changes()) WHERE public_id = ?").bind(r.target_id));
-      if (r.target_type === "channel") stmts.push(env.DB.prepare("UPDATE channels SET like_count = max(0, like_count - changes()) WHERE public_code = ?").bind(r.target_id));
-      await env.DB.batch(stmts);
+      const table = r.target_type === "list" ? ["lists", "like_count", "public_id"] : r.target_type === "channel" ? ["channels", "like_count", "public_code"] : null;
+      let saved = marker;
+      if (!saved) {
+        let before = null;
+        if (table) {
+          const row = await env.DB.prepare(`SELECT ${table[1]} AS n FROM ${table[0]} WHERE ${table[2]} = ?`).bind(r.target_id).first();
+          if (row) before = Number(row.n) || 0;
+        }
+        saved = { n: count, before };
+        await env.CONFIGS.put(markerKey, JSON.stringify(saved));
+      }
+      if (table && saved.before !== null) {
+        await env.DB.prepare(`UPDATE ${table[0]} SET ${table[1]} = ? WHERE ${table[2]} = ? AND ${table[1]} = ?`)
+          .bind(Math.max(0, saved.before - saved.n), r.target_id, saved.before).run();
+      }
+      await env.DB.prepare("DELETE FROM likes WHERE target_type = ? AND target_id = ? AND substr(voter, 1, 2) = 'a:'").bind(r.target_type, r.target_id).run();
+      await env.CONFIGS.delete(markerKey);
     } catch (e) {
       out.failed.push(`${r.target_type}:${r.target_id}`);
       console.error("anonymous-likes-purge failed for", r.target_type, r.target_id, e);
