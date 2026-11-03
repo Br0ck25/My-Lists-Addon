@@ -194,7 +194,7 @@ Anyone (human or AI) changing buttons, colours, spacing, text or wording follows
 
 ## Support This Project
 
-My Lists Addon is a free community service with no ads or subscriptions, run and paid for by one person. Hosting now costs over $100 a month. If you enjoy using the platform and want to help keep it online for everyone:
+My Lists Addon is a free community service with no ads or subscriptions, run and paid for by one person. If you enjoy using the platform and want to help keep it online for everyone:
 
 - **Ko-fi**: [ko-fi.com/mylistsaddon](https://ko-fi.com/mylistsaddon)
 - **TorBox Debrid (Referral)**: [torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1](https://torbox.app/subscription?referral=af23795c-7706-4b02-a979-d84b5613cfd1)
