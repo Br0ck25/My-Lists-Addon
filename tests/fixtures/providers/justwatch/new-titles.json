@@ -49,8 +49,8 @@
     "data.newTitles.edges[]",
     "data.newTitles.edges[].node.__typename:string",
     "data.newTitles.edges[].node.objectId:number",
-    "data.newTitles.edges[].newOffer.monetizationType:string",
-    "data.newTitles.edges[].newOffer.package.shortName:string",
+    "data.newTitles.edges[*].newOffer.monetizationType:string",
+    "data.newTitles.edges[*].newOffer.package.shortName:string",
     "data.newTitles.edges[*].node.content.externalIds.tmdbId:string || data.newTitles.edges[*].node.show.content.externalIds.tmdbId:string",
     "data.newTitles.edges[*].node.content.title:string || data.newTitles.edges[*].node.show.content.title:string"
   ],

@@ -168,6 +168,20 @@ describe("P4-5: provider contract fixtures", () => {
     }
   });
 
+  it("JustWatch new-titles: one title without an offer is not a break, none at all is (TEST-05)", () => {
+    // The Worker skips an edge with no newOffer (src/catalog/07_source-fetchers-tmdb-simkl.js),
+    // so the contract may only demand that SOME edge has one. Demanding every
+    // edge made the nightly check red for 8 nights over a harmless answer.
+    const { required, response } = fixture("justwatch/new-titles.json");
+    const edges = response.data.newTitles.edges;
+    const make = (list) => ({ data: { newTitles: { ...response.data.newTitles, edges: list } } });
+    const bare = { ...edges[0] };
+    delete bare.newOffer;
+    assert.deepEqual(checkRequired(make([bare, edges[0]]), required), [], "first edge has no offer, second has one");
+    const none = edges.map((e) => { const c = { ...e }; delete c.newOffer; return c; });
+    assert.ok(checkRequired(make(none), required).length > 0, "no edge has an offer: the Worker would show nothing");
+  });
+
   it("the path checker says what is wrong, and where", () => {
     const v = { a: [{ id: 1, t: "x" }, { id: "2" }], e: [], n: null, obj: { k: 1 } };
     assert.deepEqual(checkRequired(v, ["a[].id", "a[*].t:string", "obj:object", "a:array"]), []);
