@@ -346,9 +346,11 @@ async function withSecurityHeaders(response, privatePath = false, extraSetCookie
   let body = response.body;
   const contentType = headers.get("Content-Type") || "";
   if (nonce && body !== null && contentType.indexOf("text/html") === 0) {
-    // response.text() on a string body is the string; on a stream it is read
-    // once, which is fine because nothing else reads it.
-    const html = await response.text();
+    // A page built by htmlPageResponse carries its own string (PAGE_HTML_BODY),
+    // so it is not decoded back out of the body just to swap the nonce. Any
+    // other HTML response: response.text() on a string body is the string; on a
+    // stream it is read once, which is fine because nothing else reads it.
+    const html = typeof response[PAGE_HTML_BODY] === "string" ? response[PAGE_HTML_BODY] : await response.text();
     body = html.indexOf(CSP_NONCE_PLACEHOLDER) === -1
       ? html
       : html.split(CSP_NONCE_PLACEHOLDER).join(nonce);
@@ -2592,6 +2594,15 @@ function rememberRecentSplitPage(html, page) {
   if (RECENT_SPLIT_PAGES.length > RECENT_SPLIT_PAGES_MAX) RECENT_SPLIT_PAGES.pop();
 }
 
+// Private marker: the string a page Response was built from (see withSecurityHeaders).
+const PAGE_HTML_BODY = Symbol("pageHtmlBody");
+
+function pageResponseWithBody(html, init) {
+  const res = new Response(html, init);
+  res[PAGE_HTML_BODY] = html;
+  return res;
+}
+
 async function htmlPageResponse(request, fullHtml, extraHeaders) {
   // The ~1.3MB client bundle is lifted out to /app.js?v=<hash> first, so
   // both the body sent below and the ETag computed from it describe the
@@ -2609,7 +2620,7 @@ async function htmlPageResponse(request, fullHtml, extraHeaders) {
     "Cache-Control": "no-cache",
     ...(extraHeaders || {}),
   };
-  if (!etag) return new Response(html, { headers });
+  if (!etag) return pageResponseWithBody(html, { headers });
   headers["ETag"] = etag;
 
   // If-None-Match can carry a list, and a cache is allowed to weaken a tag
@@ -2625,7 +2636,7 @@ async function htmlPageResponse(request, fullHtml, extraHeaders) {
       return new Response(null, { status: 304, headers });
     }
   }
-  return new Response(html, { headers });
+  return pageResponseWithBody(html, { headers });
 }
 
 // --- Per-User Cache & Circuit Breaker Shield ---------------------------------
