@@ -17,7 +17,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 import { call, freshIsolate, makeEnv, nextIp } from "./harness.mjs";
-import { checkRequired, loadFixtures, LIVE_SECRETS, pickPath, runLiveCheck } from "../tools/provider_live_check.mjs";
+import { checkRequired, loadFixtures, LIVE_SECRETS, pickPath, runLiveCheck, skippedWarning } from "../tools/provider_live_check.mjs";
 import { listSources } from "./sources.mjs";
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -166,6 +166,24 @@ describe("P4-5: provider contract fixtures", () => {
       if (exempt[id]) continue;
       assert.ok(have.has(id), `no fixture for ${id}`);
     }
+  });
+
+  it("a green run that skipped providers for a missing key says so in a GitHub warning (TEST-06)", () => {
+    const fx = (file) => ({ file, provider: file.split("/")[0] });
+    const results = [
+      { fx: fx("tmdb/discover.json"), status: "skipped", detail: "TMDB_API_KEY not set" },
+      { fx: fx("tmdb/trending.json"), status: "skipped", detail: "TMDB_API_KEY not set" },
+      { fx: fx("trakt/popular.json"), status: "skipped", detail: "TRAKT_CLIENT_ID not set" },
+      { fx: fx("tvmaze/schedule.json"), status: "skipped", detail: "no live request" },
+      { fx: fx("cinemeta/top.json"), status: "passed", detail: "" },
+    ];
+    const line = skippedWarning(results);
+    assert.match(line, /^::warning::/, "a workflow annotation, so it shows on the run page");
+    assert.match(line, /tmdb \(2\)/);
+    assert.match(line, /trakt \(1\)/);
+    assert.match(line, /TMDB_API_KEY/);
+    assert.ok(!/tvmaze|cinemeta/.test(line), "only providers skipped for a missing key are named");
+    assert.equal(skippedWarning([{ fx: fx("cinemeta/top.json"), status: "passed", detail: "" }]), "", "nothing skipped, nothing to say");
   });
 
   it("JustWatch new-titles: one title without an offer is not a break, none at all is (TEST-05)", () => {

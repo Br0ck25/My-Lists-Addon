@@ -233,10 +233,28 @@ export async function runLiveCheck({ env = process.env, fixtures = loadFixtures(
   return results;
 }
 
+// A GitHub annotation naming the providers skipped because their key is not set,
+// so a green run is not mistaken for "every provider was checked". "" when none.
+export function skippedWarning(results) {
+  const byProvider = new Map();
+  const secrets = new Set();
+  for (const r of results) {
+    const m = r.status === "skipped" && /^(.+) not set$/.exec(String(r.detail || ""));
+    if (!m) continue;
+    byProvider.set(r.fx.provider, (byProvider.get(r.fx.provider) || 0) + 1);
+    m[1].split(", ").forEach((n) => secrets.add(n));
+  }
+  if (!byProvider.size) return "";
+  const named = [...byProvider].map(([p, n]) => `${p} (${n})`).join(", ");
+  return `::warning::Provider live check skipped endpoints with no key set: ${named}. Add ${[...secrets].join(", ")} as repository secrets so they are checked too.`;
+}
+
 async function main() {
   const results = await runLiveCheck();
   const count = (s) => results.filter((r) => r.status === s).length;
   console.log(`\n${count("passed")} passed, ${count("failed")} failed, ${count("skipped")} skipped`);
+  const warning = skippedWarning(results);
+  if (warning) console.log(warning);
   if (process.env.GITHUB_STEP_SUMMARY) {
     const rows = results.map((r) => `| ${r.status} | \`${r.fx.file}\` | ${r.fx.endpoint || ""} | ${String(r.detail || "").replace(/\|/g, "\\|")} |`);
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
