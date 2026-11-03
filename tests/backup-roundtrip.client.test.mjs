@@ -117,6 +117,60 @@ describe("full backup round trip", () => {
     assert.equal(back.itemsRef, undefined);
   });
 
+  it("a catalog row that shows a channel is stored as a reference to the channel and gets the channel's items back on restore", () => {
+    const a = loadClient({ signedIn: true });
+    a.call("saveLocalChannelsMap", { ch_1: { channelId: "ch_1", name: "Crime night", type: "series", items: [SHOW] } });
+    const storedItems = JSON.parse(JSON.stringify(a.call("loadLocalChannels").ch_1.items));
+    const rowUrl = "channel:v1:" + JSON.stringify({ channelId: "ch_1", name: "Crime night", type: "series", items: storedItems });
+    a.set("collectEntries", () => [{ id: "row1", type: "series", name: "Crime night", url: rowUrl }]);
+    const file = JSON.parse(JSON.stringify(a.call("buildFullBackupPayload")));
+
+    const stored = JSON.parse(file.entries[0].url.slice("channel:v1:".length));
+    assert.equal(stored.itemsRef, "ch_1");
+    assert.equal(stored.items, null);
+
+    const b = loadClient({ signedIn: true });
+    const rows = [];
+    b.set("restoreRows", (r) => rows.push(...r));
+    b.call("runImport", file);
+    const back = JSON.parse(rows[0].url.slice("channel:v1:".length));
+    assert.deepEqual(back.items.map((i) => i.id), [SHOW.id], "the restored channel row has its episodes back, not null");
+    assert.equal(back.itemsRef, undefined);
+  });
+
+  it("a row that shows only PART of a list (a mixed list split into movie and series rows) keeps its own items and is not widened to the whole list", () => {
+    const a = loadClient({ signedIn: true });
+    a.call("saveLocalCustomListsMap", { "my-favs": { slug: "my-favs", name: "My favs", type: "mixed", items: [MOVIE, SHOW] } });
+    const movieOnly = JSON.parse(JSON.stringify(a.call("loadLocalCustomLists")["my-favs"].items.filter((i) => i.type === "movie")));
+    assert.equal(movieOnly.length, 1, "setup: a strict subset of the two-item list");
+    const rowUrl = "customlist:v1:" + JSON.stringify({ localSlug: "my-favs", name: "My favs", type: "movie", items: movieOnly });
+    // A second row with as many items as the list but not the same ones (one was edited in the row).
+    const sameCountEdited = JSON.parse(JSON.stringify(a.call("loadLocalCustomLists")["my-favs"].items));
+    sameCountEdited[1].name = "Edited in this row";
+    const editedUrl = "customlist:v1:" + JSON.stringify({ localSlug: "my-favs", name: "My favs", type: "mixed", items: sameCountEdited });
+    a.set("collectEntries", () => [
+      { id: "row1", type: "movie", name: "My favs", url: rowUrl },
+      { id: "row2", type: "series", name: "My favs", url: editedUrl },
+    ]);
+    const file = JSON.parse(JSON.stringify(a.call("buildFullBackupPayload")));
+
+    const stored = JSON.parse(file.entries[0].url.slice("customlist:v1:".length));
+    assert.equal(stored.itemsRef, undefined, "a subset is not replaced by a reference to the full list");
+    assert.deepEqual(stored.items.map((i) => i.id), [MOVIE.id]);
+    const storedEdited = JSON.parse(file.entries[1].url.slice("customlist:v1:".length));
+    assert.equal(storedEdited.itemsRef, undefined, "same count but different items is not replaced either");
+    assert.equal(storedEdited.items[1].name, "Edited in this row");
+
+    const b = loadClient({ signedIn: true });
+    const rows = [];
+    b.set("restoreRows", (r) => rows.push(...r));
+    b.call("runImport", file);
+    const back = JSON.parse(rows[0].url.slice("customlist:v1:".length));
+    assert.deepEqual(back.items.map((i) => i.id), [MOVIE.id], "the restored row still shows only its movie, not the whole list");
+    const backEdited = JSON.parse(rows[1].url.slice("customlist:v1:".length));
+    assert.equal(backEdited.items[1].name, "Edited in this row", "the edit survives the round trip");
+  });
+
   it("still restores a file written by the previous release (2.0: rows embed their items)", () => {
     const old = {
       version: "2.0",
