@@ -131,5 +131,23 @@ echo
 echo "=== 6. tests ==="
 node --test tests/*.test.mjs
 
+# CI runs the suite three times and the UI contract in a browser (.github/workflows/ci.yml).
+# These are the same runs, so a green verify.sh no longer goes red on CI afterwards (audit TEST-09).
+echo
+echo "=== 6b. tests, with lists read from v2 (as CI) ==="
+MLA_TEST_V2_LISTS_READ=1 node --test tests/*.test.mjs
+
+echo
+echo "=== 6c. tests, with the materializer on (as CI) ==="
+MLA_TEST_FLAGS=FF_MATERIALIZER node --test tests/*.test.mjs
+
+echo
+echo "=== 6d. UI contract (needs Playwright; skipped if it is not installed) ==="
+if node -e "require('playwright')" >/dev/null 2>&1; then
+  node tests/ui-contract.mjs
+else
+  echo "  skipped: Playwright is not installed here (CI still runs it)"
+fi
+
 echo
 echo "ALL CHECKS PASSED"
