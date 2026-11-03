@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "822f6a6fd4";
+const WORKER_BUILD = "73c3ca07ab";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -47608,16 +47608,12 @@ function loadCollectionGroups(folders) {
   try { stored = JSON.parse(localStorage.getItem(COLLECTION_GROUPS_STORAGE_KEY) || '[]'); } catch (e) {}
   if (!Array.isArray(stored)) stored = [];
   stored = stored.filter(function (g) { return g && typeof g.id === 'string' && typeof g.name === 'string'; });
-  return groupCollectionFolders(Array.isArray(folders) ? folders : loadCustomCollections(), stored).map(function (g) {
-    return Object.assign({ id: g.id, name: g.name, remoteId: g.remoteId || g.id }, g.nuvioLink ? { nuvioLink: g.nuvioLink } : {});
-  });
+  return groupCollectionFolders(Array.isArray(folders) ? folders : loadCustomCollections(), stored).map(collectionGroupRecord);
 }
 
 function saveCollectionGroups(groups) {
   try {
-    localStorage.setItem(COLLECTION_GROUPS_STORAGE_KEY, JSON.stringify((groups || []).map(function (g) {
-      return Object.assign({ id: g.id, name: g.name, remoteId: g.remoteId || g.id }, g.nuvioLink ? { nuvioLink: g.nuvioLink } : {});
-    })));
+    localStorage.setItem(COLLECTION_GROUPS_STORAGE_KEY, JSON.stringify((groups || []).map(collectionGroupRecord)));
     return true;
   } catch (e) { return false; }
 }
@@ -47633,7 +47629,8 @@ function openCreateCollectionGroupModal(editId) {
     '<p class="app-shell-muted">' + (group && group.nuvioLink ? 'Edit this name and the folders below, then use Update Nuvio to save the entire collection.' : 'Create a collection first, then add folders and lists inside it.') + '</p>' +
     '<div class="row"><label for="collectionGroupName">Collection name</label>' +
     '<input id="collectionGroupName" type="text" maxlength="120" placeholder="e.g. Streaming Services, Family" value="' + escapeAttr(group ? group.name : '') + '" required></div>' +
-    '<div class="actions u-mt-12px"><button type="button" data-act="submitCollectionGroupModal">' + (group ? 'Save name' : 'Create collection') + '</button>' +
+    nuvioHomeToggleHtml(group) +
+    '<div class="actions u-mt-12px"><button type="button" data-act="submitCollectionGroupModal">' + (group ? 'Save' : 'Create collection') + '</button>' +
     '<button type="button" class="secondary" data-act="closeModal">Cancel</button></div>');
 }
 
@@ -47653,6 +47650,7 @@ function submitCollectionGroupModal() {
   const id = existing ? existing.id : 'col_mylists_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
   if (existing) existing.name = name;
   else groups.push({ id: id, name: name, remoteId: id });
+  applyNuvioHomeToggle(existing);
   if (!saveCollectionGroups(groups)) { showToast('Could not save this collection. Check browser storage and try again.', 'error'); return; }
   if (existing) {
     folders.forEach(function (f) { if (collectionGroupInfo(f).id === id) f.parentCollectionName = name; });
@@ -47748,6 +47746,7 @@ function linkSavedNuvioCollection(sentGroup, sentFolders, saved, info) {
   if (group.name === sentGroup.name) group.name = savedName;
   group.nuvioLink = { scope: info.scope, profileId: Number(info.profileId), collectionId: saved.id,
     collection: JSON.parse(JSON.stringify(saved)), localName: savedName, localFolderIds: sentFolders.map(function (f) { return f.id; }) };
+  rememberNuvioHomeChoice(group, info.homeHidden);
   sentFolders.forEach(function (sent) {
     const stored = current.find(function (f) { return f.id === sent.id && collectionGroupInfo(f).id === group.id; });
     const remoteId = (sent.nuvioLink && sent.nuvioLink.folder.id) || sent.originalFolderId || sent.id;
@@ -47828,7 +47827,7 @@ async function writeLinkedNuvioCollection(id, remove) {
   try {
     const res = await mediaAppUiCall('nuvio', 'collections', 'POST', { profileId: link.profileId, scope: link.scope,
       installMode: remove ? 'delete-collection' : 'update-collection', targetCollectionId: link.collectionId,
-      expectedCollection: link.collection, updatedCollection: updated,
+      expectedCollection: link.collection, updatedCollection: updated, hideHomeCatalogs: remove ? undefined : group.nuvioHomeHidden,
       collectionLists: own.reduce(function (all, f) { return all.concat(f.lists || []); }, []) });
     if (!res || !res.ok) { showToast(mediaAppUiMessage(res, remove ? 'Could not delete the Nuvio collection.' : 'Could not update the Nuvio collection.'), 'error'); return; }
     if (owner !== ((typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '')) return;
@@ -47854,7 +47853,8 @@ async function writeLinkedNuvioCollection(id, remove) {
     } else {
       linkSavedNuvioCollection(group, own, saved.find(function (p) { return p.id === link.collectionId; }), link);
     }
-    showToast(remove ? 'Deleted "' + group.name + '" from Nuvio. Your local copy was kept.' : 'Updated "' + group.name + '" in Nuvio.', 'success');
+    if (remove) showToast('Deleted "' + group.name + '" from Nuvio. Your local copy was kept.', 'success');
+    else showNuvioPushToast('Updated "' + group.name + '" in Nuvio.', res);
   } catch (e) {
     showToast(remove ? 'Could not delete the Nuvio collection. Your local copy was kept.' : 'Could not update the Nuvio collection. Your local edits were kept.', 'error');
   } finally { nuvioFolderWriteBusy = false; renderCustomCollections(); renderPremadeCollections(); }
@@ -49095,6 +49095,7 @@ async function pushLinkedNuvioFolder(col) {
     if ('title' in original) original.title = l.name || catId;
     return original;
   });
+  const parentGroup = loadCollectionGroups().find(function (g) { return g.id === collectionGroupInfo(col).id; });
   nuvioFolderWriteBusy = true;
   nuvioFoldersVersion++;
   let res;
@@ -49102,7 +49103,7 @@ async function pushLinkedNuvioFolder(col) {
     res = await mediaAppUiCall('nuvio', 'collections', 'POST', {
       profileId: link.profileId, scope: link.scope, installMode: 'update-folder', targetCollectionId: link.collectionId,
       folderId: link.folder.id, expectedFolder: link.folder, updatedFolder: folder,
-      collections: [folder], collectionLists: col.lists || []
+      collections: [folder], collectionLists: col.lists || [], hideHomeCatalogs: parentGroup ? parentGroup.nuvioHomeHidden : undefined
     });
   } finally { nuvioFolderWriteBusy = false; }
   if (!res || !res.ok) { showToast(mediaAppUiMessage(res, 'Could not update the Nuvio folder.'), 'error'); return; }
@@ -49122,7 +49123,7 @@ async function pushLinkedNuvioFolder(col) {
     }
     saveCustomCollections(current);
   }
-  showToast('Nuvio folder updated.', 'success');
+  showNuvioPushToast('Nuvio folder updated.', res);
 }
 
 function linkedNuvioFolderSignature(col) {
@@ -49219,7 +49220,7 @@ async function executeNuvioCollectionsPush(opts) {
       const sentGroups = groupCollectionFolders(collectionsToPush, parentsToPush);
       sentGroups.forEach(function (sent, index) {
         const saved = (res.data.collections || []).find(function (p) { return p.id === res.data.writtenCollectionIds[index]; });
-        linkSavedNuvioCollection(sent, sent.folders, saved, { scope: res.data.scope, profileId: res.data.profileId || profileId });
+        linkSavedNuvioCollection(sent, sent.folders, saved, { scope: res.data.scope, profileId: res.data.profileId || profileId, homeHidden: options.hideHomeCatalogs === true });
       });
     }
     if (res.data && res.data.collections) {
@@ -49230,11 +49231,7 @@ async function executeNuvioCollectionsPush(opts) {
     if (res.data && res.data.addonInstalled) {
       msg += ' My Lists Collections is installed as a separate addon.';
     }
-    if (res.data && res.data.homeVisibilityUpdated === false) {
-      showToast(msg + ' Home visibility could not be confirmed. Check Nuvio’s Catalogs & Collections settings.', 'info');
-    } else {
-      showToast(msg, 'success');
-    }
+    showNuvioPushToast(msg, res);
   } else {
     showToast(mediaAppUiMessage(res, 'Could not push to Nuvio. Check your connection in Settings.'), 'error');
   }
@@ -49740,6 +49737,57 @@ window.pushCollectionGroupToNuvio = pushCollectionGroupToNuvio;
 window.pushPremadeCollectionToNuvio = pushPremadeCollectionToNuvio;
 window.pushLinkedNuvioCollection = pushLinkedNuvioCollection;
 window.deleteNuvioCollection = deleteNuvioCollection;
+// --- "Hide collection catalogs on Nuvio home", remembered per synced collection ---
+//
+// The choice used to apply to the first sync only: Update Nuvio sent nothing,
+// so a list added to the collection later showed on the Nuvio home screen.
+// Each collection group now keeps nuvioHomeHidden, and both Update Nuvio paths
+// (17_client-my-lists-and-trakt-oauth.js) send it as hideHomeCatalogs.
+//   * absent: no choice yet; updates leave Nuvio's home rows alone (as before);
+//   * true:   every update hides this collection's rows, including new lists;
+//   * false:  set only by turning the toggle off after it was on; updates show
+//             the rows again.
+// It lives on the group, not in nuvioLink, because every pull rebuilds nuvioLink.
+// See docs/features/2026-11-03-nuvio-home-hide.md.
+
+// The one stored shape of a collection group (load and save both use it).
+function collectionGroupRecord(g) {
+  return Object.assign({ id: g.id, name: g.name, remoteId: g.remoteId || g.id }, g.nuvioLink ? { nuvioLink: g.nuvioLink } : {},
+    typeof g.nuvioHomeHidden === 'boolean' ? { nuvioHomeHidden: g.nuvioHomeHidden } : {});
+}
+
+// First sync: on is remembered; off clears any earlier choice, so later
+// updates keep today's behaviour.
+function rememberNuvioHomeChoice(group, hidden) {
+  if (hidden === true) group.nuvioHomeHidden = true;
+  else if (hidden === false) delete group.nuvioHomeHidden;
+}
+
+// Same wording and controls as the toggle in the Sync to Nuvio window.
+function nuvioHomeToggleHtml(group) {
+  if (!group || !group.nuvioLink) return '';
+  return '<div class="settings-toggle-row u-mt-12px"><div class="u-flex-1 u-minw-0 u-pr-12px">' +
+    '<label for="collectionGroupHideHome" class="u-fw-600 u-fs-v_font_size_base">Hide collection catalogs on Nuvio home</label>' +
+    '<p id="collectionGroupHideHomeHint" class="u-m-4px_0_0 u-c-v_muted u-fs-v_font_size_sm">Applies the next time you press Update Nuvio, including lists you add later. Catalogs stay available in Catalogs &amp; Collections.</p></div>' +
+    '<label class="ui-toggle" aria-label="Hide collection catalogs on Nuvio home"><input type="checkbox" id="collectionGroupHideHome" aria-describedby="collectionGroupHideHomeHint"' + (group.nuvioHomeHidden === true ? ' checked' : '') + '>' +
+    '<span class="ui-toggle-slider"></span></label></div>';
+}
+
+// Edit collection: off is saved only after it was on, so collections nobody
+// touched keep today's behaviour.
+function applyNuvioHomeToggle(group) {
+  const toggle = group && group.nuvioLink ? document.getElementById('collectionGroupHideHome') : null;
+  if (toggle && (toggle.checked || group.nuvioHomeHidden === true)) group.nuvioHomeHidden = !!toggle.checked;
+}
+
+// Update and sync results: say so when Nuvio did not confirm the home rows.
+function showNuvioPushToast(msg, res) {
+  if (res && res.data && res.data.homeVisibilityUpdated === false) {
+    showToast(msg + ' Home visibility could not be confirmed. Check Nuvio’s Catalogs & Collections settings.', 'info');
+  } else {
+    showToast(msg, 'success');
+  }
+}
 // Wraps a timer callback so a tick that arrives while the previous run is still
 // waiting (a slow fetch) is skipped instead of starting a second request.
 function skipWhileBusy(fn) {
@@ -107696,6 +107744,29 @@ async function nuvioCollectionHomeSettings(env, accessToken, profileId, collecti
   return { ...settings, items };
 }
 
+// Save home rows prepared by nuvioCollectionHomeSettings and read them back.
+// The RPC returns no payload, so confirm the stored values rather than treating
+// an accepted write (or a concurrent overwrite) as success. Collections may
+// already be saved, so a failure is reported as false, never thrown.
+async function nuvioSaveHomeVisibility(env, accessToken, profileId, homeSettings, hidden) {
+  try {
+    await nuvioRpc(env, accessToken, "sync_push_home_catalog_settings", {
+      p_profile_id: profileId, p_platform: "home_catalog_shared",
+      p_settings_json: homeSettings, p_origin_client_id: "my-lists-addon"
+    });
+    const savedHome = await nuvioPullHomeSettings(env, accessToken, profileId);
+    const savedItems = Array.isArray(savedHome.items) ? savedHome.items : [];
+    const targets = homeSettings.items.filter((i) => i.key && !i.is_collection && i.enabled === !hidden);
+    return targets.every((target) => {
+      const matches = savedItems.filter((i) => !i.is_collection && nuvioHomeCatalogKey(i) === target.key);
+      return matches.length > 0 && matches.every((i) => i.enabled === target.enabled);
+    });
+  } catch (homeErr) {
+    console.warn("Could not save Nuvio home catalog visibility:", homeErr);
+    return false;
+  }
+}
+
 // Addon writes replace the complete profile list. A failed/malformed read
 // must never be mistaken for an empty profile (or another profile's addons).
 async function nuvioGetAddons(env, accessToken, profileId) {
@@ -108056,9 +108127,14 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const profileId = (body && body.profileId != null) ? Number(body.profileId) : (Number(row.profile_index) || 1);
       if (!Number.isInteger(profileId) || profileId < 1 || profileId > 6) return json({ ok: false, error: "Choose a valid Nuvio profile." }, 400);
       const installMode = String(body.installMode || (body.merge === false ? "replace" : "new")).toLowerCase();
+      if (body.hideHomeCatalogs != null && typeof body.hideHomeCatalogs !== "boolean") {
+        return json({ ok: false, error: "Home catalog visibility must be a boolean." }, 400);
+      }
       // Scoped collection management never replaces or normalizes unrelated
-      // collections, addons or home preferences. Nuvio only has a whole-blob
-      // write, so verify the exact target snapshot against a fresh pull first.
+      // collections or addons. Home rows change only for this collection, and
+      // only when the request carries the person's saved hide/show choice.
+      // Nuvio only has a whole-blob write, so verify the exact target snapshot
+      // against a fresh pull first.
       if (installMode === "update-collection" || installMode === "delete-collection") {
         const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
         if (!scope || body.scope !== scope) return json({ ok: false, error: "This collection belongs to a different connection. Pull it again before making changes." }, 409);
@@ -108098,19 +108174,25 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
           });
           updated = nuvioSeparateCollectionSources([{ ...target, ...incoming, id: target.id, folders: mergedFolders }])[0];
         }
+        let homeSettings = null;
+        if (updated && typeof body.hideHomeCatalogs === "boolean") {
+          try { homeSettings = await nuvioCollectionHomeSettings(env, conn.accessToken, profileId, [updated], body.hideHomeCatalogs); }
+          catch (homeErr) {
+            if (homeErr && homeErr.kind === "invalid") throw homeErr;
+            return json({ ok: false, error: "Couldn't read your Nuvio home settings, so nothing was changed. Please try again." }, 502);
+          }
+        }
         const collections = installMode === "delete-collection" ? existing.filter((c) => c !== target) : existing.map((c) => c === target ? updated : c);
         const ownsSources = [target, updated].filter(Boolean).some((c) => (c.folders || []).some((f) => (f.catalogSources || []).some((source) => source && (source.addonId === ADDON_ID || source.addonId === COLLECTIONS_ADDON_ID))));
         if (updated && ownsSources) {
           collectionsManifestUrl = await nuvioEnsureAddonInstalled(env, conn.accessToken, profileId, new URL(request.url).origin, account, collections, body.collectionLists, body.manifestUrl);
         }
         await nuvioRpc(env, conn.accessToken, "sync_push_collections", { p_profile_id: profileId, p_collections_json: collections, p_origin_client_id: "my-lists-addon" });
-        return json({ ok: true, profileId, scope, collections, deletedCollectionId: updated ? null : target.id, writtenCollectionIds: updated ? [target.id] : [], collectionsManifestUrl });
+        const homeVisibilityUpdated = homeSettings ? await nuvioSaveHomeVisibility(env, conn.accessToken, profileId, homeSettings, body.hideHomeCatalogs) : null;
+        return json({ ok: true, profileId, scope, collections, deletedCollectionId: updated ? null : target.id, writtenCollectionIds: updated ? [target.id] : [], collectionsManifestUrl, homeVisibilityUpdated });
       }
       let collections = body.collections != null ? body.collections : (body.p_collections_json != null ? body.p_collections_json : null);
       if (!collections) return json({ ok: false, error: "Provide collections to push." }, 400);
-      if (body.hideHomeCatalogs != null && typeof body.hideHomeCatalogs !== "boolean") {
-        return json({ ok: false, error: "Home catalog visibility must be a boolean." }, 400);
-      }
       const incomingCollections = nuvioSeparateCollectionSources(collections);
 
       let existing = [];
@@ -108181,30 +108263,9 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
         p_origin_client_id: "my-lists-addon"
       });
 
-      let homeVisibilityUpdated = null;
-      if (homeSettings) {
-        try {
-          await nuvioRpc(env, conn.accessToken, "sync_push_home_catalog_settings", {
-            p_profile_id: profileId, p_platform: "home_catalog_shared",
-            p_settings_json: homeSettings, p_origin_client_id: "my-lists-addon"
-          });
-          // The RPC returns no payload. Confirm the stored values rather than
-          // treating an accepted write (or a concurrent overwrite) as success.
-          const savedHome = await nuvioPullHomeSettings(env, conn.accessToken, profileId);
-          const savedItems = Array.isArray(savedHome.items) ? savedHome.items : [];
-          const targets = homeSettings.items.filter((i) => i.key && !i.is_collection &&
-            i.enabled === !body.hideHomeCatalogs);
-          homeVisibilityUpdated = targets.every((target) => {
-            const matches = savedItems.filter((i) => !i.is_collection && nuvioHomeCatalogKey(i) === target.key);
-            return matches.length > 0 && matches.every((i) => i.enabled === target.enabled);
-          });
-        } catch (homeErr) {
-          // Collections/addon may already be saved. Report partial success, not
-          // a generic failure that makes someone unknowingly add a duplicate.
-          console.warn("Could not save Nuvio home catalog visibility:", homeErr);
-          homeVisibilityUpdated = false;
-        }
-      }
+      // Collections/addon may already be saved: a failure here is reported as
+      // partial success, not a generic failure that invites a duplicate push.
+      const homeVisibilityUpdated = homeSettings ? await nuvioSaveHomeVisibility(env, conn.accessToken, profileId, homeSettings, body.hideHomeCatalogs) : null;
       const scope = conn.id ? await installTokenHash("nuvio-collections:" + JSON.stringify([accountId, conn.id])) : null;
       const writtenCollectionIds = installMode === "new" ? collections.slice(existingCount).map((c) => c.id)
         : installMode === "replace" ? collections.map((c) => c.id) : body.targetCollectionId ? [body.targetCollectionId] : [];
