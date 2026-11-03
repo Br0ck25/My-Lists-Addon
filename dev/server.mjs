@@ -23,9 +23,13 @@ globalThis.fetch = async (input, init) => {
 };
 const UPSTREAM = [];
 
+// PORT and CONTROL_PORT are optional (tests/e2e-workflows.mjs picks free ones);
+// without them the ports are the same as always.
+const PORT = Number(process.env.PORT) || 8787;
+const CONTROL_PORT = Number(process.env.CONTROL_PORT) || 8788;
 const REQS = [];
 const server = http.createServer(async (req, res) => {
-  const url = "http://127.0.0.1:8787" + req.url;
+  const url = `http://127.0.0.1:${PORT}` + req.url;
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const body = chunks.length ? Buffer.concat(chunks) : undefined;
@@ -58,7 +62,7 @@ const server = http.createServer(async (req, res) => {
   res.end(out);
 });
 
-server.listen(8787, "127.0.0.1", () => console.log("LIVE on http://127.0.0.1:8787"));
+server.listen(PORT, "127.0.0.1", () => console.log(`LIVE on http://127.0.0.1:${PORT}`));
 
 // Control channel for the test driver.
 http.createServer(async (req, res) => {
@@ -72,4 +76,4 @@ http.createServer(async (req, res) => {
   }
   if (req.url === "/kv") { res.end(JSON.stringify([...kv._store.keys()])); return; }
   res.end("?");
-}).listen(8788, "127.0.0.1");
+}).listen(CONTROL_PORT, "127.0.0.1");
