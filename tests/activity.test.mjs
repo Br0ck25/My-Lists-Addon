@@ -1071,6 +1071,39 @@ describe("FF_SHOW_SCHEDULE: the legacy shelf sweeps pass over accounts served fr
     assert.equal(env.CONFIGS._store.has("airingnextchecked:notcopied"), true);
   });
 
+  // PERF-13: once every account is copied, the two sweeps have nobody left to
+  // serve, so they must not page through every account just to skip each one.
+  async function creatorListingsDuringTick(extra, { withLegacyAccount }) {
+    const { env } = await eventTrackingSetup({ TMDB_API_KEY: "k", ...extra });
+    if (withLegacyAccount) await createUser(env, "notcopied");
+    let listings = 0;
+    const realList = env.CONFIGS.list.bind(env.CONFIGS);
+    env.CONFIGS.list = (opts, ...rest) => {
+      if (opts && opts.prefix === "creator:") listings++;
+      return realList(opts, ...rest);
+    };
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    try {
+      await runScheduledTick(env, { cron: "x" }, await freshIsolate());
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    return listings;
+  }
+
+  it("with every account copied, neither sweep lists the accounts", async () => {
+    assert.equal(await creatorListingsDuringTick({ FF_SHOW_SCHEDULE: "1" }, { withLegacyAccount: false }), 0);
+  });
+
+  it("an account not yet copied keeps both sweeps running", async () => {
+    assert.ok(await creatorListingsDuringTick({ FF_SHOW_SCHEDULE: "1" }, { withLegacyAccount: true }) >= 2);
+  });
+
+  it("with FF_SHOW_SCHEDULE off, the sweeps list the accounts even when every one is copied", async () => {
+    assert.ok(await creatorListingsDuringTick({}, { withLegacyAccount: false }) >= 2);
+  });
+
   it("with FF_SHOW_SCHEDULE off, sweeps every account as before", async () => {
     const { env, finds } = await sweepOnce({});
     assert.ok(finds.some((id) => ANN_SHOWS.includes(id)), `the copied account is swept; looked up: ${finds.join(", ")}`);

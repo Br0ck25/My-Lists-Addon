@@ -2464,7 +2464,7 @@ Full suite after the split: **2,741 passed, one failed, one TODO**. The failure 
 - Not changed: BUG-08 (every bare `fetch(` already goes through the Worker's fetch guard with a default timeout and the provider breaker).
 - Checks: full `bash verify.sh -q`: 3,143 tests, 3,137 passed, 5 todo, 1 failed (the known cold-catalog latency budget in `tests/load-performance.test.mjs`: 65–108 ms on this shared VM both before and after these fixes, passes with `CI=1`; left as it is).
 
-## 2026-11-03 — Performance audit fixes PERF-00 to PERF-16 (build `88a7f25a45`, prepared; not deployed)
+## 2026-11-03 — Performance audit fixes PERF-00 to PERF-16 (build `822f6a6fd4`, prepared; not deployed)
 
 Plan and evidence: `docs/PERF_AUDIT_PLAN.md`. No migration, binding, secret or flag. Deploy the rebuilt Worker; nothing a visitor sees changes.
 
@@ -2475,7 +2475,8 @@ Plan and evidence: `docs/PERF_AUDIT_PLAN.md`. No migration, binding, secret or f
 - **Watch history saves (PERF-01).** The matching of the saved history to stored plays is linear: 5,000 plays 106 ms to 6 ms, 10,000 plays 519 ms to 7 ms of CPU in the worst case.
 - **Sync check (PERF-03).** The once-a-minute check from each open tab no longer rebuilds the whole watch history for an account on the activity database. It returns the same number the full load gives the browser.
 - **Budgets (PERF-00, 11 step 1).** The cold-catalog latency test no longer times real internet calls (budgets unchanged). `tests/asset-size-budget.json` holds the gzip sizes of the page, `/app.js`, `/app-features.js` and `/app.css` (2% allowance, may only shrink).
-- **Not built:** PERF-02 (playback ping), PERF-10, 11 step 2, 13, 14, 15. Reasons and what to measure are in `docs/HANDOFF.md`.
+- **Old shelf sweeps stop when nobody needs them (PERF-13, owner confirmed `FF_SHOW_SCHEDULE` is on and every account is copied).** `cron.episodes` and `cron.airing-next` first ask D1 whether any live account's history copy is not done (or a profile has no account row). With none, they return without listing a single account. A new account, or one whose copy failed, turns them back on until `activity.copy-new` copies it. With `FF_SHOW_SCHEDULE` or `FF_EVENT_TRACKING` off they run exactly as before.
+- **Not built:** PERF-02 (playback ping), PERF-10, 11 step 2, 14, 15. Reasons and what to measure are in `docs/HANDOFF.md`.
 
 ### Checked
 `bash verify.sh -q` passes. New tests: `perf-eastern-date-key`, `perf-page-hash`, `perf-page-nonce`, `perf-catalog-lookup`, `perf-chart-index` (golden test against the old scan), `perf-user-cache`, `perf-history-match`, `perf-sync-meta`, `perf-shelf-owner-memo`, `perf-stat-batching`, `perf-ping-cost`, `asset-size-budget`. Two `creator-kv-mirror` tests and five tests that read the `stats` table right after a request were adjusted for the new timing (what they assert is unchanged); their reasons are in the commit messages.

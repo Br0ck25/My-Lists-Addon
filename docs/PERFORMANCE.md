@@ -100,6 +100,7 @@ Cross-reference of findings from `PERFORMANCE_AUDIT.md`:
 | **PERF-09** | Per-user provider cache was FIFO; previews flooded it | **Resolved:** previews have their own 5,000-entry map; both caches are real LRU. |
 | **PERF-01** | `saveTrackingRecord` matched watch history in O(n²) | **Resolved:** Map by `legacy_id`. 5,000 plays 106 ms to 6 ms, 10,000 plays 519 ms to 7 ms (old loop worst case). |
 | **PERF-11 (step 1)** | No budget on `/app-features.js`, `/app.css`, the page | **Resolved:** `tests/asset-size-budget.json` ratchet (2% allowance, may only shrink). Step 2 (load features on demand) not built; survey in `docs/HANDOFF.md`. |
+| **PERF-13** | `cron.episodes` / `cron.airing-next` listed every account each tick only to skip copied ones | **Resolved:** one D1 check per run (`legacyShelfSweepNeeded`); with no uncopied account the sweeps list nothing. Flags off: unchanged. |
 | **PERF-03** | `sync/meta` assembled the whole tracking record once a minute per tab | **Resolved:** reads the record's own stamp from the stored settings (zero `watch_events` reads). |
 | **PERF-16** | A track-on link re-verified its owner on every row | **Resolved:** 10 s memo per (name, key), the SESSION_CACHE window. |
 | **PERF-06** | Page decoded and re-encoded on every 200 just for the nonce | **Resolved:** the page string travels with the Response. |

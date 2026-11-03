@@ -175,7 +175,7 @@ All of these upsert `stats(kind,'total')`, a single hot row that every request c
 **Test.** `tests/dst-days-ago.test.mjs` passes unchanged; a unit test checks the key around both 2026 DST changes.
 **Risk.** None.
 
-### PERF-13 (Medium, scalability; ops check, then decide): the legacy cron sweeps walk every account
+### PERF-13 (Medium, scalability; **owner confirmed both, 2026-11-03: built as a self-disabling guard**): the legacy cron sweeps walk every account
 **Evidence.** `checkForNewEpisodes` and `refreshAiringNextSweep` (`src/catalog/07_source-fetchers-tmdb-simkl.js:4858`, `:4774`) page through **all** `creator:` KV keys, 25 per tick (every 4 min, `LEGACY_CRON_EVERY_MS`). For each account they read KV/D1 just to learn they should skip it (`legacyShelfSweepSkips` → `eventTrackingOwns`). Airing Next rebuilds at most 3 accounts per tick (`AIRING_NEXT_SWEEP_ACCOUNTS_PER_TICK`). At 10,000 accounts, one full pass is ~400 ticks (~27 hours), mostly spent skipping accounts the newer `show.refresh` job already serves.
 **Recommendation.** Ops check first: is `FF_SHOW_SCHEDULE` on in production, and does `/admin` → activity backfill show every account copied? If both are yes, the owner can retire these two periodic jobs (`cron.episodes`, `cron.airing-next` in `45_jobs-dispatcher.js:574`). That is a product step: ask, don't do it. If not, the cheap fix is to sweep from a D1 query of accounts **not** on the activity database instead of listing KV.
 

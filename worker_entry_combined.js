@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "88a7f25a45";
+const WORKER_BUILD = "822f6a6fd4";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -100114,6 +100114,30 @@ function isShowScheduleEnabled(env) {
 // not know yet, and each write cost a full record save (saveTrackingRecord).
 // They keep sweeping accounts on the legacy stores, and every account again
 // if FF_SHOW_SCHEDULE is turned off.
+// Whether the legacy shelf sweeps (checkForNewEpisodes, refreshAiringNextSweep)
+// have anyone left to serve (PERF-13). With FF_SHOW_SCHEDULE they skip every
+// account whose history copy is done, so once every account is copied they
+// would page through all of them only to skip each one. One query answers it:
+// a live account whose copy is not done (not yet copied, or a failed copy), or
+// a profile with no account row. Flags off, or the query failing: true, so the
+// sweeps run exactly as before. Asked once per sweep run, not per account.
+async function legacyShelfSweepNeeded(env) {
+  if (!isShowScheduleEnabled(env) || !isEventTrackingEnabled(env) || !env.DB) return true;
+  try {
+    const row = await env.DB.prepare(
+      `SELECT 1 AS x WHERE EXISTS (
+         SELECT 1 FROM accounts a WHERE a.deleted_at IS NULL AND NOT EXISTS (
+           SELECT 1 FROM jobs j WHERE j.dedupe_key = 'migrate.activity:acct:' || a.id AND j.status = 'done'))
+       OR EXISTS (
+         SELECT 1 FROM creators c WHERE NOT EXISTS (
+           SELECT 1 FROM accounts a WHERE a.username = c.username COLLATE NOCASE))`
+    ).first();
+    return !!row;
+  } catch {
+    return true;
+  }
+}
+
 async function legacyShelfSweepSkips(env, username) {
   if (!isShowScheduleEnabled(env)) return false;
   return (await eventTrackingOwns(env, username)) != null;
@@ -101931,14 +101955,15 @@ function runLegacyCronTasks(env, ctx) {
   // The ordering is kept: the Continue Watching sweep writes first, because
   // it is the part a person is waiting on, and everything that spends
   // provider calls runs after it.
-  const episodeSweep = guard("checkForNewEpisodes", checkForNewEpisodes(env));
+  const shelfSweepNeeded = legacyShelfSweepNeeded(env);
+  const episodeSweep = guard("checkForNewEpisodes", shelfSweepNeeded.then((needed) => needed && checkForNewEpisodes(env)));
   const streamingSweep = guard(
     "sweepNewOnStreaming",
     episodeSweep.then(() => sweepNewOnStreaming(env, ctx))
   );
   const airingNextSweep = guard(
     "refreshAiringNextSweep",
-    episodeSweep.then(() => refreshAiringNextSweep(env, ctx))
+    episodeSweep.then(() => shelfSweepNeeded).then((needed) => needed && refreshAiringNextSweep(env, ctx))
   );
   const betterPosterWarm = guard(
     "prewarmBetterPosters",
@@ -102002,13 +102027,14 @@ async function runJobSteps(tasks) {
 definePeriodicJob("cron.episodes", {
   everyMs: LEGACY_CRON_EVERY_MS,
   legacy: true,
-  run: (env) => checkForNewEpisodes(env),
+  // Nothing to do once every account is served from the schedule (PERF-13, 40_).
+  run: async (env) => (await legacyShelfSweepNeeded(env)) && checkForNewEpisodes(env),
 });
 
 definePeriodicJob("cron.airing-next", {
   everyMs: LEGACY_CRON_EVERY_MS,
   legacy: true,
-  run: (env, payload, job) => refreshAiringNextSweep(env, job.ctx),
+  run: async (env, payload, job) => (await legacyShelfSweepNeeded(env)) && refreshAiringNextSweep(env, job.ctx),
 });
 
 // New on Streaming (P5-10 names it nos.sweep; its quota ledger is in D1).

@@ -185,6 +185,30 @@ function isShowScheduleEnabled(env) {
 // not know yet, and each write cost a full record save (saveTrackingRecord).
 // They keep sweeping accounts on the legacy stores, and every account again
 // if FF_SHOW_SCHEDULE is turned off.
+// Whether the legacy shelf sweeps (checkForNewEpisodes, refreshAiringNextSweep)
+// have anyone left to serve (PERF-13). With FF_SHOW_SCHEDULE they skip every
+// account whose history copy is done, so once every account is copied they
+// would page through all of them only to skip each one. One query answers it:
+// a live account whose copy is not done (not yet copied, or a failed copy), or
+// a profile with no account row. Flags off, or the query failing: true, so the
+// sweeps run exactly as before. Asked once per sweep run, not per account.
+async function legacyShelfSweepNeeded(env) {
+  if (!isShowScheduleEnabled(env) || !isEventTrackingEnabled(env) || !env.DB) return true;
+  try {
+    const row = await env.DB.prepare(
+      `SELECT 1 AS x WHERE EXISTS (
+         SELECT 1 FROM accounts a WHERE a.deleted_at IS NULL AND NOT EXISTS (
+           SELECT 1 FROM jobs j WHERE j.dedupe_key = 'migrate.activity:acct:' || a.id AND j.status = 'done'))
+       OR EXISTS (
+         SELECT 1 FROM creators c WHERE NOT EXISTS (
+           SELECT 1 FROM accounts a WHERE a.username = c.username COLLATE NOCASE))`
+    ).first();
+    return !!row;
+  } catch {
+    return true;
+  }
+}
+
 async function legacyShelfSweepSkips(env, username) {
   if (!isShowScheduleEnabled(env)) return false;
   return (await eventTrackingOwns(env, username)) != null;
