@@ -2555,10 +2555,20 @@ function splitPageMemoKey(html) {
   return (h >>> 0).toString(36) + ":" + html.length;
 }
 
+// The last few pages by identity. renderBuilderCached hands back the same string
+// object for the default page, so a repeat request (a 304 included) is found with
+// one reference comparison instead of an FNV pass over ~1.6 MB.
+const RECENT_SPLIT_PAGES = [];
+const RECENT_SPLIT_PAGES_MAX = 2;
+
 async function pageWithExternalBundle(html) {
+  for (const e of RECENT_SPLIT_PAGES) if (e.html === html) return e.page;
   const key = splitPageMemoKey(html);
   const memo = SPLIT_PAGE_MEMO.get(key);
-  if (memo) return memo;
+  if (memo) {
+    rememberRecentSplitPage(html, memo);
+    return memo;
+  }
   let page = html;
   try {
     page = (await splitAppBundle(html)).page;
@@ -2572,7 +2582,13 @@ async function pageWithExternalBundle(html) {
     if (oldest !== undefined) SPLIT_PAGE_MEMO.delete(oldest);
   }
   SPLIT_PAGE_MEMO.set(key, page);
+  rememberRecentSplitPage(html, page);
   return page;
+}
+
+function rememberRecentSplitPage(html, page) {
+  RECENT_SPLIT_PAGES.unshift({ html, page });
+  if (RECENT_SPLIT_PAGES.length > RECENT_SPLIT_PAGES_MAX) RECENT_SPLIT_PAGES.pop();
 }
 
 async function htmlPageResponse(request, fullHtml, extraHeaders) {
