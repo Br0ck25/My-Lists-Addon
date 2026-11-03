@@ -14,13 +14,18 @@
 // locally. en-CA formats as YYYY-MM-DD directly; America/New_York's IANA
 // data handles the EST/EDT switch automatically, unlike a fixed offset
 // would.
+// The formatter is built once (on first use) and kept on the function itself:
+// constructing an Intl.DateTimeFormat per call was a top self-time function.
 function easternDateKey(date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  if (!easternDateKey._fmt) {
+    easternDateKey._fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  }
+  return easternDateKey._fmt.format(date);
 }
 
 // Eastern calendar date n days before nowMs. Calendar arithmetic, not

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "72bd529dd9";
+const WORKER_BUILD = "7091694e42";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -11014,13 +11014,18 @@ function sortPublicChannelIndex(entries, sort) {
 // locally. en-CA formats as YYYY-MM-DD directly; America/New_York's IANA
 // data handles the EST/EDT switch automatically, unlike a fixed offset
 // would.
+// The formatter is built once (on first use) and kept on the function itself:
+// constructing an Intl.DateTimeFormat per call was a top self-time function.
 function easternDateKey(date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  if (!easternDateKey._fmt) {
+    easternDateKey._fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  }
+  return easternDateKey._fmt.format(date);
 }
 
 // Eastern calendar date n days before nowMs. Calendar arithmetic, not
