@@ -94,6 +94,29 @@ describe("full backup round trip", () => {
     assert.equal(file.keys.tmdbKey, "0123456789abcdef0123456789abcdef");
   });
 
+  it("a catalog row that shows a custom list is stored in the file as a reference and gets its items back on restore", () => {
+    const a = loadClient({ signedIn: true });
+    a.call("saveLocalCustomListsMap", { "my-favs": { slug: "my-favs", name: "My favs", type: "movie", items: [MOVIE] } });
+    // A real row carries the stored list's own items (same field order), which is what makes the copy droppable.
+    const storedItems = JSON.parse(JSON.stringify(a.call("loadLocalCustomLists")["my-favs"].items));
+    const rowUrl = "customlist:v1:" + JSON.stringify({ localSlug: "my-favs", name: "My favs", type: "movie", items: storedItems });
+    a.set("collectEntries", () => [{ id: "row1", type: "movie", name: "My favs", url: rowUrl }]);
+    const file = JSON.parse(JSON.stringify(a.call("buildFullBackupPayload")));
+
+    const stored = JSON.parse(file.entries[0].url.slice("customlist:v1:".length));
+    assert.equal(stored.itemsRef, "my-favs", "the row points at the list instead of embedding a second copy");
+    assert.equal(stored.items, null);
+    assert.deepEqual(file.customLists["my-favs"].items.map((i) => i.id), [MOVIE.id], "the items live once, in customLists");
+
+    const b = loadClient({ signedIn: true });
+    const rows = [];
+    b.set("restoreRows", (r) => rows.push(...r));
+    b.call("runImport", file);
+    const back = JSON.parse(rows[0].url.slice("customlist:v1:".length));
+    assert.deepEqual(back.items.map((i) => i.id), [MOVIE.id], "the restored row has its items back, not null");
+    assert.equal(back.itemsRef, undefined);
+  });
+
   it("still restores a file written by the previous release (2.0: rows embed their items)", () => {
     const old = {
       version: "2.0",
