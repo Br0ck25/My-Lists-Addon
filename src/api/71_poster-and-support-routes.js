@@ -470,7 +470,11 @@ async function apiPosterBadgeRender(env, { posterUrl, airDate, airTime, isPremie
         airDateText, airTimeText, bottomText, bottomBg, bottomBgOpacity,
         bottomBorder, bottomBorderOpacity, bottomColor,
       });
-    } catch (e) {}
+    } catch (e) {
+      // Still falls back to the SVG, but says so: a silent failure here meant
+      // blank Stremio posters with no error anywhere (audit TEST-03).
+      console.error("/api/poster-badge: could not draw the JPEG badge, sending the SVG instead", e);
+    }
   }
 
   rememberBadgedPoster(cacheKey, svg);

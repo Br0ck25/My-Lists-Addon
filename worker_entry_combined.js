@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "73c3ca07ab";
+const WORKER_BUILD = "b4c0f71d31";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -116007,7 +116007,11 @@ async function apiPosterBadgeRender(env, { posterUrl, airDate, airTime, isPremie
         airDateText, airTimeText, bottomText, bottomBg, bottomBgOpacity,
         bottomBorder, bottomBorderOpacity, bottomColor,
       });
-    } catch (e) {}
+    } catch (e) {
+      // Still falls back to the SVG, but says so: a silent failure here meant
+      // blank Stremio posters with no error anywhere (audit TEST-03).
+      console.error("/api/poster-badge: could not draw the JPEG badge, sending the SVG instead", e);
+    }
   }
 
   rememberBadgedPoster(cacheKey, svg);
