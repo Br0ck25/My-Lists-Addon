@@ -3488,11 +3488,11 @@ async function reserveAuthAttempt(env, scope, day, maxFailures) {
   return { over: false, release };
 }
 
+// A like belongs to a signed-in account (D-6). A signed-out caller has no voter
+// id: no "a:<hash of the IP>" is ever made any more (D-37), so nothing is stored.
 async function likeVoterId(request, env, creatorUsername, scopeId) {
   if (creatorUsername) return `u:${creatorUsername}`;
-  const ip = clientIpKey(request);
-  if (!ip) return null;
-  return `a:${await anonLikeVoterHash(env, ip, scopeId)}`;
+  return null;
 }
 
 function ledgerKeyToListId(ledgerKey) {
