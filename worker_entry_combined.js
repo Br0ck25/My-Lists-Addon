@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "67fa6e88d0";
+const WORKER_BUILD = "1c7536965d";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -31416,6 +31416,52 @@ function resolveChartSlug(slug) {
   return CHART_SLUG_REGISTRY[slug] || CHART_SLUG_REGISTRY[LEGACY_CHART_SLUGS[slug]] || null;
 }
 
+// Lookup index for findChartOrCollectionEntry: slug -> first table item (or
+// CHART_SLUG_ENTRIES entry) that the old linear scan would have matched. One per
+// request type because the "chosen url" slug depends on it. Built lazily, once.
+const CHART_LOOKUP_INDEX_CACHE = {};
+
+function chartLookupIndex(reqType) {
+  if (CHART_LOOKUP_INDEX_CACHE[reqType]) return CHART_LOOKUP_INDEX_CACHE[reqType];
+  const slug = (v) => (typeof slugifyServer === "function" ? slugifyServer(v) : "");
+  const tables = [
+    typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10 : [],
+    typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL : [],
+    typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS : [],
+    typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS : [],
+    typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [],
+    typeof MDBLIST_OFFICIAL_CHARTS !== "undefined" ? MDBLIST_OFFICIAL_CHARTS : [],
+    typeof TMDB_CHART_LISTS !== "undefined" ? TMDB_CHART_LISTS : [],
+    typeof TRAKT_CHART_LISTS !== "undefined" ? TRAKT_CHART_LISTS : [],
+    typeof SIMKL_CHART_LISTS !== "undefined" ? SIMKL_CHART_LISTS : [],
+    typeof HIDDEN_GEMS_LIST !== "undefined" ? HIDDEN_GEMS_LIST : [],
+    typeof MY_LISTS_ADDON_CHARTS !== "undefined" ? MY_LISTS_ADDON_CHARTS : []
+  ];
+  const tableMap = new Map();
+  for (const table of tables) {
+    if (!Array.isArray(table)) continue;
+    for (const item of table) {
+      if (!item) continue;
+      const mUrl = item.movieUrl || item.url || "";
+      const sUrl = item.showUrl || item.url || "";
+      const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
+      const cSlug = item.slug ? String(item.slug).toLowerCase() : "";
+      for (const key of [slug(mUrl), slug(sUrl), slug(chosenUrl), slug(item.name), cSlug]) {
+        if (!tableMap.has(key)) tableMap.set(key, item);
+      }
+    }
+  }
+  const slugEntryMap = new Map();
+  if (typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+    for (const c of CHART_SLUG_ENTRIES) {
+      for (const key of [slug(c.movieUrl || c.url || ""), slug(c.showUrl || c.url || ""), slug(c.name || ""), slug(c.slug || "")]) {
+        if (!slugEntryMap.has(key)) slugEntryMap.set(key, c);
+      }
+    }
+  }
+  return (CHART_LOOKUP_INDEX_CACHE[reqType] = { tables: tableMap, slugEntries: slugEntryMap });
+}
+
 function findChartOrCollectionEntry(id, type) {
   if (!id) return null;
   const cleanId = String(id).trim();
@@ -31450,65 +31496,32 @@ function findChartOrCollectionEntry(id, type) {
     return { id: cleanId, name, type: reqType, url: `tmdb:genre:${gen}`, enabled: true };
   }
 
-  // 2. Search against all known tables:
-  const tables = [
-    typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10 : [],
-    typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL : [],
-    typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS : [],
-    typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS : [],
-    typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [],
-    typeof MDBLIST_OFFICIAL_CHARTS !== "undefined" ? MDBLIST_OFFICIAL_CHARTS : [],
-    typeof TMDB_CHART_LISTS !== "undefined" ? TMDB_CHART_LISTS : [],
-    typeof TRAKT_CHART_LISTS !== "undefined" ? TRAKT_CHART_LISTS : [],
-    typeof SIMKL_CHART_LISTS !== "undefined" ? SIMKL_CHART_LISTS : [],
-    typeof HIDDEN_GEMS_LIST !== "undefined" ? HIDDEN_GEMS_LIST : [],
-    typeof MY_LISTS_ADDON_CHARTS !== "undefined" ? MY_LISTS_ADDON_CHARTS : []
-  ];
-
-  for (const table of tables) {
-    if (!Array.isArray(table)) continue;
-    for (const item of table) {
-      if (!item) continue;
-      const mUrl = item.movieUrl || item.url || "";
-      const sUrl = item.showUrl || item.url || "";
-      const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
-
-      const mSlug = typeof slugifyServer === "function" ? slugifyServer(mUrl) : "";
-      const sSlug = typeof slugifyServer === "function" ? slugifyServer(sUrl) : "";
-      const uSlug = typeof slugifyServer === "function" ? slugifyServer(chosenUrl) : "";
-      const nSlug = typeof slugifyServer === "function" ? slugifyServer(item.name) : "";
-      const cSlug = item.slug ? String(item.slug).toLowerCase() : "";
-
-      if (cleanId === mSlug || cleanId === sSlug || cleanId === uSlug || cleanId === nSlug || cleanId === cSlug) {
-        return {
-          id: cleanId,
-          name: item.name || cleanId,
-          type: reqType,
-          url: chosenUrl,
-          enabled: true
-        };
-      }
-    }
+  // 2. Search against all known tables, then 3. CHART_SLUG_ENTRIES. Both are
+  // answered from an index built once per isolate (first table, first item wins,
+  // exactly the order of the linear scan this replaced).
+  const index = chartLookupIndex(reqType);
+  const item = index.tables.get(cleanId);
+  if (item) {
+    const mUrl = item.movieUrl || item.url || "";
+    const sUrl = item.showUrl || item.url || "";
+    const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
+    return {
+      id: cleanId,
+      name: item.name || cleanId,
+      type: reqType,
+      url: chosenUrl,
+      enabled: true
+    };
   }
-
-  // 3. Fallback: Check CHART_SLUG_ENTRIES
-  if (typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
-    const found = CHART_SLUG_ENTRIES.find((c) => {
-      const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
-      const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
-      const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
-      const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
-      return cleanId === mSlug || cleanId === sSlug || cleanId === nSlug || cleanId === cSlug;
-    });
-    if (found) {
-      return {
-        id: cleanId,
-        name: found.name,
-        type: reqType,
-        url: reqType === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
-        enabled: true
-      };
-    }
+  const found = index.slugEntries.get(cleanId);
+  if (found) {
+    return {
+      id: cleanId,
+      name: found.name,
+      type: reqType,
+      url: reqType === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+      enabled: true
+    };
   }
 
   return null;

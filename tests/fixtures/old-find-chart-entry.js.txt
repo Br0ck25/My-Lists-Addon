@@ -1,0 +1,100 @@
+// Frozen copy of findChartOrCollectionEntry as it was before PERF-07 step 2 (linear scan
+// of every chart table). tests/perf-chart-index.test.mjs appends this to the Worker
+// module and uses it as the oracle for the indexed lookup. Do not edit.
+function __oldFindChartOrCollectionEntry(id, type) {
+  if (!id) return null;
+  const cleanId = String(id).trim();
+  const reqType = type === "series" ? "series" : "movie";
+
+  // 1. Direct TMDB chart / kids / holiday / genre slug prefixes
+  if (cleanId.startsWith("tmdb-chart-")) {
+    const net = cleanId.replace(/^tmdb-chart-/, "");
+    const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
+                     (typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === net.replace(/[^a-z0-9]+/g, "")) : null);
+    const row = STREAMING_ROW_BY_CHART_KEY[net];
+    if (row && row.additional && !row.kinds[reqType]) return null;
+    const name = row ? `${row.serviceName}: ${row.name}` : provider ? `${provider.name} (Streaming)` : `${net.toUpperCase()} Catalog`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:chart:${net}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-kids-")) {
+    const rating = cleanId.replace(/^tmdb-kids-/, "");
+    const match = typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS.find((k) => k.movieUrl === `tmdb:kids:${rating}`) : null;
+    const name = match ? match.name : `Rated ${rating.toUpperCase()} & Under`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:kids:${rating}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-holiday-")) {
+    const hol = cleanId.replace(/^tmdb-holiday-/, "");
+    const match = typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS.find((h) => h.movieUrl === `tmdb:holiday:${hol}`) : null;
+    const name = match ? match.name : `Holiday ${hol}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:holiday:${hol}`, enabled: true };
+  }
+  if (cleanId.startsWith("tmdb-genre-")) {
+    const gen = cleanId.replace(/^tmdb-genre-/, "");
+    const match = typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS.find((g) => g.movieUrl === `tmdb:genre:${gen}`) : null;
+    const name = match ? match.name : `Genre ${gen}`;
+    return { id: cleanId, name, type: reqType, url: `tmdb:genre:${gen}`, enabled: true };
+  }
+
+  // 2. Search against all known tables:
+  const tables = [
+    typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10 : [],
+    typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL : [],
+    typeof KIDS_LISTS !== "undefined" ? KIDS_LISTS : [],
+    typeof HOLIDAY_LISTS !== "undefined" ? HOLIDAY_LISTS : [],
+    typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [],
+    typeof MDBLIST_OFFICIAL_CHARTS !== "undefined" ? MDBLIST_OFFICIAL_CHARTS : [],
+    typeof TMDB_CHART_LISTS !== "undefined" ? TMDB_CHART_LISTS : [],
+    typeof TRAKT_CHART_LISTS !== "undefined" ? TRAKT_CHART_LISTS : [],
+    typeof SIMKL_CHART_LISTS !== "undefined" ? SIMKL_CHART_LISTS : [],
+    typeof HIDDEN_GEMS_LIST !== "undefined" ? HIDDEN_GEMS_LIST : [],
+    typeof MY_LISTS_ADDON_CHARTS !== "undefined" ? MY_LISTS_ADDON_CHARTS : []
+  ];
+
+  for (const table of tables) {
+    if (!Array.isArray(table)) continue;
+    for (const item of table) {
+      if (!item) continue;
+      const mUrl = item.movieUrl || item.url || "";
+      const sUrl = item.showUrl || item.url || "";
+      const chosenUrl = reqType === "series" ? (sUrl || mUrl) : (mUrl || sUrl);
+
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(mUrl) : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(sUrl) : "";
+      const uSlug = typeof slugifyServer === "function" ? slugifyServer(chosenUrl) : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(item.name) : "";
+      const cSlug = item.slug ? String(item.slug).toLowerCase() : "";
+
+      if (cleanId === mSlug || cleanId === sSlug || cleanId === uSlug || cleanId === nSlug || cleanId === cSlug) {
+        return {
+          id: cleanId,
+          name: item.name || cleanId,
+          type: reqType,
+          url: chosenUrl,
+          enabled: true
+        };
+      }
+    }
+  }
+
+  // 3. Fallback: Check CHART_SLUG_ENTRIES
+  if (typeof CHART_SLUG_ENTRIES !== "undefined" && Array.isArray(CHART_SLUG_ENTRIES)) {
+    const found = CHART_SLUG_ENTRIES.find((c) => {
+      const mSlug = typeof slugifyServer === "function" ? slugifyServer(c.movieUrl || c.url || "") : "";
+      const sSlug = typeof slugifyServer === "function" ? slugifyServer(c.showUrl || c.url || "") : "";
+      const nSlug = typeof slugifyServer === "function" ? slugifyServer(c.name || "") : "";
+      const cSlug = typeof slugifyServer === "function" ? slugifyServer(c.slug || "") : "";
+      return cleanId === mSlug || cleanId === sSlug || cleanId === nSlug || cleanId === cSlug;
+    });
+    if (found) {
+      return {
+        id: cleanId,
+        name: found.name,
+        type: reqType,
+        url: reqType === "series" ? (found.showUrl || found.movieUrl) : (found.movieUrl || found.showUrl),
+        enabled: true
+      };
+    }
+  }
+
+  return null;
+}
