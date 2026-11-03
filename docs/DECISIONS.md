@@ -2,6 +2,12 @@
 
 Decisions the owner has made. They are recorded here so the code, the plan documents and future work agree. The newest entries are at the top.
 
+## 2026-11-02 — No anonymous likes are kept
+
+| # | Decision | Consequence in the code |
+|---|---|---|
+| D-37 | **No anonymous likes are kept.** Every vote cast signed-out before D-6 (voter id `a:<hash of IP and target>`, reversible to the IP address) is removed, and each like total is lowered by the votes removed, so every total equals the signed-in likes behind it. Some lists and channels show fewer likes and may move in the "popular" and "liked" orders; that is accepted. Channel "added" counts and anonymous published lists themselves are not touched. Replaces D-9. | `likeVoterId` no longer makes an `a:` id (a signed-out caller has none; the like routes already answer 401). `POST /admin/api/anonymous-likes-purge` (admin only, `src/jobs/61_anonymous-likes-purge.js`) removes the old votes from the KV ledgers (`listlikevoters:*`, `extlikevoters:*`, `channellikevoters:*`), D1 `list_likes` and D1 `likes`, and lowers the totals (KV records, the channel directory row, `creator_lists.likes`, `published_lists.likes`, `lists.like_count`, `channels.like_count`) by the number removed, never below 0. A dry run is the default; deleting needs `{"apply":true,"confirm":"delete anonymous likes"}`. Safe to run again. `LIKE_VOTER_PEPPER` (SEC-05) is gone. Steps: `docs/OPERATIONS.md` §33. |
+
 ## 2026-11-02 — Old scrobble webhook addresses are retired
 
 | # | Decision | Consequence in the code |
@@ -91,7 +97,7 @@ Also confirmed by the owner on 2026-09-27: the Cloudflare dashboard offers **Que
 | D-6 | **No anonymous likes or anonymous lists.** Only signed-in accounts can like lists, external lists or channels, share or publish channels, or count as "added" on a channel. | `/api/lists/like`, `/api/lists/like-external` and `/api/channel/like` return 401 `signInRequired` without an account. `/api/channel/share` requires an account. `/api/channel/added` counts once per account and ignores signed-out adds. The site prompts signed-out visitors to log in. Legacy anonymous published lists (`publishedlist:user:*`, D1 `published_lists`) are no longer shown in the directory or search and can't be liked. **Their existing URLs still resolve**, so Stremio catalogs that already use them keep working. An admin can delete them from `/admin`. |
 | D-7 | **Leaked credentials in git history:** no action requested. | — |
 | D-8 | **Signed-out installs stay, limited to public lists.** A signed-out visitor can add the site's public lists to the Live Preview and generate an install link. Nothing personal or user-made works signed out: no watchlist, Airing Next, watch history or Continue Watching, no custom lists or imports, no channels of their own, no connected provider accounts. | See "D-8 in the code" below. Install links that already exist keep working exactly as they do today. |
-| D-9 | **Existing anonymous likes stay.** Votes cast signed-out before D-6 keep counting toward the totals people see. | Nothing removes the `a:`-prefixed voter ids from the like ledgers. |
+| D-9 | **Existing anonymous likes stay.** Votes cast signed-out before D-6 keep counting toward the totals people see. **Replaced by D-37 (2026-11-02).** | Nothing removes the `a:`-prefixed voter ids from the like ledgers. (Row kept for the record; D-37 removes them.) |
 | D-10 | **Signed-out install links never expire.** An install link made without an account keeps working however long it goes unused. | Nothing deletes or expires `cfg:` records. Task P7-7's idle expiry is dropped. |
 
 ## D-8 in the code

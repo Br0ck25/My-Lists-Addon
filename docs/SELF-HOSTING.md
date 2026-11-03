@@ -112,7 +112,6 @@ Then connect the queue back to the Worker: **Compute → Queues → `mylists-job
 | `TMDB_API_KEY` | Your TMDB key. |
 | `TOKEN_ENCRYPTION_KEY` | See below. **Never change or delete it later.** |
 | `LOOKUP_PEPPER` | See below. **Never change or delete it later.** |
-| `LIKE_VOTER_PEPPER` | **Optional.** Only used for signed-out like votes, which are retired, so you can leave it out. Any long random value; never change it once set. |
 
 Optional, add only for what you use: `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET`, `MDBLIST_API_KEY`, `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET`.
 

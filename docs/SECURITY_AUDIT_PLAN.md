@@ -13,7 +13,7 @@ What I found is mostly about **what an attacker could do if they ever got a copy
 2. Trakt, MDBList and Simkl sign-ins saved by cloud sync sit unencrypted in KV, although the newer storage for the same tokens is encrypted (SEC-02).
 3. The Account Key stays in the browser's storage forever, even once a sign-in cookie exists. **Owner decided (2026-11-02): yes, with sessions that renew while in use** (SEC-03).
 4. Media-server webhook tokens are stored as-is, unlike every other token (SEC-04).
-5. Anonymous like votes store a fingerprint of the voter's IP address that can be reversed (SEC-05). Expired sign-in records are never deleted (SEC-06).
+5. Anonymous like votes store a fingerprint of the voter's IP address that can be reversed (SEC-05, **resolved: removed by owner decision D-37**). Expired sign-in records are never deleted (SEC-06).
 6. Smaller items: the webhook endpoint has no limit on bad tokens (SEC-07); shared channels can carry images from any web host, which lets a sharer log viewers' IP addresses (**owner decided: HTTPS only**, SEC-08).
 7. Settings to confirm in Cloudflare and GitHub (SEC-09, SEC-10).
 
@@ -106,7 +106,9 @@ Tests: after a rotate, no raw token appears in D1 or KV; the URL shown in Settin
 
 ---
 
-### SEC-05 (Low, privacy): anonymous like votes keep a reversible fingerprint of the voter's IP
+### SEC-05 (Low, privacy): anonymous like votes keep a reversible fingerprint of the voter's IP -- **resolved by removal (D-37)**
+**Resolved.** The owner decided (2026-11-02) to remove anonymous likes completely instead of re-keying them: `likeVoterId` no longer makes an `a:` id, and `POST /admin/api/anonymous-likes-purge` deletes the old ones from every store and lowers the totals by the votes removed (`docs/DECISIONS.md` D-37, `docs/OPERATIONS.md` §33). The peppered-HMAC fix below (`LIKE_VOTER_PEPPER`) was built first and then removed as unused. The original finding is kept for the record.
+
 **Evidence.** `likeVoterId` (`02_:3502`) stores `"a:" + SHA-256(ip + "|" + scope)` truncated to 128 bits (`hashStringForKey`, `02_:2224`) in KV ledgers and D1 `list_likes.voter_id`, kept indefinitely. IPv4 has 2^32 addresses, so the IP behind any vote is recovered in under a second per list.
 
 **Impact.** Stored IP addresses are personal data. The database links them to which lists a person liked.
@@ -163,7 +165,7 @@ Tick each in Cloudflare / GitHub; none needs a code change.
 4. SEC-04 (needs migration 0024).
 5. SEC-07.
 6. SEC-06.
-7. SEC-05.
+7. SEC-05 (resolved by removal, D-37).
 8. SEC-10.
 9. SEC-08 (HTTPS only).
 10. SEC-03: step 0 (sliding sessions) first, then the rest behind `FF_FORGET_KEY`, off by default.
