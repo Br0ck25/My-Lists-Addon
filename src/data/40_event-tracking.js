@@ -182,6 +182,38 @@ function trackingRecordRest(record) {
   return rest;
 }
 
+// Matching an incoming history to the stored plays, in linear time. A stored
+// row is claimed by the incoming item with the same legacy id and the same
+// watched_at if there is one, otherwise by the first unclaimed row for that id
+// (the rule the findIndex/splice loop this replaced applied). Rows with no
+// legacy id are never claimed. Used by saveTrackingRecord below.
+function groupStoredHistoryRows(storedRows) {
+  const byId = new Map();
+  for (const r of storedRows || []) {
+    const id = r.legacy_id;
+    if (!id) continue;
+    const list = byId.get(id);
+    if (list) list.push(r);
+    else byId.set(id, [r]);
+  }
+  return byId;
+}
+
+function takeStoredHistoryRow(byId, id, watchedAt) {
+  const list = byId.get(id);
+  if (!list || !list.length) return null;
+  let i = watchedAt ? list.findIndex((r) => r.watched_at === watchedAt) : -1;
+  if (i < 0) i = 0;
+  const [row] = list.splice(i, 1);
+  return row;
+}
+
+function remainingStoredHistoryRows(byId) {
+  const out = [];
+  for (const list of byId.values()) for (const r of list) out.push(r);
+  return out;
+}
+
 // The diff shim: a record written by any route goes into the activity
 // database. New entries become plays; with an intentional removal, plays
 // the record no longer lists are removed; the show state is rebuilt.
@@ -199,22 +231,16 @@ async function saveTrackingRecord(env, username, accountId, record) {
   const known = new Set((storedRows || []).map((r) => r.legacy_id).filter(Boolean));
   const listed = new Set();
   const fresh = [];
-  const unmatchedStored = [...(storedRows || [])];
+  const storedByLegacyId = groupStoredHistoryRows(storedRows);
   for (const item of incoming) {
     if (!item || typeof item !== "object") continue;
     const id = legacyHistoryId(item);
     if (!id) continue;
     listed.add(id);
     if (!known.has(id)) fresh.push({ ...legacyHistoryPlay(item, Number(record.updatedAt) || Date.now()), id });
-    const t = Number(item.watchedAt) || 0;
-    let sIdx = t ? unmatchedStored.findIndex(r => r.legacy_id === id && r.watched_at === t) : -1;
-    if (sIdx < 0) {
-      sIdx = unmatchedStored.findIndex(r => r.legacy_id === id);
-    }
-    if (sIdx >= 0) {
-      unmatchedStored.splice(sIdx, 1);
-    }
+    takeStoredHistoryRow(storedByLegacyId, id, Number(item.watchedAt) || 0);
   }
+  const unmatchedStored = remainingStoredHistoryRows(storedByLegacyId);
   if (fresh.length) {
     for (let i = 0; i < fresh.length; i += ACTIVITY_BACKFILL_CHUNK) {
       const chunk = fresh.slice(i, i + ACTIVITY_BACKFILL_CHUNK);
