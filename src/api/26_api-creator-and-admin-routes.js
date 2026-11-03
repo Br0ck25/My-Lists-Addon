@@ -206,6 +206,8 @@ export default {
       configureProviderBreaker(env);
       // FF_EVENT_TRACKING, as in the fetch handler above.
       env = eventTrackingEnv(env);
+      // Counts this isolate is still holding (PERF-04) go to D1 on every tick.
+      await flushPendingStats(env);
       await runCronTick(event, env, ctx);
     } catch (err) {
       console.error("[Cron] scheduled() failed:", err);
@@ -217,6 +219,7 @@ export default {
   // -> Consumers -> this Worker; docs/OPERATIONS.md section 18). Each message
   // names its job type, and runJobsQueue (44_jobs-queue.js) runs its handler.
   async queue(batch, env, ctx) {
+    await flushPendingStats(env); // counts this isolate still holds (PERF-04)
     await runJobsQueue(batch, env, ctx);
   },
 

@@ -327,6 +327,9 @@ async function handleCspReport(request, env, ctx) {
   return done();
 }
 
+// Private marker: the string a page Response was built from (htmlPageResponse sets it).
+const PAGE_HTML_BODY = Symbol("pageHtmlBody");
+
 // Wraps a Response with the headers above, without disturbing anything the
 // route handler already set (status, statusText, body, its own headers
 // like Content-Type/Cache-Control/CORS) -- see securityHeaders' own
@@ -346,9 +349,11 @@ async function withSecurityHeaders(response, privatePath = false, extraSetCookie
   let body = response.body;
   const contentType = headers.get("Content-Type") || "";
   if (nonce && body !== null && contentType.indexOf("text/html") === 0) {
-    // response.text() on a string body is the string; on a stream it is read
-    // once, which is fine because nothing else reads it.
-    const html = await response.text();
+    // A page built by htmlPageResponse carries its own string (PAGE_HTML_BODY),
+    // so it is not decoded back out of the body just to swap the nonce. Any
+    // other HTML response: response.text() on a string body is the string; on a
+    // stream it is read once, which is fine because nothing else reads it.
+    const html = typeof response[PAGE_HTML_BODY] === "string" ? response[PAGE_HTML_BODY] : await response.text();
     body = html.indexOf(CSP_NONCE_PLACEHOLDER) === -1
       ? html
       : html.split(CSP_NONCE_PLACEHOLDER).join(nonce);
@@ -582,15 +587,18 @@ function instrumentEnv(env, counters) {
     },
     list: (...a) => { counters.kvLists++; return kv.list(...a); },
   } : kv;
-  function wrapDbSession(targetDb) {
+  function wrapDbSession(targetDb, rawDb = targetDb) {
     if (!targetDb) return targetDb;
     return {
+      // The real binding, for state that must outlive this request (PERF-04's
+      // pending counters are kept per binding, not per wrapper).
+      __raw: rawDb,
       prepare: (...a) => { counters.d1Statements++; return targetDb.prepare(...a); },
       batch: (...a) => { counters.d1Batches++; return targetDb.batch(...a); },
       exec: (...a) => { counters.d1Statements++; return targetDb.exec(...a); },
       dump: (...a) => targetDb.dump(...a),
       getBookmark: () => (typeof targetDb.getBookmark === "function" ? targetDb.getBookmark() : null),
-      withSession: (...a) => wrapDbSession(typeof targetDb.withSession === "function" ? targetDb.withSession(...a) : targetDb),
+      withSession: (...a) => wrapDbSession(typeof targetDb.withSession === "function" ? targetDb.withSession(...a) : targetDb, rawDb),
     };
   }
   const dbProxy = wrapDbSession(db);
@@ -2529,90 +2537,8 @@ async function splitAppCss(html) {
   return { page, css: APP_CSS };
 }
 
-// Rewritten pages are remembered so a repeat request for the same page does not
-// re-scan ~2MB looking for the markers.
-//
-// Keyed on a cheap hash of the page, NOT on the page itself. The key used to be
-// the whole pre-split HTML string -- measured at 1,979,374 characters -- with
-// the rewritten page (~580KB) as the value, sixteen of them. That is tens of
-// megabytes of strings pinned in an isolate that has 128MB for everything,
-// alongside APP_BUNDLE (~1.3MB), APP_CSS (~97KB) and PER_USER_CACHE_MAP's
-// thousand entries. Every distinct shared list URL, configure link and deep
-// link renders different HTML, so the cache genuinely does fill.
-//
-// A 32-bit FNV-1a over the string is not collision-proof, and does not need to
-// be: a collision would serve one visitor another visitor's PAGE, so the stored
-// length is checked too and the hash is only ever a key into this isolate's own
-// memory. Cheap enough that it costs less than the marker scan it avoids.
-const SPLIT_PAGE_MEMO = new Map();
-
-function splitPageMemoKey(html) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < html.length; i++) {
-    h ^= html.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36) + ":" + html.length;
-}
-
-async function pageWithExternalBundle(html) {
-  const key = splitPageMemoKey(html);
-  const memo = SPLIT_PAGE_MEMO.get(key);
-  if (memo) return memo;
-  let page = html;
-  try {
-    page = (await splitAppBundle(html)).page;
-    page = (await splitAppCss(page)).page;
-  } catch {
-    // Nothing unexpected here is worth costing somebody their page.
-    return html;
-  }
-  if (SPLIT_PAGE_MEMO.size >= 16) {
-    const oldest = SPLIT_PAGE_MEMO.keys().next().value;
-    if (oldest !== undefined) SPLIT_PAGE_MEMO.delete(oldest);
-  }
-  SPLIT_PAGE_MEMO.set(key, page);
-  return page;
-}
-
-async function htmlPageResponse(request, fullHtml, extraHeaders) {
-  // The ~1.3MB client bundle is lifted out to /app.js?v=<hash> first, so
-  // both the body sent below and the ETag computed from it describe the
-  // small page rather than the page-plus-bundle.
-  const html = await pageWithExternalBundle(fullHtml);
-  let etag = "";
-  try {
-    etag = await htmlEtagFor(html);
-  } catch {
-    // No digest available -- fall through and just send the page, exactly
-    // as this did before there was an ETag at all.
-  }
-  const headers = {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-cache",
-    ...(extraHeaders || {}),
-  };
-  if (!etag) return new Response(html, { headers });
-  headers["ETag"] = etag;
-
-  // If-None-Match can carry a list, and a cache is allowed to weaken a tag
-  // it stores, so compare against each entry with any W/ prefix removed
-  // rather than string-equalling the whole header.
-  const inm = request && request.headers ? (request.headers.get("If-None-Match") || "") : "";
-  if (inm) {
-    const match = inm
-      .split(",")
-      .map((s) => s.trim().replace(/^W\//, ""))
-      .some((s) => s === etag || s === "*");
-    if (match) {
-      return new Response(null, { status: 304, headers });
-    }
-  }
-  return new Response(html, { headers });
-}
-
 // --- Per-User Cache & Circuit Breaker Shield ---------------------------------
-// Safe in-memory LRU cache with rolling window and Stale-If-Error degradation.
+// Safe in-memory LRU cache (a hit refreshes recency) with rolling window and Stale-If-Error degradation.
 // Ensures bearer-authenticated user data is safely isolated and never leaks between users.
 const PER_USER_CACHE_MAP = new Map();
 const PER_USER_CACHE_MAX_ENTRIES = 1000;
@@ -2642,29 +2568,45 @@ function safeUserHash(token = "", username = "") {
   return a + b;
 }
 
+// Catalog previews (one small entry per title) live in their own bounded map so
+// a cold home screen cannot push every user's provider responses out of the main
+// one. Same get/set shape; the key prefix picks the map.
+const PREVIEW_CACHE_MAP = new Map();
+const PREVIEW_CACHE_MAX_ENTRIES = 5000;
+const PREVIEW_CACHE_KEY_PREFIX = "catalog-preview:";
+
+function perUserCacheFor(key) {
+  return String(key).startsWith(PREVIEW_CACHE_KEY_PREFIX)
+    ? { map: PREVIEW_CACHE_MAP, max: PREVIEW_CACHE_MAX_ENTRIES }
+    : { map: PER_USER_CACHE_MAP, max: PER_USER_CACHE_MAX_ENTRIES };
+}
+
 function getPerUserCache(key) {
   if (!key) return null;
-  const entry = PER_USER_CACHE_MAP.get(key);
+  const { map } = perUserCacheFor(key);
+  const entry = map.get(key);
   if (!entry) return null;
   const now = Date.now();
-  if (now <= entry.freshUntil) {
-    return { data: entry.data, isFresh: true, isStale: false };
-  }
   if (now <= entry.staleUntil) {
-    return { data: entry.data, isFresh: false, isStale: true };
+    // Least recently used: a hit moves the key to the newest position.
+    map.delete(key);
+    map.set(key, entry);
+    return { data: entry.data, isFresh: now <= entry.freshUntil, isStale: now > entry.freshUntil };
   }
-  PER_USER_CACHE_MAP.delete(key);
+  map.delete(key);
   return null;
 }
 
 function setPerUserCache(key, data, freshTtlSec = 60, staleTtlSec = 1800) {
   if (!key || data === undefined || data === null) return;
-  if (PER_USER_CACHE_MAP.size >= PER_USER_CACHE_MAX_ENTRIES) {
-    const oldestKey = PER_USER_CACHE_MAP.keys().next().value;
-    if (oldestKey) PER_USER_CACHE_MAP.delete(oldestKey);
+  const { map, max } = perUserCacheFor(key);
+  map.delete(key);
+  if (map.size >= max) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey) map.delete(oldestKey);
   }
   const now = Date.now();
-  PER_USER_CACHE_MAP.set(key, {
+  map.set(key, {
     data,
     freshUntil: now + freshTtlSec * 1000,
     staleUntil: now + staleTtlSec * 1000,
@@ -4722,7 +4664,7 @@ async function isCreatorTombstoned(env, username) {
 // cleaned up by both callers automatically.
 async function purgeCreatorData(env, username, options = {}) {
   const deleteIdentity = options.deleteIdentity === true;
-  const u = username;
+  const u = forgetShelfOwner(username);
   // Read before the sweep below deletes it, so the bump at the end can still
   // guarantee the stamp moves forward -- see bumpCreatorListsStamp's notBefore.
   let priorListsStamp = 0;
@@ -5413,37 +5355,6 @@ async function mayReadTrackedShelf(env, username, slug, keys = {}) {
   return isTrackedShelfShared(await readCreatorShareFlags(env, username), slug);
 }
 
-// Proves a Creator Name + Creator Key pair, and answers with the username it
-// proves or "".
-//
-// This is authenticateCreator's check without the parts that need a request:
-// same tombstone, same record read, same PBKDF2-with-memo. It exists because
-// authenticateCreator lives inside handleFetch's closure and resolveConfig is
-// a module-scope function every catalog request goes through.
-//
-// The ONE caller is resolveConfig, and only for a STORED config -- i.e. a
-// credential this Worker itself wrote into KV, not one a caller just handed
-// over -- so there is no unbounded-PBKDF2 path here to throttle. A base64
-// config is caller-authored and is never given to this function.
-async function verifyShelfOwner(env, creatorName, creatorKey) {
-  if (!env || !env.CONFIGS || !creatorName || !creatorKey) return "";
-  const v = validateCreatorUsername(creatorName);
-  if (!v.ok) return "";
-  try {
-    const [tombstoned, raw] = await Promise.all([
-      isCreatorTombstoned(env, v.normalized),
-      getCreator(env, v.normalized),
-    ]);
-    if (tombstoned || !raw) return "";
-    const profile = JSON.parse(raw);
-    if (!profile || !profile.keyHash) return "";
-    const ok = await verifyCreatorKeyMemoized(String(creatorKey), profile.keyHash, v.normalized);
-    return ok ? v.normalized : "";
-  } catch {
-    return "";
-  }
-}
-
 // page of keys with Promise.all, so a hundred lists by one creator would
 // otherwise each start their own lookup.
 //
@@ -5525,6 +5436,7 @@ async function backfillCreatorRowInD1(env, username) {
 // rotating KV while D1 keeps answering with the old hash would leave neither
 // key working and lock the owner out of their own account.
 async function rotateCreatorKeyHashInD1(env, username, keyHash) {
+  forgetShelfOwner();
   if (!env || !env.DB) return { ok: true };
   try {
     // meta.changes, not merely "did not throw". A D1 UPDATE that matches ZERO

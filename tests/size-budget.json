@@ -28,7 +28,7 @@
   "src/data/29_media.js::resolveMediaBatch": 160
  },
  "files": {
-  "src/admin/03_admin.js": 6798,
+  "src/admin/03_admin.js": 6740,
   "src/catalog/05_catalog-core.js": 4713,
   "src/catalog/07_source-fetchers-tmdb-simkl.js": 5465,
   "src/client/16_client-row-core.js": 4376,
@@ -39,7 +39,7 @@
   "src/client/22_client-creator-profile.js": 7075,
   "src/client/23_client-list-management.js": 3974,
   "src/client/24_client-backup-restore-presets.js": 4886,
-  "src/core/02_http-and-creator-utils.js": 7142,
+  "src/core/02_http-and-creator-utils.js": 7054,
   "src/page/09_page-shell.js": 5796
  }
 }
