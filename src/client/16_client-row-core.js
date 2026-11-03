@@ -76,9 +76,9 @@ function creatorSessionHeldFor() {
   }
 }
 
-function noteCreatorSession(res) {
-  const who = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('X-MLA-Session') : null;
-  if (!who) return;
+function noteCreatorSession(res, keyless) {
+  const who = readSessionHeaders(res);
+  if (!who) { if (keyless && res && res.status === 401) creatorSessionEnded(); return; }
   try {
     localStorage.setItem(CREATOR_SESSION_SEEN_KEY, String(who).toLowerCase());
   } catch (e) {}
@@ -103,7 +103,7 @@ async function creatorApiFetch(url, init) {
   const name = body && typeof body === 'object' && !Array.isArray(body) && body.creatorName ? String(body.creatorName).toLowerCase() : '';
   if (!name || !body.creatorKey || creatorSessionHeldFor() !== name) {
     const res = await fetch(url, init);
-    noteCreatorSession(res);
+    noteCreatorSession(res, !!name && !body.creatorKey);
     return res;
   }
   const withoutKey = Object.assign({}, body);
@@ -1226,7 +1226,7 @@ var activeCreator = (function() {
     const name = localStorage.getItem('myListAddon:creatorName');
     const key = localStorage.getItem('myListAddon:creatorKey');
     const disp = localStorage.getItem('myListAddon:creatorDisplayName') || name;
-    if (name && key) return { creatorName: name, displayName: disp };
+    if (name && (key || creatorKeyForgottenFor(name))) return { creatorName: name, displayName: disp };
   } catch (e) {}
   return null;
 })();
@@ -2606,7 +2606,7 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
 function isSignedIn() {
   if (typeof activeCreator === 'undefined' || !activeCreator) return false;
   try {
-    return !!localStorage.getItem('myListAddon:creatorKey');
+    return !!localStorage.getItem('myListAddon:creatorKey') || creatorKeyForgotten();
   } catch (e) {
     return false;
   }
@@ -2947,7 +2947,7 @@ function feedbackCreatorAuth() {
   } catch (e) {
     key = '';
   }
-  if (!key) return { creatorName: null, creatorKey: null };
+  if (!key && !creatorKeyForgottenFor(name)) return { creatorName: null, creatorKey: null };
   return { creatorName: name, creatorKey: key };
 }
 

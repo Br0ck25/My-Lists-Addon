@@ -145,9 +145,12 @@ CREATE INDEX IF NOT EXISTS idx_feedback_creator_updated ON feedback(creator_name
 CREATE TABLE IF NOT EXISTS scrobble_tokens (
     token      TEXT PRIMARY KEY,
     username   TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    token_hash TEXT,
+    token_enc  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_scrobble_tokens_user ON scrobble_tokens(username);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scrobble_tokens_hash ON scrobble_tokens(token_hash);
 
 CREATE TABLE IF NOT EXISTS event_meta (
     event_type TEXT NOT NULL,
@@ -681,4 +684,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0018', 0),
   ('0019', 0),
   ('0020', 0),
-  ('0021', 0);
+  ('0021', 0),
+  ('0024', 0);

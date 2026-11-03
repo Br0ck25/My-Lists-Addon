@@ -14348,7 +14348,9 @@ describe("P3a-4: sessions API and authentication", () => {
     hashCreatorKey,
   } = loadSourceFunctions(
     "src/core/00_constants.js",
-    "src/core/02_http-and-creator-utils.js"
+    "src/core/02_http-and-creator-utils.js",
+    // SEC-03: resolveSession calls renewSessionIfDue, which lives in this file.
+    "src/api/62_session-renewal.js"
   );
   const PBKDF2_ITERATIONS = 100000;
 
@@ -15445,7 +15447,9 @@ describe("P3a-7: blind index v2 (key_lookup_hmac and legacy fallback)", () => {
     createSession,
   } = loadSourceFunctions(
     "src/core/00_constants.js",
-    "src/core/02_http-and-creator-utils.js"
+    "src/core/02_http-and-creator-utils.js",
+    // SEC-01: storeCreatorKeyLookup calls helpers that live in this file.
+    "src/jobs/60_key-lookup-cleanup.js"
   );
 
   const testPepper = "test_lookup_pepper_secret_value_32_bytes";

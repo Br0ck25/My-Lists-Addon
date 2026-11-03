@@ -1605,10 +1605,9 @@ async function resolveSession(request, env, ctx) {
     if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
     if (row.deleted_at != null || (row.status && row.status !== "active")) return null;
 
-    // Throttle last_seen_at update (at most once every 5 minutes per session)
-    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
-      (ctx || { waitUntil() {} }).waitUntil(env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {}));
-    }
+    // last_seen_at refresh and sliding expiry, at most every 5 minutes (62_session-renewal.js)
+    const renewed = renewSessionIfDue(env, ctx, row, now);
+    if (renewed) request._sessionRenewed = true;
 
     const account = {
       id: row.id,
@@ -1628,7 +1627,7 @@ async function resolveSession(request, env, ctx) {
       accountId: row.account_id,
       createdAt: row.session_created_at,
       lastSeenAt: row.last_seen_at,
-      expiresAt: row.expires_at,
+      expiresAt: renewed ? now + SESSION_TTL_MS : row.expires_at,
       userAgent: row.user_agent,
     };
 
@@ -1732,6 +1731,8 @@ function creatorLookupHashKey(username) {
 
 async function storeCreatorKeyLookup(env, key, username) {
   if (!env || !key || !username) return;
+  // SEC-01: HMAC stored -> no unsalted SHA-256 copy (see writeKeyLookupHmac).
+  if (await writeKeyLookupHmac(env, key, username)) return deleteLegacyCreatorKeyLookup(env, username);
   const lookupHash = await creatorKeyLookupHash(key);
   if (!lookupHash) return;
   const now = Date.now();
@@ -1742,18 +1743,6 @@ async function storeCreatorKeyLookup(env, key, username) {
       ).bind(lookupHash, username, now).run();
     } catch (dbErr) {
       console.error("D1 write error (storeCreatorKeyLookup):", dbErr);
-    }
-    if (env.LOOKUP_PEPPER) {
-      try {
-        const hmac = await hmacLookupKey(key, env);
-        if (hmac) {
-          await env.DB.prepare(
-            "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
-          ).bind(hmac, username).run();
-        }
-      } catch (hmacErr) {
-        console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
-      }
     }
   }
   if (env.CONFIGS) {
@@ -3499,12 +3488,11 @@ async function reserveAuthAttempt(env, scope, day, maxFailures) {
   return { over: false, release };
 }
 
+// A like belongs to a signed-in account (D-6). A signed-out caller has no voter
+// id: no "a:<hash of the IP>" is ever made any more (D-37), so nothing is stored.
 async function likeVoterId(request, env, creatorUsername, scopeId) {
   if (creatorUsername) return `u:${creatorUsername}`;
-  const ip = clientIpKey(request);
-  if (!ip) return null;
-  const hash = await hashStringForKey(`${ip}|${scopeId}`);
-  return `a:${hash}`;
+  return null;
 }
 
 function ledgerKeyToListId(ledgerKey) {

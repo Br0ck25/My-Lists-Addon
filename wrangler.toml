@@ -139,6 +139,9 @@ FF_MEDIA_APP_PUSH = "1"
 # FF_SESSIONS = "1"
 # Optional feature flag for Phase 3a: the /api/installs management API
 # FF_INSTALLS = "1"
+# Optional (SEC-03): a browser with a working session stops keeping the
+# Account Key. Off by default; try it on one account first (docs/OPERATIONS.md §33).
+# FF_FORGET_KEY = "1"
 # Optional feature flag for Phase 3b: read lists from the v2 tables. Leave
 # unset until the list copy has finished (docs/OPERATIONS.md sections 9 and 10).
 # FF_V2_LISTS_READ = "1"

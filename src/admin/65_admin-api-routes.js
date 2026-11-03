@@ -15,6 +15,8 @@ async function handleAdminApiRoutes(request, env, ctx, url, path) {
   if (path === "/admin/api/published-channels" && request.method === "GET") return adminApiPublishedChannels(request, env, url);
   if (path === "/admin/api/channel-moderate" && request.method === "POST") return adminApiChannelModerate(request, env);
   if (path === "/admin/api/channel-ownerless" && request.method === "POST") return adminApiChannelOwnerless(request, env);
+  if (path === "/admin/api/key-lookup-cleanup" && request.method === "POST") return adminApiKeyLookupCleanup(request, env);
+  if (path === "/admin/api/anonymous-likes-purge" && request.method === "POST") return adminApiAnonymousLikesPurge(request, env);
   if (path === "/admin/api/migrate-day-counts" && request.method === "POST") return adminApiMigrateDayCounts(request, env);
   if (path === "/admin/api/export-kv-to-r2" && request.method === "POST") return adminApiExportKvToR2(request, env);
   return null;
@@ -913,6 +915,63 @@ async function adminApiChannelOwnerless(request, env) {
     return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
   }
   return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/key-lookup-cleanup  (POST)  { cursor?, limit?, apply?, confirm? }
+//   -> { ok, apply, scanned, withLegacy, cleaned, next, done }
+// SEC-01: removes the old unsalted Account Key fingerprints of accounts that
+// already have the peppered HMAC (see 60_key-lookup-cleanup.js). A count by
+// default; with apply it cleans this batch, and only when `confirm` is the
+// confirmation phrase. Run it again with `next` as `cursor` until `done`.
+async function adminApiKeyLookupCleanup(request, env) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  let body = {};
+  try {
+    body = (await request.json()) || {};
+  } catch {
+    body = {};
+  }
+  const apply = body.apply === true;
+  if (apply && body.confirm !== KEY_LOOKUP_CLEANUP_CONFIRM) {
+    return json({ ok: false, error: `To delete, send confirm: "${KEY_LOOKUP_CLEANUP_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+  }
+  let result;
+  try {
+    result = await cleanLegacyKeyLookups(env, { cursor: body.cursor, limit: body.limit, apply });
+  } catch (e) {
+    return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+  }
+  return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/anonymous-likes-purge  (POST)  { cursor?, limit?, apply?, confirm? }
+//   -> { ok, apply, phase, scanned, legacyTargets, kvVotes, d1Votes, legacyVotes,
+//        v2Targets, v2Votes, failed, next, done }
+// D-37: removes every anonymous like vote and lowers the like totals by the
+// votes removed (see 61_anonymous-likes-purge.js). A count by default; with apply
+// it removes this batch, and only when `confirm` is the confirmation phrase. Run
+// it again with `next` as `cursor` until `done`.
+async function adminApiAnonymousLikesPurge(request, env) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  let body = {};
+  try {
+    body = (await request.json()) || {};
+  } catch {
+    body = {};
+  }
+  const apply = body.apply === true;
+  if (apply && body.confirm !== ANON_LIKES_PURGE_CONFIRM) {
+    return json({ ok: false, error: `To delete, send confirm: "${ANON_LIKES_PURGE_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+  }
+  let result;
+  try {
+    result = await purgeAnonymousLikes(env, { cursor: body.cursor, limit: body.limit, apply });
+  } catch (e) {
+    return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+  }
+  return json(result, result.ok ? 200 : (result.failed && result.failed.length ? 500 : 400), { "Cache-Control": "no-store" });
 }
 
 async function adminApiMigrateDayCounts(request, env) {

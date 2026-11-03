@@ -5021,7 +5021,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
   if (payload.creatorSlug && !isWatchlist) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey');
     const creatorName = localStorage.getItem('myListAddon:creatorName');
-    if (creatorKey && creatorName && name) {
+    if ((creatorKey || creatorKeyForgotten()) && creatorName && name) {
       try {
         const creatorListMeta = (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData))
           ? lastCreatorListsData.find((l) => l.slug === payload.creatorSlug)

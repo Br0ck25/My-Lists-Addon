@@ -969,7 +969,7 @@ async function saveLocalCustomListEdit(name) {
   let mirror = null;
   if (typeof activeCreator !== 'undefined' && activeCreator) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-    if (creatorKey) {
+    if (creatorKey || creatorKeyForgotten()) {
       // A whole-list replacement of a list that already exists on the server:
       // exactly what the server's expectedUpdatedAt guard is for, and one of
       // the three slug-bearing call sites that never armed it. Routed through

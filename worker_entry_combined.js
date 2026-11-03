@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-02";
+const WORKER_BUILD_DATE = "2026-11-03";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "62cb9d7d6f";
+const WORKER_BUILD = "72bd529dd9";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1311,6 +1311,17 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0023", kind: "table", name: "media_app_sync",
     consequence: "Connecting a Stremio or Nuvio account answers \"isn't available right now\", and nothing is pulled from them. Nothing else changes.",
+  },  {
+    migration: "0024", kind: "column", table: "scrobble_tokens", name: "token_hash",
+    consequence: "Media-server webhook tokens stay stored as plain text in D1 and KV instead of as a hash. Webhooks keep working.",
+  },
+  {
+    migration: "0024", kind: "column", table: "scrobble_tokens", name: "token_enc",
+    consequence: "Media-server webhook tokens stay stored as plain text in D1 and KV instead of encrypted. Webhooks keep working.",
+  },
+  {
+    migration: "0024", kind: "index", name: "idx_scrobble_tokens_hash",
+    consequence: "Looking up a webhook token by its hash scans the whole scrobble_tokens table. Slower, not broken.",
   },
 ];
 
@@ -5452,10 +5463,9 @@ async function resolveSession(request, env, ctx) {
     if (typeof row.expires_at === "number" && row.expires_at <= now) return null;
     if (row.deleted_at != null || (row.status && row.status !== "active")) return null;
 
-    // Throttle last_seen_at update (at most once every 5 minutes per session)
-    if (typeof row.last_seen_at === "number" && now - row.last_seen_at > 5 * 60 * 1000) {
-      (ctx || { waitUntil() {} }).waitUntil(env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(now, idHash).run().catch(() => {}));
-    }
+    // last_seen_at refresh and sliding expiry, at most every 5 minutes (62_session-renewal.js)
+    const renewed = renewSessionIfDue(env, ctx, row, now);
+    if (renewed) request._sessionRenewed = true;
 
     const account = {
       id: row.id,
@@ -5475,7 +5485,7 @@ async function resolveSession(request, env, ctx) {
       accountId: row.account_id,
       createdAt: row.session_created_at,
       lastSeenAt: row.last_seen_at,
-      expiresAt: row.expires_at,
+      expiresAt: renewed ? now + SESSION_TTL_MS : row.expires_at,
       userAgent: row.user_agent,
     };
 
@@ -5579,6 +5589,8 @@ function creatorLookupHashKey(username) {
 
 async function storeCreatorKeyLookup(env, key, username) {
   if (!env || !key || !username) return;
+  // SEC-01: HMAC stored -> no unsalted SHA-256 copy (see writeKeyLookupHmac).
+  if (await writeKeyLookupHmac(env, key, username)) return deleteLegacyCreatorKeyLookup(env, username);
   const lookupHash = await creatorKeyLookupHash(key);
   if (!lookupHash) return;
   const now = Date.now();
@@ -5589,18 +5601,6 @@ async function storeCreatorKeyLookup(env, key, username) {
       ).bind(lookupHash, username, now).run();
     } catch (dbErr) {
       console.error("D1 write error (storeCreatorKeyLookup):", dbErr);
-    }
-    if (env.LOOKUP_PEPPER) {
-      try {
-        const hmac = await hmacLookupKey(key, env);
-        if (hmac) {
-          await env.DB.prepare(
-            "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
-          ).bind(hmac, username).run();
-        }
-      } catch (hmacErr) {
-        console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
-      }
     }
   }
   if (env.CONFIGS) {
@@ -7346,12 +7346,11 @@ async function reserveAuthAttempt(env, scope, day, maxFailures) {
   return { over: false, release };
 }
 
+// A like belongs to a signed-in account (D-6). A signed-out caller has no voter
+// id: no "a:<hash of the IP>" is ever made any more (D-37), so nothing is stored.
 async function likeVoterId(request, env, creatorUsername, scopeId) {
   if (creatorUsername) return `u:${creatorUsername}`;
-  const ip = clientIpKey(request);
-  if (!ip) return null;
-  const hash = await hashStringForKey(`${ip}|${scopeId}`);
-  return `a:${hash}`;
+  return null;
 }
 
 function ledgerKeyToListId(ledgerKey) {
@@ -22119,12 +22118,12 @@ function sharedChannelString(value, max) {
   return String(value == null ? "" : value).trim().slice(0, max);
 }
 
-// Only http(s) art is kept. A shared channel's poster is rendered straight
-// into an <img>, so a "javascript:" or "data:" URL from a stranger has no
-// business surviving the trip.
+// Only https art is kept (SEC-08), on any host. A shared channel's poster is rendered
+// straight into an <img> by everyone who adds it: "javascript:", "data:" and plain
+// http:// from a stranger have no business surviving the trip.
 function sharedChannelImageUrl(value) {
   const url = sharedChannelString(value, 600);
-  return /^https?:\/\//i.test(url) ? url : "";
+  try { return new URL(url).protocol === "https:" ? url : ""; } catch { return ""; }
 }
 
 function sanitizeSharedChannelItem(raw) {
@@ -36934,7 +36933,7 @@ ${appShellMobileNavHtml}
         var cDisp = localStorage.getItem('myListAddon:creatorDisplayName') || cName;
         var cBar = document.getElementById('creatorProfileBar');
         if (cBar) {
-          if (cName && cKey) {
+          if (cName && (cKey || localStorage.getItem('myListAddon:keyForgotten') === String(cName).toLowerCase())) {
             var disp = cDisp || cName || 'Account';
             var init = (disp.charAt(0) || 'U').toUpperCase();
             cBar.innerHTML = '<button type="button" class="header-avatar-btn signed-in" id="headerProfileBtn" data-act="switchTab" data-act-args="[&quot;account&quot;]" aria-label="Account: ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '" title="Signed in as ' + String(disp).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '"><span class="header-avatar-initial">' + String(init).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}) + '</span></button>';
@@ -39565,9 +39564,9 @@ function creatorSessionHeldFor() {
   }
 }
 
-function noteCreatorSession(res) {
-  const who = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('X-MLA-Session') : null;
-  if (!who) return;
+function noteCreatorSession(res, keyless) {
+  const who = readSessionHeaders(res);
+  if (!who) { if (keyless && res && res.status === 401) creatorSessionEnded(); return; }
   try {
     localStorage.setItem(CREATOR_SESSION_SEEN_KEY, String(who).toLowerCase());
   } catch (e) {}
@@ -39592,7 +39591,7 @@ async function creatorApiFetch(url, init) {
   const name = body && typeof body === 'object' && !Array.isArray(body) && body.creatorName ? String(body.creatorName).toLowerCase() : '';
   if (!name || !body.creatorKey || creatorSessionHeldFor() !== name) {
     const res = await fetch(url, init);
-    noteCreatorSession(res);
+    noteCreatorSession(res, !!name && !body.creatorKey);
     return res;
   }
   const withoutKey = Object.assign({}, body);
@@ -40715,7 +40714,7 @@ var activeCreator = (function() {
     const name = localStorage.getItem('myListAddon:creatorName');
     const key = localStorage.getItem('myListAddon:creatorKey');
     const disp = localStorage.getItem('myListAddon:creatorDisplayName') || name;
-    if (name && key) return { creatorName: name, displayName: disp };
+    if (name && (key || creatorKeyForgottenFor(name))) return { creatorName: name, displayName: disp };
   } catch (e) {}
   return null;
 })();
@@ -42095,7 +42094,7 @@ function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = tr
 function isSignedIn() {
   if (typeof activeCreator === 'undefined' || !activeCreator) return false;
   try {
-    return !!localStorage.getItem('myListAddon:creatorKey');
+    return !!localStorage.getItem('myListAddon:creatorKey') || creatorKeyForgotten();
   } catch (e) {
     return false;
   }
@@ -42436,7 +42435,7 @@ function feedbackCreatorAuth() {
   } catch (e) {
     key = '';
   }
-  if (!key) return { creatorName: null, creatorKey: null };
+  if (!key && !creatorKeyForgottenFor(name)) return { creatorName: null, creatorKey: null };
   return { creatorName: name, creatorKey: key };
 }
 
@@ -43863,6 +43862,140 @@ document.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 
+// --- Forgetting the Account Key once the session holds the sign-in (SEC-03) ---------
+//
+// The Account Key used to stay in localStorage for good: a permanent password for
+// any script or extension running on the page, or the next person on a shared
+// computer. Behind FF_FORGET_KEY (off unless the server sends X-MLA-Forget-Key: 1
+// next to X-MLA-Session), a browser that holds a working session stops keeping it:
+//
+//   * myListAddon:creatorKey is removed; the name stays, and myListAddon:keyForgotten
+//     records the account, so the page starts signed in from the name plus the
+//     session marker (myListAddon:sessionFor, 16_client-row-core.js).
+//   * requests then carry the name and no key, and the HttpOnly session cookie
+//     signs them (every account route accepts that: tests/session-only-routes.test.mjs).
+//     Sessions renew while used, so a regular visitor never types the key again.
+//   * when the session ends (30 days away, signed out, revoked) a request answers
+//     401 and the existing sign-in prompt opens; the key is never resent.
+//   * before the key is forgotten for the first time the person is told to keep it
+//     somewhere safe (with the key on screen), and offered a recovery answer if
+//     they have none. If they do not confirm, the key stays and they are asked
+//     again on the next visit.
+//   * where storage or cookies are blocked, creatorSessionHeldFor() is '' and
+//     nothing changes.
+//
+// Plain strings are used inside the functions, not constants: activeCreator
+// (16_client-row-core.js) calls creatorKeyForgottenFor while the page is still
+// loading, before any constant declared in a later file exists.
+
+var forgetKeyServerAllows = false;
+var forgetKeyRunning = false;
+var forgetKeyDeclined = false;
+var creatorSessionEndedShown = false;
+
+// The X-MLA-Session value of an answer (null when absent); also notes whether the
+// server wants keys forgotten.
+function readSessionHeaders(res) {
+  const h = res && res.headers && typeof res.headers.get === 'function' ? res.headers : null;
+  if (!h) return null;
+  if (h.get('X-MLA-Forget-Key') === '1') forgetKeyServerAllows = true;
+  return h.get('X-MLA-Session');
+}
+
+// True when this browser forgot the key for this account and still holds its session.
+function creatorKeyForgottenFor(name) {
+  try {
+    const n = String(name || '').toLowerCase();
+    return !!n && localStorage.getItem('myListAddon:keyForgotten') === n && localStorage.getItem('myListAddon:sessionFor') === n;
+  } catch (e) {
+    return false;
+  }
+}
+
+// The same, for the account this browser is signed in as.
+function creatorKeyForgotten() {
+  try {
+    return creatorKeyForgottenFor(localStorage.getItem('myListAddon:creatorName'));
+  } catch (e) {
+    return false;
+  }
+}
+
+function forgetKeyNoticeMessage(key, hasRecoveryAnswer) {
+  return 'Your Account Key is ' + key + '\\n\\nKeep it somewhere safe, like a password manager. This browser is about to stop storing it, ' +
+    'so you stay signed in for as long as you keep using the site, and you will need the key to sign in again after that or on another device.' +
+    (hasRecoveryAnswer ? '' : '\\n\\nYou have no recovery answer yet. Set one in Settings so you can get back in if you lose the key.');
+}
+
+// Called when the account has loaded (markCreatorSyncLoaded) and after every answer
+// that carries the headers. Does nothing unless the server asked for it, a session is
+// confirmed for this account, and the person has been told.
+async function maybeForgetCreatorKey() {
+  if (!forgetKeyServerAllows || forgetKeyRunning || forgetKeyDeclined) return;
+  let name = '';
+  let key = '';
+  try {
+    name = (localStorage.getItem('myListAddon:creatorName') || '').toLowerCase();
+    key = localStorage.getItem('myListAddon:creatorKey') || '';
+  } catch (e) {
+    return;
+  }
+  if (!name || !key || creatorSessionHeldFor() !== name) return;
+  forgetKeyRunning = true;
+  try {
+    const hasAnswer = localStorage.getItem('myListAddon:hasRecoveryAnswer') === '1';
+    const confirmed = await appShellDialog({
+      title: 'Keep your Account Key safe',
+      message: forgetKeyNoticeMessage(key, hasAnswer),
+      confirmLabel: 'I have saved it',
+      cancelLabel: 'Not now',
+    });
+    if (!confirmed) {
+      forgetKeyDeclined = true;
+      return;
+    }
+    // The person may have signed out or switched account while the dialog was open.
+    if ((localStorage.getItem('myListAddon:creatorName') || '').toLowerCase() !== name || creatorSessionHeldFor() !== name) return;
+    localStorage.setItem('myListAddon:keyForgotten', name);
+    localStorage.removeItem('myListAddon:creatorKey');
+  } catch (e) {
+    // Storage failed part-way: the key is removed only after the marker is written.
+  } finally {
+    forgetKeyRunning = false;
+  }
+}
+
+// A request that carried no key (the key was forgotten) was refused: the session is
+// gone. Show the existing sign-in prompt, with the username filled in.
+function creatorSessionEnded() {
+  if (creatorSessionEndedShown || !creatorKeyForgotten()) return;
+  creatorSessionEndedShown = true;
+  let name = '';
+  try {
+    name = localStorage.getItem('myListAddon:creatorName') || '';
+    localStorage.removeItem('myListAddon:keyForgotten');
+    localStorage.removeItem('myListAddon:sessionFor');
+  } catch (e) {}
+  activeCreator = null;
+  if (typeof appShellState !== 'undefined' && appShellState && typeof appShellState.set === 'function') appShellState.set({ account: null });
+  if (typeof renderCreatorProfileBar === 'function') renderCreatorProfileBar();
+  if (typeof renderCreatorDashboard === 'function') renderCreatorDashboard();
+  openRestoreModal();
+  const nameInput = document.getElementById('restoreNameInput');
+  if (nameInput) nameInput.value = name;
+  showToast('You were signed out. Sign in with your Account Key.', 'info');
+  setTimeout(function () { creatorSessionEndedShown = false; }, 5000);
+}
+
+// The two markers a forgotten-key browser signs in from, written again after
+// clearLocalAccountData has wiped them (account reset on this or another device).
+function rememberForgottenKey(name) {
+  try {
+    const n = String(name || '').toLowerCase();
+    localStorage.setItem('myListAddon:keyForgotten', n);
+    localStorage.setItem('myListAddon:sessionFor', n);
+  } catch (e) {}
+}
 // --- "Your MDBList/Trakt Lists" ----------------------------------------------
 //
 // Once a key (and, for Trakt, a username) is entered above, shows every
@@ -49860,7 +49993,7 @@ async function syncCustomListWithExternalSource(slug, btn, options) {
     // Persist to creator account if signed in
     if (typeof activeCreator !== 'undefined' && activeCreator) {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-      if (creatorKey) {
+      if (creatorKey || creatorKeyForgotten()) {
         const body = {
           creatorName: activeCreator.creatorName,
           creatorKey: creatorKey,
@@ -56204,7 +56337,7 @@ async function syncCustomListPayload(payload, name, applyEdit) {
   if (payload.creatorSlug && !isWatchlist) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey');
     const creatorName = localStorage.getItem('myListAddon:creatorName');
-    if (creatorKey && creatorName && name) {
+    if ((creatorKey || creatorKeyForgotten()) && creatorName && name) {
       try {
         const creatorListMeta = (typeof lastCreatorListsData !== 'undefined' && Array.isArray(lastCreatorListsData))
           ? lastCreatorListsData.find((l) => l.slug === payload.creatorSlug)
@@ -58166,8 +58299,8 @@ function applyChannelPosterUrl() {
     return;
   }
 
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
+  if (url.protocol !== 'https:') {
+    if (status) { status.textContent = 'Only https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;
@@ -71142,7 +71275,7 @@ async function saveLocalCustomListEdit(name) {
   let mirror = null;
   if (typeof activeCreator !== 'undefined' && activeCreator) {
     const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-    if (creatorKey) {
+    if (creatorKey || creatorKeyForgotten()) {
       // A whole-list replacement of a list that already exists on the server:
       // exactly what the server's expectedUpdatedAt guard is for, and one of
       // the three slug-bearing call sites that never armed it. Routed through
@@ -75199,7 +75332,7 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 async function uploadLocalListPayloadToAccount(payload) {
   if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return { ok: false, error: 'signed-out' };
+  if (!creatorKey && !creatorKeyForgotten()) return { ok: false, error: 'signed-out' };
   const list = payload || {};
   const body = {
     creatorName: activeCreator.creatorName,
@@ -75402,7 +75535,7 @@ function renderAccountKeySection() {
     '<div class="u-mt-6px">' +
       '<div class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700 u-mb-6px">Account Key</div>' +
       '<div class="account-key-group">' +
-        '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
+        '<div class="creator-key-display" id="accountKeyDisplay">' + (key ? '\u2022'.repeat(Math.max(8, key.length)) : 'Not stored in this browser') + '</div>' +
         '<div class="account-key-actions">' +
           '<button type="button" class="secondary lc-btn" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
           '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
@@ -75483,7 +75616,7 @@ async function submitSetRecoveryAnswer() {
     return;
   }
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) {
+  if (!creatorKey && !creatorKeyForgotten()) {
     errBox.innerHTML = '<p class="testresult err">Account Key missing. Please sign in again.</p>';
     return;
   }
@@ -75540,7 +75673,7 @@ async function openResetAccountModal() {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
       const creatorName = activeCreator.creatorName;
       const displayName = activeCreator.displayName;
-      if (!creatorKey) return;
+      if (!creatorKey && !creatorKeyForgotten()) return;
 
       // Stop anything in flight from re-uploading what we are about to clear.
       window._suppressCreatorSync = true;
@@ -75579,7 +75712,7 @@ async function openResetAccountModal() {
         activeCreator = { creatorName: creatorName, displayName: displayName };
         localStorage.setItem('myListAddon:creatorName', creatorName);
         localStorage.setItem('myListAddon:creatorDisplayName', displayName || creatorName);
-        localStorage.setItem('myListAddon:creatorKey', creatorKey);
+        if (creatorKey) localStorage.setItem('myListAddon:creatorKey', creatorKey); else rememberForgottenKey(creatorName);
         // Written AFTER clearLocalAccountData, which removes every myListAddon:
         // key including this one. Without it this browser would meet its own
         // reset on the next load and wipe itself a second time.
@@ -75696,10 +75829,10 @@ function toggleAccountKeyVisibility() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   const isHidden = btn.textContent === 'Show Key';
   if (isHidden) {
-    display.textContent = key;
+    display.textContent = key || 'Not stored in this browser';
     btn.textContent = 'Hide Key';
   } else {
-    display.textContent = '\u2022'.repeat(Math.max(8, key.length));
+    display.textContent = key ? '\u2022'.repeat(Math.max(8, key.length)) : 'Not stored in this browser';
     btn.textContent = 'Show Key';
   }
 }
@@ -76066,7 +76199,7 @@ async function fetchScrobbleToken(rotate) {
   if (!activeCreator || !activeCreator.creatorName) return '';
   let creatorKey = '';
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
-  if (!creatorKey) return '';
+  if (!creatorKey && !creatorKeyForgotten()) return '';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-token', {
       method: 'POST',
@@ -76315,7 +76448,7 @@ async function refreshTrackPlaybackStatus() {
 
 async function copyAccountKey() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!key) return;
+  if (!key) { showToast('This browser no longer stores your Account Key. Use the copy you saved.', 'info'); return; }
   const copied = await copyTextToClipboard(key, {
     toastMessage: 'Key copied to clipboard! \u2713'
   });
@@ -76747,7 +76880,7 @@ function proceedToLoginWithUsername(username, key) {
 async function tryAutoRestoreCreatorProfile() {
   const name = localStorage.getItem('myListAddon:creatorName');
   const key = localStorage.getItem('myListAddon:creatorKey');
-  if (!name || !key) return;
+  if (!name || (!key && !creatorKeyForgottenFor(name))) return;
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
@@ -76902,7 +77035,7 @@ function applyRemoteAccountReset(serverResetAt) {
   const displayName = activeCreator.displayName;
   let creatorKey = '';
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
 
   window._suppressCreatorSync = true;
   try {
@@ -76911,7 +77044,7 @@ function applyRemoteAccountReset(serverResetAt) {
     try {
       localStorage.setItem('myListAddon:creatorName', creatorName);
       localStorage.setItem('myListAddon:creatorDisplayName', displayName || creatorName);
-      localStorage.setItem('myListAddon:creatorKey', creatorKey);
+      if (creatorKey) localStorage.setItem('myListAddon:creatorKey', creatorKey); else rememberForgottenKey(creatorName);
     } catch (e) {}
     rememberAccountResetAt(serverResetAt);
     if (typeof renderCreatorProfileBar === 'function') renderCreatorProfileBar();
@@ -77136,7 +77269,7 @@ function markCreatorSyncLoaded() {
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   if (_creatorSyncGateTimer) { clearTimeout(_creatorSyncGateTimer); _creatorSyncGateTimer = null; }
   _creatorSyncLoadedFor = activeCreator.creatorName;
-  flushDeferredSyncPushes();
+  flushDeferredSyncPushes(); maybeForgetCreatorKey();
 }
 window.markCreatorSyncLoaded = markCreatorSyncLoaded;
 
@@ -77277,7 +77410,7 @@ async function pushChannelsSync() {
   if (window._suppressCreatorSync) return;
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen.
   if (!creatorSyncGateOpen()) { deferSyncPush('channels'); return; }
@@ -77351,7 +77484,7 @@ async function pushCreatorSync() {
   if (window._suppressCreatorSync) return;
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen. This is the config blob: the catalog rows, which is
   // where "my list rows came back after opening the phone" came from.
@@ -77572,7 +77705,7 @@ async function pushTrackingSync(opts) {
   if (window._suppressCreatorSync) return;
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds. This endpoint
   // replaces Watch History and Continue Watching wholesale, and the timers
   // that start the page (refreshAiringNext at 600ms,
@@ -77760,7 +77893,7 @@ async function loadCreatorSync(opts) {
   const isBackgroundResume = !!(opts && opts.background);
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Who this load is for. Checked again after the await, because signing in as
   // someone else calls clearLocalAccountData() and then starts a fresh load --
   // and this one is still in flight. Measured: signing in as alice and then
@@ -79288,7 +79421,7 @@ async function undoListDelete(snap, rows) {
   if (!snap) return;
   clearCreatorListDeletion(snap.slug);
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (typeof activeCreator !== 'undefined' && activeCreator && creatorKey) {
+  if (typeof activeCreator !== 'undefined' && activeCreator && (creatorKey || creatorKeyForgotten())) {
     const out = await saveCreatorListWithBaseline({
       slug: snap.slug, name: snap.name, type: snap.type, items: snap.items, visibility: snap.visibility,
       sourceUrl: snap.sourceUrl, synced: snap.synced, lastSyncedAt: snap.lastSyncedAt, baseItemIds: snap.baseItemIds,
@@ -79539,7 +79672,7 @@ let _uploadingMissingLists = false;
 let _missingListUploadRounds = 0;
 const MISSING_LIST_UPLOAD_MAX_ROUNDS = 5;
 async function uploadMissingLocalListsToAccount(lists, creatorKey) {
-  if (_uploadingMissingLists || !activeCreator || !creatorKey || !lists || !lists.length) return 0;
+  if (_uploadingMissingLists || !activeCreator || (!creatorKey && !creatorKeyForgotten()) || !lists || !lists.length) return 0;
   if (_missingListUploadRounds >= MISSING_LIST_UPLOAD_MAX_ROUNDS) return 0;
   _uploadingMissingLists = true;
   _missingListUploadRounds++;
@@ -79872,7 +80005,7 @@ async function renderCreatorDashboard(options) {
         // being re-created on the account.
         if (listTombstones[l.creatorSlug || l.slug] || listTombstones[k]) return;
         localRestoredCustomLists.push(l);
-        if (activeCreator && creatorKey) needUploading.push(l);
+        if (activeCreator && (creatorKey || creatorKeyForgotten())) needUploading.push(l);
       }
     });
     // A render that finds everything already on the account is the signal
@@ -80573,7 +80706,7 @@ if (_creatorDashEl) {
       // If signed into creator, also delete from server if it exists
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        if (creatorKey) {
+        if (creatorKey || creatorKeyForgotten()) {
           // Fire-and-forget: if this never lands the list survives on the
           // account while being gone locally, which is precisely what the
           // backfill must not undo.
@@ -81761,7 +81894,7 @@ async function handleForegroundResumeSync() {
 
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
 
   // Defer slightly so tab switch and UI clicks are completely instant and smooth
   if (_foregroundSyncTimer) clearTimeout(_foregroundSyncTimer);
@@ -86774,7 +86907,7 @@ async function pushPresetsDirectly(presetsMap) {
   if (window._suppressCreatorSync) return { ok: false, error: null };
   if (!activeCreator) return { ok: false, error: null };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return { ok: false, error: null };
+  if (!creatorKey && !creatorKeyForgotten()) return { ok: false, error: null };
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen (22_client-creator-profile.js). Presets are a full
   // overwrite like everything else here, so a cold start pushing this
@@ -91464,6 +91597,10 @@ export default {
       const p = new URL(request && request.url ? request.url : "https://x/").pathname;
       if (request && request.account && (p.startsWith("/api/creator/") || CREATOR_SESSION_PATH_PREFIXES.some((x) => p.startsWith(x)))) {
         secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
+        // SEC-03 step 0: a session renewed by this request gets its cookie renewed too.
+        if (isForgetKeyEnabled(env)) secured.headers.set("X-MLA-Forget-Key", "1");
+        const renewalCookie = sessionCookieRenewal(request);
+        if (renewalCookie && !secured.headers.has("Set-Cookie")) secured.headers.set("Set-Cookie", renewalCookie);
       }
     } catch {
       // Never affects the response.
@@ -93148,6 +93285,203 @@ async function connectionSuppliedConfigFields(env, accountId) {
   }
   return fields;
 }
+// --- Media-server webhook tokens, stored hashed (SEC-04) ------------------------
+//
+// A webhook token (?st=) used to be the primary key of scrobble_tokens and a KV
+// key name, so a copy of the database or a KV listing was a list of working
+// tokens. With TOKEN_ENCRYPTION_KEY set and migration 0024 applied:
+//
+//   * scrobble_tokens.token_hash = SHA-256(token) is what a request is looked up by,
+//   * scrobble_tokens.token_enc  = the token encrypted for the Settings page
+//     (context "scrobble:<username>"), so the webhook URL can be shown again,
+//   * scrobble_tokens.token      = "hashed:<hash>", which no request can send
+//     (a token may not contain ":"),
+//   * KV is keyed by the hash (scrobbletoken:h:<hash>), and the reverse index
+//     creatorscrobbletoken:<username> holds "h:<hash>", so the existing
+//     account-purge code, which deletes scrobbleTokenKey(<reverse index value>),
+//     removes it unchanged.
+//
+// A plain-text row is converted the first time it authenticates or is shown.
+// Without the key or the migration every function here hands over to the older
+// getOrCreateScrobbleToken / usernameForScrobbleToken (02_) and nothing changes.
+
+let scrobbleHashColumnsMissing = false;
+
+function scrobbleHashUsable(env) {
+  return Boolean(env && env.DB && !scrobbleHashColumnsMissing && hasTokenEncryptionKey(env));
+}
+
+// True (and remembered for this isolate) when the error is the missing 0024 columns.
+function noteScrobbleHashColumnsMissing(err) {
+  if (!/no such column/i.test(String((err && err.message) || err))) return false;
+  scrobbleHashColumnsMissing = true;
+  return true;
+}
+
+const SCROBBLE_STORED_FORM = /^(hashed:|h:)/;
+
+function scrobbleTokenContext(username) {
+  return "scrobble:" + String(username || "");
+}
+
+async function scrobbleHashRow(env, username) {
+  return env.DB.prepare("SELECT token, token_hash, token_enc FROM scrobble_tokens WHERE username = ?").bind(username).first();
+}
+
+// Fills hash + encrypted copy for a plain-text token and removes the raw token
+// from D1 and KV. Best-effort: a failure leaves the plain row working as before.
+async function migrateScrobbleToken(env, username, token) {
+  try {
+    const hash = await hashSessionToken(token);
+    const enc = await encryptToken(token, env, scrobbleTokenContext(username));
+    if (env.CONFIGS) {
+      await env.CONFIGS.put(scrobbleTokenKey("h:" + hash), username);
+      await env.CONFIGS.put(creatorScrobbleTokenKey(username), "h:" + hash);
+    }
+    await env.DB.prepare(
+      "UPDATE scrobble_tokens SET token_hash = ?, token_enc = ?, token = ? WHERE username = ? AND token = ?"
+    ).bind(hash, enc, "hashed:" + hash, username, token).run();
+    if (env.CONFIGS) await env.CONFIGS.delete(scrobbleTokenKey(token));
+  } catch (err) {
+    noteScrobbleHashColumnsMissing(err);
+    console.error("Could not hash a webhook token:", err && err.message);
+  }
+}
+
+// Mints a token stored hashed. "" when a rotation could not reach D1 (as the
+// older function), null when the 0024 columns are missing (caller falls back).
+async function mintHashedScrobbleToken(env, username, rotate, previous) {
+  const token = generateShortId() + generateShortId();
+  const hash = await hashSessionToken(token);
+  const enc = await encryptToken(token, env, scrobbleTokenContext(username));
+  try {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM scrobble_tokens WHERE username = ?").bind(username),
+      env.DB.prepare(
+        "INSERT INTO scrobble_tokens (token, username, created_at, token_hash, token_enc) VALUES (?, ?, ?, ?, ?)"
+      ).bind("hashed:" + hash, username, Date.now(), hash, enc),
+    ]);
+  } catch (err) {
+    if (noteScrobbleHashColumnsMissing(err)) return null;
+    console.error("D1 write error (scrobble_tokens):", err);
+    if (rotate) return "";
+  }
+  if (env.CONFIGS) {
+    await env.CONFIGS.put(scrobbleTokenKey("h:" + hash), username);
+    await env.CONFIGS.put(creatorScrobbleTokenKey(username), "h:" + hash);
+    if (previous) {
+      try {
+        await env.CONFIGS.delete(scrobbleTokenKey(previous));
+      } catch {
+        console.error("scrobble token rotation: could not revoke the previous token");
+      }
+    }
+  }
+  return token;
+}
+
+// What Settings calls: the account's token (minted if it has none), stored
+// hashed when it can be. `rotate` revokes the old one.
+async function getOrCreateScrobbleTokenSecure(env, username, rotate = false) {
+  if (!scrobbleHashUsable(env)) return legacyScrobbleTokenOrRotate(env, username, rotate);
+  let row = null;
+  try {
+    row = await scrobbleHashRow(env, username);
+  } catch (err) {
+    if (noteScrobbleHashColumnsMissing(err)) return legacyScrobbleTokenOrRotate(env, username, rotate);
+  }
+  let previous = "";
+  if (row && !rotate) {
+    if (row.token_enc) {
+      try {
+        const shown = await decryptToken(row.token_enc, env, scrobbleTokenContext(username));
+        if (shown) return shown;
+      } catch (err) {
+        console.error("Could not read a webhook token; issuing a new one:", err && err.message);
+      }
+    } else if (row.token && !SCROBBLE_STORED_FORM.test(row.token)) {
+      await migrateScrobbleToken(env, username, row.token);
+      return row.token;
+    }
+  }
+  if (!row && !rotate && env.CONFIGS) {
+    // Known only to KV (never reached D1): let the older code back-fill D1, then convert.
+    const kvToken = (await env.CONFIGS.get(creatorScrobbleTokenKey(username))) || "";
+    if (kvToken && !SCROBBLE_STORED_FORM.test(kvToken)) {
+      const t = await getOrCreateScrobbleToken(env, username, false);
+      if (t && !SCROBBLE_STORED_FORM.test(t)) {
+        await migrateScrobbleToken(env, username, t);
+        return t;
+      }
+    }
+  }
+  if (env.CONFIGS) previous = ((await env.CONFIGS.get(creatorScrobbleTokenKey(username))) || "");
+  const minted = await mintHashedScrobbleToken(env, username, rotate, previous);
+  if (minted === null) return legacyScrobbleTokenOrRotate(env, username, rotate);
+  return minted;
+}
+
+// The older function, guarded so a hashed row it cannot read is replaced
+// rather than handed out ("hashed:..." must never be shown as a token).
+async function legacyScrobbleTokenOrRotate(env, username, rotate) {
+  const token = await getOrCreateScrobbleToken(env, username, rotate);
+  if (token && SCROBBLE_STORED_FORM.test(token)) return getOrCreateScrobbleToken(env, username, true);
+  return token;
+}
+
+// What the webhook calls: the account a presented token belongs to, or "".
+async function usernameForScrobbleTokenSecure(env, token) {
+  const t = String(token || "").trim();
+  if (!t || t.length > 64 || !/^[A-Za-z0-9_-]+$/.test(t)) return "";
+  if (!scrobbleHashUsable(env)) return usernameForScrobbleToken(env, t);
+  const hash = await hashSessionToken(t);
+  let d1Failed = false;
+  try {
+    const row = await env.DB.prepare("SELECT username FROM scrobble_tokens WHERE token_hash = ?").bind(hash).first();
+    if (row && row.username) return row.username;
+  } catch (err) {
+    if (noteScrobbleHashColumnsMissing(err)) return usernameForScrobbleToken(env, t);
+    d1Failed = true;
+  }
+  if (d1Failed && env.CONFIGS) {
+    // D1 is down: the hashed KV copy keeps a working token working.
+    try {
+      return (await env.CONFIGS.get(scrobbleTokenKey("h:" + hash))) || "";
+    } catch {
+      return "";
+    }
+  }
+  const user = await usernameForScrobbleToken(env, t);
+  if (user) await migrateScrobbleToken(env, user, t);
+  return user;
+}
+// SEC-02: the provider keys and tokens of the cloud-sync blob (creatorsync:<name>.keys)
+// are stored as { enc: "<encryptToken(JSON)>" } when TOKEN_ENCRYPTION_KEY is set,
+// bound to the account name. openSyncKeys also accepts the old plain object, so
+// nothing has to be migrated: a blob is sealed the next time it is saved. With no
+// encryption key both functions pass the plain object through, as before.
+function syncKeysContext(username) {
+  return "creatorsync:" + String(username || "");
+}
+
+async function sealSyncKeys(env, username, keys) {
+  if (!keys || typeof keys !== "object" || !Object.keys(keys).length || !hasTokenEncryptionKey(env)) return keys;
+  return { enc: await encryptToken(JSON.stringify(keys), env, syncKeysContext(username)) };
+}
+
+// Always a plain object. A sealed value that cannot be opened (key removed from
+// the ring, copied from another account) reads as empty rather than throwing.
+async function openSyncKeys(env, username, stored) {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+  if (typeof stored.enc !== "string") return stored;
+  try {
+    const plain = JSON.parse(await decryptToken(stored.enc, env, syncKeysContext(username)));
+    return plain && typeof plain === "object" && !Array.isArray(plain) ? plain : {};
+  } catch (err) {
+    console.error("Could not open the sealed sync keys:", err && err.message);
+    return {};
+  }
+}
 
 // --- Media: one row per movie or show (Phase 3b, P3b-2) ----------------------
 //
@@ -94437,8 +94771,9 @@ async function legacyLikeVoters(env, legacyListId, ledgerKey) {
 }
 
 // Legacy voter ids as v2 voters. "u:<username>" becomes "acct:<id>" when the
-// account exists. One whose account is gone keeps its legacy id, and so do
-// the signed-out "a:<hash>" votes: both still count, as they do today (D-9).
+// account exists. One whose account is gone keeps its legacy id. A signed-out
+// "a:<hash>" vote is copied as it is if one is still in the legacy stores; the
+// anonymous-likes purge (D-37) removes them from every store, and the new tables.
 async function mapLegacyVoters(env, voters, budget) {
   const cache = budget.accountIds;
   const names = [...new Set([...voters].filter((v) => v.startsWith("u:")).map((v) => v.slice(2).toLowerCase()))]
@@ -94794,7 +95129,7 @@ async function upsertLegacyListRow(env, target, legacy, fields) {
 
 // A list's like_count keeps the legacy total when that is higher than the
 // voters on record: some likes were counted before the ledgers existed, and
-// the totals people see do not drop (D-9). P3b-5 adjusts it by each change.
+// the totals people see do not drop. P3b-5 adjusts it by each change.
 async function finishLegacyListLikes(env, target, legacy, listId, publicId, budget, recon) {
   const voters = await syncLegacyLikes(env, "list", publicId, target.likeListId, target.likeLedgerKey, budget);
   const legacyCount = Number(legacy.likes) || 0;
@@ -95775,8 +96110,8 @@ async function moveApiListEntry(request, env, account, row, now) {
 //
 // The voter is the signed-in account, "acct:<id>" (D-6). There is no cap.
 // Liking twice, or taking back a like that is not there, changes nothing and
-// answers the same. The legacy signed-out "a:" votes the backfill carried
-// across are never touched here and keep counting (D-9).
+// answers the same. No signed-out "a:" vote is made or kept (D-37); the old ones
+// are removed by /admin/api/anonymous-likes-purge (61_).
 //
 // A like is INSERT OR IGNORE, and the target's like_count moves by changes()
 // in the same batch, so the count moves by exactly the rows that changed even
@@ -103555,6 +103890,43 @@ definePeriodicJob("rollup.daily", {
   run: (env, payload, job) => runRollupDaily(env, job),
 });
 
+// --- sessions.purge (SEC-06) -----------------------------------------------------------
+//
+// Sign-in sessions that expired or were revoked more than a week ago are deleted
+// (each keeps a user agent and timestamps, and nothing else removed them). A live
+// session and a recently revoked one stay, so the session list in Settings is
+// unchanged. Batched with a rowid subquery; a run does at most SESSIONS_PURGE_BATCHES
+// batches and the next daily run carries on.
+
+const SESSIONS_PURGE_GRACE_MS = 7 * DAY_MS;
+const SESSIONS_PURGE_BATCH = 500;
+const SESSIONS_PURGE_BATCHES = 20;
+
+async function runSessionsPurge(env, { now = Date.now() } = {}) {
+  if (!env || !env.DB) return { deleted: 0 };
+  const cutoff = now - SESSIONS_PURGE_GRACE_MS;
+  let deleted = 0;
+  try {
+    for (let i = 0; i < SESSIONS_PURGE_BATCHES; i++) {
+      const res = await env.DB.prepare(
+        "DELETE FROM sessions WHERE rowid IN (SELECT rowid FROM sessions WHERE expires_at < ? OR (revoked_at IS NOT NULL AND revoked_at < ?) LIMIT ?)"
+      ).bind(cutoff, cutoff, SESSIONS_PURGE_BATCH).run();
+      const n = (res && res.meta && res.meta.changes) || 0;
+      deleted += n;
+      if (n < SESSIONS_PURGE_BATCH) break;
+    }
+  } catch (err) {
+    if (/no such table/i.test(jobErrorText(err))) return { deleted };
+    throw err;
+  }
+  return { deleted };
+}
+
+definePeriodicJob("sessions.purge", {
+  everyMs: DAY_MS,
+  run: (env) => runSessionsPurge(env),
+});
+
 // --- The materializer (Phase 5, P5-11) ------------------------------------------
 //
 // "Remove duplicate items across lists" (dedupeAcrossLists) used to cost a
@@ -104996,6 +105368,103 @@ async function handleSupportEmailsApi(path, request, env) {
 
   return json({ ok: false, error: 'Endpoint not found.' }, 404);
 }
+// --- Old Account Key fingerprints (SEC-01) ---------------------------------------
+//
+// Before the peppered blind index, every key create/reset wrote an unsalted
+// SHA-256 fingerprint of the Account Key: a creator_key_lookups row and two KV
+// keys (keylookup:<hash>, creatorlookuphash:<name>). Someone holding a copy of
+// those can test key guesses against every account at once, so accounts that
+// already have accounts.key_lookup_hmac do not need them. /admin/api/key-lookup-cleanup
+// counts them (the default) and removes them in batches, only when told to and
+// only with the confirmation phrase.
+//
+// Accounts WITHOUT an HMAC are never touched: their legacy copy is the only way
+// forgot-username finds them without scanning every account with PBKDF2. They
+// lose it by signing in once with LOOKUP_PEPPER set (see storeCreatorKeyLookup).
+
+const KEY_LOOKUP_CLEANUP_CONFIRM = "delete legacy key lookups";
+const KEY_LOOKUP_CLEANUP_BATCH = 50;
+const KEY_LOOKUP_CLEANUP_BATCH_MAX = 200;
+
+async function accountHasLegacyKeyLookup(env, username) {
+  if (env.DB) {
+    const row = await env.DB.prepare("SELECT 1 AS one FROM creator_key_lookups WHERE username = ? LIMIT 1").bind(username).first();
+    if (row) return true;
+  }
+  if (env.CONFIGS && (await env.CONFIGS.get(creatorLookupHashKey(username)))) return true;
+  return false;
+}
+
+// One batch. `cursor` is the previous call's `next` (an accounts.id); `done` is
+// true when every account with an HMAC has been looked at.
+async function cleanLegacyKeyLookups(env, { cursor, limit, apply } = {}) {
+  if (!env || !env.DB) return { ok: false, error: "no-database" };
+  const n = Math.max(1, Math.min(KEY_LOOKUP_CLEANUP_BATCH_MAX, Number(limit) || KEY_LOOKUP_CLEANUP_BATCH));
+  const out = { ok: true, apply: !!apply, scanned: 0, withLegacy: 0, cleaned: 0, next: null, done: true };
+  let rows;
+  try {
+    const res = await env.DB.prepare(
+      "SELECT id, username FROM accounts WHERE key_lookup_hmac IS NOT NULL AND id > ? ORDER BY id LIMIT ?"
+    ).bind(Math.max(0, Number(cursor) || 0), n).all();
+    rows = (res && res.results) || [];
+  } catch (err) {
+    if (/no such column/i.test(String((err && err.message) || err))) return { ok: false, error: "The accounts table has no key_lookup_hmac column yet." };
+    throw err;
+  }
+  out.scanned = rows.length;
+  for (const r of rows) {
+    if (!(await accountHasLegacyKeyLookup(env, r.username))) continue;
+    out.withLegacy++;
+    if (!apply) continue;
+    await deleteLegacyCreatorKeyLookup(env, r.username);
+    out.cleaned++;
+  }
+  if (rows.length === n) {
+    out.next = rows[rows.length - 1].id;
+    out.done = false;
+  }
+  return out;
+}
+
+// SEC-01: removes the unsalted SHA-256 copies (D1 rows and KV keys) of one
+// account's key but leaves accounts.key_lookup_hmac alone. deleteCreatorKeyLookup
+// clears the HMAC too, which is wrong once the HMAC is what the account uses.
+async function deleteLegacyCreatorKeyLookup(env, username) {
+  if (!env || !username) return;
+  if (env.DB) {
+    try {
+      await env.DB.prepare("DELETE FROM creator_key_lookups WHERE username = ?").bind(username).run();
+    } catch (dbErr) {
+      console.error("D1 delete error (deleteLegacyCreatorKeyLookup):", dbErr);
+    }
+  }
+  if (env.CONFIGS) {
+    try {
+      const oldHash = await env.CONFIGS.get(creatorLookupHashKey(username));
+      if (oldHash) await env.CONFIGS.delete(creatorKeyLookupKey(oldHash));
+      await env.CONFIGS.delete(creatorLookupHashKey(username));
+    } catch (kvErr) {
+      console.error("KV delete error (deleteLegacyCreatorKeyLookup):", kvErr);
+    }
+  }
+}
+
+// Writes the peppered HMAC to the account row. True only when a row changed,
+// so a caller never drops the legacy copy for an account that has no HMAC.
+async function writeKeyLookupHmac(env, key, username) {
+  if (!env || !env.DB || !env.LOOKUP_PEPPER) return false;
+  try {
+    const hmac = await hmacLookupKey(key, env);
+    if (!hmac) return false;
+    const res = await env.DB.prepare(
+      "UPDATE accounts SET key_lookup_hmac = ? WHERE lower(username) = lower(?)"
+    ).bind(hmac, username).run();
+    return Boolean(res && res.meta && res.meta.changes > 0);
+  } catch (hmacErr) {
+    console.error("D1 write error (storeCreatorKeyLookup key_lookup_hmac):", hmacErr);
+    return false;
+  }
+}
 // --- Shared channels no account owns ------------------------------------------
 //
 // Shares used to need no account, so some channel links were minted with no
@@ -105097,6 +105566,294 @@ async function removeOwnerlessChannels(env, { cursor, limit, apply } = {}) {
     out.done = false;
     out.next = listed.cursor;
   }
+  return out;
+}
+// --- Anonymous like votes are removed (D-37) -----------------------------------
+//
+// Before D-6 a signed-out visitor could like a list, an outside list or a channel.
+// The vote was stored under the voter id "a:<32 hex>", a hash of the visitor's IP
+// address and the target that can be reversed to the address. The owner decided
+// (2026-11-02) to keep none of them, and to lower every like total by the votes
+// removed, so each total equals the signed-in likes behind it.
+// /admin/api/anonymous-likes-purge counts them (the default) and removes them in
+// batches, only when told to and only with the confirmation phrase.
+//
+// Where votes and totals are kept, per target:
+//   Old store (one total, read when the new tables are not read):
+//     votes   KV listlikevoters:* / extlikevoters:* / channellikevoters:*  AND
+//             D1 list_likes (list_id c:<user>:<slug>, a:<slug>, ext:<hash>, ch:<code>)
+//     totals  KV creatorlist:<user>:<slug> / publishedlist:user:<slug> /
+//             externallike:<hash> / channelshare:<code> ("likes"), the channel
+//             directory row in index:publicchannels, D1 creator_lists.likes /
+//             published_lists.likes
+//     applyLikeVote derives the total from the union of the KV ledger and
+//     list_likes, so the same vote held in both is ONE vote: the old totals go
+//     down by the number of distinct anonymous ids, not by the rows removed.
+//   New tables (their own total, kept separately by the copy):
+//     votes   D1 likes (target_type list / channel / external)
+//     totals  D1 lists.like_count, channels.like_count (an outside list has none:
+//             its count is its rows)
+//     lowered by the number of anonymous rows removed from `likes`.
+// Not touched: channel "added" records (likes rows of type channel_add, list_likes
+// rows under channeladdvoters:*) and add_count; the lists and channels themselves.
+// Signed-in voters ("u:<name>", "acct:<id>") are never touched.
+//
+// One call = one batch of one phase; `next` carries the phase and where it stopped.
+
+const ANON_LIKES_PURGE_CONFIRM = "delete anonymous likes";
+const ANON_LIKES_PURGE_BATCH = 10;
+const ANON_LIKES_PURGE_BATCH_MAX = 50;
+const ANON_LIKES_PURGE_KV_PHASES = { list: "listlikevoters:", ext: "extlikevoters:", chan: "channellikevoters:" };
+const ANON_LIKES_PURGE_PHASES = ["list", "ext", "chan", "d1", "v2"];
+const ANON_LIKES_PURGE_LEGACY_IDS = "(list_id LIKE 'c:%' OR list_id LIKE 'a:%' OR list_id LIKE 'ext:%' OR list_id LIKE 'ch:%')";
+
+// The only anonymous form there ever was: "a:" plus a hash (likeVoterId, before D-37).
+function isAnonymousLikeVoter(voter) {
+  return typeof voter === "string" && voter.startsWith("a:");
+}
+
+function anonLikesLedgerKeyFor(listId) {
+  if (listId.startsWith("c:")) return `listlikevoters:${listId.slice(2)}`;
+  if (listId.startsWith("a:")) return `listlikevoters:user:${listId.slice(2)}`;
+  if (listId.startsWith("ext:")) return `extlikevoters:${listId.slice(4)}`;
+  if (listId.startsWith("ch:")) return `channellikevoters:${listId.slice(3)}`;
+  return "";
+}
+
+async function anonLikesD1Voters(env, listId) {
+  if (!env.DB) return [];
+  try {
+    const res = await env.DB.prepare("SELECT voter_id FROM list_likes WHERE list_id = ? AND substr(voter_id, 1, 2) = 'a:'").bind(listId).all();
+    return ((res && res.results) || []).map((r) => r.voter_id);
+  } catch {
+    return []; // list_likes not migrated yet: nothing was ever stored there
+  }
+}
+
+// --- Progress records (safe to re-run) ---------------------------------------
+//
+// Lowering a total is not repeatable, and a target is changed in several places
+// (KV records, D1, the ledger) that cannot be written as one. So before the first
+// write to a target a record is saved in KV (anonlikespurge:...) holding the number
+// of votes to take off and what each total was BEFORE. A total is then set to
+// max(0, before - n) only while it still equals `before`: run again after a failure
+// and a total that was already lowered no longer matches, so it is left alone.
+// The votes themselves are removed last, because they are how a target is found
+// again; the record is deleted when the target is finished.
+
+const ANON_LIKES_PURGE_MARKER = "anonlikespurge:";
+
+async function anonLikesReadMarker(env, key) {
+  const raw = await env.CONFIGS.get(key);
+  if (!raw) return null;
+  try {
+    const m = JSON.parse(raw);
+    return m && Number.isFinite(m.n) ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+function anonLikesRecordKey(listId) {
+  const rest = listId.slice(listId.indexOf(":") + 1);
+  if (listId.startsWith("c:")) return `creatorlist:${rest}`;
+  if (listId.startsWith("a:")) return `publishedlist:user:${rest}`;
+  if (listId.startsWith("ext:")) return `externallike:${rest}`;
+  if (listId.startsWith("ch:")) return `channelshare:${rest}`;
+  return "";
+}
+
+async function anonLikesKvLikes(env, key) {
+  const raw = key ? await env.CONFIGS.get(key) : null;
+  if (!raw) return null;
+  try {
+    const rec = JSON.parse(raw);
+    return rec && typeof rec === "object" ? Number(rec.likes) || 0 : null;
+  } catch {
+    return null;
+  }
+}
+
+// What each old-store total of one target is right now (null: there is none).
+async function anonLikesTotalsBefore(env, listId) {
+  const rest = listId.slice(listId.indexOf(":") + 1);
+  const before = { rec: await anonLikesKvLikes(env, anonLikesRecordKey(listId)), idx: null, d1: null };
+  if (listId.startsWith("ch:")) {
+    const entry = (await readPublicChannelIndex(env)).find((e) => e && e.code === rest);
+    if (entry) before.idx = Number(entry.likes) || 0;
+  }
+  const table = listId.startsWith("c:") ? ["creator_lists", "likes", "id"] : listId.startsWith("a:") ? ["published_lists", "likes", "slug"] : null;
+  if (table && env.DB) {
+    const row = await env.DB.prepare(`SELECT ${table[1]} AS n FROM ${table[0]} WHERE ${table[2]} = ?`).bind(rest).first();
+    if (row) before.d1 = Number(row.n) || 0;
+  }
+  return before;
+}
+
+// Sets every old-store total of one target to max(0, before - n), each only while
+// it still holds `before`.
+async function anonLikesLowerTotals(env, listId, before, n) {
+  const rest = listId.slice(listId.indexOf(":") + 1);
+  const key = anonLikesRecordKey(listId);
+  if (before.rec !== null && (await anonLikesKvLikes(env, key)) === before.rec && before.rec !== Math.max(0, before.rec - n)) {
+    const rec = JSON.parse(await env.CONFIGS.get(key));
+    rec.likes = Math.max(0, before.rec - n);
+    await env.CONFIGS.put(key, JSON.stringify(rec));
+  }
+  if (before.idx !== null) {
+    const entry = (await readPublicChannelIndex(env)).find((e) => e && e.code === rest);
+    const target = Math.max(0, before.idx - n);
+    if (entry && (Number(entry.likes) || 0) === before.idx && target !== before.idx) await updatePublicChannelIndexEntry(env, rest, { likes: target });
+  }
+  if (before.d1 !== null && env.DB) {
+    const table = listId.startsWith("c:") ? ["creator_lists", "likes", "id"] : ["published_lists", "likes", "slug"];
+    await env.DB.prepare(`UPDATE ${table[0]} SET ${table[1]} = ? WHERE ${table[2]} = ? AND ${table[1]} = ?`)
+      .bind(Math.max(0, before.d1 - n), rest, before.d1).run();
+  }
+}
+
+// One old-store target: counts its anonymous votes (the union of the KV ledger
+// and list_likes) and, with `apply`, lowers its totals by that number and then
+// removes the votes. A progress record from an interrupted run is picked up: its
+// `n` is the number to take off, not what is left.
+async function anonLikesPurgeLegacyTarget(env, listId, ledgerKey, apply, out) {
+  const markerKey = `${ANON_LIKES_PURGE_MARKER}legacy:${listId}`;
+  const marker = await anonLikesReadMarker(env, markerKey);
+  const kvAnon = new Set((await readLikeVotersFromKv(env, ledgerKey)).filter(isAnonymousLikeVoter));
+  const d1Anon = new Set(await anonLikesD1Voters(env, listId));
+  const anon = new Set([...kvAnon, ...d1Anon]);
+  out.scanned++;
+  if (!anon.size) {
+    if (marker && apply) await env.CONFIGS.delete(markerKey); // finished, only the record was left
+    return;
+  }
+  const n = marker ? marker.n : anon.size;
+  out.legacyTargets++;
+  out.kvVotes += kvAnon.size;
+  out.d1Votes += d1Anon.size;
+  out.legacyVotes += n;
+  if (!apply) return;
+  try {
+    const saved = marker || { n, before: await anonLikesTotalsBefore(env, listId) };
+    if (!marker) await env.CONFIGS.put(markerKey, JSON.stringify(saved));
+    await anonLikesLowerTotals(env, listId, saved.before, saved.n);
+    if (d1Anon.size && env.DB) {
+      await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ? AND substr(voter_id, 1, 2) = 'a:'").bind(listId).run();
+    }
+    if (kvAnon.size) {
+      const kept = (await readLikeVotersFromKv(env, ledgerKey)).filter((v) => !isAnonymousLikeVoter(v));
+      if (kept.length) await env.CONFIGS.put(ledgerKey, JSON.stringify([...new Set(kept)]));
+      else await env.CONFIGS.delete(ledgerKey);
+    }
+    await env.CONFIGS.delete(markerKey);
+  } catch (e) {
+    out.failed.push(ledgerKey);
+    console.error("anonymous-likes-purge failed for", ledgerKey, e);
+  }
+}
+
+// A KV phase: the ledgers under one prefix. Returns where to go on, or null.
+async function anonLikesPurgeKvPhase(env, phase, inner, n, apply, out) {
+  const prefix = ANON_LIKES_PURGE_KV_PHASES[phase];
+  const listed = await env.CONFIGS.list({ prefix, limit: n, ...(inner ? { cursor: inner } : {}) });
+  for (const k of listed.keys || []) {
+    const ledgerKey = k.name;
+    await anonLikesPurgeLegacyTarget(env, ledgerKeyToListId(ledgerKey), ledgerKey, apply, out);
+  }
+  return listed.list_complete ? null : listed.cursor || null;
+}
+
+// The D1 phase: targets whose anonymous votes are in list_likes. A target that
+// has a KV ledger was handled in the phases before this one (a dry run, which
+// removed nothing, must not count it twice).
+async function anonLikesPurgeD1Phase(env, inner, n, apply, out) {
+  if (!env.DB) return null;
+  let rows = [];
+  try {
+    const res = await env.DB.prepare(
+      `SELECT DISTINCT list_id FROM list_likes WHERE substr(voter_id, 1, 2) = 'a:' AND ${ANON_LIKES_PURGE_LEGACY_IDS} AND list_id > ? ORDER BY list_id LIMIT ?`
+    ).bind(inner || "", n).all();
+    rows = (res && res.results) || [];
+  } catch {
+    return null;
+  }
+  for (const r of rows) {
+    const ledgerKey = anonLikesLedgerKeyFor(r.list_id);
+    if (!apply && (await env.CONFIGS.get(ledgerKey))) continue;
+    await anonLikesPurgeLegacyTarget(env, r.list_id, ledgerKey, apply, out);
+  }
+  return rows.length === n ? rows[rows.length - 1].list_id : null;
+}
+
+// The new tables: anonymous rows in `likes`, and the total they were counted in.
+async function anonLikesPurgeV2Phase(env, inner, n, apply, out) {
+  if (!env.DB) return null;
+  const [afterType, afterId] = inner ? inner.split("|") : ["", ""];
+  let rows = [];
+  try {
+    const res = await env.DB.prepare(
+      "SELECT target_type, target_id, COUNT(*) AS n FROM likes WHERE substr(voter, 1, 2) = 'a:' AND target_type IN ('list', 'channel', 'external') " +
+      "AND (target_type > ? OR (target_type = ? AND target_id > ?)) GROUP BY target_type, target_id ORDER BY target_type, target_id LIMIT ?"
+    ).bind(afterType, afterType, afterId || "", n).all();
+    rows = (res && res.results) || [];
+  } catch {
+    return null; // the new tables are not there yet
+  }
+  for (const r of rows) {
+    out.scanned++;
+    out.v2Targets++;
+    const markerKey = `${ANON_LIKES_PURGE_MARKER}v2:${r.target_type}:${r.target_id}`;
+    const marker = await anonLikesReadMarker(env, markerKey);
+    const count = marker ? marker.n : Number(r.n) || 0;
+    out.v2Votes += count;
+    if (!apply) continue;
+    try {
+      const table = r.target_type === "list" ? ["lists", "like_count", "public_id"] : r.target_type === "channel" ? ["channels", "like_count", "public_code"] : null;
+      let saved = marker;
+      if (!saved) {
+        let before = null;
+        if (table) {
+          const row = await env.DB.prepare(`SELECT ${table[1]} AS n FROM ${table[0]} WHERE ${table[2]} = ?`).bind(r.target_id).first();
+          if (row) before = Number(row.n) || 0;
+        }
+        saved = { n: count, before };
+        await env.CONFIGS.put(markerKey, JSON.stringify(saved));
+      }
+      if (table && saved.before !== null) {
+        await env.DB.prepare(`UPDATE ${table[0]} SET ${table[1]} = ? WHERE ${table[2]} = ? AND ${table[1]} = ?`)
+          .bind(Math.max(0, saved.before - saved.n), r.target_id, saved.before).run();
+      }
+      await env.DB.prepare("DELETE FROM likes WHERE target_type = ? AND target_id = ? AND substr(voter, 1, 2) = 'a:'").bind(r.target_type, r.target_id).run();
+      await env.CONFIGS.delete(markerKey);
+    } catch (e) {
+      out.failed.push(`${r.target_type}:${r.target_id}`);
+      console.error("anonymous-likes-purge failed for", r.target_type, r.target_id, e);
+    }
+  }
+  if (rows.length !== n) return null;
+  const last = rows[rows.length - 1];
+  return `${last.target_type}|${last.target_id}`;
+}
+
+// One batch. `cursor` is the previous call's `next` ("<phase>:<where it stopped>").
+async function purgeAnonymousLikes(env, { cursor, limit, apply } = {}) {
+  if (!env || !env.CONFIGS) return { ok: false, error: "no-storage" };
+  const n = Math.max(1, Math.min(ANON_LIKES_PURGE_BATCH_MAX, Number(limit) || ANON_LIKES_PURGE_BATCH));
+  const text = cursor ? String(cursor) : "list:";
+  const cut = text.indexOf(":");
+  const phase = cut < 0 ? "" : text.slice(0, cut);
+  const inner = cut < 0 ? "" : text.slice(cut + 1);
+  if (!ANON_LIKES_PURGE_PHASES.includes(phase)) return { ok: false, error: "That cursor is not one this job gave out." };
+  const out = { ok: true, apply: !!apply, phase, scanned: 0, legacyTargets: 0, kvVotes: 0, d1Votes: 0, legacyVotes: 0, v2Targets: 0, v2Votes: 0, failed: [], next: null, done: true };
+  let more;
+  if (ANON_LIKES_PURGE_KV_PHASES[phase]) more = await anonLikesPurgeKvPhase(env, phase, inner, n, !!apply, out);
+  else if (phase === "d1") more = await anonLikesPurgeD1Phase(env, inner, n, !!apply, out);
+  else more = await anonLikesPurgeV2Phase(env, inner, n, !!apply, out);
+  const following = ANON_LIKES_PURGE_PHASES[ANON_LIKES_PURGE_PHASES.indexOf(phase) + 1];
+  if (more) out.next = `${phase}:${more}`;
+  else if (following) out.next = `${following}:`;
+  out.done = out.next === null;
+  if (out.failed.length) out.ok = false;
   return out;
 }
 
@@ -107382,6 +108139,8 @@ async function creatorKeyAuthAccepted(request, env, ctx, { path, creatorKey, via
                   "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
                 ).bind(hmac, accountRow.id).run();
                 accountRow.key_lookup_hmac = hmac;
+                // SEC-01: the HMAC is stored, so the unsalted copy can go.
+                await deleteLegacyCreatorKeyLookup(env, accountRow.username);
               }
             } catch (hmacErr) {
               console.error("Failed to write accounts.key_lookup_hmac on creator auth:", hmacErr);
@@ -107400,6 +108159,49 @@ async function creatorKeyAuthAccepted(request, env, ctx, { path, creatorKey, via
     displayName: profile.displayName,
     hasRecoveryAnswer: Boolean(profile.recoveryAnswerHash),
   };
+}
+// --- Sliding sessions (SEC-03, step 0) ----------------------------------------------
+//
+// A session used to expire 30 days after sign-in whatever happened in between.
+// Now a session that is in use is renewed: at most every 5 minutes, together with
+// the last_seen_at refresh, expires_at moves to now + SESSION_TTL_MS, and the
+// response to an /api/creator/ request carries the same cookie again with a fresh
+// Max-Age so the browser's copy moves too. Someone who visits regularly never has
+// to sign in again; someone away for 30 days does.
+//
+// Only a live session is renewed: revoked, expired and deleted-account sessions
+// are refused by resolveSession before this runs, and the UPDATE below also
+// requires revoked_at IS NULL, so a request racing a sign-out cannot undo it.
+
+const SESSION_RENEW_AFTER_MS = 5 * 60 * 1000;
+
+// True when this request renews the session (the write itself is handed to waitUntil).
+function renewSessionIfDue(env, ctx, row, now) {
+  if (typeof row.last_seen_at !== "number" || now - row.last_seen_at <= SESSION_RENEW_AFTER_MS) return false;
+  const write = env.DB.prepare(
+    "UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id_hash = ? AND revoked_at IS NULL"
+  ).bind(now, now + SESSION_TTL_MS, row.id_hash).run().catch(() => {});
+  (ctx || { waitUntil() {} }).waitUntil(write);
+  return true;
+}
+
+// The Set-Cookie value that renews the browser's copy, or null when this request
+// did not renew or did not come with the cookie (a Bearer token has no cookie).
+function sessionCookieRenewal(request) {
+  if (!request || !request._sessionRenewed) return null;
+  const cookieHeader = request.headers.get("Cookie") || request.headers.get("cookie") || "";
+  if (!/(?:^|;\s*)mla_session=/.test(cookieHeader)) return null;
+  const token = extractSessionToken(request);
+  return token ? buildSessionCookieHeader(token) : null;
+}
+
+// --- FF_FORGET_KEY (SEC-03) -----------------------------------------------------------
+//
+// When set to 1, every answer that confirms a session (X-MLA-Session) also says
+// X-MLA-Forget-Key: 1, and a page that has seen both stops keeping the Account
+// Key in this browser (16_client-forget-key.js). Off by default.
+function isForgetKeyEnabled(env) {
+  return Boolean(env) && (env.FF_FORGET_KEY === "1" || env.FF_FORGET_KEY === "true" || env.FF_FORGET_KEY === true);
 }
 // Auto-track Playback ping from the /:config/subtitles/... route, moved out of handleFetch (CQ-01).
 
@@ -107922,6 +108724,10 @@ function detectClientApp(request) {
 // one are returned and passed on. The filter block stays in this function,
 // because it reads the ids and flags parsed above.
 
+const SCROBBLE_MAX_BODY_BYTES = 8 * 1024 * 1024;
+const SCROBBLE_BAD_TOKEN_MAX = 30;
+const SCROBBLE_BAD_TOKEN_WINDOW_SEC = 600;
+
 // Handles incoming webhooks from Plex, Jellyfin, and Emby media servers
 // Automatically marks watched episodes/movies and advances Continue Watching
 async function handleMediaServerScrobbleFor(request, url, env, ctx) {
@@ -107929,7 +108735,13 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
     return json({ ok: false, error: "Cloudflare KV storage (CONFIGS) not configured." }, 500);
   }
 
-  const authed = await authenticateScrobbleRequest(url, env);
+  // SEC-07: Plex attaches a thumbnail, which is well under this; nothing else should be bigger.
+  const declaredBytes = Number(request.headers.get("content-length"));
+  if (declaredBytes > SCROBBLE_MAX_BODY_BYTES) {
+    return json({ ok: false, error: "Payload too large." }, 413);
+  }
+
+  const authed = await authenticateScrobbleRequest(url, env, request, ctx);
   if (authed.response) return authed.response;
   const { authUser, authForm, effectiveTmdbKey } = authed;
 
@@ -108037,7 +108849,7 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
 }
 
 // Steps 1 of the webhook: who is calling. Returns { response } to answer straight away, or the account.
-async function authenticateScrobbleRequest(url, env) {
+async function authenticateScrobbleRequest(url, env, request, ctx) {
   const configParam = url.searchParams.get("config") || url.searchParams.get("token") || "";
   const queryCreator = url.searchParams.get("creator") || url.searchParams.get("user") || "";
   const queryKey = url.searchParams.get("key") || "";
@@ -108054,7 +108866,7 @@ async function authenticateScrobbleRequest(url, env) {
   let authForm = "";
 
   if (scrobbleToken) {
-    const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
+    const tokenUser = await usernameForScrobbleTokenSecure(env, scrobbleToken);
     // An account in the middle of deletion has a tombstone before its token
     // is purged. The key and config forms below already check it; without
     // this a ping in that window wrote tracking the purge then had to
@@ -108080,6 +108892,12 @@ async function authenticateScrobbleRequest(url, env) {
   }
 
   if (!authUser) {
+    // SEC-07: a wrong token spends this IP's budget; a correct one never does,
+    // so a busy media server is never limited.
+    if (scrobbleToken && request) {
+      const badToken = await reserveRateLimit(env, ctx, "scrobblebadtoken", clientIpKey(request), SCROBBLE_BAD_TOKEN_MAX, SCROBBLE_BAD_TOKEN_WINDOW_SEC);
+      if (badToken.over) return { response: json({ ok: false, error: "Too many attempts. Please wait and try again." }, 429) };
+    }
     return { response: json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401) };
   }
   await ensureTrackingMigrated(env, authUser);
@@ -108089,8 +108907,9 @@ async function authenticateScrobbleRequest(url, env) {
       const rawSync = await env.CONFIGS.get(`creatorsync:${authUser}`);
       if (rawSync) {
         const syncObj = JSON.parse(rawSync);
-        if (syncObj && syncObj.keys && syncObj.keys.tmdbKey) {
-          effectiveTmdbKey = String(syncObj.keys.tmdbKey).trim();
+        const syncKeys = syncObj && syncObj.keys ? await openSyncKeys(env, authUser, syncObj.keys) : null;
+        if (syncKeys && syncKeys.tmdbKey) {
+          effectiveTmdbKey = String(syncKeys.tmdbKey).trim();
         }
       }
     } catch {}
@@ -108659,6 +109478,8 @@ async function handleAdminApiRoutes(request, env, ctx, url, path) {
   if (path === "/admin/api/published-channels" && request.method === "GET") return adminApiPublishedChannels(request, env, url);
   if (path === "/admin/api/channel-moderate" && request.method === "POST") return adminApiChannelModerate(request, env);
   if (path === "/admin/api/channel-ownerless" && request.method === "POST") return adminApiChannelOwnerless(request, env);
+  if (path === "/admin/api/key-lookup-cleanup" && request.method === "POST") return adminApiKeyLookupCleanup(request, env);
+  if (path === "/admin/api/anonymous-likes-purge" && request.method === "POST") return adminApiAnonymousLikesPurge(request, env);
   if (path === "/admin/api/migrate-day-counts" && request.method === "POST") return adminApiMigrateDayCounts(request, env);
   if (path === "/admin/api/export-kv-to-r2" && request.method === "POST") return adminApiExportKvToR2(request, env);
   return null;
@@ -109557,6 +110378,63 @@ async function adminApiChannelOwnerless(request, env) {
     return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
   }
   return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/key-lookup-cleanup  (POST)  { cursor?, limit?, apply?, confirm? }
+//   -> { ok, apply, scanned, withLegacy, cleaned, next, done }
+// SEC-01: removes the old unsalted Account Key fingerprints of accounts that
+// already have the peppered HMAC (see 60_key-lookup-cleanup.js). A count by
+// default; with apply it cleans this batch, and only when `confirm` is the
+// confirmation phrase. Run it again with `next` as `cursor` until `done`.
+async function adminApiKeyLookupCleanup(request, env) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  let body = {};
+  try {
+    body = (await request.json()) || {};
+  } catch {
+    body = {};
+  }
+  const apply = body.apply === true;
+  if (apply && body.confirm !== KEY_LOOKUP_CLEANUP_CONFIRM) {
+    return json({ ok: false, error: `To delete, send confirm: "${KEY_LOOKUP_CLEANUP_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+  }
+  let result;
+  try {
+    result = await cleanLegacyKeyLookups(env, { cursor: body.cursor, limit: body.limit, apply });
+  } catch (e) {
+    return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+  }
+  return json(result, result.ok ? 200 : 400, { "Cache-Control": "no-store" });
+}
+
+// /admin/api/anonymous-likes-purge  (POST)  { cursor?, limit?, apply?, confirm? }
+//   -> { ok, apply, phase, scanned, legacyTargets, kvVotes, d1Votes, legacyVotes,
+//        v2Targets, v2Votes, failed, next, done }
+// D-37: removes every anonymous like vote and lowers the like totals by the
+// votes removed (see 61_anonymous-likes-purge.js). A count by default; with apply
+// it removes this batch, and only when `confirm` is the confirmation phrase. Run
+// it again with `next` as `cursor` until `done`.
+async function adminApiAnonymousLikesPurge(request, env) {
+  const authed = await isAdminRequest(request, env);
+  if (!authed) return json({ ok: false, error: "Not authorized." }, 401);
+  let body = {};
+  try {
+    body = (await request.json()) || {};
+  } catch {
+    body = {};
+  }
+  const apply = body.apply === true;
+  if (apply && body.confirm !== ANON_LIKES_PURGE_CONFIRM) {
+    return json({ ok: false, error: `To delete, send confirm: "${ANON_LIKES_PURGE_CONFIRM}".` }, 400, { "Cache-Control": "no-store" });
+  }
+  let result;
+  try {
+    result = await purgeAnonymousLikes(env, { cursor: body.cursor, limit: body.limit, apply });
+  } catch (e) {
+    return json({ ok: false, error: safeErrorMessage(e) }, 500, { "Cache-Control": "no-store" });
+  }
+  return json(result, result.ok ? 200 : (result.failed && result.failed.length ? 500 : 400), { "Cache-Control": "no-store" });
 }
 
 async function adminApiMigrateDayCounts(request, env) {
@@ -111151,7 +112029,7 @@ async function creatorApiScrobbleToken(request, env, ctx, path) {
   if (!auth.ok) {
     return authFailureResponse(auth);
   }
-  const token = await getOrCreateScrobbleToken(env, auth.username, body.rotate === true);
+  const token = await getOrCreateScrobbleTokenSecure(env, auth.username, body.rotate === true);
   if (!token) return json({ ok: false, error: "Could not issue a webhook token." }, 500);
   return json({ ok: true, token }, 200, { "Cache-Control": "no-store" });
 }
@@ -112381,7 +113259,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
     try {
       const current = JSON.parse(currentRaw);
       currentUpdatedAt = Number(current.updatedAt) || 0;
-      currentKeys = current.keys && typeof current.keys === "object" ? current.keys : null;
+      currentKeys = current.keys && typeof current.keys === "object" ? await openSyncKeys(env, auth.username, current.keys) : null;
       if (expectedUpdatedAt !== null && currentUpdatedAt > expectedUpdatedAt) {
         // Purely for visibility -- this was previously invisible even
         // to us; now it's at least countable on the admin dashboard.
@@ -112413,7 +113291,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
 
   const blob = {
     config: Array.isArray(body.config) ? body.config : [],
-    keys: mergedKeys,
+    keys: await sealSyncKeys(env, auth.username, mergedKeys),
     collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
     likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
     hiddenLists: Array.isArray(body.hiddenLists) ? body.hiddenLists.map(String) : [],
@@ -113333,6 +114211,7 @@ async function creatorApiSyncLoad(request, env, ctx, path) {
       data = null;
     }
   }
+  if (data && data.keys) data.keys = await openSyncKeys(env, auth.username, data.keys);
   if (d1UserLists) {
     if (!data) {
       data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };
@@ -122392,6 +123271,8 @@ async function apiSessionSignIn(request, env, ctx, path) {
           "UPDATE accounts SET key_lookup_hmac = ? WHERE id = ?"
         ).bind(hmac, accountRow.id).run();
         accountRow.key_lookup_hmac = hmac;
+        // SEC-01: the HMAC is stored, so the unsalted copy can go.
+        await deleteLegacyCreatorKeyLookup(env, accountRow.username);
       }
     } catch (hmacErr) {
       console.error("Failed to write accounts.key_lookup_hmac on login:", hmacErr);

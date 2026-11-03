@@ -7,6 +7,10 @@
 // one are returned and passed on. The filter block stays in this function,
 // because it reads the ids and flags parsed above.
 
+const SCROBBLE_MAX_BODY_BYTES = 8 * 1024 * 1024;
+const SCROBBLE_BAD_TOKEN_MAX = 30;
+const SCROBBLE_BAD_TOKEN_WINDOW_SEC = 600;
+
 // Handles incoming webhooks from Plex, Jellyfin, and Emby media servers
 // Automatically marks watched episodes/movies and advances Continue Watching
 async function handleMediaServerScrobbleFor(request, url, env, ctx) {
@@ -14,7 +18,13 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
     return json({ ok: false, error: "Cloudflare KV storage (CONFIGS) not configured." }, 500);
   }
 
-  const authed = await authenticateScrobbleRequest(url, env);
+  // SEC-07: Plex attaches a thumbnail, which is well under this; nothing else should be bigger.
+  const declaredBytes = Number(request.headers.get("content-length"));
+  if (declaredBytes > SCROBBLE_MAX_BODY_BYTES) {
+    return json({ ok: false, error: "Payload too large." }, 413);
+  }
+
+  const authed = await authenticateScrobbleRequest(url, env, request, ctx);
   if (authed.response) return authed.response;
   const { authUser, authForm, effectiveTmdbKey } = authed;
 
@@ -122,7 +132,7 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
 }
 
 // Steps 1 of the webhook: who is calling. Returns { response } to answer straight away, or the account.
-async function authenticateScrobbleRequest(url, env) {
+async function authenticateScrobbleRequest(url, env, request, ctx) {
   const configParam = url.searchParams.get("config") || url.searchParams.get("token") || "";
   const queryCreator = url.searchParams.get("creator") || url.searchParams.get("user") || "";
   const queryKey = url.searchParams.get("key") || "";
@@ -139,7 +149,7 @@ async function authenticateScrobbleRequest(url, env) {
   let authForm = "";
 
   if (scrobbleToken) {
-    const tokenUser = await usernameForScrobbleToken(env, scrobbleToken);
+    const tokenUser = await usernameForScrobbleTokenSecure(env, scrobbleToken);
     // An account in the middle of deletion has a tombstone before its token
     // is purged. The key and config forms below already check it; without
     // this a ping in that window wrote tracking the purge then had to
@@ -165,6 +175,12 @@ async function authenticateScrobbleRequest(url, env) {
   }
 
   if (!authUser) {
+    // SEC-07: a wrong token spends this IP's budget; a correct one never does,
+    // so a busy media server is never limited.
+    if (scrobbleToken && request) {
+      const badToken = await reserveRateLimit(env, ctx, "scrobblebadtoken", clientIpKey(request), SCROBBLE_BAD_TOKEN_MAX, SCROBBLE_BAD_TOKEN_WINDOW_SEC);
+      if (badToken.over) return { response: json({ ok: false, error: "Too many attempts. Please wait and try again." }, 429) };
+    }
     return { response: json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401) };
   }
   await ensureTrackingMigrated(env, authUser);
@@ -174,8 +190,9 @@ async function authenticateScrobbleRequest(url, env) {
       const rawSync = await env.CONFIGS.get(`creatorsync:${authUser}`);
       if (rawSync) {
         const syncObj = JSON.parse(rawSync);
-        if (syncObj && syncObj.keys && syncObj.keys.tmdbKey) {
-          effectiveTmdbKey = String(syncObj.keys.tmdbKey).trim();
+        const syncKeys = syncObj && syncObj.keys ? await openSyncKeys(env, authUser, syncObj.keys) : null;
+        if (syncKeys && syncKeys.tmdbKey) {
+          effectiveTmdbKey = String(syncKeys.tmdbKey).trim();
         }
       }
     } catch {}

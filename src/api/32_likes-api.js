@@ -18,8 +18,8 @@
 //
 // The voter is the signed-in account, "acct:<id>" (D-6). There is no cap.
 // Liking twice, or taking back a like that is not there, changes nothing and
-// answers the same. The legacy signed-out "a:" votes the backfill carried
-// across are never touched here and keep counting (D-9).
+// answers the same. No signed-out "a:" vote is made or kept (D-37); the old ones
+// are removed by /admin/api/anonymous-likes-purge (61_).
 //
 // A like is INSERT OR IGNORE, and the target's like_count moves by changes()
 // in the same batch, so the count moves by exactly the rows that changed even

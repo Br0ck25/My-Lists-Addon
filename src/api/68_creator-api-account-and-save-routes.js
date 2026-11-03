@@ -312,7 +312,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
     try {
       const current = JSON.parse(currentRaw);
       currentUpdatedAt = Number(current.updatedAt) || 0;
-      currentKeys = current.keys && typeof current.keys === "object" ? current.keys : null;
+      currentKeys = current.keys && typeof current.keys === "object" ? await openSyncKeys(env, auth.username, current.keys) : null;
       if (expectedUpdatedAt !== null && currentUpdatedAt > expectedUpdatedAt) {
         // Purely for visibility -- this was previously invisible even
         // to us; now it's at least countable on the admin dashboard.
@@ -344,7 +344,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
 
   const blob = {
     config: Array.isArray(body.config) ? body.config : [],
-    keys: mergedKeys,
+    keys: await sealSyncKeys(env, auth.username, mergedKeys),
     collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
     likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
     hiddenLists: Array.isArray(body.hiddenLists) ? body.hiddenLists.map(String) : [],

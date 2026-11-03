@@ -143,6 +143,8 @@ Same page, **Add**, type **Text**, one per line:
 
 These match what the public site runs. Set them now, on an empty database, and leave them set.
 
+**Optional, not in the table:** `FF_FORGET_KEY` = `1` makes a browser with a working sign-in stop storing the Account Key (it shows the key once and asks the person to save it). Sessions renew while used, so people who visit regularly never type the key again. Leave it out at first and try it on your own account before leaving it on. Updating an older copy? Run `migrations/0024_scrobble_token_hash.sql` once (a new copy already has it), so media-server webhook tokens are stored hashed.
+
 ### Step 11. Add the schedule
 
 **Worker → Settings → Triggers → Add → Cron Trigger**, value `*/5 * * * *` (every 5 minutes). Without it new episodes never reach Continue Watching and charts go stale.

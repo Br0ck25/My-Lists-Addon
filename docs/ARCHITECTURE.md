@@ -116,6 +116,7 @@ The queue consumer (`mylists-jobs`) runs these recurring jobs:
 | `channel.presets` | Daily | Rebuilds the preset channels (`channel.pool.build` per network) |
 | `token.refresh` | Daily | Refreshes expiring OAuth tokens |
 | `rollup.daily` | Daily | Fills the D1 `title_daily_stats` table |
+| `sessions.purge` | Daily | Deletes sign-in sessions that expired or were revoked more than 7 days ago (SEC-06) |
 
 One-off jobs, started by a request rather than a clock: `account.purge` (removes a deleted account's data), `import.resolve` (list imports) and `poster.fetch`.
 

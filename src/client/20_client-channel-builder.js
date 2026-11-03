@@ -1371,8 +1371,8 @@ function applyChannelPosterUrl() {
     return;
   }
 
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    if (status) { status.textContent = 'Only http:// or https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
+  if (url.protocol !== 'https:') {
+    if (status) { status.textContent = 'Only https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
     if (preview) preview.style.display = 'flex';
     if (previewImg) previewImg.style.display = 'none';
     return;

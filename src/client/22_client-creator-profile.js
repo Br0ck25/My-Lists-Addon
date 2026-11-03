@@ -389,7 +389,7 @@ function saveLocalCustomList(sourceRow, urlInput, payload, name) {
 async function uploadLocalListPayloadToAccount(payload) {
   if (!activeCreator || !activeCreator.creatorName) return { ok: false, error: 'signed-out' };
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return { ok: false, error: 'signed-out' };
+  if (!creatorKey && !creatorKeyForgotten()) return { ok: false, error: 'signed-out' };
   const list = payload || {};
   const body = {
     creatorName: activeCreator.creatorName,
@@ -592,7 +592,7 @@ function renderAccountKeySection() {
     '<div class="u-mt-6px">' +
       '<div class="u-fs-v_font_size_xs u-tt-uppercase u-ls-0_5px u-c-v_muted u-fw-700 u-mb-6px">Account Key</div>' +
       '<div class="account-key-group">' +
-        '<div class="creator-key-display" id="accountKeyDisplay">' + '\u2022'.repeat(Math.max(8, key.length)) + '</div>' +
+        '<div class="creator-key-display" id="accountKeyDisplay">' + (key ? '\u2022'.repeat(Math.max(8, key.length)) : 'Not stored in this browser') + '</div>' +
         '<div class="account-key-actions">' +
           '<button type="button" class="secondary lc-btn" id="accountKeyToggleBtn" data-act="toggleAccountKeyVisibility">Show Key</button>' +
           '<button type="button" class="secondary lc-btn" data-act="copyAccountKey">Copy Key</button>' +
@@ -673,7 +673,7 @@ async function submitSetRecoveryAnswer() {
     return;
   }
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) {
+  if (!creatorKey && !creatorKeyForgotten()) {
     errBox.innerHTML = '<p class="testresult err">Account Key missing. Please sign in again.</p>';
     return;
   }
@@ -730,7 +730,7 @@ async function openResetAccountModal() {
       const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
       const creatorName = activeCreator.creatorName;
       const displayName = activeCreator.displayName;
-      if (!creatorKey) return;
+      if (!creatorKey && !creatorKeyForgotten()) return;
 
       // Stop anything in flight from re-uploading what we are about to clear.
       window._suppressCreatorSync = true;
@@ -769,7 +769,7 @@ async function openResetAccountModal() {
         activeCreator = { creatorName: creatorName, displayName: displayName };
         localStorage.setItem('myListAddon:creatorName', creatorName);
         localStorage.setItem('myListAddon:creatorDisplayName', displayName || creatorName);
-        localStorage.setItem('myListAddon:creatorKey', creatorKey);
+        if (creatorKey) localStorage.setItem('myListAddon:creatorKey', creatorKey); else rememberForgottenKey(creatorName);
         // Written AFTER clearLocalAccountData, which removes every myListAddon:
         // key including this one. Without it this browser would meet its own
         // reset on the next load and wipe itself a second time.
@@ -886,10 +886,10 @@ function toggleAccountKeyVisibility() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
   const isHidden = btn.textContent === 'Show Key';
   if (isHidden) {
-    display.textContent = key;
+    display.textContent = key || 'Not stored in this browser';
     btn.textContent = 'Hide Key';
   } else {
-    display.textContent = '\u2022'.repeat(Math.max(8, key.length));
+    display.textContent = key ? '\u2022'.repeat(Math.max(8, key.length)) : 'Not stored in this browser';
     btn.textContent = 'Show Key';
   }
 }
@@ -1256,7 +1256,7 @@ async function fetchScrobbleToken(rotate) {
   if (!activeCreator || !activeCreator.creatorName) return '';
   let creatorKey = '';
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
-  if (!creatorKey) return '';
+  if (!creatorKey && !creatorKeyForgotten()) return '';
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/scrobble-token', {
       method: 'POST',
@@ -1505,7 +1505,7 @@ async function refreshTrackPlaybackStatus() {
 
 async function copyAccountKey() {
   const key = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!key) return;
+  if (!key) { showToast('This browser no longer stores your Account Key. Use the copy you saved.', 'info'); return; }
   const copied = await copyTextToClipboard(key, {
     toastMessage: 'Key copied to clipboard! \u2713'
   });
@@ -1937,7 +1937,7 @@ function proceedToLoginWithUsername(username, key) {
 async function tryAutoRestoreCreatorProfile() {
   const name = localStorage.getItem('myListAddon:creatorName');
   const key = localStorage.getItem('myListAddon:creatorKey');
-  if (!name || !key) return;
+  if (!name || (!key && !creatorKeyForgottenFor(name))) return;
   try {
     const res = await creatorApiFetch(ORIGIN + '/api/creator/restore', {
       method: 'POST',
@@ -2092,7 +2092,7 @@ function applyRemoteAccountReset(serverResetAt) {
   const displayName = activeCreator.displayName;
   let creatorKey = '';
   try { creatorKey = localStorage.getItem('myListAddon:creatorKey') || ''; } catch (e) {}
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
 
   window._suppressCreatorSync = true;
   try {
@@ -2101,7 +2101,7 @@ function applyRemoteAccountReset(serverResetAt) {
     try {
       localStorage.setItem('myListAddon:creatorName', creatorName);
       localStorage.setItem('myListAddon:creatorDisplayName', displayName || creatorName);
-      localStorage.setItem('myListAddon:creatorKey', creatorKey);
+      if (creatorKey) localStorage.setItem('myListAddon:creatorKey', creatorKey); else rememberForgottenKey(creatorName);
     } catch (e) {}
     rememberAccountResetAt(serverResetAt);
     if (typeof renderCreatorProfileBar === 'function') renderCreatorProfileBar();
@@ -2326,7 +2326,7 @@ function markCreatorSyncLoaded() {
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   if (_creatorSyncGateTimer) { clearTimeout(_creatorSyncGateTimer); _creatorSyncGateTimer = null; }
   _creatorSyncLoadedFor = activeCreator.creatorName;
-  flushDeferredSyncPushes();
+  flushDeferredSyncPushes(); maybeForgetCreatorKey();
 }
 window.markCreatorSyncLoaded = markCreatorSyncLoaded;
 
@@ -2467,7 +2467,7 @@ async function pushChannelsSync() {
   if (window._suppressCreatorSync) return;
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen.
   if (!creatorSyncGateOpen()) { deferSyncPush('channels'); return; }
@@ -2541,7 +2541,7 @@ async function pushCreatorSync() {
   if (window._suppressCreatorSync) return;
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds -- see
   // creatorSyncGateOpen. This is the config blob: the catalog rows, which is
   // where "my list rows came back after opening the phone" came from.
@@ -2762,7 +2762,7 @@ async function pushTrackingSync(opts) {
   if (window._suppressCreatorSync) return;
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Not until this browser has seen what the account holds. This endpoint
   // replaces Watch History and Continue Watching wholesale, and the timers
   // that start the page (refreshAiringNext at 600ms,
@@ -2950,7 +2950,7 @@ async function loadCreatorSync(opts) {
   const isBackgroundResume = !!(opts && opts.background);
   if (!activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
   // Who this load is for. Checked again after the await, because signing in as
   // someone else calls clearLocalAccountData() and then starts a fresh load --
   // and this one is still in flight. Measured: signing in as alice and then
@@ -4478,7 +4478,7 @@ async function undoListDelete(snap, rows) {
   if (!snap) return;
   clearCreatorListDeletion(snap.slug);
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (typeof activeCreator !== 'undefined' && activeCreator && creatorKey) {
+  if (typeof activeCreator !== 'undefined' && activeCreator && (creatorKey || creatorKeyForgotten())) {
     const out = await saveCreatorListWithBaseline({
       slug: snap.slug, name: snap.name, type: snap.type, items: snap.items, visibility: snap.visibility,
       sourceUrl: snap.sourceUrl, synced: snap.synced, lastSyncedAt: snap.lastSyncedAt, baseItemIds: snap.baseItemIds,
@@ -4729,7 +4729,7 @@ let _uploadingMissingLists = false;
 let _missingListUploadRounds = 0;
 const MISSING_LIST_UPLOAD_MAX_ROUNDS = 5;
 async function uploadMissingLocalListsToAccount(lists, creatorKey) {
-  if (_uploadingMissingLists || !activeCreator || !creatorKey || !lists || !lists.length) return 0;
+  if (_uploadingMissingLists || !activeCreator || (!creatorKey && !creatorKeyForgotten()) || !lists || !lists.length) return 0;
   if (_missingListUploadRounds >= MISSING_LIST_UPLOAD_MAX_ROUNDS) return 0;
   _uploadingMissingLists = true;
   _missingListUploadRounds++;
@@ -5062,7 +5062,7 @@ async function renderCreatorDashboard(options) {
         // being re-created on the account.
         if (listTombstones[l.creatorSlug || l.slug] || listTombstones[k]) return;
         localRestoredCustomLists.push(l);
-        if (activeCreator && creatorKey) needUploading.push(l);
+        if (activeCreator && (creatorKey || creatorKeyForgotten())) needUploading.push(l);
       }
     });
     // A render that finds everything already on the account is the signal
@@ -5763,7 +5763,7 @@ if (_creatorDashEl) {
       // If signed into creator, also delete from server if it exists
       if (activeCreator) {
         const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-        if (creatorKey) {
+        if (creatorKey || creatorKeyForgotten()) {
           // Fire-and-forget: if this never lands the list survives on the
           // account while being gone locally, which is precisely what the
           // backfill must not undo.
@@ -6951,7 +6951,7 @@ async function handleForegroundResumeSync() {
 
   if (typeof activeCreator === 'undefined' || !activeCreator) return;
   const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
-  if (!creatorKey) return;
+  if (!creatorKey && !creatorKeyForgotten()) return;
 
   // Defer slightly so tab switch and UI clicks are completely instant and smooth
   if (_foregroundSyncTimer) clearTimeout(_foregroundSyncTimer);

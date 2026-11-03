@@ -60,6 +60,35 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Anonymous likes are removed (built 2026-11-03, stamp 72bd529dd9)
+
+Your decision of 2026-11-02 (D-37, replaces D-9): the likes people cast while signed out, before D-6, are deleted, and every like total goes down by the votes removed. Each total then equals the signed-in likes behind it.
+
+- **Some lists, outside lists and channels will show fewer likes**, and some may move in the "popular" and "liked" orders. That is expected. Channel "added" counts, the lists and channels themselves, and every signed-in like are untouched.
+- **Nothing happens until you run it.** New admin call `/admin/api/anonymous-likes-purge`: a count first (the default), then a confirmed delete, in batches. Steps are in `docs/OPERATIONS.md` §33 ("Removing the old anonymous likes"). Running it again changes nothing, and it can be re-run after a failure part-way without lowering any total twice.
+- A signed-out visitor still gets "sign in to like" and nothing is stored for them. The IP-based voter id is no longer made anywhere, and the optional `LIKE_VOTER_PEPPER` setting from the earlier security entry is gone.
+
+---
+
+## Security fixes from the audit (built 2026-11-02, stamp ee72a94a44)
+
+Plain words, from `docs/SECURITY_AUDIT_PLAN.md`. Nobody is signed out and nothing changes on screen unless you turn `FF_FORGET_KEY` on. Every new secret is optional, and each fix works the old way until you do its step (`docs/OPERATIONS.md` §33 has the exact steps).
+
+- **Forgot-username no longer keeps a fast fingerprint of every Account Key (SEC-01).** With `LOOKUP_PEPPER` set, the unsalted copy is not written, an account's old copy is removed when it next signs in, and a new admin call (`/admin/api/key-lookup-cleanup`, a count first, then a confirmed delete) clears the old copies for accounts that already have the new one.
+- **Trakt, MDBList, Simkl and TMDB keys saved by cloud sync are encrypted at rest (SEC-02)** when `TOKEN_ENCRYPTION_KEY` is set. The page receives exactly what it did before; an old plain copy is encrypted the next time that account saves.
+- **Media-server webhook tokens are stored hashed and encrypted (SEC-04).** New **migration `0024_scrobble_token_hash.sql`** (apply it in the D1 Console before or after deploying; the Worker works either way). Webhook URLs keep working; Settings still shows the URL.
+- **The webhook endpoint is limited (SEC-07):** 413 for a body over 8 MB, 429 after 30 wrong tokens in 10 minutes from one address. A correct token is never limited.
+- **Old sessions are deleted (SEC-06):** a new daily job removes sign-in sessions that expired or were revoked more than a week ago.
+- **Signed-out like voter ids (SEC-05).** An optional `LIKE_VOTER_PEPPER` setting was built first and then removed: you decided to delete the old anonymous likes instead. See the next entry.
+- **Shared channel images must be https (SEC-08, your decision).** Any https host works (Imgur and the like). An `http://` image is dropped and the channel's generated poster is used; the logo box in the channel builder now says so.
+- **Sessions renew while they are used (SEC-03, step 0).** Every 5 minutes of use pushes the 30 days forward and re-sends the cookie, so someone who visits regularly is never signed out. Away for 30 days, signed out, or revoked still ends it.
+- **The browser can forget the Account Key (SEC-03, your decision), behind `FF_FORGET_KEY`, off by default.** When on, after sign-in the page shows the key once ("Keep your Account Key safe"), and after *I have saved it* removes it from the browser; the session cookie signs everything from then on. When the session ends, the Login box opens with the username filled in. Try it on your own account before leaving it on.
+- **Dependabot (SEC-10)** was already set up for the GitHub Actions; nothing to do. SEC-09 is your checklist (Cloudflare and GitHub settings).
+
+New optional setting: `FF_FORGET_KEY`. New migration: `0024`. New admin calls: `/admin/api/key-lookup-cleanup`, `/admin/api/anonymous-likes-purge`. New daily job: `sessions.purge`.
+
+---
+
 ## Trakt Continue Watching: the website list and the Stremio/Nuvio shelf now agree (built 2026-11-02, stamp eb36cbf5de)
 
 What you will notice, in plain words (owner decisions of 2026-11-02, CQ-04):

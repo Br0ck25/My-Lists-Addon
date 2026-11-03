@@ -293,3 +293,40 @@ definePeriodicJob("rollup.daily", {
   everyMs: DAY_MS,
   run: (env, payload, job) => runRollupDaily(env, job),
 });
+
+// --- sessions.purge (SEC-06) -----------------------------------------------------------
+//
+// Sign-in sessions that expired or were revoked more than a week ago are deleted
+// (each keeps a user agent and timestamps, and nothing else removed them). A live
+// session and a recently revoked one stay, so the session list in Settings is
+// unchanged. Batched with a rowid subquery; a run does at most SESSIONS_PURGE_BATCHES
+// batches and the next daily run carries on.
+
+const SESSIONS_PURGE_GRACE_MS = 7 * DAY_MS;
+const SESSIONS_PURGE_BATCH = 500;
+const SESSIONS_PURGE_BATCHES = 20;
+
+async function runSessionsPurge(env, { now = Date.now() } = {}) {
+  if (!env || !env.DB) return { deleted: 0 };
+  const cutoff = now - SESSIONS_PURGE_GRACE_MS;
+  let deleted = 0;
+  try {
+    for (let i = 0; i < SESSIONS_PURGE_BATCHES; i++) {
+      const res = await env.DB.prepare(
+        "DELETE FROM sessions WHERE rowid IN (SELECT rowid FROM sessions WHERE expires_at < ? OR (revoked_at IS NOT NULL AND revoked_at < ?) LIMIT ?)"
+      ).bind(cutoff, cutoff, SESSIONS_PURGE_BATCH).run();
+      const n = (res && res.meta && res.meta.changes) || 0;
+      deleted += n;
+      if (n < SESSIONS_PURGE_BATCH) break;
+    }
+  } catch (err) {
+    if (/no such table/i.test(jobErrorText(err))) return { deleted };
+    throw err;
+  }
+  return { deleted };
+}
+
+definePeriodicJob("sessions.purge", {
+  everyMs: DAY_MS,
+  run: (env) => runSessionsPurge(env),
+});

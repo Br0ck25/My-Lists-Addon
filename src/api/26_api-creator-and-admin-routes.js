@@ -173,6 +173,10 @@ export default {
       const p = new URL(request && request.url ? request.url : "https://x/").pathname;
       if (request && request.account && (p.startsWith("/api/creator/") || CREATOR_SESSION_PATH_PREFIXES.some((x) => p.startsWith(x)))) {
         secured.headers.set("X-MLA-Session", String(request.account.username || "").toLowerCase());
+        // SEC-03 step 0: a session renewed by this request gets its cookie renewed too.
+        if (isForgetKeyEnabled(env)) secured.headers.set("X-MLA-Forget-Key", "1");
+        const renewalCookie = sessionCookieRenewal(request);
+        if (renewalCookie && !secured.headers.has("Set-Cookie")) secured.headers.set("Set-Cookie", renewalCookie);
       }
     } catch {
       // Never affects the response.
