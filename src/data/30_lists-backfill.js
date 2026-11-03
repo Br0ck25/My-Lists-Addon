@@ -355,8 +355,9 @@ async function legacyLikeVoters(env, legacyListId, ledgerKey) {
 }
 
 // Legacy voter ids as v2 voters. "u:<username>" becomes "acct:<id>" when the
-// account exists. One whose account is gone keeps its legacy id, and so do
-// the signed-out "a:<hash>" votes: both still count, as they do today (D-9).
+// account exists. One whose account is gone keeps its legacy id. A signed-out
+// "a:<hash>" vote is copied as it is if one is still in the legacy stores; the
+// anonymous-likes purge (D-37) removes them from every store, and the new tables.
 async function mapLegacyVoters(env, voters, budget) {
   const cache = budget.accountIds;
   const names = [...new Set([...voters].filter((v) => v.startsWith("u:")).map((v) => v.slice(2).toLowerCase()))]
@@ -712,7 +713,7 @@ async function upsertLegacyListRow(env, target, legacy, fields) {
 
 // A list's like_count keeps the legacy total when that is higher than the
 // voters on record: some likes were counted before the ledgers existed, and
-// the totals people see do not drop (D-9). P3b-5 adjusts it by each change.
+// the totals people see do not drop. P3b-5 adjusts it by each change.
 async function finishLegacyListLikes(env, target, legacy, listId, publicId, budget, recon) {
   const voters = await syncLegacyLikes(env, "list", publicId, target.likeListId, target.likeLedgerKey, budget);
   const legacyCount = Number(legacy.likes) || 0;

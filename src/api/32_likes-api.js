@@ -18,8 +18,8 @@
 //
 // The voter is the signed-in account, "acct:<id>" (D-6). There is no cap.
 // Liking twice, or taking back a like that is not there, changes nothing and
-// answers the same. The legacy signed-out "a:" votes the backfill carried
-// across are never touched here and keep counting (D-9).
+// answers the same. No signed-out "a:" vote is made or kept (D-37); the old ones
+// are removed by /admin/api/anonymous-likes-purge (61_).
 //
 // A like is INSERT OR IGNORE, and the target's like_count moves by changes()
 // in the same batch, so the count moves by exactly the rows that changed even
@@ -145,17 +145,4 @@ function likeWriteStatements(env, target, voter, liking, accountId) {
   // What this account has liked changed: its other devices should look.
   stmts.push(accountVersionStatement(env, accountId));
   return stmts;
-}
-
-// SEC-05: the hash behind a signed-out voter id ("a:<hash>", likeVoterId in 02_). A
-// bare SHA-256 of "ip|scope" can be reversed by trying every IPv4 address, so with
-// LIKE_VOTER_PEPPER (or LOOKUP_PEPPER) set it is an HMAC with that secret instead.
-// With neither set it is exactly the old hash. Signed-out likes are retired (D-6), so
-// no route reaches this today; the "a:" ids already stored (D-9) are not changed.
-async function anonLikeVoterHash(env, ip, scopeId) {
-  const pepper = String((env && (env.LIKE_VOTER_PEPPER || env.LOOKUP_PEPPER)) || "");
-  if (!pepper) return hashStringForKey(`${ip}|${scopeId}`);
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pepper), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`like-voter|${ip}|${scopeId}`));
-  return bufferToHex(new Uint8Array(mac)).slice(0, 32);
 }
