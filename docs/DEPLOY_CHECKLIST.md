@@ -133,6 +133,7 @@ Perform the deployment during a low-traffic window:
   *Note:* All migrations in `migrations/` are strictly additive and backward-compatible with running Workers.
 - [ ] **2. Deploy Worker Code:**
   - Navigate to **Cloudflare Dashboard** $\to$ **Workers & Pages** $\to$ `my-lists-addon` $\to$ **Edit code**.
+  - On GitHub, check that the CI run for the commit you are pasting is green (Actions -> CI -> branch main). Do not paste a red commit.
   - Select all and replace with the contents of `worker_entry_combined.js`.
   - Click **Save and Deploy**.
   - **Before pasting, save the Worker currently in the dashboard** (Select all, copy, keep it as `previous-worker.js` outside the repository). It is the fastest rollback.
