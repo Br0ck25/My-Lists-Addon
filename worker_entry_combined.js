@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "858730cc0c";
+const WORKER_BUILD = "85209bd5f8";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -23541,6 +23541,31 @@ function pageResponseWithBody(html, init) {
   const res = new Response(html, init);
   res[PAGE_HTML_BODY] = html;
   return res;
+}
+
+// The 404 a person sees after following a dead link: a short page with a way
+// back to the site. Only for a real browser navigation (see isBrowserNavigation);
+// apps, feeds (.json) and /api/* keep their JSON or plain-text answers.
+function notFoundForPeople(request, path, fallback) {
+  if (!isBrowserNavigation(request) || /\.json$/i.test(path) || path.startsWith("/api/")) return fallback();
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found - My Lists Addon</title>
+<link rel="stylesheet" href="/app.css">
+<style nonce="${CSP_NONCE_PLACEHOLDER}">
+body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: var(--color-bg-canvas); color: var(--color-text-primary); font-family: system-ui, sans-serif; }
+main { max-width: 28rem; text-align: center; }
+a { color: var(--color-text-primary); text-decoration: underline; }
+</style></head>
+<body><main>
+<h1>Could not find that page</h1>
+<p>The link may be old, mistyped, or the list or channel may have been removed.</p>
+<p><a href="/">Go to My Lists Addon</a></p>
+</main></body></html>`;
+  return new Response(html, {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
 }
 
 async function htmlPageResponse(request, fullHtml, extraHeaders) {
@@ -70562,6 +70587,35 @@ function objectEntriesOnly(map) {
   }
   return map;
 }
+// Addresses that name nothing. The page opens the list view for any /lists/<x>
+// or /channels/<x> address, so a deleted share or a mistyped slug used to show
+// a made-up channel or "Loading…" for ever. These send the person back to
+// Discover with a message instead. Called from handleInitialDeepLink
+// (24_client-backup-restore-presets.js); the flag is also what tests read.
+function showDeepLinkNotFound(what) {
+  const message = 'Could not find this ' + what + '. It may have been removed.';
+  window._deepLinkNotFound = message;
+  try { history.replaceState(null, '', '/'); } catch (e) {}
+  try { switchTab('discover'); } catch (e) {}
+  showAppNoticeModal('Could Not Find This ' + (what === 'channel' ? 'Channel' : 'List'), message, true);
+}
+
+// /channels/<user>/<slug> is a share address: the Worker redirects a live one,
+// so a page that still sees one with no saved channel behind it is dead.
+function deadChannelLink(path, foundChannel) {
+  if (foundChannel || !new RegExp('^/channels/[^/]+/[^/]+').test(path)) return false;
+  showDeepLinkNotFound('channel');
+  return true;
+}
+
+// Called after every known /lists/ address has been tried. The app shell owns
+// its own /lists/<sub-tab> routes, and #/list? links carry their own list.
+function deadListLink(path, hash) {
+  if (!path.startsWith('/lists/') || path.length < 8 || hash.startsWith('#/list?')) return false;
+  if (typeof APP_SHELL_HEAD_ROUTES !== 'undefined' && APP_SHELL_HEAD_ROUTES[path]) return false;
+  showDeepLinkNotFound('list');
+  return true;
+}
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
@@ -88750,7 +88804,6 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(name, type, 'custom:' + slug, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   // Channel deep linking (e.g. /channels/tlc)
   const channelMatch = path.match(new RegExp('^/channels/([a-z0-9_-]+)', 'i'));
   if (channelMatch) {
@@ -88766,6 +88819,7 @@ tryAutoRestoreCreatorProfile();
         break;
       }
     }
+    if (deadChannelLink(path, foundChannel)) return;
     const chName = foundChannel ? (foundChannel.name || (typeof deslugify === 'function' ? deslugify(slug) : slug)) : (typeof deslugify === 'function' ? deslugify(slug) : slug);
     const chUrl = foundChannel ? (foundChannel.channelId ? ('channel:id:' + foundChannel.channelId) : ('channel:v1:' + (foundChannel.name || 'channel'))) : ('channel:v1:' + slug);
     let sample = null;
@@ -88789,8 +88843,8 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(chName, 'series', chUrl, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   const hash = location.hash || '';
+  if (deadListLink(path, hash)) return;
   if (hash.startsWith('#/list?')) {
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     openListDetailsPage(params.get('name') || 'List', params.get('type') || 'movie', params.get('url') || '', null, { skipPushState: true });
@@ -91764,7 +91818,7 @@ async function handleFetch(request, env, ctx) {
     const adminLogoutAndBulkResolveResponse = handleAdminLogoutAndBulkResolveRoutes(request, env, ctx, url, path);
     if (adminLogoutAndBulkResolveResponse) return adminLogoutAndBulkResolveResponse;
 
-    return new Response("Not found", { status: 404 });
+    return notFoundForPeople(request, path, () => new Response("Not found", { status: 404 }));
 }
 
 // The actual Worker export. Delegates to handleFetch (25_api-catalog-
@@ -116985,7 +117039,7 @@ async function creatorListPageOrFeed(request, env, ctx, url, path, m) {
 // The rest of creatorListPageOrFeed, moved unchanged: the same statements in the same order, split only for the 150-line limit.
 async function creatorListPageOrFeedRender(request, env, ctx, { url, path, username, listName, listData, isCreatorList }) {
   if (!listData) {
-    return json({ ok: false, error: "No list found at that address." }, 404);
+    return notFoundForPeople(request, path, () => json({ ok: false, error: "No list found at that address." }, 404));
   }
   let creatorDisplayName = "Anonymous";
   if (isCreatorList) {
@@ -117015,7 +117069,7 @@ async function creatorListPageOrFeedRender(request, env, ctx, { url, path, usern
     // read the display name already needed, so it costs nothing new.
     const profileRaw = await getCreator(env, username);
     if (!profileRaw) {
-      return json({ ok: false, error: "No list found at that address." }, 404);
+      return notFoundForPeople(request, path, () => json({ ok: false, error: "No list found at that address." }, 404));
     }
     try {
       creatorDisplayName = JSON.parse(profileRaw).displayName || username;

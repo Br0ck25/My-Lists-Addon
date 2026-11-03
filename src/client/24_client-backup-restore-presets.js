@@ -2500,7 +2500,6 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(name, type, 'custom:' + slug, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   // Channel deep linking (e.g. /channels/tlc)
   const channelMatch = path.match(new RegExp('^/channels/([a-z0-9_-]+)', 'i'));
   if (channelMatch) {
@@ -2516,6 +2515,7 @@ tryAutoRestoreCreatorProfile();
         break;
       }
     }
+    if (deadChannelLink(path, foundChannel)) return;
     const chName = foundChannel ? (foundChannel.name || (typeof deslugify === 'function' ? deslugify(slug) : slug)) : (typeof deslugify === 'function' ? deslugify(slug) : slug);
     const chUrl = foundChannel ? (foundChannel.channelId ? ('channel:id:' + foundChannel.channelId) : ('channel:v1:' + (foundChannel.name || 'channel'))) : ('channel:v1:' + slug);
     let sample = null;
@@ -2539,8 +2539,8 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(chName, 'series', chUrl, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   const hash = location.hash || '';
+  if (deadListLink(path, hash)) return;
   if (hash.startsWith('#/list?')) {
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     openListDetailsPage(params.get('name') || 'List', params.get('type') || 'movie', params.get('url') || '', null, { skipPushState: true });
