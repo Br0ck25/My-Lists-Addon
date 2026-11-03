@@ -2490,3 +2490,24 @@ Plan and evidence: `docs/PERF_AUDIT_PLAN.md`. No migration, binding, secret or f
 
 ### Checked
 `bash verify.sh -q` passes. New tests: `perf-eastern-date-key`, `perf-page-hash`, `perf-page-nonce`, `perf-catalog-lookup`, `perf-chart-index` (golden test against the old scan), `perf-user-cache`, `perf-history-match`, `perf-sync-meta`, `perf-shelf-owner-memo`, `perf-stat-batching`, `perf-ping-cost`, `asset-size-budget`. Two `creator-kv-mirror` tests and five tests that read the `stats` table right after a request were adjusted for the new timing (what they assert is unchanged); their reasons are in the commit messages.
+
+## 2026-11-03 — Testing audit fixes TEST-01 to TEST-13 (build `b4c0f71d31`, prepared; not deployed)
+
+Plan and evidence: `docs/audits/2026-11-03-testing.md`. No migration, binding, secret or flag. Almost all of it is tests and checks; the Worker changes in one place.
+
+### What it changes
+- **One line of behaviour (TEST-03, owner approved).** When drawing the Stremio badge picture fails, the error is now logged once (`/api/poster-badge: could not draw the JPEG badge, sending the SVG instead`). The SVG fallback is unchanged, so nothing a visitor sees changes.
+- **New tests for gaps the audit found.** Full backup and restore as one round trip, including an older-format file (TEST-12); changing lists on Trakt, TMDB, Simkl and MDBList and copying watch history to them (TEST-01); the Trakt history and MDBList watchlist/history rows (TEST-10); the Stremio badged-poster JPEG, with an independent check of every PNG overlay (TEST-03); sign-in redirects, popular lists, show-id resolving and the static files (TEST-02, part); the RPDB memory cap for live answers (TEST-13).
+- **Browser workflow tests (TEST-08).** `tests/e2e-workflows.mjs` drives Chromium through create account + list + reload, sign out + sign in with the key, delete account, and add a channel. It has its own CI job (`e2e`). `dev/server.mjs` accepts optional `PORT` and `CONTROL_PORT`; the defaults are unchanged.
+- **Fewer false alarms.** The nightly provider check no longer fails when one JustWatch title has no offer (TEST-05). Two wall-clock timing budgets run off CI only, and the scrobble test counts database statements (8 per request) so extra work still fails CI (TEST-07). The nightly check prints a warning naming the providers it skipped for a missing key (TEST-06).
+- **The suite no longer calls real services (TEST-11).** `tests/harness.mjs` refuses any host except `example.test`; about 1,200 requests per run to TMDB, Cinemeta, JustWatch and MDBList are gone.
+- **`verify.sh` matches CI (TEST-09).** It also runs the suite with lists read from v2, the suite with the materializer on, and the UI contract when Playwright is installed. CI's map check now covers `docs/FILE-INDEX.md` too.
+- **Deploy checklist (TEST-04).** Step 2 now asks whether the CI run for the commit being pasted is green. The owner declined required status checks, so nothing blocks a merge.
+
+### Still open
+- **TEST-06:** the owner adds `TMDB_API_KEY` and `TRAKT_CLIENT_ID` as repository secrets (Settings -> Secrets and variables -> Actions).
+- **TEST-02:** MDBList account shelves, the Trakt and Simkl card routes, the provider list pages, `/api/quick-channel-shows` and `/api/mdblist-history-raw` still have no test.
+
+### Checked
+`bash verify.sh -q` passes (build, syntax, scope, then the tests). The two flagged suite runs and `tests/ui-contract.mjs` were run separately: 3,324 pass and 0 fail each, 72 component states match. `node tests/e2e-workflows.mjs`: 4 of 4. Each new test was shown to fail against a deliberately broken copy of the code, and the copy was restored.
+
