@@ -16,7 +16,7 @@ The big architecture work from Phase 8 (`docs/PERFORMANCE.md`) holds up: catalog
 7. Scalability notes: the old per-account cron sweeps get slower as accounts grow, and some caching is per data center only (PERF-13, PERF-14, PERF-15).
 
 ### Decision needed from the owner (PERF-04)
-Counters (page views, installs, API usage) are written to the database once per event. Batching them in memory and writing once a minute cuts those writes by roughly 100×. The trade-off: if Cloudflare recycles a server between flushes, up to a minute of counts from that server is lost, so the admin numbers become slightly approximate. **Recommendation: accept.** Nothing reads these numbers to make a decision (`03_admin.js` says so). Sonnet should do PERF-04 only after you answer.
+Counters (page views, installs, API usage) are written to the database once per event. Batching them in memory and writing once a minute cuts those writes by roughly 100×. The trade-off: if Cloudflare recycles a server between flushes, up to a minute of counts from that server is lost, so the admin numbers become slightly approximate. **Owner decided (2026-11-03): accept.** Build PERF-04 as written.
 
 ## How this audit was done
 
@@ -106,13 +106,13 @@ The media-server webhook (`src/api/64_media-server-scrobble.js:411`, `:513`) has
 
 ---
 
-### PERF-04 (High, database; **owner decision first**): stat counters are two D1 writes per event, on the same two rows
+### PERF-04 (High, database; **owner accepted batching, 2026-11-03**): stat counters are two D1 writes per event, on the same two rows
 **Evidence.** `bumpStat`/`bumpStatBy` (`src/admin/03_admin.js:85`, `:127`): one batch of two upserts (`total` and today's row). This is PF-B15 in `docs/PERFORMANCE.md`, still open. Hottest callers:
 - `trackSharedApiUse` (`src/catalog/05_catalog-core.js:148`, called at `:169`) runs on **every catalog row** whose source uses the site's shared key. It runs *before* the snapshot and caches are checked, so it counts row requests, not API calls, and writes D1 even when nothing was fetched.
 - `pageviews` on every page route (`80_`, `70_`, `73_`).
 All of these upsert `stats(kind,'total')`, a single hot row that every request contends on at the single D1 primary.
 
-**Fix (after the owner accepts the trade-off above).** In `03_admin.js`, add an in-isolate accumulator, `Map<kind, {total, byDay}>`. `bumpStat`/`bumpStatBy` add to it and schedule a flush through the request's `ctx.waitUntil` when the oldest unflushed bump is older than ~60 s or the map passes ~50 kinds. The flush is one `env.DB.batch` of the same upsert, with `n = n + excluded.n`. The KV-only (no D1) path and the `sourcegroup:` branch keep their current behaviour. `bumpStat` gets no `ctx` today: thread the flush through the existing `ctx.waitUntil(bumpStat(...))` call sites by having `bumpStat` return the flush promise when one is due (no call-site changes), or add a module-level `pendingStatFlush` that `export default.fetch` hands to `ctx.waitUntil`. Pick the smaller diff and say which you chose.
+**Fix (owner accepted the trade-off on 2026-11-03).** In `03_admin.js`, add an in-isolate accumulator, `Map<kind, {total, byDay}>`. `bumpStat`/`bumpStatBy` add to it and schedule a flush through the request's `ctx.waitUntil` when the oldest unflushed bump is older than ~60 s or the map passes ~50 kinds. The flush is one `env.DB.batch` of the same upsert, with `n = n + excluded.n`. The KV-only (no D1) path and the `sourcegroup:` branch keep their current behaviour. `bumpStat` gets no `ctx` today: thread the flush through the existing `ctx.waitUntil(bumpStat(...))` call sites by having `bumpStat` return the flush promise when one is due (no call-site changes), or add a module-level `pendingStatFlush` that `export default.fetch` hands to `ctx.waitUntil`. Pick the smaller diff and say which you chose.
 **Do not** change what `apiuse:*` means in this commit. Counting real outbound calls instead is a product change. Note it for the owner.
 **Test.** 100 bumps within one minute → 1 batch; the totals read back by the admin stats are exactly 100 after a flush; a day boundary (Eastern) splits into two day rows (use the `Date.now` seam the DST tests use, `tests/dst-days-ago.test.mjs`).
 **Guards.** `tests/analytics-engine-stats.test.mjs`, the admin stats tests (`grep -l "statsToday\|bumpStat\|pageviews" tests/*.mjs`).
@@ -216,7 +216,7 @@ Only the PBKDF2 step is memoized. `getCreator` also mirrors to KV whenever `last
 
 **Phase 0:** PERF-00 (a green baseline).
 **Phase 1, low risk, one commit each:** PERF-12 → PERF-05 → PERF-08 + PERF-07 step 1 → PERF-07 step 2 → PERF-09 → PERF-01 → PERF-11 step 1.
-**Phase 2:** PERF-03 → PERF-16 → PERF-06 (optional) → PERF-04 (only after the owner's answer).
+**Phase 2:** PERF-03 → PERF-16 → PERF-06 (optional) → PERF-04.
 **Phase 3, behaviour-sensitive, separate PR:** PERF-02 (ping, then webhook).
 **Report back, do not build:** PERF-10, PERF-11 step 2, PERF-13, PERF-14, PERF-15. Each needs a measurement or an owner decision first; write what you found in `docs/HANDOFF.md`.
 
