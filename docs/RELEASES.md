@@ -2463,3 +2463,19 @@ Full suite after the split: **2,741 passed, one failed, one TODO**. The failure 
 - **Small KV/memory tidy-ups (BUG-04, BUG-07).** A failed poster-variant write is retried on the next call; the other KV read-modify-write sites say that a lost update is accepted; the two RPDB maps are capped at 1,000 entries.
 - Not changed: BUG-08 (every bare `fetch(` already goes through the Worker's fetch guard with a default timeout and the provider breaker).
 - Checks: full `bash verify.sh -q`: 3,143 tests, 3,137 passed, 5 todo, 1 failed (the known cold-catalog latency budget in `tests/load-performance.test.mjs`: 65–108 ms on this shared VM both before and after these fixes, passes with `CI=1`; left as it is).
+
+## 2026-11-03 — Performance audit fixes PERF-00 to PERF-16 (build `88a7f25a45`, prepared; not deployed)
+
+Plan and evidence: `docs/PERF_AUDIT_PLAN.md`. No migration, binding, secret or flag. Deploy the rebuilt Worker; nothing a visitor sees changes.
+
+### What it changes
+- **Counters are written about once a minute (PERF-04, owner accepted).** Page views, installs and shared-key API use add up in memory and go to D1 as one batch (60 s, or 50 kinds). If Cloudflare recycles a server between writes, up to a minute of that server's counts is lost, so the /admin numbers are slightly approximate. Admin stats pages, cron ticks and queue deliveries write first, so the dashboard is exact for what the server has seen.
+- **Pages are cheaper to serve (PERF-05, 06, 12).** `GET /` 10.6 ms to 4.6 ms and `304 Not Modified` 4.8 ms to 0.1 ms server time (test harness); the nonce is inserted without decoding the page again; the Eastern date formatter is built once.
+- **Catalog rows (PERF-07, 08, 09, 16).** A configured row reads one KV key instead of two and no longer scans every chart table; catalog previews no longer push other users' cached provider data out of memory (both caches now evict least recently used); a track-on link checks its owner once per 10 s instead of on every row.
+- **Watch history saves (PERF-01).** The matching of the saved history to stored plays is linear: 5,000 plays 106 ms to 6 ms, 10,000 plays 519 ms to 7 ms of CPU in the worst case.
+- **Sync check (PERF-03).** The once-a-minute check from each open tab no longer rebuilds the whole watch history for an account on the activity database. It returns the same number the full load gives the browser.
+- **Budgets (PERF-00, 11 step 1).** The cold-catalog latency test no longer times real internet calls (budgets unchanged). `tests/asset-size-budget.json` holds the gzip sizes of the page, `/app.js`, `/app-features.js` and `/app.css` (2% allowance, may only shrink).
+- **Not built:** PERF-02 (playback ping), PERF-10, 11 step 2, 13, 14, 15. Reasons and what to measure are in `docs/HANDOFF.md`.
+
+### Checked
+`bash verify.sh -q` passes. New tests: `perf-eastern-date-key`, `perf-page-hash`, `perf-page-nonce`, `perf-catalog-lookup`, `perf-chart-index` (golden test against the old scan), `perf-user-cache`, `perf-history-match`, `perf-sync-meta`, `perf-shelf-owner-memo`, `perf-stat-batching`, `perf-ping-cost`, `asset-size-budget`. Two `creator-kv-mirror` tests and five tests that read the `stats` table right after a request were adjusted for the new timing (what they assert is unchanged); their reasons are in the commit messages.
