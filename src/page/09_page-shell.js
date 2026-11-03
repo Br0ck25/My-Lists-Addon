@@ -3766,7 +3766,7 @@ ${UTILITY_CSS}
   .actions button[data-act="removeAllLists"],
   .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
-    color: var(--color-danger);
+    color: var(--color-danger-text);
     border: 1.5px solid var(--color-danger-line);
     box-shadow: var(--shadow-sm);
     min-height: var(--control-height-md, 40px);
@@ -3778,9 +3778,9 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):hover:not(:disabled),
   .actions button[data-act="removeAllLists"]:hover:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
-    background: var(--color-danger);
+    background: var(--color-danger-fill);
     color: var(--color-on-brand);
-    border-color: var(--color-danger);
+    border-color: var(--color-danger-fill);
   }
 
   .btn-danger:active:not(:disabled),

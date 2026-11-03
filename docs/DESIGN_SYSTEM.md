@@ -42,6 +42,7 @@ All tokens live in `:root` (light) and `:root.dark-theme` (dark) in `src/page/09
 | `--color-brand` | `#0066D6` | `#0A84FF` | Brand **text**, borders, links, focus ring |
 | `--color-brand-hover` / `-active` | `#0055B8` / `#00459A` | `#0071E3` / `#0056B3` | Text/border hover states |
 | `--color-brand-fill` / `-fill-hover` / `-fill-active` | `#0066D6` / `#0055B8` / `#00459A` | `#0A64D8` / `#0B5FCC` / `#0A54B3` | **Backgrounds that carry white text** (primary button, active tab, badges). ≥ 5:1 with white |
+| `--color-danger-fill` / `--color-warn-fill` | `#D70015` / `#B25000` | `#D1241B` / `#B54A00` | **Solid destructive buttons that carry white text** (Delete/Reset Account, `.btn-danger` hover). ≥ 5:1 with white. Never `--color-danger`/`--color-warn` as a fill |
 | `--color-on-brand` | `#FFFFFF` | `#FFFFFF` | Text/icons on any filled colour (never write `#fff`) |
 | `--color-brand-wash` / `-subtle` / `-tint` / `-line` | alpha `.08 / .12 / .16 / .35` | `.14 / .18 / .24 / .40` | Resting tint / soft fill / hover fill / tinted border. The same four exist for `--color-danger-*` |
 | `--color-brand-2` | `#34AADC` | `#5AC8FA` | Second gradient stop only (Wako button) |

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "85209bd5f8";
+const WORKER_BUILD = "9ddc444571";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1826,6 +1826,9 @@ const DESIGN_TOKENS_CSS = `
     --color-success-text:   #1F7A35;
     --color-warn-text:      #B25000;
     --color-danger-text:    #D70015;
+    /* Backgrounds that carry white text (>= 5:1 with --color-on-brand) */
+    --color-danger-fill:    #D70015;
+    --color-warn-fill:      #B25000;
     --color-badge-tmdb:     #00769E;
     --color-badge-mylists:  #7B2FA8;
     --color-badge-imdb:     #7A5C00;
@@ -1984,6 +1987,8 @@ const DESIGN_TOKENS_CSS = `
     --color-success-subtle: rgba(48, 209, 88, 0.18);
     --color-success-text:   #30D158;
     --color-warn-text:      #FF9F0A;
+    --color-danger-fill:    #D1241B;
+    --color-warn-fill:      #B54A00;
     --color-danger-text:    #FF453A;
     --color-badge-tmdb:     #5AC8FA;
     --color-badge-mylists:  #BF5AF2;
@@ -2058,7 +2063,7 @@ const UTILITY_CSS = `
 .u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3) !important}
 .u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35) !important}
 .u-bdc-rgba_255_59_48_0_4{border-color:rgba(255,59,48,0.4) !important}
-.u-bdc-v_color_danger{border-color:var(--color-danger) !important}
+.u-bdc-v_color_danger_fill{border-color:var(--color-danger-fill) !important}
 .u-bdc-v_danger{border-color:var(--danger) !important}
 .u-bdt-1px_dashed_v_border{border-top:1px dashed var(--border) !important}
 .u-bdt-1px_solid_v_border{border-top:1px solid var(--border) !important}
@@ -2079,7 +2084,7 @@ const UTILITY_CSS = `
 .u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08) !important}
 .u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12) !important}
 .u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15) !important}
-.u-bg-v_accent{background:var(--accent) !important}
+.u-bg-v_color_brand_fill{background:var(--color-brand-fill) !important}
 .u-bg-v_bg{background:var(--bg) !important}
 .u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03)) !important}
 .u-bg-v_border{background:var(--border) !important}
@@ -2087,10 +2092,10 @@ const UTILITY_CSS = `
 .u-bg-v_color_bg_elevated{background:var(--color-bg-elevated) !important}
 .u-bg-v_color_bg_overlay{background:var(--color-bg-overlay) !important}
 .u-bg-v_color_bg_sunken{background:var(--color-bg-sunken) !important}
-.u-bg-v_color_danger{background:var(--color-danger) !important}
+.u-bg-v_color_danger_fill{background:var(--color-danger-fill) !important}
 .u-bg-v_color_on_brand{background:var(--color-on-brand) !important}
 .u-bg-v_color_success_subtle{background:var(--color-success-subtle) !important}
-.u-bg-v_color_warn{background:var(--color-warn) !important}
+.u-bg-v_color_warn_fill{background:var(--color-warn-fill) !important}
 .u-bg-v_panel_strong{background:var(--panel-strong) !important}
 .u-bg-v_surface{background:var(--surface) !important}
 .u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04)) !important}
@@ -35635,7 +35640,7 @@ ${UTILITY_CSS}
   .actions button[data-act="removeAllLists"],
   .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
-    color: var(--color-danger);
+    color: var(--color-danger-text);
     border: 1.5px solid var(--color-danger-line);
     box-shadow: var(--shadow-sm);
     min-height: var(--control-height-md, 40px);
@@ -35647,9 +35652,9 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):hover:not(:disabled),
   .actions button[data-act="removeAllLists"]:hover:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
-    background: var(--color-danger);
+    background: var(--color-danger-fill);
     color: var(--color-on-brand);
-    border-color: var(--color-danger);
+    border-color: var(--color-danger-fill);
   }
 
   .btn-danger:active:not(:disabled),
@@ -42153,7 +42158,7 @@ function openSupportGoal() {
       row('Given so far', supportMoney(g.raised), false) +
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
-    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_color_brand_fill u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
     '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 9th of each month.</p>';
   showModal(html);
 }
@@ -55698,7 +55703,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
         '<div class="clickable-episode u-fd-column u-gap-4px u-cur-pointer" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
           '<div class="u-aspectratio-16_9 u-bg-222 u-br-v_radius_sm u-ov-hidden u-bsh-0_2px_6px_rgba_0_0_0_0_4" style="width:100%; position:relative;">' +
             (still ? '<img src="' + still + '" class="u-objectfit-cover" style="width:100%; height:100%;">' : '') +
-            '<div class="episode-num-badge u-bg-v_accent u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
+            '<div class="episode-num-badge u-bg-v_color_brand_fill u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
           '</div>' +
           '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
@@ -75883,12 +75888,12 @@ function renderAccountKeySection() {
         '<div class="u-bd-1px_solid_rgba_255_149_0_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_149_0_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_color_warn_text u-mb-4px">Reset Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-          '<button type="button" class="lc-btn u-bg-v_color_warn u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_warn_fill u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
         '</div>' +
         '<div class="u-bd-1px_solid_rgba_255_59_48_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_59_48_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_danger_v_color_danger u-mb-4px">Delete Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-          '<button type="button" class="lc-btn u-bg-v_color_danger u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_danger_fill u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
         '</div>' +
       '</div>' +
     '</details>';
@@ -76064,7 +76069,7 @@ function openDeleteAccountModal() {
       '<div id="deleteAccountStatus"></div>' +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger u-bdc-v_color_danger u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger_fill u-bdc-v_color_danger_fill u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );

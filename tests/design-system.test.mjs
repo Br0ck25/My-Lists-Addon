@@ -133,6 +133,82 @@ describe("design system: text on the brand fill is readable in both themes", () 
   });
 });
 
+describe("design system: danger and warn buttons are readable in both themes (UI-10)", () => {
+  const lum = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const toHex = (rgb) => "#" + rgb.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+  // Light is the first definition of a token, dark the last (see the brand-fill test above).
+  const defs = (css, name) => [...css.matchAll(new RegExp(`${name}:\\s*([^;]+);`, "g"))].map((m) => m[1].trim());
+  const both = (css, name) => { const d = defs(css, name); assert.ok(d.length >= 1, name + " is defined"); return { light: d[0], dark: d[d.length - 1] }; };
+  // A token that is #rrggbb, or rgba() laid over a page colour.
+  const resolve = (value, under) => {
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
+    const m = value.match(/^rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/);
+    assert.ok(m, "not a plain colour: " + value + " (a *-fill token is needed)");
+    const a = Number(m[4]);
+    const base = hexToRgb(under);
+    return toHex([0, 1, 2].map((i) => Number(m[i + 1]) * a + base[i] * (1 - a)));
+  };
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+  it("every solid fill that carries --color-on-brand text reaches 4.5:1, light and dark", async () => {
+    const css = await appCss();
+    const onBrand = both(css, "--color-on-brand");
+    const seen = new Set();
+    const bad = [];
+    for (const f of listSources(root).filter((n) => /(?:^|\/)\d\d_.*\.js$/.test(n) && !n.includes("/00_"))) {
+      const src = fs.readFileSync(path.join(root, f), "utf8");
+      for (const m of src.matchAll(/class="([^"]*)"/g)) {
+        const cls = m[1].split(/\s+/);
+        if (!cls.includes("u-c-v_color_on_brand")) continue;
+        for (const c of cls.filter((x) => x.startsWith("u-bg-v_"))) {
+          const token = "--" + c.slice("u-bg-v_".length).replace(/_/g, "-");
+          if (seen.has(token)) continue;
+          seen.add(token);
+          const d = both(css, token);
+          for (const theme of ["light", "dark"]) {
+            let ratio = 0;
+            try { ratio = contrast(resolve(d[theme], "#ffffff"), onBrand[theme]); } catch { ratio = 0; }
+            if (ratio < 4.5) bad.push(`${token} ${theme}: ${ratio.toFixed(2)} (${f})`);
+          }
+        }
+      }
+    }
+    assert.deepEqual(bad, []);
+    assert.ok(seen.has("--color-danger-fill") && seen.has("--color-warn-fill"), "the destructive buttons use the fill tokens: " + [...seen].join(", "));
+  });
+
+  it(".btn-danger text reaches 4.5:1 at rest and on hover, light and dark", async () => {
+    const css = await appCss();
+    const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1], body: m[2] }));
+    const rest = blocks.find((b) => /\.btn-danger,/.test(b.sel) && !/:hover/.test(b.sel));
+    const hover = blocks.find((b) => /\.btn-danger:hover/.test(b.sel));
+    assert.ok(rest && hover, "found the .btn-danger rules");
+    const tok = (body, prop) => body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*var\\((--[\\w-]+)\\)`))[1];
+    const onBrand = both(css, "--color-on-brand");
+    const pages = both(css, "--color-bg-surface");
+    const canvas = both(css, "--color-bg-canvas");
+    const bad = [];
+    for (const theme of ["light", "dark"]) {
+      for (const page of [pages[theme], canvas[theme]]) {
+        const bg = resolve(both(css, tok(rest.body, "background"))[theme], resolve(page, "#ffffff"));
+        const fg = resolve(both(css, tok(rest.body, "color"))[theme], bg);
+        const r = contrast(fg, bg);
+        if (r < 4.5) bad.push(`rest ${theme} on ${page}: ${r.toFixed(2)}`);
+      }
+      const hbg = resolve(both(css, tok(hover.body, "background"))[theme], "#ffffff");
+      const hr = contrast(resolve(both(css, tok(hover.body, "color"))[theme], hbg), hbg);
+      if (hr < 4.5) bad.push(`hover ${theme}: ${hr.toFixed(2)}`);
+    }
+    assert.deepEqual(bad, []);
+  });
+});
+
 describe("design system: add/remove list buttons share one class", () => {
   // The add/remove button look lives in `.list-add-btn` rules (src/page/09_page-shell.js).
   // A button built with one of the legacy names but without the shared class

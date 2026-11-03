@@ -628,12 +628,12 @@ function renderAccountKeySection() {
         '<div class="u-bd-1px_solid_rgba_255_149_0_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_149_0_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_color_warn_text u-mb-4px">Reset Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-          '<button type="button" class="lc-btn u-bg-v_color_warn u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_warn_fill u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
         '</div>' +
         '<div class="u-bd-1px_solid_rgba_255_59_48_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_59_48_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_danger_v_color_danger u-mb-4px">Delete Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-          '<button type="button" class="lc-btn u-bg-v_color_danger u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_danger_fill u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
         '</div>' +
       '</div>' +
     '</details>';
@@ -809,7 +809,7 @@ function openDeleteAccountModal() {
       '<div id="deleteAccountStatus"></div>' +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger u-bdc-v_color_danger u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger_fill u-bdc-v_color_danger_fill u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );

@@ -4099,7 +4099,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
         '<div class="clickable-episode u-fd-column u-gap-4px u-cur-pointer" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
           '<div class="u-aspectratio-16_9 u-bg-222 u-br-v_radius_sm u-ov-hidden u-bsh-0_2px_6px_rgba_0_0_0_0_4" style="width:100%; position:relative;">' +
             (still ? '<img src="' + still + '" class="u-objectfit-cover" style="width:100%; height:100%;">' : '') +
-            '<div class="episode-num-badge u-bg-v_accent u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
+            '<div class="episode-num-badge u-bg-v_color_brand_fill u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
           '</div>' +
           '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
