@@ -1,5 +1,5 @@
 # Keep synced collection rows off the Nuvio home screen (2026-11-03)
-Status: awaiting review
+Status: done
 Model: claude-opus-5-5 (as configured for the session)
 
 ## Request
@@ -125,3 +125,57 @@ the same known timing budget.
    Lists rows in Nuvio and Stremio are unchanged.
 
 ## Review
+Reviewed 2026-11-03 by an independent session. **Verdict: approved.**
+
+Checked: commits `663524c`, `62ae38a`, `43e9585` (sources, tests, docs; the
+generated `worker_entry_combined.js` diff only by build). `43e9585` (Edit
+collection button renamed "Save name" to "Save") is not listed under "What
+was built"; it is a small, sensible follow-on to plan line 3 and the try-it
+steps already use the new label.
+
+Plan, line by line:
+1. Done. `executeNuvioCollectionsPush` passes `homeHidden` to
+   `linkSavedNuvioCollection` -> `rememberNuvioHomeChoice`
+   (`src/client/17_client-my-lists-and-trakt-oauth.js:3545,5019`).
+2. Done. `writeLinkedNuvioCollection` (line 3626) and `pushLinkedNuvioFolder`
+   (line 4902) send `hideHomeCatalogs`. The server's `update-collection` now
+   applies it to that collection's rows only (`src/api/61_media-app-sync.js`
+   around line 1996); `update-folder` already did.
+3. Done. `nuvioHomeToggleHtml` copies the Sync to Nuvio toggle's label and
+   `.ui-toggle` markup. It appears only on synced collections.
+4. Done. Off after on is stored as `false`, sent, and the server sets
+   `enabled: true`.
+5. Done. Groups with no stored choice send no `hideHomeCatalogs` (the key is
+   left out), so the server leaves home settings alone. Saving the edit window
+   with the toggle off on such a group stores nothing (`applyNuvioHomeToggle`).
+6. Done. Server changes are inside the Nuvio collections route and touch only
+   `app.my-list.collections` rows. The client changes are only in Nuvio paths.
+   Stremio, Wako and the regular My Lists rows have no code changes. The
+   existing test "leaves regular My Lists home preferences alone" still passes.
+7. Done. `media-app-sync.test.mjs` "applies the collection's saved home-row
+   choice..." covers hide and show, and checks another collection's row is
+   untouched.
+
+Older data: `groupCollectionFolders` copies every stored field, and every
+`saveCollectionGroups` caller goes through `collectionGroupRecord`, so the
+choice survives load, save and the 2-minute pull, which updates the group in
+place. Backups include it (`24_client-backup-restore-presets.js:154`). Older
+backups and stored groups without it load as "no choice".
+
+Tests without the feature (HEAD tests run on `a47e845` in a scratch
+worktree): 5 of 8 new tests fail. The other 3 pass, because each guards a
+rule that held before the feature: untouched collections send no choice; the
+toggle is hidden on unsynced collections; the server's single-folder update
+(already worked). Each would still fail if that rule broke, so they are kept
+as regression guards. The notes' claim that each test "fails without the
+change" is therefore not exact. No test was skipped or loosened.
+
+Checks: the two related test files, 160/160 pass. `bash verify.sh -q`:
+3,258 tests, 3,252 pass, 5 todo. 1 fails: the known cold-catalog p95 timing
+budget in `tests/load-performance.test.mjs`, as in "Before building".
+No new routes. The size budget passes and its baselines were only lowered.
+
+Worth knowing (not a defect, outside the plan): the choice is kept in this
+browser's storage, like the collections themselves. Update Nuvio from a
+different browser or device leaves home rows as Nuvio has them until the
+toggle is set there too.
