@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "faa46966e0";
+const WORKER_BUILD = "5eca400386";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -5540,6 +5540,7 @@ async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
 
 function clearSessionCache() {
   SESSION_CACHE.clear();
+  SHELF_OWNER_MEMO.clear();
 }
 
 
@@ -8611,6 +8612,7 @@ async function isCreatorTombstoned(env, username) {
 // cannot happen again: anything added to the account's key set gets
 // cleaned up by both callers automatically.
 async function purgeCreatorData(env, username, options = {}) {
+  SHELF_OWNER_MEMO.clear();
   const deleteIdentity = options.deleteIdentity === true;
   const u = username;
   // Read before the sweep below deletes it, so the bump at the end can still
@@ -9315,10 +9317,33 @@ async function mayReadTrackedShelf(env, username, slug, keys = {}) {
 // credential this Worker itself wrote into KV, not one a caller just handed
 // over -- so there is no unbounded-PBKDF2 path here to throttle. A base64
 // config is caller-authored and is never given to this function.
+//
+// A success is remembered for 10 s in this isolate (the SESSION_CACHE window,
+// audit SESS-001), because every row of a track-on link asks again and each ask
+// was a KV tombstone read, a D1 tombstone query and SELECT * FROM creators. So an
+// account deleted or re-keyed on another isolate can still serve its shelf here
+// for up to 10 s; on this isolate purgeCreatorData and a key rotation clear it at
+// once. Failures are never remembered, and the memo key is a SHA-256 of the name
+// and the presented key, never the key itself.
+const SHELF_OWNER_MEMO = new Map();
+const SHELF_OWNER_MEMO_TTL_MS = 10 * 1000;
+const SHELF_OWNER_MEMO_MAX = 1000;
+
 async function verifyShelfOwner(env, creatorName, creatorKey) {
   if (!env || !env.CONFIGS || !creatorName || !creatorKey) return "";
   const v = validateCreatorUsername(creatorName);
   if (!v.ok) return "";
+  let memoKey = "";
+  try {
+    memoKey = await creatorAuthMemoKey(v.normalized, String(creatorKey), "shelf-owner");
+    const hit = SHELF_OWNER_MEMO.get(memoKey);
+    if (hit !== undefined) {
+      if (Date.now() < hit) return v.normalized;
+      SHELF_OWNER_MEMO.delete(memoKey);
+    }
+  } catch {
+    memoKey = "";
+  }
   try {
     const [tombstoned, raw] = await Promise.all([
       isCreatorTombstoned(env, v.normalized),
@@ -9328,6 +9353,13 @@ async function verifyShelfOwner(env, creatorName, creatorKey) {
     const profile = JSON.parse(raw);
     if (!profile || !profile.keyHash) return "";
     const ok = await verifyCreatorKeyMemoized(String(creatorKey), profile.keyHash, v.normalized);
+    if (ok && memoKey) {
+      if (SHELF_OWNER_MEMO.size >= SHELF_OWNER_MEMO_MAX) {
+        const oldest = SHELF_OWNER_MEMO.keys().next().value;
+        if (oldest !== undefined) SHELF_OWNER_MEMO.delete(oldest);
+      }
+      SHELF_OWNER_MEMO.set(memoKey, Date.now() + SHELF_OWNER_MEMO_TTL_MS);
+    }
     return ok ? v.normalized : "";
   } catch {
     return "";
@@ -9415,6 +9447,7 @@ async function backfillCreatorRowInD1(env, username) {
 // rotating KV while D1 keeps answering with the old hash would leave neither
 // key working and lock the owner out of their own account.
 async function rotateCreatorKeyHashInD1(env, username, keyHash) {
+  SHELF_OWNER_MEMO.clear();
   if (!env || !env.DB) return { ok: true };
   try {
     // meta.changes, not merely "did not throw". A D1 UPDATE that matches ZERO
