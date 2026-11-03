@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b4c0f71d31";
+const WORKER_BUILD = "fa37567593";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1322,6 +1322,10 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0024", kind: "index", name: "idx_scrobble_tokens_hash",
     consequence: "Looking up a webhook token by its hash scans the whole scrobble_tokens table. Slower, not broken.",
+  },
+  {
+    migration: "0025", kind: "index", name: "idx_lists_owner_deleted",
+    consequence: "Each signed-in Lists load reads the whole lists table to find the account's recently deleted lists. Slower, not broken.",
   },
 ];
 

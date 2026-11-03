@@ -424,6 +424,8 @@ CREATE TABLE IF NOT EXISTS lists (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_lists_owner_slug ON lists(owner_account_id, slug) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_lists_owner ON lists(owner_account_id, position) WHERE deleted_at IS NULL;
+-- The recently deleted lists a Lists load asks for (migration 0025, audit DB-03).
+CREATE INDEX IF NOT EXISTS idx_lists_owner_deleted ON lists(owner_account_id, deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_lists_dir_popular ON lists(like_count DESC, updated_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_lists_dir_new ON lists(created_at DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_lists_dir_added ON lists(add_count DESC, like_count DESC, id DESC) WHERE visibility = 'public' AND deleted_at IS NULL;
@@ -685,4 +687,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0019', 0),
   ('0020', 0),
   ('0021', 0),
-  ('0024', 0);
+  ('0024', 0),
+  ('0025', 0);

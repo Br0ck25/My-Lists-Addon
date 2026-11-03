@@ -1300,6 +1300,10 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0024", kind: "index", name: "idx_scrobble_tokens_hash",
     consequence: "Looking up a webhook token by its hash scans the whole scrobble_tokens table. Slower, not broken.",
   },
+  {
+    migration: "0025", kind: "index", name: "idx_lists_owner_deleted",
+    consequence: "Each signed-in Lists load reads the whole lists table to find the account's recently deleted lists. Slower, not broken.",
+  },
 ];
 
 
