@@ -707,6 +707,14 @@ export async function runScheduledTick(env, event = {}, w = worker) {
   }
 }
 
+// Counters are added up in the isolate and written to D1 about once a minute (PERF-04),
+// and flushed by every admin stats read, cron tick and queue delivery. A test that looks
+// at the stats table straight after an event asks for that flush first: an empty queue
+// delivery does exactly that and nothing else.
+export async function flushStats(env, w = worker) {
+  await w.queue({ queue: "mylists-jobs", messages: [] }, env, { waitUntil() {} });
+}
+
 // --- The directory index, after it was sharded across 32 keys ---------------
 //
 // 1.5.3 replaced the single `index:publiclists` blob with

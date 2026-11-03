@@ -37,6 +37,16 @@ function calcPercentiles(durations) {
 describe("P8-5: In-Process Load Testing & Latency Baselines", () => {
   describe("1. Catalog Hot Path (N Installs x 20 Rows)", () => {
     it("satisfies the < 5 ms warm cache and < 40 ms cold latency budgets across 20 rows", async () => {
+      // The rows are lists of tt ids, so preview enrichment fetches Cinemeta/TMDB.
+      // Those are real internet calls, not Worker time: answer them instantly (404
+      // is a handled miss) so the budgets time the Worker only. Budgets unchanged.
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = async (input, ...rest) => {
+        const u = String(typeof input === "string" ? input : input?.url || input);
+        if (/cinemeta|themoviedb\.org/i.test(u)) return new Response("{}", { status: 404 });
+        return realFetch(input, ...rest);
+      };
+      try {
       const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
       // Count storage round trips: unlike wall-clock time they do not depend on
       // how busy the machine is, and they are what the latency budget is really for.
@@ -133,6 +143,9 @@ describe("P8-5: In-Process Load Testing & Latency Baselines", () => {
           coldStats.p90 < 40,
           `cold catalog p90 (${coldStats.p90.toFixed(2)}ms) must be under 40ms`
         );
+      }
+      } finally {
+        globalThis.fetch = realFetch;
       }
     });
   });

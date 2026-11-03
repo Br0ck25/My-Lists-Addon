@@ -212,14 +212,19 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
     return jsonPublic({ metas }, 200, { "Cache-Control": metas.previewIncomplete ? "public, max-age=30" : "public, max-age=3600, stale-while-revalidate=86400" });
   }
 
+  // Only a request with no install config needs the chart/collection lookup up
+  // front. With a config, a row it lists is served from the config, and a row it
+  // does not list reaches the same two lookups below (entryIndex < 0).
   let unconfiguredEntry = null;
-  if (typeof findChartOrCollectionEntry === "function") {
-    unconfiguredEntry = findChartOrCollectionEntry(id, type);
-  }
-  if (!unconfiguredEntry && env && env.CONFIGS) {
-    try {
-      unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
-    } catch {}
+  if (!config) {
+    if (typeof findChartOrCollectionEntry === "function") {
+      unconfiguredEntry = findChartOrCollectionEntry(id, type);
+    }
+    if (!unconfiguredEntry && env && env.CONFIGS) {
+      try {
+        unconfiguredEntry = await env.CONFIGS.get(`col_cat:${id}:${type}`, "json");
+      } catch {}
+    }
   }
   if (!config && !unconfiguredEntry) return jsonPublic({ metas: [] });
 

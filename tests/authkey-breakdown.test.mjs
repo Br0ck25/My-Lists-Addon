@@ -5,7 +5,16 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { call, createUser, makeD1, makeEnv, makeKv } from "./harness.mjs";
+import { call as rawCall, createUser, flushStats, makeD1, makeEnv, makeKv } from "./harness.mjs";
+// Counters are batched in the isolate (PERF-04) and reach D1 about once a minute. These
+// tests read the stats table right after a request, so flush after each one: what they
+// check is which counters a request bumps, not when the batch is written.
+const call = async (env, ...args) => {
+  const res = await rawCall(env, ...args);
+  await flushStats(env);
+  return res;
+};
+
 
 async function setup() {
   const db = makeD1();

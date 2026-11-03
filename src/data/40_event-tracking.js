@@ -121,6 +121,20 @@ async function writeTrackingSettings(env, accountId, all, tracking) {
   ).bind(accountId, JSON.stringify(next), Date.now()).run();
 }
 
+// The tracking record's own updatedAt for an account served from the activity
+// database, read from its stored settings without assembling the record (all
+// plays and both shelves). null when the account is not on the activity
+// database, or has no stored settings yet (the first read after the switch
+// assembles, and migrates, the record), so the caller falls back to the full read.
+// sync/meta uses this: every open tab asks it once a minute.
+async function trackingUpdatedAtFor(env, username) {
+  const accountId = await eventTrackingOwns(env, username);
+  if (accountId == null) return null;
+  const { tracking } = await readTrackingSettings(env, accountId);
+  if (!tracking) return null;
+  return Number(tracking.updatedAt) || 0;
+}
+
 // The record as the legacy routes read it.
 async function assembleTrackingRecord(env, rawKv, username, accountId) {
   const settings = await readTrackingSettings(env, accountId);
@@ -171,6 +185,30 @@ function isShowScheduleEnabled(env) {
 // not know yet, and each write cost a full record save (saveTrackingRecord).
 // They keep sweeping accounts on the legacy stores, and every account again
 // if FF_SHOW_SCHEDULE is turned off.
+// Whether the legacy shelf sweeps (checkForNewEpisodes, refreshAiringNextSweep)
+// have anyone left to serve (PERF-13). With FF_SHOW_SCHEDULE they skip every
+// account whose history copy is done, so once every account is copied they
+// would page through all of them only to skip each one. One query answers it:
+// a live account whose copy is not done (not yet copied, or a failed copy), or
+// a profile with no account row. Flags off, or the query failing: true, so the
+// sweeps run exactly as before. Asked once per sweep run, not per account.
+async function legacyShelfSweepNeeded(env) {
+  if (!isShowScheduleEnabled(env) || !isEventTrackingEnabled(env) || !env.DB) return true;
+  try {
+    const row = await env.DB.prepare(
+      `SELECT 1 AS x WHERE EXISTS (
+         SELECT 1 FROM accounts a WHERE a.deleted_at IS NULL AND NOT EXISTS (
+           SELECT 1 FROM jobs j WHERE j.dedupe_key = 'migrate.activity:acct:' || a.id AND j.status = 'done'))
+       OR EXISTS (
+         SELECT 1 FROM creators c WHERE NOT EXISTS (
+           SELECT 1 FROM accounts a WHERE a.username = c.username COLLATE NOCASE))`
+    ).first();
+    return !!row;
+  } catch {
+    return true;
+  }
+}
+
 async function legacyShelfSweepSkips(env, username) {
   if (!isShowScheduleEnabled(env)) return false;
   return (await eventTrackingOwns(env, username)) != null;
@@ -180,6 +218,38 @@ async function legacyShelfSweepSkips(env, username) {
 function trackingRecordRest(record) {
   const { watchHistory, _intentionalRemoval, ...rest } = record && typeof record === "object" ? record : {};
   return rest;
+}
+
+// Matching an incoming history to the stored plays, in linear time. A stored
+// row is claimed by the incoming item with the same legacy id and the same
+// watched_at if there is one, otherwise by the first unclaimed row for that id
+// (the rule the findIndex/splice loop this replaced applied). Rows with no
+// legacy id are never claimed. Used by saveTrackingRecord below.
+function groupStoredHistoryRows(storedRows) {
+  const byId = new Map();
+  for (const r of storedRows || []) {
+    const id = r.legacy_id;
+    if (!id) continue;
+    const list = byId.get(id);
+    if (list) list.push(r);
+    else byId.set(id, [r]);
+  }
+  return byId;
+}
+
+function takeStoredHistoryRow(byId, id, watchedAt) {
+  const list = byId.get(id);
+  if (!list || !list.length) return null;
+  let i = watchedAt ? list.findIndex((r) => r.watched_at === watchedAt) : -1;
+  if (i < 0) i = 0;
+  const [row] = list.splice(i, 1);
+  return row;
+}
+
+function remainingStoredHistoryRows(byId) {
+  const out = [];
+  for (const list of byId.values()) for (const r of list) out.push(r);
+  return out;
 }
 
 // The diff shim: a record written by any route goes into the activity
@@ -199,22 +269,16 @@ async function saveTrackingRecord(env, username, accountId, record) {
   const known = new Set((storedRows || []).map((r) => r.legacy_id).filter(Boolean));
   const listed = new Set();
   const fresh = [];
-  const unmatchedStored = [...(storedRows || [])];
+  const storedByLegacyId = groupStoredHistoryRows(storedRows);
   for (const item of incoming) {
     if (!item || typeof item !== "object") continue;
     const id = legacyHistoryId(item);
     if (!id) continue;
     listed.add(id);
     if (!known.has(id)) fresh.push({ ...legacyHistoryPlay(item, Number(record.updatedAt) || Date.now()), id });
-    const t = Number(item.watchedAt) || 0;
-    let sIdx = t ? unmatchedStored.findIndex(r => r.legacy_id === id && r.watched_at === t) : -1;
-    if (sIdx < 0) {
-      sIdx = unmatchedStored.findIndex(r => r.legacy_id === id);
-    }
-    if (sIdx >= 0) {
-      unmatchedStored.splice(sIdx, 1);
-    }
+    takeStoredHistoryRow(storedByLegacyId, id, Number(item.watchedAt) || 0);
   }
+  const unmatchedStored = remainingStoredHistoryRows(storedByLegacyId);
   if (fresh.length) {
     for (let i = 0; i < fresh.length; i += ACTIVITY_BACKFILL_CHUNK) {
       const chunk = fresh.slice(i, i + ACTIVITY_BACKFILL_CHUNK);

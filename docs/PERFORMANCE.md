@@ -85,9 +85,28 @@ Cross-reference of findings from `PERFORMANCE_AUDIT.md`:
 | **PF-B12**| FTS updates delete by unindexed column | Full FTS scan per save/delete | **Resolved (P3b-1):** External-content FTS table `lists_fts2` with `content_rowid=id`. |
 | **PF-B13**| `purgeCreatorData` on every account creation | 20+ KV keys and 12 D1 statements | **Resolved (P5-8):** Background `account.purge` job with soft delete. |
 | **PF-B14**| Monolithic cron sharing 30 s CPU budget | Overlapping tasks; timeout risks | **Resolved (P5-1, P5-10):** Cloudflare Queue (`JOBS`) distributes tasks across 15 min consumers. |
-| **PF-B15**| D1 `stats` write on every pageview | Lock contention and row churn | **Open:** P8-2 moved these to Analytics Engine, which nothing reads, and was reverted (D-33). Still one upsert per kind and day. |
+| **PF-B15**| D1 `stats` write on every pageview | Lock contention and row churn | **Resolved (PERF-04, 2026-11-03):** `bumpStat`/`bumpStatBy` add up in the isolate and are written as one batch about once a minute (owner accepted that a recycled isolate can lose up to a minute of counts). Admin stats reads, cron ticks and queue deliveries flush first. `evt:`, `searchq:` and genre/decade counters still write per event (`d1BumpStat`). |
 | **PF-B16**| `PER_USER_CACHE_MAP` unconstrained byte size | Memory pressure within 128 MB isolate | **Resolved (P8-4):** Bounded LRU caches (max 500 entries) with memory-safe sizing. |
 | **PF-B17**| Charts pre-warmed only for US page 0 | Cold responses for other regions | **Resolved (P5-5):** `chart.refresh` hourly refreshes snapshots per active region in KV. |
+
+### Performance audit 2026-11-03 (PERF-00 – PERF-16, `docs/PERF_AUDIT_PLAN.md`)
+
+| ID | Finding | Status |
+|---|---|---|
+| **PERF-00** | `load-performance` cold-catalog test timed real Cinemeta/TMDB calls | **Resolved:** the test stubs those two hosts; budgets unchanged. |
+| **PERF-12** | `easternDateKey` built a new `Intl.DateTimeFormat` per call | **Resolved:** built once, kept on the function. |
+| **PERF-05** | Every page view (304 too) hashed the ~1.6 MB page to find its memo | **Resolved:** last two pages matched by identity first. `GET /` 10.6 ms to 4.6 ms, `304` 4.8 ms to 0.1 ms (harness). |
+| **PERF-08, PERF-07** | Configured catalog rows read `col_cat:` from KV and scanned every chart table | **Resolved:** lookups only run without a config; the chart/collection lookup is an index built once per isolate (golden test against the old scan). KV reads per row 2 to 1, D1 0. |
+| **PERF-09** | Per-user provider cache was FIFO; previews flooded it | **Resolved:** previews have their own 5,000-entry map; both caches are real LRU. |
+| **PERF-01** | `saveTrackingRecord` matched watch history in O(n²) | **Resolved:** Map by `legacy_id`. 5,000 plays 106 ms to 6 ms, 10,000 plays 519 ms to 7 ms (old loop worst case). |
+| **PERF-11 (step 1)** | No budget on `/app-features.js`, `/app.css`, the page | **Resolved:** `tests/asset-size-budget.json` ratchet (2% allowance, may only shrink). Step 2 (load features on demand) not built; survey in `docs/HANDOFF.md`. |
+| **PERF-13** | `cron.episodes` / `cron.airing-next` listed every account each tick only to skip copied ones | **Resolved:** one D1 check per run (`legacyShelfSweepNeeded`); with no uncopied account the sweeps list nothing. Flags off: unchanged. |
+| **PERF-03** | `sync/meta` assembled the whole tracking record once a minute per tab | **Resolved:** reads the record's own stamp from the stored settings (zero `watch_events` reads). |
+| **PERF-16** | A track-on link re-verified its owner on every row | **Resolved:** 10 s memo per (name, key), the SESSION_CACHE window. |
+| **PERF-06** | Page decoded and re-encoded on every 200 just for the nonce | **Resolved:** the page string travels with the Response. |
+| **PERF-04** | See PF-B15 above | **Resolved** (owner accepted the trade-off). |
+| **PERF-02** | Playback ping reads the whole history twice and rebuilds it | **Not built:** the blob round trip also computes next episode and completed state (reasons in `docs/HANDOFF.md`). Cost pinned by `tests/perf-ping-cost.test.mjs` (500 plays: 2 full reads, 14 activity statements). |
+| **PERF-10, 13, 14, 15** | Need a measurement or an owner decision | **Open:** notes in `docs/HANDOFF.md`. |
 
 ---
 

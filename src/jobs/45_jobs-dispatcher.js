@@ -503,14 +503,15 @@ function runLegacyCronTasks(env, ctx) {
   // The ordering is kept: the Continue Watching sweep writes first, because
   // it is the part a person is waiting on, and everything that spends
   // provider calls runs after it.
-  const episodeSweep = guard("checkForNewEpisodes", checkForNewEpisodes(env));
+  const shelfSweepNeeded = legacyShelfSweepNeeded(env);
+  const episodeSweep = guard("checkForNewEpisodes", shelfSweepNeeded.then((needed) => needed && checkForNewEpisodes(env)));
   const streamingSweep = guard(
     "sweepNewOnStreaming",
     episodeSweep.then(() => sweepNewOnStreaming(env, ctx))
   );
   const airingNextSweep = guard(
     "refreshAiringNextSweep",
-    episodeSweep.then(() => refreshAiringNextSweep(env, ctx))
+    episodeSweep.then(() => shelfSweepNeeded).then((needed) => needed && refreshAiringNextSweep(env, ctx))
   );
   const betterPosterWarm = guard(
     "prewarmBetterPosters",
@@ -574,13 +575,14 @@ async function runJobSteps(tasks) {
 definePeriodicJob("cron.episodes", {
   everyMs: LEGACY_CRON_EVERY_MS,
   legacy: true,
-  run: (env) => checkForNewEpisodes(env),
+  // Nothing to do once every account is served from the schedule (PERF-13, 40_).
+  run: async (env) => (await legacyShelfSweepNeeded(env)) && checkForNewEpisodes(env),
 });
 
 definePeriodicJob("cron.airing-next", {
   everyMs: LEGACY_CRON_EVERY_MS,
   legacy: true,
-  run: (env, payload, job) => refreshAiringNextSweep(env, job.ctx),
+  run: async (env, payload, job) => (await legacyShelfSweepNeeded(env)) && refreshAiringNextSweep(env, job.ctx),
 });
 
 // New on Streaming (P5-10 names it nos.sweep; its quota ledger is in D1).

@@ -8,6 +8,16 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeKv, makeD1, makeEnv, call, createUser } from "./harness.mjs";
 
+// A track-on link's owner check is remembered for 10 s (PERF-16, verifyShelfOwner),
+// so a request inside that window does not read the account at all. These tests are
+// about what a request that DOES verify the owner reads and writes, so the second
+// request is made after the window by moving the clock 11 s.
+async function afterOwnerMemoWindow(fn) {
+  const realNow = Date.now;
+  Date.now = () => realNow() + 11_000;
+  try { return await fn(); } finally { Date.now = realNow; }
+}
+
 async function setup() {
   const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
   const user = await createUser(env, "mirror" + Math.random().toString(36).slice(2, 8));
@@ -36,7 +46,7 @@ describe("the KV copy of an account", () => {
     await call(env, "/mir1/catalog/movie/shared.json");
     puts.length = 0;
     await env.DB.prepare("UPDATE creators SET display_name = ? WHERE username = ?").bind("Renamed", user.creatorName).run();
-    await call(env, "/mir1/catalog/movie/shared.json");
+    await afterOwnerMemoWindow(() => call(env, "/mir1/catalog/movie/shared.json"));
     assert.ok(puts.includes(`creator:${user.creatorName}`), "a changed record must reach the KV fallback copy");
   });
 });
@@ -63,7 +73,7 @@ describe("repeated KV reads inside one request", () => {
     env.CONFIGS._hooks.beforeGet = async (k) => { reads.push(k); };
     await call(env, "/mir1/catalog/movie/shared.json");
     const first = reads.length;
-    await call(env, "/mir1/catalog/movie/shared.json");
+    await afterOwnerMemoWindow(() => call(env, "/mir1/catalog/movie/shared.json"));
     assert.equal(reads.length, first * 2, "the second request must not be served from the first one's reads");
   });
 });
