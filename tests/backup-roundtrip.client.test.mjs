@@ -11,7 +11,13 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 const MOVIE = { id: "tt0133093", type: "movie", name: "The Matrix", poster: "https://img.example/m.jpg", year: "1999" };
 const SHOW = { id: "tt0903747", type: "series", name: "Breaking Bad", poster: "https://img.example/bb.jpg", year: "2008" };
 
+const ENTRY = { id: "tmdb-disney", type: "movie", name: "Disney hits", url: "https://api.themoviedb.org/3/list/8?x=1" };
+
 function fillEverything(c) {
+  // The catalog rows (what the user's Stremio/Wako install is built from) and a provider key.
+  // The harness page has no real catalog rows, so give collectEntries the row a user would have.
+  c.set("collectEntries", () => [ENTRY]);
+  c.get("document").getElementById("tmdbKeyInput").value = "0123456789abcdef0123456789abcdef";
   c.call("saveLocalCustomListsMap", {
     "my-favs": { slug: "my-favs", name: "My favs", type: "movie", items: [MOVIE] },
   });
@@ -32,7 +38,7 @@ function fillEverything(c) {
   c.localStorage.setItem("myListAddon:hiddenLists", JSON.stringify(["x"]));
 }
 
-function snapshot(c) {
+function snapshot(c, restored = []) {
   return plain({
     lists: c.call("loadLocalCustomLists"),
     channels: c.call("loadLocalChannels"),
@@ -41,6 +47,8 @@ function snapshot(c) {
     region: c.localStorage.getItem("myListAddon:region"),
     dedupe: c.localStorage.getItem("myListAddon:dedupeAcrossLists"),
     hidden: c.localStorage.getItem("myListAddon:hiddenLists"),
+    entries: restored.map((e) => ({ type: e.type, name: e.name, url: e.url })),
+    tmdbKey: c.call("readProviderSecret", "myListAddon:tmdbKey"),
     presetNames: Object.keys(c.call("loadPresetsMap")),
   });
 }
@@ -49,18 +57,23 @@ describe("full backup round trip", () => {
   it("restores custom lists, channels, merged channels, presets, collections and settings into a fresh browser", () => {
     const a = loadClient({ signedIn: true });
     fillEverything(a);
-    const before = snapshot(a);
+    const before = snapshot(a, a.call("collectEntries"));
     const file = JSON.stringify(a.call("buildFullBackupPayload"));
 
     const b = loadClient({ signedIn: true });
     assert.equal(snapshot(b).lists["my-favs"], undefined, "fresh browser starts without the list");
+    const rowsRestored = [];
+    b.set("restoreRows", (rows) => rowsRestored.push(...rows));
     b.call("runImport", JSON.parse(file));
-    const after = snapshot(b);
+    const after = snapshot(b, rowsRestored);
 
     assert.deepEqual(after.lists["my-favs"], before.lists["my-favs"]);
     assert.equal(after.lists["my-favs"].items[0].id, MOVIE.id);
     assert.deepEqual(after.channels.ch_1.items.map((i) => i.id), [SHOW.id]);
     assert.deepEqual(after.merged, before.merged);
+    assert.deepEqual(before.entries, [{ type: ENTRY.type, name: ENTRY.name, url: ENTRY.url }], "setup: the row exists");
+    assert.deepEqual(after.entries, before.entries, "catalog rows come back");
+    assert.equal(after.tmdbKey, "0123456789abcdef0123456789abcdef", "provider key comes back");
     assert.deepEqual(after.presetNames, ["Friday preset"]);
     assert.deepEqual(after.collections, before.collections);
     assert.equal(after.region, "GB");
@@ -77,6 +90,8 @@ describe("full backup round trip", () => {
     assert.deepEqual(Object.keys(file.mergedChannels), ["merged-1"]);
     assert.deepEqual(Object.keys(file.presets), ["Friday preset"]);
     assert.equal(file.customCollections.length, 1);
+    assert.deepEqual(file.entries.map((e) => e.name), ["Disney hits"]);
+    assert.equal(file.keys.tmdbKey, "0123456789abcdef0123456789abcdef");
   });
 
   it("still restores a file written by the previous release (2.0: rows embed their items)", () => {
