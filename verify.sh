@@ -142,9 +142,12 @@ echo "=== 6c. tests, with the materializer on (as CI) ==="
 MLA_TEST_FLAGS=FF_MATERIALIZER node --test tests/*.test.mjs
 
 echo
-echo "=== 6d. UI contract (needs Playwright; skipped if it is not installed) ==="
-if node -e "require('playwright')" >/dev/null 2>&1; then
+echo "=== 6d. UI contract and browser workflows (need Playwright; skipped if it is not installed) ==="
+# Test the way the scripts load it: an ESM import. require() also finds a global install via NODE_PATH,
+# which import ignores, so a require() check says yes and the scripts then fail (audit TEST-09).
+if node --input-type=module -e "await import('playwright')" >/dev/null 2>&1; then
   node tests/ui-contract.mjs
+  node tests/e2e-workflows.mjs
 else
   echo "  skipped: Playwright is not installed here (CI still runs it)"
 fi
