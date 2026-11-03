@@ -1,5 +1,5 @@
 # Keep synced collection rows off the Nuvio home screen (2026-11-03)
-Status: building
+Status: awaiting review
 Model: claude-opus-5-5 (as configured for the session)
 
 ## Request
@@ -64,6 +64,64 @@ Approved by the owner on 2026-11-03 (all recommendations accepted).
    with it off marks it shown.
 
 ## Before building
+`bash verify.sh -q` at `446f349` (no source changes since): 3,250 tests, all
+pass except the known cold-catalog p95 timing budget in
+`tests/load-performance.test.mjs`.
+
 ## What was built
+Commits:
+- `663524c` server: `update-collection` applies the saved choice.
+- `62ae38a` browser: each collection remembers the choice and both Update
+  Nuvio paths send it; the toggle in Edit collection.
+
+Files:
+- `src/api/61_media-app-sync.js`: a whole-collection update now reads Nuvio
+  home settings first when the request carries `hideHomeCatalogs` (nothing is
+  written if that read fails), then sets only that collection's rows and
+  confirms them. The save-and-confirm step became `nuvioSaveHomeVisibility`,
+  shared with the first push. The boolean check now runs for every mode.
+  `update-folder` already handled the choice; only the browser was not
+  sending it.
+- `src/client/17_client-nuvio-home-choice.js` (new, small, because the main
+  client file is over the size limit): `collectionGroupRecord` (stored shape,
+  now keeps `nuvioHomeHidden`), `rememberNuvioHomeChoice`,
+  `nuvioHomeToggleHtml`, `applyNuvioHomeToggle`, `showNuvioPushToast`.
+- `src/client/17_client-my-lists-and-trakt-oauth.js`: calls the above from
+  load/save, the first sync, Edit collection, and both Update Nuvio paths.
+  The file is 3 lines shorter; `tests/size-budget.json` lowered.
+- Technical choice: the setting is stored on the collection group, not inside
+  `nuvioLink`, because the automatic 2-minute pull rebuilds `nuvioLink`.
+- Technical choice: "off" is stored only after the toggle was on. Collections
+  nobody touched send nothing, so rows someone hid by hand inside Nuvio are
+  not switched back on.
+
+Tests added (each fails without the change; checked by reverting):
+- `tests/media-app-sync.test.mjs`: whole-collection update hides/shows only
+  that collection's rows; a non-boolean choice is refused before any write;
+  nothing changes if home settings cannot be read; a single-folder update
+  applies the choice to that folder's rows.
+- `tests/collections-hierarchy.client.test.mjs`: untouched collections send
+  no choice; the edit-window choice is saved, survives the automatic pull, is
+  sent by both Update Nuvio paths, and can be turned off; the Sync to Nuvio
+  choice is remembered; the toggle appears only on synced collections.
+
+Checks: `bash verify.sh -q` after both commits: 3,258 tests, all pass except
+the same known timing budget.
+
 ## How to try it
+(After the new build is deployed. Use a test collection.)
+1. Lists → Collections → create a collection with one folder and one list →
+   **Push collection to Nuvio** → turn **Hide collection catalogs on Nuvio
+   home** on → Add collection. → In Nuvio, the list is not on the home screen
+   but is in Settings → Catalogs & Collections.
+2. Add a second list to the folder → **Update Nuvio**. → The new list is also
+   not on the Nuvio home screen. (Before this change it appeared.)
+3. **Edit collection** on that collection. → The same toggle is there and is
+   on. Turn it off → Save name → **Update Nuvio**. → Both lists now show on
+   the Nuvio home screen.
+4. Turn it back on → Save name → **Update Nuvio**. → Both are hidden again.
+5. Check nothing else changed: a collection you synced before this update →
+   **Update Nuvio** → its home rows look exactly as before. Your regular My
+   Lists rows in Nuvio and Stremio are unchanged.
+
 ## Review
