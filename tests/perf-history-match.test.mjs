@@ -68,9 +68,10 @@ describe("PERF-01: stored watch history is matched in linear time", () => {
       Object.defineProperty(row, "legacy_id", { enumerable: true, get() { reads++; return "t" + i; } });
       return row;
     });
-    const incoming = stored.map((r, i) => ({ id: "t" + i, t: 1000 + i }));
+    // Newest first: the old loop then scanned to the end of the list for every item.
+    const incoming = stored.map((r, i) => ({ id: "t" + i, t: 1000 + i })).reverse();
     const rest = newMatch(m, stored, incoming);
     assert.equal(rest.length, 0);
-    assert.ok(reads <= 4 * N, `${reads} legacy_id reads for ${N} rows (old loop made ~${(N * N) / 2})`);
+    assert.ok(reads <= 4 * N, `${reads} legacy_id reads for ${N} rows (old loop made ~${N * N / 2 * 2} on this order)`);
   });
 });
