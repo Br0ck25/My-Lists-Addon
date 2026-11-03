@@ -2511,3 +2511,21 @@ Plan and evidence: `docs/audits/2026-11-03-testing.md`. No migration, binding, s
 ### Checked
 `bash verify.sh -q` passes (build, syntax, scope, then the tests). The two flagged suite runs and `tests/ui-contract.mjs` were run separately: 3,324 pass and 0 fail each, 72 component states match. `node tests/e2e-workflows.mjs`: 4 of 4. Each new test was shown to fail against a deliberately broken copy of the code, and the copy was restored.
 
+
+## 2026-11-03 — Database audit fixes DB-01 to DB-04 (build `fa37567593`, prepared; not deployed)
+
+Plan and evidence: `docs/audits/2026-11-03-database.md`. One additive migration (`0025`), one new repository secret. No binding or flag.
+
+### What it changes
+- **The daily backup copies KV too (DB-01).** Install links (`cfg:`), each account's synced settings, presets and My Channels, shared channels and list order lived only in KV, which nothing backed up. The *D1 backup* workflow now also copies those prefixes (`.github/scripts/kv-backup.mjs`), encrypted and checked like the D1 copies, as a second artifact `kv-backup-<run>`. `docs/OPERATIONS.md` §5 lists the prefixes and how to restore them; §33 no longer points at a KV export that did not exist.
+- **A sign-up during the backup no longer fails that day's run (DB-02).** The reader checks its own file and, only when a row arrived without its parent between two reads, reads the database once more.
+- **The Lists page stops reading the whole `lists` table (DB-03).** Migration `0025` indexes deleted lists for the "recently deleted" lookup each signed-in Lists load makes. Without it nothing breaks; it is slower.
+- **The migration ledger seed lists 0022 and 0023 (DB-04).** `docs/OPERATIONS.md` §4 explains why a live database has no row for them.
+
+### Owner steps
+1. **Apply `migrations/0025_lists_owner_deleted_index.sql`** in `my-lists-db`'s Console (§4). Safe before or after pasting the Worker.
+2. **Add the repository secret `KV_NAMESPACE_ID`** (the `CONFIGS` namespace id: Workers & Pages → KV) and give the existing `CLOUDFLARE_API_TOKEN` *Account → Workers KV Storage → Read* as well as *D1 → Read*. Until both are done each daily run keeps its D1 copy, then fails (red ✗) naming what is missing.
+3. Run *D1 backup* by hand once (Actions → *Run workflow*) and check it ends green with two artifacts.
+
+### Checked
+`bash verify.sh -q` passes. New tests: `kv-backup` (every listed prefix copied, caches left out, a failed page or a missing permission fails the run; dropping a prefix fails 3 of them), `lists-deleted-index` (the exact statement's plan is `SCAN lists` without the index and uses it with), and in `d1-backup` and `worker` the backup race and the ledger seed. The DB-02, DB-03 and DB-04 tests were run red before their fix; the `kv-backup` tests (new code) were shown red by dropping a prefix. Not tested: a real KV read or restore (no access to the Cloudflare account from here).
