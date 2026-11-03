@@ -198,10 +198,20 @@ async function creatorApiSyncMeta(request, env, ctx, path) {
   }
 
   let configRaw = null, trackingRaw = null, presetsRaw = null, channelsRaw = null, listsRaw = null, metaResetAt = 0;
+  // An account on the activity database: reading creatorsynctracking: through
+  // the shim assembles every play and both shelves, just to find one number.
+  // Take the record's own stamp from its stored settings instead (the same
+  // value sync/load hands the browser as trackingUpdatedAt).
+  let activityTrackingStamp = null;
+  try {
+    activityTrackingStamp = typeof trackingUpdatedAtFor === "function" ? await trackingUpdatedAtFor(env, auth.username) : null;
+  } catch {
+    activityTrackingStamp = null;
+  }
   try {
     [configRaw, trackingRaw, presetsRaw, channelsRaw, listsRaw, metaResetAt] = await Promise.all([
       env.CONFIGS.get(`creatorsync:${auth.username}`),
-      env.CONFIGS.get(`creatorsynctracking:${auth.username}`),
+      activityTrackingStamp !== null ? null : env.CONFIGS.get(`creatorsynctracking:${auth.username}`),
       env.CONFIGS.get(`creatorsyncpresets:${auth.username}`),
       env.CONFIGS.get(`creatorsyncchannels:${auth.username}`),
       env.CONFIGS.get(`creatorliststamp:${auth.username}`),
@@ -234,13 +244,14 @@ async function creatorApiSyncMeta(request, env, ctx, path) {
     } catch (e) {}
   }
 
+  const rawTrackingStamp = activityTrackingStamp !== null ? activityTrackingStamp : readUpdatedAtFromRaw(trackingRaw);
   const trackingUpdatedAt = d1TrackingStamp !== null
-    ? Math.max(d1TrackingStamp, readUpdatedAtFromRaw(trackingRaw))
-    : readUpdatedAtFromRaw(trackingRaw);
+    ? Math.max(d1TrackingStamp, rawTrackingStamp)
+    : rawTrackingStamp;
 
   return jsonPrivate({
     ok: true,
-    exists: configRaw !== null || trackingRaw !== null || d1TrackingExists,
+    exists: configRaw !== null || trackingRaw !== null || activityTrackingStamp !== null || d1TrackingExists,
     config: readUpdatedAtFromRaw(configRaw),
     tracking: trackingUpdatedAt,
     presets: readUpdatedAtFromRaw(presetsRaw),

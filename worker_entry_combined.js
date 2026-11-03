@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "15f2e036e9";
+const WORKER_BUILD = "faa46966e0";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -99891,6 +99891,20 @@ async function writeTrackingSettings(env, accountId, all, tracking) {
   ).bind(accountId, JSON.stringify(next), Date.now()).run();
 }
 
+// The tracking record's own updatedAt for an account served from the activity
+// database, read from its stored settings without assembling the record (all
+// plays and both shelves). null when the account is not on the activity
+// database, or has no stored settings yet (the first read after the switch
+// assembles, and migrates, the record), so the caller falls back to the full read.
+// sync/meta uses this: every open tab asks it once a minute.
+async function trackingUpdatedAtFor(env, username) {
+  const accountId = await eventTrackingOwns(env, username);
+  if (accountId == null) return null;
+  const { tracking } = await readTrackingSettings(env, accountId);
+  if (!tracking) return null;
+  return Number(tracking.updatedAt) || 0;
+}
+
 // The record as the legacy routes read it.
 async function assembleTrackingRecord(env, rawKv, username, accountId) {
   const settings = await readTrackingSettings(env, accountId);
@@ -114179,10 +114193,20 @@ async function creatorApiSyncMeta(request, env, ctx, path) {
   }
 
   let configRaw = null, trackingRaw = null, presetsRaw = null, channelsRaw = null, listsRaw = null, metaResetAt = 0;
+  // An account on the activity database: reading creatorsynctracking: through
+  // the shim assembles every play and both shelves, just to find one number.
+  // Take the record's own stamp from its stored settings instead (the same
+  // value sync/load hands the browser as trackingUpdatedAt).
+  let activityTrackingStamp = null;
+  try {
+    activityTrackingStamp = typeof trackingUpdatedAtFor === "function" ? await trackingUpdatedAtFor(env, auth.username) : null;
+  } catch {
+    activityTrackingStamp = null;
+  }
   try {
     [configRaw, trackingRaw, presetsRaw, channelsRaw, listsRaw, metaResetAt] = await Promise.all([
       env.CONFIGS.get(`creatorsync:${auth.username}`),
-      env.CONFIGS.get(`creatorsynctracking:${auth.username}`),
+      activityTrackingStamp !== null ? null : env.CONFIGS.get(`creatorsynctracking:${auth.username}`),
       env.CONFIGS.get(`creatorsyncpresets:${auth.username}`),
       env.CONFIGS.get(`creatorsyncchannels:${auth.username}`),
       env.CONFIGS.get(`creatorliststamp:${auth.username}`),
@@ -114215,13 +114239,14 @@ async function creatorApiSyncMeta(request, env, ctx, path) {
     } catch (e) {}
   }
 
+  const rawTrackingStamp = activityTrackingStamp !== null ? activityTrackingStamp : readUpdatedAtFromRaw(trackingRaw);
   const trackingUpdatedAt = d1TrackingStamp !== null
-    ? Math.max(d1TrackingStamp, readUpdatedAtFromRaw(trackingRaw))
-    : readUpdatedAtFromRaw(trackingRaw);
+    ? Math.max(d1TrackingStamp, rawTrackingStamp)
+    : rawTrackingStamp;
 
   return jsonPrivate({
     ok: true,
-    exists: configRaw !== null || trackingRaw !== null || d1TrackingExists,
+    exists: configRaw !== null || trackingRaw !== null || activityTrackingStamp !== null || d1TrackingExists,
     config: readUpdatedAtFromRaw(configRaw),
     tracking: trackingUpdatedAt,
     presets: readUpdatedAtFromRaw(presetsRaw),

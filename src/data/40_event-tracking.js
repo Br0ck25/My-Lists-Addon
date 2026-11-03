@@ -121,6 +121,20 @@ async function writeTrackingSettings(env, accountId, all, tracking) {
   ).bind(accountId, JSON.stringify(next), Date.now()).run();
 }
 
+// The tracking record's own updatedAt for an account served from the activity
+// database, read from its stored settings without assembling the record (all
+// plays and both shelves). null when the account is not on the activity
+// database, or has no stored settings yet (the first read after the switch
+// assembles, and migrates, the record), so the caller falls back to the full read.
+// sync/meta uses this: every open tab asks it once a minute.
+async function trackingUpdatedAtFor(env, username) {
+  const accountId = await eventTrackingOwns(env, username);
+  if (accountId == null) return null;
+  const { tracking } = await readTrackingSettings(env, accountId);
+  if (!tracking) return null;
+  return Number(tracking.updatedAt) || 0;
+}
+
 // The record as the legacy routes read it.
 async function assembleTrackingRecord(env, rawKv, username, accountId) {
   const settings = await readTrackingSettings(env, accountId);
