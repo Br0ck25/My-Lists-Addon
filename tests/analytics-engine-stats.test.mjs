@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 
-const { makeEnv, makeD1, makeKv, call } = await import("./harness.mjs");
+const { makeEnv, makeD1, makeKv, call, flushStats } = await import("./harness.mjs");
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -30,7 +30,7 @@ function loadSourceFunctions(...relFiles) {
   return sandbox;
 }
 
-const adminFns = loadSourceFunctions("src/core/00_constants.js", "src/core/01_icon-asset.js", "src/core/02_http-and-creator-utils.js", "src/admin/03_admin.js");
+const adminFns = loadSourceFunctions("src/core/00_constants.js", "src/core/01_icon-asset.js", "src/core/02_http-and-creator-utils.js", "src/admin/03_admin.js", "src/admin/04_stat-counters.js");
 const { bumpStatBy, recordSearchQuery, computeLeaderboard } = adminFns;
 // A top-level const is not a property of the sandbox; read it from its scope.
 
@@ -44,6 +44,7 @@ describe("counters are written to D1 even with Analytics Engine bound", () => {
 
     const res = await call(env, "/");
     assert.equal(res.status, 200);
+    await flushStats(env); // counters are batched in the isolate (PERF-04)
     assert.equal(db._stat("pageviews", "total"), 1, "the dashboard's Total page views");
     assert.equal(db._stat("pageviews", adminFns.statsToday()), 1, "and today's");
     assert.equal(points.filter((p) => p.blobs && p.blobs[0] === "stat").length, 0, "no stat copy in Analytics Engine");
@@ -53,6 +54,7 @@ describe("counters are written to D1 even with Analytics Engine bound", () => {
     const db = makeD1();
     const env = makeEnv({ CONFIGS: makeKv(), DB: db, ANALYTICS: analyticsBound([]) });
     await bumpStatBy(env, "apiuse:tmdb", 5);
+    await adminFns.flushPendingStats(env); // batched in the isolate (PERF-04)
     assert.equal(db._stat("apiuse:tmdb", "total"), 5);
   });
 

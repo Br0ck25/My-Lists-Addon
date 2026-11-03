@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "aee2b639f5";
+const WORKER_BUILD = "88a7f25a45";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -4185,6 +4185,9 @@ async function handleCspReport(request, env, ctx) {
   return done();
 }
 
+// Private marker: the string a page Response was built from (htmlPageResponse sets it).
+const PAGE_HTML_BODY = Symbol("pageHtmlBody");
+
 // Wraps a Response with the headers above, without disturbing anything the
 // route handler already set (status, statusText, body, its own headers
 // like Content-Type/Cache-Control/CORS) -- see securityHeaders' own
@@ -4442,15 +4445,18 @@ function instrumentEnv(env, counters) {
     },
     list: (...a) => { counters.kvLists++; return kv.list(...a); },
   } : kv;
-  function wrapDbSession(targetDb) {
+  function wrapDbSession(targetDb, rawDb = targetDb) {
     if (!targetDb) return targetDb;
     return {
+      // The real binding, for state that must outlive this request (PERF-04's
+      // pending counters are kept per binding, not per wrapper).
+      __raw: rawDb,
       prepare: (...a) => { counters.d1Statements++; return targetDb.prepare(...a); },
       batch: (...a) => { counters.d1Batches++; return targetDb.batch(...a); },
       exec: (...a) => { counters.d1Statements++; return targetDb.exec(...a); },
       dump: (...a) => targetDb.dump(...a),
       getBookmark: () => (typeof targetDb.getBookmark === "function" ? targetDb.getBookmark() : null),
-      withSession: (...a) => wrapDbSession(typeof targetDb.withSession === "function" ? targetDb.withSession(...a) : targetDb),
+      withSession: (...a) => wrapDbSession(typeof targetDb.withSession === "function" ? targetDb.withSession(...a) : targetDb, rawDb),
     };
   }
   const dbProxy = wrapDbSession(db);
@@ -5542,7 +5548,6 @@ async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
 
 function clearSessionCache() {
   SESSION_CACHE.clear();
-  SHELF_OWNER_MEMO.clear();
 }
 
 
@@ -6388,113 +6393,6 @@ async function splitAppCss(html) {
     '<link rel="stylesheet" href="/app.css?v=' + APP_CSS.hash + '">' +
     html.slice(end + APP_CSS_END.length);
   return { page, css: APP_CSS };
-}
-
-// Rewritten pages are remembered so a repeat request for the same page does not
-// re-scan ~2MB looking for the markers.
-//
-// Keyed on a cheap hash of the page, NOT on the page itself. The key used to be
-// the whole pre-split HTML string -- measured at 1,979,374 characters -- with
-// the rewritten page (~580KB) as the value, sixteen of them. That is tens of
-// megabytes of strings pinned in an isolate that has 128MB for everything,
-// alongside APP_BUNDLE (~1.3MB), APP_CSS (~97KB) and PER_USER_CACHE_MAP's
-// thousand entries. Every distinct shared list URL, configure link and deep
-// link renders different HTML, so the cache genuinely does fill.
-//
-// A 32-bit FNV-1a over the string is not collision-proof, and does not need to
-// be: a collision would serve one visitor another visitor's PAGE, so the stored
-// length is checked too and the hash is only ever a key into this isolate's own
-// memory. Cheap enough that it costs less than the marker scan it avoids.
-const SPLIT_PAGE_MEMO = new Map();
-
-function splitPageMemoKey(html) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < html.length; i++) {
-    h ^= html.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36) + ":" + html.length;
-}
-
-// The last few pages by identity. renderBuilderCached hands back the same string
-// object for the default page, so a repeat request (a 304 included) is found with
-// one reference comparison instead of an FNV pass over ~1.6 MB.
-const RECENT_SPLIT_PAGES = [];
-const RECENT_SPLIT_PAGES_MAX = 2;
-
-async function pageWithExternalBundle(html) {
-  for (const e of RECENT_SPLIT_PAGES) if (e.html === html) return e.page;
-  const key = splitPageMemoKey(html);
-  const memo = SPLIT_PAGE_MEMO.get(key);
-  if (memo) {
-    rememberRecentSplitPage(html, memo);
-    return memo;
-  }
-  let page = html;
-  try {
-    page = (await splitAppBundle(html)).page;
-    page = (await splitAppCss(page)).page;
-  } catch {
-    // Nothing unexpected here is worth costing somebody their page.
-    return html;
-  }
-  if (SPLIT_PAGE_MEMO.size >= 16) {
-    const oldest = SPLIT_PAGE_MEMO.keys().next().value;
-    if (oldest !== undefined) SPLIT_PAGE_MEMO.delete(oldest);
-  }
-  SPLIT_PAGE_MEMO.set(key, page);
-  rememberRecentSplitPage(html, page);
-  return page;
-}
-
-function rememberRecentSplitPage(html, page) {
-  RECENT_SPLIT_PAGES.unshift({ html, page });
-  if (RECENT_SPLIT_PAGES.length > RECENT_SPLIT_PAGES_MAX) RECENT_SPLIT_PAGES.pop();
-}
-
-// Private marker: the string a page Response was built from (see withSecurityHeaders).
-const PAGE_HTML_BODY = Symbol("pageHtmlBody");
-
-function pageResponseWithBody(html, init) {
-  const res = new Response(html, init);
-  res[PAGE_HTML_BODY] = html;
-  return res;
-}
-
-async function htmlPageResponse(request, fullHtml, extraHeaders) {
-  // The ~1.3MB client bundle is lifted out to /app.js?v=<hash> first, so
-  // both the body sent below and the ETag computed from it describe the
-  // small page rather than the page-plus-bundle.
-  const html = await pageWithExternalBundle(fullHtml);
-  let etag = "";
-  try {
-    etag = await htmlEtagFor(html);
-  } catch {
-    // No digest available -- fall through and just send the page, exactly
-    // as this did before there was an ETag at all.
-  }
-  const headers = {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-cache",
-    ...(extraHeaders || {}),
-  };
-  if (!etag) return pageResponseWithBody(html, { headers });
-  headers["ETag"] = etag;
-
-  // If-None-Match can carry a list, and a cache is allowed to weaken a tag
-  // it stores, so compare against each entry with any W/ prefix removed
-  // rather than string-equalling the whole header.
-  const inm = request && request.headers ? (request.headers.get("If-None-Match") || "") : "";
-  if (inm) {
-    const match = inm
-      .split(",")
-      .map((s) => s.trim().replace(/^W\//, ""))
-      .some((s) => s === etag || s === "*");
-    if (match) {
-      return new Response(null, { status: 304, headers });
-    }
-  }
-  return pageResponseWithBody(html, { headers });
 }
 
 // --- Per-User Cache & Circuit Breaker Shield ---------------------------------
@@ -8623,9 +8521,8 @@ async function isCreatorTombstoned(env, username) {
 // cannot happen again: anything added to the account's key set gets
 // cleaned up by both callers automatically.
 async function purgeCreatorData(env, username, options = {}) {
-  SHELF_OWNER_MEMO.clear();
   const deleteIdentity = options.deleteIdentity === true;
-  const u = username;
+  const u = forgetShelfOwner(username);
   // Read before the sweep below deletes it, so the bump at the end can still
   // guarantee the stamp moves forward -- see bumpCreatorListsStamp's notBefore.
   let priorListsStamp = 0;
@@ -9316,67 +9213,6 @@ async function mayReadTrackedShelf(env, username, slug, keys = {}) {
   return isTrackedShelfShared(await readCreatorShareFlags(env, username), slug);
 }
 
-// Proves a Creator Name + Creator Key pair, and answers with the username it
-// proves or "".
-//
-// This is authenticateCreator's check without the parts that need a request:
-// same tombstone, same record read, same PBKDF2-with-memo. It exists because
-// authenticateCreator lives inside handleFetch's closure and resolveConfig is
-// a module-scope function every catalog request goes through.
-//
-// The ONE caller is resolveConfig, and only for a STORED config -- i.e. a
-// credential this Worker itself wrote into KV, not one a caller just handed
-// over -- so there is no unbounded-PBKDF2 path here to throttle. A base64
-// config is caller-authored and is never given to this function.
-//
-// A success is remembered for 10 s in this isolate (the SESSION_CACHE window,
-// audit SESS-001), because every row of a track-on link asks again and each ask
-// was a KV tombstone read, a D1 tombstone query and SELECT * FROM creators. So an
-// account deleted or re-keyed on another isolate can still serve its shelf here
-// for up to 10 s; on this isolate purgeCreatorData and a key rotation clear it at
-// once. Failures are never remembered, and the memo key is a SHA-256 of the name
-// and the presented key, never the key itself.
-const SHELF_OWNER_MEMO = new Map();
-const SHELF_OWNER_MEMO_TTL_MS = 10 * 1000;
-const SHELF_OWNER_MEMO_MAX = 1000;
-
-async function verifyShelfOwner(env, creatorName, creatorKey) {
-  if (!env || !env.CONFIGS || !creatorName || !creatorKey) return "";
-  const v = validateCreatorUsername(creatorName);
-  if (!v.ok) return "";
-  let memoKey = "";
-  try {
-    memoKey = await creatorAuthMemoKey(v.normalized, String(creatorKey), "shelf-owner");
-    const hit = SHELF_OWNER_MEMO.get(memoKey);
-    if (hit !== undefined) {
-      if (Date.now() < hit) return v.normalized;
-      SHELF_OWNER_MEMO.delete(memoKey);
-    }
-  } catch {
-    memoKey = "";
-  }
-  try {
-    const [tombstoned, raw] = await Promise.all([
-      isCreatorTombstoned(env, v.normalized),
-      getCreator(env, v.normalized),
-    ]);
-    if (tombstoned || !raw) return "";
-    const profile = JSON.parse(raw);
-    if (!profile || !profile.keyHash) return "";
-    const ok = await verifyCreatorKeyMemoized(String(creatorKey), profile.keyHash, v.normalized);
-    if (ok && memoKey) {
-      if (SHELF_OWNER_MEMO.size >= SHELF_OWNER_MEMO_MAX) {
-        const oldest = SHELF_OWNER_MEMO.keys().next().value;
-        if (oldest !== undefined) SHELF_OWNER_MEMO.delete(oldest);
-      }
-      SHELF_OWNER_MEMO.set(memoKey, Date.now() + SHELF_OWNER_MEMO_TTL_MS);
-    }
-    return ok ? v.normalized : "";
-  } catch {
-    return "";
-  }
-}
-
 // page of keys with Promise.all, so a hundred lists by one creator would
 // otherwise each start their own lookup.
 //
@@ -9458,7 +9294,7 @@ async function backfillCreatorRowInD1(env, username) {
 // rotating KV while D1 keeps answering with the old hash would leave neither
 // key working and lock the owner out of their own account.
 async function rotateCreatorKeyHashInD1(env, username, keyHash) {
-  SHELF_OWNER_MEMO.clear();
+  forgetShelfOwner();
   if (!env || !env.DB) return { ok: true };
   try {
     // meta.changes, not merely "did not throw". A D1 UPDATE that matches ZERO
@@ -11114,7 +10950,7 @@ function easternDateKeyDaysAgo(nowMs, n) {
 }
 
 function statsToday() {
-  return easternDateKey(new Date());
+  return easternDateKey(new Date(Date.now()));
 }
 
 // --- Counter storage ---------------------------------------------------------
@@ -11161,75 +10997,6 @@ async function d1BumpStat(env, kind, buckets, amount) {
     ).bind(kind, bucket, amount)
   );
   await env.DB.batch(stmts);
-}
-
-async function bumpStat(env, kind) {
-  if (!env || !env.CONFIGS) return;
-  try {
-    // D1 is where every counter is read from (readStatCount, loadStatsByDay,
-    // the leaderboards), so it is where every counter is written. From
-    // 2026-10-02 to the fix these went to Analytics Engine only, which
-    // nothing reads, and the admin dashboard froze at zero.
-    if (env.DB) {
-      await d1BumpStat(env, kind, ["total", statsToday()], 1);
-      return;
-    }
-    // KV path: get-then-put, so concurrent bumps lose increments
-    // (AUDIT-2026-09-05 §14). Deliberately left as it is, and recorded here
-    // rather than silently: KV has no atomic increment and no
-    // compare-and-swap, so the only correct fix is a different storage
-    // primitive -- which is exactly what the D1 branch above is
-    // (d1BumpStat's upsert is atomic, and it is the path any deployment
-    // that cares about exact counters should be on). What is lost is a
-    // display statistic under simultaneous load; nothing reads these
-    // numbers to make a decision, and no user-visible behaviour depends on
-    // one. Spending a durable object per counter on that would be the
-    // wrong trade.
-    const totalKey = `stats:${kind}:total`;
-    const dayKey = `stats:${kind}:${statsToday()}`;
-    const [totalRaw, dayRaw] = await Promise.all([env.CONFIGS.get(totalKey), env.CONFIGS.get(dayKey)]);
-    const total = (parseInt(totalRaw, 10) || 0) + 1;
-    const day = (parseInt(dayRaw, 10) || 0) + 1;
-    await Promise.all([env.CONFIGS.put(totalKey, String(total)), env.CONFIGS.put(dayKey, String(day))]);
-  } catch (e) {
-    // best-effort -- a failed stat bump should never break the actual
-    // request it's riding along on (see the ctx.waitUntil call sites,
-    // which don't await this at all for exactly that reason).
-  }
-}
-
-// Like bumpStat above, but by a caller-supplied amount in one write
-// instead of always +1 -- used for the per-source-group counters (a
-// single "generate install link" beacon can represent several rows of the
-// same group at once, e.g. five Custom Lists in one install). Total only,
-// no daily breakdown -- "which sources people use" reads more like a
-// standing preference than a day-to-day trend, and this keeps the write
-// count reasonable for a request that can touch several groups at once.
-async function bumpStatBy(env, kind, amount) {
-  if (!env || !env.CONFIGS || !amount) return;
-  try {
-    const totalKey = `stats:${kind}:total`;
-    if (env.DB && kind.startsWith("sourcegroup:")) {
-      // Left exactly as it was: source groups have their own table, their
-      // own read path in renderAdminDashboard, and their own branch in
-      // /admin/api/migrate-d1. It was already atomic -- it is the precedent
-      // the rest of this now follows, not something to re-route.
-      const groupName = kind.slice("sourcegroup:".length);
-      await env.DB.prepare(
-        "INSERT INTO source_groups (id, name, install_count) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET install_count = source_groups.install_count + excluded.install_count"
-      ).bind(groupName, groupName, amount).run();
-    } else if (env.DB) {
-      // Total only, no day bucket -- see this function's own comment on why
-      // per-source-group counters are all-time.
-      await d1BumpStat(env, kind, ["total"], amount);
-    } else {
-      const totalRaw = await env.CONFIGS.get(totalKey);
-      const total = (parseInt(totalRaw, 10) || 0) + amount;
-      await env.CONFIGS.put(totalKey, String(total));
-    }
-  } catch (e) {
-    // best-effort, see bumpStat above
-  }
 }
 
 // Bumps one or more named counters that all live inside a single JSON blob
@@ -11794,6 +11561,7 @@ async function attachEventMeta(env, eventType, ids) {
 // `kind` dimension list_copy:{slug} already uses. That is why this needed no
 // migration: the table it wants already exists.
 async function d1CountsByKindPrefix(env, prefix, window, candidateCap) {
+  await flushPendingStats(env);
   const [lo, hi] = statKindRange(prefix);
   let rows;
   if (window === "alltime") {
@@ -12357,6 +12125,7 @@ async function computeCatalogAndCommunityLeaderboards(env, ctx) {
 }
 
 async function computeAudienceAnalytics(env) {
+  await flushPendingStats(env);
   if (!env || (!env.CONFIGS && !env.DB)) return { watchTypes: {}, genres: [], decades: [] };
 
   if (env.CONFIGS) {
@@ -12556,6 +12325,7 @@ function recordListCopySlug(rawId, origin) {
 // Deliberately NOT "D1 + KV summed": /admin/api/migrate-d1 COPIES the KV
 // value into D1, so summing would double every migrated counter.
 async function readStatCount(env, kind, bucket) {
+  await flushPendingStats(env);
   if (env && env.DB) {
     try {
       const { results } = await env.DB.prepare(
@@ -12603,6 +12373,7 @@ function statKindRange(prefix) {
 // a large key space cannot push this request past Cloudflare's subrequest
 // limit (see computeCatalogAndCommunityLeaderboards' own comment).
 async function readStatTotalsByPrefix(env, prefix) {
+  await flushPendingStats(env);
   const out = new Map();
   if (!env || !env.CONFIGS) return out;
   if (env.DB) {
@@ -12668,6 +12439,7 @@ async function readSourceGroupTotals(env) {
 // day keys, as { "authkey:api-save": n, "authkey:why:nocookie": n, ... }.
 // With D1 it is one range query; without it, one loadStatsByDay per kind.
 async function loadAuthKeyBreakdown(env, dateKeys) {
+  await flushPendingStats(env);
   const sums = {};
   if (!env || !env.CONFIGS) return sums;
   if (env.DB) {
@@ -12729,6 +12501,7 @@ function authKeyBreakdownHtml(sums) {
 // KV range-query, so this is the only way to enumerate them) and returns a
 // { "YYYY-MM-DD": count } map, skipping the :total key itself.
 async function loadStatsByDay(env, kind) {
+  await flushPendingStats(env);
   if (!env || !env.CONFIGS) return {};
   if (env.DB) {
     try {
@@ -18821,6 +18594,166 @@ async function searchTraktLists(query, traktKeyOverride) {
 
   return lists;
 }
+// Stat counters: bumpStat / bumpStatBy and their in-isolate batching (PERF-04).
+// Moved out of 03_admin.js, which is over its size baseline and may only shrink;
+// d1BumpStat and every stats reader stay there.
+
+// --- In-isolate batching of the D1 counters (PERF-04) -----------------------
+//
+// bumpStat / bumpStatBy used to write two upserts per event, and the `total` row
+// of a busy kind (pageviews, apiuse:*) is one row every request contends on at
+// the single D1 primary. They now add up in this isolate and are written as ONE
+// batch when the oldest unwritten bump is a minute old, or 50 kinds are waiting.
+//
+// The owner accepted the cost (2026-11-03): an isolate recycled between flushes
+// loses up to a minute of its counts, so the admin numbers are approximate by
+// that much. To keep the numbers honest otherwise: every stats READ in this file
+// flushes this isolate's pending counts first, the cron tick does too, and a
+// failed flush puts its counts back for the next one. bumpStat returns the flush
+// when it is due, so the existing ctx.waitUntil(bumpStat(...)) call sites carry
+// it (no call site changed). The day key is taken when the event happens, so a
+// batch spanning midnight Eastern still splits into two day rows.
+const STAT_FLUSH_AFTER_MS = 60 * 1000;
+const STAT_FLUSH_MAX_KINDS = 50;
+const STAT_FLUSH_STATEMENTS_PER_BATCH = 100;
+const STAT_PENDING_BY_DB = new WeakMap();
+
+// The one object that stays the same across requests: instrumentEnv wraps env.DB
+// per request and keeps the real binding on __raw.
+function statBindingOf(env) {
+  const db = env && env.DB;
+  return db && db.__raw ? db.__raw : db;
+}
+
+function statPendingFor(env) {
+  const key = statBindingOf(env);
+  let st = STAT_PENDING_BY_DB.get(key);
+  if (!st) {
+    st = { db: key, kinds: new Map(), firstAt: 0 };
+    STAT_PENDING_BY_DB.set(key, st);
+  }
+  return st;
+}
+
+function statPendingAdd(st, kind, day, amount) {
+  let k = st.kinds.get(kind);
+  if (!k) {
+    k = { total: 0, days: new Map() };
+    st.kinds.set(kind, k);
+  }
+  if (!st.firstAt) st.firstAt = Date.now();
+  if (day === "total") {
+    k.total += amount;
+  } else {
+    k.days.set(day, (k.days.get(day) || 0) + amount);
+  }
+}
+
+function statPendingDue(st) {
+  return st.kinds.size >= STAT_FLUSH_MAX_KINDS || (st.firstAt && Date.now() - st.firstAt >= STAT_FLUSH_AFTER_MS);
+}
+
+async function flushPendingStats(env) {
+  if (!env || !env.DB) return;
+  const st = STAT_PENDING_BY_DB.get(statBindingOf(env));
+  if (!st || !st.kinds.size) return;
+  // Swap first, so a bump arriving while the batch is in flight starts a new window.
+  const taken = st.kinds;
+  st.kinds = new Map();
+  st.firstAt = 0;
+  const upsert = "INSERT INTO stats (kind, day, n) VALUES (?, ?, ?) ON CONFLICT(kind, day) DO UPDATE SET n = n + excluded.n";
+  const stmts = [];
+  for (const [kind, k] of taken) {
+    if (k.total) stmts.push(st.db.prepare(upsert).bind(kind, "total", k.total));
+    for (const [day, n] of k.days) stmts.push(st.db.prepare(upsert).bind(kind, day, n));
+  }
+  try {
+    for (let i = 0; i < stmts.length; i += STAT_FLUSH_STATEMENTS_PER_BATCH) {
+      await st.db.batch(stmts.slice(i, i + STAT_FLUSH_STATEMENTS_PER_BATCH));
+    }
+  } catch (e) {
+    // Best-effort like every counter: put the counts back for the next flush.
+    for (const [kind, k] of taken) {
+      if (k.total) statPendingAdd(st, kind, "total", k.total);
+      for (const [day, n] of k.days) statPendingAdd(st, kind, day, n);
+    }
+  }
+}
+
+async function bumpStat(env, kind) {
+  if (!env || !env.CONFIGS) return;
+  try {
+    // D1 is where every counter is read from (readStatCount, loadStatsByDay,
+    // the leaderboards), so it is where every counter is written. From
+    // 2026-10-02 to the fix these went to Analytics Engine only, which
+    // nothing reads, and the admin dashboard froze at zero.
+    if (env.DB) {
+      const st = statPendingFor(env);
+      statPendingAdd(st, kind, "total", 1);
+      statPendingAdd(st, kind, statsToday(), 1);
+      if (statPendingDue(st)) await flushPendingStats(env);
+      return;
+    }
+    // KV path: get-then-put, so concurrent bumps lose increments
+    // (AUDIT-2026-09-05 §14). Deliberately left as it is, and recorded here
+    // rather than silently: KV has no atomic increment and no
+    // compare-and-swap, so the only correct fix is a different storage
+    // primitive -- which is exactly what the D1 branch above is
+    // (d1BumpStat's upsert is atomic, and it is the path any deployment
+    // that cares about exact counters should be on). What is lost is a
+    // display statistic under simultaneous load; nothing reads these
+    // numbers to make a decision, and no user-visible behaviour depends on
+    // one. Spending a durable object per counter on that would be the
+    // wrong trade.
+    const totalKey = `stats:${kind}:total`;
+    const dayKey = `stats:${kind}:${statsToday()}`;
+    const [totalRaw, dayRaw] = await Promise.all([env.CONFIGS.get(totalKey), env.CONFIGS.get(dayKey)]);
+    const total = (parseInt(totalRaw, 10) || 0) + 1;
+    const day = (parseInt(dayRaw, 10) || 0) + 1;
+    await Promise.all([env.CONFIGS.put(totalKey, String(total)), env.CONFIGS.put(dayKey, String(day))]);
+  } catch (e) {
+    // best-effort -- a failed stat bump should never break the actual
+    // request it's riding along on (see the ctx.waitUntil call sites,
+    // which don't await this at all for exactly that reason).
+  }
+}
+
+// Like bumpStat above, but by a caller-supplied amount in one write
+// instead of always +1 -- used for the per-source-group counters (a
+// single "generate install link" beacon can represent several rows of the
+// same group at once, e.g. five Custom Lists in one install). Total only,
+// no daily breakdown -- "which sources people use" reads more like a
+// standing preference than a day-to-day trend, and this keeps the write
+// count reasonable for a request that can touch several groups at once.
+async function bumpStatBy(env, kind, amount) {
+  if (!env || !env.CONFIGS || !amount) return;
+  try {
+    const totalKey = `stats:${kind}:total`;
+    if (env.DB && kind.startsWith("sourcegroup:")) {
+      // Left exactly as it was: source groups have their own table, their
+      // own read path in renderAdminDashboard, and their own branch in
+      // /admin/api/migrate-d1. It was already atomic -- it is the precedent
+      // the rest of this now follows, not something to re-route.
+      const groupName = kind.slice("sourcegroup:".length);
+      await env.DB.prepare(
+        "INSERT INTO source_groups (id, name, install_count) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET install_count = source_groups.install_count + excluded.install_count"
+      ).bind(groupName, groupName, amount).run();
+    } else if (env.DB) {
+      // Total only, no day bucket -- see this function's own comment on why
+      // per-source-group counters are all-time.
+      const st = statPendingFor(env);
+      statPendingAdd(st, kind, "total", amount);
+      if (statPendingDue(st)) await flushPendingStats(env);
+    } else {
+      const totalRaw = await env.CONFIGS.get(totalKey);
+      const total = (parseInt(totalRaw, 10) || 0) + amount;
+      await env.CONFIGS.put(totalKey, String(total));
+    }
+  } catch (e) {
+    // best-effort, see bumpStat above
+  }
+}
+
 // --- manifest ----------------------------------------------------------
 
 // A shelf's TITLE in the apps. `liveNames` (see liveShelfNames) carries the
@@ -23534,6 +23467,185 @@ async function buildChannelMeta(entry, origin, opts = {}) {
 // mdblist's json feeds (public list feed and the REST API) are both either a
 // flat array of items, or an object with `movies` / `shows` arrays depending
 // on list contents. This normalizes + filters + maps either shape to metas.
+// Page memo and the HTML page response. Moved out of 02_http-and-creator-utils.js
+// (unchanged apart from PERF-05's identity shortcut and PERF-06's body marker),
+// because that file is over its size baseline and may only shrink.
+
+// Rewritten pages are remembered so a repeat request for the same page does not
+// re-scan ~2MB looking for the markers.
+//
+// Keyed on a cheap hash of the page, NOT on the page itself. The key used to be
+// the whole pre-split HTML string -- measured at 1,979,374 characters -- with
+// the rewritten page (~580KB) as the value, sixteen of them. That is tens of
+// megabytes of strings pinned in an isolate that has 128MB for everything,
+// alongside APP_BUNDLE (~1.3MB), APP_CSS (~97KB) and PER_USER_CACHE_MAP's
+// thousand entries. Every distinct shared list URL, configure link and deep
+// link renders different HTML, so the cache genuinely does fill.
+//
+// A 32-bit FNV-1a over the string is not collision-proof, and does not need to
+// be: a collision would serve one visitor another visitor's PAGE, so the stored
+// length is checked too and the hash is only ever a key into this isolate's own
+// memory. Cheap enough that it costs less than the marker scan it avoids.
+const SPLIT_PAGE_MEMO = new Map();
+
+function splitPageMemoKey(html) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < html.length; i++) {
+    h ^= html.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36) + ":" + html.length;
+}
+
+// The last few pages by identity. renderBuilderCached hands back the same string
+// object for the default page, so a repeat request (a 304 included) is found with
+// one reference comparison instead of an FNV pass over ~1.6 MB.
+const RECENT_SPLIT_PAGES = [];
+const RECENT_SPLIT_PAGES_MAX = 2;
+
+async function pageWithExternalBundle(html) {
+  for (const e of RECENT_SPLIT_PAGES) if (e.html === html) return e.page;
+  const key = splitPageMemoKey(html);
+  const memo = SPLIT_PAGE_MEMO.get(key);
+  if (memo) {
+    rememberRecentSplitPage(html, memo);
+    return memo;
+  }
+  let page = html;
+  try {
+    page = (await splitAppBundle(html)).page;
+    page = (await splitAppCss(page)).page;
+  } catch {
+    // Nothing unexpected here is worth costing somebody their page.
+    return html;
+  }
+  if (SPLIT_PAGE_MEMO.size >= 16) {
+    const oldest = SPLIT_PAGE_MEMO.keys().next().value;
+    if (oldest !== undefined) SPLIT_PAGE_MEMO.delete(oldest);
+  }
+  SPLIT_PAGE_MEMO.set(key, page);
+  rememberRecentSplitPage(html, page);
+  return page;
+}
+
+function rememberRecentSplitPage(html, page) {
+  RECENT_SPLIT_PAGES.unshift({ html, page });
+  if (RECENT_SPLIT_PAGES.length > RECENT_SPLIT_PAGES_MAX) RECENT_SPLIT_PAGES.pop();
+}
+
+function pageResponseWithBody(html, init) {
+  const res = new Response(html, init);
+  res[PAGE_HTML_BODY] = html;
+  return res;
+}
+
+async function htmlPageResponse(request, fullHtml, extraHeaders) {
+  // The ~1.3MB client bundle is lifted out to /app.js?v=<hash> first, so
+  // both the body sent below and the ETag computed from it describe the
+  // small page rather than the page-plus-bundle.
+  const html = await pageWithExternalBundle(fullHtml);
+  let etag = "";
+  try {
+    etag = await htmlEtagFor(html);
+  } catch {
+    // No digest available -- fall through and just send the page, exactly
+    // as this did before there was an ETag at all.
+  }
+  const headers = {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-cache",
+    ...(extraHeaders || {}),
+  };
+  if (!etag) return pageResponseWithBody(html, { headers });
+  headers["ETag"] = etag;
+
+  // If-None-Match can carry a list, and a cache is allowed to weaken a tag
+  // it stores, so compare against each entry with any W/ prefix removed
+  // rather than string-equalling the whole header.
+  const inm = request && request.headers ? (request.headers.get("If-None-Match") || "") : "";
+  if (inm) {
+    const match = inm
+      .split(",")
+      .map((s) => s.trim().replace(/^W\//, ""))
+      .some((s) => s === etag || s === "*");
+    if (match) {
+      return new Response(null, { status: 304, headers });
+    }
+  }
+  return pageResponseWithBody(html, { headers });
+}
+
+// Owner check for a stored track-on config (resolveConfig). Moved out of
+// 02_http-and-creator-utils.js unchanged apart from the 10 s memo (PERF-16), because
+// that file is over its size baseline and may only shrink (tests/size-budget.json).
+
+// Proves a Creator Name + Creator Key pair, and answers with the username it
+// proves or "".
+//
+// This is authenticateCreator's check without the parts that need a request:
+// same tombstone, same record read, same PBKDF2-with-memo. It exists because
+// authenticateCreator lives inside handleFetch's closure and resolveConfig is
+// a module-scope function every catalog request goes through.
+//
+// The ONE caller is resolveConfig, and only for a STORED config -- i.e. a
+// credential this Worker itself wrote into KV, not one a caller just handed
+// over -- so there is no unbounded-PBKDF2 path here to throttle. A base64
+// config is caller-authored and is never given to this function.
+//
+// A success is remembered for 10 s in this isolate (the SESSION_CACHE window,
+// audit SESS-001), because every row of a track-on link asks again and each ask
+// was a KV tombstone read, a D1 tombstone query and SELECT * FROM creators. So an
+// account deleted or re-keyed on another isolate can still serve its shelf here
+// for up to 10 s; on this isolate purgeCreatorData and a key rotation clear it at
+// once. Failures are never remembered, and the memo key is a SHA-256 of the name
+// and the presented key, never the key itself.
+const SHELF_OWNER_MEMO = new Map();
+const SHELF_OWNER_MEMO_TTL_MS = 10 * 1000;
+const SHELF_OWNER_MEMO_MAX = 1000;
+
+async function verifyShelfOwner(env, creatorName, creatorKey) {
+  if (!env || !env.CONFIGS || !creatorName || !creatorKey) return "";
+  const v = validateCreatorUsername(creatorName);
+  if (!v.ok) return "";
+  let memoKey = "";
+  try {
+    memoKey = await creatorAuthMemoKey(v.normalized, String(creatorKey), "shelf-owner");
+    const hit = SHELF_OWNER_MEMO.get(memoKey);
+    if (hit !== undefined) {
+      if (Date.now() < hit) return v.normalized;
+      SHELF_OWNER_MEMO.delete(memoKey);
+    }
+  } catch {
+    memoKey = "";
+  }
+  try {
+    const [tombstoned, raw] = await Promise.all([
+      isCreatorTombstoned(env, v.normalized),
+      getCreator(env, v.normalized),
+    ]);
+    if (tombstoned || !raw) return "";
+    const profile = JSON.parse(raw);
+    if (!profile || !profile.keyHash) return "";
+    const ok = await verifyCreatorKeyMemoized(String(creatorKey), profile.keyHash, v.normalized);
+    if (ok && memoKey) {
+      if (SHELF_OWNER_MEMO.size >= SHELF_OWNER_MEMO_MAX) {
+        const oldest = SHELF_OWNER_MEMO.keys().next().value;
+        if (oldest !== undefined) SHELF_OWNER_MEMO.delete(oldest);
+      }
+      SHELF_OWNER_MEMO.set(memoKey, Date.now() + SHELF_OWNER_MEMO_TTL_MS);
+    }
+    return ok ? v.normalized : "";
+  } catch {
+    return "";
+  }
+}
+
+// Drops every remembered owner check (an account was purged or re-keyed on this
+// isolate). Returns what it was given, so a caller can use it in place.
+function forgetShelfOwner(username) {
+  SHELF_OWNER_MEMO.clear();
+  return username;
+}
 function extractMdblistItem(it) {
   if (!it) return null;
   // MDBList sync/watched item shapes:
@@ -91724,6 +91836,8 @@ export default {
       configureProviderBreaker(env);
       // FF_EVENT_TRACKING, as in the fetch handler above.
       env = eventTrackingEnv(env);
+      // Counts this isolate is still holding (PERF-04) go to D1 on every tick.
+      await flushPendingStats(env);
       await runCronTick(event, env, ctx);
     } catch (err) {
       console.error("[Cron] scheduled() failed:", err);
@@ -91735,6 +91849,7 @@ export default {
   // -> Consumers -> this Worker; docs/OPERATIONS.md section 18). Each message
   // names its job type, and runJobsQueue (44_jobs-queue.js) runs its handler.
   async queue(batch, env, ctx) {
+    await flushPendingStats(env); // counts this isolate still holds (PERF-04)
     await runJobsQueue(batch, env, ctx);
   },
 

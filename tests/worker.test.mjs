@@ -4,7 +4,7 @@ import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { D1_MAX_BOUND_PARAMS, accountProof, awaitFreshRateWindow, call, createUser, freshIsolate, hasPublicIndex, isPublicIndexKey, lapseCreatorTombstone, makeD1, makeEnv, makeKv, nextIp, publicIndexEntries, publicIndexSnapshot, runScheduledTick, seedAnonPublishedList, worker } from "./harness.mjs";
+import { D1_MAX_BOUND_PARAMS, accountProof, awaitFreshRateWindow, call, createUser, flushStats, freshIsolate, hasPublicIndex, isPublicIndexKey, lapseCreatorTombstone, makeD1, makeEnv, makeKv, nextIp, publicIndexEntries, publicIndexSnapshot, runScheduledTick, seedAnonPublishedList, worker } from "./harness.mjs";
 import { listSources } from "./sources.mjs";
 
 // Likes, channel adds and shares need an account (docs/DECISIONS.md D-6).
@@ -2381,7 +2381,7 @@ describe("P2-6: an outbound call that sets no timeout still gets one", () => {
 // builder's save body. Every field is round-tripped here, so a field added to
 // the schema is covered the moment it exists.
 describe("P2-8: every install setting survives a save, from one schema", () => {
-  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
+  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
   const FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).map((f) => ({ ...f }));
   const ROW = { id: "pop", name: "Pop", type: "movie", url: "tmdb:chart:popular" };
   // A value for each field that is NOT its default, so it has to be stored.
@@ -2720,7 +2720,7 @@ describe("harness: the test D1 enforces D1's limits", () => {
 
 // Two Phase 1 correctness fixes that are easy to regress without noticing.
 describe("Phase 1: catalog ids and badge days", () => {
-  const fns = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/catalog/05_catalog-core.js");
+  const fns = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/catalog/05_catalog-core.js");
 
   // A TMDB id used to get "tt" glued on, so "550" became "tt550" -- a real,
   // unrelated IMDb title -- and "tmdb:680" became "tttmdb:680".
@@ -4701,6 +4701,7 @@ describe("audit fix 9: stat counters are atomic when D1 is bound", () => {
 
     const withD1 = makeEnv({ DB: makeD1() });
     await Promise.all(Array.from({ length: 20 }, () => call(withD1, "/")));
+    await flushStats(withD1); // counters are batched in the isolate (PERF-04)
     const d1Count = withD1.DB._stat("pageviews", "total") || 0;
 
     // The KV read-modify-write loses almost all of them: every concurrent
@@ -4713,6 +4714,7 @@ describe("audit fix 9: stat counters are atomic when D1 is bound", () => {
   it("writes both the all-time and the per-day bucket", async () => {
     const env = makeEnv({ DB: makeD1() });
     await call(env, "/");
+    await flushStats(env); // counters are batched in the isolate (PERF-04)
     const buckets = env.DB._statBuckets("pageviews");
     assert.equal(buckets.length, 2);
     assert.ok(buckets.includes("total"));
@@ -16051,7 +16053,7 @@ describe("P3a review: the accounts row follows the creator profile", () => {
 // v2 links (/i/{token}) are created, edited, rotated and revoked through
 // /api/installs.
 describe("P3a-8: installs", () => {
-  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
+  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
   const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
   const SECRET_FIELDS = vm.runInContext("INSTALL_CONFIG_FIELDS", sb).filter((f) => f.secret).map((f) => f.name);
 
@@ -16081,7 +16083,7 @@ describe("P3a-8: installs", () => {
   // Returned as plain data: each sandbox is its own realm, and a strict
   // comparison would otherwise fail on the prototypes alone.
   async function freshResolve(id, env, opts) {
-    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
+    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env, opts)));
   }
 
@@ -16533,7 +16535,7 @@ describe("P3a-8: installs", () => {
 describe("P3a-8: undoing the install move", () => {
   const TEST_KEY = "k1:" + Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 7)).toString("base64");
   async function freshResolve(id, env) {
-    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
+    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env)));
   }
 
@@ -16938,7 +16940,7 @@ describe("P3a-10: catalogs use the owner's connections", () => {
     assert.equal(r.headers.get("location"), "https://example.test/?connected=trakt");
   }
   async function freshResolve(id, env) {
-    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
+    const fresh = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
     return JSON.parse(JSON.stringify(await fresh.resolveConfig(id, env)));
   }
   const watchlistRow = { id: "tw", name: "Watchlist", type: "movie", url: "trakt:watchlist" };
@@ -17120,7 +17122,7 @@ describe("P3a-10: catalogs use the owner's connections", () => {
   it("when another request already renewed it, uses that token instead of marking the connection broken", async () => {
     const realFetch = globalThis.fetch;
     try {
-      const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
+      const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/api/27_installs.js", "src/api/28_connections.js");
       let env;
       let accountId;
       const seen = stubTrakt({

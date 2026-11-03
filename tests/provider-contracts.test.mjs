@@ -300,7 +300,7 @@ describe("P4-5: provider contract fixtures", () => {
   // read them.
   describe("the other providers", () => {
     function sandboxWithFixtures() {
-      const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/04_config-resolution.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
+      const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_shelf-owner.js", "src/core/04_config-resolution.js", "src/catalog/07_source-fetchers-tmdb-simkl.js");
       const router = fixtureRouter();
       // After loading: 02_'s own fetch guard would otherwise call itself here.
       sb.fetch = router.handler;

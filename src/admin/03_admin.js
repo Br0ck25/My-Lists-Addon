@@ -38,7 +38,7 @@ function easternDateKeyDaysAgo(nowMs, n) {
 }
 
 function statsToday() {
-  return easternDateKey(new Date());
+  return easternDateKey(new Date(Date.now()));
 }
 
 // --- Counter storage ---------------------------------------------------------
@@ -85,75 +85,6 @@ async function d1BumpStat(env, kind, buckets, amount) {
     ).bind(kind, bucket, amount)
   );
   await env.DB.batch(stmts);
-}
-
-async function bumpStat(env, kind) {
-  if (!env || !env.CONFIGS) return;
-  try {
-    // D1 is where every counter is read from (readStatCount, loadStatsByDay,
-    // the leaderboards), so it is where every counter is written. From
-    // 2026-10-02 to the fix these went to Analytics Engine only, which
-    // nothing reads, and the admin dashboard froze at zero.
-    if (env.DB) {
-      await d1BumpStat(env, kind, ["total", statsToday()], 1);
-      return;
-    }
-    // KV path: get-then-put, so concurrent bumps lose increments
-    // (AUDIT-2026-09-05 §14). Deliberately left as it is, and recorded here
-    // rather than silently: KV has no atomic increment and no
-    // compare-and-swap, so the only correct fix is a different storage
-    // primitive -- which is exactly what the D1 branch above is
-    // (d1BumpStat's upsert is atomic, and it is the path any deployment
-    // that cares about exact counters should be on). What is lost is a
-    // display statistic under simultaneous load; nothing reads these
-    // numbers to make a decision, and no user-visible behaviour depends on
-    // one. Spending a durable object per counter on that would be the
-    // wrong trade.
-    const totalKey = `stats:${kind}:total`;
-    const dayKey = `stats:${kind}:${statsToday()}`;
-    const [totalRaw, dayRaw] = await Promise.all([env.CONFIGS.get(totalKey), env.CONFIGS.get(dayKey)]);
-    const total = (parseInt(totalRaw, 10) || 0) + 1;
-    const day = (parseInt(dayRaw, 10) || 0) + 1;
-    await Promise.all([env.CONFIGS.put(totalKey, String(total)), env.CONFIGS.put(dayKey, String(day))]);
-  } catch (e) {
-    // best-effort -- a failed stat bump should never break the actual
-    // request it's riding along on (see the ctx.waitUntil call sites,
-    // which don't await this at all for exactly that reason).
-  }
-}
-
-// Like bumpStat above, but by a caller-supplied amount in one write
-// instead of always +1 -- used for the per-source-group counters (a
-// single "generate install link" beacon can represent several rows of the
-// same group at once, e.g. five Custom Lists in one install). Total only,
-// no daily breakdown -- "which sources people use" reads more like a
-// standing preference than a day-to-day trend, and this keeps the write
-// count reasonable for a request that can touch several groups at once.
-async function bumpStatBy(env, kind, amount) {
-  if (!env || !env.CONFIGS || !amount) return;
-  try {
-    const totalKey = `stats:${kind}:total`;
-    if (env.DB && kind.startsWith("sourcegroup:")) {
-      // Left exactly as it was: source groups have their own table, their
-      // own read path in renderAdminDashboard, and their own branch in
-      // /admin/api/migrate-d1. It was already atomic -- it is the precedent
-      // the rest of this now follows, not something to re-route.
-      const groupName = kind.slice("sourcegroup:".length);
-      await env.DB.prepare(
-        "INSERT INTO source_groups (id, name, install_count) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET install_count = source_groups.install_count + excluded.install_count"
-      ).bind(groupName, groupName, amount).run();
-    } else if (env.DB) {
-      // Total only, no day bucket -- see this function's own comment on why
-      // per-source-group counters are all-time.
-      await d1BumpStat(env, kind, ["total"], amount);
-    } else {
-      const totalRaw = await env.CONFIGS.get(totalKey);
-      const total = (parseInt(totalRaw, 10) || 0) + amount;
-      await env.CONFIGS.put(totalKey, String(total));
-    }
-  } catch (e) {
-    // best-effort, see bumpStat above
-  }
 }
 
 // Bumps one or more named counters that all live inside a single JSON blob
@@ -718,6 +649,7 @@ async function attachEventMeta(env, eventType, ids) {
 // `kind` dimension list_copy:{slug} already uses. That is why this needed no
 // migration: the table it wants already exists.
 async function d1CountsByKindPrefix(env, prefix, window, candidateCap) {
+  await flushPendingStats(env);
   const [lo, hi] = statKindRange(prefix);
   let rows;
   if (window === "alltime") {
@@ -1281,6 +1213,7 @@ async function computeCatalogAndCommunityLeaderboards(env, ctx) {
 }
 
 async function computeAudienceAnalytics(env) {
+  await flushPendingStats(env);
   if (!env || (!env.CONFIGS && !env.DB)) return { watchTypes: {}, genres: [], decades: [] };
 
   if (env.CONFIGS) {
@@ -1480,6 +1413,7 @@ function recordListCopySlug(rawId, origin) {
 // Deliberately NOT "D1 + KV summed": /admin/api/migrate-d1 COPIES the KV
 // value into D1, so summing would double every migrated counter.
 async function readStatCount(env, kind, bucket) {
+  await flushPendingStats(env);
   if (env && env.DB) {
     try {
       const { results } = await env.DB.prepare(
@@ -1527,6 +1461,7 @@ function statKindRange(prefix) {
 // a large key space cannot push this request past Cloudflare's subrequest
 // limit (see computeCatalogAndCommunityLeaderboards' own comment).
 async function readStatTotalsByPrefix(env, prefix) {
+  await flushPendingStats(env);
   const out = new Map();
   if (!env || !env.CONFIGS) return out;
   if (env.DB) {
@@ -1592,6 +1527,7 @@ async function readSourceGroupTotals(env) {
 // day keys, as { "authkey:api-save": n, "authkey:why:nocookie": n, ... }.
 // With D1 it is one range query; without it, one loadStatsByDay per kind.
 async function loadAuthKeyBreakdown(env, dateKeys) {
+  await flushPendingStats(env);
   const sums = {};
   if (!env || !env.CONFIGS) return sums;
   if (env.DB) {
@@ -1653,6 +1589,7 @@ function authKeyBreakdownHtml(sums) {
 // KV range-query, so this is the only way to enumerate them) and returns a
 // { "YYYY-MM-DD": count } map, skipping the :total key itself.
 async function loadStatsByDay(env, kind) {
+  await flushPendingStats(env);
   if (!env || !env.CONFIGS) return {};
   if (env.DB) {
     try {

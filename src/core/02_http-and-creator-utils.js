@@ -327,6 +327,9 @@ async function handleCspReport(request, env, ctx) {
   return done();
 }
 
+// Private marker: the string a page Response was built from (htmlPageResponse sets it).
+const PAGE_HTML_BODY = Symbol("pageHtmlBody");
+
 // Wraps a Response with the headers above, without disturbing anything the
 // route handler already set (status, statusText, body, its own headers
 // like Content-Type/Cache-Control/CORS) -- see securityHeaders' own
@@ -584,15 +587,18 @@ function instrumentEnv(env, counters) {
     },
     list: (...a) => { counters.kvLists++; return kv.list(...a); },
   } : kv;
-  function wrapDbSession(targetDb) {
+  function wrapDbSession(targetDb, rawDb = targetDb) {
     if (!targetDb) return targetDb;
     return {
+      // The real binding, for state that must outlive this request (PERF-04's
+      // pending counters are kept per binding, not per wrapper).
+      __raw: rawDb,
       prepare: (...a) => { counters.d1Statements++; return targetDb.prepare(...a); },
       batch: (...a) => { counters.d1Batches++; return targetDb.batch(...a); },
       exec: (...a) => { counters.d1Statements++; return targetDb.exec(...a); },
       dump: (...a) => targetDb.dump(...a),
       getBookmark: () => (typeof targetDb.getBookmark === "function" ? targetDb.getBookmark() : null),
-      withSession: (...a) => wrapDbSession(typeof targetDb.withSession === "function" ? targetDb.withSession(...a) : targetDb),
+      withSession: (...a) => wrapDbSession(typeof targetDb.withSession === "function" ? targetDb.withSession(...a) : targetDb, rawDb),
     };
   }
   const dbProxy = wrapDbSession(db);
@@ -1684,7 +1690,6 @@ async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
 
 function clearSessionCache() {
   SESSION_CACHE.clear();
-  SHELF_OWNER_MEMO.clear();
 }
 
 
@@ -2530,113 +2535,6 @@ async function splitAppCss(html) {
     '<link rel="stylesheet" href="/app.css?v=' + APP_CSS.hash + '">' +
     html.slice(end + APP_CSS_END.length);
   return { page, css: APP_CSS };
-}
-
-// Rewritten pages are remembered so a repeat request for the same page does not
-// re-scan ~2MB looking for the markers.
-//
-// Keyed on a cheap hash of the page, NOT on the page itself. The key used to be
-// the whole pre-split HTML string -- measured at 1,979,374 characters -- with
-// the rewritten page (~580KB) as the value, sixteen of them. That is tens of
-// megabytes of strings pinned in an isolate that has 128MB for everything,
-// alongside APP_BUNDLE (~1.3MB), APP_CSS (~97KB) and PER_USER_CACHE_MAP's
-// thousand entries. Every distinct shared list URL, configure link and deep
-// link renders different HTML, so the cache genuinely does fill.
-//
-// A 32-bit FNV-1a over the string is not collision-proof, and does not need to
-// be: a collision would serve one visitor another visitor's PAGE, so the stored
-// length is checked too and the hash is only ever a key into this isolate's own
-// memory. Cheap enough that it costs less than the marker scan it avoids.
-const SPLIT_PAGE_MEMO = new Map();
-
-function splitPageMemoKey(html) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < html.length; i++) {
-    h ^= html.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36) + ":" + html.length;
-}
-
-// The last few pages by identity. renderBuilderCached hands back the same string
-// object for the default page, so a repeat request (a 304 included) is found with
-// one reference comparison instead of an FNV pass over ~1.6 MB.
-const RECENT_SPLIT_PAGES = [];
-const RECENT_SPLIT_PAGES_MAX = 2;
-
-async function pageWithExternalBundle(html) {
-  for (const e of RECENT_SPLIT_PAGES) if (e.html === html) return e.page;
-  const key = splitPageMemoKey(html);
-  const memo = SPLIT_PAGE_MEMO.get(key);
-  if (memo) {
-    rememberRecentSplitPage(html, memo);
-    return memo;
-  }
-  let page = html;
-  try {
-    page = (await splitAppBundle(html)).page;
-    page = (await splitAppCss(page)).page;
-  } catch {
-    // Nothing unexpected here is worth costing somebody their page.
-    return html;
-  }
-  if (SPLIT_PAGE_MEMO.size >= 16) {
-    const oldest = SPLIT_PAGE_MEMO.keys().next().value;
-    if (oldest !== undefined) SPLIT_PAGE_MEMO.delete(oldest);
-  }
-  SPLIT_PAGE_MEMO.set(key, page);
-  rememberRecentSplitPage(html, page);
-  return page;
-}
-
-function rememberRecentSplitPage(html, page) {
-  RECENT_SPLIT_PAGES.unshift({ html, page });
-  if (RECENT_SPLIT_PAGES.length > RECENT_SPLIT_PAGES_MAX) RECENT_SPLIT_PAGES.pop();
-}
-
-// Private marker: the string a page Response was built from (see withSecurityHeaders).
-const PAGE_HTML_BODY = Symbol("pageHtmlBody");
-
-function pageResponseWithBody(html, init) {
-  const res = new Response(html, init);
-  res[PAGE_HTML_BODY] = html;
-  return res;
-}
-
-async function htmlPageResponse(request, fullHtml, extraHeaders) {
-  // The ~1.3MB client bundle is lifted out to /app.js?v=<hash> first, so
-  // both the body sent below and the ETag computed from it describe the
-  // small page rather than the page-plus-bundle.
-  const html = await pageWithExternalBundle(fullHtml);
-  let etag = "";
-  try {
-    etag = await htmlEtagFor(html);
-  } catch {
-    // No digest available -- fall through and just send the page, exactly
-    // as this did before there was an ETag at all.
-  }
-  const headers = {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-cache",
-    ...(extraHeaders || {}),
-  };
-  if (!etag) return pageResponseWithBody(html, { headers });
-  headers["ETag"] = etag;
-
-  // If-None-Match can carry a list, and a cache is allowed to weaken a tag
-  // it stores, so compare against each entry with any W/ prefix removed
-  // rather than string-equalling the whole header.
-  const inm = request && request.headers ? (request.headers.get("If-None-Match") || "") : "";
-  if (inm) {
-    const match = inm
-      .split(",")
-      .map((s) => s.trim().replace(/^W\//, ""))
-      .some((s) => s === etag || s === "*");
-    if (match) {
-      return new Response(null, { status: 304, headers });
-    }
-  }
-  return pageResponseWithBody(html, { headers });
 }
 
 // --- Per-User Cache & Circuit Breaker Shield ---------------------------------
@@ -4765,9 +4663,8 @@ async function isCreatorTombstoned(env, username) {
 // cannot happen again: anything added to the account's key set gets
 // cleaned up by both callers automatically.
 async function purgeCreatorData(env, username, options = {}) {
-  SHELF_OWNER_MEMO.clear();
   const deleteIdentity = options.deleteIdentity === true;
-  const u = username;
+  const u = forgetShelfOwner(username);
   // Read before the sweep below deletes it, so the bump at the end can still
   // guarantee the stamp moves forward -- see bumpCreatorListsStamp's notBefore.
   let priorListsStamp = 0;
@@ -5458,67 +5355,6 @@ async function mayReadTrackedShelf(env, username, slug, keys = {}) {
   return isTrackedShelfShared(await readCreatorShareFlags(env, username), slug);
 }
 
-// Proves a Creator Name + Creator Key pair, and answers with the username it
-// proves or "".
-//
-// This is authenticateCreator's check without the parts that need a request:
-// same tombstone, same record read, same PBKDF2-with-memo. It exists because
-// authenticateCreator lives inside handleFetch's closure and resolveConfig is
-// a module-scope function every catalog request goes through.
-//
-// The ONE caller is resolveConfig, and only for a STORED config -- i.e. a
-// credential this Worker itself wrote into KV, not one a caller just handed
-// over -- so there is no unbounded-PBKDF2 path here to throttle. A base64
-// config is caller-authored and is never given to this function.
-//
-// A success is remembered for 10 s in this isolate (the SESSION_CACHE window,
-// audit SESS-001), because every row of a track-on link asks again and each ask
-// was a KV tombstone read, a D1 tombstone query and SELECT * FROM creators. So an
-// account deleted or re-keyed on another isolate can still serve its shelf here
-// for up to 10 s; on this isolate purgeCreatorData and a key rotation clear it at
-// once. Failures are never remembered, and the memo key is a SHA-256 of the name
-// and the presented key, never the key itself.
-const SHELF_OWNER_MEMO = new Map();
-const SHELF_OWNER_MEMO_TTL_MS = 10 * 1000;
-const SHELF_OWNER_MEMO_MAX = 1000;
-
-async function verifyShelfOwner(env, creatorName, creatorKey) {
-  if (!env || !env.CONFIGS || !creatorName || !creatorKey) return "";
-  const v = validateCreatorUsername(creatorName);
-  if (!v.ok) return "";
-  let memoKey = "";
-  try {
-    memoKey = await creatorAuthMemoKey(v.normalized, String(creatorKey), "shelf-owner");
-    const hit = SHELF_OWNER_MEMO.get(memoKey);
-    if (hit !== undefined) {
-      if (Date.now() < hit) return v.normalized;
-      SHELF_OWNER_MEMO.delete(memoKey);
-    }
-  } catch {
-    memoKey = "";
-  }
-  try {
-    const [tombstoned, raw] = await Promise.all([
-      isCreatorTombstoned(env, v.normalized),
-      getCreator(env, v.normalized),
-    ]);
-    if (tombstoned || !raw) return "";
-    const profile = JSON.parse(raw);
-    if (!profile || !profile.keyHash) return "";
-    const ok = await verifyCreatorKeyMemoized(String(creatorKey), profile.keyHash, v.normalized);
-    if (ok && memoKey) {
-      if (SHELF_OWNER_MEMO.size >= SHELF_OWNER_MEMO_MAX) {
-        const oldest = SHELF_OWNER_MEMO.keys().next().value;
-        if (oldest !== undefined) SHELF_OWNER_MEMO.delete(oldest);
-      }
-      SHELF_OWNER_MEMO.set(memoKey, Date.now() + SHELF_OWNER_MEMO_TTL_MS);
-    }
-    return ok ? v.normalized : "";
-  } catch {
-    return "";
-  }
-}
-
 // page of keys with Promise.all, so a hundred lists by one creator would
 // otherwise each start their own lookup.
 //
@@ -5600,7 +5436,7 @@ async function backfillCreatorRowInD1(env, username) {
 // rotating KV while D1 keeps answering with the old hash would leave neither
 // key working and lock the owner out of their own account.
 async function rotateCreatorKeyHashInD1(env, username, keyHash) {
-  SHELF_OWNER_MEMO.clear();
+  forgetShelfOwner();
   if (!env || !env.DB) return { ok: true };
   try {
     // meta.changes, not merely "did not throw". A D1 UPDATE that matches ZERO
