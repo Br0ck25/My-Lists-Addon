@@ -152,7 +152,21 @@ When it nears D1's size limit it can be split: create and bind `DB_ACTIVITY_1`, 
   3. Load it into a **new, empty** database first and check it: `npx wrangler d1 create my-lists-restore`, then `npx wrangler d1 execute my-lists-restore --remote --file=backup.sql`. The search tables come back filled; nothing needs rebuilding.
   4. Point the Worker's binding (`DB`, or `DB_ACTIVITY` for `mylists-activity`) at the restored database only once it checks out.
   5. Never load a backup into the live database on top of existing data.
-- The KV namespace has no built-in backup. With `FF_V2_LISTS_ONLY` and `FF_EVENT_TRACKING` on, lists and Watch History are in D1. The R2 bucket (`BLOBS`: channel pools and Better Poster images) is not copied: both are rebuilt from D1 and the providers.
+- **KV holds user data that D1 does not** (audit DB-01, 2026-11-03). The D1 copy alone cannot bring these back, and KV has no built-in backup:
+  - `cfg:`: every install link pasted into Stremio, Nuvio or Wako (a link moved to D1 still keeps its config here);
+  - `creatorsync:`, `creatorsyncpresets:`, `creatorsyncchannels:`: each account's synced settings, presets and My Channels;
+  - `creatorchannel:`, `channelshare:`: channels and shared channel links;
+  - `creatorlistorder:`: each account's list order;
+  - `creatorlist:`: lists, while `FF_V2_LISTS_ONLY` is off (copied either way).
+  
+  So the same daily run also copies those prefixes (`.github/scripts/kv-backup.mjs`), as JSON lines, encrypted and checked the same way (`.github/scripts/kv-backup-verify.mjs` counts every prefix's keys against what was read). It is kept as a second artifact, `kv-backup-<run>`. Caches, cron cursors and counters are left out on purpose. It needs:
+    - one more repository secret, `KV_NAMESPACE_ID`: the `CONFIGS` namespace's id (Workers & Pages → KV);
+    - `CLOUDFLARE_API_TOKEN` given *Account → Workers KV Storage → Read* as well as *D1 → Read*.
+  
+  The D1 copies are made and kept first. Until both KV steps are done the run still **fails** and names what is missing, but that day's D1 copy is kept.
+- **Restoring the KV copy** (into a new namespace first, the same rule as D1): decrypt and `gunzip` it as in step 2 above, drop the first line (a header), turn the rest into one JSON array, and bulk-load it:
+  `tail -n +2 configs-kv-<stamp>.jsonl | jq -s . > kv.json`, then `npx wrangler kv bulk put kv.json --namespace-id=<new namespace id> --remote`. Each line is already `{"key", "value", "metadata"}`, the format that command takes. A file over 100 MB has to be split first (`jq` on slices of the array). Point the Worker's `CONFIGS` binding at the new namespace once it checks out.
+- The R2 bucket (`BLOBS`: channel pools and Better Poster images) is not copied: both are rebuilt from D1 and the providers.
 
 ## 6. Recommended WAF rate-limiting rules (optional)
 
@@ -656,7 +670,7 @@ The fixes from `docs/SECURITY_AUDIT_PLAN.md`. Everything is optional or safe to 
 | SEC-03 | Sessions now renew while they are used (30 more days, checked at most every 5 minutes, and the cookie is re-sent). With `FF_FORGET_KEY=1`, a browser with a working session stops keeping the Account Key. | See `FF_FORGET_KEY` in §3. Off by default. |
 
 **Removing the old anonymous likes (SEC-05, D-37).** Sign in to `/admin` first (the call only works with the admin sign-in). It is `POST /admin/api/anonymous-likes-purge`, in batches; each answer has `next` and `done`.
-1. **Take a backup first** (the KV export in §5), because deleting cannot be undone.
+1. **Take a backup first**, because deleting cannot be undone: run the daily backup by hand (Actions → *D1 backup* → *Run workflow*, §5), which copies D1 and the like totals kept in `channelshare:` and `creatorlist:`. It does not copy the vote ledgers (`listlikevoters:`, `extlikevoters:`, `channellikevoters:`), so also run `/admin` → *Export old data to R2* once for each of those three prefixes.
 2. **Dry run (changes nothing).** Send `{}`. The answer counts what a real run would remove: `legacyVotes` (distinct votes taken off the old totals), `v2Votes` (rows in the new tables), `kvVotes`/`d1Votes` (where they sit), and `legacyTargets`/`v2Targets` (lists, outside lists and channels affected). Repeat with `{"cursor":"<next from the last answer>"}` until `done` is `true`, and add up the numbers.
 3. **Apply.** Send `{"apply":true,"confirm":"delete anonymous likes"}`, then repeat with `"cursor"` set to `next` until `done` is `true`. Without the exact confirm phrase nothing is deleted. `"limit"` (1 to 50, default 10) sets how many lists/channels one call handles.
 4. **Check.** A dry run again should add up to 0. If an answer has `failed` entries (a storage error part-way), just run the apply again from the start (`{"apply":true,"confirm":"delete anonymous likes"}`, no cursor). Each list or channel keeps a small progress record (`anonlikespurge:...` in KV) until it is finished, so a total is never lowered twice, and the result is exactly the same as an uninterrupted run. Tell me if the same one keeps failing. While a list is half-done, a dry run still counts its original votes once.

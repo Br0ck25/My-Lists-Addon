@@ -23,6 +23,14 @@ name: D1 backup
 #                            there since FF_EVENT_TRACKING)
 #   BACKUP_PASSPHRASE        a long random passphrase, also kept somewhere safe
 #                            outside GitHub -- without it a backup is unreadable
+#   KV_NAMESPACE_ID          the CONFIGS KV namespace's id. Install links,
+#                            synced settings, presets and My Channels live only
+#                            there (audit DB-01), copied by kv-backup.mjs. The
+#                            token above then also needs "Workers KV Storage:
+#                            Read".
+#
+# The D1 copies are made and kept first, so a missing KV secret or permission
+# fails the run without losing that day's D1 copy.
 
 on:
   schedule:
@@ -68,22 +76,11 @@ jobs:
           set -euo pipefail
           mkdir -p backup
           stamp="$(date -u +%Y-%m-%dT%H%MZ)"
+          echo "stamp=$stamp" >> "$GITHUB_ENV"
           dump() {
             local name="$1" id="$2"
             node .github/scripts/d1-backup.mjs "$id" "backup/${name}-${stamp}.sql"
-            test -s "backup/${name}-${stamp}.sql"
-            gzip -9 "backup/${name}-${stamp}.sql"
-            gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
-              --symmetric --cipher-algo AES256 "backup/${name}-${stamp}.sql.gz"
-            # Only the encrypted file leaves this runner.
-            rm -f "backup/${name}-${stamp}.sql.gz"
-            # Prove the kept file opens: decrypt it with the passphrase, load
-            # it into an empty database, and compare every table's row count.
-            mkdir -p check
-            gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
-              --decrypt "backup/${name}-${stamp}.sql.gz.gpg" | gunzip > "check/${name}.sql"
-            node .github/scripts/d1-backup-verify.mjs "check/${name}.sql" "backup/${name}-${stamp}.sql.counts.json"
-            rm -f "check/${name}.sql" "backup/${name}-${stamp}.sql.counts.json"
+            bash .github/scripts/backup-seal.sh "backup/${name}-${stamp}.sql" .github/scripts/d1-backup-verify.mjs
           }
           dump my-lists-db "$D1_DATABASE_ID"
           dump mylists-activity "$ACTIVITY_D1_DATABASE_ID"
@@ -93,5 +90,33 @@ jobs:
         with:
           name: d1-backup-${{ github.run_id }}
           path: backup/*.sql.gz.gpg
+          if-no-files-found: error
+          retention-days: 30
+
+      # The KV copy (audit DB-01). Checked here, not with the D1 secrets above,
+      # so the D1 copy is already kept when this fails.
+      - name: Check the KV secret is set
+        env:
+          KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+        run: |
+          if [ -z "$KV_NAMESPACE_ID" ]; then
+            echo "::error::No KV backup was made (the D1 backup was). Missing repository secret: KV_NAMESPACE_ID, and the API token needs Workers KV Storage: Read (see docs/OPERATIONS.md §5)."
+            exit 1
+          fi
+
+      - name: Read and encrypt KV
+        env:
+          KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p kv-backup
+          node .github/scripts/kv-backup.mjs "$KV_NAMESPACE_ID" "kv-backup/configs-kv-${stamp}.jsonl"
+          bash .github/scripts/backup-seal.sh "kv-backup/configs-kv-${stamp}.jsonl" .github/scripts/kv-backup-verify.mjs
+          ls -l kv-backup
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kv-backup-${{ github.run_id }}
+          path: kv-backup/*.jsonl.gz.gpg
           if-no-files-found: error
           retention-days: 30
