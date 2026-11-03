@@ -128,3 +128,39 @@ describe("static files", () => {
     assert.match(text, /<svg[^>]*width="300"[^>]*height="450"/);
   });
 });
+
+describe("MDBList watch history (raw) and the item-add path", () => {
+  const post = (path, json) => call(makeEnv(), path, { method: "POST", json });
+
+  it("history-raw: gathers movies, shows and episodes from MDBList with the user's key, and hides the key in its debug log", async () => {
+    const sent = stub((u) => {
+      if (u.pathname !== "/sync/watched") return u.pathname === "/lists/user" ? [{ user_name: "bob" }] : null;
+      const mt = u.searchParams.get("mediatype");
+      if (mt === "movie") return { movies: [{ id: 1, title: "The Matrix", imdb_id: "tt0133093" }] };
+      if (mt === "show") return { shows: [{ id: 2, title: "Breaking Bad", imdb_id: "tt0903747" }] };
+      return { episodes: [] };
+    });
+    const res = await post("/api/mdblist-history-raw", { apikey: "SECRETKEY" });
+    assert.equal(res.body.ok, true);
+    assert.deepEqual(res.body.items.map((i) => i.imdb_id), ["tt0133093", "tt0903747"]);
+    const watched = sent.filter((u) => u.includes("/sync/watched"));
+    assert.deepEqual(watched.map((u) => new URL(u).searchParams.get("mediatype")), ["movie", "show", "episode"]);
+    assert.ok(watched.every((u) => new URL(u).searchParams.get("apikey") === "SECRETKEY"));
+    assert.ok(!JSON.stringify(res.body.debug).includes("SECRETKEY"), "the key is not echoed back");
+  });
+
+  it("history-raw: with no key, account or username it says it is not connected and asks MDBList nothing", async () => {
+    const sent = stub(() => ({}));
+    const res = await post("/api/mdblist-history-raw", {});
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, "Not connected to MDBList.");
+    assert.equal(sent.length, 0);
+  });
+
+  it("item-add adds (it is the add spelling of item-mutate): a Trakt watchlist add reaches Trakt, not the remove address", async () => {
+    const sent = stub(() => ({ added: { movies: 1 } }));
+    const res = await post("/api/external-list/item-add", { provider: "trakt", traktAccessToken: "TT", traktKey: "CID", imdbId: "tt0133093", tmdbId: "603", title: "The Matrix", year: "1999", mediaType: "movie" });
+    assert.equal(res.body.ok, true);
+    assert.deepEqual(sent, ["https://api.trakt.tv/sync/watchlist"]);
+  });
+});
