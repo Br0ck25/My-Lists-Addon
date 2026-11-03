@@ -46,7 +46,10 @@ prove and write down problems, and a later session fixes them with `/fix-plan`.
 7. Never print or copy a secret value into the report. Say where it is, not
    what it is.
 8. Read code cheaply: use the project's index files to find code, read only
-   the part you need, and never read generated files.
+   the part you need, and never read generated files. Do not launch helper
+   agents to sweep the repo; they multiply usage. Work in this session.
+9. Depth beats coverage. An area marked `partial` with what is left written
+   down is better than a shallow `done`.
 
 ## 2. Start or resume
 - Today's report path: `docs/audits/<YYYY-MM-DD>-$ARGUMENTS.md`.
@@ -64,23 +67,38 @@ prove and write down problems, and a later session fixes them with `/fix-plan`.
 - After each area: update its row in "Audit progress" (`done`, or `partial`
   with what is left), add its findings, and add what you checked and found
   fine. Save the report.
-- Every 3 areas, and before you stop for any reason, commit the report alone
-  (`git add <report>`; message `audit(<type>): progress`) and push to the
-  current branch. A cloud session can end without warning; the repo is the
-  only memory.
-- If you are running low on usage or context, stop at the end of an area,
-  save, commit, push, and tell the owner to type `/audit $ARGUMENTS` again
-  to resume. Do not mark unfinished areas as done.
+- Then commit the report alone (`git add <report>`; message
+  `audit(<type>): <area> done`) and push to the current branch, after
+  **every** area. A usage limit or a closed session can end the work
+  mid-sentence with no warning; only what is pushed survives.
+- If the context is getting long, stop at the end of an area, save, commit,
+  push, and tell the owner to type `/audit $ARGUMENTS` again to resume. Do
+  not mark unfinished areas as done.
 
 ## 4. Finding IDs and severity
 - ID prefix comes from `project.md`. Number on from the highest ID with that
   prefix already in `docs/` (grep it), so IDs never clash with older reports.
-- Severity: Critical, High, Medium, Low, Info. Judge by what actually happens
-  to users or data in this project, not by the textbook worst case.
+- Severity: judge by what actually happens to users or data in this project,
+  not by the textbook worst case.
+  - **Critical**: someone can see or change another person's data, or data
+    is lost, today.
+  - **High**: a main feature breaks for many users, or an attack works with
+    some effort.
+  - **Medium**: breaks in less common situations, or harmful only if
+    something else goes wrong first.
+  - **Low**: minor or cosmetic.
+  - **Info**: worth knowing; nothing to fix.
 - Confidence: Confirmed (reproduced), High, Medium. Low confidence goes under
   "Unverified hunches", not "Findings".
 
-## 5. Finish
+## 5. Challenge your own findings
+Before finishing, go back over every Critical and High finding and try to
+prove it wrong: re-read the code, look for a guard, wrapper or caller check
+elsewhere, and check whether the failing input can really reach that line.
+If it does not survive, lower its severity or move it to "Unverified
+hunches", and note why. Commit and push after this pass.
+
+## 6. Finish
 - Fill in the summary, fix order and "Not covered" sections. Set
   `Status: complete` (or `complete with gaps` and say which).
 - Check that `git status` shows only the report, then commit and push it.
