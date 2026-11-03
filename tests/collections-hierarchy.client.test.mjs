@@ -507,3 +507,90 @@ describe('collection expansion and Nuvio lifecycle', () => {
   });
 
 });
+
+// The Nuvio home-row choice belongs to each synced collection. Without it,
+// Update Nuvio sent nothing and lists added later showed on the Nuvio home
+// screen even though the person chose to hide them (docs/features/2026-11-03-nuvio-home-hide.md).
+describe('Nuvio home-row choice per synced collection', () => {
+  const ownParent = () => ({ id: 'my-lists-collections', title: 'Mine', folders: [
+    { id: 'one', title: 'One', catalogSources: [{ addonId: 'app.my-list.collections', catalogId: 'one', type: 'movie' }] }
+  ] });
+  async function pullOwn(client) {
+    emptyCollections(client);
+    client.set('mediaAppUiCall', async () => ({ ok: true, data: { scope: 'scope-a', profileId: 1, collections: [ownParent()] } }));
+    await client.call('pullCollectionsFromNuvio');
+    return plain(client.call('loadCollectionGroups'))[0];
+  }
+  function editWindowHtml(client, groupId) {
+    let html = '';
+    client.set('showModal', (markup) => { html = markup; });
+    client.call('openCreateCollectionGroupModal', groupId);
+    return html;
+  }
+  function setHidden(client, groupId, checked) {
+    assert.ok(editWindowHtml(client, groupId).includes('id="collectionGroupHideHome"'), 'a synced collection has the hide toggle in its edit window');
+    client.document.getElementById('collectionGroupName').value = 'Mine';
+    client.document.getElementById('collectionGroupHideHome').checked = checked;
+    client.call('submitCollectionGroupModal');
+  }
+  function captureWrites(client) {
+    const writes = [];
+    client.set('appShellDialog', async () => true);
+    client.set('mediaAppUiCall', async (p, s, method, body) => {
+      if (method === 'GET') return { ok: true, data: { scope: 'scope-a', profileId: 1, collections: [ownParent()] } };
+      writes.push(plain(body));
+      const saved = body.updatedCollection || { ...ownParent(), folders: [body.updatedFolder] };
+      return { ok: true, data: { scope: 'scope-a', profileId: 1, collections: [saved] } };
+    });
+    return writes;
+  }
+
+  it('leaves existing synced collections as they are until the toggle is set', async () => {
+    const client = loadClient();
+    const group = await pullOwn(client);
+    const writes = captureWrites(client);
+    await client.call('pushLinkedNuvioCollection', group.id);
+    assert.equal(writes.at(-1).installMode, 'update-collection');
+    assert.equal('hideHomeCatalogs' in writes.at(-1), false, 'no choice made: Nuvio home settings are not touched');
+  });
+
+  it('sends the saved choice on Update Nuvio, keeps it through automatic pulls, and can turn it off again', async () => {
+    const client = loadClient();
+    const group = await pullOwn(client);
+    setHidden(client, group.id, true);
+    assert.equal(plain(client.call('loadCollectionGroups'))[0].nuvioHomeHidden, true);
+    assert.match(editWindowHtml(client, group.id), /id="collectionGroupHideHome"[^>]*checked/, 'the edit window shows the saved choice');
+    const writes = captureWrites(client);
+    await client.call('pullCollectionsFromNuvio', true);
+    assert.equal(plain(client.call('loadCollectionGroups'))[0].nuvioHomeHidden, true, 'the 2-minute refresh must not forget it');
+    await client.call('pushLinkedNuvioCollection', group.id);
+    assert.equal(writes.at(-1).hideHomeCatalogs, true);
+    const linkedFolder = plain(client.call('loadCustomCollections')).find((f) => f.nuvioLink);
+    await client.call('pushLinkedNuvioFolder', linkedFolder);
+    assert.equal(writes.at(-1).installMode, 'update-folder');
+    assert.equal(writes.at(-1).hideHomeCatalogs, true, 'a single-folder update follows the collection choice');
+    setHidden(client, group.id, false);
+    await client.call('pushLinkedNuvioCollection', group.id);
+    assert.equal(writes.at(-1).hideHomeCatalogs, false, 'turning it off shows the rows again');
+  });
+
+  it('remembers the choice made in the Sync to Nuvio window for later updates', async () => {
+    for (const hidden of [true, false]) {
+      const client = loadClient();
+      emptyCollections(client);
+      const group = createParent(client, 'New collection');
+      client.call('saveCustomCollections', [folder('child', 'Child', { parentCollectionId: group.id, parentCollectionName: group.name, lists: [] })]);
+      client.set('mediaAppUiCall', async (p, s, method, body) => method === 'GET' ? { ok: true, data: { collections: [] } } : ({ ok: true, data: { profileId: 1, scope: 'scope', writtenCollectionIds: ['col_mylists_actual'], collections: [{ ...plain(body.collections[0]), id: 'col_mylists_actual' }] } }));
+      await client.call('executeNuvioCollectionsPush', { targetGroupId: group.id, installMode: 'new', hideHomeCatalogs: hidden });
+      const linked = plain(client.call('loadCollectionGroups'))[0];
+      assert.equal(linked.nuvioHomeHidden, hidden ? true : undefined, 'off at first sync keeps today\'s behaviour on updates');
+    }
+  });
+
+  it('shows the toggle only for collections synced to Nuvio', () => {
+    const client = loadClient();
+    emptyCollections(client);
+    const group = createParent(client, 'Local only');
+    assert.equal(editWindowHtml(client, group.id).includes('collectionGroupHideHome'), false);
+  });
+});
