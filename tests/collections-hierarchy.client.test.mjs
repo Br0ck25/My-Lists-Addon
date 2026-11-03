@@ -560,6 +560,7 @@ describe('Nuvio home-row choice per synced collection', () => {
     setHidden(client, group.id, true);
     assert.equal(plain(client.call('loadCollectionGroups'))[0].nuvioHomeHidden, true);
     assert.match(editWindowHtml(client, group.id), /id="collectionGroupHideHome"[^>]*checked/, 'the edit window shows the saved choice');
+    assert.match(editWindowHtml(client, group.id), />Save<\/button>/, 'the button saves the name and the toggle, so it is not labelled "Save name"');
     const writes = captureWrites(client);
     await client.call('pullCollectionsFromNuvio', true);
     assert.equal(plain(client.call('loadCollectionGroups'))[0].nuvioHomeHidden, true, 'the 2-minute refresh must not forget it');

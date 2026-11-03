@@ -117,9 +117,9 @@ the same known timing budget.
 2. Add a second list to the folder → **Update Nuvio**. → The new list is also
    not on the Nuvio home screen. (Before this change it appeared.)
 3. **Edit collection** on that collection. → The same toggle is there and is
-   on. Turn it off → Save name → **Update Nuvio**. → Both lists now show on
+   on. Turn it off → **Save** → **Update Nuvio**. → Both lists now show on
    the Nuvio home screen.
-4. Turn it back on → Save name → **Update Nuvio**. → Both are hidden again.
+4. Turn it back on → **Save** → **Update Nuvio**. → Both are hidden again.
 5. Check nothing else changed: a collection you synced before this update →
    **Update Nuvio** → its home rows look exactly as before. Your regular My
    Lists rows in Nuvio and Stremio are unchanged.

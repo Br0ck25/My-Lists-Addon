@@ -3426,7 +3426,7 @@ function openCreateCollectionGroupModal(editId) {
     '<div class="row"><label for="collectionGroupName">Collection name</label>' +
     '<input id="collectionGroupName" type="text" maxlength="120" placeholder="e.g. Streaming Services, Family" value="' + escapeAttr(group ? group.name : '') + '" required></div>' +
     nuvioHomeToggleHtml(group) +
-    '<div class="actions u-mt-12px"><button type="button" data-act="submitCollectionGroupModal">' + (group ? 'Save name' : 'Create collection') + '</button>' +
+    '<div class="actions u-mt-12px"><button type="button" data-act="submitCollectionGroupModal">' + (group ? 'Save' : 'Create collection') + '</button>' +
     '<button type="button" class="secondary" data-act="closeModal">Cancel</button></div>');
 }
 

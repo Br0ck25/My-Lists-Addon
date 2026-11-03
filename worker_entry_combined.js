@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-03";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "3fe995268f";
+const WORKER_BUILD = "ca21a4ad1d";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -47424,7 +47424,7 @@ function openCreateCollectionGroupModal(editId) {
     '<div class="row"><label for="collectionGroupName">Collection name</label>' +
     '<input id="collectionGroupName" type="text" maxlength="120" placeholder="e.g. Streaming Services, Family" value="' + escapeAttr(group ? group.name : '') + '" required></div>' +
     nuvioHomeToggleHtml(group) +
-    '<div class="actions u-mt-12px"><button type="button" data-act="submitCollectionGroupModal">' + (group ? 'Save name' : 'Create collection') + '</button>' +
+    '<div class="actions u-mt-12px"><button type="button" data-act="submitCollectionGroupModal">' + (group ? 'Save' : 'Create collection') + '</button>' +
     '<button type="button" class="secondary" data-act="closeModal">Cancel</button></div>');
 }
 

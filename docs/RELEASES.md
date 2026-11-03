@@ -60,12 +60,12 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
-## Nuvio home rows stay hidden after Update Nuvio (built 2026-11-03, stamp c795ac4b3c)
+## Nuvio home rows stay hidden after Update Nuvio (built 2026-11-03, stamp ca21a4ad1d)
 
 Your request of 2026-11-03 (`docs/features/2026-11-03-nuvio-home-hide.md`). Before this, **Hide collection catalogs on Nuvio home** only applied to the first sync. A list added to the collection later and sent with **Update Nuvio** appeared on the Nuvio home screen anyway.
 
 - **Each synced collection now remembers the choice** made in the Sync to Nuvio window. **Update Nuvio**, for the whole collection or one folder, applies it again, so lists added later follow it.
-- **Edit collection** on a synced collection has the same toggle, so the choice can be changed later. It takes effect at the next Update Nuvio. Turning it off shows the rows again.
+- **Edit collection** on a synced collection has the same toggle, so the choice can be changed later. It takes effect at the next Update Nuvio. Turning it off shows the rows again. The window's button now says **Save** instead of **Save name**, because it saves both.
 - **Nothing changes until someone uses it.** The toggle is still off by default for new syncs. Collections synced before this change, or synced with the toggle off, are left as they are on Nuvio's home screen until the toggle is turned on. Stremio, Wako and the regular My Lists home rows are not affected.
 
 ---
