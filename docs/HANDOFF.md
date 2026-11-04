@@ -17,7 +17,8 @@
     - `POST /api/nuvio-tv/device/claim` (account): verifies creator authentication, validates `userCode` (with or without hyphen), binds account's active `installId`, `manifestUrl`, and `syncUrl` to KV record.
   - Added frontend pairing and onboarding flow:
     - `src/page/15_tab-settings-html.js`: added `#nuvioTvOnboardingBanner` in `#nuvioSection` ("Step 2: Sign in with your Nuvio account below to view your Continue Watching, Watch History, and Library on the website.").
-    - `src/client/22_client-nuvio-tv-pairing.js`: checks URL params `source=nuvio_tv` and `tv_code`, auto-opens account creation modal if signed out, invokes `handleNuvioTvPostAuth()` upon sign in / creation.
+    - `src/client/22_client-nuvio-tv-pairing.js`: checks URL params `source=nuvio_tv` and `tv_code`, auto-opens account creation modal if signed out, invokes `handleNuvioTvPostAuth()` asynchronously (deferred via `setTimeout`) upon sign in / creation.
+    - `src/client/23_client-list-management.js`: declared `shufflePickerSignature` with `var` to avoid temporal dead zone (TDZ) reference errors during early bundle evaluation.
     - `src/client/22_client-creator-profile.js`: updated `submitCreateProfile` and `submitRestoreProfile` to pass `source: "nuvio_tv"` and trigger `handleNuvioTvPostAuth()`; updated `loadCreatorSync` to restore `customCollections` and `randomizeItemsDaily`.
   - All unit tests in `tests/nuvio-tv-sync.test.mjs` (16 tests) and verification checks pass.
 
