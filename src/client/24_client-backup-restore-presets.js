@@ -1951,7 +1951,7 @@ function signInToInstallHtml(message, entries) {
     + '</div>';
 }
 
-async function generate() {
+var generate = skipWhileBusy(async function generate() {
   const entries = collectEntries();
   if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
@@ -2095,7 +2095,7 @@ async function generate() {
   // off-screen above the fold the person's currently scrolled past.
   lastGeneratedConfigHash = computeConfigStateHash();
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+});
 
 // pre-fill
 suppressSave = true;

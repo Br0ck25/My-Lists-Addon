@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-03";
+const WORKER_BUILD_DATE = "2026-11-04";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9ddc444571";
+const WORKER_BUILD = "37840b1c05";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -88260,7 +88260,7 @@ function signInToInstallHtml(message, entries) {
     + '</div>';
 }
 
-async function generate() {
+var generate = skipWhileBusy(async function generate() {
   const entries = collectEntries();
   if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
@@ -88404,7 +88404,7 @@ async function generate() {
   // off-screen above the fold the person's currently scrolled past.
   lastGeneratedConfigHash = computeConfigStateHash();
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+});
 
 // pre-fill
 suppressSave = true;
