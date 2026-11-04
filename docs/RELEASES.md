@@ -60,6 +60,19 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Frontend audit fixes UI-01 to UI-18 (built 2026-11-04, stamp 187f828767; prepared, not deployed)
+
+From `docs/audits/2026-11-03-frontend.md`. What people will notice:
+
+- **Errors are visible again.** "Could Not Save List" and the other error messages open on top of the pop-up form instead of behind it (UI-01). A form opened from a dialog, such as the Trakt PIN form after its alert, also comes up on top.
+- **Dead links say so.** A deleted channel link no longer shows a made-up channel with "+ Add"; an unreadable `/lists/...` address goes back to Discover with a message instead of "Loading…" for ever; a dead shared list or unknown address in a browser gets a small page with a link home instead of raw text (UI-06, UI-07). Apps and feeds keep their JSON.
+- **Red and orange buttons are readable** in light and dark mode, including pressed, and the `+ Add` and `Remove` pills (UI-10).
+- **A half-built channel survives a reload**, kept per account in this browser; signed out, the channel builder is not opened (UI-04). A remembered sub-tab the page no longer knows no longer blanks Discover, Catalogs or Channels (UI-02). Signing out or in on one tab updates the other tabs (UI-05).
+- **Smaller:** Generate Install Link cannot be pressed twice (UI-08); a failed catalog preview says "Could not load this catalog." with a Retry button (UI-03); help text names the real "Refresh" button and the Connected Services section (UI-09, UI-16); heart buttons and the webhook box have names for screen readers (UI-11); the ticked pill is centred in its row on a phone (UI-12); the Guide no longer scrolls sideways (UI-13); bigger tap areas for the icon buttons and "See All" (UI-17); colours, "…" and the "See All" links written from scripts follow the design rules (UI-14); the Guide and FAQ name the site they are served from (UI-18).
+- **Not changed:** the shutdown wording about the public site (D-35) is still there; the owner said the site is not shutting down and asked for that as a separate change. UI-15 was accepted as it is.
+
+---
+
 ## Nuvio home rows stay hidden after Update Nuvio (built 2026-11-03, stamp 73c3ca07ab)
 
 Your request of 2026-11-03 (`docs/features/2026-11-03-nuvio-home-hide.md`). Before this, **Hide collection catalogs on Nuvio home** only applied to the first sync. A list added to the collection later and sent with **Update Nuvio** appeared on the Nuvio home screen anyway.
