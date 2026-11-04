@@ -1395,7 +1395,7 @@ async function renderLivePreview() {
           if (seeAllBtn && sample.length > visibleCount) seeAllBtn.disabled = false;
         } else {
           entryDOM.style.display = '';
-          postersContainer.innerHTML = '<p class="testresult err">&#x2717; Network error loading this catalog.</p>';
+          postersContainer.innerHTML = catalogLoadErrorHtml();
         }
       }
     }

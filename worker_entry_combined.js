@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "8c9f041268";
+const WORKER_BUILD = "5092a44b85";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -57219,6 +57219,14 @@ async function runCatalogSearch() {
 
 
 
+// What a My Catalogs row shows when its preview could not be loaded. A server
+// hiccup (a 502 page that is not JSON) lands in the same catch as a lost
+// connection, so it must not say "network"; Retry re-runs the catalogs preview,
+// the same action as the Refresh button above the rows.
+function catalogLoadErrorHtml() {
+  return '<p class="testresult err">&#x2717; Could not load this catalog. ' +
+    '<button type="button" class="lc-btn secondary" data-act="renderLivePreview">Retry</button></p>';
+}
 // --- Channel builder ---------------------------------------------------------
 //
 // Builds one synthetic "series" out of hand-picked real episodes (from any
@@ -83891,7 +83899,7 @@ async function renderLivePreview() {
           if (seeAllBtn && sample.length > visibleCount) seeAllBtn.disabled = false;
         } else {
           entryDOM.style.display = '';
-          postersContainer.innerHTML = '<p class="testresult err">&#x2717; Network error loading this catalog.</p>';
+          postersContainer.innerHTML = catalogLoadErrorHtml();
         }
       }
     }
