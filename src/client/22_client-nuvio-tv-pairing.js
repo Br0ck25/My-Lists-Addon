@@ -37,7 +37,9 @@ async function handleNuvioTvPostAuth() {
     const shuffleEl = document.getElementById('shuffleItemsCheckbox');
     if (shuffleEl && !shuffleEl.checked) {
       shuffleEl.checked = true;
-      if (typeof saveState === 'function') saveState();
+      try {
+        if (typeof saveState === 'function') saveState();
+      } catch (err) {}
     }
 
     // 2. Claim TV device code if one was provided in URL/sessionStorage
@@ -108,7 +110,7 @@ function initNuvioTvOnboarding() {
         }
       }, 150);
     } else {
-      handleNuvioTvPostAuth();
+      setTimeout(handleNuvioTvPostAuth, 50);
     }
   } catch (e) {
     console.error('initNuvioTvOnboarding error:', e);
@@ -117,9 +119,11 @@ function initNuvioTvOnboarding() {
 
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initNuvioTvOnboarding);
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(initNuvioTvOnboarding, 50);
+    });
   } else {
-    initNuvioTvOnboarding();
+    setTimeout(initNuvioTvOnboarding, 50);
   }
 }
 

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "8eb866573c";
+const WORKER_BUILD = "3cd0fec19e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -83023,7 +83023,9 @@ async function handleNuvioTvPostAuth() {
     const shuffleEl = document.getElementById('shuffleItemsCheckbox');
     if (shuffleEl && !shuffleEl.checked) {
       shuffleEl.checked = true;
-      if (typeof saveState === 'function') saveState();
+      try {
+        if (typeof saveState === 'function') saveState();
+      } catch (err) {}
     }
 
     // 2. Claim TV device code if one was provided in URL/sessionStorage
@@ -83094,7 +83096,7 @@ function initNuvioTvOnboarding() {
         }
       }, 150);
     } else {
-      handleNuvioTvPostAuth();
+      setTimeout(handleNuvioTvPostAuth, 50);
     }
   } catch (e) {
     console.error('initNuvioTvOnboarding error:', e);
@@ -83103,9 +83105,11 @@ function initNuvioTvOnboarding() {
 
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initNuvioTvOnboarding);
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(initNuvioTvOnboarding, 50);
+    });
   } else {
-    initNuvioTvOnboarding();
+    setTimeout(initNuvioTvOnboarding, 50);
   }
 }
 
@@ -83611,7 +83615,7 @@ function collectEntries() {
 // one out). The choice lives on each row (dataset.noShuffle) so it travels
 // with the row through save, backup and restore. Rebuilt only when the set of
 // lists or the toggle changes, so it does not flicker on every keystroke.
-let shufflePickerSignature = '';
+var shufflePickerSignature = '';
 function renderShuffleListPicker() {
   const host = document.getElementById('shuffleItemsPicker');
   const toggle = document.getElementById('shuffleItemsCheckbox');
