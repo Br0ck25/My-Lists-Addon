@@ -262,7 +262,7 @@ ${seoHeadHtml}
     var shellSub = (shellRoute && shellRoute.sub) || '';
     var knownSub = function(key, names, fallback) { var v = localStorage.getItem(key); if (v && names.indexOf(v) === -1) { v = fallback; localStorage.setItem(key, v); } return v || fallback; };
     try {
-      var catSub = shellSub || knownSub('myListAddon:catalogsSubmenu', ['all', 'shelves', 'quickadd', 'bulk'], 'all');
+      var catSub = shellSub || knownSub('myListAddon:catalogsSubmenu', ['all', 'quickadd', 'bulk'], 'all');
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
       var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
       // Must agree with normalizeListsSubmenu (16_client-row-core.js): an unknown value

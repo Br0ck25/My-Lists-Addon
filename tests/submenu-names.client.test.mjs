@@ -11,6 +11,7 @@ describe("remembered sub-tabs", () => {
   for (const [key, bad, fallback] of [
     ["myListAddon:discoverSubmenu", "trending", "movie"],
     ["myListAddon:catalogsSubmenu", "123", "all"],
+    ["myListAddon:catalogsSubmenu", "shelves", "all"],
     ["myListAddon:channelsSubmenu", "gone", "my-channels"],
   ]) {
     it(`${key} = "${bad}" falls back to "${fallback}"`, () => {

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "187f828767";
+const WORKER_BUILD = "9ae42fd516";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -32142,7 +32142,7 @@ ${seoHeadHtml}
     var shellSub = (shellRoute && shellRoute.sub) || '';
     var knownSub = function(key, names, fallback) { var v = localStorage.getItem(key); if (v && names.indexOf(v) === -1) { v = fallback; localStorage.setItem(key, v); } return v || fallback; };
     try {
-      var catSub = shellSub || knownSub('myListAddon:catalogsSubmenu', ['all', 'shelves', 'quickadd', 'bulk'], 'all');
+      var catSub = shellSub || knownSub('myListAddon:catalogsSubmenu', ['all', 'quickadd', 'bulk'], 'all');
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
       var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
       // Must agree with normalizeListsSubmenu (16_client-row-core.js): an unknown value
