@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1f4dc9d1a3";
+const WORKER_BUILD = "393ff1d70e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -70829,6 +70829,29 @@ function watchStaticModals() {
 // The page's script can run before the forms further down the page exist.
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchStaticModals);
 else watchStaticModals();
+// A pill row scrolls sideways on a phone. When a row comes into view (page load,
+// opening a tab from a link or the bottom nav) the ticked pill is centred in it.
+// Only the row itself scrolls: scrollIntoView could also move the page.
+function centerActivePill(bar) {
+  const pill = bar.querySelector('.subnav-pill.active');
+  if (!pill) return;
+  const barBox = bar.getBoundingClientRect();
+  const pillBox = pill.getBoundingClientRect();
+  const target = bar.scrollLeft + (pillBox.left - barBox.left) - (bar.clientWidth - pillBox.width) / 2;
+  bar.scrollLeft = Math.max(0, target);
+}
+
+(function watchPillRows() {
+  if (typeof IntersectionObserver !== 'function') return;
+  function start() {
+    const seen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) centerActivePill(e.target); });
+    });
+    document.querySelectorAll('.subnav-pills-bar').forEach(function (bar) { seen.observe(bar); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
