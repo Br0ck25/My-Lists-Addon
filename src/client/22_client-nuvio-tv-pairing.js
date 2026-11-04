@@ -200,42 +200,53 @@ async function handleNuvioTvPostAuth() {
 
 function initNuvioTvOnboarding() {
   try {
-    if (typeof window === 'undefined' || !window.location) return;
-    const urlParams = new URLSearchParams(window.location.search);
-    const sourceParam = urlParams.get('source');
-    const tvCodeParam = urlParams.get('tv_code') || urlParams.get('code');
+    if (typeof window === 'undefined') return;
+    const urlParams = (window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
+    const sourceParam = (urlParams && urlParams.get('source')) ||
+      (typeof window !== 'undefined' && window._nuvio_source) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source'));
+    const tvCodeParam = (urlParams && (urlParams.get('tv_code') || urlParams.get('code'))) ||
+      (typeof window !== 'undefined' && window._nuvio_tv_code) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_tv_code'));
 
-    if (sourceParam === 'nuvio_tv') {
-      sessionStorage.setItem('mylists_source', 'nuvio_tv');
+    if (sourceParam === 'nuvio_tv' || tvCodeParam) {
+      window._nuvio_source = 'nuvio_tv';
+      try { sessionStorage.setItem('mylists_source', 'nuvio_tv'); } catch (e) {}
     }
     if (tvCodeParam) {
-      sessionStorage.setItem('mylists_tv_code', tvCodeParam.trim().toUpperCase());
+      const cleanCode = tvCodeParam.trim().toUpperCase();
+      window._nuvio_tv_code = cleanCode;
+      try { sessionStorage.setItem('mylists_tv_code', cleanCode); } catch (e) {}
     }
 
-    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv');
-    if (!isNuvioTv) return;
+    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv') ||
+      (typeof window !== 'undefined' && window._nuvio_source === 'nuvio_tv');
+    if (!isNuvioTv && !tvCodeParam) return;
 
-    const tvCode = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('mylists_tv_code') : null;
+    if (window._nuvioModalOpened) return;
+
+    const tvCode = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_tv_code')) ||
+      (typeof window !== 'undefined' && window._nuvio_tv_code) || null;
     const signedIn = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ||
       Boolean(localStorage.getItem('myListAddon:creatorName'));
 
-    if (!signedIn) {
-      setTimeout(function() {
+    setTimeout(function() {
+      if (window._nuvioModalOpened) return;
+      window._nuvioModalOpened = true;
+      if (!signedIn) {
         if (tvCode) {
           openNuvioTvAuthModal(tvCode);
         } else if (typeof openCreateProfileModal === 'function') {
           openCreateProfileModal();
         }
-      }, 150);
-    } else {
-      setTimeout(function() {
+      } else {
         if (tvCode) {
           openNuvioTvPairingModal(tvCode);
         } else {
           handleNuvioTvPostAuth();
         }
-      }, 150);
-    }
+      }
+    }, 250);
   } catch (e) {
     console.error('initNuvioTvOnboarding error:', e);
   }
@@ -244,10 +255,74 @@ function initNuvioTvOnboarding() {
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(initNuvioTvOnboarding, 50);
+      initNuvioTvOnboarding();
     });
   } else {
-    setTimeout(initNuvioTvOnboarding, 50);
+    initNuvioTvOnboarding();
+  }
+}
+
+// Custom channel logo management
+let channelDraftLogo = null;
+
+function setChannelDraftLogo(val) {
+  channelDraftLogo = val || null;
+}
+
+function applyChannelLogoUrl() {
+  const urlInput = document.getElementById('channelLogoUrlInput');
+  const preview = document.getElementById('channelLogoUrlPreview');
+  const previewImg = document.getElementById('channelLogoUrlImg');
+  const status = document.getElementById('channelLogoUrlStatus');
+  if (!urlInput) return;
+
+  const raw = urlInput.value.trim();
+  if (!raw) return;
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch (_) {
+    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--color-danger-text)'; }
+    if (preview) preview.style.display = 'flex';
+    if (previewImg) previewImg.style.display = 'none';
+    return;
+  }
+
+  if (url.protocol !== 'https:') {
+    if (status) { status.textContent = 'Only https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
+    if (preview) preview.style.display = 'flex';
+    if (previewImg) previewImg.style.display = 'none';
+    return;
+  }
+
+  channelDraftLogo = url.href;
+  if (status) { status.textContent = 'Logo URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
+  if (preview) preview.style.display = 'flex';
+  if (previewImg) {
+    previewImg.src = url.href;
+    previewImg.style.display = '';
+  }
+}
+
+function syncChannelLogoUrlInput() {
+  const urlInput = document.getElementById('channelLogoUrlInput');
+  const preview = document.getElementById('channelLogoUrlPreview');
+  const previewImg = document.getElementById('channelLogoUrlImg');
+  const status = document.getElementById('channelLogoUrlStatus');
+  if (!urlInput) return;
+
+  if (channelDraftLogo) {
+    urlInput.value = channelDraftLogo;
+    if (previewImg) {
+      previewImg.src = channelDraftLogo;
+      previewImg.style.display = '';
+    }
+    if (status) { status.textContent = 'Logo URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
+    if (preview) preview.style.display = 'flex';
+  } else {
+    urlInput.value = '';
+    if (preview) preview.style.display = 'none';
   }
 }
 
@@ -258,3 +333,6 @@ window.openNuvioTvPairingModal = openNuvioTvPairingModal;
 window.openNuvioTvAuthModal = openNuvioTvAuthModal;
 window.submitNuvioTvLink = submitNuvioTvLink;
 window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
+window.applyChannelLogoUrl = applyChannelLogoUrl;
+window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
+window.setChannelDraftLogo = setChannelDraftLogo;

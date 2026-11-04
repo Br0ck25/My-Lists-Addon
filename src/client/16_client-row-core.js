@@ -23,23 +23,23 @@
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
 
+try {
+  if (typeof window !== 'undefined' && window.location) {
+    const _sp = new URLSearchParams(window.location.search || '');
+    const _s = _sp.get('source'), _c = _sp.get('tv_code') || _sp.get('code');
+    if (_s === 'nuvio_tv' || _c) {
+      window._nuvio_source = 'nuvio_tv';
+      try { sessionStorage.setItem('mylists_source', 'nuvio_tv'); } catch (e) {}
+    }
+    if (_c) {
+      window._nuvio_tv_code = _c.trim().toUpperCase();
+      try { sessionStorage.setItem('mylists_tv_code', _c.trim().toUpperCase()); } catch (e) {}
+    }
+  }
+} catch (e) {}
 // --- Requests signed by the session, not the Account Key (Release 19) ---------
-//
-// Since sign-in sessions (FF_SESSIONS), a request that carries the Account Key
-// to an /api/creator/ route also gives this browser a 30-day session cookie,
-// and the routes that read and save the account's data accept that session in
-// place of the key. The server says on every /api/creator/ answer whose
-// session this browser holds (the X-MLA-Session header: the page cannot read
-// the HttpOnly cookie). Once it has said so for the account, those requests
-// go without the key: it no longer travels with every autosave and list edit.
-// When the session is gone (expired, or signed out elsewhere) the server
-// answers 401, and the request is sent once more exactly as before, key
-// included, which also starts a new session -- nobody is signed out by this.
-// Until a session is known (a fresh browser, a server without sessions),
-// nothing changes. Signing in, creating an account, recovery, key resets and
-// deleting always send the key: there the key is what is being checked. (A key
-// reset ends every session of the account, so a browser left with the old key
-// is signed out by the retry, as before.)
+// Sessions (FF_SESSIONS): requests carrying Account Key get session cookie;
+// routes reading/saving account data accept session in place of key.
 const CREATOR_SESSION_ROUTES = [
   '/api/creator/sync/',
   '/api/creator/lists',

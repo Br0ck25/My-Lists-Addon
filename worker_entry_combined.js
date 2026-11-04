@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "051eded92f";
+const WORKER_BUILD = "273b306017";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -3894,7 +3894,7 @@ function isPublicCorsPath(path) {
   if (/^\/lists\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\.json$/.test(p)) return true;
   if (p === "/icon.png" || p === "/unavailable-poster.svg") return true;
   if (p === "/api/poster-badge" || p === "/api/channel-poster" || p === "/api/channel-logo" || p === "/api/safe-poster") return true;
-  if (p.startsWith("/api/scrobble") || p.startsWith("/api/nuvio-tv/")) return true;
+  if (p.startsWith("/api/scrobble") || p.startsWith("/api/nuvio-tv/") || p === "/api/channel-lineup") return true;
   return false;
 }
 
@@ -31975,13 +31975,14 @@ function buildStreamingServiceFolders() {
         }
       }
     }
+    const coverImageUrl = "https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(svc.name) + "&format=landscape&v=6";
     return {
       id: svc.id,
       title: svc.name,
       name: svc.name,
       tileShape: "LANDSCAPE",
       hideTitle: false,
-      coverImageUrl: "",
+      coverImageUrl: coverImageUrl,
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -32108,14 +32109,21 @@ const PREMADE_COLLECTIONS = [
 
 function buildNuvioDefaultChannels() {
   const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined" ? QUICK_CHANNEL_PRESETS : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
-  return networks.map((net, i) => ({
-    id: `ch_preset_${net.id}`,
-    name: net.name,
-    logoUrl: `/api/channel-logo?netId=${net.id}&v=7`,
-    category: "Live TV",
-    catalogId: `channel_preset_${net.id}`,
-    playOrder: i + 1,
-  }));
+  return networks.map((net, i) => {
+    const posterUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`;
+    const logoUrl = net.logoPath
+      ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7`
+      : `/api/channel-logo?netId=${net.id}&v=7`;
+    return {
+      id: `ch_preset_${net.id}`,
+      name: net.name,
+      posterUrl,
+      logoUrl,
+      category: "My Lists Addon Channels",
+      catalogId: `channel_preset_${net.id}`,
+      playOrder: i + 1,
+    };
+  });
 }
 
 function buildNuvioTvDefaultConfig() {
@@ -32125,7 +32133,6 @@ function buildNuvioTvDefaultConfig() {
     "chart:combined:popular_movies",
     "chart:combined:popular_tv",
     "chart:trakt:boxoffice_movies",
-    "chart:trakt:boxoffice_tv",
   ];
   const lists = [
     {
@@ -32168,15 +32175,6 @@ function buildNuvioTvDefaultConfig() {
       id: "chart:trakt:boxoffice_movies",
       name: "Trakt Box Office",
       type: "movie",
-      url: "trakt:chart:box_office",
-      enabled: true,
-      randomizeItemsDaily: true,
-      randomizeDaily: true,
-    },
-    {
-      id: "chart:trakt:boxoffice_tv",
-      name: "Trakt Box Office",
-      type: "series",
       url: "trakt:chart:box_office",
       enabled: true,
       randomizeItemsDaily: true,
@@ -32235,11 +32233,13 @@ async function seedNuvioTvNewUser(env, username, accountId) {
       channelId: chId,
       id: chId,
       name: net.name,
-      poster: `/api/channel-logo?netId=${net.id}&v=7`,
+      poster: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`,
+      posterUrl: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`,
+      logoUrl: net.logoPath ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7` : `/api/channel-logo?netId=${net.id}&v=7`,
       backdrop: "",
       presetNetworkId: String(net.id),
       networkId: String(net.id),
-      category: "Live TV",
+      category: "My Lists Addon Channels",
       catalogId: `channel_preset_${net.id}`,
       items: [],
       shuffle: false,
@@ -39102,6 +39102,17 @@ if ('serviceWorker' in navigator) {
             <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
           </div>
         </div>
+        <div class="u-mt-12px">
+          <p class="u-m-0_0_6px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Or use a custom channel logo URL (SVG, PNG, WebP):</p>
+          <div class="row u-gap-8px">
+            <input type="url" id="channelLogoUrlInput" placeholder="https://example.com/logo.svg" class="u-flex-1 u-fs-v_font_size_sm">
+            <button type="button" class="secondary u-ws-nowrap u-fs-v_font_size_sm" data-act="applyChannelLogoUrl">Use This</button>
+          </div>
+          <div id="channelLogoUrlPreview" class="u-mt-8px u-ai-center u-gap-10px" style="display:none;">
+            <img id="channelLogoUrlImg" src="" alt="Logo preview" class="u-objectfit-contain u-br-v_radius_xs u-bd-1px_solid_v_border" style="width:80px; height:45px; background:var(--color-bg-subtle); padding:4px;" loading="lazy">
+            <span id="channelLogoUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+          </div>
+        </div>
       </div>
 
       <!-- Bottom Action Bar -->
@@ -40183,23 +40194,23 @@ if ('serviceWorker' in navigator) {
 <script nonce="${CSP_NONCE_PLACEHOLDER}">
 const ORIGIN = (typeof location !== 'undefined' && location.origin) ? location.origin : ${jsonForScript(origin)};
 
+try {
+  if (typeof window !== 'undefined' && window.location) {
+    const _sp = new URLSearchParams(window.location.search || '');
+    const _s = _sp.get('source'), _c = _sp.get('tv_code') || _sp.get('code');
+    if (_s === 'nuvio_tv' || _c) {
+      window._nuvio_source = 'nuvio_tv';
+      try { sessionStorage.setItem('mylists_source', 'nuvio_tv'); } catch (e) {}
+    }
+    if (_c) {
+      window._nuvio_tv_code = _c.trim().toUpperCase();
+      try { sessionStorage.setItem('mylists_tv_code', _c.trim().toUpperCase()); } catch (e) {}
+    }
+  }
+} catch (e) {}
 // --- Requests signed by the session, not the Account Key (Release 19) ---------
-//
-// Since sign-in sessions (FF_SESSIONS), a request that carries the Account Key
-// to an /api/creator/ route also gives this browser a 30-day session cookie,
-// and the routes that read and save the account's data accept that session in
-// place of the key. The server says on every /api/creator/ answer whose
-// session this browser holds (the X-MLA-Session header: the page cannot read
-// the HttpOnly cookie). Once it has said so for the account, those requests
-// go without the key: it no longer travels with every autosave and list edit.
-// When the session is gone (expired, or signed out elsewhere) the server
-// answers 401, and the request is sent once more exactly as before, key
-// included, which also starts a new session -- nobody is signed out by this.
-// Until a session is known (a fresh browser, a server without sessions),
-// nothing changes. Signing in, creating an account, recovery, key resets and
-// deleting always send the key: there the key is what is being checked. (A key
-// reset ends every session of the account, so a browser left with the old key
-// is signed out by the retry, as before.)
+// Sessions (FF_SESSIONS): requests carrying Account Key get session cookie;
+// routes reading/saving account data accept session in place of key.
 const CREATOR_SESSION_ROUTES = [
   '/api/creator/sync/',
   '/api/creator/lists',
@@ -58984,6 +58995,7 @@ function renderChannelPosterPicker() {
 
   grid.innerHTML = html;
   if (typeof syncChannelPosterUrlInput === 'function') syncChannelPosterUrlInput();
+  if (typeof syncChannelLogoUrlInput === 'function') syncChannelLogoUrlInput();
 }
 
 function selectChannelPoster(posterUrl, backdropUrl) {
@@ -66833,17 +66845,14 @@ async function saveChannel() {
     // Worker on every request, and its picks have just been sorted for real
     // (see editChannelById) -- so the stored order is now the answer.
     sortByAired: false,
-    // Explicitly cleared (not just left out): channelSourceItems
-    // (05_catalog-core.js) always prefers presetNetworkId's generic network
-    // lineup over whatever items a channel's own row carries, so a Quick
-    // Add channel that still had this set after being edited here would
-    // have its picks silently ignored for actual playback -- the edit would
-    // look saved but never play. The saved row already forgot this field
-    // the moment it started going through this function (nothing above
-    // rebuilds it), so this just makes the local copy agree with what the
-    // row has always done -- see saveLocalChannel's own comment on why an
-    // explicit '' here, not an absence, is what keeps that copy in sync.
+    // Explicitly cleared (not just left out): channelSourceItems (05_catalog-core.js)
+    // prefers presetNetworkId over items a channel's row carries, so a Quick Add
+    // channel edited here has picks preserved -- see saveLocalChannel comment.
+    // Preserves local agreement with what the row has always done.
     presetNetworkId: '',
+    posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
+    logoUrl: (document.getElementById('channelLogoUrlInput') && document.getElementById('channelLogoUrlInput').value.trim()) || (typeof channelDraftLogo !== 'undefined' && channelDraftLogo) || (existingChannel && existingChannel.logoUrl) || null,
+    // Visibility and sharing flags
     visibility: isPublic ? 'public' : 'private',
     sharePublished: isPublic,
     shareCode: existingChannel.shareCode || '',
@@ -67827,7 +67836,7 @@ function editChannelById(channelId) {
   resetChannelDraftWorkspace();
   channelDraftItems = (channel.items || []).slice();
   channelDraftPoster = channel.poster || null;
-  channelDraftBackdrop = channel.backdrop || null;
+  channelDraftBackdrop = channel.backdrop || null; if (typeof setChannelDraftLogo === 'function') setChannelDraftLogo(channel.logoUrl || channel.logo || null);
   
   const nameInput = document.getElementById('channelNameInput');
   if (nameInput) nameInput.value = channel.name || '';
@@ -70307,6 +70316,7 @@ function channelAsListingEntry(ch) {
     }
   }
   if (!poster && !backdrop) {
+    poster = ch.posterUrl || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(ch.name || 'Channel') + '&v=6');
     backdrop = ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(ch.name || 'Channel') + '&format=landscape&v=6';
   }
   return {
@@ -83186,42 +83196,53 @@ async function handleNuvioTvPostAuth() {
 
 function initNuvioTvOnboarding() {
   try {
-    if (typeof window === 'undefined' || !window.location) return;
-    const urlParams = new URLSearchParams(window.location.search);
-    const sourceParam = urlParams.get('source');
-    const tvCodeParam = urlParams.get('tv_code') || urlParams.get('code');
+    if (typeof window === 'undefined') return;
+    const urlParams = (window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
+    const sourceParam = (urlParams && urlParams.get('source')) ||
+      (typeof window !== 'undefined' && window._nuvio_source) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source'));
+    const tvCodeParam = (urlParams && (urlParams.get('tv_code') || urlParams.get('code'))) ||
+      (typeof window !== 'undefined' && window._nuvio_tv_code) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_tv_code'));
 
-    if (sourceParam === 'nuvio_tv') {
-      sessionStorage.setItem('mylists_source', 'nuvio_tv');
+    if (sourceParam === 'nuvio_tv' || tvCodeParam) {
+      window._nuvio_source = 'nuvio_tv';
+      try { sessionStorage.setItem('mylists_source', 'nuvio_tv'); } catch (e) {}
     }
     if (tvCodeParam) {
-      sessionStorage.setItem('mylists_tv_code', tvCodeParam.trim().toUpperCase());
+      const cleanCode = tvCodeParam.trim().toUpperCase();
+      window._nuvio_tv_code = cleanCode;
+      try { sessionStorage.setItem('mylists_tv_code', cleanCode); } catch (e) {}
     }
 
-    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv');
-    if (!isNuvioTv) return;
+    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv') ||
+      (typeof window !== 'undefined' && window._nuvio_source === 'nuvio_tv');
+    if (!isNuvioTv && !tvCodeParam) return;
 
-    const tvCode = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('mylists_tv_code') : null;
+    if (window._nuvioModalOpened) return;
+
+    const tvCode = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_tv_code')) ||
+      (typeof window !== 'undefined' && window._nuvio_tv_code) || null;
     const signedIn = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ||
       Boolean(localStorage.getItem('myListAddon:creatorName'));
 
-    if (!signedIn) {
-      setTimeout(function() {
+    setTimeout(function() {
+      if (window._nuvioModalOpened) return;
+      window._nuvioModalOpened = true;
+      if (!signedIn) {
         if (tvCode) {
           openNuvioTvAuthModal(tvCode);
         } else if (typeof openCreateProfileModal === 'function') {
           openCreateProfileModal();
         }
-      }, 150);
-    } else {
-      setTimeout(function() {
+      } else {
         if (tvCode) {
           openNuvioTvPairingModal(tvCode);
         } else {
           handleNuvioTvPostAuth();
         }
-      }, 150);
-    }
+      }
+    }, 250);
   } catch (e) {
     console.error('initNuvioTvOnboarding error:', e);
   }
@@ -83230,10 +83251,74 @@ function initNuvioTvOnboarding() {
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(initNuvioTvOnboarding, 50);
+      initNuvioTvOnboarding();
     });
   } else {
-    setTimeout(initNuvioTvOnboarding, 50);
+    initNuvioTvOnboarding();
+  }
+}
+
+// Custom channel logo management
+let channelDraftLogo = null;
+
+function setChannelDraftLogo(val) {
+  channelDraftLogo = val || null;
+}
+
+function applyChannelLogoUrl() {
+  const urlInput = document.getElementById('channelLogoUrlInput');
+  const preview = document.getElementById('channelLogoUrlPreview');
+  const previewImg = document.getElementById('channelLogoUrlImg');
+  const status = document.getElementById('channelLogoUrlStatus');
+  if (!urlInput) return;
+
+  const raw = urlInput.value.trim();
+  if (!raw) return;
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch (_) {
+    if (status) { status.textContent = 'Invalid URL \u2014 please enter a full URL starting with https://'; status.style.color = 'var(--color-danger-text)'; }
+    if (preview) preview.style.display = 'flex';
+    if (previewImg) previewImg.style.display = 'none';
+    return;
+  }
+
+  if (url.protocol !== 'https:') {
+    if (status) { status.textContent = 'Only https:// URLs are supported.'; status.style.color = 'var(--color-danger-text)'; }
+    if (preview) preview.style.display = 'flex';
+    if (previewImg) previewImg.style.display = 'none';
+    return;
+  }
+
+  channelDraftLogo = url.href;
+  if (status) { status.textContent = 'Logo URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
+  if (preview) preview.style.display = 'flex';
+  if (previewImg) {
+    previewImg.src = url.href;
+    previewImg.style.display = '';
+  }
+}
+
+function syncChannelLogoUrlInput() {
+  const urlInput = document.getElementById('channelLogoUrlInput');
+  const preview = document.getElementById('channelLogoUrlPreview');
+  const previewImg = document.getElementById('channelLogoUrlImg');
+  const status = document.getElementById('channelLogoUrlStatus');
+  if (!urlInput) return;
+
+  if (channelDraftLogo) {
+    urlInput.value = channelDraftLogo;
+    if (previewImg) {
+      previewImg.src = channelDraftLogo;
+      previewImg.style.display = '';
+    }
+    if (status) { status.textContent = 'Logo URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
+    if (preview) preview.style.display = 'flex';
+  } else {
+    urlInput.value = '';
+    if (preview) preview.style.display = 'none';
   }
 }
 
@@ -83244,6 +83329,9 @@ window.openNuvioTvPairingModal = openNuvioTvPairingModal;
 window.openNuvioTvAuthModal = openNuvioTvAuthModal;
 window.submitNuvioTvLink = submitNuvioTvLink;
 window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
+window.applyChannelLogoUrl = applyChannelLogoUrl;
+window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
+window.setChannelDraftLogo = setChannelDraftLogo;
 // Reordering & position management
 function moveRow(btn, dir) {
   const entry = btn.closest('.entry');
@@ -91143,7 +91231,7 @@ function initAppShell() {
     appShellApplyRoute(route);
   } else if (appShellTrimSlashes(location.pathname) === '/' && !location.hash) {
     const open = appShellRouteForName(window._originTab || '') || { tab: 'discover', sub: '' };
-    try { history.replaceState({ appShell: true }, '', appShellPathFor(open.tab, '')); } catch (e) {}
+    try { history.replaceState({ appShell: true }, '', appShellPathFor(open.tab, '') + (location.search || '')); } catch (e) {}
     // ...and the page is then the page at that path, with the view's own
     // cards drawn (Settings' were missing when "/" reopened Settings).
     appShellApplyRoute({ tab: open.tab, sub: '' });
@@ -92584,14 +92672,30 @@ function formatNuvioUserChannels(userChannelsRaw) {
   if (userChannelsRaw) {
     const list = Array.isArray(userChannelsRaw) ? userChannelsRaw : (typeof userChannelsRaw === "object" ? Object.values(userChannelsRaw) : []);
     if (list.length) {
-      return list.map((ch, i) => ({
-        id: ch.id || `ch_${i + 1}`,
-        name: ch.name || `Channel ${i + 1}`,
-        logoUrl: ch.poster || `/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId || ""}&v=7`,
-        category: ch.category || "Custom Channels",
-        catalogId: ch.id || `channel_${i + 1}`,
-        playOrder: i + 1,
-      }));
+      return list.map((ch, i) => {
+        const name = ch.name || `Channel ${i + 1}`;
+        const posterUrl = ch.posterUrl || ch.poster || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
+        const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || ch.poster || "") : "");
+        let logoUrl = ch.logoUrl;
+        if (!logoUrl) {
+          if (logoPath) {
+            logoUrl = `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(logoPath)}&v=7`;
+          } else if (ch.networkId || ch.presetNetworkId) {
+            logoUrl = `https://mylistsaddon.com/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId}&v=7`;
+          } else {
+            logoUrl = ch.logo || posterUrl;
+          }
+        }
+        return {
+          id: ch.id || `ch_${i + 1}`,
+          name: name,
+          posterUrl: posterUrl,
+          logoUrl: logoUrl,
+          category: ch.category || "My Lists Addon Channels",
+          catalogId: ch.id || `channel_${i + 1}`,
+          playOrder: typeof ch.playOrder === "number" ? ch.playOrder : (i + 1),
+        };
+      });
     }
   }
   return typeof buildNuvioDefaultChannels === "function" ? buildNuvioDefaultChannels() : [];
@@ -118740,7 +118844,10 @@ function handleLookupRoutes(request, env, ctx, url, path) {
   if (path === "/api/show-seasons") return apiShowSeasons(env, ctx, url);
   if (path === "/api/show-episodes") return apiShowEpisodes(env, ctx, url);
   if (path === "/api/channel-preset") return apiChannelPreset(env, ctx, url);
-  if (path === "/api/channel-lineup" && request.method === "POST") return apiChannelLineup(request, env, ctx, url);
+  if (path === "/api/channel-lineup") {
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
+    if (request.method === "POST") return apiChannelLineup(request, env, ctx, url);
+  }
   if (path === "/api/person-search") return apiPersonSearch(request, env, ctx, url);
   if (path === "/api/person-credits") return apiPersonCredits(env, ctx, url);
   if (path === "/api/person-show-episodes") return apiPersonShowEpisodes(env, ctx, url);
@@ -119523,17 +119630,27 @@ async function apiChannelLineup(request, env, ctx, url) {
   try {
     body = await readJsonObject(request);
   } catch {
-    return json({ ok: false, error: "Invalid JSON body." }, 400);
+    return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
   }
   const payload = parseChannelPayload(body.url || "");
-  if (!payload) return json({ ok: false, error: "That is not a channel." }, 400);
+  if (!payload) return json({ ok: false, error: "That is not a channel." }, 400, corsHeaders());
   try {
     const lineup = await resolveChannelLineup(payload, {
       env, ctx, origin: url.origin,
       now: typeof body.now === "number" ? body.now : undefined,
     });
-    if (!lineup) return json({ ok: true, items: [], rotating: !!payload.dailyRotate, plan: null });
+    if (!lineup) return json({ ok: true, items: [], rotating: !!payload.dailyRotate, plan: null }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
     const needsAccount = !!(payload.hideWatched || payload.dynamic);
+    const items = (lineup.items || []).map((it) => {
+      const mediaId = it.imdbId || (it.tmdbId ? `tmdb:${it.tmdbId}` : (it.id && (String(it.id).startsWith("tt") || String(it.id).startsWith("tmdb:")) ? it.id : ""));
+      return {
+        ...it,
+        id: mediaId || it.id || "",
+        title: it.title || it.name || it.epName || "",
+        poster: it.poster || it.thumbnail || it.showPoster || null,
+        thumbnail: it.thumbnail || it.poster || it.showPoster || null,
+      };
+    });
     return json({
       ok: true,
       rotating: !!payload.dailyRotate,
@@ -119548,10 +119665,10 @@ async function apiChannelLineup(request, env, ctx, url) {
         ? [payload.hideWatched ? "hideWatched" : null, payload.dynamic ? "dynamic" : null].filter(Boolean)
         : [],
       generatedAt: Date.now(),
-      items: lineup.items,
-    }, 200, { "Cache-Control": "no-store" });
+      items: items,
+    }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
   } catch (err) {
-    return json({ ok: false, error: safeErrorMessage(err) }, 500, { "Cache-Control": "no-store" });
+    return json({ ok: false, error: safeErrorMessage(err) }, 500, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
 }
 

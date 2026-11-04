@@ -22,7 +22,7 @@ function isPublicCorsPath(path) {
   if (/^\/lists\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\.json$/.test(p)) return true;
   if (p === "/icon.png" || p === "/unavailable-poster.svg") return true;
   if (p === "/api/poster-badge" || p === "/api/channel-poster" || p === "/api/channel-logo" || p === "/api/safe-poster") return true;
-  if (p.startsWith("/api/scrobble") || p.startsWith("/api/nuvio-tv/")) return true;
+  if (p.startsWith("/api/scrobble") || p.startsWith("/api/nuvio-tv/") || p === "/api/channel-lineup") return true;
   return false;
 }
 

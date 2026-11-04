@@ -478,14 +478,30 @@ function formatNuvioUserChannels(userChannelsRaw) {
   if (userChannelsRaw) {
     const list = Array.isArray(userChannelsRaw) ? userChannelsRaw : (typeof userChannelsRaw === "object" ? Object.values(userChannelsRaw) : []);
     if (list.length) {
-      return list.map((ch, i) => ({
-        id: ch.id || `ch_${i + 1}`,
-        name: ch.name || `Channel ${i + 1}`,
-        logoUrl: ch.poster || `/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId || ""}&v=7`,
-        category: ch.category || "Custom Channels",
-        catalogId: ch.id || `channel_${i + 1}`,
-        playOrder: i + 1,
-      }));
+      return list.map((ch, i) => {
+        const name = ch.name || `Channel ${i + 1}`;
+        const posterUrl = ch.posterUrl || ch.poster || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
+        const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || ch.poster || "") : "");
+        let logoUrl = ch.logoUrl;
+        if (!logoUrl) {
+          if (logoPath) {
+            logoUrl = `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(logoPath)}&v=7`;
+          } else if (ch.networkId || ch.presetNetworkId) {
+            logoUrl = `https://mylistsaddon.com/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId}&v=7`;
+          } else {
+            logoUrl = ch.logo || posterUrl;
+          }
+        }
+        return {
+          id: ch.id || `ch_${i + 1}`,
+          name: name,
+          posterUrl: posterUrl,
+          logoUrl: logoUrl,
+          category: ch.category || "My Lists Addon Channels",
+          catalogId: ch.id || `channel_${i + 1}`,
+          playOrder: typeof ch.playOrder === "number" ? ch.playOrder : (i + 1),
+        };
+      });
     }
   }
   return typeof buildNuvioDefaultChannels === "function" ? buildNuvioDefaultChannels() : [];

@@ -1359,13 +1359,14 @@ function buildStreamingServiceFolders() {
         }
       }
     }
+    const coverImageUrl = "https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(svc.name) + "&format=landscape&v=6";
     return {
       id: svc.id,
       title: svc.name,
       name: svc.name,
       tileShape: "LANDSCAPE",
       hideTitle: false,
-      coverImageUrl: "",
+      coverImageUrl: coverImageUrl,
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -1492,14 +1493,21 @@ const PREMADE_COLLECTIONS = [
 
 function buildNuvioDefaultChannels() {
   const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined" ? QUICK_CHANNEL_PRESETS : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
-  return networks.map((net, i) => ({
-    id: `ch_preset_${net.id}`,
-    name: net.name,
-    logoUrl: `/api/channel-logo?netId=${net.id}&v=7`,
-    category: "Live TV",
-    catalogId: `channel_preset_${net.id}`,
-    playOrder: i + 1,
-  }));
+  return networks.map((net, i) => {
+    const posterUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`;
+    const logoUrl = net.logoPath
+      ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7`
+      : `/api/channel-logo?netId=${net.id}&v=7`;
+    return {
+      id: `ch_preset_${net.id}`,
+      name: net.name,
+      posterUrl,
+      logoUrl,
+      category: "My Lists Addon Channels",
+      catalogId: `channel_preset_${net.id}`,
+      playOrder: i + 1,
+    };
+  });
 }
 
 function buildNuvioTvDefaultConfig() {
@@ -1509,7 +1517,6 @@ function buildNuvioTvDefaultConfig() {
     "chart:combined:popular_movies",
     "chart:combined:popular_tv",
     "chart:trakt:boxoffice_movies",
-    "chart:trakt:boxoffice_tv",
   ];
   const lists = [
     {
@@ -1552,15 +1559,6 @@ function buildNuvioTvDefaultConfig() {
       id: "chart:trakt:boxoffice_movies",
       name: "Trakt Box Office",
       type: "movie",
-      url: "trakt:chart:box_office",
-      enabled: true,
-      randomizeItemsDaily: true,
-      randomizeDaily: true,
-    },
-    {
-      id: "chart:trakt:boxoffice_tv",
-      name: "Trakt Box Office",
-      type: "series",
       url: "trakt:chart:box_office",
       enabled: true,
       randomizeItemsDaily: true,
@@ -1619,11 +1617,13 @@ async function seedNuvioTvNewUser(env, username, accountId) {
       channelId: chId,
       id: chId,
       name: net.name,
-      poster: `/api/channel-logo?netId=${net.id}&v=7`,
+      poster: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`,
+      posterUrl: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`,
+      logoUrl: net.logoPath ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7` : `/api/channel-logo?netId=${net.id}&v=7`,
       backdrop: "",
       presetNetworkId: String(net.id),
       networkId: String(net.id),
-      category: "Live TV",
+      category: "My Lists Addon Channels",
       catalogId: `channel_preset_${net.id}`,
       items: [],
       shuffle: false,

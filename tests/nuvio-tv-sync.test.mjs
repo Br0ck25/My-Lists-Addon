@@ -12,9 +12,9 @@ describe("Nuvio TV Launcher - Default Preset & Guest Manifest", () => {
     assert.ok(data);
     assert.ok(Array.isArray(data.catalogs), "manifest has catalogs array");
     const contentCatalogs = data.catalogs.filter((c) => !c.id.startsWith("search_"));
-    assert.equal(contentCatalogs.length, 6, "has exactly 6 default catalogs");
+    assert.equal(contentCatalogs.length, 5, "has exactly 5 default catalogs");
 
-    // Order: Trending Movies, Trending TV, Popular Movies, Popular TV, Trakt Box Office Movies, Trakt Box Office TV
+    // Order: Trending Movies, Trending TV, Popular Movies, Popular TV, Trakt Box Office Movies
     assert.equal(contentCatalogs[0].id, "chart:combined:trending_movies");
     assert.equal(contentCatalogs[0].type, "movie");
     assert.equal(contentCatalogs[1].id, "chart:combined:trending_tv");
@@ -27,8 +27,6 @@ describe("Nuvio TV Launcher - Default Preset & Guest Manifest", () => {
 
     assert.equal(contentCatalogs[4].id, "chart:trakt:boxoffice_movies");
     assert.equal(contentCatalogs[4].type, "movie");
-    assert.equal(contentCatalogs[5].id, "chart:trakt:boxoffice_tv");
-    assert.equal(contentCatalogs[5].type, "series");
   });
 
   it("GET /c/nuvio-default/manifest.json supports /c/ prefix", async () => {
@@ -38,7 +36,7 @@ describe("Nuvio TV Launcher - Default Preset & Guest Manifest", () => {
     const data = res.body;
     assert.ok(data);
     const contentCatalogs = data.catalogs.filter((c) => !c.id.startsWith("search_"));
-    assert.equal(contentCatalogs.length, 6);
+    assert.equal(contentCatalogs.length, 5);
     assert.equal(contentCatalogs[0].id, "chart:combined:trending_movies");
   });
 });
@@ -62,7 +60,6 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
       "chart:combined:popular_movies",
       "chart:combined:popular_tv",
       "chart:trakt:boxoffice_movies",
-      "chart:trakt:boxoffice_tv",
     ];
     assert.deepEqual(data.catalogIds, expectedCatalogIds);
     assert.deepEqual(data.catalogOrder, expectedCatalogIds);
@@ -70,6 +67,12 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     // Collections check (Nuvio collections.json schema)
     assert.ok(Array.isArray(data.collections), "collections is an array");
     assert.ok(data.collections.length >= 4, "contains Streaming Services, Genres, Franchises, Studios");
+
+    const streamingCol = data.collections.find((c) => c.id === "col_mylists_streaming_services");
+    assert.ok(streamingCol, "has col_mylists_streaming_services");
+    for (const f of streamingCol.folders) {
+      assert.ok(f.coverImageUrl && f.coverImageUrl.length > 0, `folder ${f.name} has non-empty coverImageUrl`);
+    }
 
     const collectionNames = data.collections.map((c) => c.title || c.name);
     assert.ok(collectionNames.includes("Streaming Services"), "has Streaming Services collection");
@@ -117,7 +120,8 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
       assert.ok(ch.id, "channel has id");
       assert.ok(ch.name, "channel has name");
       assert.ok(ch.logoUrl, "channel has logoUrl");
-      assert.ok(ch.category, "channel has category");
+      assert.ok(ch.posterUrl, "channel has posterUrl");
+      assert.equal(ch.category, "My Lists Addon Channels");
       assert.ok(ch.catalogId, "channel has catalogId");
       assert.ok(typeof ch.playOrder === "number", "channel has playOrder");
     }
@@ -129,7 +133,7 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     assert.equal(res.status, 200);
     const data = res.body;
     assert.equal(data.ok, true);
-    assert.equal(data.catalogIds.length, 6);
+    assert.equal(data.catalogIds.length, 5);
   });
 
   it("GET /nuvio-default/catalog/movie/chart:combined:trending_movies.json handles catalog requests", async () => {
@@ -259,13 +263,12 @@ describe("Phase 2: Nuvio TV Launcher - New User Account Seeding & Existing User 
 
     // 2a. Catalogs check: Combined Trending, Combined Popular, Trakt Box Office in exact order
     assert.ok(Array.isArray(syncData.config), "config is an array");
-    assert.equal(syncData.config.length, 6, "has 6 default catalog rows");
+    assert.equal(syncData.config.length, 5, "has 5 default catalog rows");
     assert.equal(syncData.config[0].id, "chart:combined:trending_movies");
     assert.equal(syncData.config[1].id, "chart:combined:trending_tv");
     assert.equal(syncData.config[2].id, "chart:combined:popular_movies");
     assert.equal(syncData.config[3].id, "chart:combined:popular_tv");
     assert.equal(syncData.config[4].id, "chart:trakt:boxoffice_movies");
-    assert.equal(syncData.config[5].id, "chart:trakt:boxoffice_tv");
     assert.equal(syncData.randomizeItemsDaily, true, "randomizeItemsDaily is true");
 
     // 2b. Channels check: My Channels is populated with all Quick Add channels
@@ -291,7 +294,7 @@ describe("Phase 2: Nuvio TV Launcher - New User Account Seeding & Existing User 
     assert.equal(nuvioSyncRes.status, 200);
     assert.equal(nuvioSyncRes.body.ok, true);
     assert.equal(nuvioSyncRes.body.randomizeItemsDaily, true);
-    assert.equal(nuvioSyncRes.body.catalogIds.length, 6);
+    assert.equal(nuvioSyncRes.body.catalogIds.length, 5);
   });
 
   it("POST /api/creator/account/register with ?source=nuvio_tv query param seeds correctly", async () => {
@@ -309,7 +312,7 @@ describe("Phase 2: Nuvio TV Launcher - New User Account Seeding & Existing User 
     assert.equal(nuvioSyncRes.status, 200);
     assert.equal(nuvioSyncRes.body.ok, true);
     assert.equal(nuvioSyncRes.body.randomizeItemsDaily, true);
-    assert.equal(nuvioSyncRes.body.catalogIds.length, 6);
+    assert.equal(nuvioSyncRes.body.catalogIds.length, 5);
   });
 
   it("Normal registration without source creates empty account with NO seeded preset", async () => {

@@ -401,6 +401,17 @@
             <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
           </div>
         </div>
+        <div class="u-mt-12px">
+          <p class="u-m-0_0_6px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Or use a custom channel logo URL (SVG, PNG, WebP):</p>
+          <div class="row u-gap-8px">
+            <input type="url" id="channelLogoUrlInput" placeholder="https://example.com/logo.svg" class="u-flex-1 u-fs-v_font_size_sm">
+            <button type="button" class="secondary u-ws-nowrap u-fs-v_font_size_sm" data-act="applyChannelLogoUrl">Use This</button>
+          </div>
+          <div id="channelLogoUrlPreview" class="u-mt-8px u-ai-center u-gap-10px" style="display:none;">
+            <img id="channelLogoUrlImg" src="" alt="Logo preview" class="u-objectfit-contain u-br-v_radius_xs u-bd-1px_solid_v_border" style="width:80px; height:45px; background:var(--color-bg-subtle); padding:4px;" loading="lazy">
+            <span id="channelLogoUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
+          </div>
+        </div>
       </div>
 
       <!-- Bottom Action Bar -->

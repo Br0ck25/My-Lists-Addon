@@ -1328,6 +1328,7 @@ function renderChannelPosterPicker() {
 
   grid.innerHTML = html;
   if (typeof syncChannelPosterUrlInput === 'function') syncChannelPosterUrlInput();
+  if (typeof syncChannelLogoUrlInput === 'function') syncChannelLogoUrlInput();
 }
 
 function selectChannelPoster(posterUrl, backdropUrl) {
@@ -9177,17 +9178,14 @@ async function saveChannel() {
     // Worker on every request, and its picks have just been sorted for real
     // (see editChannelById) -- so the stored order is now the answer.
     sortByAired: false,
-    // Explicitly cleared (not just left out): channelSourceItems
-    // (05_catalog-core.js) always prefers presetNetworkId's generic network
-    // lineup over whatever items a channel's own row carries, so a Quick
-    // Add channel that still had this set after being edited here would
-    // have its picks silently ignored for actual playback -- the edit would
-    // look saved but never play. The saved row already forgot this field
-    // the moment it started going through this function (nothing above
-    // rebuilds it), so this just makes the local copy agree with what the
-    // row has always done -- see saveLocalChannel's own comment on why an
-    // explicit '' here, not an absence, is what keeps that copy in sync.
+    // Explicitly cleared (not just left out): channelSourceItems (05_catalog-core.js)
+    // prefers presetNetworkId over items a channel's row carries, so a Quick Add
+    // channel edited here has picks preserved -- see saveLocalChannel comment.
+    // Preserves local agreement with what the row has always done.
     presetNetworkId: '',
+    posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
+    logoUrl: (document.getElementById('channelLogoUrlInput') && document.getElementById('channelLogoUrlInput').value.trim()) || (typeof channelDraftLogo !== 'undefined' && channelDraftLogo) || (existingChannel && existingChannel.logoUrl) || null,
+    // Visibility and sharing flags
     visibility: isPublic ? 'public' : 'private',
     sharePublished: isPublic,
     shareCode: existingChannel.shareCode || '',
@@ -10171,7 +10169,7 @@ function editChannelById(channelId) {
   resetChannelDraftWorkspace();
   channelDraftItems = (channel.items || []).slice();
   channelDraftPoster = channel.poster || null;
-  channelDraftBackdrop = channel.backdrop || null;
+  channelDraftBackdrop = channel.backdrop || null; if (typeof setChannelDraftLogo === 'function') setChannelDraftLogo(channel.logoUrl || channel.logo || null);
   
   const nameInput = document.getElementById('channelNameInput');
   if (nameInput) nameInput.value = channel.name || '';
@@ -12651,6 +12649,7 @@ function channelAsListingEntry(ch) {
     }
   }
   if (!poster && !backdrop) {
+    poster = ch.posterUrl || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(ch.name || 'Channel') + '&v=6');
     backdrop = ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(ch.name || 'Channel') + '&format=landscape&v=6';
   }
   return {

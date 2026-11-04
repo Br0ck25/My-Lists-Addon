@@ -293,7 +293,10 @@ function handleLookupRoutes(request, env, ctx, url, path) {
   if (path === "/api/show-seasons") return apiShowSeasons(env, ctx, url);
   if (path === "/api/show-episodes") return apiShowEpisodes(env, ctx, url);
   if (path === "/api/channel-preset") return apiChannelPreset(env, ctx, url);
-  if (path === "/api/channel-lineup" && request.method === "POST") return apiChannelLineup(request, env, ctx, url);
+  if (path === "/api/channel-lineup") {
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
+    if (request.method === "POST") return apiChannelLineup(request, env, ctx, url);
+  }
   if (path === "/api/person-search") return apiPersonSearch(request, env, ctx, url);
   if (path === "/api/person-credits") return apiPersonCredits(env, ctx, url);
   if (path === "/api/person-show-episodes") return apiPersonShowEpisodes(env, ctx, url);
@@ -1076,17 +1079,27 @@ async function apiChannelLineup(request, env, ctx, url) {
   try {
     body = await readJsonObject(request);
   } catch {
-    return json({ ok: false, error: "Invalid JSON body." }, 400);
+    return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
   }
   const payload = parseChannelPayload(body.url || "");
-  if (!payload) return json({ ok: false, error: "That is not a channel." }, 400);
+  if (!payload) return json({ ok: false, error: "That is not a channel." }, 400, corsHeaders());
   try {
     const lineup = await resolveChannelLineup(payload, {
       env, ctx, origin: url.origin,
       now: typeof body.now === "number" ? body.now : undefined,
     });
-    if (!lineup) return json({ ok: true, items: [], rotating: !!payload.dailyRotate, plan: null });
+    if (!lineup) return json({ ok: true, items: [], rotating: !!payload.dailyRotate, plan: null }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
     const needsAccount = !!(payload.hideWatched || payload.dynamic);
+    const items = (lineup.items || []).map((it) => {
+      const mediaId = it.imdbId || (it.tmdbId ? `tmdb:${it.tmdbId}` : (it.id && (String(it.id).startsWith("tt") || String(it.id).startsWith("tmdb:")) ? it.id : ""));
+      return {
+        ...it,
+        id: mediaId || it.id || "",
+        title: it.title || it.name || it.epName || "",
+        poster: it.poster || it.thumbnail || it.showPoster || null,
+        thumbnail: it.thumbnail || it.poster || it.showPoster || null,
+      };
+    });
     return json({
       ok: true,
       rotating: !!payload.dailyRotate,
@@ -1101,10 +1114,10 @@ async function apiChannelLineup(request, env, ctx, url) {
         ? [payload.hideWatched ? "hideWatched" : null, payload.dynamic ? "dynamic" : null].filter(Boolean)
         : [],
       generatedAt: Date.now(),
-      items: lineup.items,
-    }, 200, { "Cache-Control": "no-store" });
+      items: items,
+    }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
   } catch (err) {
-    return json({ ok: false, error: safeErrorMessage(err) }, 500, { "Cache-Control": "no-store" });
+    return json({ ok: false, error: safeErrorMessage(err) }, 500, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
 }
 
