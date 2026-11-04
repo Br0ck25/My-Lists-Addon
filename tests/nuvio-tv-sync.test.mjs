@@ -402,3 +402,135 @@ describe("Phase 2: Nuvio TV Launcher - New User Account Seeding & Existing User 
     assert.equal(syncData.channels.my_noir_ch.name, "Noir Channel");
   });
 });
+
+describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () => {
+  it("POST /api/nuvio-tv/device/code generates deviceCode, userCode, and verificationUrl", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const res = await call(env, "/api/nuvio-tv/device/code", { method: "POST" });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.ok(res.body.deviceCode, "has deviceCode");
+    assert.ok(res.body.userCode, "has userCode");
+    assert.match(res.body.userCode, /^[A-Z0-9]{3}-[A-Z0-9]{3}$/, "userCode is XXX-XXX format");
+    assert.ok(res.body.verificationUrl.includes("source=nuvio_tv"), "verificationUrl includes source=nuvio_tv");
+    assert.ok(res.body.verificationUrl.includes(res.body.userCode), "verificationUrl includes userCode");
+  });
+
+  it("GET /api/nuvio-tv/device/poll reports pending status for active code", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const codeRes = await call(env, "/api/nuvio-tv/device/code", { method: "POST" });
+    const { deviceCode } = codeRes.body;
+
+    // Missing deviceCode
+    const missingRes = await call(env, "/api/nuvio-tv/device/poll");
+    assert.equal(missingRes.status, 400);
+
+    // Nonexistent deviceCode
+    const notFoundRes = await call(env, "/api/nuvio-tv/device/poll?deviceCode=nonexistent-uuid");
+    assert.equal(notFoundRes.status, 404);
+
+    // Valid pending deviceCode
+    const pollRes = await call(env, `/api/nuvio-tv/device/poll?deviceCode=${deviceCode}`);
+    assert.equal(pollRes.status, 200);
+    assert.equal(pollRes.body.ok, true);
+    assert.equal(pollRes.body.status, "pending");
+  });
+
+  it("POST /api/nuvio-tv/device/claim requires authentication and links device to account", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+
+    // 1. Generate pairing code on TV
+    const codeRes = await call(env, "/api/nuvio-tv/device/code", { method: "POST" });
+    const { deviceCode, userCode } = codeRes.body;
+
+    // 2. Unauthenticated claim attempt -> 401
+    const anonClaimRes = await call(env, "/api/nuvio-tv/device/claim", {
+      method: "POST",
+      json: { userCode },
+    });
+    assert.equal(anonClaimRes.status, 401);
+
+    // 3. Create a creator account on website
+    const proof = await accountProof(env, "claimuser");
+
+    // 4. Authenticated claim with invalid userCode -> 404
+    const badCodeRes = await call(env, "/api/nuvio-tv/device/claim", {
+      method: "POST",
+      json: {
+        userCode: "INVALID",
+        creatorName: "claimuser",
+        creatorKey: proof.creatorKey,
+      },
+    });
+    assert.equal(badCodeRes.status, 404);
+
+    // 5. Authenticated claim with valid userCode
+    const claimRes = await call(env, "/api/nuvio-tv/device/claim", {
+      method: "POST",
+      json: {
+        userCode,
+        creatorName: "claimuser",
+        creatorKey: proof.creatorKey,
+      },
+    });
+    assert.equal(claimRes.status, 200);
+    assert.equal(claimRes.body.ok, true);
+    assert.ok(claimRes.body.manifestUrl.includes("/manifest.json"));
+    assert.ok(claimRes.body.syncUrl.includes("/api/nuvio-tv/sync/"));
+
+    // 6. TV polls again -> receives status authenticated and URLs
+    const pollAfterRes = await call(env, `/api/nuvio-tv/device/poll?deviceCode=${deviceCode}`);
+    assert.equal(pollAfterRes.status, 200);
+    assert.equal(pollAfterRes.body.ok, true);
+    assert.equal(pollAfterRes.body.status, "authenticated");
+    assert.equal(pollAfterRes.body.installId, claimRes.body.installId);
+    assert.equal(pollAfterRes.body.manifestUrl, claimRes.body.manifestUrl);
+    assert.equal(pollAfterRes.body.syncUrl, claimRes.body.syncUrl);
+  });
+
+  it("POST /api/nuvio-tv/device/claim accepts userCode without hyphen", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const codeRes = await call(env, "/api/nuvio-tv/device/code", { method: "POST" });
+    const { deviceCode, userCode } = codeRes.body;
+    const rawCodeWithoutHyphen = userCode.replace(/-/g, "");
+
+    const proof = await accountProof(env, "claimuser2");
+
+    const claimRes = await call(env, "/api/nuvio-tv/device/claim", {
+      method: "POST",
+      json: {
+        userCode: rawCodeWithoutHyphen,
+        creatorName: "claimuser2",
+        creatorKey: proof.creatorKey,
+      },
+    });
+    assert.equal(claimRes.status, 200);
+    assert.equal(claimRes.body.ok, true);
+
+    const pollRes = await call(env, `/api/nuvio-tv/device/poll?deviceCode=${deviceCode}`);
+    assert.equal(pollRes.status, 200);
+    assert.equal(pollRes.body.status, "authenticated");
+  });
+
+  it("Builder HTML and client bundle include Nuvio TV onboarding banner and pairing logic", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const pageRes = await call(env, "/");
+    assert.equal(pageRes.status, 200);
+    assert.ok(pageRes.text.includes('id="nuvioTvOnboardingBanner"'), "HTML has nuvioTvOnboardingBanner");
+    assert.ok(pageRes.text.includes('id="nuvioSection"'), "HTML has nuvioSection");
+    assert.ok(pageRes.text.includes("Step 2:"), "HTML contains Step 2 prefix");
+    assert.ok(
+      pageRes.text.includes("Sign in with your Nuvio account below to view your Continue Watching, Watch History, and Library on the website."),
+      "HTML contains step 2 onboarding prompt"
+    );
+
+    // Verify /app-features.js contains the pairing functions
+    const m = pageRes.text.match(/<script src="(\/app-features\.js\?v=[0-9a-f]+)"/);
+    assert.ok(m, "page loads app-features.js");
+    const featuresRes = await call(env, m[1]);
+    assert.equal(featuresRes.status, 200);
+    assert.ok(featuresRes.text.includes("claimNuvioTvDeviceCode"), "bundle includes claimNuvioTvDeviceCode");
+    assert.ok(featuresRes.text.includes("handleNuvioTvPostAuth"), "bundle includes handleNuvioTvPostAuth");
+    assert.ok(featuresRes.text.includes("initNuvioTvOnboarding"), "bundle includes initNuvioTvOnboarding");
+  });
+});

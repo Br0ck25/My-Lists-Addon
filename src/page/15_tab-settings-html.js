@@ -619,6 +619,12 @@
 
       <!-- Nuvio Section -->
       <div class="provider-card" id="nuvioSection">
+        <div id="nuvioTvOnboardingBanner" style="display:none;" class="u-mb-12px u-p-12px_16px u-br-v_radius_md u-bd-1_5px_solid_v_accent u-bg-v_surface_2_rgba_255_255_255_0_04">
+          <div class="u-ai-center u-gap-8px" style="display:flex;">
+            <span class="u-fw-700 u-fs-v_font_size_base u-c-v_accent">Step 2:</span>
+            <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sign in with your Nuvio account below to view your Continue Watching, Watch History, and Library on the website.</span>
+          </div>
+        </div>
         <div class="provider-card-header">
           <div>
             <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">

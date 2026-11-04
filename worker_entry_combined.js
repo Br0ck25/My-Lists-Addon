@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "47bb7d8aef";
+const WORKER_BUILD = "8eb866573c";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -3894,7 +3894,7 @@ function isPublicCorsPath(path) {
   if (/^\/lists\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\.json$/.test(p)) return true;
   if (p === "/icon.png" || p === "/unavailable-poster.svg") return true;
   if (p === "/api/poster-badge" || p === "/api/channel-poster" || p === "/api/channel-logo" || p === "/api/safe-poster") return true;
-  if (p.startsWith("/api/scrobble") || p.startsWith("/api/nuvio-tv/sync")) return true;
+  if (p.startsWith("/api/scrobble") || p.startsWith("/api/nuvio-tv/")) return true;
   return false;
 }
 
@@ -4343,7 +4343,7 @@ function verifyCsrf(request) {
   const path = url.pathname;
 
   // Exemptions
-  if (path.startsWith("/api/scrobble")) {
+  if (path.startsWith("/api/scrobble") || path.indexOf("/api/nuvio-tv/") === 0) {
     return null;
   }
   // Exactly the eight provider routes (tests/route-access.json). This was
@@ -39933,6 +39933,12 @@ if ('serviceWorker' in navigator) {
 
       <!-- Nuvio Section -->
       <div class="provider-card" id="nuvioSection">
+        <div id="nuvioTvOnboardingBanner" style="display:none;" class="u-mb-12px u-p-12px_16px u-br-v_radius_md u-bd-1_5px_solid_v_accent u-bg-v_surface_2_rgba_255_255_255_0_04">
+          <div class="u-ai-center u-gap-8px" style="display:flex;">
+            <span class="u-fw-700 u-fs-v_font_size_base u-c-v_accent">Step 2:</span>
+            <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Sign in with your Nuvio account below to view your Continue Watching, Watch History, and Library on the website.</span>
+          </div>
+        </div>
         <div class="provider-card-header">
           <div>
             <div class="u-ai-center u-gap-8px u-fw2-wrap" style="display:flex;">
@@ -77674,11 +77680,7 @@ async function submitRestoreProfile() {
     localStorage.setItem('myListAddon:creatorKey', key);
     localStorage.setItem('myListAddon:hasRecoveryAnswer', data.hasRecoveryAnswer ? '1' : '0');
     closeModal();
-    // Released here, not in the finally below: what follows is the sign-in
-    // tail, and loadCreatorSync can take as long as the network takes. Holding
-    // the guard across it would leave the Login button disabled for the whole
-    // of it and stop someone signing into a different account. Calling it twice
-    // is harmless.
+    // Released here: what follows is the sign-in tail, and loadCreatorSync takes time.
     endSubmit();
     renderCreatorProfileBar();
     renderAccountKeySection();
@@ -77688,6 +77690,7 @@ async function submitRestoreProfile() {
     await loadCreatorSync();
     // After the sync load, so tokens this account keeps in sync are included.
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
+    if (typeof handleNuvioTvPostAuth === 'function') handleNuvioTvPostAuth();
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -78887,9 +78890,11 @@ async function loadCreatorSync(opts) {
     }
     window._lastCreatorSyncLoadedAt = Date.now();
     showSunsetNoticesOnce(data.sunset_notices);
-    // Before anything below adopts local state or pushes it up: was this
-    // account emptied while this browser was asleep? If so its copy is stale by
-    // definition, and uploading it is exactly how a reset used to undo itself.
+    if (Array.isArray(data.customCollections)) {
+      try { localStorage.setItem('myListAddon:customCollections', JSON.stringify(data.customCollections)); } catch (e) {}
+      if (typeof renderCollectionsView === 'function') renderCollectionsView();
+    }
+    // Before anything below adopts local state: was this account emptied while asleep?
     if (shouldApplyAccountReset(data.resetAt)) {
       // An emptied account has no credentials to lose: blank is the truth.
       _creatorKeysAppliedFor = loadingFor;
@@ -79341,9 +79346,9 @@ async function loadCreatorSync(opts) {
         const el = document.getElementById('shuffleShelvesCheckbox');
         if (el) el.checked = synced.keys.shuffleShelves;
       }
-      if (typeof synced.keys.shuffleItems === 'boolean') {
+      if (typeof synced.keys.shuffleItems === 'boolean' || synced.randomizeItemsDaily || synced.shuffleItems) {
         const el = document.getElementById('shuffleItemsCheckbox');
-        if (el) el.checked = synced.keys.shuffleItems;
+        if (el) el.checked = (typeof synced.keys.shuffleItems === 'boolean') ? synced.keys.shuffleItems : Boolean(synced.randomizeItemsDaily || synced.shuffleItems);
       }
       if (synced.keys.region) {
         const el = document.getElementById('regionSelect');
@@ -79793,10 +79798,11 @@ async function submitCreateProfile() {
   if (!endSubmit) return;
 
   try {
+    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv');
     const res = await creatorApiFetch(ORIGIN + '/api/creator/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined }),
+      body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined, source: isNuvioTv ? 'nuvio_tv' : undefined }),
     });
     const data = await res.json();
     if (!data.ok) {
@@ -79836,11 +79842,11 @@ async function submitCreateProfile() {
     renderTrackPlaybackSection();
     showKeyRevealModal(data.displayName, data.creatorKey);
     loadCreatorSync();
-    // Every hand-built list in this browser goes up to the new account. Not
-    // awaited: the key is already on screen.
+    // Every hand-built list in this browser goes up to the new account. Not awaited: the key is already on screen.
     Promise.resolve()
       .then(function () { return migrateLocalCustomListsToAccount(); })
       .catch(function () {});
+    if (typeof handleNuvioTvPostAuth === 'function') handleNuvioTvPostAuth();
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -82978,6 +82984,134 @@ if (typeof window !== 'undefined') {
     handleForegroundResumeSync();
   });
 }
+// --- Nuvio TV Launcher Pairing & Onboarding Controller -----------------------
+
+async function claimNuvioTvDeviceCode(userCode) {
+  if (!userCode) return false;
+  try {
+    const creatorName = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName)
+      ? activeCreator.creatorName
+      : (localStorage.getItem('myListAddon:creatorName') || '');
+    const creatorKey = localStorage.getItem('myListAddon:creatorKey') || '';
+    const res = await fetch(ORIGIN + '/api/nuvio-tv/device/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userCode: userCode, creatorName: creatorName, creatorKey: creatorKey }),
+    });
+    const data = await res.json();
+    if (data && data.ok) {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('mylists_tv_code');
+      }
+      if (typeof showToast === 'function') {
+        showToast('Linked to Nuvio TV Launcher!', 'success');
+      }
+      return true;
+    }
+  } catch (err) {
+    console.error('Nuvio TV device claim failed:', err);
+  }
+  return false;
+}
+
+async function handleNuvioTvPostAuth() {
+  try {
+    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv');
+    if (!isNuvioTv) return;
+
+    // 1. Ensure 24h shuffle checkbox is enabled on the client
+    const shuffleEl = document.getElementById('shuffleItemsCheckbox');
+    if (shuffleEl && !shuffleEl.checked) {
+      shuffleEl.checked = true;
+      if (typeof saveState === 'function') saveState();
+    }
+
+    // 2. Claim TV device code if one was provided in URL/sessionStorage
+    const tvCode = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('mylists_tv_code') : null;
+    if (tvCode) {
+      await claimNuvioTvDeviceCode(tvCode);
+    }
+
+    // 3. Direct user to sign in with their Nuvio account if not already connected
+    const isNuvioConnected = (typeof mediaAppListsLive !== 'undefined' && mediaAppListsLive.nuvio);
+    if (!isNuvioConnected) {
+      if (typeof goToExternalSettings === 'function') {
+        goToExternalSettings();
+      } else if (typeof switchTab === 'function') {
+        switchTab('settings');
+        if (typeof switchSettingsSubmenu === 'function') {
+          const externalPill = document.querySelector('#settingsSubnavBar button[data-sub="external"]');
+          switchSettingsSubmenu('external', externalPill);
+        }
+      }
+
+      setTimeout(function() {
+        const banner = document.getElementById('nuvioTvOnboardingBanner');
+        if (banner) banner.style.display = 'block';
+        const section = document.getElementById('nuvioSection');
+        if (section) {
+          if (typeof section.scrollIntoView === 'function') {
+            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          section.style.borderColor = 'var(--color-brand)';
+          section.style.boxShadow = '0 0 0 2px var(--color-brand)';
+          setTimeout(function() {
+            section.style.borderColor = '';
+            section.style.boxShadow = '';
+          }, 3500);
+        }
+      }, 250);
+    }
+  } catch (e) {
+    console.error('handleNuvioTvPostAuth error:', e);
+  }
+}
+
+function initNuvioTvOnboarding() {
+  try {
+    if (typeof window === 'undefined' || !window.location) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const sourceParam = urlParams.get('source');
+    const tvCodeParam = urlParams.get('tv_code') || urlParams.get('code');
+
+    if (sourceParam === 'nuvio_tv') {
+      sessionStorage.setItem('mylists_source', 'nuvio_tv');
+    }
+    if (tvCodeParam) {
+      sessionStorage.setItem('mylists_tv_code', tvCodeParam.trim().toUpperCase());
+    }
+
+    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv');
+    if (!isNuvioTv) return;
+
+    const signedIn = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ||
+      Boolean(localStorage.getItem('myListAddon:creatorName'));
+
+    if (!signedIn) {
+      setTimeout(function() {
+        if (typeof openCreateProfileModal === 'function') {
+          openCreateProfileModal();
+        }
+      }, 150);
+    } else {
+      handleNuvioTvPostAuth();
+    }
+  } catch (e) {
+    console.error('initNuvioTvOnboarding error:', e);
+  }
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initNuvioTvOnboarding);
+  } else {
+    initNuvioTvOnboarding();
+  }
+}
+
+window.claimNuvioTvDeviceCode = claimNuvioTvDeviceCode;
+window.handleNuvioTvPostAuth = handleNuvioTvPostAuth;
+window.initNuvioTvOnboarding = initNuvioTvOnboarding;
 // Reordering & position management
 function moveRow(btn, dir) {
   const entry = btn.closest('.entry');
@@ -115177,6 +115311,9 @@ async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
   if (path === "/api/creator/sync/load" && request.method === "POST") return creatorApiSyncLoad(request, env, ctx, path);
   if (path === "/api/creator/sync/like" && request.method === "POST") return creatorApiSyncLike(request, env, ctx, path);
   if (path === "/api/creator/sync/share-tracking" && request.method === "POST") return creatorApiSyncShareTracking(request, env, ctx, path);
+  if (path === "/api/nuvio-tv/device/code") return handleNuvioTvDeviceCode(request, env, ctx, url);
+  if (path === "/api/nuvio-tv/device/poll") return handleNuvioTvDevicePoll(request, env, ctx, url);
+  if (path === "/api/nuvio-tv/device/claim") return handleNuvioTvDeviceClaim(request, env, ctx, url, path);
   return null;
 }
 
@@ -115933,6 +116070,145 @@ async function creatorApiSyncShareTracking(request, env, ctx, path) {
       "continue-watching": shared["continue-watching"] === true,
     },
   }, 200, { "Cache-Control": "no-store" });
+}
+
+// POST /api/nuvio-tv/device/code -- generates pairing codes for Nuvio TV Launcher
+async function handleNuvioTvDeviceCode(request, env, ctx, url) {
+  if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  const kv = (env && (env.CONFIGS || env["LIST_CACHE"]));
+  if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+
+  const deviceCode = crypto.randomUUID();
+  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  let raw = "";
+  for (let i = 0; i < 6; i++) {
+    raw += chars[bytes[i] % chars.length];
+  }
+  const userCode = raw.slice(0, 3) + "-" + raw.slice(3);
+  const origin = url ? url.origin : "";
+  const verificationUrl = `${origin}/?source=nuvio_tv&tv_code=${userCode}`;
+
+  const payload = {
+    deviceCode,
+    userCode,
+    status: "pending",
+    createdAt: Date.now()
+  };
+  const jsonStr = JSON.stringify(payload);
+  await kv.put("nuvio_tv_device:" + deviceCode, jsonStr, { expirationTtl: 600 });
+  await kv.put("nuvio_tv_code:" + userCode, jsonStr, { expirationTtl: 600 });
+  await kv.put("nuvio_tv_code:" + raw, jsonStr, { expirationTtl: 600 });
+
+  return json({ ok: true, deviceCode, userCode, verificationUrl }, 200, corsHeaders());
+}
+
+// GET /api/nuvio-tv/device/poll -- polled by Nuvio TV Launcher
+async function handleNuvioTvDevicePoll(request, env, ctx, url) {
+  if (request.method !== "GET" && request.method !== "HEAD") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  const deviceCode = (url.searchParams.get("deviceCode") || "").trim();
+  if (!deviceCode) return json({ ok: false, error: "Missing deviceCode parameter." }, 400, corsHeaders());
+  const kv = (env && (env.CONFIGS || env["LIST_CACHE"]));
+  if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+
+  const raw = await kv.get("nuvio_tv_device:" + deviceCode);
+  if (!raw) return json({ ok: false, error: "Device code expired or not found." }, 404, corsHeaders());
+  let record;
+  try {
+    record = JSON.parse(raw);
+  } catch {
+    return json({ ok: false, error: "Malformed device record." }, 500, corsHeaders());
+  }
+
+  if (record.status === "authenticated") {
+    return json({
+      ok: true,
+      status: "authenticated",
+      installId: record.installId,
+      manifestUrl: record.manifestUrl,
+      syncUrl: record.syncUrl
+    }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
+  return json({ ok: true, status: "pending" }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+}
+
+// POST /api/nuvio-tv/device/claim -- binds logged-in creator session to TV device
+async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
+  if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  let body;
+  try {
+    body = await readJsonObject(request);
+  } catch {
+    return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
+  }
+
+  const auth = await authenticateCreatorFor(request, env, ctx, path, body.creatorName, body.creatorKey);
+  if (!auth.ok) return authFailureResponse(auth);
+
+  const rawCode = (body.userCode || "").toString().trim().toUpperCase();
+  if (!rawCode) return json({ ok: false, error: "Missing userCode." }, 400, corsHeaders());
+  const kv = (env && (env.CONFIGS || env["LIST_CACHE"]));
+  if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+
+  let codeRaw = await kv.get("nuvio_tv_code:" + rawCode);
+  if (!codeRaw && rawCode.includes("-")) {
+    codeRaw = await kv.get("nuvio_tv_code:" + rawCode.replace(/-/g, ""));
+  }
+  if (!codeRaw && !rawCode.includes("-") && rawCode.length === 6) {
+    codeRaw = await kv.get("nuvio_tv_code:" + rawCode.slice(0, 3) + "-" + rawCode.slice(3));
+  }
+  if (!codeRaw) return json({ ok: false, error: "Invalid or expired user code." }, 404, corsHeaders());
+
+  let record;
+  try {
+    record = JSON.parse(codeRaw);
+  } catch {
+    return json({ ok: false, error: "Malformed device record." }, 500, corsHeaders());
+  }
+
+  let installToken = auth.username;
+  if (env && env.DB) {
+    try {
+      const acct = await env.DB.prepare(
+        "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1"
+      ).bind(auth.username).first();
+      if (acct) {
+        const inst = await env.DB.prepare(
+          "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
+        ).bind(acct.id).first();
+        if (inst) {
+          installToken = inst.legacy_cfg_id || inst.token_hash || auth.username;
+        }
+      }
+    } catch {}
+  }
+
+  const origin = url ? url.origin : "";
+  const manifestUrl = (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
+    ? `${origin}/${installToken}/manifest.json`
+    : installToken.length === 43
+      ? `${origin}/i/${installToken}/manifest.json`
+      : `${origin}/${installToken}/manifest.json`;
+  const syncUrl = `${origin}/api/nuvio-tv/sync/${installToken || auth.username}`;
+
+  const updated = {
+    ...record,
+    status: "authenticated",
+    claimedBy: auth.username,
+    installId: installToken || auth.username,
+    manifestUrl,
+    syncUrl,
+    claimedAt: Date.now()
+  };
+  const updatedStr = JSON.stringify(updated);
+  await kv.put("nuvio_tv_device:" + record.deviceCode, updatedStr, { expirationTtl: 600 });
+  await kv.put("nuvio_tv_code:" + record.userCode, updatedStr, { expirationTtl: 600 });
+  const cleanCode = record.userCode.replace(/-/g, "");
+  await kv.put("nuvio_tv_code:" + cleanCode, updatedStr, { expirationTtl: 600 });
+
+  return json({ ok: true, installId: updated.installId, manifestUrl, syncUrl }, 200, corsHeaders());
 }
 // Routes the Stremio, Nuvio and Wako apps call (configure, manifest, subtitles ping, catalog rows, meta, scrobble webhook), moved out of handleFetch (CQ-01).
 

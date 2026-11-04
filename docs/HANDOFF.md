@@ -1,6 +1,6 @@
 # Handoff
 
-## Current work: Phase 1 & 2 Nuvio TV Launcher backend integration (2026-11-04, branch `feat/nuvio-tv-phase1`)
+## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-04, branch `feat/nuvio-tv-phase1`)
 - **Phase 1 (Default preset, guest manifest, unified sync)**:
   - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultPreset()` and `buildNuvioTvDefaultConfig()`.
   - Built unified sync route `GET /api/nuvio-tv/sync/:target` (registered as public in `tests/route-access.json`), supporting `"default"` target, user accounts, and install tokens. Computes deterministic SHA-256 `versionHash` and formats collections and channels in Nuvio schema.
@@ -10,14 +10,24 @@
   - Normal registrations without `source=nuvio_tv` remain completely unseeded.
   - Existing user sign-in (`POST /api/creator/account/login`, `POST /api/creator/restore`) preserves existing user lists/channels/collections without overwriting.
   - Added routes in `tests/route-access.json`: `/api/creator/account/register` (public), `/api/creator/register` (public), `/api/creator/account/login` (account).
-  - All unit tests in `tests/nuvio-tv-sync.test.mjs` (11 tests) and full verification suite (`bash verify.sh -q`) pass cleanly.
+- **Phase 3 (TV device pairing & post-registration redirect to Nuvio account sign-in)**:
+  - Implemented pairing endpoints in `src/api/69_creator-api-sync-routes.js`:
+    - `POST /api/nuvio-tv/device/code` (public): generates random `deviceCode` (UUID) and 6-char `userCode` (e.g. `K4P-89M`), stored with 10-minute TTL in KV, returns `{ ok: true, deviceCode, userCode, verificationUrl }`.
+    - `GET /api/nuvio-tv/device/poll?deviceCode=...` (public): returns `{ ok: true, status: "pending" }` or `{ ok: true, status: "authenticated", installId, manifestUrl, syncUrl }`.
+    - `POST /api/nuvio-tv/device/claim` (account): verifies creator authentication, validates `userCode` (with or without hyphen), binds account's active `installId`, `manifestUrl`, and `syncUrl` to KV record.
+  - Added frontend pairing and onboarding flow:
+    - `src/page/15_tab-settings-html.js`: added `#nuvioTvOnboardingBanner` in `#nuvioSection` ("Step 2: Sign in with your Nuvio account below to view your Continue Watching, Watch History, and Library on the website.").
+    - `src/client/22_client-nuvio-tv-pairing.js`: checks URL params `source=nuvio_tv` and `tv_code`, auto-opens account creation modal if signed out, invokes `handleNuvioTvPostAuth()` upon sign in / creation.
+    - `src/client/22_client-creator-profile.js`: updated `submitCreateProfile` and `submitRestoreProfile` to pass `source: "nuvio_tv"` and trigger `handleNuvioTvPostAuth()`; updated `loadCreatorSync` to restore `customCollections` and `randomizeItemsDaily`.
+  - All unit tests in `tests/nuvio-tv-sync.test.mjs` (16 tests) and verification checks pass.
 
 ### Must not be undone
-- `/nuvio-default/manifest.json` and `/api/nuvio-tv/sync/:target` are public endpoints for Nuvio TV Launcher out-of-the-box experience and device sync.
+- `/nuvio-default/manifest.json`, `/api/nuvio-tv/sync/:target`, `/api/nuvio-tv/device/code`, and `/api/nuvio-tv/device/poll` are public endpoints for Nuvio TV Launcher out-of-the-box experience, device sync, and pairing.
+- `/api/nuvio-tv/device/claim` is an `account` route requiring creator authentication.
 - `handleNuvioTvSyncRoute` is split into sub-helpers (`buildNuvioTvSyncDefaultResponse`, `formatNuvioUserCollections`, `formatNuvioUserChannels`, `resolveNuvioTvTargetData`) to stay well within the 150-line size budget limit.
 - `creatorApiCreate` delegates profile persistence to `persistNewCreatorProfile` to stay well within the 150-line limit.
 - Seeding only runs when `source === "nuvio_tv"` on a brand new registration. Normal web/Nuvio registrations and existing user logins must never be overwritten.
-- `tests/route-access.json` lists `"/api/nuvio-tv/sync": "public"`, `"/api/creator/account/register": "public"`, `"/api/creator/register": "public"`, `"/api/creator/account/login": "account"`.
+- `tests/route-access.json` lists `"/api/nuvio-tv/sync": "public"`, `"/api/nuvio-tv/device/code": "public"`, `"/api/nuvio-tv/device/poll": "public"`, `"/api/nuvio-tv/device/claim": "account"`, `"/api/creator/account/register": "public"`, `"/api/creator/register": "public"`, `"/api/creator/account/login": "account"`.
 
 ## Earlier work: performance audit fixes (2026-11-03, branch `claude/kind-bell-5wa9ht`, not deployed)
 Plan: `docs/PERF_AUDIT_PLAN.md`. Done: PERF-00, 12, 05, 08+07 (both steps), 09, 01, 11 step 1, 03, 16, 06, 04. **Not built: PERF-02** (below). Not built by instruction: PERF-10, 11 step 2, 13, 14, 15. Results are in `docs/PERFORMANCE.md` section 3 and `docs/RELEASES.md` (2026-11-03). No migration, binding or flag; deploy the rebuilt Worker only.
