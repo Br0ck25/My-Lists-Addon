@@ -322,3 +322,13 @@ describe("design system: phone tap areas (UI-17)", () => {
     }
   });
 });
+
+describe("design system: the guide page does not scroll sideways (UI-13)", () => {
+  it("inline code can wrap, so a long example address cannot push the page wider than a phone", async () => {
+    const res = await call(makeEnv(), "/guide");
+    assert.equal(res.status, 200);
+    const rule = res.text.match(/\n\s*code\s*\{([^}]*)\}/);
+    assert.ok(rule, "found the guide's inline code rule");
+    assert.match(rule[1], /overflow-wrap:\s*anywhere/);
+  });
+});

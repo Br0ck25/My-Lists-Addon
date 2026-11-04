@@ -4303,7 +4303,7 @@ ${UTILITY_CSS}
     background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 2px 7px;
+    padding: 2px 7px; overflow-wrap: anywhere;
     font-size: 0.88em;
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     color: var(--text);
