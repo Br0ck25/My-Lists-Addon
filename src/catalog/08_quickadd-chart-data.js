@@ -1585,5 +1585,101 @@ function buildNuvioTvDefaultPreset() {
   return buildNuvioTvDefaultConfig();
 }
 
+async function seedNuvioTvNewUser(env, username, accountId) {
+  if (!env || !env.CONFIGS) return;
+  const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
+  const now = Date.now();
+
+  // 1. Seed user's initial builder / catalog config
+  const syncBlob = {
+    config: defaultConfig.lists || [],
+    entries: defaultConfig.lists || [],
+    randomizeItemsDaily: true,
+    shuffleItems: true,
+    catalogOrder: defaultConfig.catalogOrder || [],
+    catalogIds: defaultConfig.catalogOrder || [],
+    keys: {},
+    collapsedPanels: {},
+    likedLists: [],
+    hiddenLists: [],
+    hiddenMyListsSections: [],
+    updatedAt: now,
+  };
+  await env.CONFIGS.put(`creatorsync:${username}`, JSON.stringify(syncBlob));
+
+  // 2. Seed Channels -> My Channels (all QUICK_CHANNEL_PRESETS)
+  const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined"
+    ? QUICK_CHANNEL_PRESETS
+    : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
+  const channelsMap = {};
+  for (let i = 0; i < networks.length; i++) {
+    const net = networks[i];
+    const chId = `ch_preset_${net.id}`;
+    channelsMap[chId] = {
+      channelId: chId,
+      id: chId,
+      name: net.name,
+      poster: `/api/channel-logo?netId=${net.id}&v=7`,
+      backdrop: "",
+      presetNetworkId: String(net.id),
+      networkId: String(net.id),
+      category: "Live TV",
+      catalogId: `channel_preset_${net.id}`,
+      items: [],
+      shuffle: false,
+      dailyRotate: true,
+      liveSync: false,
+      sourceUrl: "",
+      playOrder: i + 1,
+    };
+  }
+  await env.CONFIGS.put(`creatorsyncchannels:${username}`, JSON.stringify({
+    channels: channelsMap,
+    mergedChannels: {},
+    updatedAt: now,
+  }));
+
+  // 3. Seed Lists -> Collections (all PREMADE_COLLECTIONS)
+  const premades = typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : [];
+  await env.CONFIGS.put(`creatorsyncpresets:${username}`, JSON.stringify({
+    presets: {},
+    customCollections: premades,
+    customCollectionGroups: [
+      { id: "streaming-services", title: "Streaming Services" },
+      { id: "genres", title: "Genres" },
+      { id: "franchises", title: "Franchises" },
+      { id: "studios", title: "Studios" },
+    ],
+    updatedAt: now,
+  }));
+
+  // 4. If DB is present, seed an initial install
+  let acctId = accountId;
+  if (!acctId && env.DB) {
+    try {
+      const acct = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1").bind(username).first();
+      if (acct) acctId = acct.id;
+    } catch {}
+  }
+  if (env.DB && acctId) {
+    try {
+      const token = typeof generateInstallToken === "function" ? generateInstallToken() : `i_${Math.random().toString(36).slice(2, 10)}`;
+      const tokenHash = typeof installTokenHash === "function" ? await installTokenHash(token) : token;
+      const installConfig = {
+        entries: defaultConfig.lists || [],
+        randomizeItemsDaily: true,
+        shuffleItems: true,
+      };
+      await env.DB.prepare(
+        "INSERT INTO installs (token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at) " +
+        "VALUES (?, NULL, ?, 'Nuvio TV', ?, 1, 'read', ?, ?)"
+      ).bind(tokenHash, acctId, JSON.stringify(installConfig), now, now).run();
+    } catch (e) {
+      console.error("seedNuvioTvNewUser: install insert failed", e);
+    }
+  }
+}
+
+
 
 

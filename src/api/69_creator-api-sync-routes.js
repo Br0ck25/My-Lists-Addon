@@ -441,6 +441,10 @@ async function creatorSyncLoadMergePresets(env, auth, data, presetsRawInit) {
   data.presets = dedicatedPresets;
   data.presetsB64 = dedicatedPresetsB64;
   data.presetsUpdatedAt = dedicatedUpdatedAt;
+  if (presetsBlob && Array.isArray(presetsBlob.customCollections)) {
+    data.customCollections = presetsBlob.customCollections;
+    data.customCollectionGroups = Array.isArray(presetsBlob.customCollectionGroups) ? presetsBlob.customCollectionGroups : [];
+  }
   return data;
 }
 

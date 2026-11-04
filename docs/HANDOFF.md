@@ -1,15 +1,23 @@
 # Handoff
 
-## Current work: Phase 1 Nuvio TV Launcher backend integration (2026-11-04, branch `feat/nuvio-tv-phase1`)
-- Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultPreset()` and `buildNuvioTvDefaultConfig()`.
-- Built unified sync route `GET /api/nuvio-tv/sync/:target` (registered as public in `tests/route-access.json`), supporting `"default"` target, user accounts, and install tokens. Computes deterministic SHA-256 `versionHash` and formats collections and channels in Nuvio schema.
-- Added test suite `tests/nuvio-tv-sync.test.mjs` verifying default manifest, catalog route, public sync route, and user account / install resolution.
-- All verification steps pass (`bash verify.sh -q` green, size budget intact, routes registered and verified).
+## Current work: Phase 1 & 2 Nuvio TV Launcher backend integration (2026-11-04, branch `feat/nuvio-tv-phase1`)
+- **Phase 1 (Default preset, guest manifest, unified sync)**:
+  - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultPreset()` and `buildNuvioTvDefaultConfig()`.
+  - Built unified sync route `GET /api/nuvio-tv/sync/:target` (registered as public in `tests/route-access.json`), supporting `"default"` target, user accounts, and install tokens. Computes deterministic SHA-256 `versionHash` and formats collections and channels in Nuvio schema.
+- **Phase 2 (New user account seeding for Nuvio TV Launcher & existing user sign-in)**:
+  - Implemented `seedNuvioTvNewUser` in `src/catalog/08_quickadd-chart-data.js`.
+  - Updated `POST /api/creator/account/register`, `POST /api/creator/register`, and `POST /api/creator/create` to check `body.source === "nuvio_tv"` (or `?source=nuvio_tv`). When set on new account creation, seeds 6 default catalogs in exact order with `randomizeItemsDaily: true`, all quick add channels in `channels_v2`/`creatorsyncchannels`, and all premade collections in `collections`/`creatorsyncpresets`.
+  - Normal registrations without `source=nuvio_tv` remain completely unseeded.
+  - Existing user sign-in (`POST /api/creator/account/login`, `POST /api/creator/restore`) preserves existing user lists/channels/collections without overwriting.
+  - Added routes in `tests/route-access.json`: `/api/creator/account/register` (public), `/api/creator/register` (public), `/api/creator/account/login` (account).
+  - All unit tests in `tests/nuvio-tv-sync.test.mjs` (11 tests) and full verification suite (`bash verify.sh -q`) pass cleanly.
 
 ### Must not be undone
 - `/nuvio-default/manifest.json` and `/api/nuvio-tv/sync/:target` are public endpoints for Nuvio TV Launcher out-of-the-box experience and device sync.
 - `handleNuvioTvSyncRoute` is split into sub-helpers (`buildNuvioTvSyncDefaultResponse`, `formatNuvioUserCollections`, `formatNuvioUserChannels`, `resolveNuvioTvTargetData`) to stay well within the 150-line size budget limit.
-- `tests/route-access.json` lists `"/api/nuvio-tv/sync": "public"`.
+- `creatorApiCreate` delegates profile persistence to `persistNewCreatorProfile` to stay well within the 150-line limit.
+- Seeding only runs when `source === "nuvio_tv"` on a brand new registration. Normal web/Nuvio registrations and existing user logins must never be overwritten.
+- `tests/route-access.json` lists `"/api/nuvio-tv/sync": "public"`, `"/api/creator/account/register": "public"`, `"/api/creator/register": "public"`, `"/api/creator/account/login": "account"`.
 
 ## Earlier work: performance audit fixes (2026-11-03, branch `claude/kind-bell-5wa9ht`, not deployed)
 Plan: `docs/PERF_AUDIT_PLAN.md`. Done: PERF-00, 12, 05, 08+07 (both steps), 09, 01, 11 step 1, 03, 16, 06, 04. **Not built: PERF-02** (below). Not built by instruction: PERF-10, 11 step 2, 13, 14, 15. Results are in `docs/PERFORMANCE.md` section 3 and `docs/RELEASES.md` (2026-11-03). No migration, binding or flag; deploy the rebuilt Worker only.

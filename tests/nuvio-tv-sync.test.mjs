@@ -225,3 +225,180 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     assert.equal(userChannel.name, "My Custom Channel");
   });
 });
+
+describe("Phase 2: Nuvio TV Launcher - New User Account Seeding & Existing User Sign-In", () => {
+  it("POST /api/creator/register with source='nuvio_tv' seeds default catalogs, channels, and collections", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+
+    // 1. Register new user with source === "nuvio_tv"
+    const regRes = await call(env, "/api/creator/register", {
+      method: "POST",
+      json: {
+        creatorName: "nuviotvuser1",
+        displayName: "Nuvio User 1",
+        source: "nuvio_tv",
+      },
+    });
+    assert.equal(regRes.status, 200);
+    assert.equal(regRes.body.ok, true);
+    assert.equal(regRes.body.creatorName, "nuviotvuser1");
+    assert.ok(regRes.body.creatorKey, "returns creatorKey");
+    const creatorKey = regRes.body.creatorKey;
+
+    // 2. Load sync state via POST /api/creator/sync/load
+    const syncLoadRes = await call(env, "/api/creator/sync/load", {
+      method: "POST",
+      json: {
+        creatorName: "nuviotvuser1",
+        creatorKey,
+      },
+    });
+    assert.equal(syncLoadRes.status, 200);
+    const syncData = syncLoadRes.body.data;
+    assert.ok(syncData, "sync data exists for seeded user");
+
+    // 2a. Catalogs check: Combined Trending, Combined Popular, Trakt Box Office in exact order
+    assert.ok(Array.isArray(syncData.config), "config is an array");
+    assert.equal(syncData.config.length, 6, "has 6 default catalog rows");
+    assert.equal(syncData.config[0].id, "chart:combined:trending_movies");
+    assert.equal(syncData.config[1].id, "chart:combined:trending_tv");
+    assert.equal(syncData.config[2].id, "chart:combined:popular_movies");
+    assert.equal(syncData.config[3].id, "chart:combined:popular_tv");
+    assert.equal(syncData.config[4].id, "chart:trakt:boxoffice_movies");
+    assert.equal(syncData.config[5].id, "chart:trakt:boxoffice_tv");
+    assert.equal(syncData.randomizeItemsDaily, true, "randomizeItemsDaily is true");
+
+    // 2b. Channels check: My Channels is populated with all Quick Add channels
+    assert.ok(syncData.channels && typeof syncData.channels === "object", "channels map is populated");
+    const channelKeys = Object.keys(syncData.channels);
+    assert.ok(channelKeys.length >= 25, "has all Quick Add channel presets");
+    const channelNames = Object.values(syncData.channels).map((ch) => ch.name);
+    assert.ok(channelNames.includes("CBS"), "has CBS");
+    assert.ok(channelNames.includes("HBO"), "has HBO");
+    assert.ok(channelNames.includes("Cartoon Network"), "has Cartoon Network");
+
+    // 2c. Collections check: populated with all Premade Collections
+    assert.ok(Array.isArray(syncData.customCollections), "customCollections is populated");
+    assert.ok(syncData.customCollections.length >= 4, "has all 4 collection groups");
+    const colTitles = syncData.customCollections.map((c) => c.title || c.name);
+    assert.ok(colTitles.includes("Streaming Services"));
+    assert.ok(colTitles.includes("Genres"));
+    assert.ok(colTitles.includes("Franchises"));
+    assert.ok(colTitles.includes("Studios"));
+
+    // 3. Verify public sync route returns the seeded data
+    const nuvioSyncRes = await call(env, "/api/nuvio-tv/sync/nuviotvuser1");
+    assert.equal(nuvioSyncRes.status, 200);
+    assert.equal(nuvioSyncRes.body.ok, true);
+    assert.equal(nuvioSyncRes.body.randomizeItemsDaily, true);
+    assert.equal(nuvioSyncRes.body.catalogIds.length, 6);
+  });
+
+  it("POST /api/creator/account/register with ?source=nuvio_tv query param seeds correctly", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const regRes = await call(env, "/api/creator/account/register?source=nuvio_tv", {
+      method: "POST",
+      json: {
+        username: "nuviotvquery",
+      },
+    });
+    assert.equal(regRes.status, 200);
+    assert.equal(regRes.body.ok, true);
+
+    const nuvioSyncRes = await call(env, "/api/nuvio-tv/sync/nuviotvquery");
+    assert.equal(nuvioSyncRes.status, 200);
+    assert.equal(nuvioSyncRes.body.ok, true);
+    assert.equal(nuvioSyncRes.body.randomizeItemsDaily, true);
+    assert.equal(nuvioSyncRes.body.catalogIds.length, 6);
+  });
+
+  it("Normal registration without source creates empty account with NO seeded preset", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const regRes = await call(env, "/api/creator/create", {
+      method: "POST",
+      json: {
+        creatorName: "normalwebuser",
+      },
+    });
+    assert.equal(regRes.status, 200);
+    assert.equal(regRes.body.ok, true);
+    const creatorKey = regRes.body.creatorKey;
+
+    // Load sync state
+    const syncLoadRes = await call(env, "/api/creator/sync/load", {
+      method: "POST",
+      json: {
+        creatorName: "normalwebuser",
+        creatorKey,
+      },
+    });
+    assert.equal(syncLoadRes.status, 200);
+    const syncData = syncLoadRes.body.data;
+    // Without source: "nuvio_tv", account has null or empty initial config
+    if (syncData) {
+      assert.deepEqual(syncData.config, [], "config is empty");
+      assert.equal(Object.keys(syncData.channels || {}).length, 0, "no channels seeded");
+      assert.equal((syncData.customCollections || []).length, 0, "no collections seeded");
+    }
+  });
+
+  it("Existing user login via POST /api/creator/account/login preserves existing data without overwriting", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+
+    // 1. Create a normal user
+    const proof = await accountProof(env, "veteranuser");
+    // Veteran user has their own custom config
+    await env.CONFIGS.put(
+      "creatorsync:veteranuser",
+      JSON.stringify({
+        config: [{ id: "veteran_movie_list", name: "Classic Noir", type: "movie" }],
+        entries: [{ id: "veteran_movie_list", name: "Classic Noir", type: "movie" }],
+        randomizeItemsDaily: false,
+        shuffleItems: false,
+        catalogOrder: ["veteran_movie_list"],
+        updatedAt: 123456789,
+      })
+    );
+    // Veteran user has their own channels
+    await env.CONFIGS.put(
+      "creatorsyncchannels:veteranuser",
+      JSON.stringify({
+        channels: {
+          my_noir_ch: { channelId: "my_noir_ch", name: "Noir Channel" },
+        },
+        mergedChannels: {},
+        updatedAt: 123456789,
+      })
+    );
+
+    // 2. Existing user logs in with source: "nuvio_tv"
+    const loginRes = await call(env, "/api/creator/account/login", {
+      method: "POST",
+      json: {
+        username: "veteranuser",
+        key: proof.creatorKey,
+        source: "nuvio_tv",
+      },
+    });
+    assert.equal(loginRes.status, 200);
+    assert.equal(loginRes.body.ok, true);
+
+    // 3. Verify their existing data was NOT overwritten
+    const syncLoadRes = await call(env, "/api/creator/sync/load", {
+      method: "POST",
+      json: {
+        creatorName: "veteranuser",
+        creatorKey: proof.creatorKey,
+      },
+    });
+    assert.equal(syncLoadRes.status, 200);
+    const syncData = syncLoadRes.body.data;
+    assert.equal(syncData.config.length, 1);
+    assert.equal(syncData.config[0].id, "veteran_movie_list");
+    assert.equal(syncData.config[0].name, "Classic Noir");
+    assert.equal(syncData.randomizeItemsDaily, false);
+
+    assert.equal(Object.keys(syncData.channels).length, 1);
+    assert.equal(syncData.channels.my_noir_ch.name, "Noir Channel");
+  });
+});

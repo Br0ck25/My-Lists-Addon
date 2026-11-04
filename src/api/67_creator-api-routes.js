@@ -28,7 +28,7 @@ function authFailureResponse(auth) {
 async function handleCreatorApiAccountRoutes(request, env, ctx, url, path) {
   if (path === "/api/creator/track-status" && request.method === "POST") return creatorApiTrackStatus(request, env, ctx, path);
   if (path === "/api/creator/scrobble-seen-users" && request.method === "POST") return creatorApiScrobbleSeenUsers(request, env, ctx, path);
-  if (path === "/api/creator/create" && request.method === "POST") return creatorApiCreate(request, env, ctx);
+  if (path === "/api/creator/create" && request.method === "POST") return creatorApiCreate(request, env, ctx, url);
   if (path === "/api/creator/reset-key" && request.method === "POST") return creatorApiResetKey(request, env, ctx);
   return null;
 }
@@ -103,7 +103,32 @@ async function creatorApiScrobbleSeenUsers(request, env, ctx, path) {
 // Rate limited to one new profile per minute per IP, counted in D1
 // (rate_counters, P7-3) -- this add-on has no user-identity system to
 // rate-limit against besides the requester's own IP.
-async function creatorApiCreate(request, env, ctx) {
+async function persistNewCreatorProfile(env, username, profileObj, creatorKey) {
+  if (env.DB) {
+    try {
+      await env.DB.prepare("DELETE FROM creator_tombstones WHERE username = ?").bind(username).run();
+    } catch (dbErr) {}
+    try {
+      await env.DB.prepare(
+        "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+      ).bind(username, profileObj.displayName, profileObj.keyHash, profileObj.recoveryAnswerHash, profileObj.createdAt).run();
+    } catch (dbErr) {
+      console.error("D1 write error (creator create):", dbErr);
+      return { ok: false, error: "Failed to create creator account. Please try again." };
+    }
+  }
+  await env.CONFIGS.put(`creator:${username}`, JSON.stringify(profileObj));
+  const accountRow = await getOrBackfillAccount(env, username, profileObj);
+  await storeCreatorKeyLookup(env, creatorKey, username);
+  try {
+    const countRaw = await env.CONFIGS.get("stats:creator_count");
+    const count = parseInt(countRaw || "0", 10) + 1;
+    await env.CONFIGS.put("stats:creator_count", String(count));
+  } catch (err) {}
+  return { ok: true, accountRow };
+}
+
+async function creatorApiCreate(request, env, ctx, url) {
   if (!env || !env.CONFIGS) return json({ ok: false, error: "no-kv" });
   const ip = clientIpKey(request);
   if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
@@ -116,7 +141,8 @@ async function creatorApiCreate(request, env, ctx) {
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400);
   }
-  const v = validateCreatorUsername(body.creatorName);
+  const usernameRaw = body.creatorName || body.username;
+  const v = validateCreatorUsername(usernameRaw);
   if (!v.ok) return json({ ok: false, error: v.error });
   const dn = normalizeCreatorDisplayName(body.displayName, v.normalized);
   if (!dn.ok) return json({ ok: false, error: dn.error }, 400);
@@ -133,36 +159,12 @@ async function creatorApiCreate(request, env, ctx) {
     return json({ ok: false, error: "That username is already taken." });
   }
   // A username that was deleted moments ago is not available yet.
-  //
-  // This is the half of the tombstone that actually prevents disclosure.
-  // A purge is a sweep, so a request already in flight when it ran can put
-  // a key back after it finished -- and `creatorsync:{u}` holds the
-  // account's own provider API keys. Holding the name for a few minutes
-  // means the straggler has finished, and the second sweep has run, long
-  // before anyone else can claim it. Same message as a name that is simply
-  // taken, which is what it is for now.
   if (await isCreatorTombstoned(env, v.normalized)) {
     return json({ ok: false, error: "That username is already taken." });
   }
   const creatorKey = generateCreatorKey();
   const keyHash = await hashCreatorKey(creatorKey);
-  // Recovery answer is optional and, unlike the Creator Key itself,
-  // chosen by the person rather than generated -- normalized
-  // (trimmed + lowercased) before hashing so a small casing slip
-  // months later at reset time doesn't lock them out over nothing.
-  // Same PBKDF2 hash-only storage as the key: this value is never
-  // recoverable, only checkable, and it's never shown to an admin --
-  // self-service reset (/api/creator/reset-key) is the only thing
-  // that ever reads it.
   const recoveryAnswerRaw = String(body.recoveryAnswer || "").trim();
-  // Optional -- but if one is given it has to be long enough to be worth
-  // hashing. It is lowercased before hashing and it can replace the
-  // Creator Key outright via /api/creator/reset-key, so a three-character
-  // answer is a three-character password on the whole account. Rejected
-  // rather than silently accepted, since the person setting it is the
-  // only one who can pick a better one. Existing short answers are
-  // untouched; the per-account failure budget on reset-key is what
-  // protects those.
   if (recoveryAnswerRaw && recoveryAnswerRaw.length < RECOVERY_ANSWER_MIN_LENGTH) {
     return json({
       ok: false,
@@ -173,23 +175,6 @@ async function creatorApiCreate(request, env, ctx) {
   const nowMs = Date.now();
   const profileObj = { displayName, keyHash, recoveryAnswerHash, createdAt: nowMs };
 
-  // A new account starts empty BY CONSTRUCTION, not because whatever
-  // happened to this username previously is assumed to have finished
-  // cleanly.
-  //
-  // The tombstone above holds a just-deleted name long enough for any
-  // in-flight write to land and for the post-deletion sweep to run, but
-  // "long enough" is a judgement about request duration, and inheriting a
-  // previous owner's synced config -- which carries their TMDB/Trakt API
-  // keys -- is too sharp an outcome to leave resting on one. Sweeping here
-  // as well means it does not matter how a stray key got there, or how
-  // long ago: nothing under this username survives into the new account.
-  //
-  // Cheap and safe: for a name that was never used this is one list() that
-  // returns nothing plus a handful of deletes against absent keys, on an
-  // endpoint already rate-limited to one call per IP per minute. It cannot
-  // touch a live account either, because the uniqueness check above has
-  // already established there is none.
   const preCreatePurge = await purgeCreatorData(env, v.normalized, { deleteIdentity: false, detachSupportThreads: true });
   if (!preCreatePurge.ok) {
     return json({
@@ -197,10 +182,6 @@ async function creatorApiCreate(request, env, ctx) {
       error: "Couldn't set that Profile up just now. Please try again in a moment.",
     }, 503);
   }
-  // Same principle for the accounts row: one left by an earlier holder of
-  // this username would carry its sessions, installs and provider
-  // connections into the new account. The uniqueness check above has
-  // established there is no live profile, so any row here is a leftover.
   if (!(await deleteAccountRow(env, v.normalized)).ok) {
     return json({
       ok: false,
@@ -208,45 +189,17 @@ async function creatorApiCreate(request, env, ctx) {
     }, 503);
   }
 
-  // D1 write is authoritative when DB is bound: fail the request if D1 fails,
-  // then populate the KV read-through cache.
-  if (env.DB) {
-    try {
-      await env.DB.prepare("DELETE FROM creator_tombstones WHERE username = ?").bind(v.normalized).run();
-    } catch (dbErr) {
-      // An expired row is inert anyway (isCreatorTombstoned compares `until`), so failing to tidy it changes nothing.
-    }
-    try {
-      await env.DB.prepare(
-        "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at) VALUES (?, ?, ?, ?, ?)"
-      ).bind(v.normalized, displayName, keyHash, recoveryAnswerHash, nowMs).run();
-    } catch (dbErr) {
-      console.error("D1 write error (creator create):", dbErr);
-      return json({
-        ok: false,
-        error: "Failed to create creator account. Please try again.",
-      }, 500);
-    }
+  const persisted = await persistNewCreatorProfile(env, v.normalized, profileObj, creatorKey);
+  if (!persisted.ok) {
+    return json({ ok: false, error: persisted.error }, 500);
   }
-  await env.CONFIGS.put(`creator:${v.normalized}`, JSON.stringify(profileObj));
-  // The accounts row from the start, so a new account never waits on the
-  // backfill. Best-effort: without migration 0015 this does nothing, and
-  // the first sign-in fills the row anyway.
-  await getOrBackfillAccount(env, v.normalized, profileObj);
-  await storeCreatorKeyLookup(env, creatorKey, v.normalized);
 
-  try {
-    const countRaw = await env.CONFIGS.get("stats:creator_count");
-    const count = parseInt(countRaw || "0", 10) + 1;
-    await env.CONFIGS.put("stats:creator_count", String(count));
-  } catch (err) {}
+  const reqUrl = (url && url.searchParams) ? url : (request && request.url ? new URL(request.url) : null);
+  const source = String(body.source || (reqUrl && reqUrl.searchParams && reqUrl.searchParams.get("source")) || "").trim();
+  if (source === "nuvio_tv" && typeof seedNuvioTvNewUser === "function") {
+    await seedNuvioTvNewUser(env, v.normalized, persisted.accountRow && persisted.accountRow.id);
+  }
 
-  // The Creator Key is returned exactly once, right here -- it's never
-  // stored anywhere (only its hash is), so this is the only moment it
-  // will ever exist outside whoever's holding onto it themselves.
-  // no-store: this is the one and only moment the plaintext Creator Key
-  // exists outside whoever is holding it. Same reasoning
-  // /api/creator/scrobble-token already applied to its own token.
   return json({ ok: true, creatorName: v.normalized, displayName, creatorKey }, 200, { "Cache-Control": "no-store" });
 }
 
@@ -627,7 +580,9 @@ async function creatorApiRestore(request, env, ctx, path) {
       return json({ ok: false, error: "Invalid JSON body." }, 400);
     }
   }
-  const auth = await authenticateCreatorFor(request, env, ctx, path, body.creatorName, body.creatorKey);
+  const usernameRaw = body.creatorName || body.username;
+  const keyRaw = body.creatorKey || body.key;
+  const auth = await authenticateCreatorFor(request, env, ctx, path, usernameRaw, keyRaw);
   if (!auth.ok) {
     // A request without a key guessed nothing (see noKey above); the
     // spends of every other failure stay.
@@ -635,11 +590,12 @@ async function creatorApiRestore(request, env, ctx, path) {
     return authFailureResponse(auth);
   }
   await releaseRestore();
-  if (body.creatorKey) {
+  const keyToLookup = body.creatorKey || body.key;
+  if (keyToLookup) {
     if (ctx && typeof ctx.waitUntil === "function") {
-      ctx.waitUntil(storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {}));
+      ctx.waitUntil(storeCreatorKeyLookup(env, keyToLookup, auth.username).catch(() => {}));
     } else {
-      await storeCreatorKeyLookup(env, body.creatorKey, auth.username).catch(() => {});
+      await storeCreatorKeyLookup(env, keyToLookup, auth.username).catch(() => {});
     }
   }
   return jsonPrivate({
