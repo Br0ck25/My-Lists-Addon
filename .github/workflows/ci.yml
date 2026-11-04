@@ -169,7 +169,9 @@ jobs:
   # contract is updated on purpose, so a different-sized button or a new colour
   # cannot slip in unnoticed. Separate job: it needs a browser.
   ui-contract:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest became 26.04, where Playwright 1.56.1 cannot
+    # install Chromium. Move back once the pinned Playwright supports it.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -191,7 +193,9 @@ jobs:
   # a browser, and it is the only test that runs the page, the client script
   # and the Worker together.
   e2e:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest became 26.04, where Playwright 1.56.1 cannot
+    # install Chromium. Move back once the pinned Playwright supports it.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
