@@ -183,27 +183,47 @@ describe("design system: danger and warn buttons are readable in both themes (UI
     assert.ok(seen.has("--color-danger-fill") && seen.has("--color-warn-fill"), "the destructive buttons use the fill tokens: " + [...seen].join(", "));
   });
 
-  it(".btn-danger text reaches 4.5:1 at rest and on hover, light and dark", async () => {
+  // Every state of the destructive button and of the soft add/remove pills: text
+  // against its own (possibly translucent) background laid over each page colour
+  // it can sit on, in both themes.
+  it(".btn-danger and the add/remove pills reach 4.5:1 in every state, light and dark", async () => {
     const css = await appCss();
-    const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1], body: m[2] }));
-    const rest = blocks.find((b) => /\.btn-danger,/.test(b.sel) && !/:hover/.test(b.sel));
-    const hover = blocks.find((b) => /\.btn-danger:hover/.test(b.sel));
-    assert.ok(rest && hover, "found the .btn-danger rules");
-    const tok = (body, prop) => body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*var\\((--[\\w-]+)\\)`))[1];
-    const onBrand = both(css, "--color-on-brand");
-    const pages = both(css, "--color-bg-surface");
-    const canvas = both(css, "--color-bg-canvas");
+    const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].replace(/\/\*[\s\S]*?\*\//g, "").trim(), body: m[2] }));
+    // The rule whose selector list STARTS with the given selector (not a :where() that merely mentions it).
+    const rule = (start, exact) => {
+      const b = blocks.find((x) => (exact ? x.sel === start : x.sel.startsWith(start)));
+      assert.ok(b, "found the rule " + start);
+      return b.body;
+    };
+    const tok = (body, prop) => {
+      const m = body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*var\\((--[\\w-]+)\\)`));
+      assert.ok(m, `${prop} is a token in: ${body.trim().slice(0, 80)}`);
+      return m[1];
+    };
+    const states = {
+      "btn-danger rest": rule(".btn-danger,"),
+      "btn-danger hover": rule(".btn-danger:hover"),
+      "btn-danger pressed": rule(".btn-danger:hover") + rule(".btn-danger:active"),
+      "+ Add rest": rule(".list-add-btn:not(.is-added):not(:disabled)"),
+      "+ Add hover": rule(".list-add-btn:not(.is-added):hover"),
+      "Remove rest": rule(".list-add-btn.is-added", true),
+      "Remove hover": rule(".list-add-btn.is-added:hover"),
+    };
+    const pages = ["--color-bg-canvas", "--color-bg-surface"];
     const bad = [];
     for (const theme of ["light", "dark"]) {
-      for (const page of [pages[theme], canvas[theme]]) {
-        const bg = resolve(both(css, tok(rest.body, "background"))[theme], resolve(page, "#ffffff"));
-        const fg = resolve(both(css, tok(rest.body, "color"))[theme], bg);
-        const r = contrast(fg, bg);
-        if (r < 4.5) bad.push(`rest ${theme} on ${page}: ${r.toFixed(2)}`);
+      for (const [label, body] of Object.entries(states)) {
+        // A rule that sets no background of its own keeps the one from its rest state.
+        const bgName = /background:\s*var\(/.test(body) ? tok(body, "background") : null;
+        for (const pageName of pages) {
+          const page = resolve(both(css, pageName)[theme], "#ffffff");
+          const bg = bgName ? resolve(both(css, bgName)[theme], page) : page;
+          const fgName = /(?:^|[;\s])color:\s*var\(/.test(body) ? tok(body, "color") : null;
+          if (!fgName) continue;
+          const r = contrast(resolve(both(css, fgName)[theme], bg), bg);
+          if (r < 4.5) bad.push(`${label} ${theme} on ${pageName}: ${r.toFixed(2)}`);
+        }
       }
-      const hbg = resolve(both(css, tok(hover.body, "background"))[theme], "#ffffff");
-      const hr = contrast(resolve(both(css, tok(hover.body, "color"))[theme], hbg), hbg);
-      if (hr < 4.5) bad.push(`hover ${theme}: ${hr.toFixed(2)}`);
     }
     assert.deepEqual(bad, []);
   });

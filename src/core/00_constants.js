@@ -1802,9 +1802,12 @@ const DESIGN_TOKENS_CSS = `
     /* Coloured text on a tinted or white surface (>= 4.5:1) */
     --color-success-text:   #1F7A35;
     --color-warn-text:      #B25000;
-    --color-danger-text:    #D70015;
+    --color-danger-text:    #C4001A;
     /* Backgrounds that carry white text (>= 5:1 with --color-on-brand) */
     --color-danger-fill:    #D70015;
+    --color-danger-fill-active: #B3001B;
+    /* Brand-coloured text on a tinted or white surface (>= 4.5:1) */
+    --color-brand-text:     #0059BD;
     --color-warn-fill:      #B25000;
     --color-badge-tmdb:     #00769E;
     --color-badge-mylists:  #7B2FA8;
@@ -1965,8 +1968,10 @@ const DESIGN_TOKENS_CSS = `
     --color-success-text:   #30D158;
     --color-warn-text:      #FF9F0A;
     --color-danger-fill:    #D1241B;
+    --color-danger-fill-active: #B01E16;
+    --color-brand-text:     #64B0FF;
     --color-warn-fill:      #B54A00;
-    --color-danger-text:    #FF453A;
+    --color-danger-text:    #FF7A72;
     --color-badge-tmdb:     #5AC8FA;
     --color-badge-mylists:  #BF5AF2;
     --color-badge-imdb:     #F5C518;

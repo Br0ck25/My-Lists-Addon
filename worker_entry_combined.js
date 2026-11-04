@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "71afc977a1";
+const WORKER_BUILD = "73071f6029";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1825,9 +1825,12 @@ const DESIGN_TOKENS_CSS = `
     /* Coloured text on a tinted or white surface (>= 4.5:1) */
     --color-success-text:   #1F7A35;
     --color-warn-text:      #B25000;
-    --color-danger-text:    #D70015;
+    --color-danger-text:    #C4001A;
     /* Backgrounds that carry white text (>= 5:1 with --color-on-brand) */
     --color-danger-fill:    #D70015;
+    --color-danger-fill-active: #B3001B;
+    /* Brand-coloured text on a tinted or white surface (>= 4.5:1) */
+    --color-brand-text:     #0059BD;
     --color-warn-fill:      #B25000;
     --color-badge-tmdb:     #00769E;
     --color-badge-mylists:  #7B2FA8;
@@ -1988,8 +1991,10 @@ const DESIGN_TOKENS_CSS = `
     --color-success-text:   #30D158;
     --color-warn-text:      #FF9F0A;
     --color-danger-fill:    #D1241B;
+    --color-danger-fill-active: #B01E16;
+    --color-brand-text:     #64B0FF;
     --color-warn-fill:      #B54A00;
-    --color-danger-text:    #FF453A;
+    --color-danger-text:    #FF7A72;
     --color-badge-tmdb:     #5AC8FA;
     --color-badge-mylists:  #BF5AF2;
     --color-badge-imdb:     #F5C518;
@@ -23557,6 +23562,7 @@ function notFoundForPeople(request, path, fallback) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Not found - My Lists Addon</title>
 <link rel="stylesheet" href="/app.css">
+<script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: var(--color-bg-canvas); color: var(--color-text-primary); font-family: system-ui, sans-serif; }
 main { max-width: 28rem; text-align: center; }
@@ -33859,13 +33865,13 @@ ${UTILITY_CSS}
   .list-add-btn:not(.is-added):not(:disabled) {
     background: var(--color-brand-wash) !important;
     border-color: var(--color-brand-line) !important;
-    color: var(--color-brand) !important;
+    color: var(--color-brand-text) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn:not(.is-added):hover:not(:disabled) {
     background: var(--color-brand-tint) !important;
-    border-color: var(--color-brand) !important;
-    color: var(--color-brand) !important;
+    border-color: var(--color-brand-text) !important;
+    color: var(--color-brand-text) !important;
   }
   .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
@@ -35661,7 +35667,7 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):active:not(:disabled),
   .actions button[data-act="removeAllLists"]:active:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:active:not(:disabled) {
-    background: var(--color-danger-hover);
+    background: var(--color-danger-fill-active);
     transform: scale(0.98);
   }
 
@@ -70705,11 +70711,15 @@ function objectEntriesOnly(map) {
 // Discover with a message instead. Called from handleInitialDeepLink
 // (24_client-backup-restore-presets.js); the flag is also what tests read.
 function showDeepLinkNotFound(what) {
-  const message = 'Could not find this ' + what + '. It may have been removed.';
+  // A channel share address is known to be dead. A /lists/ address the page does
+  // not recognise may be a list the person still has, so it is not called removed.
+  const message = what === 'channel'
+    ? 'Could not find this channel. It may have been removed.'
+    : 'Could not open this list from its address. Open it from Catalogs or Lists instead.';
   window._deepLinkNotFound = message;
   try { history.replaceState(null, '', '/'); } catch (e) {}
   try { switchTab('discover'); } catch (e) {}
-  showAppNoticeModal('Could Not Find This ' + (what === 'channel' ? 'Channel' : 'List'), message, true);
+  showAppNoticeModal(what === 'channel' ? 'Could Not Find This Channel' : 'Could Not Open This List', message, true);
 }
 
 // /channels/<user>/<slug> is a share address: the Worker redirects a live one,
@@ -70722,12 +70732,45 @@ function deadChannelLink(path, foundChannel) {
 
 // Called after every known /lists/ address has been tried. The app shell owns
 // its own /lists/<sub-tab> routes, and #/list? links carry their own list.
-function deadListLink(path, hash) {
+// Airing Next is a list the app writes into the address bar (getListCleanPath).
+function unknownListLink(path, hash) {
   if (!path.startsWith('/lists/') || path.length < 8 || hash.startsWith('#/list?')) return false;
   if (typeof APP_SHELL_HEAD_ROUTES !== 'undefined' && APP_SHELL_HEAD_ROUTES[path]) return false;
+  if (path.split('/').length === 3 && path.split('/')[2] === 'airing-next') {
+    openListDetailsPage('Airing Next', 'series', 'autotrack:airing-next', null, { skipPushState: true });
+    return true;
+  }
   showDeepLinkNotFound('list');
   return true;
 }
+// The nine static pop-up forms carry no z-index of their own (so a dialog opened
+// from one, such as "Could Not Save List", stacks above it by coming later in the
+// page). The other way round -- a form opened while a dialog is already open --
+// needs the form to come later, so it is moved to the end of <body> when it opens
+// (they start inside the page's own container, which comes before any dialog).
+const STATIC_MODAL_IDS = ['createListModal', 'createCollectionModal', 'importNuvioCollectionsModal', 'syncNuvioModal', 'addShelfModal', 'importListModal', 'importChannelModal', 'selectListModal', 'traktDeviceModal'];
+
+function raiseStaticModal(form) {
+  if (!form || (form.parentNode === document.body && !form.nextElementSibling)) return;
+  // Moving a node drops focus from anything inside it.
+  const focused = document.activeElement;
+  document.body.appendChild(form);
+  if (focused && form.contains(focused) && typeof focused.focus === 'function') focused.focus();
+}
+
+function watchStaticModals() {
+  if (typeof MutationObserver !== 'function') return;
+  STATIC_MODAL_IDS.forEach(function (id) {
+    const form = document.getElementById(id);
+    if (!form) return;
+    new MutationObserver(function () {
+      if (form.style.display === 'flex') raiseStaticModal(form);
+    }).observe(form, { attributes: true, attributeFilter: ['style'] });
+  });
+}
+// The page's script can run before the forms further down the page exist.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchStaticModals);
+else watchStaticModals();
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
@@ -88956,7 +88999,7 @@ tryAutoRestoreCreatorProfile();
     return;
   }
   const hash = location.hash || '';
-  if (deadListLink(path, hash)) return;
+  if (unknownListLink(path, hash)) return;
   if (hash.startsWith('#/list?')) {
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     openListDetailsPage(params.get('name') || 'List', params.get('type') || 'movie', params.get('url') || '', null, { skipPushState: true });

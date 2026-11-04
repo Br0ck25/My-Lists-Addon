@@ -1985,13 +1985,13 @@ ${UTILITY_CSS}
   .list-add-btn:not(.is-added):not(:disabled) {
     background: var(--color-brand-wash) !important;
     border-color: var(--color-brand-line) !important;
-    color: var(--color-brand) !important;
+    color: var(--color-brand-text) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn:not(.is-added):hover:not(:disabled) {
     background: var(--color-brand-tint) !important;
-    border-color: var(--color-brand) !important;
-    color: var(--color-brand) !important;
+    border-color: var(--color-brand-text) !important;
+    color: var(--color-brand-text) !important;
   }
   .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
@@ -3787,7 +3787,7 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):active:not(:disabled),
   .actions button[data-act="removeAllLists"]:active:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:active:not(:disabled) {
-    background: var(--color-danger-hover);
+    background: var(--color-danger-fill-active);
     transform: scale(0.98);
   }
 
