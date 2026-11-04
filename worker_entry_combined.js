@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "273b306017";
+const WORKER_BUILD = "1493674eb1";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -31996,13 +31996,14 @@ function buildGenreFolders() {
   return genres.map((g) => {
     const slug = g.movieUrl ? g.movieUrl.replace(/^tmdb:genre:/, "") : typeof slugifyServer === "function" ? slugifyServer(g.name) : g.name;
     const catId = `tmdb-genre-${slug}`;
+    const coverImageUrl = g.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(g.name) + "&v=6");
     return {
       id: `col_genre_${slug}`,
       title: g.name,
       name: g.name,
       tileShape: "POSTER",
       hideTitle: false,
-      coverImageUrl: "",
+      coverImageUrl: coverImageUrl,
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -32021,7 +32022,7 @@ function buildFranchiseFolders() {
     name: f.name,
     tileShape: "LANDSCAPE",
     hideTitle: false,
-    coverImageUrl: "",
+    coverImageUrl: f.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(f.name) + "&format=landscape&v=6"),
     hidden: false,
     isVisible: true,
     enabled: true,
@@ -32038,7 +32039,7 @@ function buildStudioFolders() {
     name: st.name,
     tileShape: "LANDSCAPE",
     hideTitle: false,
-    coverImageUrl: "",
+    coverImageUrl: st.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(st.name) + "&format=landscape&v=6"),
     hidden: false,
     isVisible: true,
     enabled: true,
@@ -32111,13 +32112,17 @@ function buildNuvioDefaultChannels() {
   const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined" ? QUICK_CHANNEL_PRESETS : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
   return networks.map((net, i) => {
     const posterUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`;
+    const backdropUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&format=landscape&v=6`;
     const logoUrl = net.logoPath
       ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7`
       : `/api/channel-logo?netId=${net.id}&v=7`;
     return {
       id: `ch_preset_${net.id}`,
       name: net.name,
+      poster: posterUrl,
       posterUrl,
+      backdrop: backdropUrl,
+      backdropUrl,
       logoUrl,
       category: "My Lists Addon Channels",
       catalogId: `channel_preset_${net.id}`,
@@ -83194,6 +83199,41 @@ async function handleNuvioTvPostAuth() {
   }
 }
 
+function renderNuvioTvStickyBar(tvCode, signedIn) {
+  if (!tvCode || document.getElementById('nuvioTvStickyBar') || !document.body) return;
+  const bar = document.createElement('div');
+  bar.id = 'nuvioTvStickyBar';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#15803d,#16a34a);color:#fff;padding:12px 16px;box-shadow:0 4px 12px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:space-between;font-family:sans-serif;font-size:14px;';
+  const safeCode = (typeof escapeHtml === 'function' ? escapeHtml(tvCode) : tvCode);
+  bar.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">' +
+    '<span style="font-size:20px;">\uD83D\uDCFA</span>' +
+    '<span><strong>Link Nuvio TV Launcher:</strong> Pairing Code <strong style="background:rgba(0,0,0,0.25);padding:2px 8px;border-radius:4px;letter-spacing:0.08em;">' + safeCode + '</strong></span>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;">' +
+    '<button type="button" id="nuvioStickyLinkBtn" style="background:#fff;color:#15803d;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;">' + (signedIn ? 'Link TV Now' : 'Sign In & Link') + '</button>' +
+    '<a href="/link?code=' + encodeURIComponent(tvCode) + '" style="background:rgba(0,0,0,0.2);color:#fff;text-decoration:none;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;">Open Link Page &rarr;</a>' +
+    '<button type="button" id="nuvioStickyCloseBtn" style="background:transparent;border:none;color:#fff;cursor:pointer;font-size:16px;padding:0 4px;">\u2715</button>' +
+    '</div>';
+  document.body.prepend(bar);
+  const btn = document.getElementById('nuvioStickyLinkBtn');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      if (signedIn) {
+        if (typeof openNuvioTvPairingModal === 'function') openNuvioTvPairingModal(tvCode);
+      } else {
+        if (typeof openNuvioTvAuthModal === 'function') openNuvioTvAuthModal(tvCode);
+        else window.location.href = '/link?code=' + encodeURIComponent(tvCode);
+      }
+    });
+  }
+  const closeBtn = document.getElementById('nuvioStickyCloseBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() {
+      if (bar.parentNode) bar.parentNode.removeChild(bar);
+    });
+  }
+}
+
 function initNuvioTvOnboarding() {
   try {
     if (typeof window === 'undefined') return;
@@ -83219,28 +83259,36 @@ function initNuvioTvOnboarding() {
       (typeof window !== 'undefined' && window._nuvio_source === 'nuvio_tv');
     if (!isNuvioTv && !tvCodeParam) return;
 
-    if (window._nuvioModalOpened) return;
-
     const tvCode = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_tv_code')) ||
       (typeof window !== 'undefined' && window._nuvio_tv_code) || null;
     const signedIn = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ||
       Boolean(localStorage.getItem('myListAddon:creatorName'));
 
+    if (tvCode) {
+      renderNuvioTvStickyBar(tvCode, signedIn);
+    }
+
+    if (window._nuvioModalOpened) return;
+
     setTimeout(function() {
-      if (window._nuvioModalOpened) return;
-      window._nuvioModalOpened = true;
-      if (!signedIn) {
-        if (tvCode) {
-          openNuvioTvAuthModal(tvCode);
-        } else if (typeof openCreateProfileModal === 'function') {
-          openCreateProfileModal();
-        }
-      } else {
-        if (tvCode) {
-          openNuvioTvPairingModal(tvCode);
+      try {
+        if (window._nuvioModalOpened) return;
+        window._nuvioModalOpened = true;
+        if (!signedIn) {
+          if (tvCode) {
+            openNuvioTvAuthModal(tvCode);
+          } else if (typeof openCreateProfileModal === 'function') {
+            openCreateProfileModal();
+          }
         } else {
-          handleNuvioTvPostAuth();
+          if (tvCode) {
+            openNuvioTvPairingModal(tvCode);
+          } else {
+            handleNuvioTvPostAuth();
+          }
         }
+      } catch (err) {
+        console.error('Nuvio TV modal open failed:', err);
       }
     }, 250);
   } catch (e) {
@@ -83332,6 +83380,7 @@ window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
 window.applyChannelLogoUrl = applyChannelLogoUrl;
 window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
 window.setChannelDraftLogo = setChannelDraftLogo;
+window.renderNuvioTvStickyBar = renderNuvioTvStickyBar;
 // Reordering & position management
 function moveRow(btn, dir) {
   const entry = btn.closest('.entry');
@@ -92601,6 +92650,7 @@ function traktLimitNote(res, text, retrySec) {
 async function buildNuvioTvSyncDefaultResponse(url) {
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
   const manifestUrl = `${url.origin}/nuvio-default/manifest.json`;
+  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/default`;
   const catalogIds = defaultConfig.catalogIds || defaultConfig.catalogOrder || [];
   const catalogOrder = defaultConfig.catalogOrder || catalogIds;
   const collections = defaultConfig.collections || [];
@@ -92616,6 +92666,7 @@ async function buildNuvioTvSyncDefaultResponse(url) {
     ok: true,
     versionHash,
     manifestUrl,
+    collectionsUrl,
     randomizeItemsDaily: true,
     catalogIds,
     catalogOrder,
@@ -92631,24 +92682,31 @@ function formatNuvioUserCollections(userCollections) {
   if (!Array.isArray(userCollections) || !userCollections.length) {
     return typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : [];
   }
-  const userFolders = userCollections.map((col) => ({
-    id: col.id || `folder_${Math.random().toString(36).slice(2, 8)}`,
-    title: col.name || col.title || "User Collection",
-    name: col.name || col.title || "User Collection",
-    tileShape: col.tileShape || "LANDSCAPE",
-    hideTitle: !!col.hideTitle,
-    coverImageUrl: col.coverImageUrl || "",
-    hidden: false,
-    isVisible: true,
-    enabled: true,
-    catalogSources: (col.lists || []).map((l) => ({
-      addonId: l.addonId || "app.my-list.collections",
-      catalogId: l.catalogId || (typeof slugifyServer === "function" ? slugifyServer(l.url || l.name || "") : (l.name || "catalog")),
-      name: (l.name || "").replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim(),
-      title: (l.name || "").replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim(),
-      type: l.type || "movie",
-    })),
-  }));
+  const userFolders = userCollections.map((col) => {
+    const tileShape = col.tileShape || "LANDSCAPE";
+    const name = col.name || col.title || "User Collection";
+    const fallbackCover = tileShape === "POSTER"
+      ? `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`
+      : `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&format=landscape&v=6`;
+    return {
+      id: col.id || `folder_${Math.random().toString(36).slice(2, 8)}`,
+      title: name,
+      name: name,
+      tileShape: tileShape,
+      hideTitle: !!col.hideTitle,
+      coverImageUrl: col.coverImageUrl || fallbackCover,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      catalogSources: (col.lists || []).map((l) => ({
+        addonId: l.addonId || "app.my-list.collections",
+        catalogId: l.catalogId || (typeof slugifyServer === "function" ? slugifyServer(l.url || l.name || "") : (l.name || "catalog")),
+        name: (l.name || "").replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim(),
+        title: (l.name || "").replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim(),
+        type: l.type || "movie",
+      })),
+    };
+  });
   return [
     {
       id: "my-lists-collections",
@@ -92675,6 +92733,7 @@ function formatNuvioUserChannels(userChannelsRaw) {
       return list.map((ch, i) => {
         const name = ch.name || `Channel ${i + 1}`;
         const posterUrl = ch.posterUrl || ch.poster || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
+        const backdropUrl = ch.backdropUrl || ch.backdrop || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&format=landscape&v=6`;
         const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || ch.poster || "") : "");
         let logoUrl = ch.logoUrl;
         if (!logoUrl) {
@@ -92689,7 +92748,10 @@ function formatNuvioUserChannels(userChannelsRaw) {
         return {
           id: ch.id || `ch_${i + 1}`,
           name: name,
+          poster: posterUrl,
           posterUrl: posterUrl,
+          backdrop: backdropUrl,
+          backdropUrl: backdropUrl,
           logoUrl: logoUrl,
           category: ch.category || "My Lists Addon Channels",
           catalogId: ch.id || `channel_${i + 1}`,
@@ -92772,7 +92834,356 @@ async function resolveNuvioTvTargetData(target, env) {
   return { resolved, installToken, username, updatedAt };
 }
 
+async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
+  const isDefaultPath = path === "/nuvio-default/collections.json";
+  const isApiPrefix = path === "/api/nuvio-tv/collections" || path.indexOf("/api/nuvio-tv/collections/") === 0;
+  if (!isDefaultPath && !isApiPrefix) return null;
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  }
+
+  let target = "default";
+  if (isDefaultPath) {
+    target = "default";
+  } else if (path.indexOf("/api/nuvio-tv/collections/") === 0) {
+    target = path.slice("/api/nuvio-tv/collections/".length).trim();
+  } else if (path === "/api/nuvio-tv/collections") {
+    target = (url.searchParams.get("target") || "").trim() || "default";
+  }
+  if (!target || target === ":target") target = "default";
+
+  if (target === "default") {
+    const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
+    const collections = defaultConfig.collections || [];
+    return jsonPublic({ ok: true, collections }, 200, {
+      ...corsHeaders(),
+      "Cache-Control": "public, max-age=300",
+    });
+  }
+
+  const { resolved, username } = await resolveNuvioTvTargetData(target, env);
+  if (!resolved) {
+    return json({ ok: false, error: "Target not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
+  let userCollections = null;
+  if (username && env && env.CONFIGS) {
+    try {
+      const storedPresets = await env.CONFIGS.get(`creatorsyncpresets:${username}`);
+      if (storedPresets) {
+        const parsedPresets = JSON.parse(storedPresets);
+        if (Array.isArray(parsedPresets.customCollections) && parsedPresets.customCollections.length) {
+          userCollections = parsedPresets.customCollections;
+        }
+      }
+    } catch {}
+  }
+  const formattedCollections = formatNuvioUserCollections(userCollections);
+  return jsonPublic({ ok: true, collections: formattedCollections }, 200, {
+    ...corsHeaders(),
+    "Cache-Control": "public, max-age=300",
+  });
+}
+
+function buildNuvioTvLinkPageCss() {
+  return `:root {
+    --bg: #0f1115; --surface: #171a21; --surface-hover: #1f232c; --border: #262a35;
+    --text: #f3f4f6; --muted: #9ca3af; --brand: #22c55e; --brand-hover: #16a34a;
+    --danger: #ef4444; --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--font);
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 32px 28px; max-width: 440px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.4); text-align: center;
+  }
+  .logo {
+    display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px;
+    border-radius: 14px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);
+    font-size: 28px; margin-bottom: 16px;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+  p.sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+  .code-box {
+    background: rgba(255, 255, 255, 0.03); border: 1.5px dashed var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 24px;
+  }
+  .code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  .code-val { font-size: 28px; font-weight: 800; letter-spacing: 0.15em; color: var(--brand); margin-top: 4px; font-family: monospace; }
+  .user-pill { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .user-pill strong { color: var(--text); }
+  .btn {
+    display: inline-block; width: 100%; padding: 13px 20px; border-radius: 8px; font-size: 15px;
+    font-weight: 600; border: none; cursor: pointer; transition: background 0.15s ease; text-decoration: none;
+  }
+  .btn-primary { background: var(--brand); color: #000; }
+  .btn-primary:hover { background: var(--brand-hover); }
+  .btn-secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); margin-top: 10px; }
+  .btn-secondary:hover { background: #272d38; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .input-field {
+    width: 100%; padding: 12px 14px; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; margin-bottom: 12px; outline: none;
+  }
+  .input-field:focus { border-color: var(--brand); }
+  .error-msg { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+  .success-box {
+    display: none; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 10px; padding: 20px; margin-bottom: 20px;
+  }
+  .success-icon { font-size: 40px; color: var(--brand); margin-bottom: 8px; }
+  .success-title { font-size: 18px; font-weight: 700; color: var(--brand); margin-bottom: 6px; }
+  .success-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+  .switch-mode-btn { background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; margin-top: 14px; }
+  .switch-mode-btn:hover { color: var(--text); }`;
+}
+
+function buildNuvioTvLinkPageAuthJs() {
+  return `var regSubmitBtn = document.getElementById('regSubmitBtn');
+    if (regSubmitBtn) {
+      regSubmitBtn.addEventListener('click', async function() {
+        var u = (document.getElementById('regUsername').value || '').trim();
+        var r = (document.getElementById('regRecovery').value || '').trim();
+        if (!u) { showError('Please choose a username.'); return; }
+        if (!code) { showError('Missing pairing code.'); return; }
+        showError(''); regSubmitBtn.disabled = true; regSubmitBtn.textContent = 'Creating Account\u2026';
+        try {
+          var regRes = await fetch('/api/creator/account/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u, recoveryAnswer: r, source: 'nuvio_tv' })
+          });
+          var regData = await regRes.json();
+          if (!regData || !regData.ok) {
+            showError((regData && regData.error) || 'Account registration failed.');
+            regSubmitBtn.disabled = false; regSubmitBtn.textContent = 'Create Account & Link TV';
+            return;
+          }
+          try {
+            localStorage.setItem('myListAddon:creatorName', regData.username || u);
+            if (regData.key) localStorage.setItem('myListAddon:creatorKey', regData.key);
+          } catch (e) {}
+
+          regSubmitBtn.textContent = 'Linking TV\u2026';
+          var claimData = await claimTv(code, regData.username || u, regData.key);
+          if (claimData && claimData.ok) {
+            actionArea.style.display = 'none'; successBox.style.display = 'block';
+          } else {
+            showError((claimData && claimData.error) || 'Account created, but linking TV failed. Please retry.');
+            regSubmitBtn.disabled = false; regSubmitBtn.textContent = 'Link TV';
+          }
+        } catch (err) {
+          showError('Network error connecting to server.'); regSubmitBtn.disabled = false; regSubmitBtn.textContent = 'Create Account & Link TV';
+        }
+      });
+    }
+
+    var loginSubmitBtn = document.getElementById('loginSubmitBtn');
+    if (loginSubmitBtn) {
+      loginSubmitBtn.addEventListener('click', async function() {
+        var u = (document.getElementById('loginUsername').value || '').trim();
+        var k = (document.getElementById('loginKey').value || '').trim();
+        if (!u || !k) { showError('Please enter username and key.'); return; }
+        if (!code) { showError('Missing pairing code.'); return; }
+        showError(''); loginSubmitBtn.disabled = true; loginSubmitBtn.textContent = 'Signing In\u2026';
+        try {
+          var logRes = await fetch('/api/creator/account/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u, key: k })
+          });
+          var logData = await logRes.json();
+          if (!logData || !logData.ok) {
+            showError((logData && logData.error) || 'Login failed. Check credentials.');
+            loginSubmitBtn.disabled = false; loginSubmitBtn.textContent = 'Sign In & Link TV';
+            return;
+          }
+          try {
+            localStorage.setItem('myListAddon:creatorName', logData.username || u);
+            localStorage.setItem('myListAddon:creatorKey', k);
+          } catch (e) {}
+
+          loginSubmitBtn.textContent = 'Linking TV\u2026';
+          var claimData = await claimTv(code, logData.username || u, k);
+          if (claimData && claimData.ok) {
+            actionArea.style.display = 'none'; successBox.style.display = 'block';
+          } else {
+            showError((claimData && claimData.error) || 'Signed in, but linking TV failed. Please retry.');
+            loginSubmitBtn.disabled = false; loginSubmitBtn.textContent = 'Link TV';
+          }
+        } catch (err) {
+          showError('Network error connecting to server.'); loginSubmitBtn.disabled = false; loginSubmitBtn.textContent = 'Sign In & Link TV';
+        }
+      });
+    }`;
+}
+
+function buildNuvioTvLinkPageJs(codeParam) {
+  const authJs = buildNuvioTvLinkPageAuthJs();
+  return `(function() {
+    var code = ${JSON.stringify(codeParam)};
+    if (!code) {
+      var sp = new URLSearchParams(window.location.search || '');
+      code = (sp.get('code') || sp.get('tv_code') || '').trim().toUpperCase();
+    }
+    var codeDisplay = document.getElementById('tvCodeDisplay');
+    if (code && codeDisplay) codeDisplay.textContent = code;
+
+    var userPill = document.getElementById('userPill');
+    var signedInView = document.getElementById('signedInView');
+    var registerView = document.getElementById('registerView');
+    var loginView = document.getElementById('loginView');
+    var successBox = document.getElementById('successBox');
+    var actionArea = document.getElementById('actionArea');
+    var errorMsg = document.getElementById('errorMsg');
+
+    function showError(msg) {
+      if (!errorMsg) return;
+      errorMsg.textContent = msg || '';
+      errorMsg.style.display = msg ? 'block' : 'none';
+    }
+
+    var storedUser = '';
+    var storedKey = '';
+    try {
+      storedUser = localStorage.getItem('myListAddon:creatorDisplayName') || localStorage.getItem('myListAddon:creatorName') || '';
+      storedKey = localStorage.getItem('myListAddon:creatorKey') || '';
+    } catch (e) {}
+
+    if (storedUser) {
+      userPill.innerHTML = 'Signed in as <strong>' + storedUser.replace(/</g, '&lt;') + '</strong>';
+      signedInView.style.display = 'block';
+    } else {
+      userPill.innerHTML = 'Not signed in';
+      registerView.style.display = 'block';
+    }
+
+    var showLoginBtn = document.getElementById('showLoginBtn');
+    if (showLoginBtn) {
+      showLoginBtn.addEventListener('click', function() {
+        showError(''); registerView.style.display = 'none'; loginView.style.display = 'block';
+      });
+    }
+
+    var showRegBtn = document.getElementById('showRegBtn');
+    if (showRegBtn) {
+      showRegBtn.addEventListener('click', function() {
+        showError(''); loginView.style.display = 'none'; registerView.style.display = 'block';
+      });
+    }
+
+    async function claimTv(userCode, username, key) {
+      var res = await fetch('/api/nuvio-tv/device/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ userCode: userCode, creatorName: username, creatorKey: key })
+      });
+      return await res.json();
+    }
+
+    var confirmLinkBtn = document.getElementById('confirmLinkBtn');
+    if (confirmLinkBtn) {
+      confirmLinkBtn.addEventListener('click', async function() {
+        if (!code) { showError('Missing pairing code.'); return; }
+        showError(''); confirmLinkBtn.disabled = true; confirmLinkBtn.textContent = 'Linking TV\u2026';
+        try {
+          var data = await claimTv(code, storedUser, storedKey);
+          if (data && data.ok) {
+            actionArea.style.display = 'none'; successBox.style.display = 'block';
+          } else {
+            showError((data && data.error) || 'Failed to link TV. Please verify the code on your TV.');
+            confirmLinkBtn.disabled = false; confirmLinkBtn.textContent = 'Link TV Now';
+          }
+        } catch (err) {
+          showError('Network error connecting to server.'); confirmLinkBtn.disabled = false; confirmLinkBtn.textContent = 'Link TV Now';
+        }
+      });
+    }
+
+    ${authJs}
+  })();`;
+}
+
+function handleNuvioTvLinkPage(request, env, ctx, url, path) {
+  const codeParam = (url.searchParams.get("code") || url.searchParams.get("tv_code") || "").trim().toUpperCase();
+  const safeCode = escapeHtmlServer(codeParam);
+  const css = buildNuvioTvLinkPageCss();
+  const js = buildNuvioTvLinkPageJs(codeParam);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Link Nuvio TV Launcher &bull; My Lists Addon</title>
+  <style>${css}</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">&#128250;</div>
+    <h1>Link Nuvio TV Launcher</h1>
+    <p class="sub">Connect your My Lists Addon account to sync your Catalogs, Collections, and Channels to your TV.</p>
+
+    <div class="code-box">
+      <div class="code-label">Pairing Code</div>
+      <div class="code-val" id="tvCodeDisplay">${safeCode || "&mdash;"}</div>
+      <div class="user-pill" id="userPill">Checking account status&hellip;</div>
+    </div>
+
+    <div class="success-box" id="successBox">
+      <div class="success-icon">&#x2713;</div>
+      <div class="success-title">TV Linked Successfully!</div>
+      <div class="success-desc">Your Catalogs, Collections, and Live TV Channels have synced to your TV screen. You can now return to your TV.</div>
+      <a href="/" class="btn btn-primary" style="margin-top:16px;">Open My Lists Addon</a>
+    </div>
+
+    <div id="actionArea">
+      <div id="signedInView" style="display:none;">
+        <button type="button" class="btn btn-primary" id="confirmLinkBtn">Link TV Now</button>
+        <a href="/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+      <div id="registerView" style="display:none;">
+        <input type="text" id="regUsername" class="input-field" placeholder="Choose a Username" maxlength="25">
+        <input type="text" id="regRecovery" class="input-field" placeholder="Recovery Answer (optional, 8+ chars)">
+        <button type="button" class="btn btn-primary" id="regSubmitBtn">Create Account &amp; Link TV</button>
+        <div><button type="button" class="switch-mode-btn" id="showLoginBtn">Already have an account? Sign in</button></div>
+      </div>
+
+      <div id="loginView" style="display:none;">
+        <input type="text" id="loginUsername" class="input-field" placeholder="Account Username">
+        <input type="password" id="loginKey" class="input-field" placeholder="Account Key or Password">
+        <button type="button" class="btn btn-primary" id="loginSubmitBtn">Sign In &amp; Link TV</button>
+        <div><button type="button" class="switch-mode-btn" id="showRegBtn">Need an account? Create one</button></div>
+      </div>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <script>${js}</script>
+</body>
+</html>`;
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
+  if (path === "/link" || path === "/tv") {
+    return handleNuvioTvLinkPage(request, env, ctx, url, path);
+  }
+  const colRes = await handleNuvioTvCollectionsRoute(request, env, ctx, url, path);
+  if (colRes) return colRes;
+
   if (path !== "/api/nuvio-tv/sync" && (path.indexOf("/api/nuvio-tv/sync/") !== 0)) return null;
   if (request.method !== "GET" && request.method !== "HEAD") {
     return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
@@ -92798,6 +93209,8 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     : installToken.length === 43
       ? `${url.origin}/i/${installToken}/manifest.json`
       : `${url.origin}/${installToken}/manifest.json`;
+
+  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${target}`;
 
   const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
   const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);
@@ -92835,6 +93248,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     ok: true,
     versionHash,
     manifestUrl,
+    collectionsUrl,
     randomizeItemsDaily,
     catalogIds,
     catalogOrder,
@@ -119643,12 +120057,15 @@ async function apiChannelLineup(request, env, ctx, url) {
     const needsAccount = !!(payload.hideWatched || payload.dynamic);
     const items = (lineup.items || []).map((it) => {
       const mediaId = it.imdbId || (it.tmdbId ? `tmdb:${it.tmdbId}` : (it.id && (String(it.id).startsWith("tt") || String(it.id).startsWith("tmdb:")) ? it.id : ""));
+      const itemTitle = it.title || it.name || it.epName || "";
+      const poster = it.poster || it.thumbnail || it.showPoster || (itemTitle ? `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&v=6` : null);
+      const thumbnail = it.thumbnail || it.poster || it.showPoster || (itemTitle ? `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&format=landscape&v=6` : null);
       return {
         ...it,
         id: mediaId || it.id || "",
-        title: it.title || it.name || it.epName || "",
-        poster: it.poster || it.thumbnail || it.showPoster || null,
-        thumbnail: it.thumbnail || it.poster || it.showPoster || null,
+        title: itemTitle,
+        poster: poster,
+        thumbnail: thumbnail,
       };
     });
     return json({

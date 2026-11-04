@@ -1092,12 +1092,15 @@ async function apiChannelLineup(request, env, ctx, url) {
     const needsAccount = !!(payload.hideWatched || payload.dynamic);
     const items = (lineup.items || []).map((it) => {
       const mediaId = it.imdbId || (it.tmdbId ? `tmdb:${it.tmdbId}` : (it.id && (String(it.id).startsWith("tt") || String(it.id).startsWith("tmdb:")) ? it.id : ""));
+      const itemTitle = it.title || it.name || it.epName || "";
+      const poster = it.poster || it.thumbnail || it.showPoster || (itemTitle ? `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&v=6` : null);
+      const thumbnail = it.thumbnail || it.poster || it.showPoster || (itemTitle ? `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&format=landscape&v=6` : null);
       return {
         ...it,
         id: mediaId || it.id || "",
-        title: it.title || it.name || it.epName || "",
-        poster: it.poster || it.thumbnail || it.showPoster || null,
-        thumbnail: it.thumbnail || it.poster || it.showPoster || null,
+        title: itemTitle,
+        poster: poster,
+        thumbnail: thumbnail,
       };
     });
     return json({

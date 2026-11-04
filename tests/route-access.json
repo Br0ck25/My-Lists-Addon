@@ -114,6 +114,7 @@
   "/api/mdblist/oauth/start": "integration",
   "/api/me": "account",
   "/api/me/sessions": "account",
+  "/api/nuvio-tv/collections": "public",
   "/api/nuvio-tv/device/claim": "account",
   "/api/nuvio-tv/device/code": "public",
   "/api/nuvio-tv/device/poll": "public",
@@ -168,11 +169,14 @@
   "/configure": "static",
   "/guide": "static",
   "/icon.png": "static",
+  "/link": "public",
   "/lists/public.json": "static",
   "/manifest.json": "static",
+  "/nuvio-default/collections.json": "public",
   "/reconnect-poster.svg": "static",
   "/robots.txt": "static",
   "/sitemap.xml": "static",
   "/sw.js": "static",
-  "/unavailable-poster.svg": "static"
+  "/unavailable-poster.svg": "static",
+  "/tv": "public"
 }

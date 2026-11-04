@@ -1,6 +1,16 @@
 # Handoff
 
 ## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-04, branch `feat/nuvio-tv-phase1`)
+- **Collections URL & Artwork Fallbacks**:
+  - `collectionsUrl` (`${url.origin}/api/nuvio-tv/collections/${target}`): included in the JSON payload returned by `GET /api/nuvio-tv/sync/:target` and `GET /api/nuvio-tv/sync/default`.
+  - Added public collections endpoint `GET /api/nuvio-tv/collections/:target` and `GET /nuvio-default/collections.json` (registered as `public` in `tests/route-access.json`).
+  - Added created poster fallbacks for all Collection folders (Genres, Franchises, Studios, Streaming Services, and user Custom Collections): if `coverImageUrl` is missing, it falls back to `/api/channel-poster?name=...` (`POSTER` format for genres, `LANDSCAPE` format for others).
+  - Added channel artwork fallbacks for 24/7 Channels: every channel in `channels` array contains `poster`, `posterUrl`, `backdrop`, and `backdropUrl` with fallback to generated artwork (`/api/channel-poster`) if unset.
+  - Added artwork fallbacks to `/api/channel-lineup` items so lineup items always supply `poster` and `thumbnail`.
+- **Dedicated Pairing Page & Sticky Bar (`/link` and `/tv`)**:
+  - Added standalone server-rendered pairing page `GET /link` and `GET /tv` (with `?code=...` or `?tv_code=...`) registered as `public` in `tests/route-access.json`:
+    - Shows pairing code, detects local sign-in, provides 1-click "Link TV Now" button, instant account creation / sign-in forms without modal dependencies, and redirects back to `/`.
+  - In `src/client/22_client-nuvio-tv-pairing.js`: added `renderNuvioTvStickyBar(tvCode, signedIn)` which displays a prominent green sticky banner across the top of the browser when scanning QR codes, ensuring pairing can never be missed or blocked by modal race conditions.
 - **Pairing modal trigger & URL query parameter preservation**:
   - Captured `source=nuvio_tv` and `tv_code` immediately and synchronously in the inline HTML preamble (`src/client/16_client-row-core.js`) into `sessionStorage` and `window._nuvio_*` globals before any deferred bundles or routers execute.
   - Updated `initAppShell` in `src/client/24_client-backup-restore-presets.js` to preserve `window.location.search` during initial `history.replaceState`.
@@ -40,15 +50,15 @@
     - `src/client/22_client-nuvio-tv-pairing.js`: checks URL params `source=nuvio_tv` and `tv_code`; presents `openNuvioTvPairingModal(tvCode)` with an explicit "Link TV" button when already signed in, and `openNuvioTvAuthModal(tvCode)` when signed out; verifies claim using `creatorApiFetch` (supporting session cookies and keys) and presents `showNuvioTvPairingSuccessModal(tvCode)` upon success.
     - `src/client/23_client-list-management.js`: declared `shufflePickerSignature` with `var` to avoid temporal dead zone (TDZ) reference errors during early bundle evaluation.
     - `src/client/22_client-creator-profile.js`: updated `submitCreateProfile` and `submitRestoreProfile` to pass `source: "nuvio_tv"` and trigger `handleNuvioTvPostAuth()`; updated `loadCreatorSync` to restore `customCollections` and `randomizeItemsDaily`.
-  - All unit tests in `tests/nuvio-tv-sync.test.mjs` (16 tests) and verification checks pass.
+  - All unit tests in `tests/nuvio-tv-sync.test.mjs` (18 tests) and verification checks pass.
 
 ### Must not be undone
-- `/nuvio-default/manifest.json`, `/api/nuvio-tv/sync/:target`, `/api/nuvio-tv/device/code`, and `/api/nuvio-tv/device/poll` are public endpoints for Nuvio TV Launcher out-of-the-box experience, device sync, and pairing.
+- `/nuvio-default/manifest.json`, `/nuvio-default/collections.json`, `/api/nuvio-tv/sync/:target`, `/api/nuvio-tv/collections/:target`, `/api/nuvio-tv/device/code`, `/api/nuvio-tv/device/poll`, `/link`, and `/tv` are public endpoints for Nuvio TV Launcher out-of-the-box experience, device sync, and pairing.
 - `/api/nuvio-tv/device/claim` is an `account` route requiring creator authentication.
-- `handleNuvioTvSyncRoute` is split into sub-helpers (`buildNuvioTvSyncDefaultResponse`, `formatNuvioUserCollections`, `formatNuvioUserChannels`, `resolveNuvioTvTargetData`) to stay well within the 150-line size budget limit.
+- `handleNuvioTvSyncRoute` is split into sub-helpers (`buildNuvioTvSyncDefaultResponse`, `handleNuvioTvCollectionsRoute`, `handleNuvioTvLinkPage`, `buildNuvioTvLinkPageCss`, `buildNuvioTvLinkPageJs`, `buildNuvioTvLinkPageAuthJs`, `formatNuvioUserCollections`, `formatNuvioUserChannels`, `resolveNuvioTvTargetData`) to stay well within the 150-line size budget limit.
 - `creatorApiCreate` delegates profile persistence to `persistNewCreatorProfile` to stay well within the 150-line limit.
 - Seeding only runs when `source === "nuvio_tv"` on a brand new registration. Normal web/Nuvio registrations and existing user logins must never be overwritten.
-- `tests/route-access.json` lists `"/api/nuvio-tv/sync": "public"`, `"/api/nuvio-tv/device/code": "public"`, `"/api/nuvio-tv/device/poll": "public"`, `"/api/nuvio-tv/device/claim": "account"`, `"/api/creator/account/register": "public"`, `"/api/creator/register": "public"`, `"/api/creator/account/login": "account"`.
+- `tests/route-access.json` lists all public and account routes with their expected authorization class.
 
 ## Earlier work: performance audit fixes (2026-11-03, branch `claude/kind-bell-5wa9ht`, not deployed)
 Plan: `docs/PERF_AUDIT_PLAN.md`. Done: PERF-00, 12, 05, 08+07 (both steps), 09, 01, 11 step 1, 03, 16, 06, 04. **Not built: PERF-02** (below). Not built by instruction: PERF-10, 11 step 2, 13, 14, 15. Results are in `docs/PERFORMANCE.md` section 3 and `docs/RELEASES.md` (2026-11-03). No migration, binding or flag; deploy the rebuilt Worker only.

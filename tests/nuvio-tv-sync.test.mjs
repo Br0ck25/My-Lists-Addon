@@ -51,6 +51,7 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     assert.equal(data.ok, true);
     assert.ok(typeof data.versionHash === "string" && data.versionHash.length === 64, "valid SHA-256 versionHash");
     assert.ok(data.manifestUrl.includes("/nuvio-default/manifest.json"), "manifestUrl points to nuvio-default manifest");
+    assert.ok(data.collectionsUrl.includes("/api/nuvio-tv/collections/default"), "collectionsUrl points to default collections");
     assert.equal(data.randomizeItemsDaily, true, "randomizeItemsDaily is true");
 
     // Catalog order check
@@ -89,6 +90,7 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
       for (const folder of col.folders) {
         assert.ok(folder.id, "folder has id");
         assert.ok(folder.title, "folder has title");
+        assert.ok(folder.coverImageUrl && folder.coverImageUrl.length > 0, `folder ${folder.name} has non-empty coverImageUrl`);
         assert.ok(Array.isArray(folder.catalogSources), "folder has catalogSources");
         assert.ok(folder.catalogSources.length > 0, "folder has at least one catalogSource");
         for (const src of folder.catalogSources) {
@@ -120,7 +122,10 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
       assert.ok(ch.id, "channel has id");
       assert.ok(ch.name, "channel has name");
       assert.ok(ch.logoUrl, "channel has logoUrl");
+      assert.ok(ch.poster, "channel has poster");
       assert.ok(ch.posterUrl, "channel has posterUrl");
+      assert.ok(ch.backdrop, "channel has backdrop");
+      assert.ok(ch.backdropUrl, "channel has backdropUrl");
       assert.equal(ch.category, "My Lists Addon Channels");
       assert.ok(ch.catalogId, "channel has catalogId");
       assert.ok(typeof ch.playOrder === "number", "channel has playOrder");
@@ -227,6 +232,36 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     const userChannel = data.channels.find((ch) => ch.id === "ch_nuvio_1");
     assert.ok(userChannel, "has user custom channel");
     assert.equal(userChannel.name, "My Custom Channel");
+  });
+
+  it("GET /api/nuvio-tv/collections/:target and /nuvio-default/collections.json return collections array", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const res1 = await call(env, "/api/nuvio-tv/collections/default");
+    assert.equal(res1.status, 200);
+    assert.equal(res1.body.ok, true);
+    assert.ok(Array.isArray(res1.body.collections), "returns collections array");
+    assert.ok(res1.body.collections.length >= 4);
+
+    const res2 = await call(env, "/nuvio-default/collections.json");
+    assert.equal(res2.status, 200);
+    assert.equal(res2.body.ok, true);
+    assert.ok(Array.isArray(res2.body.collections));
+
+    // Every folder must have non-empty coverImageUrl
+    for (const col of res1.body.collections) {
+      for (const f of col.folders) {
+        assert.ok(f.coverImageUrl && f.coverImageUrl.length > 0, `folder ${f.name} has non-empty coverImageUrl`);
+      }
+    }
+  });
+
+  it("GET /link and /tv render standalone pairing landing page", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const res = await call(env, "/link?code=MTC-WGT");
+    assert.equal(res.status, 200);
+    assert.ok(res.text.includes("MTC-WGT"), "contains pairing code");
+    assert.ok(res.text.includes("Link Nuvio TV Launcher"), "contains title");
+    assert.ok(res.text.includes("Link TV Now"), "contains link button");
   });
 });
 

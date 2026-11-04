@@ -1380,13 +1380,14 @@ function buildGenreFolders() {
   return genres.map((g) => {
     const slug = g.movieUrl ? g.movieUrl.replace(/^tmdb:genre:/, "") : typeof slugifyServer === "function" ? slugifyServer(g.name) : g.name;
     const catId = `tmdb-genre-${slug}`;
+    const coverImageUrl = g.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(g.name) + "&v=6");
     return {
       id: `col_genre_${slug}`,
       title: g.name,
       name: g.name,
       tileShape: "POSTER",
       hideTitle: false,
-      coverImageUrl: "",
+      coverImageUrl: coverImageUrl,
       hidden: false,
       isVisible: true,
       enabled: true,
@@ -1405,7 +1406,7 @@ function buildFranchiseFolders() {
     name: f.name,
     tileShape: "LANDSCAPE",
     hideTitle: false,
-    coverImageUrl: "",
+    coverImageUrl: f.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(f.name) + "&format=landscape&v=6"),
     hidden: false,
     isVisible: true,
     enabled: true,
@@ -1422,7 +1423,7 @@ function buildStudioFolders() {
     name: st.name,
     tileShape: "LANDSCAPE",
     hideTitle: false,
-    coverImageUrl: "",
+    coverImageUrl: st.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(st.name) + "&format=landscape&v=6"),
     hidden: false,
     isVisible: true,
     enabled: true,
@@ -1495,13 +1496,17 @@ function buildNuvioDefaultChannels() {
   const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined" ? QUICK_CHANNEL_PRESETS : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
   return networks.map((net, i) => {
     const posterUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`;
+    const backdropUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&format=landscape&v=6`;
     const logoUrl = net.logoPath
       ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7`
       : `/api/channel-logo?netId=${net.id}&v=7`;
     return {
       id: `ch_preset_${net.id}`,
       name: net.name,
+      poster: posterUrl,
       posterUrl,
+      backdrop: backdropUrl,
+      backdropUrl,
       logoUrl,
       category: "My Lists Addon Channels",
       catalogId: `channel_preset_${net.id}`,

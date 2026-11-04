@@ -198,6 +198,41 @@ async function handleNuvioTvPostAuth() {
   }
 }
 
+function renderNuvioTvStickyBar(tvCode, signedIn) {
+  if (!tvCode || document.getElementById('nuvioTvStickyBar') || !document.body) return;
+  const bar = document.createElement('div');
+  bar.id = 'nuvioTvStickyBar';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#15803d,#16a34a);color:#fff;padding:12px 16px;box-shadow:0 4px 12px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:space-between;font-family:sans-serif;font-size:14px;';
+  const safeCode = (typeof escapeHtml === 'function' ? escapeHtml(tvCode) : tvCode);
+  bar.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">' +
+    '<span style="font-size:20px;">\uD83D\uDCFA</span>' +
+    '<span><strong>Link Nuvio TV Launcher:</strong> Pairing Code <strong style="background:rgba(0,0,0,0.25);padding:2px 8px;border-radius:4px;letter-spacing:0.08em;">' + safeCode + '</strong></span>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;">' +
+    '<button type="button" id="nuvioStickyLinkBtn" style="background:#fff;color:#15803d;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;">' + (signedIn ? 'Link TV Now' : 'Sign In & Link') + '</button>' +
+    '<a href="/link?code=' + encodeURIComponent(tvCode) + '" style="background:rgba(0,0,0,0.2);color:#fff;text-decoration:none;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;">Open Link Page &rarr;</a>' +
+    '<button type="button" id="nuvioStickyCloseBtn" style="background:transparent;border:none;color:#fff;cursor:pointer;font-size:16px;padding:0 4px;">\u2715</button>' +
+    '</div>';
+  document.body.prepend(bar);
+  const btn = document.getElementById('nuvioStickyLinkBtn');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      if (signedIn) {
+        if (typeof openNuvioTvPairingModal === 'function') openNuvioTvPairingModal(tvCode);
+      } else {
+        if (typeof openNuvioTvAuthModal === 'function') openNuvioTvAuthModal(tvCode);
+        else window.location.href = '/link?code=' + encodeURIComponent(tvCode);
+      }
+    });
+  }
+  const closeBtn = document.getElementById('nuvioStickyCloseBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() {
+      if (bar.parentNode) bar.parentNode.removeChild(bar);
+    });
+  }
+}
+
 function initNuvioTvOnboarding() {
   try {
     if (typeof window === 'undefined') return;
@@ -223,28 +258,36 @@ function initNuvioTvOnboarding() {
       (typeof window !== 'undefined' && window._nuvio_source === 'nuvio_tv');
     if (!isNuvioTv && !tvCodeParam) return;
 
-    if (window._nuvioModalOpened) return;
-
     const tvCode = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_tv_code')) ||
       (typeof window !== 'undefined' && window._nuvio_tv_code) || null;
     const signedIn = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ||
       Boolean(localStorage.getItem('myListAddon:creatorName'));
 
+    if (tvCode) {
+      renderNuvioTvStickyBar(tvCode, signedIn);
+    }
+
+    if (window._nuvioModalOpened) return;
+
     setTimeout(function() {
-      if (window._nuvioModalOpened) return;
-      window._nuvioModalOpened = true;
-      if (!signedIn) {
-        if (tvCode) {
-          openNuvioTvAuthModal(tvCode);
-        } else if (typeof openCreateProfileModal === 'function') {
-          openCreateProfileModal();
-        }
-      } else {
-        if (tvCode) {
-          openNuvioTvPairingModal(tvCode);
+      try {
+        if (window._nuvioModalOpened) return;
+        window._nuvioModalOpened = true;
+        if (!signedIn) {
+          if (tvCode) {
+            openNuvioTvAuthModal(tvCode);
+          } else if (typeof openCreateProfileModal === 'function') {
+            openCreateProfileModal();
+          }
         } else {
-          handleNuvioTvPostAuth();
+          if (tvCode) {
+            openNuvioTvPairingModal(tvCode);
+          } else {
+            handleNuvioTvPostAuth();
+          }
         }
+      } catch (err) {
+        console.error('Nuvio TV modal open failed:', err);
       }
     }, 250);
   } catch (e) {
@@ -336,3 +379,4 @@ window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
 window.applyChannelLogoUrl = applyChannelLogoUrl;
 window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
 window.setChannelDraftLogo = setChannelDraftLogo;
+window.renderNuvioTvStickyBar = renderNuvioTvStickyBar;
