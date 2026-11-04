@@ -60,7 +60,7 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
-## Frontend audit fixes UI-01 to UI-18 (built 2026-11-04, stamp 187f828767; prepared, not deployed)
+## Frontend audit fixes UI-01 to UI-18 (built 2026-11-04, stamp a4b163e906; prepared, not deployed)
 
 From `docs/audits/2026-11-03-frontend.md`. What people will notice:
 
