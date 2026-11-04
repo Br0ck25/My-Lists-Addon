@@ -1,6 +1,26 @@
 # Handoff
 
 ## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-04, branch `feat/nuvio-tv-phase1`)
+- **Pairing modal trigger & URL query parameter preservation**:
+  - Captured `source=nuvio_tv` and `tv_code` immediately and synchronously in the inline HTML preamble (`src/client/16_client-row-core.js`) into `sessionStorage` and `window._nuvio_*` globals before any deferred bundles or routers execute.
+  - Updated `initAppShell` in `src/client/24_client-backup-restore-presets.js` to preserve `window.location.search` during initial `history.replaceState`.
+  - Added multi-source fallback checking and deduplication in `initNuvioTvOnboarding` in `src/client/22_client-nuvio-tv-pairing.js` so `openNuvioTvPairingModal(tvCode)` opens reliably when signed in and `openNuvioTvAuthModal(tvCode)` opens when signed out.
+- **Removed Trakt Box Office Series**:
+  - Removed `chart:trakt:boxoffice_tv` from `buildNuvioTvDefaultConfig()`, leaving the 5 core default catalogs (`chart:combined:trending_movies`, `chart:combined:trending_tv`, `chart:combined:popular_movies`, `chart:combined:popular_tv`, `chart:trakt:boxoffice_movies`).
+  - Updated unit tests in `tests/nuvio-tv-sync.test.mjs`.
+- **Channel Schema & Sync API (`/api/nuvio-tv/sync/:id`) & Collections Artwork**:
+  - In `formatNuvioUserChannels` (`src/api/25_api-catalog-routes.js`) and `buildNuvioDefaultChannels` (`src/catalog/08_quickadd-chart-data.js`):
+    - Added `posterUrl`: defaults to `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(channel.name)}&v=6`.
+    - Added `logoUrl`: outputs network logo or `/api/channel-logo?path=...` / `/api/channel-logo?netId=...`.
+    - Set default `category: "My Lists Addon Channels"`.
+  - In `buildStreamingServiceFolders` (`src/catalog/08_quickadd-chart-data.js`):
+    - Ensured every folder in `col_mylists_streaming_services` outputs non-empty `coverImageUrl` (e.g. landscape artwork URL).
+- **Custom Channel Builder & CORS / Lineup**:
+  - Added custom `channelLogoUrlInput` in `src/page/13_tab-channels.js`.
+  - Added `applyChannelLogoUrl`, `syncChannelLogoUrlInput`, and `setChannelDraftLogo` in `src/client/22_client-nuvio-tv-pairing.js`.
+  - Persisted `posterUrl` and `logoUrl` in custom channel payloads during `saveChannel` in `src/client/20_client-channel-builder.js`.
+  - Added fallback in web preview rendering to `ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'` when `posterUrl` is empty.
+  - Added `OPTIONS` preflight support and `Access-Control-Allow-Origin: *` to `/api/channel-lineup`, ensuring lineup items include `poster`, `thumbnail`, `title`, and media ID (`tmdb:...` or `tt...`).
 - **Phase 1 (Default preset, guest manifest, unified sync)**:
   - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultPreset()` and `buildNuvioTvDefaultConfig()`.
   - Built unified sync route `GET /api/nuvio-tv/sync/:target` (registered as public in `tests/route-access.json`), supporting `"default"` target, user accounts, and install tokens. Computes deterministic SHA-256 `versionHash` and formats collections and channels in Nuvio schema.
