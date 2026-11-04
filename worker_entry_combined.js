@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "73071f6029";
+const WORKER_BUILD = "8c9f041268";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -70705,6 +70705,17 @@ function objectEntriesOnly(map) {
   }
   return map;
 }
+// Signing in, out or switching account in another tab reloads this one, so it
+// does not keep showing (and acting as) the old account. The page only paints
+// its header on load. A write of the same account name changes nothing here, so
+// two tabs writing the key together cannot start a reload loop.
+window.addEventListener('storage', function (e) {
+  if (e.key !== 'myListAddon:creatorName' && e.key !== 'myListAddon:creatorKey') return;
+  let stored = '';
+  try { stored = localStorage.getItem('myListAddon:creatorName') || ''; } catch (err) { return; }
+  const shown = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
+  if (stored !== shown) location.reload();
+});
 // Addresses that name nothing. The page opens the list view for any /lists/<x>
 // or /channels/<x> address, so a deleted share or a mistyped slug used to show
 // a made-up channel or "Loading…" for ever. These send the person back to
