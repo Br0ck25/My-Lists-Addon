@@ -284,3 +284,41 @@ describe("design system: the rules reach everyone who changes the UI", () => {
   });
 });
 
+
+describe("design system: phone tap areas (UI-17)", () => {
+  // Icon-only buttons and inline links are narrower or shorter than a fingertip.
+  // The invisible ::after extension (docs/DESIGN_SYSTEM.md section 9) must reach them
+  // sideways as well, and links that are not .lc-btn need it too.
+  const phoneBlock = (css) => {
+    const start = css.indexOf("Touch targets: on phones");
+    assert.ok(start > -1, "found the phone touch-target block");
+    return css.slice(start, start + 2500);
+  };
+  const extension = (block, selector) => {
+    const re = new RegExp(`${selector.replace(/[.]/g, "\\.")}::after[^{}]*\\{[^}]*inset:\\s*([^;}]+)`);
+    const m = block.match(re);
+    return m ? m[1].trim() : null;
+  };
+  it("icon-only buttons are extended sideways as well as up and down", async () => {
+    const block = phoneBlock(await appCss());
+    for (const sel of [".lc-btn.searchLikeBtn", ".lc-btn.searchLikeExternalBtn", ".lc-btn.customizeListBtn"]) {
+      const inset = extension(block, sel);
+      assert.ok(inset, sel + " has its own extension");
+      const parts = []; let depth = 0, cur = "";
+      for (const ch of inset) {
+        if (ch === "(") depth++;
+        if (ch === ")") depth--;
+        if (ch === " " && depth === 0) { if (cur) parts.push(cur); cur = ""; } else cur += ch;
+      }
+      if (cur) parts.push(cur);
+      assert.ok(parts.length === 2 && !/^0(px)?$/.test(parts[1]), `${sel} inset "${inset}" must extend sideways`);
+    }
+  });
+  it("'See All' links get an extension too", async () => {
+    const block = phoneBlock(await appCss());
+    for (const sel of [".text-action-btn", ".discover-chart-seeall"]) {
+      assert.ok(extension(block, sel), sel + " has an extension");
+      assert.match(block, new RegExp(`${sel.replace(".", "\\.")}[^{}]*\\{[^}]*position:\\s*relative|:where\\([^)]*${sel.replace(".", "\\.")}`), sel + " is positioned so the extension sits on it");
+    }
+  });
+});
