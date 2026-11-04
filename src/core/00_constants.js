@@ -2134,7 +2134,6 @@ const UTILITY_CSS = `
 .u-flex-1_1_220px{flex:1 1 220px !important}
 .u-flex-1_1_320px{flex:1 1 320px !important}
 .u-flex-none{flex:none !important}
-.u-fs-13px{font-size:13px !important}
 .u-fs-2_5rem{font-size:2.5rem !important}
 .u-fs-2rem{font-size:2rem !important}
 .u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}

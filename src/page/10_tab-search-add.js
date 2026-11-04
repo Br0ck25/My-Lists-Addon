@@ -22,7 +22,7 @@
     </div>
 
     <div class="row u-mb-12px u-gap-8px">
-      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
+      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name…" data-act-on="input" data-act="filterLists">
       <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" class="u-flex-none" style="width:auto;">
         <option value="">All groups</option>
       </select>

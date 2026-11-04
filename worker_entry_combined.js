@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ffb8e18f09";
+const WORKER_BUILD = "a4b163e906";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -2157,7 +2157,6 @@ const UTILITY_CSS = `
 .u-flex-1_1_220px{flex:1 1 220px !important}
 .u-flex-1_1_320px{flex:1 1 320px !important}
 .u-flex-none{flex:none !important}
-.u-fs-13px{font-size:13px !important}
 .u-fs-2_5rem{font-size:2.5rem !important}
 .u-fs-2rem{font-size:2rem !important}
 .u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}
@@ -37290,7 +37289,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
       
       <div class="u-mb-14px">
@@ -37340,7 +37339,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
 
       <div class="u-mb-12px">
@@ -37632,7 +37631,7 @@ ${appShellMobileNavHtml}
       <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
       <div id="traktDeviceCodeBox" class="u-bg-v_panel_strong u-bd-2px_dashed_v_accent u-br-v_radius_md u-p-16px u-mb-16px">
-        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
+        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING…</div>
       </div>
 
       <div class="u-fd-column u-gap-10px u-mb-16px" style="display:flex;">
@@ -37697,7 +37696,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div class="row u-mb-12px u-gap-8px">
-      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
+      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name…" data-act-on="input" data-act="filterLists">
       <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" class="u-flex-none" style="width:auto;">
         <option value="">All groups</option>
       </select>
@@ -38187,7 +38186,7 @@ if ('serviceWorker' in navigator) {
         <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
         <div class="search-input-box">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add…">
           <button type="button" id="customListSearchClearBtn" class="search-clear-btn u-bg-none u-bd-none u-c-v_muted u-cur-pointer u-p-4px" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
@@ -38331,7 +38330,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-mb-10px u-gap-8px" id="myChannelsToolbar">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels…" class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
         </div>
         <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="recent">Recently updated</option>
@@ -38457,7 +38456,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-mb-10px u-gap-8px u-ai-center">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
+          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator…" class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
         </div>
         <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="newest">Newest</option>
@@ -38543,7 +38542,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-gap-8px">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+          <input type="text" id="channelSearchInput" placeholder="Search a show by name…" data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
         </div>
         <button type="button" class="secondary lc-btn" data-act="runChannelTitleSearch">Search</button>
       </div>
@@ -38558,7 +38557,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-mb-8px u-gap-8px">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+          <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name…" data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
         </div>
         <button type="button" class="secondary lc-btn u-flex-none u-ws-nowrap" id="channelDraftSelectModeBtn" style="width:auto;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
@@ -38701,7 +38700,7 @@ if ('serviceWorker' in navigator) {
     <div class="search-input-wrapper">
       <div class="search-input-box">
         <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." class="u-pl-38px u-pr-38px" style="width:100%;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title…" class="u-pl-38px u-pr-38px" style="width:100%;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
         <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">
           <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" /></svg>
         </button>
@@ -38846,7 +38845,7 @@ if ('serviceWorker' in navigator) {
           <span class="backup-advanced-arrow">&#x25BE;</span>
         </summary>
         <div class="u-p-0_14px_14px u-fd-column u-gap-10px" style="display:flex;">
-          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-13px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore..."></textarea>
+          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore…"></textarea>
           <div class="backup-actions-grid u-gap-8px u-fw2-wrap" style="display:flex;">
             <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current to box</button>
             <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON from box</button>
@@ -39648,7 +39647,7 @@ if ('serviceWorker' in navigator) {
         <div id="supportChatView" style="display:none;">
           <div id="supportMessagesStream" class="support-messages-stream"></div>
           <div class="support-reply-composer u-mt-10px">
-            <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+            <textarea id="supportReplyInput" placeholder="Type a reply to the developer…" data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
             <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
@@ -57109,7 +57108,7 @@ async function renderDefaultCatalogSearch(force) {
   // still landed on top of the default view.
   const thisSeq = ++currentTitleSearchSequence;
 
-  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '...</small></p>';
+  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '…</small></p>';
 
   if (currentCatalogSearchType === 'lists') {
     window._rawCatalogTitleItems = [];
@@ -86948,7 +86947,7 @@ function validateAndRepairBackup(data) {
     if (ref && !(ref in source) && embedded === 0) emptyRows.push(e.name || ref);
   });
   if (emptyRows.length) {
-    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '...' : ''));
+    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '…' : ''));
   }
 
   // 6. Ids that cannot have come from this app -- see dropUnsafeImportedIds.

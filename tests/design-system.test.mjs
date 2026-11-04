@@ -362,8 +362,12 @@ describe("design system: the page scripts follow the same rules as the styleshee
   });
 
   it("visible texts use the ellipsis character, not three dots", () => {
-    const dots = /(?<=[A-Za-z0-9 ,])\.\.\.(?=['"`<]|\\n|&)/;
+    const dots = /(?<=[A-Za-z0-9 ,'"])\.\.\.(?=['"`<]|\\n|&)/;
     // Data, not interface: a show called "And Just Like That..." and channel descriptions.
-    assert.deepEqual(scan(["src/client/"], (l) => dots.test(l) && !/showName|"description"/.test(l)), []);
+    assert.deepEqual(scan(["src/client/", "src/page/"], (l) => dots.test(l) && !/showName|"description"/.test(l)), []);
+  });
+
+  it("no odd pixel font size is left (13px on the config box was the last one)", () => {
+    assert.deepEqual(scan(["src/client/", "src/page/"], (l) => /\bu-fs-13px\b/.test(l)), []);
   });
 });

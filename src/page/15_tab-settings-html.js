@@ -755,7 +755,7 @@
         <div id="supportChatView" style="display:none;">
           <div id="supportMessagesStream" class="support-messages-stream"></div>
           <div class="support-reply-composer u-mt-10px">
-            <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+            <textarea id="supportReplyInput" placeholder="Type a reply to the developer…" data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
             <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">

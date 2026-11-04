@@ -415,7 +415,7 @@ function validateAndRepairBackup(data) {
     if (ref && !(ref in source) && embedded === 0) emptyRows.push(e.name || ref);
   });
   if (emptyRows.length) {
-    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '...' : ''));
+    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '…' : ''));
   }
 
   // 6. Ids that cannot have come from this app -- see dropUnsafeImportedIds.

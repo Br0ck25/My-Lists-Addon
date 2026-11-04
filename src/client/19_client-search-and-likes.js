@@ -5500,7 +5500,7 @@ async function renderDefaultCatalogSearch(force) {
   // still landed on top of the default view.
   const thisSeq = ++currentTitleSearchSequence;
 
-  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '...</small></p>';
+  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '…</small></p>';
 
   if (currentCatalogSearchType === 'lists') {
     window._rawCatalogTitleItems = [];

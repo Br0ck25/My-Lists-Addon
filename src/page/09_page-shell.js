@@ -5410,7 +5410,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
       
       <div class="u-mb-14px">
@@ -5460,7 +5460,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
 
       <div class="u-mb-12px">
@@ -5752,7 +5752,7 @@ ${appShellMobileNavHtml}
       <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
       <div id="traktDeviceCodeBox" class="u-bg-v_panel_strong u-bd-2px_dashed_v_accent u-br-v_radius_md u-p-16px u-mb-16px">
-        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
+        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING…</div>
       </div>
 
       <div class="u-fd-column u-gap-10px u-mb-16px" style="display:flex;">

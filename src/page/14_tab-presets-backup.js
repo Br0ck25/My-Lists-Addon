@@ -62,7 +62,7 @@
           <span class="backup-advanced-arrow">&#x25BE;</span>
         </summary>
         <div class="u-p-0_14px_14px u-fd-column u-gap-10px" style="display:flex;">
-          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-13px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore..."></textarea>
+          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore…"></textarea>
           <div class="backup-actions-grid u-gap-8px u-fw2-wrap" style="display:flex;">
             <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current to box</button>
             <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON from box</button>

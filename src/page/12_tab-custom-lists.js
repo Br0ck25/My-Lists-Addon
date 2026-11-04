@@ -205,7 +205,7 @@
         <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
         <div class="search-input-box">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add…">
           <button type="button" id="customListSearchClearBtn" class="search-clear-btn u-bg-none u-bd-none u-c-v_muted u-cur-pointer u-p-4px" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
