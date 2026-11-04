@@ -7,10 +7,11 @@
   - Added created poster fallbacks for all Collection folders (Genres, Franchises, Studios, Streaming Services, and user Custom Collections): if `coverImageUrl` is missing, it falls back to `/api/channel-poster?name=...` (`POSTER` format for genres, `LANDSCAPE` format for others).
   - Added channel artwork fallbacks for 24/7 Channels: every channel in `channels` array contains `poster`, `posterUrl`, `backdrop`, and `backdropUrl` with fallback to generated artwork (`/api/channel-poster`) if unset.
   - Added artwork fallbacks to `/api/channel-lineup` items so lineup items always supply `poster` and `thumbnail`.
-- **Dedicated Pairing Page & Sticky Bar (`/link` and `/tv`)**:
+- **Dedicated Pairing Page (`/link` and `/tv`) & Direct QR Code Redirection**:
   - Added standalone server-rendered pairing page `GET /link` and `GET /tv` (with `?code=...` or `?tv_code=...`) registered as `public` in `tests/route-access.json`:
     - Shows pairing code, detects local sign-in, provides 1-click "Link TV Now" button, instant account creation / sign-in forms without modal dependencies, and redirects back to `/`.
-  - In `src/client/22_client-nuvio-tv-pairing.js`: added `renderNuvioTvStickyBar(tvCode, signedIn)` which displays a prominent green sticky banner across the top of the browser when scanning QR codes, ensuring pairing can never be missed or blocked by modal race conditions.
+  - Removed the green sticky banner from `src/client/22_client-nuvio-tv-pairing.js`.
+  - Scanning or opening `/?source=nuvio_tv&tv_code=...` now immediately 302 redirects to `/link?code=...` (both on the server in `appHomePage` and in the client `initNuvioTvOnboarding`), taking users straight to the clean, dedicated linking interface.
 - **Pairing modal trigger & URL query parameter preservation**:
   - Captured `source=nuvio_tv` and `tv_code` immediately and synchronously in the inline HTML preamble (`src/client/16_client-row-core.js`) into `sessionStorage` and `window._nuvio_*` globals before any deferred bundles or routers execute.
   - Updated `initAppShell` in `src/client/24_client-backup-restore-presets.js` to preserve `window.location.search` during initial `history.replaceState`.

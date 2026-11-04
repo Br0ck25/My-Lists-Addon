@@ -26,6 +26,10 @@ function appShellTabPage(request, env, ctx, url, path) {
 }
 
 async function appHomePage(request, env, ctx, url) {
+  const tvCode = (url.searchParams.get("tv_code") || url.searchParams.get("code") || "").trim();
+  if (tvCode) {
+    return Response.redirect(`${url.origin}/link?code=${encodeURIComponent(tvCode)}`, 302);
+  }
   ctx.waitUntil(bumpStat(env, "pageviews"));
   // Memoized per origin and answered with a 304 when the browser
   // already holds this exact build -- see htmlPageResponse and

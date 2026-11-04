@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1493674eb1";
+const WORKER_BUILD = "44ed4493d2";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -83199,41 +83199,6 @@ async function handleNuvioTvPostAuth() {
   }
 }
 
-function renderNuvioTvStickyBar(tvCode, signedIn) {
-  if (!tvCode || document.getElementById('nuvioTvStickyBar') || !document.body) return;
-  const bar = document.createElement('div');
-  bar.id = 'nuvioTvStickyBar';
-  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#15803d,#16a34a);color:#fff;padding:12px 16px;box-shadow:0 4px 12px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:space-between;font-family:sans-serif;font-size:14px;';
-  const safeCode = (typeof escapeHtml === 'function' ? escapeHtml(tvCode) : tvCode);
-  bar.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">' +
-    '<span style="font-size:20px;">\uD83D\uDCFA</span>' +
-    '<span><strong>Link Nuvio TV Launcher:</strong> Pairing Code <strong style="background:rgba(0,0,0,0.25);padding:2px 8px;border-radius:4px;letter-spacing:0.08em;">' + safeCode + '</strong></span>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;align-items:center;">' +
-    '<button type="button" id="nuvioStickyLinkBtn" style="background:#fff;color:#15803d;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;">' + (signedIn ? 'Link TV Now' : 'Sign In & Link') + '</button>' +
-    '<a href="/link?code=' + encodeURIComponent(tvCode) + '" style="background:rgba(0,0,0,0.2);color:#fff;text-decoration:none;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;">Open Link Page &rarr;</a>' +
-    '<button type="button" id="nuvioStickyCloseBtn" style="background:transparent;border:none;color:#fff;cursor:pointer;font-size:16px;padding:0 4px;">\u2715</button>' +
-    '</div>';
-  document.body.prepend(bar);
-  const btn = document.getElementById('nuvioStickyLinkBtn');
-  if (btn) {
-    btn.addEventListener('click', function() {
-      if (signedIn) {
-        if (typeof openNuvioTvPairingModal === 'function') openNuvioTvPairingModal(tvCode);
-      } else {
-        if (typeof openNuvioTvAuthModal === 'function') openNuvioTvAuthModal(tvCode);
-        else window.location.href = '/link?code=' + encodeURIComponent(tvCode);
-      }
-    });
-  }
-  const closeBtn = document.getElementById('nuvioStickyCloseBtn');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', function() {
-      if (bar.parentNode) bar.parentNode.removeChild(bar);
-    });
-  }
-}
-
 function initNuvioTvOnboarding() {
   try {
     if (typeof window === 'undefined') return;
@@ -83261,12 +83226,14 @@ function initNuvioTvOnboarding() {
 
     const tvCode = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_tv_code')) ||
       (typeof window !== 'undefined' && window._nuvio_tv_code) || null;
+
+    if (tvCode && window.location && window.location.pathname !== '/link' && window.location.pathname !== '/tv') {
+      window.location.href = '/link?code=' + encodeURIComponent(tvCode);
+      return;
+    }
+
     const signedIn = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) ||
       Boolean(localStorage.getItem('myListAddon:creatorName'));
-
-    if (tvCode) {
-      renderNuvioTvStickyBar(tvCode, signedIn);
-    }
 
     if (window._nuvioModalOpened) return;
 
@@ -83380,7 +83347,6 @@ window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
 window.applyChannelLogoUrl = applyChannelLogoUrl;
 window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
 window.setChannelDraftLogo = setChannelDraftLogo;
-window.renderNuvioTvStickyBar = renderNuvioTvStickyBar;
 // Reordering & position management
 function moveRow(btn, dir) {
   const entry = btn.closest('.entry');
@@ -126095,6 +126061,10 @@ function appShellTabPage(request, env, ctx, url, path) {
 }
 
 async function appHomePage(request, env, ctx, url) {
+  const tvCode = (url.searchParams.get("tv_code") || url.searchParams.get("code") || "").trim();
+  if (tvCode) {
+    return Response.redirect(`${url.origin}/link?code=${encodeURIComponent(tvCode)}`, 302);
+  }
   ctx.waitUntil(bumpStat(env, "pageviews"));
   // Memoized per origin and answered with a 304 when the browser
   // already holds this exact build -- see htmlPageResponse and

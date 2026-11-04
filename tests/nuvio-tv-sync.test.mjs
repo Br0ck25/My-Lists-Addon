@@ -263,6 +263,13 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     assert.ok(res.text.includes("Link Nuvio TV Launcher"), "contains title");
     assert.ok(res.text.includes("Link TV Now"), "contains link button");
   });
+
+  it("GET /?source=nuvio_tv&tv_code=MTC-WGT redirects to /link?code=MTC-WGT", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const res = await call(env, "/?source=nuvio_tv&tv_code=MTC-WGT");
+    assert.equal(res.status, 302);
+    assert.ok(res.headers.get("location").includes("/link?code=MTC-WGT"));
+  });
 });
 
 describe("Phase 2: Nuvio TV Launcher - New User Account Seeding & Existing User Sign-In", () => {
