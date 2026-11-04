@@ -5191,9 +5191,6 @@ ${UTILITY_CSS}
     width: 100%; padding: var(--space-2-5) var(--space-3); border-radius: var(--radius-md);
     border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: var(--font-size-base);
   }
-
-
-
   /* Touch targets: on phones the compact controls keep their look but get a
      44px hit area (WCAG 2.5.5 / HIG) from an invisible extension. */
   @media (max-width: 640px) {
@@ -5202,12 +5199,8 @@ ${UTILITY_CSS}
       content: ""; position: absolute; inset: -7px 0;
     }
     /* Icon-only buttons are narrow as well as short; the sideways reach stays inside the gap between them. */
-    .lc-btn.searchLikeBtn::after, .lc-btn.searchLikeExternalBtn::after, .lc-btn.customizeListBtn::after {
-      inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-1));
-    }
-    .text-action-btn::after, .discover-chart-seeall::after {
-      content: ""; position: absolute; inset: calc(-1 * var(--space-3)) 0;
-    }
+    .lc-btn.searchLikeBtn::after, .lc-btn.searchLikeExternalBtn::after, .lc-btn.customizeListBtn::after { inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-1)); }
+    .text-action-btn::after, .discover-chart-seeall::after { content: ""; position: absolute; inset: calc(-1 * var(--space-3)) 0; }
     .header-icon-btn::after, .header-avatar-btn::after, button.modal-close-x::after, .search-clear-btn::after {
       content: ""; position: absolute; inset: -4px;
     }
