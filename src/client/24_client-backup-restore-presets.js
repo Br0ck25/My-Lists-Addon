@@ -4010,7 +4010,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Export your data as a CSV or JSON file from the other service, then go to Settings -> External Accounts & API Keys -> Import List on mylistsaddon.com. Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
+            "Export your data as a CSV or JSON file from the other service, then go to Settings -> Connected Services -> Import List on mylistsaddon.com. Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
         },
       },
       {
@@ -4558,7 +4558,7 @@ ${UTILITY_CSS}
     <ul>
       <li><strong>+ New Catalog</strong> &mdash; opens the Add Catalog modal to add a list by URL (see below).</li>
       <li><strong>Edit</strong> &mdash; toggle edit mode to drag-reorder, rename, or remove rows.</li>
-      <li><strong>Refresh Preview</strong> &mdash; re-renders the live preview.</li>
+      <li><strong>Refresh</strong> &mdash; re-renders the live preview.</li>
       <li>Filter by name and by group using the controls above the list.</li>
       <li><strong>Daily Randomizer</strong> &mdash; two toggles: shuffle catalog row order every 24 hours, or shuffle items within each catalog every 24 hours.</li>
       <li><strong>Generate Install Link</strong> &mdash; produces your install URL, ready for Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol.</li>
@@ -4739,7 +4739,7 @@ ${UTILITY_CSS}
     </ol>
 
     <h3>Bulk file import (CSV/JSON from other trackers)</h3>
-    <p>Go to <strong>Settings &rarr; External Accounts &amp; API Keys &rarr; Import List</strong>. Supported source formats: <strong>IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB</strong> exports, in CSV or JSON. You can select multiple files at once.</p>
+    <p>Go to <strong>Settings &rarr; Connected Services &rarr; Import List</strong>. Supported source formats: <strong>IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB</strong> exports, in CSV or JSON. You can select multiple files at once.</p>
     <ol>
       <li>Export your ratings/watchlist/history file from the other service (each site has its own "export my data" feature).</li>
       <li>Set <strong>Source</strong> to the matching provider, or leave it on <strong>Auto-detect</strong>.</li>
