@@ -403,6 +403,239 @@ function traktLimitNote(res, text, retrySec) {
   return parts.join(", ");
 }
 
+// GET /api/nuvio-tv/sync/:target -- unified sync route for Nuvio TV Launcher
+async function buildNuvioTvSyncDefaultResponse(url) {
+  const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
+  const manifestUrl = `${url.origin}/nuvio-default/manifest.json`;
+  const catalogIds = defaultConfig.catalogIds || defaultConfig.catalogOrder || [];
+  const catalogOrder = defaultConfig.catalogOrder || catalogIds;
+  const collections = defaultConfig.collections || [];
+  const channels = defaultConfig.channels || [];
+  const randomizeItemsDaily = true;
+  const updatedAt = 0;
+
+  const payloadToHash = JSON.stringify({ catalogIds, collections, channels, randomizeItemsDaily, updatedAt });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payloadToHash));
+  const versionHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  return jsonPublic({
+    ok: true,
+    versionHash,
+    manifestUrl,
+    randomizeItemsDaily: true,
+    catalogIds,
+    catalogOrder,
+    collections,
+    channels,
+  }, 200, {
+    ...corsHeaders(),
+    "Cache-Control": "public, max-age=300",
+  });
+}
+
+function formatNuvioUserCollections(userCollections) {
+  if (!Array.isArray(userCollections) || !userCollections.length) {
+    return typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : [];
+  }
+  const userFolders = userCollections.map((col) => ({
+    id: col.id || `folder_${Math.random().toString(36).slice(2, 8)}`,
+    title: col.name || col.title || "User Collection",
+    name: col.name || col.title || "User Collection",
+    tileShape: col.tileShape || "LANDSCAPE",
+    hideTitle: !!col.hideTitle,
+    coverImageUrl: col.coverImageUrl || "",
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    catalogSources: (col.lists || []).map((l) => ({
+      addonId: l.addonId || "app.my-list.collections",
+      catalogId: l.catalogId || (typeof slugifyServer === "function" ? slugifyServer(l.url || l.name || "") : (l.name || "catalog")),
+      name: (l.name || "").replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim(),
+      title: (l.name || "").replace(/\s*\((?:movies?|shows?|series|tv)\)\s*$/ig, "").trim(),
+      type: l.type || "movie",
+    })),
+  }));
+  return [
+    {
+      id: "my-lists-collections",
+      title: "My Lists Collections",
+      name: "My Lists Collections",
+      viewMode: "FOLLOW_LAYOUT",
+      showAllTab: false,
+      pinToTop: false,
+      focusGlowEnabled: true,
+      backdropImageUrl: "/icon.png",
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      folders: userFolders,
+    },
+    ...(typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : []),
+  ];
+}
+
+function formatNuvioUserChannels(userChannelsRaw) {
+  if (userChannelsRaw) {
+    const list = Array.isArray(userChannelsRaw) ? userChannelsRaw : (typeof userChannelsRaw === "object" ? Object.values(userChannelsRaw) : []);
+    if (list.length) {
+      return list.map((ch, i) => ({
+        id: ch.id || `ch_${i + 1}`,
+        name: ch.name || `Channel ${i + 1}`,
+        logoUrl: ch.poster || `/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId || ""}&v=7`,
+        category: ch.category || "Custom Channels",
+        catalogId: ch.id || `channel_${i + 1}`,
+        playOrder: i + 1,
+      }));
+    }
+  }
+  return typeof buildNuvioDefaultChannels === "function" ? buildNuvioDefaultChannels() : [];
+}
+
+async function resolveNuvioTvTargetData(target, env) {
+  let resolved = null;
+  let installToken = target;
+  let username = "";
+  let updatedAt = 0;
+
+  try {
+    resolved = await resolveConfig(target, env, { withTracking: true });
+    if (resolved && resolved.unresolved) resolved = null;
+  } catch {}
+
+  if (!resolved && target.length === 43) {
+    try {
+      resolved = await resolveConfig("i-" + target, env, { withTracking: true });
+      if (resolved && resolved.unresolved) resolved = null;
+    } catch {}
+  }
+
+  if (env && env.DB) {
+    try {
+      const acct = await env.DB.prepare(
+        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE id = ? OR username = ? COLLATE NOCASE OR key_hash = ? LIMIT 1"
+      ).bind(target, target, target).first();
+      if (acct) {
+        username = acct.username;
+        updatedAt = acct.last_active_at || acct.created_at || 0;
+        const inst = await env.DB.prepare(
+          "SELECT * FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
+        ).bind(acct.id).first();
+        if (inst) {
+          updatedAt = Math.max(updatedAt, inst.updated_at || 0);
+          installToken = inst.legacy_cfg_id || inst.token_hash || target;
+          if (!resolved) {
+            try {
+              const parsed = JSON.parse(inst.config_json);
+              resolved = {
+                entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+                ...readInstallConfigFields(parsed),
+                trackOwner: acct.username,
+              };
+            } catch {}
+          }
+        }
+      }
+    } catch (e) {
+      console.error("nuvio tv sync: DB account lookup failed:", e);
+    }
+  }
+
+  if (!resolved && username && env && env.CONFIGS) {
+    try {
+      const userSyncRaw = await env.CONFIGS.get(`creatorsync:${username}`);
+      if (userSyncRaw) {
+        const parsedSync = JSON.parse(userSyncRaw);
+        if (parsedSync) {
+          const list = Array.isArray(parsedSync.entries) ? parsedSync.entries : (Array.isArray(parsedSync.lists) ? parsedSync.lists : []);
+          resolved = {
+            entries: list,
+            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(parsedSync) : {}),
+            randomizeItemsDaily: parsedSync.randomizeItemsDaily || parsedSync.shuffleItems,
+            trackOwner: username,
+          };
+          updatedAt = Math.max(updatedAt, parsedSync.updatedAt || 0);
+        }
+      }
+    } catch {}
+  }
+
+  return { resolved, installToken, username, updatedAt };
+}
+
+async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
+  if (path !== "/api/nuvio-tv/sync" && (path.indexOf("/api/nuvio-tv/sync/") !== 0)) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  }
+
+  let target = "default";
+  if (path.indexOf("/api/nuvio-tv/sync/") === 0) {
+    target = path.slice("/api/nuvio-tv/sync/".length).trim();
+  } else if (path === "/api/nuvio-tv/sync") {
+    target = (url.searchParams.get("target") || "").trim() || "default";
+  }
+  if (!target || target === ":target") target = "default";
+
+  if (target === "default") return buildNuvioTvSyncDefaultResponse(url);
+
+  const { resolved, installToken, username, updatedAt } = await resolveNuvioTvTargetData(target, env);
+  if (!resolved) {
+    return json({ ok: false, error: "Target not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
+  const manifestUrl = (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
+    ? `${url.origin}/${installToken}/manifest.json`
+    : installToken.length === 43
+      ? `${url.origin}/i/${installToken}/manifest.json`
+      : `${url.origin}/${installToken}/manifest.json`;
+
+  const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
+  const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);
+  const catalogIds = entries.map((e) => e.id || e.catalogId || (typeof slugifyServer === "function" ? slugifyServer(e.url || e.name || "") : (e.name || "catalog")));
+  const catalogOrder = [...catalogIds];
+
+  let userCollections = null;
+  if (username && env && env.CONFIGS) {
+    try {
+      const storedPresets = await env.CONFIGS.get(`creatorsyncpresets:${username}`);
+      if (storedPresets) {
+        const parsedPresets = JSON.parse(storedPresets);
+        if (Array.isArray(parsedPresets.customCollections) && parsedPresets.customCollections.length) {
+          userCollections = parsedPresets.customCollections;
+        }
+      }
+    } catch {}
+  }
+  const formattedCollections = formatNuvioUserCollections(userCollections);
+
+  let userChannelsRaw = null;
+  if (username && env && env.CONFIGS) {
+    try {
+      const storedChannels = await env.CONFIGS.get(`creatorsyncchannels:${username}`);
+      if (storedChannels) userChannelsRaw = JSON.parse(storedChannels);
+    } catch {}
+  }
+  const channels = formatNuvioUserChannels(userChannelsRaw);
+
+  const payloadToHash = JSON.stringify({ catalogIds, collections: formattedCollections, channels, randomizeItemsDaily, updatedAt });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payloadToHash));
+  const versionHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  return jsonPublic({
+    ok: true,
+    versionHash,
+    manifestUrl,
+    randomizeItemsDaily,
+    catalogIds,
+    catalogOrder,
+    collections: formattedCollections,
+    channels,
+  }, 200, {
+    ...corsHeaders(),
+    "Cache-Control": "public, max-age=300",
+  });
+}
+
 async function handleFetch(request, env, ctx) {
     // Point the env-backed API key globals (00_constants.js) at whatever
     // this Worker owner configured, before anything can read them. A feature
@@ -443,8 +676,8 @@ async function handleFetch(request, env, ctx) {
       request.session = sessionAuth.session;
     }
 
-    // /api/installs (an account's install links) and the admin status of the
-    // install move -- 27_installs.js.
+    const nuvioTvSyncResponse = await handleNuvioTvSyncRoute(request, env, ctx, url, path);
+    if (nuvioTvSyncResponse) return nuvioTvSyncResponse;
     const installsResponse = await handleInstallsApi(request, env, url, path);
     if (installsResponse) return installsResponse;
     // /api/connections (an account's Trakt, MDBList, Simkl and TMDB

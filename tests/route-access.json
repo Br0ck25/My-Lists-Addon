@@ -111,6 +111,7 @@
   "/api/mdblist/oauth/start": "integration",
   "/api/me": "account",
   "/api/me/sessions": "account",
+  "/api/nuvio-tv/sync": "public",
   "/api/person-credits": "public",
   "/api/person-search": "public",
   "/api/person-show-episodes": "public",

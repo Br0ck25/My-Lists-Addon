@@ -86,9 +86,11 @@ async function builderConfigurePage(request, env, ctx, url) {
 // /:config/manifest.json, /manifest.json and /:config/subtitles/..., at their original place. Returns a Response promise, or null.
 function handleStremioManifestRoutes(request, env, ctx, url, path) {
   let m = path.match(/^\/([^/]+)\/manifest\.json$/);
+  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/manifest\.json$/);
   if (m) return installManifest(request, env, ctx, url, m);
-  if (path === "/manifest.json") return bareManifest(request, url);
+  if (path === "/manifest.json" || path.indexOf("/c/manifest.json") === 0) return bareManifest(request, url);
   m = path.match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
+  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
   if (m) return subtitlesPing(request, env, ctx, path, m);
   return null;
 }
@@ -98,7 +100,7 @@ async function installManifest(request, env, ctx, url, m) {
   // If this looks like a browser page-load (e.g. wako sent you here for
   // "Configure") rather than a JSON fetch by the app, send the user to
   // the actual editable configure page instead of showing raw JSON.
-  if (isBrowserNavigation(request)) {
+  if (isBrowserNavigation(request) && m[1] !== "nuvio-default") {
     return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
   }
   const resolved = await resolveConfig(m[1], env);
@@ -172,6 +174,7 @@ async function subtitlesPing(request, env, ctx, path, m) {
 // /:config/catalog/:type/:id.json, at its original place. Returns a Response promise, or null.
 function handleStremioCatalogRoute(request, env, ctx, url, path) {
   let m = path.match(/^(?:\/([^/]+))?\/catalog\/([^/]+)\/(.+)\.json$/);
+  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^(?:\/([^/]+))?\/catalog\/([^/]+)\/(.+)\.json$/);
   if (m) return stremioCatalogRow(request, env, ctx, url, m);
   return null;
 }

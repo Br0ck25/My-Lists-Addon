@@ -13,6 +13,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { describe, it } from "node:test";
 import { makeEnv, makeD1, makeKv, call, worker } from "./harness.mjs";
@@ -167,7 +168,7 @@ describe("BA-003: the CSP stops forms posting to another site", () => {
   });
 
   it("is still the same-origin forms the site itself posts", () => {
-    const src = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../src/admin/03_admin.js"), "utf8");
+    const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/admin/03_admin.js"), "utf8");
     const actions = [...src.matchAll(/<form[^>]*action="([^"]+)"/g)].map((m) => m[1]);
     assert.ok(actions.length >= 1);
     for (const a of actions) assert.ok(a.startsWith("/"), `form action ${a} is same-origin`);
