@@ -2540,7 +2540,7 @@ tryAutoRestoreCreatorProfile();
     return;
   }
   const hash = location.hash || '';
-  if (deadListLink(path, hash)) return;
+  if (unknownListLink(path, hash)) return;
   if (hash.startsWith('#/list?')) {
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     openListDetailsPage(params.get('name') || 'List', params.get('type') || 'movie', params.get('url') || '', null, { skipPushState: true });

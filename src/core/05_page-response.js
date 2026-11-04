@@ -79,6 +79,7 @@ function notFoundForPeople(request, path, fallback) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Not found - My Lists Addon</title>
 <link rel="stylesheet" href="/app.css">
+<script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
 <style nonce="${CSP_NONCE_PLACEHOLDER}">
 body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: var(--color-bg-canvas); color: var(--color-text-primary); font-family: system-ui, sans-serif; }
 main { max-width: 28rem; text-align: center; }

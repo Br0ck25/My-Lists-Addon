@@ -16,6 +16,12 @@ describe("not-found answers for people", () => {
     assert.doesNotMatch(res.text, /"ok":false/);
   });
 
+  it("the 404 page follows the visitor's dark-mode choice, as the app does", async () => {
+    const res = await call(makeEnv(), "/foo", { headers: NAV });
+    assert.match(res.text, /localStorage\.getItem\('theme'\)[\s\S]*dark-theme/);
+    assert.match(res.text, /<script nonce="[^"]+">/, "the inline script carries the CSP nonce");
+  });
+
   it("an unknown address in a browser gets an HTML page with a link home", async () => {
     const res = await call(makeEnv(), "/foo", { headers: NAV });
     assert.equal(res.status, 404);

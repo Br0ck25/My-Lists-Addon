@@ -34,6 +34,21 @@ describe("dead links do not invent a page", () => {
     assert.match(r.notice || "", /list/i);
   });
 
+  it("the app's own Airing Next address reopens that list on reload", () => {
+    const r = open("/lists/airing-next");
+    assert.ok(r.opened, "Airing Next is a real list the app writes into the address bar");
+    assert.equal(r.notice, null);
+  });
+
+  it("an address the page cannot read is not called removed (it may be a list the person still has)", () => {
+    for (const p of ["/lists/bogus", "/lists/mdblist/12345:my-mdb-my-mdb", "/lists/trakt/trakt-thing"]) {
+      const r = open(p);
+      assert.equal(r.opened, null, p);
+      assert.ok(r.notice, p + " still leaves the empty list view");
+      assert.doesNotMatch(r.notice, /removed/i, p);
+    }
+  });
+
   it("a one-part channel address (network channels such as /channels/tlc) still opens", () => {
     const r = open("/channels/tlc");
     assert.ok(r.opened, "network channel links keep working");
