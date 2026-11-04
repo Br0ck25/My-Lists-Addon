@@ -532,5 +532,9 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
     assert.ok(featuresRes.text.includes("claimNuvioTvDeviceCode"), "bundle includes claimNuvioTvDeviceCode");
     assert.ok(featuresRes.text.includes("handleNuvioTvPostAuth"), "bundle includes handleNuvioTvPostAuth");
     assert.ok(featuresRes.text.includes("initNuvioTvOnboarding"), "bundle includes initNuvioTvOnboarding");
+    assert.ok(featuresRes.text.includes("openNuvioTvPairingModal"), "bundle includes openNuvioTvPairingModal");
+    assert.ok(featuresRes.text.includes("openNuvioTvAuthModal"), "bundle includes openNuvioTvAuthModal");
+    assert.ok(featuresRes.text.includes("submitNuvioTvLink"), "bundle includes submitNuvioTvLink");
+    assert.ok(featuresRes.text.includes("showNuvioTvPairingSuccessModal"), "bundle includes showNuvioTvPairingSuccessModal");
   });
 });
