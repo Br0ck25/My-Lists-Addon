@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7a4d67183b";
+const WORKER_BUILD = "c43d4e78ca";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -30741,13 +30741,13 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
     // every other "See All" in the app.
     let seeAllLink = '';
     if (p.movieUrl && p.showUrl) {
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([label, "movie", p.movieUrl])}">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="#" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-prevent data-act-args="${appActArgsServer([label, "movie", p.movieUrl])}">See All &rsaquo;</a>`;
       btns = `
         <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.movieUrl, "movie", true, group])}">+ Movies</button>
         <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.showUrl, "series", true, group])}">+ Shows</button>`;
     } else if (p.url && p.type) {
       const btnText = p.type === 'movie' ? '+ Movies' : '+ Shows';
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, p.type, p.url])}">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="#" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-prevent data-act-args="${appActArgsServer([p.name, p.type, p.url])}">See All &rsaquo;</a>`;
       btns = `
         <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([p.name, p.url, p.type, true, group])}">${btnText}</button>`;
     }
@@ -30962,7 +30962,7 @@ function buildCombinedChartsHtml() {
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
         </div>
-        <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
+        <a href="#" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-prevent data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
       <div class="discover-chart-btns">
         <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.movieUrls, "movie", "Combined Charts"])}">+ Movies</button>
@@ -42157,7 +42157,7 @@ function openSupportGoal() {
     '</div>' +
     '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">It is free, with no ads. Donations only cover the hosting bill.</p>' +
     '<div class="u-fs-v_font_size_2xl u-fw-800">' + supportMoney(g.raised) + ' <small class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted">of ' + supportMoney(g.goal) + ' this month</small></div>' +
-    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? 'var(--color-success)' : 'linear-gradient(90deg,var(--color-warn),var(--color-warn-hover))') + ';"></i></div>' +
     '<div class="u-gap-6px u-fs-v_font_size_sm u-c-v_text u-mb-14px" style="display:grid;">' +
       row('Hosting this month', supportMoney(g.goal), false) +
       row('Given so far', supportMoney(g.raised), false) +
@@ -42239,7 +42239,7 @@ if (typeof document !== 'undefined') {
 
 function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
-  const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
+  const iconColor = isSuccess ? 'var(--accent-2)' : 'var(--danger)';
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
@@ -42298,7 +42298,7 @@ function showAppBusy(title, message) {
 
 function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = true) {
   const icon = isDanger ? '&#x26A0;' : '?';
-  const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
+  const iconColor = isDanger ? 'var(--danger)' : 'var(--accent-2)';
   // White text straight on --danger measures about 3.6:1. --color-danger-text
   // with --color-text-inverse is the pair for text on a danger fill: white on
   // #D70015 (5.4:1) in light, black on #FF453A (6.2:1) in dark.
@@ -45102,7 +45102,7 @@ function pickUpTraktTokenFromUrl() {
     };
     const isRateLimit = detail.includes('1015') || detail.includes('429') || err === 'exchange_failed';
     const msg = isRateLimit 
-      ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead...'
+      ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead…'
       : (messages[err] || ('Could not connect to Trakt (' + err + (detail ? ': ' + detail : '') + ').'));
 
     if (typeof showAppAlert === 'function') {
@@ -45174,8 +45174,8 @@ async function startTraktDeviceLogin(retried) {
   const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   
   if (modal) modal.style.display = 'flex';
-  if (codeEl) codeEl.innerText = 'LOADING...';
-  if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt...';
+  if (codeEl) codeEl.innerText = 'LOADING…';
+  if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt…';
 
   try {
     const got = await requestTraktDeviceCode(traktKey);
@@ -45186,7 +45186,7 @@ async function startTraktDeviceLogin(retried) {
     // (the server's message names the wait) rather than retried too early.
     if (got.status === 429 && !retried && (Number(data.retryAfter) || 2) <= 30) {
       const waitSec = Math.max(1, Number(data.retryAfter) || 2);
-      if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds...';
+      if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds…';
       setTimeout(() => { startTraktDeviceLogin(true); }, waitSec * 1000);
       return;
     }
@@ -45203,7 +45203,7 @@ async function startTraktDeviceLogin(retried) {
       linkEl.href = data.verification_url || 'https://trakt.tv/activate';
     }
     if (statusEl) {
-      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval...';
+      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval…';
     }
 
     const deviceCode = data.device_code;
@@ -55425,7 +55425,7 @@ async function openItemDetailsModal(id, type, opts) {
   }
   
   const body = document.getElementById('itemDetailsBody');
-  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB...</p>';
+  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB…</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -55677,7 +55677,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   container.style.display = 'block';
   if (grid.innerHTML.trim() !== '') return; // already loaded
   
-  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes...</div>';
+  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes…</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -56937,9 +56937,9 @@ function setCatalogSearchFilter(filter, btn) {
   currentCatalogSearchType = filter;
   const inputEl = document.getElementById('catalogSearchInput');
   if (inputEl) {
-    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
-    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
-    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title…';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title…';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists…';
   }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
@@ -57177,7 +57177,7 @@ async function runCatalogSearch() {
   }
 
   const thisSeq = ++currentTitleSearchSequence;
-  resEl.innerHTML = '<p><small>Searching...</small></p>';
+  resEl.innerHTML = '<p><small>Searching…</small></p>';
 
   try {
     fetch(ORIGIN + '/api/track-search', {
@@ -57278,10 +57278,10 @@ function setChannelSearchType(type, btn) {
   const input = document.getElementById('channelSearchInput');
   if (input) {
     input.placeholder = channelSearchType === 'movie'
-      ? 'Search a movie by name...'
+      ? 'Search a movie by name…'
       : (channelSearchType === 'person'
-        ? 'Search an actor, director or creator...'
-        : 'Search a show by name...');
+        ? 'Search an actor, director or creator…'
+        : 'Search a show by name…');
   }
   const box = document.getElementById('channelSearchResult');
   const epBox = document.getElementById('channelEpisodePicker');
@@ -58530,7 +58530,7 @@ function renderChannelPosterPicker() {
   // 1. Custom Channel Poster Option
   let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
     '<div class="channel-poster-thumb-wrap custom-preview u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100 u-fd-column u-ai-center u-jc-center u-gap-4px u-p-6px u-bd-1px_solid_rgba_0_122_255_0_3" style="display:flex;">' +
-      '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" style="color:var(--color-brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
       '</svg>' +
@@ -58613,7 +58613,7 @@ function applyChannelPosterUrl() {
   const cards = document.querySelectorAll('#channelPosterChoicesGrid .channel-poster-choice');
   cards.forEach((card) => card.classList.remove('selected'));
 
-  if (status) { status.textContent = 'Poster URL applied \u2713 (preview loading\u2026)'; status.style.color = 'var(--success, #30d158)'; }
+  if (status) { status.textContent = 'Poster URL applied \u2713 (preview loading\u2026)'; status.style.color = 'var(--color-success-text)'; }
   if (preview) preview.style.display = 'flex';
 
   if (previewImg) {
@@ -58626,7 +58626,7 @@ function applyChannelPosterUrl() {
       settled = true;
       if (ok) {
         previewImg.style.display = '';
-        if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--success, #30d158)'; }
+        if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
       } else {
         previewImg.style.display = 'none';
         if (status) {
@@ -58666,7 +58666,7 @@ function syncChannelPosterUrlInput() {
       previewImg.src = channelDraftPoster;
       previewImg.style.display = '';
     }
-    if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--success, #30d158)'; }
+    if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
     if (preview) preview.style.display = 'flex';
   } else {
     urlInput.value = '';
@@ -70519,7 +70519,7 @@ function renderChannelMergeList() {
           remainingChannels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           const options = remainingChannels.map((c) => '<option value="' + escapeAttr(c.channelId) + '">' + escapeHtml(c.name) + ' (' + (c.items ? c.items.length : 0) + ' ep)</option>').join('');
           addSelectHtml = '<select class="merge-add-channel-select" data-act="appActAddChannelToMerge" data-act-args="' + appActArgs([merged.mergedId, '@self']) + '">' +
-            '<option value="">+ Add channel...</option>' +
+            '<option value="">+ Add channel…</option>' +
             options +
           '</select>';
         } else {
@@ -71006,11 +71006,11 @@ function updateCustomListSearchPlaceholder() {
   const input = document.getElementById('customListSearchInput');
   if (!input) return;
   if (customListDraftType === 'movie') {
-    input.placeholder = 'Search a movie to add...';
+    input.placeholder = 'Search a movie to add…';
   } else if (customListDraftType === 'series') {
-    input.placeholder = 'Search a show to add...';
+    input.placeholder = 'Search a show to add…';
   } else {
-    input.placeholder = 'Search a movie or show to add...';
+    input.placeholder = 'Search a movie or show to add…';
   }
 }
 
@@ -81677,7 +81677,7 @@ async function submitCreateListModal() {
   let initialItems = [];
   
   const btn = document.getElementById('createListModalBtn');
-  btn.innerText = 'Creating...';
+  btn.innerText = 'Creating…';
   btn.disabled = true;
 
   try {
@@ -81906,7 +81906,7 @@ function deleteExternalListDirect(provider, listId, listName, btn) {
     async () => {
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Deleting...';
+        btn.textContent = 'Deleting…';
       }
 
       const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
@@ -83480,7 +83480,7 @@ function updatePictoriumUrlHint(v) {
   const hint = document.getElementById('pictoriumUrlHint');
   if (!hint) return;
   const problem = pictoriumLinkProblem(v);
-  hint.style.color = problem ? 'var(--danger, #d33)' : 'var(--muted)';
+  hint.style.color = problem ? 'var(--color-danger-text)' : 'var(--muted)';
   if (problem) hint.textContent = problem;
 }
 window.updatePictoriumUrlHint = updatePictoriumUrlHint;
@@ -83494,7 +83494,7 @@ async function testRpdbKey(btn) {
   if (!input || !status) return;
   const say = (text, color) => { status.textContent = text; status.style.color = color || 'var(--muted)'; };
   const key = String(input.value || '').trim();
-  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--danger, #d33)'); return; }
+  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--color-danger-text)'); return; }
   if (btn) btn.disabled = true;
   say('Checking…');
   try {
@@ -83504,13 +83504,13 @@ async function testRpdbKey(btn) {
       body: JSON.stringify({ key: key }),
     });
     const data = await res.json().catch(() => null);
-    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--danger, #d33)'); return; }
-    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--danger, #d33)'); return; }
+    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--color-danger-text)'); return; }
+    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--color-danger-text)'); return; }
     say(data.used != null && data.limit != null
       ? 'The key works. ' + data.used.toLocaleString() + ' of ' + data.limit.toLocaleString() + ' requests used this month.'
       : 'The key works.');
   } catch (e) {
-    say('Could not check the key just now.', 'var(--danger, #d33)');
+    say('Could not check the key just now.', 'var(--color-danger-text)');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -88392,9 +88392,9 @@ async function copyLink(url) {
     if (urlBtn) {
       const oldUrlHtml = urlBtn.innerHTML;
       urlBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Copied!</span>';
-      urlBtn.style.background = 'var(--success)';
-      urlBtn.style.color = '#ffffff';
-      urlBtn.style.borderColor = 'var(--success)';
+      urlBtn.style.background = 'var(--color-success-subtle)';
+      urlBtn.style.color = 'var(--color-success-text)';
+      urlBtn.style.borderColor = 'var(--color-success-text)';
       setTimeout(() => {
         urlBtn.innerHTML = oldUrlHtml;
         urlBtn.style.background = '';
@@ -90636,10 +90636,10 @@ ${UTILITY_CSS}
     border: none;
   }
   .btn-primary {
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
   }
-  .btn-primary:hover { background: var(--color-brand-hover); }
+  .btn-primary:hover { background: var(--color-brand-fill-hover); }
   .btn-secondary {
     background: var(--surface);
     color: var(--text);
@@ -90798,8 +90798,8 @@ ${UTILITY_CSS}
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     font-weight: 800;
     font-size: 0.85rem;
     display: flex;

@@ -1859,9 +1859,9 @@ async function copyLink(url) {
     if (urlBtn) {
       const oldUrlHtml = urlBtn.innerHTML;
       urlBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Copied!</span>';
-      urlBtn.style.background = 'var(--success)';
-      urlBtn.style.color = '#ffffff';
-      urlBtn.style.borderColor = 'var(--success)';
+      urlBtn.style.background = 'var(--color-success-subtle)';
+      urlBtn.style.color = 'var(--color-success-text)';
+      urlBtn.style.borderColor = 'var(--color-success-text)';
       setTimeout(() => {
         urlBtn.innerHTML = oldUrlHtml;
         urlBtn.style.background = '';
@@ -4103,10 +4103,10 @@ ${UTILITY_CSS}
     border: none;
   }
   .btn-primary {
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
   }
-  .btn-primary:hover { background: var(--color-brand-hover); }
+  .btn-primary:hover { background: var(--color-brand-fill-hover); }
   .btn-secondary {
     background: var(--surface);
     color: var(--text);
@@ -4265,8 +4265,8 @@ ${UTILITY_CSS}
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     font-weight: 800;
     font-size: 0.85rem;
     display: flex;

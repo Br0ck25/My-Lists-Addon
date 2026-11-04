@@ -2424,7 +2424,7 @@ function openSupportGoal() {
     '</div>' +
     '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">It is free, with no ads. Donations only cover the hosting bill.</p>' +
     '<div class="u-fs-v_font_size_2xl u-fw-800">' + supportMoney(g.raised) + ' <small class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted">of ' + supportMoney(g.goal) + ' this month</small></div>' +
-    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? 'var(--color-success)' : 'linear-gradient(90deg,var(--color-warn),var(--color-warn-hover))') + ';"></i></div>' +
     '<div class="u-gap-6px u-fs-v_font_size_sm u-c-v_text u-mb-14px" style="display:grid;">' +
       row('Hosting this month', supportMoney(g.goal), false) +
       row('Given so far', supportMoney(g.raised), false) +
@@ -2506,7 +2506,7 @@ if (typeof document !== 'undefined') {
 
 function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
-  const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
+  const iconColor = isSuccess ? 'var(--accent-2)' : 'var(--danger)';
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
@@ -2565,7 +2565,7 @@ function showAppBusy(title, message) {
 
 function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = true) {
   const icon = isDanger ? '&#x26A0;' : '?';
-  const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
+  const iconColor = isDanger ? 'var(--danger)' : 'var(--accent-2)';
   // White text straight on --danger measures about 3.6:1. --color-danger-text
   // with --color-text-inverse is the pair for text on a danger fill: white on
   // #D70015 (5.4:1) in light, black on #FF453A (6.2:1) in dark.

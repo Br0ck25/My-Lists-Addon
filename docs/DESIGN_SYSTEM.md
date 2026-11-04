@@ -389,6 +389,7 @@ Still open. Do not copy these; fix them opportunistically:
 | 6 | Unused tokens: `--color-border-focus`, `--shadow-focus`, `--control-touch-min`, `--font-display`, some `--space-*` | tokens | start using them |
 | 7 | No tooltip, generic alert/banner, empty-state or button-loading component | — | build once, add here |
 | 8 | The light primary blue is `#0066D6`, deliberately darker than Apple's `#007AFF`; any leftover `#007AFF` is legacy | — | tokens |
+| 9 | Raw hex colours in the client scripts are allowed in two places only: the 8-colour avatar palette (`var palette = [` in `16_client-row-core.js`, decorative) and the browser `theme-color` meta. `tests/design-system.test.mjs` scans `src/client` for any other | client scripts | use a token |
 
 ---
 

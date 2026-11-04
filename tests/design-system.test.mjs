@@ -332,3 +332,38 @@ describe("design system: the guide page does not scroll sideways (UI-13)", () =>
     assert.match(rule[1], /overflow-wrap:\s*anywhere/);
   });
 });
+
+describe("design system: the page scripts follow the same rules as the stylesheet (UI-14)", () => {
+  // The component CSS is checked above; colours and wording written from JavaScript
+  // strings were not. Whole-line // comments are skipped.
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const scan = (dirs, test) => {
+    const found = [];
+    for (const f of listSources(root).filter((n) => dirs.some((d) => n.startsWith(d)) && /\d\d_.*\.js$/.test(n))) {
+      fs.readFileSync(path.join(root, f), "utf8").split("\n").forEach((line, i) => {
+        if (/^\s*\/\//.test(line)) return;
+        if (test(line)) found.push(`${f}:${i + 1}`);
+      });
+    }
+    return found;
+  };
+
+  it("no hard-coded hex colour in the client scripts (the avatar palette and the browser theme-color meta are the documented exceptions)", () => {
+    const hex = /['"( =:]#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b(?![\w-])/;
+    assert.deepEqual(scan(["src/client/"], (l) => hex.test(l) && !/var palette = \[|theme-color/.test(l)), []);
+  });
+
+  it("no colour fallback inside var(--x, #hex), which can differ from the real token", () => {
+    assert.deepEqual(scan(["src/client/"], (l) => /var\(--[\w-]+,\s*#/.test(l)), []);
+  });
+
+  it("no javascript: links (the page's CSP refuses them)", () => {
+    assert.deepEqual(scan(["src/client/", "src/page/", "src/catalog/"], (l) => /href=\\?["']javascript:/.test(l)), []);
+  });
+
+  it("visible texts use the ellipsis character, not three dots", () => {
+    const dots = /(?<=[A-Za-z0-9 ,])\.\.\.(?=['"`<]|\\n|&)/;
+    // Data, not interface: a show called "And Just Like That..." and channel descriptions.
+    assert.deepEqual(scan(["src/client/"], (l) => dots.test(l) && !/showName|"description"/.test(l)), []);
+  });
+});

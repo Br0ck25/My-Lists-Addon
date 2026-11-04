@@ -859,7 +859,7 @@ function pickUpTraktTokenFromUrl() {
     };
     const isRateLimit = detail.includes('1015') || detail.includes('429') || err === 'exchange_failed';
     const msg = isRateLimit 
-      ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead...'
+      ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead…'
       : (messages[err] || ('Could not connect to Trakt (' + err + (detail ? ': ' + detail : '') + ').'));
 
     if (typeof showAppAlert === 'function') {
@@ -931,8 +931,8 @@ async function startTraktDeviceLogin(retried) {
   const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   
   if (modal) modal.style.display = 'flex';
-  if (codeEl) codeEl.innerText = 'LOADING...';
-  if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt...';
+  if (codeEl) codeEl.innerText = 'LOADING…';
+  if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt…';
 
   try {
     const got = await requestTraktDeviceCode(traktKey);
@@ -943,7 +943,7 @@ async function startTraktDeviceLogin(retried) {
     // (the server's message names the wait) rather than retried too early.
     if (got.status === 429 && !retried && (Number(data.retryAfter) || 2) <= 30) {
       const waitSec = Math.max(1, Number(data.retryAfter) || 2);
-      if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds...';
+      if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds…';
       setTimeout(() => { startTraktDeviceLogin(true); }, waitSec * 1000);
       return;
     }
@@ -960,7 +960,7 @@ async function startTraktDeviceLogin(retried) {
       linkEl.href = data.verification_url || 'https://trakt.tv/activate';
     }
     if (statusEl) {
-      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval...';
+      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval…';
     }
 
     const deviceCode = data.device_code;

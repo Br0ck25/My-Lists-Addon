@@ -3816,7 +3816,7 @@ async function openItemDetailsModal(id, type, opts) {
   }
   
   const body = document.getElementById('itemDetailsBody');
-  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB...</p>';
+  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB…</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -4068,7 +4068,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   container.style.display = 'block';
   if (grid.innerHTML.trim() !== '') return; // already loaded
   
-  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes...</div>';
+  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes…</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -5328,9 +5328,9 @@ function setCatalogSearchFilter(filter, btn) {
   currentCatalogSearchType = filter;
   const inputEl = document.getElementById('catalogSearchInput');
   if (inputEl) {
-    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
-    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
-    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title…';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title…';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists…';
   }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
@@ -5568,7 +5568,7 @@ async function runCatalogSearch() {
   }
 
   const thisSeq = ++currentTitleSearchSequence;
-  resEl.innerHTML = '<p><small>Searching...</small></p>';
+  resEl.innerHTML = '<p><small>Searching…</small></p>';
 
   try {
     fetch(ORIGIN + '/api/track-search', {

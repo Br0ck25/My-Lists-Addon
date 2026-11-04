@@ -49,10 +49,10 @@ function setChannelSearchType(type, btn) {
   const input = document.getElementById('channelSearchInput');
   if (input) {
     input.placeholder = channelSearchType === 'movie'
-      ? 'Search a movie by name...'
+      ? 'Search a movie by name…'
       : (channelSearchType === 'person'
-        ? 'Search an actor, director or creator...'
-        : 'Search a show by name...');
+        ? 'Search an actor, director or creator…'
+        : 'Search a show by name…');
   }
   const box = document.getElementById('channelSearchResult');
   const epBox = document.getElementById('channelEpisodePicker');
@@ -1301,7 +1301,7 @@ function renderChannelPosterPicker() {
   // 1. Custom Channel Poster Option
   let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
     '<div class="channel-poster-thumb-wrap custom-preview u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100 u-fd-column u-ai-center u-jc-center u-gap-4px u-p-6px u-bd-1px_solid_rgba_0_122_255_0_3" style="display:flex;">' +
-      '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" style="color:var(--color-brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
       '</svg>' +
@@ -1384,7 +1384,7 @@ function applyChannelPosterUrl() {
   const cards = document.querySelectorAll('#channelPosterChoicesGrid .channel-poster-choice');
   cards.forEach((card) => card.classList.remove('selected'));
 
-  if (status) { status.textContent = 'Poster URL applied \u2713 (preview loading\u2026)'; status.style.color = 'var(--success, #30d158)'; }
+  if (status) { status.textContent = 'Poster URL applied \u2713 (preview loading\u2026)'; status.style.color = 'var(--color-success-text)'; }
   if (preview) preview.style.display = 'flex';
 
   if (previewImg) {
@@ -1397,7 +1397,7 @@ function applyChannelPosterUrl() {
       settled = true;
       if (ok) {
         previewImg.style.display = '';
-        if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--success, #30d158)'; }
+        if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
       } else {
         previewImg.style.display = 'none';
         if (status) {
@@ -1437,7 +1437,7 @@ function syncChannelPosterUrlInput() {
       previewImg.src = channelDraftPoster;
       previewImg.style.display = '';
     }
-    if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--success, #30d158)'; }
+    if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
     if (preview) preview.style.display = 'flex';
   } else {
     urlInput.value = '';
@@ -13290,7 +13290,7 @@ function renderChannelMergeList() {
           remainingChannels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           const options = remainingChannels.map((c) => '<option value="' + escapeAttr(c.channelId) + '">' + escapeHtml(c.name) + ' (' + (c.items ? c.items.length : 0) + ' ep)</option>').join('');
           addSelectHtml = '<select class="merge-add-channel-select" data-act="appActAddChannelToMerge" data-act-args="' + appActArgs([merged.mergedId, '@self']) + '">' +
-            '<option value="">+ Add channel...</option>' +
+            '<option value="">+ Add channel…</option>' +
             options +
           '</select>';
         } else {

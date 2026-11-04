@@ -6193,7 +6193,7 @@ async function submitCreateListModal() {
   let initialItems = [];
   
   const btn = document.getElementById('createListModalBtn');
-  btn.innerText = 'Creating...';
+  btn.innerText = 'Creating…';
   btn.disabled = true;
 
   try {
@@ -6422,7 +6422,7 @@ function deleteExternalListDirect(provider, listId, listName, btn) {
     async () => {
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Deleting...';
+        btn.textContent = 'Deleting…';
       }
 
       const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
