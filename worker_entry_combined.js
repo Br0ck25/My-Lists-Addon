@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9ae42fd516";
+const WORKER_BUILD = "ffb8e18f09";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -44296,7 +44296,7 @@ async function runMyMdblistLists() {
     }
     renderMyMdblistLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your MDBList lists.</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your MDBList lists.</p>';
   }
 }
 
@@ -45303,7 +45303,7 @@ async function runMyPrivateTraktLists() {
     }
     renderMyPrivateTraktLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your Trakt lists.</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your Trakt lists.</p>';
   }
 }
 
@@ -45940,7 +45940,7 @@ async function runMyTmdbLists() {
     }
     renderMyTmdbLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your TMDB lists: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your TMDB lists: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</p>';
   }
 }
 
@@ -46856,7 +46856,7 @@ async function runMySimklLists() {
     renderMySimklLists(data.lists);
   } catch (e) {
     console.error('Simkl lists load error:', e);
-    box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml((e && e.message) ? e.message : 'Network error loading your Simkl lists.') + '</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml((e && e.message) ? e.message : 'Could not load your Simkl lists.') + '</p>';
   }
 }
 

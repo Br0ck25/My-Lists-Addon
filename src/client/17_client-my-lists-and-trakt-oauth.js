@@ -53,7 +53,7 @@ async function runMyMdblistLists() {
     }
     renderMyMdblistLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your MDBList lists.</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your MDBList lists.</p>';
   }
 }
 
@@ -1060,7 +1060,7 @@ async function runMyPrivateTraktLists() {
     }
     renderMyPrivateTraktLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your Trakt lists.</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your Trakt lists.</p>';
   }
 }
 
@@ -1697,7 +1697,7 @@ async function runMyTmdbLists() {
     }
     renderMyTmdbLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your TMDB lists: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your TMDB lists: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</p>';
   }
 }
 
@@ -2613,7 +2613,7 @@ async function runMySimklLists() {
     renderMySimklLists(data.lists);
   } catch (e) {
     console.error('Simkl lists load error:', e);
-    box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml((e && e.message) ? e.message : 'Network error loading your Simkl lists.') + '</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml((e && e.message) ? e.message : 'Could not load your Simkl lists.') + '</p>';
   }
 }
 
