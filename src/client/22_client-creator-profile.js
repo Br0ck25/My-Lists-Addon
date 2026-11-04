@@ -1157,7 +1157,7 @@ function renderTrackPlaybackSection() {
       '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
       '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
-        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
+        '<input type="text" readonly aria-label="Webhook address" id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
         '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="copyScrobbleWebhookUrl">Copy Webhook URL</button>' +
         '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been.">Regenerate</button>' +
       '</div>' +

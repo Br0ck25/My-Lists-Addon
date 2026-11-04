@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "dac21d770c";
+const WORKER_BUILD = "5c4a09606e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -70762,6 +70762,38 @@ function unknownListLink(path, hash) {
   showDeepLinkNotFound('list');
   return true;
 }
+// Names and pressed state for the heart buttons on list cards. They are icon-only
+// (a ♡ or ♥ character), built in several places, and swapped between the two by
+// their click handlers, so the state is read from the "liked" class they already
+// carry instead of being kept in step in each place.
+const LIKE_BUTTON_SELECTOR = 'button.searchLikeBtn, button.searchLikeExternalBtn';
+
+function syncLikeButtonA11y(btn) {
+  if (!btn.getAttribute('aria-label')) btn.setAttribute('aria-label', 'Like this list');
+  btn.setAttribute('aria-pressed', btn.classList.contains('liked') ? 'true' : 'false');
+}
+
+(function watchLikeButtons() {
+  if (typeof MutationObserver !== 'function') return;
+  function start() {
+    document.querySelectorAll(LIKE_BUTTON_SELECTOR).forEach(syncLikeButtonA11y);
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        if (m.type === 'attributes') {
+          if (m.target.matches && m.target.matches(LIKE_BUTTON_SELECTOR)) syncLikeButtonA11y(m.target);
+          return;
+        }
+        m.addedNodes.forEach(function (n) {
+          if (n.nodeType !== 1) return;
+          if (n.matches(LIKE_BUTTON_SELECTOR)) syncLikeButtonA11y(n);
+          n.querySelectorAll(LIKE_BUTTON_SELECTOR).forEach(syncLikeButtonA11y);
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 // The nine static pop-up forms carry no z-index of their own (so a dialog opened
 // from one, such as "Could Not Save List", stacks above it by coming later in the
 // page). The other way round -- a form opened while a dialog is already open --
@@ -76586,7 +76618,7 @@ function renderTrackPlaybackSection() {
       '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
       '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
-        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
+        '<input type="text" readonly aria-label="Webhook address" id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
         '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="copyScrobbleWebhookUrl">Copy Webhook URL</button>' +
         '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been.">Regenerate</button>' +
       '</div>' +
