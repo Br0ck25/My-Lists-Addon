@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-03";
+const WORKER_BUILD_DATE = "2026-11-04";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "fa37567593";
+const WORKER_BUILD = "a4b163e906";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1825,7 +1825,13 @@ const DESIGN_TOKENS_CSS = `
     /* Coloured text on a tinted or white surface (>= 4.5:1) */
     --color-success-text:   #1F7A35;
     --color-warn-text:      #B25000;
-    --color-danger-text:    #D70015;
+    --color-danger-text:    #C4001A;
+    /* Backgrounds that carry white text (>= 5:1 with --color-on-brand) */
+    --color-danger-fill:    #D70015;
+    --color-danger-fill-active: #B3001B;
+    /* Brand-coloured text on a tinted or white surface (>= 4.5:1) */
+    --color-brand-text:     #0059BD;
+    --color-warn-fill:      #B25000;
     --color-badge-tmdb:     #00769E;
     --color-badge-mylists:  #7B2FA8;
     --color-badge-imdb:     #7A5C00;
@@ -1984,7 +1990,11 @@ const DESIGN_TOKENS_CSS = `
     --color-success-subtle: rgba(48, 209, 88, 0.18);
     --color-success-text:   #30D158;
     --color-warn-text:      #FF9F0A;
-    --color-danger-text:    #FF453A;
+    --color-danger-fill:    #D1241B;
+    --color-danger-fill-active: #B01E16;
+    --color-brand-text:     #64B0FF;
+    --color-warn-fill:      #B54A00;
+    --color-danger-text:    #FF7A72;
     --color-badge-tmdb:     #5AC8FA;
     --color-badge-mylists:  #BF5AF2;
     --color-badge-imdb:     #F5C518;
@@ -2058,7 +2068,7 @@ const UTILITY_CSS = `
 .u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3) !important}
 .u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35) !important}
 .u-bdc-rgba_255_59_48_0_4{border-color:rgba(255,59,48,0.4) !important}
-.u-bdc-v_color_danger{border-color:var(--color-danger) !important}
+.u-bdc-v_color_danger_fill{border-color:var(--color-danger-fill) !important}
 .u-bdc-v_danger{border-color:var(--danger) !important}
 .u-bdt-1px_dashed_v_border{border-top:1px dashed var(--border) !important}
 .u-bdt-1px_solid_v_border{border-top:1px solid var(--border) !important}
@@ -2079,7 +2089,7 @@ const UTILITY_CSS = `
 .u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08) !important}
 .u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12) !important}
 .u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15) !important}
-.u-bg-v_accent{background:var(--accent) !important}
+.u-bg-v_color_brand_fill{background:var(--color-brand-fill) !important}
 .u-bg-v_bg{background:var(--bg) !important}
 .u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03)) !important}
 .u-bg-v_border{background:var(--border) !important}
@@ -2087,10 +2097,10 @@ const UTILITY_CSS = `
 .u-bg-v_color_bg_elevated{background:var(--color-bg-elevated) !important}
 .u-bg-v_color_bg_overlay{background:var(--color-bg-overlay) !important}
 .u-bg-v_color_bg_sunken{background:var(--color-bg-sunken) !important}
-.u-bg-v_color_danger{background:var(--color-danger) !important}
+.u-bg-v_color_danger_fill{background:var(--color-danger-fill) !important}
 .u-bg-v_color_on_brand{background:var(--color-on-brand) !important}
 .u-bg-v_color_success_subtle{background:var(--color-success-subtle) !important}
-.u-bg-v_color_warn{background:var(--color-warn) !important}
+.u-bg-v_color_warn_fill{background:var(--color-warn-fill) !important}
 .u-bg-v_panel_strong{background:var(--panel-strong) !important}
 .u-bg-v_surface{background:var(--surface) !important}
 .u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04)) !important}
@@ -2147,7 +2157,6 @@ const UTILITY_CSS = `
 .u-flex-1_1_220px{flex:1 1 220px !important}
 .u-flex-1_1_320px{flex:1 1 320px !important}
 .u-flex-none{flex:none !important}
-.u-fs-13px{font-size:13px !important}
 .u-fs-2_5rem{font-size:2.5rem !important}
 .u-fs-2rem{font-size:2rem !important}
 .u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}
@@ -23543,6 +23552,32 @@ function pageResponseWithBody(html, init) {
   return res;
 }
 
+// The 404 a person sees after following a dead link: a short page with a way
+// back to the site. Only for a real browser navigation (see isBrowserNavigation);
+// apps, feeds (.json) and /api/* keep their JSON or plain-text answers.
+function notFoundForPeople(request, path, fallback) {
+  if (!isBrowserNavigation(request) || /\.json$/i.test(path) || path.startsWith("/api/")) return fallback();
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found - My Lists Addon</title>
+<link rel="stylesheet" href="/app.css">
+<script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
+<style nonce="${CSP_NONCE_PLACEHOLDER}">
+body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: var(--color-bg-canvas); color: var(--color-text-primary); font-family: system-ui, sans-serif; }
+main { max-width: 28rem; text-align: center; }
+a { color: var(--color-text-primary); text-decoration: underline; }
+</style></head>
+<body><main>
+<h1>Could not find that page</h1>
+<p>The link may be old, mistyped, or the list or channel may have been removed.</p>
+<p><a href="/">Go to My Lists Addon</a></p>
+</main></body></html>`;
+  return new Response(html, {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
 async function htmlPageResponse(request, fullHtml, extraHeaders) {
   // The ~1.3MB client bundle is lifted out to /app.js?v=<hash> first, so
   // both the body sent below and the ETag computed from it describe the
@@ -30705,13 +30740,13 @@ function buildStreamingRowsHtml(list, labelSuffix, group) {
     // every other "See All" in the app.
     let seeAllLink = '';
     if (p.movieUrl && p.showUrl) {
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([label, "movie", p.movieUrl])}">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="#" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-prevent data-act-args="${appActArgsServer([label, "movie", p.movieUrl])}">See All &rsaquo;</a>`;
       btns = `
         <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.movieUrl, "movie", true, group])}">+ Movies</button>
         <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([label, p.showUrl, "series", true, group])}">+ Shows</button>`;
     } else if (p.url && p.type) {
       const btnText = p.type === 'movie' ? '+ Movies' : '+ Shows';
-      seeAllLink = `<a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, p.type, p.url])}">See All &rsaquo;</a>`;
+      seeAllLink = `<a href="#" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-prevent data-act-args="${appActArgsServer([p.name, p.type, p.url])}">See All &rsaquo;</a>`;
       btns = `
         <button type="button" class="lc-btn secondary" data-act="addRow" data-act-args="${appActArgsServer([p.name, p.url, p.type, true, group])}">${btnText}</button>`;
     }
@@ -30926,7 +30961,7 @@ function buildCombinedChartsHtml() {
         <div class="discover-chart-info">
           <div class="discover-chart-title">${p.name}</div>
         </div>
-        <a href="javascript:void(0)" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
+        <a href="#" class="discover-chart-seeall" data-act="openListDetailsPage" data-act-prevent data-act-args="${appActArgsServer([p.name, "movie", movieUrlsJoined])}">See All &rsaquo;</a>
       </div>
       <div class="discover-chart-btns">
         <button type="button" class="lc-btn secondary" data-act="addCombinedRow" data-act-args="${appActArgsServer([p.name, p.movieUrls, "movie", "Combined Charts"])}">+ Movies</button>
@@ -32104,23 +32139,22 @@ ${seoHeadHtml}
     });
     setTimeout(showApp, 5000);
     var shellSub = (shellRoute && shellRoute.sub) || '';
-
+    var knownSub = function(key, names, fallback) { var v = localStorage.getItem(key); if (v && names.indexOf(v) === -1) { v = fallback; localStorage.setItem(key, v); } return v || fallback; };
     try {
-      var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      var catSub = shellSub || knownSub('myListAddon:catalogsSubmenu', ['all', 'quickadd', 'bulk'], 'all');
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
       var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
-      // Must agree with normalizeListsSubmenu (16_client-row-core.js): the rule
-      // above hides every Lists panel and then un-hides the one this attribute
-      // names, so a stale value naming a panel that no longer exists leaves the
-      // tab blank from first paint.
+      // Must agree with normalizeListsSubmenu (16_client-row-core.js): an unknown value
+      // hides every Lists panel and leaves the tab blank from first paint.
       if (['my-lists', 'liked', 'collections', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
-      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || knownSub('myListAddon:channelsSubmenu', ['my-channels', 'storylines', 'quickadd', 'explore', 'import', 'build'], 'my-channels');
+      if (chSub === 'build' && !localStorage.getItem('myListAddon:creatorName')) { chSub = 'my-channels'; localStorage.setItem('myListAddon:channelsSubmenu', chSub); } // signed out: no builder
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
       var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
-      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || knownSub('myListAddon:discoverSubmenu', ['all', 'curated', 'gems', 'genres', 'holidays', 'kids', 'movie', 'popular', 'series'], 'movie');
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
   })();
@@ -33830,13 +33864,13 @@ ${UTILITY_CSS}
   .list-add-btn:not(.is-added):not(:disabled) {
     background: var(--color-brand-wash) !important;
     border-color: var(--color-brand-line) !important;
-    color: var(--color-brand) !important;
+    color: var(--color-brand-text) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn:not(.is-added):hover:not(:disabled) {
     background: var(--color-brand-tint) !important;
-    border-color: var(--color-brand) !important;
-    color: var(--color-brand) !important;
+    border-color: var(--color-brand-text) !important;
+    color: var(--color-brand-text) !important;
   }
   .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
@@ -35610,7 +35644,7 @@ ${UTILITY_CSS}
   .actions button[data-act="removeAllLists"],
   .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
-    color: var(--color-danger);
+    color: var(--color-danger-text);
     border: 1.5px solid var(--color-danger-line);
     box-shadow: var(--shadow-sm);
     min-height: var(--control-height-md, 40px);
@@ -35622,9 +35656,9 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):hover:not(:disabled),
   .actions button[data-act="removeAllLists"]:hover:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
-    background: var(--color-danger);
+    background: var(--color-danger-fill);
     color: var(--color-on-brand);
-    border-color: var(--color-danger);
+    border-color: var(--color-danger-fill);
   }
 
   .btn-danger:active:not(:disabled),
@@ -35632,7 +35666,7 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):active:not(:disabled),
   .actions button[data-act="removeAllLists"]:active:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:active:not(:disabled) {
-    background: var(--color-danger-hover);
+    background: var(--color-danger-fill-active);
     transform: scale(0.98);
   }
 
@@ -37036,16 +37070,16 @@ ${UTILITY_CSS}
     width: 100%; padding: var(--space-2-5) var(--space-3); border-radius: var(--radius-md);
     border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: var(--font-size-base);
   }
-
-
-
   /* Touch targets: on phones the compact controls keep their look but get a
      44px hit area (WCAG 2.5.5 / HIG) from an invisible extension. */
   @media (max-width: 640px) {
-    :where(.lc-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, button.modal-close-x, .search-clear-btn, #catalogSearchBtn) { position: relative; }
+    :where(.lc-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, button.modal-close-x, .search-clear-btn, #catalogSearchBtn, .text-action-btn, .discover-chart-seeall) { position: relative; }
     .lc-btn::after, .subnav-pill::after, #catalogSearchBtn::after {
       content: ""; position: absolute; inset: -7px 0;
     }
+    /* Icon-only buttons are narrow as well as short; the sideways reach stays inside the gap between them. */
+    .lc-btn.searchLikeBtn::after, .lc-btn.searchLikeExternalBtn::after, .lc-btn.customizeListBtn::after { inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-1)); }
+    .text-action-btn::after, .discover-chart-seeall::after { content: ""; position: absolute; inset: calc(-1 * var(--space-3)) 0; }
     .header-icon-btn::after, .header-avatar-btn::after, button.modal-close-x::after, .search-clear-btn::after {
       content: ""; position: absolute; inset: -4px;
     }
@@ -37230,7 +37264,7 @@ ${appShellMobileNavHtml}
     </div>
   </div>
 
-  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createListModalTitle">Create List</h2>
@@ -37255,7 +37289,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
       
       <div class="u-mb-14px">
@@ -37285,7 +37319,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Create Collection Folder Modal -->
-  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create folder</h2>
@@ -37305,7 +37339,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
 
       <div class="u-mb-12px">
@@ -37367,7 +37401,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import Nuvio Collections Modal -->
-  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Nuvio Collections</h2>
@@ -37393,7 +37427,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Sync to Nuvio / Add to Profile Modal -->
-  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="syncNuvioModalTitle">Add to Profile</h2>
@@ -37452,7 +37486,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Add Catalog Modal -->
-  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">New Catalog</h2>
@@ -37491,7 +37525,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import List Modal -->
-  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import List from Link</h2>
@@ -37518,7 +37552,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import Channel Modal -->
-  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-440px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Channel</h2>
@@ -37568,7 +37602,7 @@ ${appShellMobileNavHtml}
     </div>
   </div>
 
-  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-maxh-85vh" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <div>
@@ -37588,7 +37622,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Trakt Device Activation Modal -->
-  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index:10002; position:fixed; inset:0;">
+  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-24px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-ta-center" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Connect Trakt</h2>
@@ -37597,7 +37631,7 @@ ${appShellMobileNavHtml}
       <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
       <div id="traktDeviceCodeBox" class="u-bg-v_panel_strong u-bd-2px_dashed_v_accent u-br-v_radius_md u-p-16px u-mb-16px">
-        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
+        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING…</div>
       </div>
 
       <div class="u-fd-column u-gap-10px u-mb-16px" style="display:flex;">
@@ -37662,7 +37696,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div class="row u-mb-12px u-gap-8px">
-      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name..." data-act-on="input" data-act="filterLists">
+      <input type="text" id="listFilterInput" aria-label="Filter catalogs by name" placeholder="Filter catalogs by name…" data-act-on="input" data-act="filterLists">
       <select id="listGroupFilterSelect" aria-label="Filter catalogs by group" data-act="filterLists" class="u-flex-none" style="width:auto;">
         <option value="">All groups</option>
       </select>
@@ -38152,7 +38186,7 @@ if ('serviceWorker' in navigator) {
         <p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted">Search for movies or shows and tap "+ Add" to add them straight to this list.</p>
         <div class="search-input-box">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="customListSearchInput" placeholder="Search a title to add...">
+          <input type="text" id="customListSearchInput" placeholder="Search a title to add…">
           <button type="button" id="customListSearchClearBtn" class="search-clear-btn u-bg-none u-bd-none u-c-v_muted u-cur-pointer u-p-4px" aria-label="Clear search" style="display:none; position:absolute; right:10px; top:50%; transform:translateY(-50%);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3a.996.996 0 0 1-1.41 0L12 13.41 9.11 16.3a.996.996 0 1 1-1.41-1.41L10.59 12 7.7 9.11A.996.996 0 1 1 9.11 7.7L12 10.59l2.89-2.89a.996.996 0 1 1 1.41 1.41L13.41 12l2.89 2.89c.38.38.38 1.02 0 1.41z"/></svg>
           </button>
@@ -38296,7 +38330,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-mb-10px u-gap-8px" id="myChannelsToolbar">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
+          <input type="text" id="myChannelsSearchInput" aria-label="Search your channels" placeholder="Search your channels…" class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="setMyChannelsSearch" data-act-args="[&quot;@value&quot;]">
         </div>
         <select id="myChannelsSortSelect" aria-label="Order your channels" data-act="setMyChannelsSort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="recent">Recently updated</option>
@@ -38422,7 +38456,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-mb-10px u-gap-8px u-ai-center">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator..." class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
+          <input type="text" id="channelDirectorySearchInput" aria-label="Filter published channels" placeholder="Filter by name, description or creator…" class="u-pl-38px u-br-v_radius_pill" data-act-on="input" data-act="renderChannelDirectory">
         </div>
         <select id="channelDirectorySortSelect" aria-label="Order published channels" data-act="setChannelDirectorySort" data-act-args="[&quot;@value&quot;]" class="u-flex-none u-br-v_radius_pill" style="width:auto;">
           <option value="newest">Newest</option>
@@ -38508,7 +38542,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-gap-8px">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelSearchInput" placeholder="Search a show by name..." data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
+          <input type="text" id="channelSearchInput" placeholder="Search a show by name…" data-act-on="keydown" data-act="runChannelTitleSearch" data-act-keys="Enter" data-act-prevent>
         </div>
         <button type="button" class="secondary lc-btn" data-act="runChannelTitleSearch">Search</button>
       </div>
@@ -38523,7 +38557,7 @@ if ('serviceWorker' in navigator) {
       <div class="row u-mb-8px u-gap-8px">
         <div class="search-input-box u-flex-1">
           <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name..." data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
+          <input type="text" id="channelDraftFilterInput" aria-label="Filter these picks" placeholder="Filter these picks by show or episode name…" data-act-on="input" data-act="setChannelDraftFilter" data-act-args="[&quot;@value&quot;]">
         </div>
         <button type="button" class="secondary lc-btn u-flex-none u-ws-nowrap" id="channelDraftSelectModeBtn" style="width:auto;" data-act="toggleChannelDraftSelectMode">Select</button>
       </div>
@@ -38666,7 +38700,7 @@ if ('serviceWorker' in navigator) {
     <div class="search-input-wrapper">
       <div class="search-input-box">
         <svg class="search-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title..." class="u-pl-38px u-pr-38px" style="width:100%;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
+        <input type="text" id="catalogSearchInput" aria-label="Search by title or list name" placeholder="Search movies by title…" class="u-pl-38px u-pr-38px" style="width:100%;" data-act="appActCatalogSearchInput" data-act-on="input,keydown" data-act-args="[&quot;@self&quot;,&quot;@event&quot;]">
         <button type="button" id="catalogSearchClearBtn" class="search-clear-btn" aria-label="Clear search" data-act="clearCatalogSearch">
           <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" /></svg>
         </button>
@@ -38811,7 +38845,7 @@ if ('serviceWorker' in navigator) {
           <span class="backup-advanced-arrow">&#x25BE;</span>
         </summary>
         <div class="u-p-0_14px_14px u-fd-column u-gap-10px" style="display:flex;">
-          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-13px u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore..."></textarea>
+          <textarea id="configJsonBox" rows="5" class="u-ff-v_font_mono_monospace u-fs-v_font_size_sm u-br-v_radius_sm u-bd-1px_solid_v_border u-bg-v_bg u-c-v_text u-p-8px_10px u-bs-border_box" style="width:100%;" placeholder="Paste config JSON here to restore…"></textarea>
           <div class="backup-actions-grid u-gap-8px u-fw2-wrap" style="display:flex;">
             <button type="button" class="secondary lc-btn" data-act="exportConfigJson">Export current to box</button>
             <button type="button" class="secondary lc-btn" data-act="importConfigJson">Import JSON from box</button>
@@ -39613,7 +39647,7 @@ if ('serviceWorker' in navigator) {
         <div id="supportChatView" style="display:none;">
           <div id="supportMessagesStream" class="support-messages-stream"></div>
           <div class="support-reply-composer u-mt-10px">
-            <textarea id="supportReplyInput" placeholder="Type a reply to the developer..." data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
+            <textarea id="supportReplyInput" placeholder="Type a reply to the developer…" data-act-on="keydown" data-act="appActFeedbackReplyOnEnter" data-act-args="[&quot;@event&quot;]"></textarea>
             <button type="button" class="primary lc-btn u-minh-44px u-p-0_20px" id="supportReplySendBtn" data-act="sendUserFeedbackReply">Send</button>
           </div>
           <div class="u-jc-space_between u-ai-center u-mt-6px" style="display:flex;">
@@ -42122,13 +42156,13 @@ function openSupportGoal() {
     '</div>' +
     '<p class="u-m-0_0_12px u-c-v_muted u-fs-v_font_size_sm u-lh-1_4">It is free, with no ads. Donations only cover the hosting bill.</p>' +
     '<div class="u-fs-v_font_size_2xl u-fw-800">' + supportMoney(g.raised) + ' <small class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted">of ' + supportMoney(g.goal) + ' this month</small></div>' +
-    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? '#34c759' : 'linear-gradient(90deg,#ffb020,#ff8a00)') + ';"></i></div>' +
+    '<div class="u-br-v_radius_md u-bg-v_border u-ov-hidden u-m-8px_0_12px" style="height:10px;"><i style="display:block; height:100%; width:' + pct + '%; border-radius:var(--radius-md); background:' + (g.raised >= g.goal ? 'var(--color-success)' : 'linear-gradient(90deg,var(--color-warn),var(--color-warn-hover))') + ';"></i></div>' +
     '<div class="u-gap-6px u-fs-v_font_size_sm u-c-v_text u-mb-14px" style="display:grid;">' +
       row('Hosting this month', supportMoney(g.goal), false) +
       row('Given so far', supportMoney(g.raised), false) +
       row(left > 0 ? 'Still needed' : 'Covered', left > 0 ? supportMoney(left) : 'Thank you!', true) +
     '</div>' +
-    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_accent u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
+    '<a href="' + escapeAttr(g.url) + '" target="_blank" rel="noopener noreferrer" class="u-ta-center u-bg-v_color_brand_fill u-c-v_color_on_brand u-br-v_radius u-p-12px u-fw-800 u-td-none" style="display:block;">&#9749; Support on Ko-fi</a>' +
     '<p class="u-m-10px_0_0 u-ta-center u-c-v_muted u-fs-v_font_size_xs">Starts again on the 9th of each month.</p>';
   showModal(html);
 }
@@ -42204,7 +42238,7 @@ if (typeof document !== 'undefined') {
 
 function showAppAlert(title, message, isSuccess = false) {
   const icon = isSuccess ? '\u2713' : '\u2715';
-  const iconColor = isSuccess ? 'var(--accent-2, #00b4d8)' : 'var(--danger, #e63946)';
+  const iconColor = isSuccess ? 'var(--accent-2)' : 'var(--danger)';
   const html =
     '<div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">' +
       '<h3 class="u-m-0 u-fs-v_font_size_lg u-ai-center u-gap-8px" style="display:flex;">' +
@@ -42263,7 +42297,7 @@ function showAppBusy(title, message) {
 
 function showAppConfirm(title, message, confirmBtnText, onConfirm, isDanger = true) {
   const icon = isDanger ? '&#x26A0;' : '?';
-  const iconColor = isDanger ? 'var(--danger, #e63946)' : 'var(--accent-2, #00b4d8)';
+  const iconColor = isDanger ? 'var(--danger)' : 'var(--accent-2)';
   // White text straight on --danger measures about 3.6:1. --color-danger-text
   // with --color-text-inverse is the pair for text on a danger fill: white on
   // #D70015 (5.4:1) in light, black on #FF453A (6.2:1) in dark.
@@ -43872,7 +43906,7 @@ function addRow(name, url, type, enabled, group, channelId, noShuffle) {
       : (isChannel || isCustomList || isPremade)
         ? ''
         : '<button type="button" class="secondary add-source-btn" data-act="addSourceRow" data-act-args="[&quot;@self&quot;]">+ Add another source (merge into one catalog)</button>') +
-    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p class="u-c-v_muted u-fs-v_font_size_sm u-ta-center u-p-20px"><small>Click "Refresh Preview" above to load posters.</small></p></div></div>';
+    '<div class="live-preview-shelf"><div class="live-preview-shelf-title"><span class="shelf-drag-handle" title="Drag to reorder catalog"><svg viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true" style="pointer-events:none; display:block;"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span><span class="shelf-title-text">' + escapeHtml(name || 'Unnamed') + ' - ' + (type === 'series' ? 'Series' : 'Movies') + '</span><span class="live-preview-shelf-status"></span><button type="button" class="text-action-btn" disabled>See All &rsaquo;</button></div><div class="live-preview-posters"><p class="u-c-v_muted u-fs-v_font_size_sm u-ta-center u-p-20px"><small>Loading posters&hellip;</small></p></div></div>';
   container.appendChild(div);
   // Every custom-list row this browser owns gets a live server-side copy
   // (see withLiveListToken): the token is stamped into the row's URL here,
@@ -44261,7 +44295,7 @@ async function runMyMdblistLists() {
     }
     renderMyMdblistLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your MDBList lists.</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your MDBList lists.</p>';
   }
 }
 
@@ -45067,7 +45101,7 @@ function pickUpTraktTokenFromUrl() {
     };
     const isRateLimit = detail.includes('1015') || detail.includes('429') || err === 'exchange_failed';
     const msg = isRateLimit 
-      ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead...'
+      ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead…'
       : (messages[err] || ('Could not connect to Trakt (' + err + (detail ? ': ' + detail : '') + ').'));
 
     if (typeof showAppAlert === 'function') {
@@ -45139,8 +45173,8 @@ async function startTraktDeviceLogin(retried) {
   const traktKey = (document.getElementById('traktKeyInput')?.value.trim()) || readProviderSecret('myListAddon:traktKey') || '';
   
   if (modal) modal.style.display = 'flex';
-  if (codeEl) codeEl.innerText = 'LOADING...';
-  if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt...';
+  if (codeEl) codeEl.innerText = 'LOADING…';
+  if (statusEl) statusEl.innerText = 'Requesting activation code from Trakt…';
 
   try {
     const got = await requestTraktDeviceCode(traktKey);
@@ -45151,7 +45185,7 @@ async function startTraktDeviceLogin(retried) {
     // (the server's message names the wait) rather than retried too early.
     if (got.status === 429 && !retried && (Number(data.retryAfter) || 2) <= 30) {
       const waitSec = Math.max(1, Number(data.retryAfter) || 2);
-      if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds...';
+      if (statusEl) statusEl.innerText = 'Trakt is busy. Trying again in ' + waitSec + ' seconds…';
       setTimeout(() => { startTraktDeviceLogin(true); }, waitSec * 1000);
       return;
     }
@@ -45168,7 +45202,7 @@ async function startTraktDeviceLogin(retried) {
       linkEl.href = data.verification_url || 'https://trakt.tv/activate';
     }
     if (statusEl) {
-      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval...';
+      statusEl.innerHTML = '<span class="u-c-v_accent u-fw-600">Code ready!</span> Enter code at trakt.tv/activate &bull; Waiting for approval…';
     }
 
     const deviceCode = data.device_code;
@@ -45268,7 +45302,7 @@ async function runMyPrivateTraktLists() {
     }
     renderMyPrivateTraktLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your Trakt lists.</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your Trakt lists.</p>';
   }
 }
 
@@ -45905,7 +45939,7 @@ async function runMyTmdbLists() {
     }
     renderMyTmdbLists(data.lists);
   } catch (e) {
-    box.innerHTML = '<p class="testresult err">\u2717 Network error loading your TMDB lists: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 Could not load your TMDB lists: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</p>';
   }
 }
 
@@ -46821,7 +46855,7 @@ async function runMySimklLists() {
     renderMySimklLists(data.lists);
   } catch (e) {
     console.error('Simkl lists load error:', e);
-    box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml((e && e.message) ? e.message : 'Network error loading your Simkl lists.') + '</p>';
+    box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml((e && e.message) ? e.message : 'Could not load your Simkl lists.') + '</p>';
   }
 }
 
@@ -55390,7 +55424,7 @@ async function openItemDetailsModal(id, type, opts) {
   }
   
   const body = document.getElementById('itemDetailsBody');
-  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB...</p>';
+  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB…</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -55642,7 +55676,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   container.style.display = 'block';
   if (grid.innerHTML.trim() !== '') return; // already loaded
   
-  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes...</div>';
+  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes…</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -55673,7 +55707,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
         '<div class="clickable-episode u-fd-column u-gap-4px u-cur-pointer" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
           '<div class="u-aspectratio-16_9 u-bg-222 u-br-v_radius_sm u-ov-hidden u-bsh-0_2px_6px_rgba_0_0_0_0_4" style="width:100%; position:relative;">' +
             (still ? '<img src="' + still + '" class="u-objectfit-cover" style="width:100%; height:100%;">' : '') +
-            '<div class="episode-num-badge u-bg-v_accent u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
+            '<div class="episode-num-badge u-bg-v_color_brand_fill u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
           '</div>' +
           '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
@@ -56902,9 +56936,9 @@ function setCatalogSearchFilter(filter, btn) {
   currentCatalogSearchType = filter;
   const inputEl = document.getElementById('catalogSearchInput');
   if (inputEl) {
-    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
-    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
-    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title…';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title…';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists…';
   }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
@@ -57074,7 +57108,7 @@ async function renderDefaultCatalogSearch(force) {
   // still landed on top of the default view.
   const thisSeq = ++currentTitleSearchSequence;
 
-  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '...</small></p>';
+  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '…</small></p>';
 
   if (currentCatalogSearchType === 'lists') {
     window._rawCatalogTitleItems = [];
@@ -57142,7 +57176,7 @@ async function runCatalogSearch() {
   }
 
   const thisSeq = ++currentTitleSearchSequence;
-  resEl.innerHTML = '<p><small>Searching...</small></p>';
+  resEl.innerHTML = '<p><small>Searching…</small></p>';
 
   try {
     fetch(ORIGIN + '/api/track-search', {
@@ -57184,6 +57218,14 @@ async function runCatalogSearch() {
 
 
 
+// What a My Catalogs row shows when its preview could not be loaded. A server
+// hiccup (a 502 page that is not JSON) lands in the same catch as a lost
+// connection, so it must not say "network"; Retry re-runs the catalogs preview,
+// the same action as the Refresh button above the rows.
+function catalogLoadErrorHtml() {
+  return '<p class="testresult err">&#x2717; Could not load this catalog. ' +
+    '<button type="button" class="lc-btn secondary" data-act="renderLivePreview">Retry</button></p>';
+}
 // --- Channel builder ---------------------------------------------------------
 //
 // Builds one synthetic "series" out of hand-picked real episodes (from any
@@ -57235,10 +57277,10 @@ function setChannelSearchType(type, btn) {
   const input = document.getElementById('channelSearchInput');
   if (input) {
     input.placeholder = channelSearchType === 'movie'
-      ? 'Search a movie by name...'
+      ? 'Search a movie by name…'
       : (channelSearchType === 'person'
-        ? 'Search an actor, director or creator...'
-        : 'Search a show by name...');
+        ? 'Search an actor, director or creator…'
+        : 'Search a show by name…');
   }
   const box = document.getElementById('channelSearchResult');
   const epBox = document.getElementById('channelEpisodePicker');
@@ -58487,7 +58529,7 @@ function renderChannelPosterPicker() {
   // 1. Custom Channel Poster Option
   let html = '<div class="channel-poster-choice' + (isCustomSelected ? ' selected' : '') + '" data-poster="custom" data-backdrop="" data-act="selectChannelPoster" data-act-args="[&quot;custom&quot;,&quot;&quot;]">' +
     '<div class="channel-poster-thumb-wrap custom-preview u-bg-linear_gradient_135deg_0b0d14_0_131726_50_06070a_100 u-fd-column u-ai-center u-jc-center u-gap-4px u-p-6px u-bd-1px_solid_rgba_0_122_255_0_3" style="display:flex;">' +
-      '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" style="color:var(--color-brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>' +
         '<polyline points="17 2 12 7 7 2"></polyline>' +
       '</svg>' +
@@ -58570,7 +58612,7 @@ function applyChannelPosterUrl() {
   const cards = document.querySelectorAll('#channelPosterChoicesGrid .channel-poster-choice');
   cards.forEach((card) => card.classList.remove('selected'));
 
-  if (status) { status.textContent = 'Poster URL applied \u2713 (preview loading\u2026)'; status.style.color = 'var(--success, #30d158)'; }
+  if (status) { status.textContent = 'Poster URL applied \u2713 (preview loading\u2026)'; status.style.color = 'var(--color-success-text)'; }
   if (preview) preview.style.display = 'flex';
 
   if (previewImg) {
@@ -58583,7 +58625,7 @@ function applyChannelPosterUrl() {
       settled = true;
       if (ok) {
         previewImg.style.display = '';
-        if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--success, #30d158)'; }
+        if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
       } else {
         previewImg.style.display = 'none';
         if (status) {
@@ -58623,7 +58665,7 @@ function syncChannelPosterUrlInput() {
       previewImg.src = channelDraftPoster;
       previewImg.style.display = '';
     }
-    if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--success, #30d158)'; }
+    if (status) { status.textContent = 'Poster URL applied \u2713'; status.style.color = 'var(--color-success-text)'; }
     if (preview) preview.style.display = 'flex';
   } else {
     urlInput.value = '';
@@ -70476,7 +70518,7 @@ function renderChannelMergeList() {
           remainingChannels.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           const options = remainingChannels.map((c) => '<option value="' + escapeAttr(c.channelId) + '">' + escapeHtml(c.name) + ' (' + (c.items ? c.items.length : 0) + ' ep)</option>').join('');
           addSelectHtml = '<select class="merge-add-channel-select" data-act="appActAddChannelToMerge" data-act-args="' + appActArgs([merged.mergedId, '@self']) + '">' +
-            '<option value="">+ Add channel...</option>' +
+            '<option value="">+ Add channel…</option>' +
             options +
           '</select>';
         } else {
@@ -70552,6 +70594,114 @@ function renderChannelMergeList() {
 
 
 
+// The channel builder's draft survives a reload (UI-04). The builder keeps its
+// work in memory only, but its sub-tab is remembered, so a reload used to open
+// an empty "Create a Custom Channel". This stores the draft in localStorage under
+// the signed-in account's name, so one person's draft is never shown to another,
+// and puts it back through the same setters the Edit button uses.
+//
+// Nothing in 20_client-channel-builder.js calls these: it only listens to the
+// builder panel, and wraps saveChannel / cancelEditChannel / deleteLocalChannel
+// so that finishing, cancelling or deleting drops the draft.
+
+function channelDraftStorageKey() {
+  return (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName)
+    ? 'myListAddon:channelDraft:' + activeCreator.creatorName : '';
+}
+
+function clearChannelDraft() {
+  const key = channelDraftStorageKey();
+  if (key) { try { localStorage.removeItem(key); } catch (e) {} }
+}
+
+// Stores what is on screen, or clears the draft when the builder is empty.
+function saveChannelDraft() {
+  const key = channelDraftStorageKey();
+  if (!key) return;
+  const nameInput = document.getElementById('channelNameInput');
+  const name = nameInput ? nameInput.value : '';
+  const settings = readChannelBroadcastSettings();
+  if (!name.trim() && !channelDraftItems.length && !(settings.description || '').trim()) {
+    clearChannelDraft();
+    return;
+  }
+  const publicToggle = document.getElementById('channelPublicToggle');
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      v: 1,
+      editingChannelId: editingChannelId || null,
+      name: name,
+      playOrder: getChannelPlayOrder(),
+      poster: channelDraftPoster,
+      backdrop: channelDraftBackdrop,
+      isPublic: publicToggle ? !!publicToggle.checked : true,
+      items: channelDraftItems,
+      settings: settings,
+    }));
+  } catch (e) {}
+}
+
+// Reopens the builder from the stored draft. Only when the builder was the open
+// sub-tab, and only for the signed-in account.
+function restoreChannelDraft() {
+  const key = channelDraftStorageKey();
+  if (!key) return false;
+  let draft = null;
+  try {
+    if (localStorage.getItem('myListAddon:channelsSubmenu') !== 'build') return false;
+    draft = JSON.parse(localStorage.getItem(key) || 'null');
+  } catch (e) { return false; }
+  if (!draft || !Array.isArray(draft.items)) return false;
+  const known = draft.editingChannelId && loadLocalChannels()[draft.editingChannelId];
+  editingChannelId = known ? draft.editingChannelId : null;
+  editingChannelUrlInput = null;
+  resetChannelDraftWorkspace();
+  channelDraftItems = draft.items.slice();
+  channelDraftPoster = draft.poster || null;
+  channelDraftBackdrop = draft.backdrop || null;
+  const nameInput = document.getElementById('channelNameInput');
+  if (nameInput) nameInput.value = draft.name || '';
+  setChannelPlayOrder(draft.playOrder || 'as-listed');
+  const channel = Object.assign({}, draft.settings || {}, {
+    visibility: draft.isPublic === false ? 'private' : 'public',
+    sharePublished: draft.isPublic !== false,
+  });
+  applyChannelBroadcastSettings(channel);
+  renderChannelDraftList();
+  updateChannelSaveButtonLabel();
+  setChannelSearchType('tv', document.getElementById('channelSearchTypeShowsBtn'));
+  switchChannelsSubmenu('build', null);
+  return true;
+}
+
+(function wireChannelDraft() {
+  // After the handler that changed something has run.
+  function later() { setTimeout(saveChannelDraft, 400); }
+  const panel = document.getElementById('channelsSubBuild');
+  if (panel) {
+    ['input', 'change', 'click', 'keyup', 'drop', 'pointerup'].forEach(function (type) {
+      panel.addEventListener(type, later);
+    });
+  }
+  // Finishing, cancelling or deleting ends the draft.
+  const finishers = { saveChannel: true, cancelEditChannel: true };
+  Object.keys(finishers).forEach(function (name) {
+    const original = window[name];
+    if (typeof original !== 'function') return;
+    window[name] = async function () {
+      try { return await original.apply(this, arguments); } finally { saveChannelDraft(); }
+    };
+  });
+  const deleteOriginal = window.deleteLocalChannel;
+  if (typeof deleteOriginal === 'function') {
+    window.deleteLocalChannel = function (channelId) {
+      if (channelId && channelId === editingChannelId) clearChannelDraft();
+      return deleteOriginal.apply(this, arguments);
+    };
+  }
+  // Once every script has loaded and the page knows who is signed in.
+  setTimeout(restoreChannelDraft, 0);
+})();
 // A saved channel map keeps only object values. One null or non-object entry
 // (for example one synced from another device) must not break the page.
 function objectEntriesOnly(map) {
@@ -70562,6 +70712,138 @@ function objectEntriesOnly(map) {
   }
   return map;
 }
+// Signing in, out or switching account in another tab reloads this one, so it
+// does not keep showing (and acting as) the old account. The page only paints
+// its header on load. A write of the same account name changes nothing here, so
+// two tabs writing the key together cannot start a reload loop.
+window.addEventListener('storage', function (e) {
+  if (e.key !== 'myListAddon:creatorName' && e.key !== 'myListAddon:creatorKey') return;
+  let stored = '';
+  try { stored = localStorage.getItem('myListAddon:creatorName') || ''; } catch (err) { return; }
+  const shown = (typeof activeCreator !== 'undefined' && activeCreator && activeCreator.creatorName) || '';
+  if (stored !== shown) location.reload();
+});
+// Addresses that name nothing. The page opens the list view for any /lists/<x>
+// or /channels/<x> address, so a deleted share or a mistyped slug used to show
+// a made-up channel or "Loading…" for ever. These send the person back to
+// Discover with a message instead. Called from handleInitialDeepLink
+// (24_client-backup-restore-presets.js); the flag is also what tests read.
+function showDeepLinkNotFound(what) {
+  // A channel share address is known to be dead. A /lists/ address the page does
+  // not recognise may be a list the person still has, so it is not called removed.
+  const message = what === 'channel'
+    ? 'Could not find this channel. It may have been removed.'
+    : 'Could not open this list from its address. Open it from Catalogs or Lists instead.';
+  window._deepLinkNotFound = message;
+  try { history.replaceState(null, '', '/'); } catch (e) {}
+  try { switchTab('discover'); } catch (e) {}
+  showAppNoticeModal(what === 'channel' ? 'Could Not Find This Channel' : 'Could Not Open This List', message, true);
+}
+
+// /channels/<user>/<slug> is a share address: the Worker redirects a live one,
+// so a page that still sees one with no saved channel behind it is dead.
+function deadChannelLink(path, foundChannel) {
+  if (foundChannel || !new RegExp('^/channels/[^/]+/[^/]+').test(path)) return false;
+  showDeepLinkNotFound('channel');
+  return true;
+}
+
+// Called after every known /lists/ address has been tried. The app shell owns
+// its own /lists/<sub-tab> routes, and #/list? links carry their own list.
+// Airing Next is a list the app writes into the address bar (getListCleanPath).
+function unknownListLink(path, hash) {
+  if (!path.startsWith('/lists/') || path.length < 8 || hash.startsWith('#/list?')) return false;
+  if (typeof APP_SHELL_HEAD_ROUTES !== 'undefined' && APP_SHELL_HEAD_ROUTES[path]) return false;
+  if (path.split('/').length === 3 && path.split('/')[2] === 'airing-next') {
+    openListDetailsPage('Airing Next', 'series', 'autotrack:airing-next', null, { skipPushState: true });
+    return true;
+  }
+  showDeepLinkNotFound('list');
+  return true;
+}
+// Names and pressed state for the heart buttons on list cards. They are icon-only
+// (a ♡ or ♥ character), built in several places, and swapped between the two by
+// their click handlers, so the state is read from the "liked" class they already
+// carry instead of being kept in step in each place.
+const LIKE_BUTTON_SELECTOR = 'button.searchLikeBtn, button.searchLikeExternalBtn';
+
+function syncLikeButtonA11y(btn) {
+  if (!btn.getAttribute('aria-label')) btn.setAttribute('aria-label', 'Like this list');
+  btn.setAttribute('aria-pressed', btn.classList.contains('liked') ? 'true' : 'false');
+}
+
+(function watchLikeButtons() {
+  if (typeof MutationObserver !== 'function') return;
+  function start() {
+    document.querySelectorAll(LIKE_BUTTON_SELECTOR).forEach(syncLikeButtonA11y);
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        if (m.type === 'attributes') {
+          if (m.target.matches && m.target.matches(LIKE_BUTTON_SELECTOR)) syncLikeButtonA11y(m.target);
+          return;
+        }
+        m.addedNodes.forEach(function (n) {
+          if (n.nodeType !== 1) return;
+          if (n.matches(LIKE_BUTTON_SELECTOR)) syncLikeButtonA11y(n);
+          n.querySelectorAll(LIKE_BUTTON_SELECTOR).forEach(syncLikeButtonA11y);
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+// The nine static pop-up forms carry no z-index of their own (so a dialog opened
+// from one, such as "Could Not Save List", stacks above it by coming later in the
+// page). The other way round -- a form opened while a dialog is already open --
+// needs the form to come later, so it is moved to the end of <body> when it opens
+// (they start inside the page's own container, which comes before any dialog).
+const STATIC_MODAL_IDS = ['createListModal', 'createCollectionModal', 'importNuvioCollectionsModal', 'syncNuvioModal', 'addShelfModal', 'importListModal', 'importChannelModal', 'selectListModal', 'traktDeviceModal'];
+
+function raiseStaticModal(form) {
+  if (!form || (form.parentNode === document.body && !form.nextElementSibling)) return;
+  // Moving a node drops focus from anything inside it.
+  const focused = document.activeElement;
+  document.body.appendChild(form);
+  if (focused && form.contains(focused) && typeof focused.focus === 'function') focused.focus();
+}
+
+function watchStaticModals() {
+  if (typeof MutationObserver !== 'function') return;
+  STATIC_MODAL_IDS.forEach(function (id) {
+    const form = document.getElementById(id);
+    if (!form) return;
+    new MutationObserver(function () {
+      if (form.style.display === 'flex') raiseStaticModal(form);
+    }).observe(form, { attributes: true, attributeFilter: ['style'] });
+  });
+}
+// The page's script can run before the forms further down the page exist.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchStaticModals);
+else watchStaticModals();
+// A pill row scrolls sideways on a phone. When a row comes into view (page load,
+// opening a tab from a link or the bottom nav) the ticked pill is centred in it.
+// Only the row itself scrolls: scrollIntoView could also move the page.
+function centerActivePill(bar) {
+  const pill = bar.querySelector('.subnav-pill.active');
+  if (!pill) return;
+  const barBox = bar.getBoundingClientRect();
+  const pillBox = pill.getBoundingClientRect();
+  const target = bar.scrollLeft + (pillBox.left - barBox.left) - (bar.clientWidth - pillBox.width) / 2;
+  bar.scrollLeft = Math.max(0, target);
+}
+
+(function watchPillRows() {
+  if (typeof IntersectionObserver !== 'function') return;
+  function start() {
+    const seen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) centerActivePill(e.target); });
+    });
+    document.querySelectorAll('.subnav-pills-bar').forEach(function (bar) { seen.observe(bar); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
@@ -70723,11 +71005,11 @@ function updateCustomListSearchPlaceholder() {
   const input = document.getElementById('customListSearchInput');
   if (!input) return;
   if (customListDraftType === 'movie') {
-    input.placeholder = 'Search a movie to add...';
+    input.placeholder = 'Search a movie to add…';
   } else if (customListDraftType === 'series') {
-    input.placeholder = 'Search a show to add...';
+    input.placeholder = 'Search a show to add…';
   } else {
-    input.placeholder = 'Search a movie or show to add...';
+    input.placeholder = 'Search a movie or show to add…';
   }
 }
 
@@ -75829,12 +76111,12 @@ function renderAccountKeySection() {
         '<div class="u-bd-1px_solid_rgba_255_149_0_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_149_0_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_color_warn_text u-mb-4px">Reset Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Delete every list, channel, preset, watch history entry and catalog row on this account, returning it to how it was when you created it. Your account and key stay the same, and you stay signed in.</p>' +
-          '<button type="button" class="lc-btn u-bg-v_color_warn u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_warn_fill u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openResetAccountModal">Reset Account Data</button>' +
         '</div>' +
         '<div class="u-bd-1px_solid_rgba_255_59_48_0_3 u-br-v_radius_md u-p-12px_14px u-bg-rgba_255_59_48_0_05">' +
           '<div class="u-fw-700 u-fs-v_font_size_sm u-c-v_danger_v_color_danger u-mb-4px">Delete Account</div>' +
           '<p class="u-m-0_0_10px u-fs-v_font_size_sm u-c-v_muted u-lh-1_4">Permanently delete your account, all published lists, and all synced data from the server.</p>' +
-          '<button type="button" class="lc-btn u-bg-v_color_danger u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
+          '<button type="button" class="lc-btn u-bg-v_color_danger_fill u-c-v_color_on_brand u-bd-none u-p-6px_14px u-fw-700 u-fs-v_font_size_sm u-br-v_radius_sm u-cur-pointer" data-act="openDeleteAccountModal">Delete Account &amp; All Data</button>' +
         '</div>' +
       '</div>' +
     '</details>';
@@ -76010,7 +76292,7 @@ function openDeleteAccountModal() {
       '<div id="deleteAccountStatus"></div>' +
       '<div class="actions u-mt-16px u-fd-row u-jc-flex_end u-gap-8px">' +
         '<button type="button" class="secondary" data-act="closeModal">Cancel</button>' +
-        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger u-bdc-v_color_danger u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
+        '<button type="button" id="confirmDeleteAccountBtn" class="primary u-bg-v_color_danger_fill u-bdc-v_color_danger_fill u-c-v_color_on_brand" data-act="handleDeleteAccount">Permanently Delete Everything</button>' +
       '</div>' +
     '</div>'
   );
@@ -76358,7 +76640,7 @@ function renderTrackPlaybackSection() {
       '<p class="u-m-0_0_6px u-fw-700 u-fs-v_font_size_base">Home Media Servers (Plex, Jellyfin &amp; Emby Scrobbler)</p>' +
       '<p class="u-m-0_0_8px u-c-v_muted u-fs-v_font_size_sm">Automatically scrobble watched movies and TV episodes from your Plex, Jellyfin, or Emby media servers directly into your personal Watch History and Continue Watching lists.</p>' +
       '<div class="webhook-input-group">' +
-        '<input type="text" readonly id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
+        '<input type="text" readonly aria-label="Webhook address" id="scrobbleWebhookInput" value="Loading\u2026" style="padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:rgba(0,0,0,0.3); color:var(--text); font-family:monospace; font-size:var(--font-size-sm);">' +
         '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="copyScrobbleWebhookUrl">Copy Webhook URL</button>' +
         '<button type="button" class="secondary lc-btn u-p-8px_14px u-fs-v_font_size_sm" data-act="regenerateScrobbleWebhookUrl" title="Issues a new webhook URL and stops the old one working. Use this if the URL has been shared or logged somewhere it should not have been.">Regenerate</button>' +
       '</div>' +
@@ -81394,7 +81676,7 @@ async function submitCreateListModal() {
   let initialItems = [];
   
   const btn = document.getElementById('createListModalBtn');
-  btn.innerText = 'Creating...';
+  btn.innerText = 'Creating…';
   btn.disabled = true;
 
   try {
@@ -81623,7 +81905,7 @@ function deleteExternalListDirect(provider, listId, listName, btn) {
     async () => {
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Deleting...';
+        btn.textContent = 'Deleting…';
       }
 
       const traktToken = (typeof traktAccessToken !== 'undefined' && traktAccessToken) || readProviderSecret('myListAddon:traktAccessToken') || '';
@@ -83197,7 +83479,7 @@ function updatePictoriumUrlHint(v) {
   const hint = document.getElementById('pictoriumUrlHint');
   if (!hint) return;
   const problem = pictoriumLinkProblem(v);
-  hint.style.color = problem ? 'var(--danger, #d33)' : 'var(--muted)';
+  hint.style.color = problem ? 'var(--color-danger-text)' : 'var(--muted)';
   if (problem) hint.textContent = problem;
 }
 window.updatePictoriumUrlHint = updatePictoriumUrlHint;
@@ -83211,7 +83493,7 @@ async function testRpdbKey(btn) {
   if (!input || !status) return;
   const say = (text, color) => { status.textContent = text; status.style.color = color || 'var(--muted)'; };
   const key = String(input.value || '').trim();
-  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--danger, #d33)'); return; }
+  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--color-danger-text)'); return; }
   if (btn) btn.disabled = true;
   say('Checking…');
   try {
@@ -83221,13 +83503,13 @@ async function testRpdbKey(btn) {
       body: JSON.stringify({ key: key }),
     });
     const data = await res.json().catch(() => null);
-    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--danger, #d33)'); return; }
-    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--danger, #d33)'); return; }
+    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--color-danger-text)'); return; }
+    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--color-danger-text)'); return; }
     say(data.used != null && data.limit != null
       ? 'The key works. ' + data.used.toLocaleString() + ' of ' + data.limit.toLocaleString() + ' requests used this month.'
       : 'The key works.');
   } catch (e) {
-    say('Could not check the key just now.', 'var(--danger, #d33)');
+    say('Could not check the key just now.', 'var(--color-danger-text)');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -83671,7 +83953,7 @@ async function renderLivePreview() {
           if (seeAllBtn && sample.length > visibleCount) seeAllBtn.disabled = false;
         } else {
           entryDOM.style.display = '';
-          postersContainer.innerHTML = '<p class="testresult err">&#x2717; Network error loading this catalog.</p>';
+          postersContainer.innerHTML = catalogLoadErrorHtml();
         }
       }
     }
@@ -86665,7 +86947,7 @@ function validateAndRepairBackup(data) {
     if (ref && !(ref in source) && embedded === 0) emptyRows.push(e.name || ref);
   });
   if (emptyRows.length) {
-    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '...' : ''));
+    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '…' : ''));
   }
 
   // 6. Ids that cannot have come from this app -- see dropUnsafeImportedIds.
@@ -88109,9 +88391,9 @@ async function copyLink(url) {
     if (urlBtn) {
       const oldUrlHtml = urlBtn.innerHTML;
       urlBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Copied!</span>';
-      urlBtn.style.background = 'var(--success)';
-      urlBtn.style.color = '#ffffff';
-      urlBtn.style.borderColor = 'var(--success)';
+      urlBtn.style.background = 'var(--color-success-subtle)';
+      urlBtn.style.color = 'var(--color-success-text)';
+      urlBtn.style.borderColor = 'var(--color-success-text)';
       setTimeout(() => {
         urlBtn.innerHTML = oldUrlHtml;
         urlBtn.style.background = '';
@@ -88201,7 +88483,7 @@ function signInToInstallHtml(message, entries) {
     + '</div>';
 }
 
-async function generate() {
+var generate = skipWhileBusy(async function generate() {
   const entries = collectEntries();
   if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
@@ -88345,7 +88627,7 @@ async function generate() {
   // off-screen above the fold the person's currently scrolled past.
   lastGeneratedConfigHash = computeConfigStateHash();
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+});
 
 // pre-fill
 suppressSave = true;
@@ -88750,7 +89032,6 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(name, type, 'custom:' + slug, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   // Channel deep linking (e.g. /channels/tlc)
   const channelMatch = path.match(new RegExp('^/channels/([a-z0-9_-]+)', 'i'));
   if (channelMatch) {
@@ -88766,6 +89047,7 @@ tryAutoRestoreCreatorProfile();
         break;
       }
     }
+    if (deadChannelLink(path, foundChannel)) return;
     const chName = foundChannel ? (foundChannel.name || (typeof deslugify === 'function' ? deslugify(slug) : slug)) : (typeof deslugify === 'function' ? deslugify(slug) : slug);
     const chUrl = foundChannel ? (foundChannel.channelId ? ('channel:id:' + foundChannel.channelId) : ('channel:v1:' + (foundChannel.name || 'channel'))) : ('channel:v1:' + slug);
     let sample = null;
@@ -88789,8 +89071,8 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(chName, 'series', chUrl, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   const hash = location.hash || '';
+  if (unknownListLink(path, hash)) return;
   if (hash.startsWith('#/list?')) {
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     openListDetailsPage(params.get('name') || 'List', params.get('type') || 'movie', params.get('url') || '', null, { skipPushState: true });
@@ -90217,10 +90499,10 @@ if (typeof document !== 'undefined') {
 // why /:config/configure pages are the ones that get noindex'd, not this
 // one -- this page has no per-user config in its URL at all, so it's
 // exactly the kind of URL meant to be crawled and indexed.
-function renderGuidePage(origin) {
+function renderGuidePage(origin) { const siteHost = new URL(origin).host, siteHostHtml = escapeHtmlServer(siteHost);
   const title = `My Lists Addon — Complete User Guide & How-To Documentation`;
   const description =
-    "Comprehensive step-by-step guides for My Lists Addon (mylistsaddon.com). Learn how to turn MDBList, Trakt, TMDB, and Simkl lists into Stremio, Wako, and Nuvio catalogs, build 24/7 Channels and Storylines & Universes, import lists from other trackers, and sync across devices.";
+    "Comprehensive step-by-step guides for My Lists Addon (" + siteHost + "). Learn how to turn MDBList, Trakt, TMDB, and Simkl lists into Stremio, Wako, and Nuvio catalogs, build 24/7 Channels and Storylines & Universes, import lists from other trackers, and sync across devices.";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -90251,7 +90533,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Open mylistsaddon.com, add your desired lists or streaming shelves under the Catalogs tab, click Generate Install Link, and open the resulting link in Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol to confirm installation. No registration or account is required.",
+            "Open " + siteHost + ", add your desired lists or streaming shelves under the Catalogs tab, click Generate Install Link, and open the resulting link in Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol to confirm installation. No registration or account is required.",
         },
       },
       {
@@ -90260,7 +90542,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Export your data as a CSV or JSON file from the other service, then go to Settings -> External Accounts & API Keys -> Import List on mylistsaddon.com. Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
+            "Export your data as a CSV or JSON file from the other service, then go to Settings -> Connected Services -> Import List on " + siteHost + ". Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
         },
       },
       {
@@ -90353,10 +90635,10 @@ ${UTILITY_CSS}
     border: none;
   }
   .btn-primary {
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
   }
-  .btn-primary:hover { background: var(--color-brand-hover); }
+  .btn-primary:hover { background: var(--color-brand-fill-hover); }
   .btn-secondary {
     background: var(--surface);
     color: var(--text);
@@ -90515,8 +90797,8 @@ ${UTILITY_CSS}
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     font-weight: 800;
     font-size: 0.85rem;
     display: flex;
@@ -90553,7 +90835,7 @@ ${UTILITY_CSS}
     background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 2px 7px;
+    padding: 2px 7px; overflow-wrap: anywhere;
     font-size: 0.88em;
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     color: var(--text);
@@ -90697,7 +90979,7 @@ ${UTILITY_CSS}
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       </button>
-      <a href="${origin}/" class="btn btn-primary">Go to mylistsaddon.com &rarr;</a>
+      <a href="${origin}/" class="btn btn-primary">Go to ${siteHostHtml} &rarr;</a>
     </div>
   </header>
 
@@ -90732,14 +91014,14 @@ ${UTILITY_CSS}
       </div>
     </div>
 
-    <p>The fastest way to get started is to use the hosted instance directly at <a href="${origin}/"><strong>mylistsaddon.com</strong></a> &mdash; no deployment, nothing to set up. The site&rsquo;s public lists work without an account; a free account adds custom lists, channels and your own watch history.</p>
+    <p>The fastest way to get started is to use the hosted instance directly at <a href="${origin}/"><strong>${siteHostHtml}</strong></a> &mdash; no deployment, nothing to set up. The site&rsquo;s public lists work without an account; a free account adds custom lists, channels and your own watch history.</p>
 
     <div class="steps-container">
       <div class="step-card">
         <div class="step-num">1</div>
         <div class="step-body">
-          <h4>Open mylistsaddon.com</h4>
-          <p>Visit <a href="${origin}/"><strong>mylistsaddon.com</strong></a> in any browser, on desktop or mobile.</p>
+          <h4>Open ${siteHostHtml}</h4>
+          <p>Visit <a href="${origin}/"><strong>${siteHostHtml}</strong></a> in any browser, on desktop or mobile.</p>
         </div>
       </div>
       <div class="step-card">
@@ -90808,7 +91090,7 @@ ${UTILITY_CSS}
     <ul>
       <li><strong>+ New Catalog</strong> &mdash; opens the Add Catalog modal to add a list by URL (see below).</li>
       <li><strong>Edit</strong> &mdash; toggle edit mode to drag-reorder, rename, or remove rows.</li>
-      <li><strong>Refresh Preview</strong> &mdash; re-renders the live preview.</li>
+      <li><strong>Refresh</strong> &mdash; re-renders the live preview.</li>
       <li>Filter by name and by group using the controls above the list.</li>
       <li><strong>Daily Randomizer</strong> &mdash; two toggles: shuffle catalog row order every 24 hours, or shuffle items within each catalog every 24 hours.</li>
       <li><strong>Generate Install Link</strong> &mdash; produces your install URL, ready for Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol.</li>
@@ -90989,7 +91271,7 @@ ${UTILITY_CSS}
     </ol>
 
     <h3>Bulk file import (CSV/JSON from other trackers)</h3>
-    <p>Go to <strong>Settings &rarr; External Accounts &amp; API Keys &rarr; Import List</strong>. Supported source formats: <strong>IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB</strong> exports, in CSV or JSON. You can select multiple files at once.</p>
+    <p>Go to <strong>Settings &rarr; Connected Services &rarr; Import List</strong>. Supported source formats: <strong>IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB</strong> exports, in CSV or JSON. You can select multiple files at once.</p>
     <ol>
       <li>Export your ratings/watchlist/history file from the other service (each site has its own "export my data" feature).</li>
       <li>Set <strong>Source</strong> to the matching provider, or leave it on <strong>Auto-detect</strong>.</li>
@@ -91121,7 +91403,7 @@ ${UTILITY_CSS}
   <div class="footer-cta">
     <h3>Ready to Customize Your Home Screen?</h3>
     <p>Build your dream Stremio, Wako, and Nuvio catalog setup in under a minute with zero account required.</p>
-    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to mylistsaddon.com &rarr;</a>
+    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to ${siteHostHtml} &rarr;</a>
   </div>
 
   <!-- Footer Navigation -->
@@ -91764,7 +92046,7 @@ async function handleFetch(request, env, ctx) {
     const adminLogoutAndBulkResolveResponse = handleAdminLogoutAndBulkResolveRoutes(request, env, ctx, url, path);
     if (adminLogoutAndBulkResolveResponse) return adminLogoutAndBulkResolveResponse;
 
-    return new Response("Not found", { status: 404 });
+    return notFoundForPeople(request, path, () => new Response("Not found", { status: 404 }));
 }
 
 // The actual Worker export. Delegates to handleFetch (25_api-catalog-
@@ -116985,7 +117267,7 @@ async function creatorListPageOrFeed(request, env, ctx, url, path, m) {
 // The rest of creatorListPageOrFeed, moved unchanged: the same statements in the same order, split only for the 150-line limit.
 async function creatorListPageOrFeedRender(request, env, ctx, { url, path, username, listName, listData, isCreatorList }) {
   if (!listData) {
-    return json({ ok: false, error: "No list found at that address." }, 404);
+    return notFoundForPeople(request, path, () => json({ ok: false, error: "No list found at that address." }, 404));
   }
   let creatorDisplayName = "Anonymous";
   if (isCreatorList) {
@@ -117015,7 +117297,7 @@ async function creatorListPageOrFeedRender(request, env, ctx, { url, path, usern
     // read the display name already needed, so it costs nothing new.
     const profileRaw = await getCreator(env, username);
     if (!profileRaw) {
-      return json({ ok: false, error: "No list found at that address." }, 404);
+      return notFoundForPeople(request, path, () => json({ ok: false, error: "No list found at that address." }, 404));
     }
     try {
       creatorDisplayName = JSON.parse(profileRaw).displayName || username;

@@ -260,23 +260,22 @@ ${seoHeadHtml}
     });
     setTimeout(showApp, 5000);
     var shellSub = (shellRoute && shellRoute.sub) || '';
-
+    var knownSub = function(key, names, fallback) { var v = localStorage.getItem(key); if (v && names.indexOf(v) === -1) { v = fallback; localStorage.setItem(key, v); } return v || fallback; };
     try {
-      var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      var catSub = shellSub || knownSub('myListAddon:catalogsSubmenu', ['all', 'quickadd', 'bulk'], 'all');
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
       var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
-      // Must agree with normalizeListsSubmenu (16_client-row-core.js): the rule
-      // above hides every Lists panel and then un-hides the one this attribute
-      // names, so a stale value naming a panel that no longer exists leaves the
-      // tab blank from first paint.
+      // Must agree with normalizeListsSubmenu (16_client-row-core.js): an unknown value
+      // hides every Lists panel and leaves the tab blank from first paint.
       if (['my-lists', 'liked', 'collections', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
-      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || knownSub('myListAddon:channelsSubmenu', ['my-channels', 'storylines', 'quickadd', 'explore', 'import', 'build'], 'my-channels');
+      if (chSub === 'build' && !localStorage.getItem('myListAddon:creatorName')) { chSub = 'my-channels'; localStorage.setItem('myListAddon:channelsSubmenu', chSub); } // signed out: no builder
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
       var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
-      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || knownSub('myListAddon:discoverSubmenu', ['all', 'curated', 'gems', 'genres', 'holidays', 'kids', 'movie', 'popular', 'series'], 'movie');
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
   })();
@@ -1986,13 +1985,13 @@ ${UTILITY_CSS}
   .list-add-btn:not(.is-added):not(:disabled) {
     background: var(--color-brand-wash) !important;
     border-color: var(--color-brand-line) !important;
-    color: var(--color-brand) !important;
+    color: var(--color-brand-text) !important;
     box-shadow: var(--shadow-sm);
   }
   .list-add-btn:not(.is-added):hover:not(:disabled) {
     background: var(--color-brand-tint) !important;
-    border-color: var(--color-brand) !important;
-    color: var(--color-brand) !important;
+    border-color: var(--color-brand-text) !important;
+    color: var(--color-brand-text) !important;
   }
   .list-add-btn:not(.is-added):active:not(:disabled) {
     transform: scale(0.97);
@@ -3766,7 +3765,7 @@ ${UTILITY_CSS}
   .actions button[data-act="removeAllLists"],
   .catalog-actions-bar button[data-act="removeAllLists"] {
     background: var(--color-danger-subtle);
-    color: var(--color-danger);
+    color: var(--color-danger-text);
     border: 1.5px solid var(--color-danger-line);
     box-shadow: var(--shadow-sm);
     min-height: var(--control-height-md, 40px);
@@ -3778,9 +3777,9 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):hover:not(:disabled),
   .actions button[data-act="removeAllLists"]:hover:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:hover:not(:disabled) {
-    background: var(--color-danger);
+    background: var(--color-danger-fill);
     color: var(--color-on-brand);
-    border-color: var(--color-danger);
+    border-color: var(--color-danger-fill);
   }
 
   .btn-danger:active:not(:disabled),
@@ -3788,7 +3787,7 @@ ${UTILITY_CSS}
   button.danger:not(.ec-btn):active:not(:disabled),
   .actions button[data-act="removeAllLists"]:active:not(:disabled),
   .catalog-actions-bar button[data-act="removeAllLists"]:active:not(:disabled) {
-    background: var(--color-danger-hover);
+    background: var(--color-danger-fill-active);
     transform: scale(0.98);
   }
 
@@ -5192,16 +5191,16 @@ ${UTILITY_CSS}
     width: 100%; padding: var(--space-2-5) var(--space-3); border-radius: var(--radius-md);
     border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: var(--font-size-base);
   }
-
-
-
   /* Touch targets: on phones the compact controls keep their look but get a
      44px hit area (WCAG 2.5.5 / HIG) from an invisible extension. */
   @media (max-width: 640px) {
-    :where(.lc-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, button.modal-close-x, .search-clear-btn, #catalogSearchBtn) { position: relative; }
+    :where(.lc-btn, .subnav-pill, .header-icon-btn, .header-avatar-btn, button.modal-close-x, .search-clear-btn, #catalogSearchBtn, .text-action-btn, .discover-chart-seeall) { position: relative; }
     .lc-btn::after, .subnav-pill::after, #catalogSearchBtn::after {
       content: ""; position: absolute; inset: -7px 0;
     }
+    /* Icon-only buttons are narrow as well as short; the sideways reach stays inside the gap between them. */
+    .lc-btn.searchLikeBtn::after, .lc-btn.searchLikeExternalBtn::after, .lc-btn.customizeListBtn::after { inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-1)); }
+    .text-action-btn::after, .discover-chart-seeall::after { content: ""; position: absolute; inset: calc(-1 * var(--space-3)) 0; }
     .header-icon-btn::after, .header-avatar-btn::after, button.modal-close-x::after, .search-clear-btn::after {
       content: ""; position: absolute; inset: -4px;
     }
@@ -5386,7 +5385,7 @@ ${appShellMobileNavHtml}
     </div>
   </div>
 
-  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Create a list" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createListModalTitle">Create List</h2>
@@ -5411,7 +5410,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createListModalDesc" placeholder="Brief summary of what is in this list…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
       
       <div class="u-mb-14px">
@@ -5441,7 +5440,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Create Collection Folder Modal -->
-  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="createCollectionModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-labelledby="createCollectionModalTitle" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="createCollectionModalTitle">Create folder</h2>
@@ -5461,7 +5460,7 @@ ${appShellMobileNavHtml}
 
       <div class="u-mb-12px">
         <label for="createCollectionModalDesc" class="u-fs-v_font_size_sm u-fw-600 u-c-v_muted u-mb-4px u-tt-uppercase" style="display:block;">Description (Optional)</label>
-        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups..." rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
+        <textarea id="createCollectionModalDesc" placeholder="Brief summary of what this folder groups…" rows="2" class="u-p-8px_12px u-br-v_radius_sm u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_base u-rs-vertical u-ff-inherit" style="width:100%;"></textarea>
       </div>
 
       <div class="u-mb-12px">
@@ -5523,7 +5522,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import Nuvio Collections Modal -->
-  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importNuvioCollectionsModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Nuvio Collections" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Nuvio Collections</h2>
@@ -5549,7 +5548,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Sync to Nuvio / Add to Profile Modal -->
-  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="syncNuvioModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Add to Profile" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text" id="syncNuvioModalTitle">Add to Profile</h2>
@@ -5608,7 +5607,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Add Catalog Modal -->
-  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="addShelfModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="New catalog" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">New Catalog</h2>
@@ -5647,7 +5646,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import List Modal -->
-  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importListModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import list from a link" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-14px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import List from Link</h2>
@@ -5674,7 +5673,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Import Channel Modal -->
-  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="importChannelModal" class="modal-overlay u-bg-v_color_bg_overlay u-jc-center u-ai-center u-p-16px" role="dialog" aria-modal="true" aria-label="Import Channel" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-440px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_xl u-bsh-v_shadow_lg u-fd-column" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Import Channel</h2>
@@ -5724,7 +5723,7 @@ ${appShellMobileNavHtml}
     </div>
   </div>
 
-  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; z-index:10001; position:fixed; inset:0;">
+  <div id="selectListModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Choose a list" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-480px u-p-22px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-maxh-85vh" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-flex_start u-mb-12px" style="display:flex;">
         <div>
@@ -5744,7 +5743,7 @@ ${appShellMobileNavHtml}
   </div>
 
   <!-- Trakt Device Activation Modal -->
-  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; z-index:10002; position:fixed; inset:0;">
+  <div id="traktDeviceModal" class="modal-overlay u-jc-center u-ai-center u-p-16px u-bg-v_color_bg_overlay" role="dialog" aria-modal="true" aria-label="Connect Trakt" style="display:none; position:fixed; inset:0;">
     <div class="modal-card u-maxw-420px u-p-24px u-bg-v_color_bg_elevated u-bd-1px_solid_v_color_border_strong u-br-v_radius_lg u-bsh-v_shadow_lg u-fd-column u-ta-center" style="width:100%; display:flex;">
       <div class="u-jc-space_between u-ai-center u-mb-12px" style="display:flex;">
         <h2 class="u-m-0 u-fs-v_font_size_xl u-fw-700 u-c-v_text">Connect Trakt</h2>
@@ -5753,7 +5752,7 @@ ${appShellMobileNavHtml}
       <p class="u-m-0_0_16px u-c-v_muted u-fs-v_font_size_base">To authorize your Trakt account without redirects or rate limits, enter the code below on Trakt:</p>
       
       <div id="traktDeviceCodeBox" class="u-bg-v_panel_strong u-bd-2px_dashed_v_accent u-br-v_radius_md u-p-16px u-mb-16px">
-        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING...</div>
+        <div id="traktDeviceUserCode" class="u-fs-2rem u-fw-800 u-ls-4px u-c-v_accent u-ff-monospace">LOADING…</div>
       </div>
 
       <div class="u-fd-column u-gap-10px u-mb-16px" style="display:flex;">

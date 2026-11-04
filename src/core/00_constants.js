@@ -1802,7 +1802,13 @@ const DESIGN_TOKENS_CSS = `
     /* Coloured text on a tinted or white surface (>= 4.5:1) */
     --color-success-text:   #1F7A35;
     --color-warn-text:      #B25000;
-    --color-danger-text:    #D70015;
+    --color-danger-text:    #C4001A;
+    /* Backgrounds that carry white text (>= 5:1 with --color-on-brand) */
+    --color-danger-fill:    #D70015;
+    --color-danger-fill-active: #B3001B;
+    /* Brand-coloured text on a tinted or white surface (>= 4.5:1) */
+    --color-brand-text:     #0059BD;
+    --color-warn-fill:      #B25000;
     --color-badge-tmdb:     #00769E;
     --color-badge-mylists:  #7B2FA8;
     --color-badge-imdb:     #7A5C00;
@@ -1961,7 +1967,11 @@ const DESIGN_TOKENS_CSS = `
     --color-success-subtle: rgba(48, 209, 88, 0.18);
     --color-success-text:   #30D158;
     --color-warn-text:      #FF9F0A;
-    --color-danger-text:    #FF453A;
+    --color-danger-fill:    #D1241B;
+    --color-danger-fill-active: #B01E16;
+    --color-brand-text:     #64B0FF;
+    --color-warn-fill:      #B54A00;
+    --color-danger-text:    #FF7A72;
     --color-badge-tmdb:     #5AC8FA;
     --color-badge-mylists:  #BF5AF2;
     --color-badge-imdb:     #F5C518;
@@ -2035,7 +2045,7 @@ const UTILITY_CSS = `
 .u-bdc-rgba_255_59_48_0_3{border-color:rgba(255,59,48,0.3) !important}
 .u-bdc-rgba_255_59_48_0_35{border-color:rgba(255,59,48,0.35) !important}
 .u-bdc-rgba_255_59_48_0_4{border-color:rgba(255,59,48,0.4) !important}
-.u-bdc-v_color_danger{border-color:var(--color-danger) !important}
+.u-bdc-v_color_danger_fill{border-color:var(--color-danger-fill) !important}
 .u-bdc-v_danger{border-color:var(--danger) !important}
 .u-bdt-1px_dashed_v_border{border-top:1px dashed var(--border) !important}
 .u-bdt-1px_solid_v_border{border-top:1px solid var(--border) !important}
@@ -2056,7 +2066,7 @@ const UTILITY_CSS = `
 .u-bg-rgba_255_59_48_0_08{background:rgba(255,59,48,0.08) !important}
 .u-bg-rgba_255_59_48_0_12{background:rgba(255,59,48,0.12) !important}
 .u-bg-rgba_52_199_89_0_15{background:rgba(52,199,89,0.15) !important}
-.u-bg-v_accent{background:var(--accent) !important}
+.u-bg-v_color_brand_fill{background:var(--color-brand-fill) !important}
 .u-bg-v_bg{background:var(--bg) !important}
 .u-bg-v_bg_2_rgba_255_255_255_0_03{background:var(--bg-2, rgba(255,255,255,0.03)) !important}
 .u-bg-v_border{background:var(--border) !important}
@@ -2064,10 +2074,10 @@ const UTILITY_CSS = `
 .u-bg-v_color_bg_elevated{background:var(--color-bg-elevated) !important}
 .u-bg-v_color_bg_overlay{background:var(--color-bg-overlay) !important}
 .u-bg-v_color_bg_sunken{background:var(--color-bg-sunken) !important}
-.u-bg-v_color_danger{background:var(--color-danger) !important}
+.u-bg-v_color_danger_fill{background:var(--color-danger-fill) !important}
 .u-bg-v_color_on_brand{background:var(--color-on-brand) !important}
 .u-bg-v_color_success_subtle{background:var(--color-success-subtle) !important}
-.u-bg-v_color_warn{background:var(--color-warn) !important}
+.u-bg-v_color_warn_fill{background:var(--color-warn-fill) !important}
 .u-bg-v_panel_strong{background:var(--panel-strong) !important}
 .u-bg-v_surface{background:var(--surface) !important}
 .u-bg-v_surface_2_rgba_255_255_255_0_04{background:var(--surface-2, rgba(255,255,255,0.04)) !important}
@@ -2124,7 +2134,6 @@ const UTILITY_CSS = `
 .u-flex-1_1_220px{flex:1 1 220px !important}
 .u-flex-1_1_320px{flex:1 1 320px !important}
 .u-flex-none{flex:none !important}
-.u-fs-13px{font-size:13px !important}
 .u-fs-2_5rem{font-size:2.5rem !important}
 .u-fs-2rem{font-size:2rem !important}
 .u-fs-v_font_size_2xl{font-size:var(--font-size-2xl) !important}

@@ -160,6 +160,7 @@ function makeStorage(seed = {}) {
  *              Matched by pathname. An unmatched path throws, so a test that
  *              triggers an unexpected request fails loudly instead of hanging.
  * opts.storage seed for localStorage.
+ * opts.pathname the address the page was opened at (default "/"); the load-time deep link reads it.
  * opts.signedIn sign in before the test runs: true for "alice", or a username.
  *              Custom lists, channels and personal shelves need an account
  *              (docs/DECISIONS.md D-8), so a test that builds one signs in.
@@ -215,7 +216,7 @@ export function loadClient(opts = {}) {
     navigator: { userAgent: "node", clipboard: { writeText: async () => {} }, onLine: true },
     location: {
       href: "https://example.com/", origin: "https://example.com", protocol: "https:",
-      host: "example.com", hostname: "example.com", pathname: "/", search: "", hash: "",
+      host: "example.com", hostname: "example.com", pathname: opts.pathname || "/", search: "", hash: "",
       assign() {}, replace() {}, reload() {},
     },
     history: {

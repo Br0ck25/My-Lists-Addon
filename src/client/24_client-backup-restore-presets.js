@@ -415,7 +415,7 @@ function validateAndRepairBackup(data) {
     if (ref && !(ref in source) && embedded === 0) emptyRows.push(e.name || ref);
   });
   if (emptyRows.length) {
-    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '...' : ''));
+    warnings.push(emptyRows.length + ' row(s) have no items and nothing to load them from: ' + emptyRows.slice(0, 5).join(', ') + (emptyRows.length > 5 ? '…' : ''));
   }
 
   // 6. Ids that cannot have come from this app -- see dropUnsafeImportedIds.
@@ -1859,9 +1859,9 @@ async function copyLink(url) {
     if (urlBtn) {
       const oldUrlHtml = urlBtn.innerHTML;
       urlBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Copied!</span>';
-      urlBtn.style.background = 'var(--success)';
-      urlBtn.style.color = '#ffffff';
-      urlBtn.style.borderColor = 'var(--success)';
+      urlBtn.style.background = 'var(--color-success-subtle)';
+      urlBtn.style.color = 'var(--color-success-text)';
+      urlBtn.style.borderColor = 'var(--color-success-text)';
       setTimeout(() => {
         urlBtn.innerHTML = oldUrlHtml;
         urlBtn.style.background = '';
@@ -1951,7 +1951,7 @@ function signInToInstallHtml(message, entries) {
     + '</div>';
 }
 
-async function generate() {
+var generate = skipWhileBusy(async function generate() {
   const entries = collectEntries();
   if (!entries.length) { showToast('Add at least one list.', 'error'); return; }
   const keys = collectKeys();
@@ -2095,7 +2095,7 @@ async function generate() {
   // off-screen above the fold the person's currently scrolled past.
   lastGeneratedConfigHash = computeConfigStateHash();
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+});
 
 // pre-fill
 suppressSave = true;
@@ -2500,7 +2500,6 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(name, type, 'custom:' + slug, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   // Channel deep linking (e.g. /channels/tlc)
   const channelMatch = path.match(new RegExp('^/channels/([a-z0-9_-]+)', 'i'));
   if (channelMatch) {
@@ -2516,6 +2515,7 @@ tryAutoRestoreCreatorProfile();
         break;
       }
     }
+    if (deadChannelLink(path, foundChannel)) return;
     const chName = foundChannel ? (foundChannel.name || (typeof deslugify === 'function' ? deslugify(slug) : slug)) : (typeof deslugify === 'function' ? deslugify(slug) : slug);
     const chUrl = foundChannel ? (foundChannel.channelId ? ('channel:id:' + foundChannel.channelId) : ('channel:v1:' + (foundChannel.name || 'channel'))) : ('channel:v1:' + slug);
     let sample = null;
@@ -2539,8 +2539,8 @@ tryAutoRestoreCreatorProfile();
     openListDetailsPage(chName, 'series', chUrl, sample ? { sample: sample, count: sample.length, maybeMore: false } : null, { skipPushState: true });
     return;
   }
-
   const hash = location.hash || '';
+  if (unknownListLink(path, hash)) return;
   if (hash.startsWith('#/list?')) {
     const params = new URLSearchParams(hash.slice('#/list?'.length));
     openListDetailsPage(params.get('name') || 'List', params.get('type') || 'movie', params.get('url') || '', null, { skipPushState: true });
@@ -3967,10 +3967,10 @@ if (typeof document !== 'undefined') {
 // why /:config/configure pages are the ones that get noindex'd, not this
 // one -- this page has no per-user config in its URL at all, so it's
 // exactly the kind of URL meant to be crawled and indexed.
-function renderGuidePage(origin) {
+function renderGuidePage(origin) { const siteHost = new URL(origin).host, siteHostHtml = escapeHtmlServer(siteHost);
   const title = `My Lists Addon — Complete User Guide & How-To Documentation`;
   const description =
-    "Comprehensive step-by-step guides for My Lists Addon (mylistsaddon.com). Learn how to turn MDBList, Trakt, TMDB, and Simkl lists into Stremio, Wako, and Nuvio catalogs, build 24/7 Channels and Storylines & Universes, import lists from other trackers, and sync across devices.";
+    "Comprehensive step-by-step guides for My Lists Addon (" + siteHost + "). Learn how to turn MDBList, Trakt, TMDB, and Simkl lists into Stremio, Wako, and Nuvio catalogs, build 24/7 Channels and Storylines & Universes, import lists from other trackers, and sync across devices.";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -4001,7 +4001,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Open mylistsaddon.com, add your desired lists or streaming shelves under the Catalogs tab, click Generate Install Link, and open the resulting link in Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol to confirm installation. No registration or account is required.",
+            "Open " + siteHost + ", add your desired lists or streaming shelves under the Catalogs tab, click Generate Install Link, and open the resulting link in Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol to confirm installation. No registration or account is required.",
         },
       },
       {
@@ -4010,7 +4010,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Export your data as a CSV or JSON file from the other service, then go to Settings -> External Accounts & API Keys -> Import List on mylistsaddon.com. Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
+            "Export your data as a CSV or JSON file from the other service, then go to Settings -> Connected Services -> Import List on " + siteHost + ". Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
         },
       },
       {
@@ -4103,10 +4103,10 @@ ${UTILITY_CSS}
     border: none;
   }
   .btn-primary {
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
   }
-  .btn-primary:hover { background: var(--color-brand-hover); }
+  .btn-primary:hover { background: var(--color-brand-fill-hover); }
   .btn-secondary {
     background: var(--surface);
     color: var(--text);
@@ -4265,8 +4265,8 @@ ${UTILITY_CSS}
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent);
-    color: #FFF;
+    background: var(--color-brand-fill);
+    color: var(--color-on-brand);
     font-weight: 800;
     font-size: 0.85rem;
     display: flex;
@@ -4303,7 +4303,7 @@ ${UTILITY_CSS}
     background: var(--color-bg-sunken);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 2px 7px;
+    padding: 2px 7px; overflow-wrap: anywhere;
     font-size: 0.88em;
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     color: var(--text);
@@ -4447,7 +4447,7 @@ ${UTILITY_CSS}
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       </button>
-      <a href="${origin}/" class="btn btn-primary">Go to mylistsaddon.com &rarr;</a>
+      <a href="${origin}/" class="btn btn-primary">Go to ${siteHostHtml} &rarr;</a>
     </div>
   </header>
 
@@ -4482,14 +4482,14 @@ ${UTILITY_CSS}
       </div>
     </div>
 
-    <p>The fastest way to get started is to use the hosted instance directly at <a href="${origin}/"><strong>mylistsaddon.com</strong></a> &mdash; no deployment, nothing to set up. The site&rsquo;s public lists work without an account; a free account adds custom lists, channels and your own watch history.</p>
+    <p>The fastest way to get started is to use the hosted instance directly at <a href="${origin}/"><strong>${siteHostHtml}</strong></a> &mdash; no deployment, nothing to set up. The site&rsquo;s public lists work without an account; a free account adds custom lists, channels and your own watch history.</p>
 
     <div class="steps-container">
       <div class="step-card">
         <div class="step-num">1</div>
         <div class="step-body">
-          <h4>Open mylistsaddon.com</h4>
-          <p>Visit <a href="${origin}/"><strong>mylistsaddon.com</strong></a> in any browser, on desktop or mobile.</p>
+          <h4>Open ${siteHostHtml}</h4>
+          <p>Visit <a href="${origin}/"><strong>${siteHostHtml}</strong></a> in any browser, on desktop or mobile.</p>
         </div>
       </div>
       <div class="step-card">
@@ -4558,7 +4558,7 @@ ${UTILITY_CSS}
     <ul>
       <li><strong>+ New Catalog</strong> &mdash; opens the Add Catalog modal to add a list by URL (see below).</li>
       <li><strong>Edit</strong> &mdash; toggle edit mode to drag-reorder, rename, or remove rows.</li>
-      <li><strong>Refresh Preview</strong> &mdash; re-renders the live preview.</li>
+      <li><strong>Refresh</strong> &mdash; re-renders the live preview.</li>
       <li>Filter by name and by group using the controls above the list.</li>
       <li><strong>Daily Randomizer</strong> &mdash; two toggles: shuffle catalog row order every 24 hours, or shuffle items within each catalog every 24 hours.</li>
       <li><strong>Generate Install Link</strong> &mdash; produces your install URL, ready for Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol.</li>
@@ -4739,7 +4739,7 @@ ${UTILITY_CSS}
     </ol>
 
     <h3>Bulk file import (CSV/JSON from other trackers)</h3>
-    <p>Go to <strong>Settings &rarr; External Accounts &amp; API Keys &rarr; Import List</strong>. Supported source formats: <strong>IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB</strong> exports, in CSV or JSON. You can select multiple files at once.</p>
+    <p>Go to <strong>Settings &rarr; Connected Services &rarr; Import List</strong>. Supported source formats: <strong>IMDb, Letterboxd, MovieLens, Trakt, Simkl, and TMDB</strong> exports, in CSV or JSON. You can select multiple files at once.</p>
     <ol>
       <li>Export your ratings/watchlist/history file from the other service (each site has its own "export my data" feature).</li>
       <li>Set <strong>Source</strong> to the matching provider, or leave it on <strong>Auto-detect</strong>.</li>
@@ -4871,7 +4871,7 @@ ${UTILITY_CSS}
   <div class="footer-cta">
     <h3>Ready to Customize Your Home Screen?</h3>
     <p>Build your dream Stremio, Wako, and Nuvio catalog setup in under a minute with zero account required.</p>
-    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to mylistsaddon.com &rarr;</a>
+    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to ${siteHostHtml} &rarr;</a>
   </div>
 
   <!-- Footer Navigation -->

@@ -921,7 +921,7 @@ function updatePictoriumUrlHint(v) {
   const hint = document.getElementById('pictoriumUrlHint');
   if (!hint) return;
   const problem = pictoriumLinkProblem(v);
-  hint.style.color = problem ? 'var(--danger, #d33)' : 'var(--muted)';
+  hint.style.color = problem ? 'var(--color-danger-text)' : 'var(--muted)';
   if (problem) hint.textContent = problem;
 }
 window.updatePictoriumUrlHint = updatePictoriumUrlHint;
@@ -935,7 +935,7 @@ async function testRpdbKey(btn) {
   if (!input || !status) return;
   const say = (text, color) => { status.textContent = text; status.style.color = color || 'var(--muted)'; };
   const key = String(input.value || '').trim();
-  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--danger, #d33)'); return; }
+  if (!key) { say('Paste your RatingPosterDB key first.', 'var(--color-danger-text)'); return; }
   if (btn) btn.disabled = true;
   say('Checking…');
   try {
@@ -945,13 +945,13 @@ async function testRpdbKey(btn) {
       body: JSON.stringify({ key: key }),
     });
     const data = await res.json().catch(() => null);
-    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--danger, #d33)'); return; }
-    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--danger, #d33)'); return; }
+    if (!data || !data.ok) { say((data && data.error) || 'Could not check the key just now.', 'var(--color-danger-text)'); return; }
+    if (!data.valid) { say('RatingPosterDB does not accept this key.', 'var(--color-danger-text)'); return; }
     say(data.used != null && data.limit != null
       ? 'The key works. ' + data.used.toLocaleString() + ' of ' + data.limit.toLocaleString() + ' requests used this month.'
       : 'The key works.');
   } catch (e) {
-    say('Could not check the key just now.', 'var(--danger, #d33)');
+    say('Could not check the key just now.', 'var(--color-danger-text)');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -1395,7 +1395,7 @@ async function renderLivePreview() {
           if (seeAllBtn && sample.length > visibleCount) seeAllBtn.disabled = false;
         } else {
           entryDOM.style.display = '';
-          postersContainer.innerHTML = '<p class="testresult err">&#x2717; Network error loading this catalog.</p>';
+          postersContainer.innerHTML = catalogLoadErrorHtml();
         }
       }
     }

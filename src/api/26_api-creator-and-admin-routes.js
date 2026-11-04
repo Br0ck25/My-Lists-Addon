@@ -82,7 +82,7 @@
     const adminLogoutAndBulkResolveResponse = handleAdminLogoutAndBulkResolveRoutes(request, env, ctx, url, path);
     if (adminLogoutAndBulkResolveResponse) return adminLogoutAndBulkResolveResponse;
 
-    return new Response("Not found", { status: 404 });
+    return notFoundForPeople(request, path, () => new Response("Not found", { status: 404 }));
 }
 
 // The actual Worker export. Delegates to handleFetch (25_api-catalog-

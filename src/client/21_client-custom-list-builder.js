@@ -159,11 +159,11 @@ function updateCustomListSearchPlaceholder() {
   const input = document.getElementById('customListSearchInput');
   if (!input) return;
   if (customListDraftType === 'movie') {
-    input.placeholder = 'Search a movie to add...';
+    input.placeholder = 'Search a movie to add…';
   } else if (customListDraftType === 'series') {
-    input.placeholder = 'Search a show to add...';
+    input.placeholder = 'Search a show to add…';
   } else {
-    input.placeholder = 'Search a movie or show to add...';
+    input.placeholder = 'Search a movie or show to add…';
   }
 }
 

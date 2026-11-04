@@ -3816,7 +3816,7 @@ async function openItemDetailsModal(id, type, opts) {
   }
   
   const body = document.getElementById('itemDetailsBody');
-  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB...</p>';
+  body.innerHTML = '<p class="u-c-v_muted u-ta-center u-p-40px">Fetching information from TMDB…</p>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -4068,7 +4068,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
   container.style.display = 'block';
   if (grid.innerHTML.trim() !== '') return; // already loaded
   
-  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes...</div>';
+  grid.innerHTML = '<div class="u-gridcolumn-1_1 u-ta-center u-p-20px u-c-v_muted">Loading episodes…</div>';
   
   const tkInput = document.getElementById('tmdbKeyInput');
   const tmdbKey = (tkInput && tkInput.value ? tkInput.value.trim() : '') || readProviderSecret('myListAddon:tmdbKey') || '';
@@ -4099,7 +4099,7 @@ async function toggleSeasonEpisodes(headerEl, seasonNum, imdbId) {
         '<div class="clickable-episode u-fd-column u-gap-4px u-cur-pointer" data-id="' + ep.id + '" data-season="' + seasonNum + '" data-episode="' + ep.episode_number + '" data-show-id="' + escapeAttr(imdbId || '') + '" style="display:flex;" data-act="openEpisodeDetails" data-act-args="' + appActArgs([ep.episode_number]) + '">' +
           '<div class="u-aspectratio-16_9 u-bg-222 u-br-v_radius_sm u-ov-hidden u-bsh-0_2px_6px_rgba_0_0_0_0_4" style="width:100%; position:relative;">' +
             (still ? '<img src="' + still + '" class="u-objectfit-cover" style="width:100%; height:100%;">' : '') +
-            '<div class="episode-num-badge u-bg-v_accent u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
+            '<div class="episode-num-badge u-bg-v_color_brand_fill u-c-v_color_on_brand u-p-2px_6px u-br-v_radius_xs u-fw-bold u-fs-v_font_size_sm u-bsh-0_1px_4px_rgba_0_0_0_0_4" style="position:absolute; bottom:4px; left:4px;">E' + ep.episode_number + '</div>' +
           '</div>' +
           '<div class="u-fs-v_font_size_base u-c-v_text u-lh-1_2 u-pt-4px">' + escapeHtml(ep.name) + '</div>' +
         '</div>';
@@ -5328,9 +5328,9 @@ function setCatalogSearchFilter(filter, btn) {
   currentCatalogSearchType = filter;
   const inputEl = document.getElementById('catalogSearchInput');
   if (inputEl) {
-    if (filter === 'movie') inputEl.placeholder = 'Search movies by title...';
-    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title...';
-    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists...';
+    if (filter === 'movie') inputEl.placeholder = 'Search movies by title…';
+    else if (filter === 'tv') inputEl.placeholder = 'Search TV shows by title…';
+    else if (filter === 'lists') inputEl.placeholder = 'Search community & provider lists…';
   }
   const filtersRow = document.getElementById('catalogSearchFiltersRow');
   if (filtersRow) {
@@ -5500,7 +5500,7 @@ async function renderDefaultCatalogSearch(force) {
   // still landed on top of the default view.
   const thisSeq = ++currentTitleSearchSequence;
 
-  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '...</small></p>';
+  resEl.innerHTML = '<p><small>Loading top ' + (currentCatalogSearchType === 'lists' ? 'public lists' : (currentCatalogSearchType === 'tv' ? 'shows' : 'movies')) + '…</small></p>';
 
   if (currentCatalogSearchType === 'lists') {
     window._rawCatalogTitleItems = [];
@@ -5568,7 +5568,7 @@ async function runCatalogSearch() {
   }
 
   const thisSeq = ++currentTitleSearchSequence;
-  resEl.innerHTML = '<p><small>Searching...</small></p>';
+  resEl.innerHTML = '<p><small>Searching…</small></p>';
 
   try {
     fetch(ORIGIN + '/api/track-search', {

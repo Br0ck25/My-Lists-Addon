@@ -42,13 +42,16 @@ All tokens live in `:root` (light) and `:root.dark-theme` (dark) in `src/page/09
 | `--color-brand` | `#0066D6` | `#0A84FF` | Brand **text**, borders, links, focus ring |
 | `--color-brand-hover` / `-active` | `#0055B8` / `#00459A` | `#0071E3` / `#0056B3` | Text/border hover states |
 | `--color-brand-fill` / `-fill-hover` / `-fill-active` | `#0066D6` / `#0055B8` / `#00459A` | `#0A64D8` / `#0B5FCC` / `#0A54B3` | **Backgrounds that carry white text** (primary button, active tab, badges). ≥ 5:1 with white |
+| `--color-danger-fill` / `--color-warn-fill` | `#D70015` / `#B25000` | `#D1241B` / `#B54A00` | **Solid destructive buttons that carry white text** (Delete/Reset Account, `.btn-danger` hover). ≥ 5:1 with white. Never `--color-danger`/`--color-warn` as a fill |
+| `--color-danger-fill-active` | `#B3001B` | `#B01E16` | Pressed state of `.btn-danger` (white text, ≥ 6:1) |
+| `--color-brand-text` | `#0059BD` | `#64B0FF` | Brand-coloured **text** on a tinted pill (the `+ Add` button), ≥ 4.5:1 on canvas and surface. `--color-brand` is for icons and borders |
 | `--color-on-brand` | `#FFFFFF` | `#FFFFFF` | Text/icons on any filled colour (never write `#fff`) |
 | `--color-brand-wash` / `-subtle` / `-tint` / `-line` | alpha `.08 / .12 / .16 / .35` | `.14 / .18 / .24 / .40` | Resting tint / soft fill / hover fill / tinted border. The same four exist for `--color-danger-*` |
 | `--color-brand-2` | `#34AADC` | `#5AC8FA` | Second gradient stop only (Wako button) |
 | `--color-danger` / `-hover` / `-subtle` | `#FF3B30` / `#D70015` / `rgba(255,59,48,.12)` | `#FF453A` / `#FF6961` / `rgba(255,69,58,.18)` | Destructive actions, errors |
 | `--color-success` / `-hover` / `-subtle` | `#34C759` / `#248A3D` / `rgba(52,199,89,.12)` | `#30D158` / `#34C759` / `rgba(48,209,88,.18)` | Success text/chips |
 | `--color-warn` / `-hover` / `-subtle` | `#FF9500` / `#C97000` / `rgba(255,149,0,.12)` | `#FF9F0A` / `#FFB340` / `rgba(255,159,10,.18)` | Warnings |
-| `--color-success-text` / `-warn-text` / `-danger-text` | `#1F7A35` / `#B25000` / `#D70015` | `#30D158` / `#FF9F0A` / `#FF453A` | Coloured **text** on white/tinted surfaces (≥ 4.5:1) |
+| `--color-success-text` / `-warn-text` / `-danger-text` | `#1F7A35` / `#B25000` / `#C4001A` | `#30D158` / `#FF9F0A` / `#FF7A72` | Coloured **text** on white/tinted surfaces (≥ 4.5:1) |
 | `--color-badge-tmdb/-mylists/-imdb` | `#00769E` / `#7B2FA8` / `#7A5C00` | `#5AC8FA` / `#BF5AF2` / `#F5C518` | Source badge text |
 | `--color-rating-high/mid/low` | `#1F7A35` / `#B25000` / `#C41E14` | same | Rating badge fills (white text, ≥ 5:1) |
 
@@ -386,6 +389,7 @@ Still open. Do not copy these; fix them opportunistically:
 | 6 | Unused tokens: `--color-border-focus`, `--shadow-focus`, `--control-touch-min`, `--font-display`, some `--space-*` | tokens | start using them |
 | 7 | No tooltip, generic alert/banner, empty-state or button-loading component | — | build once, add here |
 | 8 | The light primary blue is `#0066D6`, deliberately darker than Apple's `#007AFF`; any leftover `#007AFF` is legacy | — | tokens |
+| 9 | Raw hex colours in the client scripts are allowed in two places only: the 8-colour avatar palette (`var palette = [` in `16_client-row-core.js`, decorative) and the browser `theme-color` meta. `tests/design-system.test.mjs` scans `src/client` for any other | client scripts | use a token |
 
 ---
 

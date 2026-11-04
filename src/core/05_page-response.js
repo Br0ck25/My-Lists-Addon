@@ -70,6 +70,32 @@ function pageResponseWithBody(html, init) {
   return res;
 }
 
+// The 404 a person sees after following a dead link: a short page with a way
+// back to the site. Only for a real browser navigation (see isBrowserNavigation);
+// apps, feeds (.json) and /api/* keep their JSON or plain-text answers.
+function notFoundForPeople(request, path, fallback) {
+  if (!isBrowserNavigation(request) || /\.json$/i.test(path) || path.startsWith("/api/")) return fallback();
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found - My Lists Addon</title>
+<link rel="stylesheet" href="/app.css">
+<script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
+<style nonce="${CSP_NONCE_PLACEHOLDER}">
+body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: var(--color-bg-canvas); color: var(--color-text-primary); font-family: system-ui, sans-serif; }
+main { max-width: 28rem; text-align: center; }
+a { color: var(--color-text-primary); text-decoration: underline; }
+</style></head>
+<body><main>
+<h1>Could not find that page</h1>
+<p>The link may be old, mistyped, or the list or channel may have been removed.</p>
+<p><a href="/">Go to My Lists Addon</a></p>
+</main></body></html>`;
+  return new Response(html, {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
 async function htmlPageResponse(request, fullHtml, extraHeaders) {
   // The ~1.3MB client bundle is lifted out to /app.js?v=<hash> first, so
   // both the body sent below and the ETag computed from it describe the

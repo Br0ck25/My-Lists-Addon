@@ -712,7 +712,7 @@ async function creatorListPageOrFeed(request, env, ctx, url, path, m) {
 // The rest of creatorListPageOrFeed, moved unchanged: the same statements in the same order, split only for the 150-line limit.
 async function creatorListPageOrFeedRender(request, env, ctx, { url, path, username, listName, listData, isCreatorList }) {
   if (!listData) {
-    return json({ ok: false, error: "No list found at that address." }, 404);
+    return notFoundForPeople(request, path, () => json({ ok: false, error: "No list found at that address." }, 404));
   }
   let creatorDisplayName = "Anonymous";
   if (isCreatorList) {
@@ -742,7 +742,7 @@ async function creatorListPageOrFeedRender(request, env, ctx, { url, path, usern
     // read the display name already needed, so it costs nothing new.
     const profileRaw = await getCreator(env, username);
     if (!profileRaw) {
-      return json({ ok: false, error: "No list found at that address." }, 404);
+      return notFoundForPeople(request, path, () => json({ ok: false, error: "No list found at that address." }, 404));
     }
     try {
       creatorDisplayName = JSON.parse(profileRaw).displayName || username;
