@@ -3967,10 +3967,10 @@ if (typeof document !== 'undefined') {
 // why /:config/configure pages are the ones that get noindex'd, not this
 // one -- this page has no per-user config in its URL at all, so it's
 // exactly the kind of URL meant to be crawled and indexed.
-function renderGuidePage(origin) {
+function renderGuidePage(origin) { const siteHost = new URL(origin).host, siteHostHtml = escapeHtmlServer(siteHost);
   const title = `My Lists Addon — Complete User Guide & How-To Documentation`;
   const description =
-    "Comprehensive step-by-step guides for My Lists Addon (mylistsaddon.com). Learn how to turn MDBList, Trakt, TMDB, and Simkl lists into Stremio, Wako, and Nuvio catalogs, build 24/7 Channels and Storylines & Universes, import lists from other trackers, and sync across devices.";
+    "Comprehensive step-by-step guides for My Lists Addon (" + siteHost + "). Learn how to turn MDBList, Trakt, TMDB, and Simkl lists into Stremio, Wako, and Nuvio catalogs, build 24/7 Channels and Storylines & Universes, import lists from other trackers, and sync across devices.";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -4001,7 +4001,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Open mylistsaddon.com, add your desired lists or streaming shelves under the Catalogs tab, click Generate Install Link, and open the resulting link in Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol to confirm installation. No registration or account is required.",
+            "Open " + siteHost + ", add your desired lists or streaming shelves under the Catalogs tab, click Generate Install Link, and open the resulting link in Stremio, Wako, Nuvio, or any other app built on the Stremio addon protocol to confirm installation. No registration or account is required.",
         },
       },
       {
@@ -4010,7 +4010,7 @@ function renderGuidePage(origin) {
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Export your data as a CSV or JSON file from the other service, then go to Settings -> Connected Services -> Import List on mylistsaddon.com. Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
+            "Export your data as a CSV or JSON file from the other service, then go to Settings -> Connected Services -> Import List on " + siteHost + ". Choose the matching source (or leave it on Auto-detect), pick or name a destination list, and upload your file.",
         },
       },
       {
@@ -4447,7 +4447,7 @@ ${UTILITY_CSS}
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       </button>
-      <a href="${origin}/" class="btn btn-primary">Go to mylistsaddon.com &rarr;</a>
+      <a href="${origin}/" class="btn btn-primary">Go to ${siteHostHtml} &rarr;</a>
     </div>
   </header>
 
@@ -4482,14 +4482,14 @@ ${UTILITY_CSS}
       </div>
     </div>
 
-    <p>The fastest way to get started is to use the hosted instance directly at <a href="${origin}/"><strong>mylistsaddon.com</strong></a> &mdash; no deployment, nothing to set up. The site&rsquo;s public lists work without an account; a free account adds custom lists, channels and your own watch history.</p>
+    <p>The fastest way to get started is to use the hosted instance directly at <a href="${origin}/"><strong>${siteHostHtml}</strong></a> &mdash; no deployment, nothing to set up. The site&rsquo;s public lists work without an account; a free account adds custom lists, channels and your own watch history.</p>
 
     <div class="steps-container">
       <div class="step-card">
         <div class="step-num">1</div>
         <div class="step-body">
-          <h4>Open mylistsaddon.com</h4>
-          <p>Visit <a href="${origin}/"><strong>mylistsaddon.com</strong></a> in any browser, on desktop or mobile.</p>
+          <h4>Open ${siteHostHtml}</h4>
+          <p>Visit <a href="${origin}/"><strong>${siteHostHtml}</strong></a> in any browser, on desktop or mobile.</p>
         </div>
       </div>
       <div class="step-card">
@@ -4871,7 +4871,7 @@ ${UTILITY_CSS}
   <div class="footer-cta">
     <h3>Ready to Customize Your Home Screen?</h3>
     <p>Build your dream Stremio, Wako, and Nuvio catalog setup in under a minute with zero account required.</p>
-    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to mylistsaddon.com &rarr;</a>
+    <a href="${origin}/" class="btn btn-primary u-fs-v_font_size_md u-p-12px_28px">Go to ${siteHostHtml} &rarr;</a>
   </div>
 
   <!-- Footer Navigation -->
