@@ -260,7 +260,6 @@ ${seoHeadHtml}
     });
     setTimeout(showApp, 5000);
     var shellSub = (shellRoute && shellRoute.sub) || '';
-
     try {
       var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
@@ -272,6 +271,7 @@ ${seoHeadHtml}
       if (['my-lists', 'liked', 'collections', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
       var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      if (chSub === 'build' && !localStorage.getItem('myListAddon:creatorName')) { chSub = 'my-channels'; localStorage.setItem('myListAddon:channelsSubmenu', chSub); } // signed out: no builder
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
       var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
