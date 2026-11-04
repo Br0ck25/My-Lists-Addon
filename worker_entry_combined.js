@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-04";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "68a7df2907";
+const WORKER_BUILD = "71afc977a1";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -32134,23 +32134,22 @@ ${seoHeadHtml}
     });
     setTimeout(showApp, 5000);
     var shellSub = (shellRoute && shellRoute.sub) || '';
+    var knownSub = function(key, names, fallback) { var v = localStorage.getItem(key); if (v && names.indexOf(v) === -1) { v = fallback; localStorage.setItem(key, v); } return v || fallback; };
     try {
-      var catSub = shellSub || localStorage.getItem('myListAddon:catalogsSubmenu') || 'all';
+      var catSub = shellSub || knownSub('myListAddon:catalogsSubmenu', ['all', 'shelves', 'quickadd', 'bulk'], 'all');
       document.documentElement.setAttribute('data-initial-catalogs-sub', catSub);
       var listSub = (shellRoute && shellRoute.tab === 'lists' && shellSub) || localStorage.getItem('myListAddon:listsSubmenu') || 'my-lists';
-      // Must agree with normalizeListsSubmenu (16_client-row-core.js): the rule
-      // above hides every Lists panel and then un-hides the one this attribute
-      // names, so a stale value naming a panel that no longer exists leaves the
-      // tab blank from first paint.
+      // Must agree with normalizeListsSubmenu (16_client-row-core.js): an unknown value
+      // hides every Lists panel and leaves the tab blank from first paint.
       if (['my-lists', 'liked', 'collections', 'import', 'create-list'].indexOf(listSub) === -1) listSub = 'my-lists';
       document.documentElement.setAttribute('data-initial-lists-sub', listSub);
-      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || localStorage.getItem('myListAddon:channelsSubmenu') || 'my-channels';
+      var chSub = (shellRoute && shellRoute.tab === 'channels' && shellSub) || knownSub('myListAddon:channelsSubmenu', ['my-channels', 'storylines', 'quickadd', 'explore', 'import', 'build'], 'my-channels');
       if (chSub === 'build' && !localStorage.getItem('myListAddon:creatorName')) { chSub = 'my-channels'; localStorage.setItem('myListAddon:channelsSubmenu', chSub); } // signed out: no builder
       document.documentElement.setAttribute('data-initial-channels-sub', chSub);
       var setSub = (shellRoute && shellRoute.tab === 'settings' && shellSub) || localStorage.getItem('myListAddon:settingsSubmenu') || 'account';
       if (['account', 'display', 'scrobble', 'external', 'backup', 'feedback'].indexOf(setSub) === -1) setSub = 'account';
       document.documentElement.setAttribute('data-initial-settings-sub', setSub);
-      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || localStorage.getItem('myListAddon:discoverSubmenu') || 'movie';
+      var discSub = (shellRoute && shellRoute.tab === 'discover' && shellSub) || knownSub('myListAddon:discoverSubmenu', ['all', 'curated', 'gems', 'genres', 'holidays', 'kids', 'movie', 'popular', 'series'], 'movie');
       document.documentElement.setAttribute('data-initial-discover-sub', discSub);
     } catch (e) {}
   })();
