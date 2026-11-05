@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-05";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "6ed1ce2e86";
+const WORKER_BUILD = "413104aef6";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -17700,6 +17700,35 @@ function savedConfigKey(id) {
 
 // `withTracking`: also read the owner's tracking record (creatorsynctracking:)
 // and fill watchHistory / continueWatching / watchlist / airingNext from it.
+async function resolveCreatorSyncConfig(username, env) {
+  if (!username || !env || !env.CONFIGS) return null;
+  try {
+    const raw = await env.CONFIGS.get(`creatorsync:${username}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed) return null;
+    const list = (Array.isArray(parsed.config) && parsed.config.length)
+      ? parsed.config
+      : ((Array.isArray(parsed.entries) && parsed.entries.length)
+        ? parsed.entries
+        : (Array.isArray(parsed.lists) ? parsed.lists : []));
+    return {
+      entries: list,
+      lists: list,
+      ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(parsed) : {}),
+      randomizeItemsDaily: parsed.randomizeItemsDaily !== undefined
+        ? parsed.randomizeItemsDaily
+        : (parsed.shuffleItems !== undefined ? parsed.shuffleItems : true),
+      shuffleItems: true,
+      trackOwner: username,
+      trackCreatorName: username,
+      updatedAt: parsed.updatedAt || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Off by default (BE-H04, task P2-9): that record can be megabytes, and every
 // catalog row request used to read and parse it -- for a Trending row as much
 // as for Continue Watching -- while nothing on those paths used it. The
@@ -17710,6 +17739,8 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
   if (cleanParam === "nuvio-default" || cleanParam === "default") {
     return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
   }
+  const creatorSync = await resolveCreatorSyncConfig(cleanParam, env);
+  if (creatorSync) return creatorSync;
   // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
   if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
@@ -17816,6 +17847,8 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
 
         return {
           entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+          ownerId: parsed.ownerId || null,
+          ownerSince: parsed.ownerSince || null,
           watchHistory,
           continueWatching,
           watchlist,
@@ -92683,10 +92716,18 @@ function formatNuvioUserCollections(userCollections) {
 
 function formatNuvioUserChannels(userChannelsRaw) {
   if (userChannelsRaw) {
-    const list = Array.isArray(userChannelsRaw) ? userChannelsRaw : (typeof userChannelsRaw === "object" ? Object.values(userChannelsRaw) : []);
-    if (list.length) {
-      return list.map((ch, i) => {
-        const name = ch.name || `Channel ${i + 1}`;
+    let raw = userChannelsRaw;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      if (raw.channels && typeof raw.channels === "object") {
+        raw = raw.channels;
+      }
+    }
+    const list = Array.isArray(raw) ? raw : (typeof raw === "object" && raw ? Object.values(raw) : []);
+    const valid = list.filter((ch) => ch && typeof ch === "object" && !Array.isArray(ch) && (ch.name || ch.channelName || ch.id || ch.channelId));
+    if (valid.length) {
+      return valid.map((ch, i) => {
+        const id = String(ch.id || ch.channelId || `ch_${i + 1}`);
+        const name = ch.name || ch.channelName || `Channel ${i + 1}`;
         const posterUrl = ch.posterUrl || ch.poster || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
         const backdropUrl = ch.backdropUrl || ch.backdrop || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&format=landscape&v=6`;
         const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || ch.poster || "") : "");
@@ -92701,7 +92742,7 @@ function formatNuvioUserChannels(userChannelsRaw) {
           }
         }
         return {
-          id: ch.id || `ch_${i + 1}`,
+          id: id,
           name: name,
           poster: posterUrl,
           posterUrl: posterUrl,
@@ -92709,7 +92750,7 @@ function formatNuvioUserChannels(userChannelsRaw) {
           backdropUrl: backdropUrl,
           logoUrl: logoUrl,
           category: ch.category || "My Lists Addon Channels",
-          catalogId: ch.id || `channel_${i + 1}`,
+          catalogId: ch.catalogId || (id.startsWith("channel_") ? id : `channel_${id}`),
           playOrder: typeof ch.playOrder === "number" ? ch.playOrder : (i + 1),
         };
       });
@@ -92724,39 +92765,67 @@ async function resolveNuvioTvTargetData(target, env) {
   let username = "";
   let updatedAt = 0;
 
-  try {
-    resolved = await resolveConfig(target, env, { withTracking: true });
-    if (resolved && resolved.unresolved) resolved = null;
-  } catch {}
-
-  if (!resolved && target.length === 43) {
-    try {
-      resolved = await resolveConfig("i-" + target, env, { withTracking: true });
-      if (resolved && resolved.unresolved) resolved = null;
-    } catch {}
-  }
-
   if (env && env.DB) {
     try {
       const acct = await env.DB.prepare(
-        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE id = ? OR username = ? COLLATE NOCASE OR key_hash = ? LIMIT 1"
+        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
       ).bind(target, target, target).first();
       if (acct) {
         username = acct.username;
         updatedAt = acct.last_active_at || acct.created_at || 0;
-        const inst = await env.DB.prepare(
-          "SELECT * FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
+        const instRow = await env.DB.prepare(
+          "SELECT legacy_cfg_id, token_hash, config_json, updated_at FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
         ).bind(acct.id).first();
-        if (inst) {
-          updatedAt = Math.max(updatedAt, inst.updated_at || 0);
-          installToken = inst.legacy_cfg_id || inst.token_hash || target;
-          if (!resolved) {
+        if (instRow) {
+          installToken = instRow.legacy_cfg_id || instRow.token_hash || String(instRow.id);
+          if (instRow.updated_at && instRow.updated_at > updatedAt) updatedAt = instRow.updated_at;
+          if (instRow.config_json) {
             try {
-              const parsed = JSON.parse(inst.config_json);
+              const p = JSON.parse(instRow.config_json);
+              const list = Array.isArray(p) ? p : (p.entries || p.config || p.lists || []);
               resolved = {
-                entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-                ...readInstallConfigFields(parsed),
-                trackOwner: acct.username,
+                entries: list,
+                lists: list,
+                ...(typeof readInstallConfigFields === "function" && typeof p === "object" ? readInstallConfigFields(p) : {}),
+                randomizeItemsDaily: p.randomizeItemsDaily !== undefined ? p.randomizeItemsDaily : true,
+                shuffleItems: true,
+                trackOwner: username,
+                trackCreatorName: username,
+                updatedAt: instRow.updated_at || updatedAt,
+              };
+            } catch {}
+          }
+        }
+      } else {
+        const instRow = await env.DB.prepare(
+          "SELECT account_id, legacy_cfg_id, token_hash, config_json, updated_at FROM installs WHERE (legacy_cfg_id = ? OR token_hash = ? OR id = ?) AND revoked_at IS NULL LIMIT 1"
+        ).bind(target, target, target).first();
+        if (instRow) {
+          if (instRow.updated_at && instRow.updated_at > updatedAt) updatedAt = instRow.updated_at;
+          if (instRow.account_id) {
+            const linkedAcct = await env.DB.prepare(
+              "SELECT id, username, last_active_at, created_at FROM accounts WHERE id = ? LIMIT 1"
+            ).bind(instRow.account_id).first();
+            if (linkedAcct) {
+              username = linkedAcct.username;
+              if (linkedAcct.last_active_at || linkedAcct.created_at) {
+                updatedAt = Math.max(updatedAt, linkedAcct.last_active_at || linkedAcct.created_at);
+              }
+            }
+          }
+          if (instRow.config_json) {
+            try {
+              const p = JSON.parse(instRow.config_json);
+              const list = Array.isArray(p) ? p : (p.entries || p.config || p.lists || []);
+              resolved = {
+                entries: list,
+                lists: list,
+                ...(typeof readInstallConfigFields === "function" && typeof p === "object" ? readInstallConfigFields(p) : {}),
+                randomizeItemsDaily: p.randomizeItemsDaily !== undefined ? p.randomizeItemsDaily : true,
+                shuffleItems: true,
+                trackOwner: username,
+                trackCreatorName: username,
+                updatedAt: instRow.updated_at || updatedAt,
               };
             } catch {}
           }
@@ -92767,26 +92836,75 @@ async function resolveNuvioTvTargetData(target, env) {
     }
   }
 
-  if (!resolved && username && env && env.CONFIGS) {
+  if (!username && env && env.CONFIGS && target && target !== "default") {
     try {
-      const userSyncRaw = await env.CONFIGS.get(`creatorsync:${username}`);
-      if (userSyncRaw) {
-        const parsedSync = JSON.parse(userSyncRaw);
-        if (parsedSync) {
-          const list = Array.isArray(parsedSync.entries) ? parsedSync.entries : (Array.isArray(parsedSync.lists) ? parsedSync.lists : []);
-          resolved = {
-            entries: list,
-            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(parsedSync) : {}),
-            randomizeItemsDaily: parsedSync.randomizeItemsDaily || parsedSync.shuffleItems,
-            trackOwner: username,
-          };
-          updatedAt = Math.max(updatedAt, parsedSync.updatedAt || 0);
-        }
+      const directSync = await env.CONFIGS.get(`creatorsync:${target}`);
+      if (directSync) username = target;
+    } catch {}
+  }
+
+  if (username && env && env.CONFIGS) {
+    try {
+      const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env) : null;
+      if (creatorConfig) {
+        resolved = creatorConfig;
+        updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
+      }
+    } catch (e) {
+      console.error("nuvio tv sync: creatorsync lookup failed:", e);
+    }
+  }
+
+  if (!resolved) {
+    try {
+      resolved = await resolveConfig(target, env, { withTracking: true });
+      if (resolved && resolved.unresolved) resolved = null;
+    } catch {}
+    if (!resolved && target.length === 43) {
+      try {
+        resolved = await resolveConfig("i-" + target, env, { withTracking: true });
+        if (resolved && resolved.unresolved) resolved = null;
+      } catch {}
+    }
+    if (resolved && !username) {
+      if (resolved.trackOwner) {
+        username = resolved.trackOwner;
+      } else if (resolved.ownerId && env && env.DB) {
+        try {
+          const oAcct = await env.DB.prepare("SELECT username, created_at, last_active_at FROM accounts WHERE id = ? LIMIT 1").bind(resolved.ownerId).first();
+          if (oAcct && oAcct.username) {
+            username = oAcct.username;
+            if (oAcct.last_active_at || oAcct.created_at) {
+              updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
+            }
+          }
+        } catch {}
+      }
+    }
+  }
+
+  if (username && env && env.CONFIGS) {
+    try {
+      const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env) : null;
+      if (creatorConfig && creatorConfig.entries && creatorConfig.entries.length) {
+        resolved = creatorConfig;
+        updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
       }
     } catch {}
   }
 
-  return { resolved, installToken, username, updatedAt };
+  if (username && env && env.DB) {
+    try {
+      const inst = await env.DB.prepare(
+        "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = (SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1) AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
+      ).bind(username).first();
+      if (inst) {
+        installToken = inst.legacy_cfg_id || inst.token_hash || username;
+      }
+    } catch {}
+  }
+
+  return { resolved, installToken: installToken || username || target, username, updatedAt };
 }
 
 async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
@@ -93179,25 +93297,16 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Target not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
 
-  const manifestUrl = (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
-    ? `${url.origin}/${installToken}/manifest.json`
-    : installToken.length === 43
-      ? `${url.origin}/i/${installToken}/manifest.json`
-      : `${url.origin}/${installToken}/manifest.json`;
-
-  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${target}`;
-
-  const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
-  const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);
-  const catalogIds = entries.map((e) => e.id || e.catalogId || (typeof slugifyServer === "function" ? slugifyServer(e.url || e.name || "") : (e.name || "catalog")));
-  const catalogOrder = [...catalogIds];
-
+  let currentUpdatedAt = updatedAt || 0;
   let userCollections = null;
   if (username && env && env.CONFIGS) {
     try {
       const storedPresets = await env.CONFIGS.get(`creatorsyncpresets:${username}`);
       if (storedPresets) {
         const parsedPresets = JSON.parse(storedPresets);
+        if (parsedPresets && parsedPresets.updatedAt) {
+          currentUpdatedAt = Math.max(currentUpdatedAt, parsedPresets.updatedAt);
+        }
         if (Array.isArray(parsedPresets.customCollections) && parsedPresets.customCollections.length) {
           userCollections = parsedPresets.customCollections;
         }
@@ -93210,12 +93319,32 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   if (username && env && env.CONFIGS) {
     try {
       const storedChannels = await env.CONFIGS.get(`creatorsyncchannels:${username}`);
-      if (storedChannels) userChannelsRaw = JSON.parse(storedChannels);
+      if (storedChannels) {
+        userChannelsRaw = JSON.parse(storedChannels);
+        if (userChannelsRaw && userChannelsRaw.updatedAt) {
+          currentUpdatedAt = Math.max(currentUpdatedAt, userChannelsRaw.updatedAt);
+        }
+      }
     } catch {}
   }
   const channels = formatNuvioUserChannels(userChannelsRaw);
 
-  const payloadToHash = JSON.stringify({ catalogIds, collections: formattedCollections, channels, randomizeItemsDaily, updatedAt });
+  const manifestUrl = username
+    ? `${url.origin}/${username}/manifest.json`
+    : (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
+      ? `${url.origin}/${installToken}/manifest.json`
+      : installToken.length === 43
+        ? `${url.origin}/i/${installToken}/manifest.json`
+        : `${url.origin}/${installToken}/manifest.json`;
+
+  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${username || target}`;
+
+  const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
+  const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);
+  const catalogIds = entries.map((e) => e.id || e.catalogId || (typeof slugifyServer === "function" ? slugifyServer(e.url || e.name || "") : (e.name || "catalog")));
+  const catalogOrder = [...catalogIds];
+
+  const payloadToHash = JSON.stringify({ catalogIds, catalogOrder, collections: formattedCollections, channels, randomizeItemsDaily, updatedAt: currentUpdatedAt });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payloadToHash));
   const versionHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
@@ -116811,12 +116940,8 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
   }
 
   const origin = url ? url.origin : "";
-  const manifestUrl = (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
-    ? `${origin}/${installToken}/manifest.json`
-    : installToken.length === 43
-      ? `${origin}/i/${installToken}/manifest.json`
-      : `${origin}/${installToken}/manifest.json`;
-  const syncUrl = `${origin}/api/nuvio-tv/sync/${installToken || auth.username}`;
+  const manifestUrl = `${origin}/${auth.username}/manifest.json`;
+  const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
 
   const updated = {
     ...record,

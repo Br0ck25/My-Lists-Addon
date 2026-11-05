@@ -887,12 +887,8 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
   }
 
   const origin = url ? url.origin : "";
-  const manifestUrl = (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
-    ? `${origin}/${installToken}/manifest.json`
-    : installToken.length === 43
-      ? `${origin}/i/${installToken}/manifest.json`
-      : `${origin}/${installToken}/manifest.json`;
-  const syncUrl = `${origin}/api/nuvio-tv/sync/${installToken || auth.username}`;
+  const manifestUrl = `${origin}/${auth.username}/manifest.json`;
+  const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
 
   const updated = {
     ...record,

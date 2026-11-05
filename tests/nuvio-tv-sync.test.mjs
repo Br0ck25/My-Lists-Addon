@@ -234,6 +234,97 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     assert.equal(userChannel.name, "My Custom Channel");
   });
 
+  it("GET /api/nuvio-tv/sync/:target correctly unwraps dictionary channels and reflects live creator sync catalogs and versionHash updates", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+
+    // Seed account using standard API helper
+    const proof = await accountProof(env, "testtvuser");
+    const saveRes = await call(env, "/api/save", {
+      method: "POST",
+      json: {
+        ...proof,
+        entries: [{ id: "list_initial", name: "Initial List", type: "movie" }],
+      },
+    });
+    assert.equal(saveRes.status, 200);
+    const installToken = saveRes.body.id;
+
+    // Put initial creator sync state (as the builder does)
+    await env.CONFIGS.put(
+      "creatorsync:testtvuser",
+      JSON.stringify({
+        config: [{ id: "list_initial", name: "Initial List", type: "movie" }],
+        updatedAt: 1000,
+      })
+    );
+
+    // 1. Initial sync before custom channels/catalogs
+    const resInitial = await call(env, "/api/nuvio-tv/sync/testtvuser");
+    assert.equal(resInitial.status, 200);
+    const initialHash = resInitial.body.versionHash;
+    assert.ok(initialHash, "has initial versionHash");
+
+    // 2. User adds custom channels in standard KV object format: { channels: { ... }, updatedAt: ... }
+    await env.CONFIGS.put(
+      "creatorsyncchannels:testtvuser",
+      JSON.stringify({
+        channels: {
+          ch_custom_action: {
+            id: "ch_custom_action",
+            name: "Non-Stop Action",
+            category: "Action Movies",
+            posterUrl: "https://example.com/action.jpg",
+          },
+        },
+        updatedAt: 2000,
+      })
+    );
+
+    // 3. User updates catalogs via creatorsync:testtvuser with live .config array
+    await env.CONFIGS.put(
+      "creatorsync:testtvuser",
+      JSON.stringify({
+        config: [
+          { id: "chart:combined:trending_movies", name: "Trending Movies", type: "movie" },
+          { id: "custom:action_favorites", name: "My Action Favs", type: "movie" },
+        ],
+        updatedAt: 2500,
+      })
+    );
+
+    // 4. Test sync endpoint via username
+    const resUpdatedUser = await call(env, "/api/nuvio-tv/sync/testtvuser");
+    assert.equal(resUpdatedUser.status, 200);
+    const updatedUserData = resUpdatedUser.body;
+
+    assert.notEqual(updatedUserData.versionHash, initialHash, "versionHash changed after adding channel and catalog");
+    assert.ok(updatedUserData.catalogIds.includes("custom:action_favorites"), "catalogIds includes new custom list");
+    assert.ok(updatedUserData.catalogOrder.includes("custom:action_favorites"), "catalogOrder includes new custom list");
+
+    const customCh = updatedUserData.channels.find((c) => c.id === "ch_custom_action");
+    assert.ok(customCh, "channels array includes un-nested custom channel");
+    assert.equal(customCh.name, "Non-Stop Action");
+    assert.equal(customCh.catalogId, "channel_ch_custom_action");
+    assert.equal(customCh.category, "Action Movies");
+    assert.equal(customCh.posterUrl, "https://example.com/action.jpg");
+    assert.ok(customCh.backdropUrl.includes("format=landscape"), "auto-generates landscape backdropUrl");
+
+    // 5. Test sync endpoint via install token resolving to the same account
+    const resUpdatedToken = await call(env, `/api/nuvio-tv/sync/${installToken}`);
+    assert.equal(resUpdatedToken.status, 200);
+    assert.equal(resUpdatedToken.body.versionHash, updatedUserData.versionHash, "token target has same versionHash");
+    assert.ok(resUpdatedToken.body.channels.some((c) => c.id === "ch_custom_action"), "token target resolves custom channel");
+
+    // 6. Test manifest endpoint /:username/manifest.json serves live catalogs
+    const resManifest = await call(env, "/testtvuser/manifest.json");
+    assert.equal(resManifest.status, 200);
+    assert.ok(resManifest.body.catalogs, "manifest has catalogs array");
+    assert.ok(
+      resManifest.body.catalogs.some((cat) => cat.id === "custom:action_favorites"),
+      "manifest.json serves newly added catalog from creatorsync"
+    );
+  });
+
   it("GET /api/nuvio-tv/collections/:target and /nuvio-default/collections.json return collections array", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
     const res1 = await call(env, "/api/nuvio-tv/collections/default");

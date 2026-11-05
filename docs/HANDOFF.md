@@ -1,6 +1,13 @@
 # Handoff
 
-## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-04, branch `feat/nuvio-tv-phase1`)
+## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
+- **Custom Channels & Live Catalog Sync for Linked Accounts**:
+  - **Issue Resolved**: When users added new catalog lists or built custom 24/7 channels on `mylistsaddon.com`, they were not showing up in Nuvio TV Launcher because:
+    1. `formatNuvioUserChannels` in `src/api/25_api-catalog-routes.js` mapped `Object.values()` over the outer KV object `{ channels: {...}, mergedChannels: {...}, updatedAt: ... }`, yielding undefined names/IDs and failing schema validation. Fixed to unwrap `raw.channels`, filter channels, and map to `{ id, name, posterUrl, backdropUrl, logoUrl, category: "My Lists Addon Channels", catalogId: "channel_" + id, playOrder }`.
+    2. `resolveNuvioTvTargetData` in `src/api/25_api-catalog-routes.js` was falling back to stale initial `installs.config_json` or static snapshots instead of live builder state. Fixed to resolve accounts via `accounts` (username/id/key_hash), `installs` (account_id), or `savedConfig` (`ownerId`), and prioritize live `creatorsync:${username}` via `resolveCreatorSyncConfig`.
+    3. `resolveConfig` in `src/core/04_config-resolution.js` now calls `resolveCreatorSyncConfig` at the top, enabling `/:username/manifest.json` and `/:username/catalog/:type/:id.json` to immediately export live catalogs added by the user.
+    4. Advanced `updatedAt` in `handleNuvioTvSyncRoute` from `accounts`, `creatorsync`, `creatorsyncchannels`, and `creatorsyncpresets`, ensuring `versionHash` updates dynamically whenever catalogs or channels are added or modified.
+    5. Updated `handleNuvioTvDeviceClaim` in `src/api/69_creator-api-sync-routes.js` to point `manifestUrl` and `syncUrl` directly to the claimed username (`/api/nuvio-tv/sync/${auth.username}`).
 - **Collections URL & Artwork Fallbacks**:
   - `collectionsUrl` (`${url.origin}/api/nuvio-tv/collections/${target}`): included in the JSON payload returned by `GET /api/nuvio-tv/sync/:target` and `GET /api/nuvio-tv/sync/default`.
   - Added public collections endpoint `GET /api/nuvio-tv/collections/:target` and `GET /nuvio-default/collections.json` (registered as `public` in `tests/route-access.json`).
