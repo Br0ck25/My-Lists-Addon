@@ -29,9 +29,9 @@ async function resolveCreatorSyncConfig(username, env) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed) return null;
-    const list = (Array.isArray(parsed.config) && parsed.config.length)
+    const list = Array.isArray(parsed.config)
       ? parsed.config
-      : ((Array.isArray(parsed.entries) && parsed.entries.length)
+      : (Array.isArray(parsed.entries)
         ? parsed.entries
         : (Array.isArray(parsed.lists) ? parsed.lists : []));
     return {

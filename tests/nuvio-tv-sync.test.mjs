@@ -309,6 +309,8 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     assert.equal(customCh.posterUrl, "https://example.com/action.jpg");
     assert.ok(customCh.backdropUrl.includes("format=landscape"), "auto-generates landscape backdropUrl");
 
+    assert.ok(resUpdatedUser.headers.get("cache-control").includes("no-store"), "sync endpoint sets no-store cache control");
+
     // 5. Test sync endpoint via install token resolving to the same account
     const resUpdatedToken = await call(env, `/api/nuvio-tv/sync/${installToken}`);
     assert.equal(resUpdatedToken.status, 200);
@@ -318,6 +320,7 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     // 6. Test manifest endpoint /:username/manifest.json serves live catalogs
     const resManifest = await call(env, "/testtvuser/manifest.json");
     assert.equal(resManifest.status, 200);
+    assert.ok(resManifest.headers.get("cache-control").includes("no-store"), "user manifest sets no-store cache control");
     assert.ok(resManifest.body.catalogs, "manifest has catalogs array");
     assert.ok(
       resManifest.body.catalogs.some((cat) => cat.id === "custom:action_favorites"),

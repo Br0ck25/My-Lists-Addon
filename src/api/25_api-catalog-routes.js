@@ -655,7 +655,7 @@ async function resolveNuvioTvTargetData(target, env) {
   if (username && env && env.CONFIGS) {
     try {
       const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env) : null;
-      if (creatorConfig && creatorConfig.entries && creatorConfig.entries.length) {
+      if (creatorConfig && Array.isArray(creatorConfig.entries)) {
         resolved = creatorConfig;
         updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
       }
@@ -1129,7 +1129,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     channels,
   }, 200, {
     ...corsHeaders(),
-    "Cache-Control": "public, max-age=300",
+    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
   });
 }
 

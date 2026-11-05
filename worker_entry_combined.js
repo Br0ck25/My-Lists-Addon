@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-05";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c2cdaa7b11";
+const WORKER_BUILD = "103ccb7d9d";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -17707,9 +17707,9 @@ async function resolveCreatorSyncConfig(username, env) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed) return null;
-    const list = (Array.isArray(parsed.config) && parsed.config.length)
+    const list = Array.isArray(parsed.config)
       ? parsed.config
-      : ((Array.isArray(parsed.entries) && parsed.entries.length)
+      : (Array.isArray(parsed.entries)
         ? parsed.entries
         : (Array.isArray(parsed.lists) ? parsed.lists : []));
     return {
@@ -92886,7 +92886,7 @@ async function resolveNuvioTvTargetData(target, env) {
   if (username && env && env.CONFIGS) {
     try {
       const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env) : null;
-      if (creatorConfig && creatorConfig.entries && creatorConfig.entries.length) {
+      if (creatorConfig && Array.isArray(creatorConfig.entries)) {
         resolved = creatorConfig;
         updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
       }
@@ -93360,7 +93360,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     channels,
   }, 200, {
     ...corsHeaders(),
-    "Cache-Control": "public, max-age=300",
+    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
   });
 }
 
@@ -116947,7 +116947,7 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
     ...record,
     status: "authenticated",
     claimedBy: auth.username,
-    installId: installToken || auth.username,
+    installId: auth.username,
     manifestUrl,
     syncUrl,
     claimedAt: Date.now()
@@ -117111,10 +117111,12 @@ async function installManifest(request, env, ctx, url, m) {
       }
     }
   }
+  const isDefaultManifest = (m[1] === "nuvio-default" || m[1] === "default");
+  const noCacheManifest = (!isDefaultManifest || hasLiveShelf || resolved.collectionsAddon);
   return jsonPublic(
     buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
     200,
-    (hasLiveShelf || resolved.collectionsAddon) ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
+    noCacheManifest ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
 }
 

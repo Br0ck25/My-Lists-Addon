@@ -894,7 +894,7 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
     ...record,
     status: "authenticated",
     claimedBy: auth.username,
-    installId: installToken || auth.username,
+    installId: auth.username,
     manifestUrl,
     syncUrl,
     claimedAt: Date.now()

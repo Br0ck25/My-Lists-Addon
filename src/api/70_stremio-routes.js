@@ -149,10 +149,12 @@ async function installManifest(request, env, ctx, url, m) {
       }
     }
   }
+  const isDefaultManifest = (m[1] === "nuvio-default" || m[1] === "default");
+  const noCacheManifest = (!isDefaultManifest || hasLiveShelf || resolved.collectionsAddon);
   return jsonPublic(
     buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
     200,
-    (hasLiveShelf || resolved.collectionsAddon) ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
+    noCacheManifest ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
 }
 
