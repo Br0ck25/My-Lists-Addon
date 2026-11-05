@@ -730,12 +730,12 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
       })
     );
 
-    // 1. Verify manifest exposes custom channel catalog
+    // 1. Verify manifest does NOT dump uncataloged 24/7 channels onto home catalogs
     const manifestRes = await call(env, "/nuviochanuser/manifest.json", { headers: { accept: "application/json" } });
     assert.equal(manifestRes.status, 200);
     assert.ok(
-      manifestRes.body.catalogs.some((c) => c.id === "channel_ch_custom_arrow"),
-      "manifest declares channel_ch_custom_arrow catalog"
+      !manifestRes.body.catalogs.some((c) => c.id === "channel_ch_custom_arrow"),
+      "manifest does not declare uncataloged channel as home catalog"
     );
 
     // 2. Verify catalog route serves channel media items with streamable IDs

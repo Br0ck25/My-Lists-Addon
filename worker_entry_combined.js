@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-05";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f837baaf43";
+const WORKER_BUILD = "3de3804100";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -117097,21 +117097,6 @@ async function installManifest(request, env, ctx, url, m) {
   ));
   const manifestEntries = [...entries];
   const userChannels = await loadUserChannelsForManifest(m[1], env);
-  if (Array.isArray(userChannels)) {
-    for (const ch of userChannels) {
-      if (!ch || (!ch.id && !ch.channelId)) continue;
-      const chId = String(ch.id || ch.channelId);
-      const catId = ch.catalogId || (chId.startsWith("channel_") ? chId : `channel_${chId}`);
-      if (!manifestEntries.some((e) => e.id === catId)) {
-        manifestEntries.push({
-          id: catId,
-          name: ch.name || "Channel",
-          type: "series",
-          enabled: true,
-        });
-      }
-    }
-  }
   const hasLiveState = (hasLiveShelf || resolved.collectionsAddon || !!resolved.trackOwner || (Array.isArray(userChannels) && userChannels.length > 0));
   return jsonPublic(
     buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
