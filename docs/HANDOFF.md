@@ -1,6 +1,17 @@
 # Handoff
 
 ## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
+- **True Watch History API & Disabling Premature Subtitle Tracking**:
+  - Implemented `POST /api/nuvio-tv/history` to record true watch completion events sent by Nuvio TV Launcher when playback reaches $\ge 90\%$ (or is manually completed). Supports both movies and TV series episodes.
+  - Implemented `POST /api/nuvio-tv/history/remove` to remove watched movies or series episodes from watch history.
+  - Added routes to `tests/route-access.json` as public endpoints and verified with dedicated unit tests in `tests/nuvio-tv-sync.test.mjs`.
+  - In `src/api/63_subtitles-track.js`, disabled premature subtitles-based watch progress logging when the incoming request originates from Nuvio clients (`incomingClient === "Nuvio"`, `X-Nuvio-Client`, or `User-Agent` containing `"nuvio"`).
+- **Collections Isolation (Preventing Collection Lists Leaking onto Home Screen)**:
+  - In `NuvioTVLauncher` (branch `feat/profile-my-lists-sync`):
+    - Added `MyListsDefaultSeed.isCollectionCatalogSource` and `extractCollectionCatalogKeys` to detect whether a catalog source belongs to any folder inside collections or the `app.my-list.collections` addon.
+    - Updated `MyListsTvSyncManager.kt` (`applyCatalogDiffAndOrder`) to filter out collection catalogs from `homeCatalogs`, automatically add collection catalog keys to `disabledHomeCatalogKeys`, and prune them from `homeCatalogOrderKeys`.
+    - Updated `HomeViewModelCatalogUtils.kt` and `HomeViewModelCatalogPipeline.kt` to exclude `MY_LISTS_COLLECTIONS_ADDON_ID` and collection catalog sources from `buildDefaultCatalogOrder`, `rebuildCatalogOrder`, and `catalogsToLoad`.
+    - Updated `CatalogOrderViewModel.kt` and `AddonManagerViewModel.kt` so collection-owned catalogs do not appear as selectable home rows in Settings.
 - **Live Catalog Sync on Short Links & Account Edits**:
   - **Issue Resolved**: When users modified catalogs on `mylistsaddon.com`, the Nuvio TV Launcher (and Stremio/Wako) did not update because short install links (`cfg:<id>`, e.g. `s3v0mW0jBp0g`) were returning the frozen snapshot `entries` from the time `/api/save` was run.
   - **Fix Implemented**: In `src/core/04_config-resolution.js` (`resolveConfig`), when resolving stored install configs that have a verified `trackOwner`, it looks up `creatorsync:${effectiveOwner}`. If live entries are found, `liveEntries` are returned in `entries`, allowing all devices and launchers using the install link to reflect catalog additions, removals, and reordering in real time.
