@@ -27,6 +27,29 @@ async function withClock(startIso, fn) {
   try { return await fn({ advance: (ms) => { t += ms; } }); } finally { Date.now = realNow; }
 }
 
+describe("playback counters are written straight away (2026-11-05 regression)", () => {
+  it("one lone playback ping reaches D1 with no later bump to flush it", async () => {
+    const { __s: s } = await load();
+    const { env, rows } = setup();
+    await withClock("2026-11-05T15:00:00Z", async () => {
+      await s.bumpStat(env, "playback_pings");
+      await s.bumpStat(env, "watch_type:movie");
+      // No flush, no clock advance: an isolate that gets recycled now must not lose it.
+      assert.deepEqual(rows("playback_pings"), [["2026-11-05", 1], ["total", 1]]);
+      assert.deepEqual(rows("watch_type:movie"), [["2026-11-05", 1], ["total", 1]]);
+    });
+  });
+
+  it("pageviews stay batched", async () => {
+    const { __s: s } = await load();
+    const { env, batches } = setup();
+    await withClock("2026-11-05T15:00:00Z", async () => {
+      await s.bumpStat(env, "pageviews");
+      assert.equal(batches.length, 0);
+    });
+  });
+});
+
 describe("PERF-04: stat counters are batched", () => {
   it("100 bumps inside a minute write nothing, then one batch holds exactly 100", async () => {
     const { __s: s } = await load();
