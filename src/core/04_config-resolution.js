@@ -151,24 +151,25 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           if (trackingRaw) {
             try {
               const tracking = JSON.parse(trackingRaw);
-              if (Array.isArray(tracking.watchHistory) && tracking.watchHistory.length && !watchHistory.length) {
-                watchHistory = tracking.watchHistory;
-              }
-              if (Array.isArray(tracking.continueWatching) && tracking.continueWatching.length && !continueWatching.length) {
-                continueWatching = tracking.continueWatching;
-              }
-              if (Array.isArray(tracking.watchlist) && tracking.watchlist.length && !watchlist.length) {
-                watchlist = tracking.watchlist;
-              }
-              if (Array.isArray(tracking.airingNext) && tracking.airingNext.length && !airingNext.length) {
-                airingNext = tracking.airingNext;
-              }
+              if (Array.isArray(tracking.watchHistory) && tracking.watchHistory.length && !watchHistory.length) watchHistory = tracking.watchHistory;
+              if (Array.isArray(tracking.continueWatching) && tracking.continueWatching.length && !continueWatching.length) continueWatching = tracking.continueWatching;
+              if (Array.isArray(tracking.watchlist) && tracking.watchlist.length && !watchlist.length) watchlist = tracking.watchlist;
+              if (Array.isArray(tracking.airingNext) && tracking.airingNext.length && !airingNext.length) airingNext = tracking.airingNext;
             } catch {}
           }
         }
 
+        const effectiveOwner = trackOwner || (typeof parsed.trackOwner === "string" ? parsed.trackOwner.toLowerCase().trim() : "");
+        let liveEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+        if (effectiveOwner) {
+          const liveConfig = await resolveCreatorSyncConfig(effectiveOwner, env);
+          if (liveConfig && Array.isArray(liveConfig.entries)) {
+            liveEntries = liveConfig.entries;
+          }
+        }
+
         return {
-          entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+          entries: liveEntries,
           ownerId: parsed.ownerId || null,
           ownerSince: parsed.ownerSince || null,
           watchHistory,

@@ -1,6 +1,14 @@
 # Handoff
 
 ## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
+- **Live Catalog Sync on Short Links & Account Edits**:
+  - **Issue Resolved**: When users modified catalogs on `mylistsaddon.com`, the Nuvio TV Launcher (and Stremio/Wako) did not update because short install links (`cfg:<id>`, e.g. `s3v0mW0jBp0g`) were returning the frozen snapshot `entries` from the time `/api/save` was run.
+  - **Fix Implemented**: In `src/core/04_config-resolution.js` (`resolveConfig`), when resolving stored install configs that have a verified `trackOwner`, it looks up `creatorsync:${effectiveOwner}`. If live entries are found, `liveEntries` are returned in `entries`, allowing all devices and launchers using the install link to reflect catalog additions, removals, and reordering in real time.
+  - Added unit test in `tests/nuvio-tv-sync.test.mjs` confirming that editing `creatorsync` immediately updates `GET /api/nuvio-tv/sync/<id>` and `GET /<id>/manifest.json`.
+- **Live State Cache-Control Parity**:
+  - In `src/api/70_stremio-routes.js` (`installManifest`), set `no-cache, no-store, must-revalidate, max-age=0` dynamically whenever an install has live account state (`trackOwner`), live shelves (`autotrack:`), custom channels, or collections addon. Plain unlinked installs retain default `max-age=3600` caching.
+- **Single Channel Image Input**:
+  - Removed duplicate "Or use a custom channel logo URL" box from `/channels/build` (`src/page/13_tab-channels.js`), keeping a single clean custom image box and automatically falling back to the channel poster for logos.
 - **Live Channel Item & Playback Resolution ("no items could be loaded from this list")**:
   - **Issue Resolved**: When channels appeared in Nuvio TV Launcher, selecting a channel gave "couldn't play this channel, no items could be loaded from this list" because:
     1. In Stremio/Nuvio protocol, when the launcher loads or plays a channel from the Live TV guide, it queries the catalog endpoint `/:target/catalog/:type/:catalogId.json` (or `/:target/meta/series/:channelId.json`) for the channel's media items.

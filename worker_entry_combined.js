@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-05";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "103ccb7d9d";
+const WORKER_BUILD = "f837baaf43";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -17829,24 +17829,25 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           if (trackingRaw) {
             try {
               const tracking = JSON.parse(trackingRaw);
-              if (Array.isArray(tracking.watchHistory) && tracking.watchHistory.length && !watchHistory.length) {
-                watchHistory = tracking.watchHistory;
-              }
-              if (Array.isArray(tracking.continueWatching) && tracking.continueWatching.length && !continueWatching.length) {
-                continueWatching = tracking.continueWatching;
-              }
-              if (Array.isArray(tracking.watchlist) && tracking.watchlist.length && !watchlist.length) {
-                watchlist = tracking.watchlist;
-              }
-              if (Array.isArray(tracking.airingNext) && tracking.airingNext.length && !airingNext.length) {
-                airingNext = tracking.airingNext;
-              }
+              if (Array.isArray(tracking.watchHistory) && tracking.watchHistory.length && !watchHistory.length) watchHistory = tracking.watchHistory;
+              if (Array.isArray(tracking.continueWatching) && tracking.continueWatching.length && !continueWatching.length) continueWatching = tracking.continueWatching;
+              if (Array.isArray(tracking.watchlist) && tracking.watchlist.length && !watchlist.length) watchlist = tracking.watchlist;
+              if (Array.isArray(tracking.airingNext) && tracking.airingNext.length && !airingNext.length) airingNext = tracking.airingNext;
             } catch {}
           }
         }
 
+        const effectiveOwner = trackOwner || (typeof parsed.trackOwner === "string" ? parsed.trackOwner.toLowerCase().trim() : "");
+        let liveEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+        if (effectiveOwner) {
+          const liveConfig = await resolveCreatorSyncConfig(effectiveOwner, env);
+          if (liveConfig && Array.isArray(liveConfig.entries)) {
+            liveEntries = liveConfig.entries;
+          }
+        }
+
         return {
-          entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+          entries: liveEntries,
           ownerId: parsed.ownerId || null,
           ownerSince: parsed.ownerSince || null,
           watchHistory,
@@ -117111,12 +117112,11 @@ async function installManifest(request, env, ctx, url, m) {
       }
     }
   }
-  const isDefaultManifest = (m[1] === "nuvio-default" || m[1] === "default");
-  const noCacheManifest = (!isDefaultManifest || hasLiveShelf || resolved.collectionsAddon);
+  const hasLiveState = (hasLiveShelf || resolved.collectionsAddon || !!resolved.trackOwner || (Array.isArray(userChannels) && userChannels.length > 0));
   return jsonPublic(
     buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
     200,
-    noCacheManifest ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
+    hasLiveState ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
 }
 

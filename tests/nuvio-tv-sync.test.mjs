@@ -769,4 +769,48 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
     assert.equal(presetCatRes.status, 200);
     assert.ok(Array.isArray(presetCatRes.body.metas));
   });
+
+  it("short install link target (cfg:<id>) resolves live creator sync entries after account edits", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const shortId = "s3v0mW0jBp0g";
+    const username = "james";
+
+    // 1. Store initial static snapshot in cfg:<shortId> with trackOwner
+    await env.CONFIGS.put(
+      `cfg:${shortId}`,
+      JSON.stringify({
+        entries: [
+          { id: "old_list_1", name: "Old List 1", type: "movie" },
+        ],
+        trackOwner: username,
+      })
+    );
+
+    // 2. User updates catalogs in creatorsync:<username>
+    await env.CONFIGS.put(
+      `creatorsync:${username}`,
+      JSON.stringify({
+        config: [
+          { id: "new_live_list_1", name: "Live List 1", type: "movie" },
+          { id: "new_live_list_2", name: "Live List 2", type: "series" },
+        ],
+        updatedAt: 1700000000,
+      })
+    );
+
+    // 3. GET /api/nuvio-tv/sync/<shortId> must reflect the live catalogs from creatorsync
+    const syncRes = await call(env, `/api/nuvio-tv/sync/${shortId}`);
+    assert.equal(syncRes.status, 200);
+    assert.equal(syncRes.body.ok, true);
+    assert.ok(syncRes.body.catalogIds.includes("new_live_list_1"), "contains updated live list 1");
+    assert.ok(syncRes.body.catalogIds.includes("new_live_list_2"), "contains updated live list 2");
+    assert.ok(!syncRes.body.catalogIds.includes("old_list_1"), "old stale snapshot list removed");
+
+    // 4. GET /<shortId>/manifest.json must also reflect the live catalogs
+    const manifestRes = await call(env, `/${shortId}/manifest.json`, { headers: { accept: "application/json" } });
+    assert.equal(manifestRes.status, 200);
+    assert.ok(manifestRes.body.catalogs.some((c) => c.id === "new_live_list_1"), "manifest has live list 1");
+    assert.ok(manifestRes.body.catalogs.some((c) => c.id === "new_live_list_2"), "manifest has live list 2");
+    assert.ok(!manifestRes.body.catalogs.some((c) => c.id === "old_list_1"), "manifest dropped old list 1");
+  });
 });
