@@ -1,6 +1,19 @@
 # Handoff
 
 ## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
+- **Live Channel Item & Playback Resolution ("no items could be loaded from this list")**:
+  - **Issue Resolved**: When channels appeared in Nuvio TV Launcher, selecting a channel gave "couldn't play this channel, no items could be loaded from this list" because:
+    1. In Stremio/Nuvio protocol, when the launcher loads or plays a channel from the Live TV guide, it queries the catalog endpoint `/:target/catalog/:type/:catalogId.json` (or `/:target/meta/series/:channelId.json`) for the channel's media items.
+    2. The catalog router (`stremioCatalogRow`) only checked `entries` (the Catalogs tab lists). Custom channels stored in `creatorsyncchannels:${username}` were not in `entries`, causing `/:target/catalog/:type/:channelId.json` to return `{ metas: [] }` and `/:target/meta/series/:channelId.json` to return `{ meta: null }`.
+    3. `/:target/manifest.json` did not declare custom channel IDs under `catalogs: [...]`.
+    4. `POST /api/channel-lineup` required raw `body.url` and rejected requests carrying `{ channelId }` or `{ id }`.
+  - **Fix Implemented**:
+    1. Added `findChannelEntryById` in `src/api/70_stremio-routes.js` to look up channels across user KV (`creatorsyncchannels:${username}`), preset networks (`CHANNEL_PRESET_NETWORKS`), and public channels.
+    2. Added `fetchChannelItemsCatalog` in `src/api/70_stremio-routes.js` to resolve channel lineup items and map them to Stremio catalog metas with streamable IDs (`tt...`, `tmdb:...`), posters, and thumbnails.
+    3. Updated `stremioCatalogRow` so catalog requests for channel IDs return the airing items.
+    4. Updated `stremioMetaItem` so meta requests for channel IDs look up channels in `creatorsyncchannels` and presets when not in `entries`.
+    5. Added `loadUserChannelsForManifest` in `src/api/70_stremio-routes.js` to declare user custom channels in `/:target/manifest.json`'s `catalogs: [...]`.
+    6. Updated `apiChannelLineup` in `src/api/74_lookup-and-preview-routes.js` to accept `channelId`, `catalogId`, or `id`.
 - **Custom Channels & Live Catalog Sync for Linked Accounts**:
   - **Issue Resolved**: When users added new catalog lists or built custom 24/7 channels on `mylistsaddon.com`, they were not showing up in Nuvio TV Launcher because:
     1. `formatNuvioUserChannels` in `src/api/25_api-catalog-routes.js` mapped `Object.values()` over the outer KV object `{ channels: {...}, mergedChannels: {...}, updatedAt: ... }`, yielding undefined names/IDs and failing schema validation. Fixed to unwrap `raw.channels`, filter channels, and map to `{ id, name, posterUrl, backdropUrl, logoUrl, category: "My Lists Addon Channels", catalogId: "channel_" + id, playOrder }`.

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-05";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "413104aef6";
+const WORKER_BUILD = "c2cdaa7b11";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -117094,8 +117094,25 @@ async function installManifest(request, env, ctx, url, m) {
   const hasLiveShelf = entries.some((e) => e && typeof e.url === 'string' && (
     customListRowIsLive(e.url, !!resolved.trackCreatorName) || !!parsePublishedListUrl(e.url)
   ));
+  const manifestEntries = [...entries];
+  const userChannels = await loadUserChannelsForManifest(m[1], env);
+  if (Array.isArray(userChannels)) {
+    for (const ch of userChannels) {
+      if (!ch || (!ch.id && !ch.channelId)) continue;
+      const chId = String(ch.id || ch.channelId);
+      const catId = ch.catalogId || (chId.startsWith("channel_") ? chId : `channel_${chId}`);
+      if (!manifestEntries.some((e) => e.id === catId)) {
+        manifestEntries.push({
+          id: catId,
+          name: ch.name || "Channel",
+          type: "series",
+          enabled: true,
+        });
+      }
+    }
+  }
   return jsonPublic(
-    buildManifest(entries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
+    buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
     200,
     (hasLiveShelf || resolved.collectionsAddon) ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
@@ -117233,7 +117250,13 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
       };
     }
   }
-  if (resolvedConfig.unresolved || !entry || entry.enabled === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
+  if (resolvedConfig.unresolved || !entry || entry.enabled === false) {
+    const channelMetas = await fetchChannelItemsCatalog(id, type, config, env, ctx, url, resolvedConfig);
+    if (channelMetas && channelMetas.length) {
+      return jsonPublic({ metas: channelMetas }, 200, CATALOG_NO_CACHE);
+    }
+    return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
+  }
 
   // Every line of the row, not just the first: a merged row stores its
   // sources newline-separated (see fetchCatalog), and one personal source
@@ -117452,6 +117475,9 @@ async function stremioMetaItem(env, ctx, url, m) {
         }
         if (matchedEntry) break;
       }
+      if (!matchedEntry && (wantedChannelId || id)) {
+        matchedEntry = await findChannelEntryById(wantedChannelId || id, config, env);
+      }
       if (!matchedEntry) return jsonPublic({ meta: null });
       const meta = await buildChannelMeta(matchedEntry, url.origin, {
         env, ctx, origin: url.origin,
@@ -117491,6 +117517,176 @@ async function stremioMetaItem(env, ctx, url, m) {
   }
 
   return jsonPublic({ meta: null });
+}
+
+async function loadUserChannelsForManifest(config, env) {
+  if (!config || !env || !env.CONFIGS || config === "nuvio-default" || config === "default") return [];
+  let username = "";
+  if (env.DB) {
+    try {
+      const acct = await env.DB.prepare(
+        "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+      ).bind(config, config, config).first();
+      if (acct) username = acct.username;
+      else {
+        const instRow = await env.DB.prepare(
+          "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
+        ).bind(config, config, config).first();
+        if (instRow && instRow.account_id) {
+          const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
+          if (linked) username = linked.username;
+        }
+      }
+    } catch {}
+  }
+  if (!username) {
+    try {
+      if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;
+      else if (await env.CONFIGS.get(`creatorsync:${config}`)) username = config;
+    } catch {}
+  }
+  if (!username) return [];
+
+  try {
+    const raw = await env.CONFIGS.get(`creatorsyncchannels:${username}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const channelsObj = (parsed && parsed.channels && typeof parsed.channels === "object") ? parsed.channels : parsed;
+    if (!channelsObj || typeof channelsObj !== "object") return [];
+    return Object.values(channelsObj).filter((ch) => ch && typeof ch === "object" && (ch.id || ch.channelId));
+  } catch {
+    return [];
+  }
+}
+
+async function findChannelEntryById(wantedId, config, env) {
+  if (!wantedId) return null;
+  const cleanId = String(wantedId).trim();
+  const strippedId = cleanId.replace(/^channel_/, "");
+
+  let username = "";
+  if (config && config !== "nuvio-default" && config !== "default") {
+    if (env && env.DB) {
+      try {
+        const acct = await env.DB.prepare(
+          "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+        ).bind(config, config, config).first();
+        if (acct) username = acct.username;
+        else {
+          const instRow = await env.DB.prepare(
+            "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
+          ).bind(config, config, config).first();
+          if (instRow && instRow.account_id) {
+            const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
+            if (linked) username = linked.username;
+          }
+        }
+      } catch {}
+    }
+    if (!username && env && env.CONFIGS) {
+      try {
+        if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;
+        else if (await env.CONFIGS.get(`creatorsync:${config}`)) username = config;
+      } catch {}
+    }
+  }
+
+  if (username && env && env.CONFIGS) {
+    try {
+      const raw = await env.CONFIGS.get(`creatorsyncchannels:${username}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const map = (parsed && parsed.channels && typeof parsed.channels === "object") ? parsed.channels : parsed;
+        if (map && typeof map === "object") {
+          for (const ch of Object.values(map)) {
+            if (!ch || typeof ch !== "object") continue;
+            const chId = String(ch.id || ch.channelId || "");
+            if (chId === cleanId || chId === strippedId || `channel_${chId}` === cleanId || `ch_${chId}` === cleanId || `channel_preset_${chId}` === cleanId) {
+              return {
+                id: chId,
+                name: ch.name || "Custom Channel",
+                type: "series",
+                url: "channel:v1:" + JSON.stringify(ch),
+                enabled: true,
+                payload: ch,
+              };
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const netId = strippedId.replace(/^preset_/, "").replace(/^net_/, "");
+  const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined"
+    ? QUICK_CHANNEL_PRESETS
+    : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
+  const matchedNet = networks.find((n) => n.id === netId || `net_${n.id}` === netId || `ch_preset_${n.id}` === cleanId || `channel_preset_${n.id}` === cleanId || `ch_preset_${n.id}` === strippedId);
+  if (matchedNet) {
+    const netPayload = {
+      channelId: `ch_preset_${matchedNet.id}`,
+      id: `ch_preset_${matchedNet.id}`,
+      name: matchedNet.name,
+      presetNetworkId: String(matchedNet.id),
+      dailyRotate: true,
+      poster: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(matchedNet.name)}&v=6`,
+      posterUrl: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(matchedNet.name)}&v=6`,
+      logoUrl: matchedNet.logoPath ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(matchedNet.logoPath)}&v=7` : `/api/channel-logo?netId=${matchedNet.id}&v=7`,
+    };
+    return {
+      id: `ch_preset_${matchedNet.id}`,
+      name: matchedNet.name,
+      type: "series",
+      url: "channel:v1:" + JSON.stringify(netPayload),
+      enabled: true,
+      payload: netPayload,
+    };
+  }
+
+  return null;
+}
+
+async function fetchChannelItemsCatalog(id, type, config, env, ctx, url, resolvedConfig) {
+  if (!id) return null;
+  const channelEntry = await findChannelEntryById(id, config, env);
+  if (!channelEntry || !channelEntry.payload) return null;
+  const payload = channelEntry.payload;
+  try {
+    const lineup = typeof resolveChannelLineup === "function"
+      ? await resolveChannelLineup(payload, {
+          env, ctx, origin: url.origin,
+          now: Date.now(),
+          watchHistory: resolvedConfig && resolvedConfig.watchHistory,
+          continueWatching: resolvedConfig && resolvedConfig.continueWatching,
+        })
+      : null;
+    let items = (lineup && Array.isArray(lineup.items) && lineup.items.length)
+      ? lineup.items
+      : (Array.isArray(payload.items) ? payload.items : []);
+    if (!items.length && payload.presetNetworkId && typeof channelSourceItems === "function") {
+      items = await channelSourceItems(payload, { env, ctx, origin: url.origin });
+    }
+    if (!items || !items.length) return [];
+
+    return items.map((it, i) => {
+      const streamId = (typeof channelItemStreamId === "function" ? channelItemStreamId(it) : "") || it.imdbId || (it.tmdbId ? `tmdb:${it.tmdbId}` : "") || it.id || `ch_item_${i}`;
+      const itemType = it.kind === "movie" ? "movie" : (type === "movie" ? "movie" : "series");
+      const itemTitle = it.title || (it.showName ? `${it.showName} S${it.season || 1}E${it.episode || (i + 1)}` : (it.name || "Item"));
+      return {
+        id: streamId,
+        type: itemType,
+        name: itemTitle,
+        poster: it.poster || it.showPoster || it.thumbnail || payload.posterUrl || payload.poster || `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&v=6`,
+        thumbnail: it.thumbnail || it.poster || it.showBackdrop || payload.backdropUrl || payload.backdrop || `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&format=landscape&v=6`,
+        background: it.backdrop || it.showBackdrop || it.thumbnail || payload.backdropUrl || payload.backdrop || `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&format=landscape&v=6`,
+        description: it.overview || it.title || "",
+        releaseInfo: it.released || (it.year ? String(it.year) : undefined),
+      };
+    });
+  } catch (err) {
+    console.error("fetchChannelItemsCatalog failed:", err);
+    return [];
+  }
 }
 // Poster images and placeholders (icon, safe poster, Better Posters, RPDB, poster badge), the Ko-fi webhook, the support goal and the site notice, moved out of handleFetch (CQ-01).
 
@@ -120146,7 +120342,13 @@ async function apiChannelLineup(request, env, ctx, url) {
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
   }
-  const payload = parseChannelPayload(body.url || "");
+  let payload = parseChannelPayload(body.url || "");
+  if (!payload && (body.channelId || body.catalogId || body.id)) {
+    const ch = typeof findChannelEntryById === "function"
+      ? await findChannelEntryById(body.channelId || body.catalogId || body.id, body.username || body.target, env)
+      : null;
+    if (ch && ch.payload) payload = ch.payload;
+  }
   if (!payload) return json({ ok: false, error: "That is not a channel." }, 400, corsHeaders());
   try {
     const lineup = await resolveChannelLineup(payload, {

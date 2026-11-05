@@ -1081,7 +1081,13 @@ async function apiChannelLineup(request, env, ctx, url) {
   } catch {
     return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
   }
-  const payload = parseChannelPayload(body.url || "");
+  let payload = parseChannelPayload(body.url || "");
+  if (!payload && (body.channelId || body.catalogId || body.id)) {
+    const ch = typeof findChannelEntryById === "function"
+      ? await findChannelEntryById(body.channelId || body.catalogId || body.id, body.username || body.target, env)
+      : null;
+    if (ch && ch.payload) payload = ch.payload;
+  }
   if (!payload) return json({ ok: false, error: "That is not a channel." }, 400, corsHeaders());
   try {
     const lineup = await resolveChannelLineup(payload, {

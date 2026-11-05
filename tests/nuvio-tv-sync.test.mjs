@@ -678,4 +678,92 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
     assert.ok(featuresRes.text.includes("submitNuvioTvLink"), "bundle includes submitNuvioTvLink");
     assert.ok(featuresRes.text.includes("showNuvioTvPairingSuccessModal"), "bundle includes showNuvioTvPairingSuccessModal");
   });
+
+  it("Custom channels and preset channels serve media items via catalog, meta, and lineup routes", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const proof = await accountProof(env, "nuviochanuser");
+
+    // Save initial catalog sync state
+    await env.CONFIGS.put(
+      "creatorsync:nuviochanuser",
+      JSON.stringify({
+        config: [{ id: "chart:combined:trending_movies", name: "Trending Movies", type: "movie" }],
+        updatedAt: 1000,
+      })
+    );
+
+    // Save custom channel in KV under creatorsyncchannels:nuviochanuser
+    await env.CONFIGS.put(
+      "creatorsyncchannels:nuviochanuser",
+      JSON.stringify({
+        channels: {
+          ch_custom_arrow: {
+            id: "ch_custom_arrow",
+            channelId: "ch_custom_arrow",
+            name: "Arrow 24/7",
+            items: [
+              {
+                imdbId: "tt2193021",
+                season: 8,
+                episode: 7,
+                title: "Purgatory",
+                kind: "episode",
+                poster: "https://example.com/arrow_s8.jpg",
+                thumbnail: "https://example.com/arrow_s8_thumb.jpg",
+              },
+              {
+                imdbId: "tt2193021",
+                season: 8,
+                episode: 8,
+                title: "Crisis on Infinite Earths",
+                kind: "episode",
+                poster: "https://example.com/arrow_s8.jpg",
+                thumbnail: "https://example.com/arrow_s8_thumb.jpg",
+              },
+            ],
+          },
+        },
+        updatedAt: 2000,
+      })
+    );
+
+    // 1. Verify manifest exposes custom channel catalog
+    const manifestRes = await call(env, "/nuviochanuser/manifest.json", { headers: { accept: "application/json" } });
+    assert.equal(manifestRes.status, 200);
+    assert.ok(
+      manifestRes.body.catalogs.some((c) => c.id === "channel_ch_custom_arrow"),
+      "manifest declares channel_ch_custom_arrow catalog"
+    );
+
+    // 2. Verify catalog route serves channel media items with streamable IDs
+    const catRes = await call(env, "/nuviochanuser/catalog/series/channel_ch_custom_arrow.json");
+    assert.equal(catRes.status, 200);
+    assert.ok(Array.isArray(catRes.body.metas), "returns metas array");
+    assert.equal(catRes.body.metas.length, 2, "returns 2 episode items");
+    assert.equal(catRes.body.metas[0].id, "tt2193021:8:7", "first item has valid stream ID");
+    assert.equal(catRes.body.metas[0].name, "Purgatory");
+
+    // 3. Verify meta route serves channel details and video episodes
+    const metaRes = await call(env, "/nuviochanuser/meta/series/channel_ch_custom_arrow.json");
+    assert.equal(metaRes.status, 200);
+    assert.ok(metaRes.body.meta, "meta object is returned");
+    assert.equal(metaRes.body.meta.name, "Arrow 24/7");
+    assert.ok(Array.isArray(metaRes.body.meta.videos), "meta has videos array");
+    assert.equal(metaRes.body.meta.videos[0].id, "tt2193021:8:7");
+
+    // 4. Verify /api/channel-lineup works with channelId and username
+    const lineupRes = await call(env, "/api/channel-lineup", {
+      method: "POST",
+      json: { channelId: "ch_custom_arrow", username: "nuviochanuser" },
+    });
+    assert.equal(lineupRes.status, 200);
+    assert.equal(lineupRes.body.ok, true);
+    assert.equal(lineupRes.body.items.length, 2);
+    assert.ok(lineupRes.body.items[0].id.startsWith("tt2193021"));
+
+    // 5. Verify preset channel (e.g. channel_preset_net_hbo) resolves
+    const presetCatRes = await call(env, "/nuviochanuser/catalog/series/channel_preset_net_hbo.json");
+    assert.equal(presetCatRes.status, 200);
+    assert.ok(Array.isArray(presetCatRes.body.metas));
+  });
 });
