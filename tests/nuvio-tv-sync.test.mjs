@@ -232,6 +232,8 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     const userChannel = data.channels.find((ch) => ch.id === "ch_nuvio_1");
     assert.ok(userChannel, "has user custom channel");
     assert.equal(userChannel.name, "My Custom Channel");
+    assert.ok(userChannel.backdropUrl && userChannel.backdropUrl.includes("format=landscape"), "backdropUrl falls back to landscape card");
+    assert.equal(userChannel.logoUrl, null, "logoUrl is null when no clearlogo exists (never vertical poster)");
   });
 
   it("GET /api/nuvio-tv/sync/:target correctly unwraps dictionary channels and reflects live creator sync catalogs and versionHash updates", async () => {

@@ -1,6 +1,20 @@
 # Handoff
 
 ## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
+- **16:9 Landscape Backdrops & Logo URL Cleanup for Channels**:
+  - **Issue Resolved**: When users created custom channels (e.g. "Pokemon") on `mylistsaddon.com`, the channel metadata only attached the show/movie's vertical 2:3 poster, leaving `backdropUrl` empty or set to the vertical poster. When loaded into TV launchers (like Nuvio TV Launcher's Live TV / EPG Guide), the guide fell back to vertical posters or stretched them. In addition, vertical posters were mistakenly copied into `logoUrl`.
+  - **Fix Implemented**:
+    1. In `src/api/25_api-catalog-routes.js` (`formatNuvioUserChannels`):
+       - If `backdrop` or `backdropUrl` is missing or matches a vertical poster, inspects channel items for 16:9 backdrops (`it.backdrop`, `it.showBackdrop`, `it.thumbnail`).
+       - Falls back to `https://mylistsaddon.com/api/channel-poster?name={name}&format=landscape&v=6`.
+       - Strips vertical 2:3 posters from `logoUrl`, setting `logoUrl: null` when no clearlogo or network badge is present so TV clients cleanly render the 16:9 backdrop banner instead of a vertical poster.
+    2. In `src/catalog/05_catalog-core.js` (`getChannelBackdropUrl`):
+       - Added checks for `payload.backdropUrl` and item backdrops (`it.backdrop`, `it.showBackdrop`, `it.thumbnail`), and removed fallback that leaked vertical posters into channel backdrops.
+    3. In `src/api/74_lookup-and-preview-routes.js` (`apiTitleSearchResults`):
+       - Removed fallback from `backdrop` to `poster` when `backdrop_path` is missing so search results do not label 2:3 vertical posters as backdrops.
+    4. In `src/client/20_client-channel-builder.js` (`saveLocalChannel` and `saveChannel`):
+       - Automatically resolves horizontal backdrops from channel items, falls back to the landscape card endpoint (`&format=landscape`), and prevents vertical posters from populating `logoUrl`.
+    5. Verified with unit test in `tests/nuvio-tv-sync.test.mjs` that custom channels in `/api/nuvio-tv/sync/:target` return valid landscape backdrops and `logoUrl: null` when no clearlogo exists.
 - **True Watch History API & Disabling Premature Subtitle Tracking**:
   - Implemented `POST /api/nuvio-tv/history` to record true watch completion events sent by Nuvio TV Launcher when playback reaches $\ge 90\%$ (or is manually completed). Supports both movies and TV series episodes.
   - Implemented `POST /api/nuvio-tv/history/remove` to remove watched movies or series episodes from watch history.

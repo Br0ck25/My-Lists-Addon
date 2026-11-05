@@ -724,11 +724,25 @@ function saveLocalChannel(payload) {
   const channelId = payload.channelId || generateChannelId();
   const now = Date.now();
   const existing = map[channelId];
+  const name = payload.name || 'Untitled Channel';
+  const poster = payload.poster || payload.posterUrl || (existing ? (existing.poster || existing.posterUrl) : null);
+  const posterUrl = payload.posterUrl || payload.poster || (existing ? (existing.posterUrl || existing.poster) : null) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6');
+  let bd = (payload.backdrop && payload.backdrop !== poster && payload.backdrop !== posterUrl) ? payload.backdrop : (payload.backdropUrl && payload.backdropUrl !== poster && payload.backdropUrl !== posterUrl ? payload.backdropUrl : (existing ? (existing.backdrop || existing.backdropUrl) : null));
+  if (!bd && Array.isArray(payload.items)) {
+    const itm = payload.items.find((it) => it && (it.backdrop || it.showBackdrop || it.thumbnail) && it.backdrop !== poster && it.showBackdrop !== poster && it.thumbnail !== poster);
+    if (itm) bd = itm.backdrop || itm.showBackdrop || itm.thumbnail;
+  }
+  bd = bd || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&format=landscape&v=6');
+  if (bd.includes('/api/channel-poster') && !bd.includes('format=landscape')) bd += (bd.includes('?') ? '&' : '?') + 'format=landscape';
+  const logo = (payload.logoUrl && payload.logoUrl !== poster && payload.logoUrl !== posterUrl) ? payload.logoUrl : (existing && existing.logoUrl !== poster && existing.logoUrl !== posterUrl ? existing.logoUrl : null);
   map[channelId] = {
     channelId: channelId,
-    name: payload.name || 'Untitled Channel',
-    poster: payload.poster || null,
-    backdrop: payload.backdrop || null,
+    name: name,
+    poster: poster,
+    posterUrl: posterUrl,
+    backdrop: bd,
+    backdropUrl: bd,
+    logoUrl: logo,
     items: compressChannelItemsForStorage(payload.items),
     shuffle: !!payload.shuffle,
     autoSort: payload.autoSort || '',
@@ -747,21 +761,6 @@ function saveLocalChannel(payload) {
     // resolveThinPresetChannels can tell this channel's full pool already
     // lives durably in the shared channel:preset:v2:<networkId> cache and
     // skip re-uploading it whole, or quietly refresh it from there.
-    //
-    // hasOwnProperty, not a plain payload.presetNetworkId || existing... --
-    // that fallback could never tell "the caller didn't mention this field"
-    // (resolveThinPresetChannels' own re-save, which should keep whatever
-    // this record already had) apart from "the caller explicitly cleared
-    // it" (saveChannel, the full editor's Save button, which never writes
-    // presetNetworkId at all once a channel has been through it -- the
-    // saved catalog row already drops it the same way, since editing a
-    // channel's picks is what makes it no longer "the generic network
-    // lineup"). Falling back to the old value in the second case is exactly
-    // how a deliberately trimmed-down edit -- say, curated to under 50
-    // picks -- got silently overwritten back to the full, unedited preset
-    // the next time this local copy looked thin: the row had already
-    // forgotten this was ever a preset channel, but this record's fallback
-    // kept insisting it still was.
     presetNetworkId: Object.prototype.hasOwnProperty.call(payload, 'presetNetworkId')
       ? (payload.presetNetworkId || '')
       : (existing ? existing.presetNetworkId : '') || '',
@@ -9148,11 +9147,10 @@ async function saveChannel() {
     return;
   }
   const verticalPoster = (channelDraftPoster && channelDraftPoster !== 'custom' && !channelDraftPoster.includes('/api/channel-poster')) ? channelDraftPoster : null;
-  let horizontalBackdrop = null;
-  if (verticalPoster) {
-    const matchedItem = channelDraftItems.find((it) => it && (it.showPoster === verticalPoster || it.poster === verticalPoster));
-    horizontalBackdrop = (matchedItem && (matchedItem.backdrop || matchedItem.showBackdrop || matchedItem.thumbnail)) || channelDraftBackdrop || verticalPoster;
-  }
+  const matchIt = channelDraftItems.find((it) => it && (it.backdrop || it.showBackdrop) && it.backdrop !== verticalPoster && it.showBackdrop !== verticalPoster && (!verticalPoster || it.showPoster === verticalPoster || it.poster === verticalPoster));
+  const anyIt = !matchIt && channelDraftItems.find((it) => it && (it.backdrop || it.showBackdrop) && it.backdrop !== verticalPoster && it.showBackdrop !== verticalPoster);
+  let horizontalBackdrop = (channelDraftBackdrop && channelDraftBackdrop !== verticalPoster) ? channelDraftBackdrop : ((matchIt || anyIt) ? ((matchIt || anyIt).backdrop || (matchIt || anyIt).showBackdrop) : (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&format=landscape&v=6'));
+  if (horizontalBackdrop.includes('/api/channel-poster') && !horizontalBackdrop.includes('format=landscape')) horizontalBackdrop += (horizontalBackdrop.includes('?') ? '&' : '?') + 'format=landscape';
   // The dropdown is the whole play-order state: "Shuffle daily" is the only
   // entry the Worker acts on, and a static sort has already been applied to
   // channelDraftItems, so the saved item order IS the play order. autoSort
@@ -9169,8 +9167,10 @@ async function saveChannel() {
   const payload = Object.assign({
     channelId: channelId,
     name: name,
-    poster: verticalPoster,
+    poster: verticalPoster || (existingChannel && (existingChannel.poster || existingChannel.posterUrl)) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
+    posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
     backdrop: horizontalBackdrop,
+    backdropUrl: horizontalBackdrop,
     items: channelDraftItems,
     shuffle: shuffle,
     autoSort: autoSort,
@@ -9183,8 +9183,9 @@ async function saveChannel() {
     // channel edited here has picks preserved -- see saveLocalChannel comment.
     // Preserves local agreement with what the row has always done.
     presetNetworkId: '',
-    posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
-    logoUrl: (existingChannel && existingChannel.logoUrl) || verticalPoster || null,
+    logoUrl: (existingChannel && existingChannel.logoUrl && existingChannel.logoUrl !== existingChannel.posterUrl && existingChannel.logoUrl !== verticalPoster)
+      ? existingChannel.logoUrl
+      : (typeof channelDraftLogo !== 'undefined' && channelDraftLogo && channelDraftLogo !== verticalPoster ? channelDraftLogo : null),
     // Visibility and sharing flags
     visibility: isPublic ? 'public' : 'private',
     sharePublished: isPublic,

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-05";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "bd5ab9e585";
+const WORKER_BUILD = "d2bd015bf8";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -19434,19 +19434,19 @@ function generateChannelBackdropSvg(name, backdropUrl = "") {
 }
 
 function getChannelBackdropUrl(payload) {
-  if (payload.backdrop && payload.backdrop.startsWith("http") && !payload.backdrop.includes("/api/channel-")) {
+  const poster = payload.posterUrl || payload.poster || "";
+  if (payload.backdrop && payload.backdrop.startsWith("http") && !payload.backdrop.includes("/api/channel-") && payload.backdrop !== poster) {
     return payload.backdrop;
+  }
+  if (payload.backdropUrl && payload.backdropUrl.startsWith("http") && !payload.backdropUrl.includes("/api/channel-") && payload.backdropUrl !== poster) {
+    return payload.backdropUrl;
   }
   if (payload.items && payload.items.length) {
     for (const it of payload.items) {
-      if (it.backdrop && it.backdrop.startsWith("http") && !it.backdrop.includes("/api/channel-")) return it.backdrop;
-      if (it.showBackdrop && it.showBackdrop.startsWith("http") && !it.showBackdrop.includes("/api/channel-")) return it.showBackdrop;
-      if (it.thumbnail && it.thumbnail.startsWith("http") && !it.thumbnail.includes("/api/channel-")) return it.thumbnail;
+      if (it.backdrop && it.backdrop.startsWith("http") && !it.backdrop.includes("/api/channel-") && it.backdrop !== poster) return it.backdrop;
+      if (it.showBackdrop && it.showBackdrop.startsWith("http") && !it.showBackdrop.includes("/api/channel-") && it.showBackdrop !== poster) return it.showBackdrop;
+      if (it.thumbnail && it.thumbnail.startsWith("http") && !it.thumbnail.includes("/api/channel-") && it.thumbnail !== poster) return it.thumbnail;
     }
-  }
-  // If a custom URL poster was set but no separate backdrop was saved, use the poster URL as the backdrop too
-  if (payload.poster && payload.poster.startsWith("http") && !payload.poster.includes("/api/channel-")) {
-    return payload.poster;
   }
   return "";
 }
@@ -58421,11 +58421,25 @@ function saveLocalChannel(payload) {
   const channelId = payload.channelId || generateChannelId();
   const now = Date.now();
   const existing = map[channelId];
+  const name = payload.name || 'Untitled Channel';
+  const poster = payload.poster || payload.posterUrl || (existing ? (existing.poster || existing.posterUrl) : null);
+  const posterUrl = payload.posterUrl || payload.poster || (existing ? (existing.posterUrl || existing.poster) : null) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6');
+  let bd = (payload.backdrop && payload.backdrop !== poster && payload.backdrop !== posterUrl) ? payload.backdrop : (payload.backdropUrl && payload.backdropUrl !== poster && payload.backdropUrl !== posterUrl ? payload.backdropUrl : (existing ? (existing.backdrop || existing.backdropUrl) : null));
+  if (!bd && Array.isArray(payload.items)) {
+    const itm = payload.items.find((it) => it && (it.backdrop || it.showBackdrop || it.thumbnail) && it.backdrop !== poster && it.showBackdrop !== poster && it.thumbnail !== poster);
+    if (itm) bd = itm.backdrop || itm.showBackdrop || itm.thumbnail;
+  }
+  bd = bd || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&format=landscape&v=6');
+  if (bd.includes('/api/channel-poster') && !bd.includes('format=landscape')) bd += (bd.includes('?') ? '&' : '?') + 'format=landscape';
+  const logo = (payload.logoUrl && payload.logoUrl !== poster && payload.logoUrl !== posterUrl) ? payload.logoUrl : (existing && existing.logoUrl !== poster && existing.logoUrl !== posterUrl ? existing.logoUrl : null);
   map[channelId] = {
     channelId: channelId,
-    name: payload.name || 'Untitled Channel',
-    poster: payload.poster || null,
-    backdrop: payload.backdrop || null,
+    name: name,
+    poster: poster,
+    posterUrl: posterUrl,
+    backdrop: bd,
+    backdropUrl: bd,
+    logoUrl: logo,
     items: compressChannelItemsForStorage(payload.items),
     shuffle: !!payload.shuffle,
     autoSort: payload.autoSort || '',
@@ -58444,21 +58458,6 @@ function saveLocalChannel(payload) {
     // resolveThinPresetChannels can tell this channel's full pool already
     // lives durably in the shared channel:preset:v2:<networkId> cache and
     // skip re-uploading it whole, or quietly refresh it from there.
-    //
-    // hasOwnProperty, not a plain payload.presetNetworkId || existing... --
-    // that fallback could never tell "the caller didn't mention this field"
-    // (resolveThinPresetChannels' own re-save, which should keep whatever
-    // this record already had) apart from "the caller explicitly cleared
-    // it" (saveChannel, the full editor's Save button, which never writes
-    // presetNetworkId at all once a channel has been through it -- the
-    // saved catalog row already drops it the same way, since editing a
-    // channel's picks is what makes it no longer "the generic network
-    // lineup"). Falling back to the old value in the second case is exactly
-    // how a deliberately trimmed-down edit -- say, curated to under 50
-    // picks -- got silently overwritten back to the full, unedited preset
-    // the next time this local copy looked thin: the row had already
-    // forgotten this was ever a preset channel, but this record's fallback
-    // kept insisting it still was.
     presetNetworkId: Object.prototype.hasOwnProperty.call(payload, 'presetNetworkId')
       ? (payload.presetNetworkId || '')
       : (existing ? existing.presetNetworkId : '') || '',
@@ -66845,11 +66844,10 @@ async function saveChannel() {
     return;
   }
   const verticalPoster = (channelDraftPoster && channelDraftPoster !== 'custom' && !channelDraftPoster.includes('/api/channel-poster')) ? channelDraftPoster : null;
-  let horizontalBackdrop = null;
-  if (verticalPoster) {
-    const matchedItem = channelDraftItems.find((it) => it && (it.showPoster === verticalPoster || it.poster === verticalPoster));
-    horizontalBackdrop = (matchedItem && (matchedItem.backdrop || matchedItem.showBackdrop || matchedItem.thumbnail)) || channelDraftBackdrop || verticalPoster;
-  }
+  const matchIt = channelDraftItems.find((it) => it && (it.backdrop || it.showBackdrop) && it.backdrop !== verticalPoster && it.showBackdrop !== verticalPoster && (!verticalPoster || it.showPoster === verticalPoster || it.poster === verticalPoster));
+  const anyIt = !matchIt && channelDraftItems.find((it) => it && (it.backdrop || it.showBackdrop) && it.backdrop !== verticalPoster && it.showBackdrop !== verticalPoster);
+  let horizontalBackdrop = (channelDraftBackdrop && channelDraftBackdrop !== verticalPoster) ? channelDraftBackdrop : ((matchIt || anyIt) ? ((matchIt || anyIt).backdrop || (matchIt || anyIt).showBackdrop) : (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&format=landscape&v=6'));
+  if (horizontalBackdrop.includes('/api/channel-poster') && !horizontalBackdrop.includes('format=landscape')) horizontalBackdrop += (horizontalBackdrop.includes('?') ? '&' : '?') + 'format=landscape';
   // The dropdown is the whole play-order state: "Shuffle daily" is the only
   // entry the Worker acts on, and a static sort has already been applied to
   // channelDraftItems, so the saved item order IS the play order. autoSort
@@ -66866,8 +66864,10 @@ async function saveChannel() {
   const payload = Object.assign({
     channelId: channelId,
     name: name,
-    poster: verticalPoster,
+    poster: verticalPoster || (existingChannel && (existingChannel.poster || existingChannel.posterUrl)) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
+    posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
     backdrop: horizontalBackdrop,
+    backdropUrl: horizontalBackdrop,
     items: channelDraftItems,
     shuffle: shuffle,
     autoSort: autoSort,
@@ -66880,8 +66880,9 @@ async function saveChannel() {
     // channel edited here has picks preserved -- see saveLocalChannel comment.
     // Preserves local agreement with what the row has always done.
     presetNetworkId: '',
-    posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
-    logoUrl: (existingChannel && existingChannel.logoUrl) || verticalPoster || null,
+    logoUrl: (existingChannel && existingChannel.logoUrl && existingChannel.logoUrl !== existingChannel.posterUrl && existingChannel.logoUrl !== verticalPoster)
+      ? existingChannel.logoUrl
+      : (typeof channelDraftLogo !== 'undefined' && channelDraftLogo && channelDraftLogo !== verticalPoster ? channelDraftLogo : null),
     // Visibility and sharing flags
     visibility: isPublic ? 'public' : 'private',
     sharePublished: isPublic,
@@ -92731,19 +92732,40 @@ function formatNuvioUserChannels(userChannelsRaw) {
       return valid.map((ch, i) => {
         const id = String(ch.id || ch.channelId || `ch_${i + 1}`);
         const name = ch.name || ch.channelName || `Channel ${i + 1}`;
-        const posterUrl = ch.posterUrl || ch.poster || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
-        const backdropUrl = ch.backdropUrl || ch.backdrop || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&format=landscape&v=6`;
-        const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || ch.poster || "") : "");
-        let logoUrl = ch.logoUrl;
-        if (!logoUrl) {
-          if (logoPath) {
-            logoUrl = `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(logoPath)}&v=7`;
-          } else if (ch.networkId || ch.presetNetworkId) {
-            logoUrl = `https://mylistsaddon.com/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId}&v=7`;
-          } else {
-            logoUrl = ch.logo || posterUrl;
+        const posterCandidate = ch.posterUrl || ch.poster || "";
+        const posterUrl = posterCandidate || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
+
+        let backdropCandidate = ch.backdropUrl || ch.backdrop || "";
+        if (backdropCandidate && (backdropCandidate === posterUrl || backdropCandidate === posterCandidate || backdropCandidate === ch.poster)) {
+          backdropCandidate = "";
+        }
+        if (!backdropCandidate && Array.isArray(ch.items)) {
+          const itemWithBackdrop = ch.items.find((it) => it && (it.backdrop || it.showBackdrop || it.thumbnail) &&
+            it.backdrop !== posterUrl && it.showBackdrop !== posterUrl && it.thumbnail !== posterUrl &&
+            it.backdrop !== posterCandidate && it.showBackdrop !== posterCandidate && it.thumbnail !== posterCandidate);
+          if (itemWithBackdrop) {
+            backdropCandidate = itemWithBackdrop.backdrop || itemWithBackdrop.showBackdrop || itemWithBackdrop.thumbnail;
           }
         }
+        let backdropUrl = backdropCandidate || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&format=landscape&v=6`;
+        if (backdropUrl.includes("/api/channel-poster") && !backdropUrl.includes("format=landscape")) {
+          backdropUrl = backdropUrl.includes("?") ? `${backdropUrl}&format=landscape` : `${backdropUrl}?format=landscape`;
+        }
+
+        let logoUrl = null;
+        const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || "") : "");
+        if (logoPath) {
+          logoUrl = `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(logoPath)}&v=7`;
+        } else if (ch.networkId || ch.presetNetworkId) {
+          logoUrl = `https://mylistsaddon.com/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId}&v=7`;
+        } else {
+          const rawLogo = ch.logoUrl || ch.logo;
+          const isPosterLogo = rawLogo && (rawLogo === posterUrl || rawLogo === posterCandidate || rawLogo === ch.poster);
+          if (rawLogo && !isPosterLogo && (rawLogo.includes("clearlogo") || rawLogo.includes("/logo") || rawLogo.endsWith(".svg") || rawLogo.endsWith(".png") || rawLogo.includes("/api/channel-logo"))) {
+            logoUrl = rawLogo;
+          }
+        }
+
         return {
           id: id,
           name: name,
@@ -92751,7 +92773,7 @@ function formatNuvioUserChannels(userChannelsRaw) {
           posterUrl: posterUrl,
           backdrop: backdropUrl,
           backdropUrl: backdropUrl,
-          logoUrl: logoUrl,
+          logoUrl: logoUrl || null,
           category: ch.category || "My Lists Addon Channels",
           catalogId: ch.catalogId || (id.startsWith("channel_") ? id : `channel_${id}`),
           playOrder: typeof ch.playOrder === "number" ? ch.playOrder : (i + 1),
@@ -120251,7 +120273,7 @@ async function apiTitleSearchResults(url, kind, isAdultFilterActive, allRawItems
   const results = await Promise.all(
     rawResults.map(async (it) => {
       let poster = it.poster_path ? `https://image.tmdb.org/t/p/w200${it.poster_path}` : (it.direct_poster || null);
-      const backdrop = it.backdrop_path ? `https://image.tmdb.org/t/p/w780${it.backdrop_path}` : (it.direct_backdrop || poster || null);
+      const backdrop = it.backdrop_path ? `https://image.tmdb.org/t/p/w780${it.backdrop_path}` : (it.direct_backdrop || null);
       const isAdultItem = it.adult === true || it.is_adult === true || isAdultOrNsfw(it);
 
       // If TMDB poster is missing, fall back to the backdrop (already in

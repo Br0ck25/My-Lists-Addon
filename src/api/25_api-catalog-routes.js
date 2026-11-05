@@ -497,19 +497,40 @@ function formatNuvioUserChannels(userChannelsRaw) {
       return valid.map((ch, i) => {
         const id = String(ch.id || ch.channelId || `ch_${i + 1}`);
         const name = ch.name || ch.channelName || `Channel ${i + 1}`;
-        const posterUrl = ch.posterUrl || ch.poster || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
-        const backdropUrl = ch.backdropUrl || ch.backdrop || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&format=landscape&v=6`;
-        const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || ch.poster || "") : "");
-        let logoUrl = ch.logoUrl;
-        if (!logoUrl) {
-          if (logoPath) {
-            logoUrl = `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(logoPath)}&v=7`;
-          } else if (ch.networkId || ch.presetNetworkId) {
-            logoUrl = `https://mylistsaddon.com/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId}&v=7`;
-          } else {
-            logoUrl = ch.logo || posterUrl;
+        const posterCandidate = ch.posterUrl || ch.poster || "";
+        const posterUrl = posterCandidate || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&v=6`;
+
+        let backdropCandidate = ch.backdropUrl || ch.backdrop || "";
+        if (backdropCandidate && (backdropCandidate === posterUrl || backdropCandidate === posterCandidate || backdropCandidate === ch.poster)) {
+          backdropCandidate = "";
+        }
+        if (!backdropCandidate && Array.isArray(ch.items)) {
+          const itemWithBackdrop = ch.items.find((it) => it && (it.backdrop || it.showBackdrop || it.thumbnail) &&
+            it.backdrop !== posterUrl && it.showBackdrop !== posterUrl && it.thumbnail !== posterUrl &&
+            it.backdrop !== posterCandidate && it.showBackdrop !== posterCandidate && it.thumbnail !== posterCandidate);
+          if (itemWithBackdrop) {
+            backdropCandidate = itemWithBackdrop.backdrop || itemWithBackdrop.showBackdrop || itemWithBackdrop.thumbnail;
           }
         }
+        let backdropUrl = backdropCandidate || `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(name)}&format=landscape&v=6`;
+        if (backdropUrl.includes("/api/channel-poster") && !backdropUrl.includes("format=landscape")) {
+          backdropUrl = backdropUrl.includes("?") ? `${backdropUrl}&format=landscape` : `${backdropUrl}?format=landscape`;
+        }
+
+        let logoUrl = null;
+        const logoPath = ch.logoPath || (typeof extractLogoPath === "function" ? extractLogoPath(ch.logo || "") : "");
+        if (logoPath) {
+          logoUrl = `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(logoPath)}&v=7`;
+        } else if (ch.networkId || ch.presetNetworkId) {
+          logoUrl = `https://mylistsaddon.com/api/channel-logo?netId=${ch.networkId || ch.presetNetworkId}&v=7`;
+        } else {
+          const rawLogo = ch.logoUrl || ch.logo;
+          const isPosterLogo = rawLogo && (rawLogo === posterUrl || rawLogo === posterCandidate || rawLogo === ch.poster);
+          if (rawLogo && !isPosterLogo && (rawLogo.includes("clearlogo") || rawLogo.includes("/logo") || rawLogo.endsWith(".svg") || rawLogo.endsWith(".png") || rawLogo.includes("/api/channel-logo"))) {
+            logoUrl = rawLogo;
+          }
+        }
+
         return {
           id: id,
           name: name,
@@ -517,7 +538,7 @@ function formatNuvioUserChannels(userChannelsRaw) {
           posterUrl: posterUrl,
           backdrop: backdropUrl,
           backdropUrl: backdropUrl,
-          logoUrl: logoUrl,
+          logoUrl: logoUrl || null,
           category: ch.category || "My Lists Addon Channels",
           catalogId: ch.catalogId || (id.startsWith("channel_") ? id : `channel_${id}`),
           playOrder: typeof ch.playOrder === "number" ? ch.playOrder : (i + 1),

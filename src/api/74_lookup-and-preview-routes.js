@@ -743,7 +743,7 @@ async function apiTitleSearchResults(url, kind, isAdultFilterActive, allRawItems
   const results = await Promise.all(
     rawResults.map(async (it) => {
       let poster = it.poster_path ? `https://image.tmdb.org/t/p/w200${it.poster_path}` : (it.direct_poster || null);
-      const backdrop = it.backdrop_path ? `https://image.tmdb.org/t/p/w780${it.backdrop_path}` : (it.direct_backdrop || poster || null);
+      const backdrop = it.backdrop_path ? `https://image.tmdb.org/t/p/w780${it.backdrop_path}` : (it.direct_backdrop || null);
       const isAdultItem = it.adult === true || it.is_adult === true || isAdultOrNsfw(it);
 
       // If TMDB poster is missing, fall back to the backdrop (already in
