@@ -262,6 +262,11 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
     assert.ok(res.text.includes("MTC-WGT"), "contains pairing code");
     assert.ok(res.text.includes("Link Nuvio TV Launcher"), "contains title");
     assert.ok(res.text.includes("Link TV Now"), "contains link button");
+    assert.ok(res.text.includes('<style nonce="'), "style has CSP nonce placeholder or nonce");
+    assert.ok(res.text.includes('<script nonce="'), "script has CSP nonce placeholder or nonce");
+    assert.ok(res.text.includes('id="successBox" style="display:none;"'), "successBox has inline display:none");
+    assert.ok(res.text.includes('id="errorMsg" style="display:none;"'), "errorMsg has inline display:none");
+    assert.ok(res.text.includes("dark-theme"), "supports theme detection");
   });
 
   it("GET /?source=nuvio_tv&tv_code=MTC-WGT redirects to /link?code=MTC-WGT", async () => {

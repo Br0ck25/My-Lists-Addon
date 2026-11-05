@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-04";
+const WORKER_BUILD_DATE = "2026-11-05";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "44ed4493d2";
+const WORKER_BUILD = "57f2bb7058";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -92853,60 +92853,54 @@ async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
 }
 
 function buildNuvioTvLinkPageCss() {
-  return `:root {
-    --bg: #0f1115; --surface: #171a21; --surface-hover: #1f232c; --border: #262a35;
-    --text: #f3f4f6; --muted: #9ca3af; --brand: #22c55e; --brand-hover: #16a34a;
-    --danger: #ef4444; --radius: 12px;
-    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  return `* { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    background: var(--bg); color: var(--text); font-family: var(--font);
+    background: var(--color-bg-canvas); color: var(--color-text-primary); font-family: var(--font-body);
     min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
   }
   .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 32px 28px; max-width: 440px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.4); text-align: center;
+    background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius);
+    padding: 32px 28px; max-width: 440px; width: 100%; box-shadow: var(--shadow-md); text-align: center;
   }
   .logo {
     display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px;
-    border-radius: 14px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: var(--radius-md); background: var(--color-brand-subtle); border: 1px solid var(--color-brand-line);
     font-size: 28px; margin-bottom: 16px;
   }
-  h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
-  p.sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: var(--color-text-primary); }
+  p.sub { font-size: 14px; color: var(--color-text-muted); margin-bottom: 24px; line-height: 1.5; }
   .code-box {
-    background: rgba(255, 255, 255, 0.03); border: 1.5px dashed var(--border); border-radius: 10px;
+    background: var(--color-bg-sunken); border: 1.5px dashed var(--color-border-strong); border-radius: var(--radius-sm);
     padding: 16px; margin-bottom: 24px;
   }
-  .code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
-  .code-val { font-size: 28px; font-weight: 800; letter-spacing: 0.15em; color: var(--brand); margin-top: 4px; font-family: monospace; }
-  .user-pill { font-size: 13px; color: var(--muted); margin-top: 6px; }
-  .user-pill strong { color: var(--text); }
+  .code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-muted); font-weight: 600; }
+  .code-val { font-size: 28px; font-weight: 800; letter-spacing: 0.15em; color: var(--color-brand); margin-top: 4px; font-family: var(--font-mono); }
+  .user-pill { font-size: 13px; color: var(--color-text-muted); margin-top: 6px; }
+  .user-pill strong { color: var(--color-text-primary); }
   .btn {
-    display: inline-block; width: 100%; padding: 13px 20px; border-radius: 8px; font-size: 15px;
-    font-weight: 600; border: none; cursor: pointer; transition: background 0.15s ease; text-decoration: none;
+    display: inline-block; width: 100%; padding: 13px 20px; border-radius: var(--radius-pill); font-size: 15px;
+    font-weight: 600; border: none; cursor: pointer; transition: background var(--duration-base) var(--ease); text-decoration: none;
   }
-  .btn-primary { background: var(--brand); color: #000; }
-  .btn-primary:hover { background: var(--brand-hover); }
-  .btn-secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); margin-top: 10px; }
-  .btn-secondary:hover { background: #272d38; }
+  .btn-primary { background: var(--color-brand-fill); color: var(--color-on-brand); }
+  .btn-primary:hover { background: var(--color-brand-fill-hover); }
+  .btn-secondary { background: var(--color-bg-sunken); color: var(--color-text-primary); border: 1px solid var(--color-border-subtle); margin-top: 10px; }
+  .btn-secondary:hover { background: var(--color-bg-elevated); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .input-field {
-    width: 100%; padding: 12px 14px; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--text); font-size: 14px; margin-bottom: 12px; outline: none;
+    width: 100%; padding: 12px 14px; background: var(--color-bg-sunken); border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-sm); color: var(--color-text-primary); font-size: 14px; margin-bottom: 12px; outline: none;
   }
-  .input-field:focus { border-color: var(--brand); }
-  .error-msg { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; }
+  .input-field:focus { border-color: var(--color-border-focus); }
+  .error-msg { color: var(--color-danger); font-size: 13px; margin-top: 12px; }
   .success-box {
-    display: none; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3);
-    border-radius: 10px; padding: 20px; margin-bottom: 20px;
+    background: var(--color-brand-subtle); border: 1px solid var(--color-brand-line);
+    border-radius: var(--radius-sm); padding: 20px; margin-bottom: 20px;
   }
-  .success-icon { font-size: 40px; color: var(--brand); margin-bottom: 8px; }
-  .success-title { font-size: 18px; font-weight: 700; color: var(--brand); margin-bottom: 6px; }
-  .success-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
-  .switch-mode-btn { background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; margin-top: 14px; }
-  .switch-mode-btn:hover { color: var(--text); }`;
+  .success-icon { font-size: 40px; color: var(--color-brand); margin-bottom: 8px; }
+  .success-title { font-size: 18px; font-weight: 700; color: var(--color-brand); margin-bottom: 6px; }
+  .success-desc { font-size: 13px; color: var(--color-text-muted); line-height: 1.4; }
+  .switch-mode-btn { background: none; border: none; color: var(--color-text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; margin-top: 14px; }
+  .switch-mode-btn:hover { color: var(--color-text-primary); }`;
 }
 
 function buildNuvioTvLinkPageAuthJs() {
@@ -93021,12 +93015,34 @@ function buildNuvioTvLinkPageJs(codeParam) {
       storedKey = localStorage.getItem('myListAddon:creatorKey') || '';
     } catch (e) {}
 
+    function applyUserView(username) {
+      storedUser = username;
+      if (storedUser) {
+        userPill.innerHTML = 'Signed in as <strong>' + storedUser.replace(/</g, '&lt;') + '</strong>';
+        signedInView.style.display = 'block';
+        registerView.style.display = 'none';
+        loginView.style.display = 'none';
+      } else {
+        userPill.innerHTML = 'Not signed in';
+        registerView.style.display = 'block';
+        signedInView.style.display = 'none';
+        loginView.style.display = 'none';
+      }
+    }
+
     if (storedUser) {
-      userPill.innerHTML = 'Signed in as <strong>' + storedUser.replace(/</g, '&lt;') + '</strong>';
-      signedInView.style.display = 'block';
+      applyUserView(storedUser);
     } else {
-      userPill.innerHTML = 'Not signed in';
-      registerView.style.display = 'block';
+      fetch('/api/me', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && data.ok && data.account && data.account.username) {
+            applyUserView(data.account.displayName || data.account.username);
+          } else {
+            applyUserView('');
+          }
+        })
+        .catch(function() { applyUserView(''); });
     }
 
     var showLoginBtn = document.getElementById('showLoginBtn');
@@ -93087,7 +93103,11 @@ function handleNuvioTvLinkPage(request, env, ctx, url, path) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Link Nuvio TV Launcher &bull; My Lists Addon</title>
-  <style>${css}</style>
+  <script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
+  <style nonce="${CSP_NONCE_PLACEHOLDER}">
+${DESIGN_TOKENS_CSS}
+${css}
+  </style>
 </head>
 <body>
   <div class="card">
@@ -93101,7 +93121,7 @@ function handleNuvioTvLinkPage(request, env, ctx, url, path) {
       <div class="user-pill" id="userPill">Checking account status&hellip;</div>
     </div>
 
-    <div class="success-box" id="successBox">
+    <div class="success-box" id="successBox" style="display:none;">
       <div class="success-icon">&#x2713;</div>
       <div class="success-title">TV Linked Successfully!</div>
       <div class="success-desc">Your Catalogs, Collections, and Live TV Channels have synced to your TV screen. You can now return to your TV.</div>
@@ -93129,13 +93149,13 @@ function handleNuvioTvLinkPage(request, env, ctx, url, path) {
       </div>
     </div>
 
-    <div class="error-msg" id="errorMsg"></div>
+    <div class="error-msg" id="errorMsg" style="display:none;"></div>
   </div>
 
-  <script>${js}</script>
+  <script nonce="${CSP_NONCE_PLACEHOLDER}">${js}<\/script>
 </body>
 </html>`;
-  return new Response(html, {
+  return pageResponseWithBody(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
