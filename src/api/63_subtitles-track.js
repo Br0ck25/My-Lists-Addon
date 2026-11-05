@@ -62,6 +62,22 @@ async function handleSubtitlesTrackFor(configParam, stremioType, id, env, reques
   const diagnosticsKey = `creatortrack:${auth.ok ? auth.username : String(trackCreatorName).toLowerCase()}`;
   const pingId = `${stremioType}:${id}`;
 
+  const incomingClient = detectClientApp(request);
+  const isNuvioClient = incomingClient === "Nuvio" ||
+    (request && request.headers && (
+      (request.headers.get("x-nuvio-client") || "").toLowerCase().includes("nuvio") ||
+      (request.headers.get("user-agent") || "").toLowerCase().includes("nuvio")
+    ));
+  if (isNuvioClient) {
+    await env.CONFIGS.put(diagnosticsKey, JSON.stringify({
+      lastPingAt: Date.now(),
+      lastPingId: pingId,
+      lastServer: "Nuvio",
+      matched: "skipped (Nuvio client reports true completion via /api/nuvio-tv/history)",
+    }));
+    return;
+  }
+
   if (!auth.ok) {
     await env.CONFIGS.put(diagnosticsKey, JSON.stringify({
       lastPingAt: Date.now(),

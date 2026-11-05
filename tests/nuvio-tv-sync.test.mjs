@@ -813,4 +813,145 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
     assert.ok(manifestRes.body.catalogs.some((c) => c.id === "new_live_list_2"), "manifest has live list 2");
     assert.ok(!manifestRes.body.catalogs.some((c) => c.id === "old_list_1"), "manifest dropped old list 1");
   });
+
+  it("POST /api/nuvio-tv/history records true watch progress for movies and episodes, and /remove deletes them", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const targetUser = "nuviowatcher";
+    await accountProof(env, targetUser);
+
+    // 1. Record Movie watched via POST /api/nuvio-tv/history
+    const movieRes = await call(env, "/api/nuvio-tv/history", {
+      method: "POST",
+      headers: {
+        "x-nuvio-client": "NuvioTVLauncher",
+        "origin": "https://mylistsaddon.com",
+      },
+      json: {
+        targetId: targetUser,
+        type: "movie",
+        contentId: "tt0137523",
+        imdbId: "tt0137523",
+        progress: 94.2,
+        completed: true,
+        watchedAt: 1730825000000,
+      },
+    });
+    assert.equal(movieRes.status, 200);
+    assert.equal(movieRes.body.success, true);
+
+    // Verify stored in creatorsynctracking:<user>
+    let trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${targetUser}`);
+    let tracking = JSON.parse(trackingRaw);
+    assert.equal(tracking.watchHistory.length, 1);
+    assert.equal(tracking.watchHistory[0].id, "tt0137523");
+    assert.equal(tracking.watchHistory[0].type, "movie");
+
+    // 2. Record Series Episode watched via POST /api/nuvio-tv/history
+    const epRes = await call(env, "/api/nuvio-tv/history", {
+      method: "POST",
+      headers: {
+        "x-nuvio-client": "NuvioTVLauncher",
+        "origin": "https://mylistsaddon.com",
+      },
+      json: {
+        targetId: targetUser,
+        type: "series",
+        contentId: "tt0903747:1:1",
+        imdbId: "tt0903747",
+        season: 1,
+        episode: 1,
+        progress: 91.5,
+        completed: true,
+        watchedAt: 1730826000000,
+      },
+    });
+    assert.equal(epRes.status, 200);
+    assert.equal(epRes.body.success, true);
+
+    trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${targetUser}`);
+    tracking = JSON.parse(trackingRaw);
+    assert.equal(tracking.watchHistory.length, 2);
+    assert.equal(tracking.watchHistory[0].seasonNum, 1);
+    assert.equal(tracking.watchHistory[0].episodeNum, 1);
+    assert.equal(tracking.watchHistory[0].showId, "tt0903747");
+
+    // 3. Remove episode via POST /api/nuvio-tv/history/remove
+    const removeEpRes = await call(env, "/api/nuvio-tv/history/remove", {
+      method: "POST",
+      headers: {
+        "x-nuvio-client": "NuvioTVLauncher",
+      },
+      json: {
+        targetId: targetUser,
+        type: "series",
+        contentId: "tt0903747:1:1",
+        imdbId: "tt0903747",
+        season: 1,
+        episode: 1,
+      },
+    });
+    assert.equal(removeEpRes.status, 200);
+    assert.equal(removeEpRes.body.success, true);
+
+    trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${targetUser}`);
+    tracking = JSON.parse(trackingRaw);
+    assert.equal(tracking.watchHistory.length, 1);
+    assert.equal(tracking.watchHistory[0].id, "tt0137523");
+
+    // 4. Remove movie via POST /api/nuvio-tv/history/remove
+    const removeMovieRes = await call(env, "/api/nuvio-tv/history/remove", {
+      method: "POST",
+      headers: {
+        "x-nuvio-client": "NuvioTVLauncher",
+      },
+      json: {
+        targetId: targetUser,
+        type: "movie",
+        contentId: "tt0137523",
+        imdbId: "tt0137523",
+      },
+    });
+    assert.equal(removeMovieRes.status, 200);
+    assert.equal(removeMovieRes.body.success, true);
+
+    trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${targetUser}`);
+    tracking = JSON.parse(trackingRaw);
+    assert.equal(tracking.watchHistory.length, 0);
+  });
+
+  it("subtitles route skips premature watch history marking for Nuvio requests", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const targetUser = "nuviosubuser";
+    await accountProof(env, targetUser);
+
+    // Save install with track: true
+    await env.CONFIGS.put(
+      `creatorsync:${targetUser}`,
+      JSON.stringify({
+        config: [],
+        trackOwner: targetUser,
+        trackCreatorName: targetUser,
+        track: true,
+      })
+    );
+
+    // Subtitle ping with X-Nuvio-Client header
+    const subRes = await call(env, `/${targetUser}/subtitles/movie/tt0468569.json`, {
+      headers: {
+        "x-nuvio-client": "NuvioTVLauncher",
+        "user-agent": "NuvioTVLauncher/1.1.10",
+      },
+    });
+    assert.equal(subRes.status, 200);
+
+    // Tracking history should NOT have been recorded
+    const trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${targetUser}`);
+    assert.equal(trackingRaw, null);
+
+    // Diagnostic should log that Nuvio client subtitle ping was skipped
+    const diagRaw = await env.CONFIGS.get(`creatortrack:${targetUser}`);
+    assert.ok(diagRaw, "diagnostics key written");
+    const diag = JSON.parse(diagRaw);
+    assert.ok(diag.matched.includes("skipped (Nuvio client reports true completion via /api/nuvio-tv/history)"));
+  });
 });

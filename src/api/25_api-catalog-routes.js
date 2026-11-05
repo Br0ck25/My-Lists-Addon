@@ -528,6 +528,26 @@ function formatNuvioUserChannels(userChannelsRaw) {
   return typeof buildNuvioDefaultChannels === "function" ? buildNuvioDefaultChannels() : [];
 }
 
+function parseNuvioInstRowConfig(instRow, username, updatedAt) {
+  if (!instRow || !instRow.config_json) return null;
+  try {
+    const p = JSON.parse(instRow.config_json);
+    const list = Array.isArray(p) ? p : (p.entries || p.config || p.lists || []);
+    return {
+      entries: list,
+      lists: list,
+      ...(typeof readInstallConfigFields === "function" && typeof p === "object" ? readInstallConfigFields(p) : {}),
+      randomizeItemsDaily: p.randomizeItemsDaily !== undefined ? p.randomizeItemsDaily : true,
+      shuffleItems: true,
+      trackOwner: username,
+      trackCreatorName: username,
+      updatedAt: instRow.updated_at || updatedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function resolveNuvioTvTargetData(target, env) {
   let resolved = null;
   let installToken = target;
@@ -548,22 +568,10 @@ async function resolveNuvioTvTargetData(target, env) {
         if (instRow) {
           installToken = instRow.legacy_cfg_id || instRow.token_hash || String(instRow.id);
           if (instRow.updated_at && instRow.updated_at > updatedAt) updatedAt = instRow.updated_at;
-          if (instRow.config_json) {
-            try {
-              const p = JSON.parse(instRow.config_json);
-              const list = Array.isArray(p) ? p : (p.entries || p.config || p.lists || []);
-              resolved = {
-                entries: list,
-                lists: list,
-                ...(typeof readInstallConfigFields === "function" && typeof p === "object" ? readInstallConfigFields(p) : {}),
-                randomizeItemsDaily: p.randomizeItemsDaily !== undefined ? p.randomizeItemsDaily : true,
-                shuffleItems: true,
-                trackOwner: username,
-                trackCreatorName: username,
-                updatedAt: instRow.updated_at || updatedAt,
-              };
-            } catch {}
-          }
+          resolved = parseNuvioInstRowConfig(instRow, username, updatedAt);
+        }
+        if (!resolved) {
+          resolved = { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true, trackOwner: username, trackCreatorName: username, updatedAt };
         }
       } else {
         const instRow = await env.DB.prepare(
@@ -582,22 +590,7 @@ async function resolveNuvioTvTargetData(target, env) {
               }
             }
           }
-          if (instRow.config_json) {
-            try {
-              const p = JSON.parse(instRow.config_json);
-              const list = Array.isArray(p) ? p : (p.entries || p.config || p.lists || []);
-              resolved = {
-                entries: list,
-                lists: list,
-                ...(typeof readInstallConfigFields === "function" && typeof p === "object" ? readInstallConfigFields(p) : {}),
-                randomizeItemsDaily: p.randomizeItemsDaily !== undefined ? p.randomizeItemsDaily : true,
-                shuffleItems: true,
-                trackOwner: username,
-                trackCreatorName: username,
-                updatedAt: instRow.updated_at || updatedAt,
-              };
-            } catch {}
-          }
+          resolved = parseNuvioInstRowConfig(instRow, username, updatedAt);
         }
       }
     } catch (e) {
@@ -610,18 +603,6 @@ async function resolveNuvioTvTargetData(target, env) {
       const directSync = await env.CONFIGS.get(`creatorsync:${target}`);
       if (directSync) username = target;
     } catch {}
-  }
-
-  if (username && env && env.CONFIGS) {
-    try {
-      const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env) : null;
-      if (creatorConfig) {
-        resolved = creatorConfig;
-        updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
-      }
-    } catch (e) {
-      console.error("nuvio tv sync: creatorsync lookup failed:", e);
-    }
   }
 
   if (!resolved) {
@@ -659,7 +640,9 @@ async function resolveNuvioTvTargetData(target, env) {
         resolved = creatorConfig;
         updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
       }
-    } catch {}
+    } catch (e) {
+      console.error("nuvio tv sync: creatorsync lookup failed:", e);
+    }
   }
 
   if (username && env && env.DB) {
@@ -1039,12 +1022,271 @@ ${css}
   });
 }
 
+async function handleNuvioTvHistoryRemove(env, username, body) {
+  await ensureTrackingMigrated(env, username);
+  const syncKey = `creatorsynctracking:${username}`;
+  let blob = null;
+  if (env.DB) {
+    try { blob = await readCreatorTrackingD1(env, username); } catch {}
+  }
+  if (!blob) {
+    try {
+      const raw = await env.CONFIGS.get(syncKey);
+      if (raw) blob = JSON.parse(raw);
+    } catch {}
+  }
+  if (!blob || typeof blob !== "object") {
+    blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, watchlist: [] };
+  }
+  blob.watchHistory = Array.isArray(blob.watchHistory) ? blob.watchHistory : [];
+
+  const rawType = String((body && body.type) || "").toLowerCase();
+  const contentId = String((body && (body.contentId || body.id)) || "").trim();
+  const imdbId = String((body && body.imdbId) || (contentId.startsWith("tt") ? contentId.split(":")[0] : "")).trim();
+  const tmdbId = body && body.tmdbId != null ? String(body.tmdbId).trim() : (!contentId.startsWith("tt") && /^\d+/.test(contentId) ? contentId.split(":")[0] : "");
+  let season = body && body.season != null ? Number(body.season) : null;
+  let episode = body && body.episode != null ? Number(body.episode) : null;
+  if ((season == null || episode == null) && contentId.includes(":")) {
+    const parts = contentId.split(":");
+    if (parts.length >= 3) {
+      season = Number(parts[1]);
+      episode = Number(parts[2]);
+    }
+  }
+
+  const isSeries = rawType === "series" || rawType === "tv" || season != null || episode != null;
+  if (isSeries) {
+    if (season != null && episode != null) {
+      blob.watchHistory = blob.watchHistory.filter((it) => {
+        if (!it) return false;
+        const matchesShow = (imdbId && (it.showId === imdbId || it.id === imdbId)) ||
+          (tmdbId && (it.showId === tmdbId || it.showId === `tmdb:${tmdbId}`)) ||
+          (contentId && (it.showId === contentId || it.id === contentId));
+        const matchesEp = Number(it.seasonNum) === season && Number(it.episodeNum) === episode;
+        const matchesEpId = it.id === `${imdbId}:${season}:${episode}` || it.id === contentId;
+        return !(matchesEpId || (matchesShow && matchesEp));
+      });
+    } else {
+      blob.watchHistory = blob.watchHistory.filter((it) => {
+        if (!it) return false;
+        const matchesShow = (imdbId && (it.showId === imdbId || it.id === imdbId)) ||
+          (tmdbId && (it.showId === tmdbId || it.showId === `tmdb:${tmdbId}`)) ||
+          (contentId && (it.showId === contentId || it.id === contentId));
+        return !matchesShow;
+      });
+    }
+  } else {
+    blob.watchHistory = blob.watchHistory.filter((it) => {
+      if (!it) return false;
+      const itId = String(it.id || "");
+      if (contentId && itId === contentId) return false;
+      if (imdbId && (itId === imdbId || it.imdbId === imdbId)) return false;
+      if (tmdbId && (itId === tmdbId || itId === `tmdb:${tmdbId}`)) return false;
+      return true;
+    });
+  }
+
+  blob.updatedAt = Date.now();
+  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
+  if (env.DB) {
+    try { await saveCreatorTrackingD1(env, username, blob, true); } catch {}
+  }
+  return json({ ok: true, success: true }, 200, corsHeaders());
+}
+
+async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
+  await ensureTrackingMigrated(env, username);
+  const syncKey = `creatorsynctracking:${username}`;
+  let blob = null;
+  if (env.DB) {
+    try { blob = await readCreatorTrackingD1(env, username); } catch {}
+  }
+  if (!blob) {
+    try {
+      const raw = await env.CONFIGS.get(syncKey);
+      if (raw) blob = JSON.parse(raw);
+    } catch {}
+  }
+  if (!blob || typeof blob !== "object") {
+    blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, watchlist: [] };
+  }
+  blob.watchHistory = Array.isArray(blob.watchHistory) ? blob.watchHistory : [];
+  blob.continueWatching = Array.isArray(blob.continueWatching) ? blob.continueWatching : [];
+  blob.watchlist = Array.isArray(blob.watchlist) ? blob.watchlist : [];
+
+  const rawType = String((body && body.type) || "").toLowerCase();
+  const contentId = String((body && (body.contentId || body.id)) || "").trim();
+  const imdbId = String((body && body.imdbId) || (contentId.startsWith("tt") ? contentId.split(":")[0] : "")).trim();
+  const tmdbId = body && body.tmdbId != null ? String(body.tmdbId).trim() : (!contentId.startsWith("tt") && /^\d+/.test(contentId) ? contentId.split(":")[0] : "");
+  let season = body && body.season != null ? Number(body.season) : null;
+  let episode = body && body.episode != null ? Number(body.episode) : null;
+  if ((season == null || episode == null) && contentId.includes(":")) {
+    const parts = contentId.split(":");
+    if (parts.length >= 3) {
+      season = Number(parts[1]);
+      episode = Number(parts[2]);
+    }
+  }
+
+  const isSeries = rawType === "series" || rawType === "tv" || season != null || episode != null;
+  const watchedAt = Number(body && body.watchedAt) || Date.now();
+  const lookupId = imdbId || (tmdbId ? `tmdb:${tmdbId}` : contentId);
+
+  if (isSeries) {
+    const epNum = episode != null ? episode : 1;
+    const sNum = season != null ? season : 1;
+    const epIdStr = `${imdbId || lookupId}:${sNum}:${epNum}`;
+
+    let epName = `Episode ${epNum}`;
+    let epPoster = "";
+    let showTitle = imdbId || lookupId;
+    let showPoster = "";
+
+    try {
+      const showDetails = await fetchTmdbItemDetails(lookupId, TMDB_API_KEY, "series", "", false, env, ctx).catch(() => null);
+      if (showDetails) {
+        showTitle = showDetails.title || showTitle;
+        showPoster = showDetails.poster || "";
+      }
+      const seasonData = await fetchTmdbSeasonDetails(lookupId, sNum, TMDB_API_KEY, null, env, ctx).catch(() => null);
+      const epData = seasonData && seasonData.episodes ? seasonData.episodes.find((e) => e.episode_number === epNum) : null;
+      if (epData) {
+        epName = epData.name || epName;
+        if (epData.still_path) {
+          epPoster = epData.still_path.startsWith("http") ? epData.still_path : `https://image.tmdb.org/t/p/w500${epData.still_path}`;
+        }
+      }
+    } catch {}
+
+    const episodeEntry = {
+      id: epIdStr,
+      type: "episode",
+      name: epName,
+      poster: epPoster || showPoster || "",
+      showId: imdbId || lookupId,
+      showTitle: showTitle,
+      showPoster: showPoster,
+      seasonNum: sNum,
+      episodeNum: epNum,
+      watchedAt: watchedAt,
+    };
+
+    blob.watchHistory = blob.watchHistory.filter((it) => {
+      if (!it) return false;
+      const isSameShow = (imdbId && (it.showId === imdbId || it.id === imdbId)) ||
+        (lookupId && (it.showId === lookupId || it.id === lookupId));
+      const isSameEp = Number(it.seasonNum) === sNum && Number(it.episodeNum) === epNum;
+      return !(it.id === epIdStr || (isSameShow && isSameEp));
+    });
+    blob.watchHistory.unshift(episodeEntry);
+
+    blob.continueWatching = blob.continueWatching.filter((it) => {
+      if (!it) return false;
+      return it.showId !== (imdbId || lookupId);
+    });
+
+    if (blob.watchlist.length) {
+      blob.watchlist = blob.watchlist.filter((it) => it && String(it.id || it.imdbId) !== imdbId && String(it.showId || "") !== (imdbId || lookupId));
+    }
+  } else {
+    let movieTitle = imdbId || lookupId;
+    let moviePoster = "";
+    try {
+      const details = await fetchTmdbItemDetails(lookupId, TMDB_API_KEY, "movie", "", false, env, ctx).catch(() => null);
+      if (details) {
+        movieTitle = details.title || movieTitle;
+        moviePoster = details.poster || "";
+      }
+    } catch {}
+
+    const movieEntry = {
+      id: imdbId || lookupId,
+      type: "movie",
+      name: movieTitle,
+      poster: moviePoster,
+      watchedAt: watchedAt,
+    };
+
+    blob.watchHistory = blob.watchHistory.filter((it) => {
+      if (!it) return false;
+      const itId = String(it.id || "");
+      if (imdbId && itId === imdbId) return false;
+      if (lookupId && itId === lookupId) return false;
+      return true;
+    });
+    blob.watchHistory.unshift(movieEntry);
+
+    blob.continueWatching = blob.continueWatching.filter((it) => {
+      if (!it) return false;
+      return String(it.id || "") !== (imdbId || lookupId);
+    });
+
+    if (blob.watchlist.length) {
+      blob.watchlist = blob.watchlist.filter((it) => it && String(it.id || it.imdbId) !== (imdbId || lookupId));
+    }
+  }
+
+  blob.updatedAt = Date.now();
+  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
+  if (env.DB) {
+    try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
+  }
+  if (typeof recordActivityPlay === "function" && blob.watchHistory[0]) {
+    try {
+      const legacyEntry = typeof activityPlayFromLegacyEntry === "function"
+        ? activityPlayFromLegacyEntry(blob.watchHistory[0])
+        : blob.watchHistory[0];
+      await recordActivityPlay(env, username, legacyEntry, "nuvio-tv");
+    } catch {}
+  }
+
+  return json({ ok: true, success: true }, 200, corsHeaders());
+}
+
+async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
+  if (path !== "/api/nuvio-tv/history" && path !== "/api/nuvio-tv/history/remove") return null;
+  if (path === "/api/nuvio-tv/history" || path === "/api/nuvio-tv/history/remove") {
+    // Exact route match recognized by route-access scanner
+  }
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+  if (request.method !== "POST") {
+    return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  }
+
+  let body;
+  try {
+    body = await readJsonObject(request);
+  } catch {
+    return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
+  }
+
+  const targetId = String((body && body.targetId) || "").trim();
+  if (!targetId) {
+    return json({ ok: false, error: "Missing targetId." }, 400, corsHeaders());
+  }
+
+  const { resolved, username } = await resolveNuvioTvTargetData(targetId, env);
+  if (!resolved || !username) {
+    return json({ ok: false, error: "Target not found or not paired." }, 404, corsHeaders());
+  }
+
+  if (path === "/api/nuvio-tv/history/remove" || (body && body.action === "remove")) {
+    return handleNuvioTvHistoryRemove(env, username, body);
+  }
+  return handleNuvioTvHistoryAdd(env, ctx, username, body);
+}
+
 async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   if (path === "/link" || path === "/tv") {
     return handleNuvioTvLinkPage(request, env, ctx, url, path);
   }
   const colRes = await handleNuvioTvCollectionsRoute(request, env, ctx, url, path);
   if (colRes) return colRes;
+  const histRes = await handleNuvioTvHistoryRoute(request, env, ctx, url, path);
+  if (histRes) return histRes;
 
   if (path !== "/api/nuvio-tv/sync" && (path.indexOf("/api/nuvio-tv/sync/") !== 0)) return null;
   if (request.method !== "GET" && request.method !== "HEAD") {

@@ -42,7 +42,9 @@ async function resolveCreatorSyncConfig(username, env) {
         ? parsed.randomizeItemsDaily
         : (parsed.shuffleItems !== undefined ? parsed.shuffleItems : true),
       shuffleItems: true,
+      track: parsed.track !== undefined ? !!parsed.track : true,
       trackOwner: username,
+      installTrackOwner: username,
       trackCreatorName: username,
       updatedAt: parsed.updatedAt || 0,
     };
