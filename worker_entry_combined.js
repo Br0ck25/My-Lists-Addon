@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-05";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "57f2bb7058";
+const WORKER_BUILD = "6ed1ce2e86";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -39107,17 +39107,6 @@ if ('serviceWorker' in navigator) {
             <span id="channelPosterUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
           </div>
         </div>
-        <div class="u-mt-12px">
-          <p class="u-m-0_0_6px u-fs-v_font_size_sm u-fw-600 u-c-v_muted">Or use a custom channel logo URL (SVG, PNG, WebP):</p>
-          <div class="row u-gap-8px">
-            <input type="url" id="channelLogoUrlInput" placeholder="https://example.com/logo.svg" class="u-flex-1 u-fs-v_font_size_sm">
-            <button type="button" class="secondary u-ws-nowrap u-fs-v_font_size_sm" data-act="applyChannelLogoUrl">Use This</button>
-          </div>
-          <div id="channelLogoUrlPreview" class="u-mt-8px u-ai-center u-gap-10px" style="display:none;">
-            <img id="channelLogoUrlImg" src="" alt="Logo preview" class="u-objectfit-contain u-br-v_radius_xs u-bd-1px_solid_v_border" style="width:80px; height:45px; background:var(--color-bg-subtle); padding:4px;" loading="lazy">
-            <span id="channelLogoUrlStatus" class="u-fs-v_font_size_xs" style="color:var(--muted);"></span>
-          </div>
-        </div>
       </div>
 
       <!-- Bottom Action Bar -->
@@ -66856,7 +66845,7 @@ async function saveChannel() {
     // Preserves local agreement with what the row has always done.
     presetNetworkId: '',
     posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
-    logoUrl: (document.getElementById('channelLogoUrlInput') && document.getElementById('channelLogoUrlInput').value.trim()) || (typeof channelDraftLogo !== 'undefined' && channelDraftLogo) || (existingChannel && existingChannel.logoUrl) || null,
+    logoUrl: (existingChannel && existingChannel.logoUrl) || verticalPoster || null,
     // Visibility and sharing flags
     visibility: isPublic ? 'public' : 'private',
     sharePublished: isPublic,

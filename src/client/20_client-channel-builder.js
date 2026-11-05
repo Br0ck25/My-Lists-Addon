@@ -9184,7 +9184,7 @@ async function saveChannel() {
     // Preserves local agreement with what the row has always done.
     presetNetworkId: '',
     posterUrl: verticalPoster || (existingChannel && existingChannel.posterUrl) || (ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'),
-    logoUrl: (document.getElementById('channelLogoUrlInput') && document.getElementById('channelLogoUrlInput').value.trim()) || (typeof channelDraftLogo !== 'undefined' && channelDraftLogo) || (existingChannel && existingChannel.logoUrl) || null,
+    logoUrl: (existingChannel && existingChannel.logoUrl) || verticalPoster || null,
     // Visibility and sharing flags
     visibility: isPublic ? 'public' : 'private',
     sharePublished: isPublic,
