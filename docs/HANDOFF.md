@@ -9,7 +9,8 @@
   - Added artwork fallbacks to `/api/channel-lineup` items so lineup items always supply `poster` and `thumbnail`.
 - **Dedicated Pairing Page (`/link` and `/tv`) & Direct QR Code Redirection**:
   - Added standalone server-rendered pairing page `GET /link` and `GET /tv` (with `?code=...` or `?tv_code=...`) registered as `public` in `tests/route-access.json`:
-    - Shows pairing code, detects local sign-in, provides 1-click "Link TV Now" button, instant account creation / sign-in forms without modal dependencies, and redirects back to `/`.
+    - Shows pairing code, detects local sign-in (via `localStorage` and `/api/me`), provides 1-click "Link TV Now" button, instant account creation / sign-in forms without modal dependencies, and redirects back to `/`.
+    - Fixed CSP blocking: added `nonce="${CSP_NONCE_PLACEHOLDER}"` to `<style>` and `<script>` tags, imported `${DESIGN_TOKENS_CSS}`, added theme detection in `<head>`, and set inline `style="display:none;"` on `#successBox` and `#errorMsg`.
   - Removed the green sticky banner from `src/client/22_client-nuvio-tv-pairing.js`.
   - Scanning or opening `/?source=nuvio_tv&tv_code=...` now immediately 302 redirects to `/link?code=...` (both on the server in `appHomePage` and in the client `initNuvioTvOnboarding`), taking users straight to the clean, dedicated linking interface.
 - **Pairing modal trigger & URL query parameter preservation**:
