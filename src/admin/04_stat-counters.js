@@ -22,6 +22,15 @@ const STAT_FLUSH_MAX_KINDS = 50;
 const STAT_FLUSH_STATEMENTS_PER_BATCH = 100;
 const STAT_PENDING_BY_DB = new WeakMap();
 
+// Playback counters are low-volume and arrive one at a time on many different
+// isolates, so a bump is almost never followed by a second one on the same isolate
+// to trigger the minute flush. Held in memory they were simply lost when the isolate
+// was recycled (the "Playback streams" column fell from 200+ a day to under 100 on
+// 2026-11-03). They are written at once; the hot kinds (pageviews, apiuse:*) stay batched.
+function statWritesImmediately(kind) {
+  return kind === "playback_pings" || kind.startsWith("watch_type:");
+}
+
 // The one object that stays the same across requests: instrumentEnv wraps env.DB
 // per request and keeps the real binding on __raw.
 function statBindingOf(env) {
@@ -95,7 +104,7 @@ async function bumpStat(env, kind) {
       const st = statPendingFor(env);
       statPendingAdd(st, kind, "total", 1);
       statPendingAdd(st, kind, statsToday(), 1);
-      if (statPendingDue(st)) await flushPendingStats(env);
+      if (statWritesImmediately(kind) || statPendingDue(st)) await flushPendingStats(env);
       return;
     }
     // KV path: get-then-put, so concurrent bumps lose increments

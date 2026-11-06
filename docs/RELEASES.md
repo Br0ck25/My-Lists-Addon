@@ -2542,3 +2542,16 @@ Plan and evidence: `docs/audits/2026-11-03-database.md`. One additive migration 
 
 ### Checked
 `bash verify.sh -q` passes. New tests: `kv-backup` (every listed prefix copied, caches left out, a failed page or a missing permission fails the run; dropping a prefix fails 3 of them), `lists-deleted-index` (the exact statement's plan is `SCAN lists` without the index and uses it with), and in `d1-backup` and `worker` the backup race and the ledger seed. The DB-02, DB-03 and DB-04 tests were run red before their fix; the `kv-backup` tests (new code) were shown red by dropping a prefix. Not tested: a real KV read or restore (no access to the Cloudflare account from here).
+
+## 2026-11-05 — Playback streams stopped being lost (build `7ab113e2f3`, prepared; not deployed)
+
+The *Playback streams* column in the admin Traffic table fell from 200+ a day to under 100 from 2026-11-03.
+
+### What it changes
+- **Playback counters are written at once.** The 2026-11-03 batching (PERF-04) kept each count in memory until a second bump arrived at least a minute later on the same isolate. Playback pings are rare per isolate, so most were never flushed and were lost when the isolate was recycled. `playback_pings` and `watch_type:*` now write straight away. Page views, install links and `apiuse:*` stay batched.
+
+### Owner steps
+1. Paste the new Worker. Streams counted from then on are complete; days since 2026-11-03 stay under-counted (the real plays happened, only the count was lost).
+
+### Checked
+`bash verify.sh -q` passes. New test in `perf-stat-batching`: one lone playback ping is in D1 with no later bump; it fails without the change.
