@@ -22,12 +22,49 @@ function savedConfigKey(id) {
 
 // `withTracking`: also read the owner's tracking record (creatorsynctracking:)
 // and fill watchHistory / continueWatching / watchlist / airingNext from it.
+async function resolveCreatorSyncConfig(username, env) {
+  if (!username || !env || !env.CONFIGS) return null;
+  try {
+    const raw = await env.CONFIGS.get(`creatorsync:${username}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed) return null;
+    const list = Array.isArray(parsed.config)
+      ? parsed.config
+      : (Array.isArray(parsed.entries)
+        ? parsed.entries
+        : (Array.isArray(parsed.lists) ? parsed.lists : []));
+    return {
+      entries: list,
+      lists: list,
+      ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(parsed) : {}),
+      randomizeItemsDaily: parsed.randomizeItemsDaily !== undefined
+        ? parsed.randomizeItemsDaily
+        : (parsed.shuffleItems !== undefined ? parsed.shuffleItems : true),
+      shuffleItems: true,
+      track: parsed.track !== undefined ? !!parsed.track : true,
+      trackOwner: username,
+      installTrackOwner: username,
+      trackCreatorName: username,
+      updatedAt: parsed.updatedAt || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Off by default (BE-H04, task P2-9): that record can be megabytes, and every
 // catalog row request used to read and parse it -- for a Trending row as much
 // as for Continue Watching -- while nothing on those paths used it. The
 // channel meta route and /api/resolve ask for it; a personal shelf reads its
 // own data in fetchAutoTrackedCatalog.
 async function resolveConfig(configParam, env, { withTracking = false } = {}) {
+  const cleanParam = String(configParam || "").replace(/^c\//, "");
+  if (cleanParam === "nuvio-default" || cleanParam === "default") {
+    return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
+  }
+  const creatorSync = await resolveCreatorSyncConfig(cleanParam, env);
+  if (creatorSync) return creatorSync;
   // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
   if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
@@ -116,24 +153,27 @@ async function resolveConfig(configParam, env, { withTracking = false } = {}) {
           if (trackingRaw) {
             try {
               const tracking = JSON.parse(trackingRaw);
-              if (Array.isArray(tracking.watchHistory) && tracking.watchHistory.length && !watchHistory.length) {
-                watchHistory = tracking.watchHistory;
-              }
-              if (Array.isArray(tracking.continueWatching) && tracking.continueWatching.length && !continueWatching.length) {
-                continueWatching = tracking.continueWatching;
-              }
-              if (Array.isArray(tracking.watchlist) && tracking.watchlist.length && !watchlist.length) {
-                watchlist = tracking.watchlist;
-              }
-              if (Array.isArray(tracking.airingNext) && tracking.airingNext.length && !airingNext.length) {
-                airingNext = tracking.airingNext;
-              }
+              if (Array.isArray(tracking.watchHistory) && tracking.watchHistory.length && !watchHistory.length) watchHistory = tracking.watchHistory;
+              if (Array.isArray(tracking.continueWatching) && tracking.continueWatching.length && !continueWatching.length) continueWatching = tracking.continueWatching;
+              if (Array.isArray(tracking.watchlist) && tracking.watchlist.length && !watchlist.length) watchlist = tracking.watchlist;
+              if (Array.isArray(tracking.airingNext) && tracking.airingNext.length && !airingNext.length) airingNext = tracking.airingNext;
             } catch {}
           }
         }
 
+        const effectiveOwner = trackOwner || (typeof parsed.trackOwner === "string" ? parsed.trackOwner.toLowerCase().trim() : "");
+        let liveEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+        if (effectiveOwner) {
+          const liveConfig = await resolveCreatorSyncConfig(effectiveOwner, env);
+          if (liveConfig && Array.isArray(liveConfig.entries)) {
+            liveEntries = liveConfig.entries;
+          }
+        }
+
         return {
-          entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+          entries: liveEntries,
+          ownerId: parsed.ownerId || null,
+          ownerSince: parsed.ownerSince || null,
           watchHistory,
           continueWatching,
           watchlist,

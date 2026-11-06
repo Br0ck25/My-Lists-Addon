@@ -497,7 +497,7 @@ function collectEntries() {
 // one out). The choice lives on each row (dataset.noShuffle) so it travels
 // with the row through save, backup and restore. Rebuilt only when the set of
 // lists or the toggle changes, so it does not flicker on every keystroke.
-let shufflePickerSignature = '';
+var shufflePickerSignature = '';
 function renderShuffleListPicker() {
   const host = document.getElementById('shuffleItemsPicker');
   const toggle = document.getElementById('shuffleItemsCheckbox');

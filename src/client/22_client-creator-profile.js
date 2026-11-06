@@ -1769,11 +1769,7 @@ async function submitRestoreProfile() {
     localStorage.setItem('myListAddon:creatorKey', key);
     localStorage.setItem('myListAddon:hasRecoveryAnswer', data.hasRecoveryAnswer ? '1' : '0');
     closeModal();
-    // Released here, not in the finally below: what follows is the sign-in
-    // tail, and loadCreatorSync can take as long as the network takes. Holding
-    // the guard across it would leave the Login button disabled for the whole
-    // of it and stop someone signing into a different account. Calling it twice
-    // is harmless.
+    // Released here: what follows is the sign-in tail, and loadCreatorSync takes time.
     endSubmit();
     renderCreatorProfileBar();
     renderAccountKeySection();
@@ -1783,6 +1779,7 @@ async function submitRestoreProfile() {
     await loadCreatorSync();
     // After the sync load, so tokens this account keeps in sync are included.
     if (data.session && typeof importLocalConnectionsOnce === 'function') importLocalConnectionsOnce(data.creatorName);
+    if (typeof handleNuvioTvPostAuth === 'function') handleNuvioTvPostAuth();
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {
@@ -2982,9 +2979,11 @@ async function loadCreatorSync(opts) {
     }
     window._lastCreatorSyncLoadedAt = Date.now();
     showSunsetNoticesOnce(data.sunset_notices);
-    // Before anything below adopts local state or pushes it up: was this
-    // account emptied while this browser was asleep? If so its copy is stale by
-    // definition, and uploading it is exactly how a reset used to undo itself.
+    if (Array.isArray(data.customCollections)) {
+      try { localStorage.setItem('myListAddon:customCollections', JSON.stringify(data.customCollections)); } catch (e) {}
+      if (typeof renderCollectionsView === 'function') renderCollectionsView();
+    }
+    // Before anything below adopts local state: was this account emptied while asleep?
     if (shouldApplyAccountReset(data.resetAt)) {
       // An emptied account has no credentials to lose: blank is the truth.
       _creatorKeysAppliedFor = loadingFor;
@@ -3436,9 +3435,9 @@ async function loadCreatorSync(opts) {
         const el = document.getElementById('shuffleShelvesCheckbox');
         if (el) el.checked = synced.keys.shuffleShelves;
       }
-      if (typeof synced.keys.shuffleItems === 'boolean') {
+      if (typeof synced.keys.shuffleItems === 'boolean' || synced.randomizeItemsDaily || synced.shuffleItems) {
         const el = document.getElementById('shuffleItemsCheckbox');
-        if (el) el.checked = synced.keys.shuffleItems;
+        if (el) el.checked = (typeof synced.keys.shuffleItems === 'boolean') ? synced.keys.shuffleItems : Boolean(synced.randomizeItemsDaily || synced.shuffleItems);
       }
       if (synced.keys.region) {
         const el = document.getElementById('regionSelect');
@@ -3888,10 +3887,11 @@ async function submitCreateProfile() {
   if (!endSubmit) return;
 
   try {
+    const isNuvioTv = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mylists_source') === 'nuvio_tv');
     const res = await creatorApiFetch(ORIGIN + '/api/creator/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined }),
+      body: JSON.stringify({ creatorName: name, displayName: displayName || undefined, recoveryAnswer: recoveryAnswer || undefined, source: isNuvioTv ? 'nuvio_tv' : undefined }),
     });
     const data = await res.json();
     if (!data.ok) {
@@ -3931,11 +3931,11 @@ async function submitCreateProfile() {
     renderTrackPlaybackSection();
     showKeyRevealModal(data.displayName, data.creatorKey);
     loadCreatorSync();
-    // Every hand-built list in this browser goes up to the new account. Not
-    // awaited: the key is already on screen.
+    // Every hand-built list in this browser goes up to the new account. Not awaited: the key is already on screen.
     Promise.resolve()
       .then(function () { return migrateLocalCustomListsToAccount(); })
       .catch(function () {});
+    if (typeof handleNuvioTvPostAuth === 'function') handleNuvioTvPostAuth();
   } catch (e) {
     errBox.innerHTML = '<p class="testresult err">Network error.</p>';
   } finally {

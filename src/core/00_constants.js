@@ -533,6 +533,7 @@ const CHANNEL_PRESET_NETWORKS = [
   { id: "41", name: "TNT" },
   { id: "30", name: "USA Network" },
 ];
+const QUICK_CHANNEL_PRESETS = CHANNEL_PRESET_NETWORKS;
 // buildNetworkChannelPreset (07_source-fetchers-tmdb-simkl.js) only uses this
 // to build a `/api/channel-logo?path=...` URL, and that URL is never read as
 // a live link -- every consumer (getPremadeChannelLogo/extractLogoPath,

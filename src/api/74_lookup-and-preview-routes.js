@@ -293,7 +293,10 @@ function handleLookupRoutes(request, env, ctx, url, path) {
   if (path === "/api/show-seasons") return apiShowSeasons(env, ctx, url);
   if (path === "/api/show-episodes") return apiShowEpisodes(env, ctx, url);
   if (path === "/api/channel-preset") return apiChannelPreset(env, ctx, url);
-  if (path === "/api/channel-lineup" && request.method === "POST") return apiChannelLineup(request, env, ctx, url);
+  if (path === "/api/channel-lineup") {
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
+    if (request.method === "POST") return apiChannelLineup(request, env, ctx, url);
+  }
   if (path === "/api/person-search") return apiPersonSearch(request, env, ctx, url);
   if (path === "/api/person-credits") return apiPersonCredits(env, ctx, url);
   if (path === "/api/person-show-episodes") return apiPersonShowEpisodes(env, ctx, url);
@@ -740,7 +743,7 @@ async function apiTitleSearchResults(url, kind, isAdultFilterActive, allRawItems
   const results = await Promise.all(
     rawResults.map(async (it) => {
       let poster = it.poster_path ? `https://image.tmdb.org/t/p/w200${it.poster_path}` : (it.direct_poster || null);
-      const backdrop = it.backdrop_path ? `https://image.tmdb.org/t/p/w780${it.backdrop_path}` : (it.direct_backdrop || poster || null);
+      const backdrop = it.backdrop_path ? `https://image.tmdb.org/t/p/w780${it.backdrop_path}` : (it.direct_backdrop || null);
       const isAdultItem = it.adult === true || it.is_adult === true || isAdultOrNsfw(it);
 
       // If TMDB poster is missing, fall back to the backdrop (already in
@@ -1076,17 +1079,36 @@ async function apiChannelLineup(request, env, ctx, url) {
   try {
     body = await readJsonObject(request);
   } catch {
-    return json({ ok: false, error: "Invalid JSON body." }, 400);
+    return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
   }
-  const payload = parseChannelPayload(body.url || "");
-  if (!payload) return json({ ok: false, error: "That is not a channel." }, 400);
+  let payload = parseChannelPayload(body.url || "");
+  if (!payload && (body.channelId || body.catalogId || body.id)) {
+    const ch = typeof findChannelEntryById === "function"
+      ? await findChannelEntryById(body.channelId || body.catalogId || body.id, body.username || body.target, env)
+      : null;
+    if (ch && ch.payload) payload = ch.payload;
+  }
+  if (!payload) return json({ ok: false, error: "That is not a channel." }, 400, corsHeaders());
   try {
     const lineup = await resolveChannelLineup(payload, {
       env, ctx, origin: url.origin,
       now: typeof body.now === "number" ? body.now : undefined,
     });
-    if (!lineup) return json({ ok: true, items: [], rotating: !!payload.dailyRotate, plan: null });
+    if (!lineup) return json({ ok: true, items: [], rotating: !!payload.dailyRotate, plan: null }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
     const needsAccount = !!(payload.hideWatched || payload.dynamic);
+    const items = (lineup.items || []).map((it) => {
+      const mediaId = it.imdbId || (it.tmdbId ? `tmdb:${it.tmdbId}` : (it.id && (String(it.id).startsWith("tt") || String(it.id).startsWith("tmdb:")) ? it.id : ""));
+      const itemTitle = it.title || it.name || it.epName || "";
+      const poster = it.poster || it.thumbnail || it.showPoster || (itemTitle ? `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&v=6` : null);
+      const thumbnail = it.thumbnail || it.poster || it.showPoster || (itemTitle ? `${url.origin}/api/channel-poster?name=${encodeURIComponent(itemTitle)}&format=landscape&v=6` : null);
+      return {
+        ...it,
+        id: mediaId || it.id || "",
+        title: itemTitle,
+        poster: poster,
+        thumbnail: thumbnail,
+      };
+    });
     return json({
       ok: true,
       rotating: !!payload.dailyRotate,
@@ -1101,10 +1123,10 @@ async function apiChannelLineup(request, env, ctx, url) {
         ? [payload.hideWatched ? "hideWatched" : null, payload.dynamic ? "dynamic" : null].filter(Boolean)
         : [],
       generatedAt: Date.now(),
-      items: lineup.items,
-    }, 200, { "Cache-Control": "no-store" });
+      items: items,
+    }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
   } catch (err) {
-    return json({ ok: false, error: safeErrorMessage(err) }, 500, { "Cache-Control": "no-store" });
+    return json({ ok: false, error: safeErrorMessage(err) }, 500, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
 }
 

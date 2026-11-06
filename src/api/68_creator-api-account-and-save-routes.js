@@ -6,6 +6,18 @@
 
 // /api/creator/lists/delete ... /sync/save-tracking, at their original place after the channel routes. Returns a Response, or null.
 async function handleCreatorApiAccountAndSaveRoutes(request, env, ctx, url, path) {
+  if (path === "/api/creator/account/register") {
+    if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+    return handleCreatorAccountRegister(request, env, ctx, url, path);
+  }
+  if (path === "/api/creator/register") {
+    if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+    return handleCreatorRegister(request, env, ctx, url, path);
+  }
+  if (path === "/api/creator/account/login") {
+    if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+    return handleCreatorAccountLogin(request, env, ctx, url, path);
+  }
   if (path === "/api/creator/lists/delete" && request.method === "POST") return creatorApiListsDelete(request, env, ctx, path);
   if (path === "/api/creator/lists/reorder" && request.method === "POST") return creatorApiListsReorder(request, env, ctx, path);
   if (path === "/api/creator/account/reset" && request.method === "POST") return creatorApiAccountReset(request, env, ctx, path);
@@ -13,6 +25,21 @@ async function handleCreatorApiAccountAndSaveRoutes(request, env, ctx, url, path
   if (path === "/api/creator/sync/save" && request.method === "POST") return creatorApiSyncSave(request, env, ctx, path);
   if (path === "/api/creator/sync/save-tracking" && request.method === "POST") return creatorApiSyncSaveTracking(request, env, ctx, path);
   return null;
+}
+
+// POST /api/creator/account/register
+async function handleCreatorAccountRegister(request, env, ctx, url, path) {
+  return creatorApiCreate(request, env, ctx, url);
+}
+
+// POST /api/creator/register
+async function handleCreatorRegister(request, env, ctx, url, path) {
+  return creatorApiCreate(request, env, ctx, url);
+}
+
+// POST /api/creator/account/login
+async function handleCreatorAccountLogin(request, env, ctx, url, path) {
+  return creatorApiRestore(request, env, ctx, path);
 }
 
 // /api/creator/lists/delete  (POST)  { creatorName, creatorKey, slug }

@@ -1,6 +1,121 @@
 # Handoff
 
-## Current work: performance audit fixes (2026-11-03, branch `claude/kind-bell-5wa9ht`, not deployed)
+## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
+- **16:9 Landscape Backdrops & Logo URL Cleanup for Channels**:
+  - **Issue Resolved**: When users created custom channels (e.g. "Pokemon") on `mylistsaddon.com`, the channel metadata only attached the show/movie's vertical 2:3 poster, leaving `backdropUrl` empty or set to the vertical poster. When loaded into TV launchers (like Nuvio TV Launcher's Live TV / EPG Guide), the guide fell back to vertical posters or stretched them. In addition, vertical posters were mistakenly copied into `logoUrl`.
+  - **Fix Implemented**:
+    1. In `src/api/25_api-catalog-routes.js` (`formatNuvioUserChannels`):
+       - If `backdrop` or `backdropUrl` is missing or matches a vertical poster, inspects channel items for 16:9 backdrops (`it.backdrop`, `it.showBackdrop`, `it.thumbnail`).
+       - Falls back to `https://mylistsaddon.com/api/channel-poster?name={name}&format=landscape&v=6`.
+       - Strips vertical 2:3 posters from `logoUrl`, setting `logoUrl: null` when no clearlogo or network badge is present so TV clients cleanly render the 16:9 backdrop banner instead of a vertical poster.
+    2. In `src/catalog/05_catalog-core.js` (`getChannelBackdropUrl`):
+       - Added checks for `payload.backdropUrl` and item backdrops (`it.backdrop`, `it.showBackdrop`, `it.thumbnail`), and removed fallback that leaked vertical posters into channel backdrops.
+    3. In `src/api/74_lookup-and-preview-routes.js` (`apiTitleSearchResults`):
+       - Removed fallback from `backdrop` to `poster` when `backdrop_path` is missing so search results do not label 2:3 vertical posters as backdrops.
+    4. In `src/client/20_client-channel-builder.js` (`saveLocalChannel` and `saveChannel`):
+       - Automatically resolves horizontal backdrops from channel items, falls back to the landscape card endpoint (`&format=landscape`), and prevents vertical posters from populating `logoUrl`.
+    5. Verified with unit test in `tests/nuvio-tv-sync.test.mjs` that custom channels in `/api/nuvio-tv/sync/:target` return valid landscape backdrops and `logoUrl: null` when no clearlogo exists.
+- **True Watch History API & Disabling Premature Subtitle Tracking**:
+  - Implemented `POST /api/nuvio-tv/history` to record true watch completion events sent by Nuvio TV Launcher when playback reaches $\ge 90\%$ (or is manually completed). Supports both movies and TV series episodes.
+  - Implemented `POST /api/nuvio-tv/history/remove` to remove watched movies or series episodes from watch history.
+  - Added routes to `tests/route-access.json` as public endpoints and verified with dedicated unit tests in `tests/nuvio-tv-sync.test.mjs`.
+  - In `src/api/63_subtitles-track.js`, disabled premature subtitles-based watch progress logging when the incoming request originates from Nuvio clients (`incomingClient === "Nuvio"`, `X-Nuvio-Client`, or `User-Agent` containing `"nuvio"`).
+- **Collections Isolation (Preventing Collection Lists Leaking onto Home Screen)**:
+  - In `NuvioTVLauncher` (branch `feat/profile-my-lists-sync`):
+    - Added `MyListsDefaultSeed.isCollectionCatalogSource` and `extractCollectionCatalogKeys` to detect whether a catalog source belongs to any folder inside collections or the `app.my-list.collections` addon.
+    - Updated `MyListsTvSyncManager.kt` (`applyCatalogDiffAndOrder`) to filter out collection catalogs from `homeCatalogs`, automatically add collection catalog keys to `disabledHomeCatalogKeys`, and prune them from `homeCatalogOrderKeys`.
+    - Updated `HomeViewModelCatalogUtils.kt` and `HomeViewModelCatalogPipeline.kt` to exclude `MY_LISTS_COLLECTIONS_ADDON_ID` and collection catalog sources from `buildDefaultCatalogOrder`, `rebuildCatalogOrder`, and `catalogsToLoad`.
+    - Updated `CatalogOrderViewModel.kt` and `AddonManagerViewModel.kt` so collection-owned catalogs do not appear as selectable home rows in Settings.
+- **Live Catalog Sync on Short Links & Account Edits**:
+  - **Issue Resolved**: When users modified catalogs on `mylistsaddon.com`, the Nuvio TV Launcher (and Stremio/Wako) did not update because short install links (`cfg:<id>`, e.g. `s3v0mW0jBp0g`) were returning the frozen snapshot `entries` from the time `/api/save` was run.
+  - **Fix Implemented**: In `src/core/04_config-resolution.js` (`resolveConfig`), when resolving stored install configs that have a verified `trackOwner`, it looks up `creatorsync:${effectiveOwner}`. If live entries are found, `liveEntries` are returned in `entries`, allowing all devices and launchers using the install link to reflect catalog additions, removals, and reordering in real time.
+  - Added unit test in `tests/nuvio-tv-sync.test.mjs` confirming that editing `creatorsync` immediately updates `GET /api/nuvio-tv/sync/<id>` and `GET /<id>/manifest.json`.
+- **Live State Cache-Control Parity**:
+  - In `src/api/70_stremio-routes.js` (`installManifest`), set `no-cache, no-store, must-revalidate, max-age=0` dynamically whenever an install has live account state (`trackOwner`), live shelves (`autotrack:`), custom channels, or collections addon. Plain unlinked installs retain default `max-age=3600` caching.
+- **Single Channel Image Input**:
+  - Removed duplicate "Or use a custom channel logo URL" box from `/channels/build` (`src/page/13_tab-channels.js`), keeping a single clean custom image box and automatically falling back to the channel poster for logos.
+- **Live Channel Item & Playback Resolution ("no items could be loaded from this list")**:
+  - **Issue Resolved**: When channels appeared in Nuvio TV Launcher, selecting a channel gave "couldn't play this channel, no items could be loaded from this list" because:
+    1. In Stremio/Nuvio protocol, when the launcher loads or plays a channel from the Live TV guide, it queries the catalog endpoint `/:target/catalog/:type/:catalogId.json` (or `/:target/meta/series/:channelId.json`) for the channel's media items.
+    2. The catalog router (`stremioCatalogRow`) only checked `entries` (the Catalogs tab lists). Custom channels stored in `creatorsyncchannels:${username}` were not in `entries`, causing `/:target/catalog/:type/:channelId.json` to return `{ metas: [] }` and `/:target/meta/series/:channelId.json` to return `{ meta: null }`.
+    3. `/:target/manifest.json` did not declare custom channel IDs under `catalogs: [...]`.
+    4. `POST /api/channel-lineup` required raw `body.url` and rejected requests carrying `{ channelId }` or `{ id }`.
+  - **Fix Implemented**:
+    1. Added `findChannelEntryById` in `src/api/70_stremio-routes.js` to look up channels across user KV (`creatorsyncchannels:${username}`), preset networks (`CHANNEL_PRESET_NETWORKS`), and public channels.
+    2. Added `fetchChannelItemsCatalog` in `src/api/70_stremio-routes.js` to resolve channel lineup items and map them to Stremio catalog metas with streamable IDs (`tt...`, `tmdb:...`), posters, and thumbnails.
+    3. Updated `stremioCatalogRow` so catalog requests for channel IDs return the airing items.
+    4. Updated `stremioMetaItem` so meta requests for channel IDs look up channels in `creatorsyncchannels` and presets when not in `entries`.
+    5. Added `loadUserChannelsForManifest` in `src/api/70_stremio-routes.js` to declare user custom channels in `/:target/manifest.json`'s `catalogs: [...]`.
+    6. Updated `apiChannelLineup` in `src/api/74_lookup-and-preview-routes.js` to accept `channelId`, `catalogId`, or `id`.
+- **Custom Channels & Live Catalog Sync for Linked Accounts**:
+  - **Issue Resolved**: When users added new catalog lists or built custom 24/7 channels on `mylistsaddon.com`, they were not showing up in Nuvio TV Launcher because:
+    1. `formatNuvioUserChannels` in `src/api/25_api-catalog-routes.js` mapped `Object.values()` over the outer KV object `{ channels: {...}, mergedChannels: {...}, updatedAt: ... }`, yielding undefined names/IDs and failing schema validation. Fixed to unwrap `raw.channels`, filter channels, and map to `{ id, name, posterUrl, backdropUrl, logoUrl, category: "My Lists Addon Channels", catalogId: "channel_" + id, playOrder }`.
+    2. `resolveNuvioTvTargetData` in `src/api/25_api-catalog-routes.js` was falling back to stale initial `installs.config_json` or static snapshots instead of live builder state. Fixed to resolve accounts via `accounts` (username/id/key_hash), `installs` (account_id), or `savedConfig` (`ownerId`), and prioritize live `creatorsync:${username}` via `resolveCreatorSyncConfig`.
+    3. `resolveConfig` in `src/core/04_config-resolution.js` now calls `resolveCreatorSyncConfig` at the top, enabling `/:username/manifest.json` and `/:username/catalog/:type/:id.json` to immediately export live catalogs added by the user.
+    4. Advanced `updatedAt` in `handleNuvioTvSyncRoute` from `accounts`, `creatorsync`, `creatorsyncchannels`, and `creatorsyncpresets`, ensuring `versionHash` updates dynamically whenever catalogs or channels are added or modified.
+    5. Updated `handleNuvioTvDeviceClaim` in `src/api/69_creator-api-sync-routes.js` to point `manifestUrl` and `syncUrl` directly to the claimed username (`/api/nuvio-tv/sync/${auth.username}`).
+- **Collections URL & Artwork Fallbacks**:
+  - `collectionsUrl` (`${url.origin}/api/nuvio-tv/collections/${target}`): included in the JSON payload returned by `GET /api/nuvio-tv/sync/:target` and `GET /api/nuvio-tv/sync/default`.
+  - Added public collections endpoint `GET /api/nuvio-tv/collections/:target` and `GET /nuvio-default/collections.json` (registered as `public` in `tests/route-access.json`).
+  - Added created poster fallbacks for all Collection folders (Genres, Franchises, Studios, Streaming Services, and user Custom Collections): if `coverImageUrl` is missing, it falls back to `/api/channel-poster?name=...` (`POSTER` format for genres, `LANDSCAPE` format for others).
+  - Added channel artwork fallbacks for 24/7 Channels: every channel in `channels` array contains `poster`, `posterUrl`, `backdrop`, and `backdropUrl` with fallback to generated artwork (`/api/channel-poster`) if unset.
+  - Added artwork fallbacks to `/api/channel-lineup` items so lineup items always supply `poster` and `thumbnail`.
+- **Dedicated Pairing Page (`/link` and `/tv`) & Direct QR Code Redirection**:
+  - Added standalone server-rendered pairing page `GET /link` and `GET /tv` (with `?code=...` or `?tv_code=...`) registered as `public` in `tests/route-access.json`:
+    - Shows pairing code, detects local sign-in (via `localStorage` and `/api/me`), provides 1-click "Link TV Now" button, instant account creation / sign-in forms without modal dependencies, and redirects back to `/`.
+    - Fixed CSP blocking: added `nonce="${CSP_NONCE_PLACEHOLDER}"` to `<style>` and `<script>` tags, imported `${DESIGN_TOKENS_CSS}`, added theme detection in `<head>`, and set inline `style="display:none;"` on `#successBox` and `#errorMsg`.
+  - Removed the green sticky banner from `src/client/22_client-nuvio-tv-pairing.js`.
+  - Scanning or opening `/?source=nuvio_tv&tv_code=...` now immediately 302 redirects to `/link?code=...` (both on the server in `appHomePage` and in the client `initNuvioTvOnboarding`), taking users straight to the clean, dedicated linking interface.
+- **Pairing modal trigger & URL query parameter preservation**:
+  - Captured `source=nuvio_tv` and `tv_code` immediately and synchronously in the inline HTML preamble (`src/client/16_client-row-core.js`) into `sessionStorage` and `window._nuvio_*` globals before any deferred bundles or routers execute.
+  - Updated `initAppShell` in `src/client/24_client-backup-restore-presets.js` to preserve `window.location.search` during initial `history.replaceState`.
+  - Added multi-source fallback checking and deduplication in `initNuvioTvOnboarding` in `src/client/22_client-nuvio-tv-pairing.js` so `openNuvioTvPairingModal(tvCode)` opens reliably when signed in and `openNuvioTvAuthModal(tvCode)` opens when signed out.
+- **Removed Trakt Box Office Series**:
+  - Removed `chart:trakt:boxoffice_tv` from `buildNuvioTvDefaultConfig()`, leaving the 5 core default catalogs (`chart:combined:trending_movies`, `chart:combined:trending_tv`, `chart:combined:popular_movies`, `chart:combined:popular_tv`, `chart:trakt:boxoffice_movies`).
+  - Updated unit tests in `tests/nuvio-tv-sync.test.mjs`.
+- **Channel Schema & Sync API (`/api/nuvio-tv/sync/:id`) & Collections Artwork**:
+  - In `formatNuvioUserChannels` (`src/api/25_api-catalog-routes.js`) and `buildNuvioDefaultChannels` (`src/catalog/08_quickadd-chart-data.js`):
+    - Added `posterUrl`: defaults to `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(channel.name)}&v=6`.
+    - Added `logoUrl`: outputs network logo or `/api/channel-logo?path=...` / `/api/channel-logo?netId=...`.
+    - Set default `category: "My Lists Addon Channels"`.
+  - In `buildStreamingServiceFolders` (`src/catalog/08_quickadd-chart-data.js`):
+    - Ensured every folder in `col_mylists_streaming_services` outputs non-empty `coverImageUrl` (e.g. landscape artwork URL).
+- **Custom Channel Builder & CORS / Lineup**:
+  - Added custom `channelLogoUrlInput` in `src/page/13_tab-channels.js`.
+  - Added `applyChannelLogoUrl`, `syncChannelLogoUrlInput`, and `setChannelDraftLogo` in `src/client/22_client-nuvio-tv-pairing.js`.
+  - Persisted `posterUrl` and `logoUrl` in custom channel payloads during `saveChannel` in `src/client/20_client-channel-builder.js`.
+  - Added fallback in web preview rendering to `ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'` when `posterUrl` is empty.
+  - Added `OPTIONS` preflight support and `Access-Control-Allow-Origin: *` to `/api/channel-lineup`, ensuring lineup items include `poster`, `thumbnail`, `title`, and media ID (`tmdb:...` or `tt...`).
+- **Phase 1 (Default preset, guest manifest, unified sync)**:
+  - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultPreset()` and `buildNuvioTvDefaultConfig()`.
+  - Built unified sync route `GET /api/nuvio-tv/sync/:target` (registered as public in `tests/route-access.json`), supporting `"default"` target, user accounts, and install tokens. Computes deterministic SHA-256 `versionHash` and formats collections and channels in Nuvio schema.
+- **Phase 2 (New user account seeding for Nuvio TV Launcher & existing user sign-in)**:
+  - Implemented `seedNuvioTvNewUser` in `src/catalog/08_quickadd-chart-data.js`.
+  - Updated `POST /api/creator/account/register`, `POST /api/creator/register`, and `POST /api/creator/create` to check `body.source === "nuvio_tv"` (or `?source=nuvio_tv`). When set on new account creation, seeds 6 default catalogs in exact order with `randomizeItemsDaily: true`, all quick add channels in `channels_v2`/`creatorsyncchannels`, and all premade collections in `collections`/`creatorsyncpresets`.
+  - Normal registrations without `source=nuvio_tv` remain completely unseeded.
+  - Existing user sign-in (`POST /api/creator/account/login`, `POST /api/creator/restore`) preserves existing user lists/channels/collections without overwriting.
+  - Added routes in `tests/route-access.json`: `/api/creator/account/register` (public), `/api/creator/register` (public), `/api/creator/account/login` (account).
+- **Phase 3 (TV device pairing & post-registration redirect to Nuvio account sign-in)**:
+  - Implemented pairing endpoints in `src/api/69_creator-api-sync-routes.js`:
+    - `POST /api/nuvio-tv/device/code` (public): generates random `deviceCode` (UUID) and 6-char `userCode` (e.g. `K4P-89M`), stored with 10-minute TTL in KV, returns `{ ok: true, deviceCode, userCode, verificationUrl }`.
+    - `GET /api/nuvio-tv/device/poll?deviceCode=...` (public): returns `{ ok: true, status: "pending" }` or `{ ok: true, status: "authenticated", installId, manifestUrl, syncUrl }`.
+    - `POST /api/nuvio-tv/device/claim` (account): verifies creator authentication, validates `userCode` (with or without hyphen), binds account's active `installId`, `manifestUrl`, and `syncUrl` to KV record.
+  - Added frontend pairing and onboarding flow:
+    - `src/page/15_tab-settings-html.js`: added `#nuvioTvOnboardingBanner` in `#nuvioSection` ("Step 2: Sign in with your Nuvio account below to view your Continue Watching, Watch History, and Library on the website.").
+    - `src/client/22_client-nuvio-tv-pairing.js`: checks URL params `source=nuvio_tv` and `tv_code`; presents `openNuvioTvPairingModal(tvCode)` with an explicit "Link TV" button when already signed in, and `openNuvioTvAuthModal(tvCode)` when signed out; verifies claim using `creatorApiFetch` (supporting session cookies and keys) and presents `showNuvioTvPairingSuccessModal(tvCode)` upon success.
+    - `src/client/23_client-list-management.js`: declared `shufflePickerSignature` with `var` to avoid temporal dead zone (TDZ) reference errors during early bundle evaluation.
+    - `src/client/22_client-creator-profile.js`: updated `submitCreateProfile` and `submitRestoreProfile` to pass `source: "nuvio_tv"` and trigger `handleNuvioTvPostAuth()`; updated `loadCreatorSync` to restore `customCollections` and `randomizeItemsDaily`.
+  - All unit tests in `tests/nuvio-tv-sync.test.mjs` (18 tests) and verification checks pass.
+
+### Must not be undone
+- `/nuvio-default/manifest.json`, `/nuvio-default/collections.json`, `/api/nuvio-tv/sync/:target`, `/api/nuvio-tv/collections/:target`, `/api/nuvio-tv/device/code`, `/api/nuvio-tv/device/poll`, `/link`, and `/tv` are public endpoints for Nuvio TV Launcher out-of-the-box experience, device sync, and pairing.
+- `/api/nuvio-tv/device/claim` is an `account` route requiring creator authentication.
+- `handleNuvioTvSyncRoute` is split into sub-helpers (`buildNuvioTvSyncDefaultResponse`, `handleNuvioTvCollectionsRoute`, `handleNuvioTvLinkPage`, `buildNuvioTvLinkPageCss`, `buildNuvioTvLinkPageJs`, `buildNuvioTvLinkPageAuthJs`, `formatNuvioUserCollections`, `formatNuvioUserChannels`, `resolveNuvioTvTargetData`) to stay well within the 150-line size budget limit.
+- `creatorApiCreate` delegates profile persistence to `persistNewCreatorProfile` to stay well within the 150-line limit.
+- Seeding only runs when `source === "nuvio_tv"` on a brand new registration. Normal web/Nuvio registrations and existing user logins must never be overwritten.
+- `tests/route-access.json` lists all public and account routes with their expected authorization class.
+
+## Earlier work: performance audit fixes (2026-11-03, branch `claude/kind-bell-5wa9ht`, not deployed)
 Plan: `docs/PERF_AUDIT_PLAN.md`. Done: PERF-00, 12, 05, 08+07 (both steps), 09, 01, 11 step 1, 03, 16, 06, 04. **Not built: PERF-02** (below). Not built by instruction: PERF-10, 11 step 2, 13, 14, 15. Results are in `docs/PERFORMANCE.md` section 3 and `docs/RELEASES.md` (2026-11-03). No migration, binding or flag; deploy the rebuilt Worker only.
 
 ### Must not be undone

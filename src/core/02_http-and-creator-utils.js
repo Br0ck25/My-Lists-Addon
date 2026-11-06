@@ -22,7 +22,7 @@ function isPublicCorsPath(path) {
   if (/^\/lists\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\.json$/.test(p)) return true;
   if (p === "/icon.png" || p === "/unavailable-poster.svg") return true;
   if (p === "/api/poster-badge" || p === "/api/channel-poster" || p === "/api/channel-logo" || p === "/api/safe-poster") return true;
-  if (p.startsWith("/api/scrobble")) return true;
+  if (p.startsWith("/api/scrobble") || p.startsWith("/api/nuvio-tv/") || p === "/api/channel-lineup") return true;
   return false;
 }
 
@@ -471,7 +471,7 @@ function verifyCsrf(request) {
   const path = url.pathname;
 
   // Exemptions
-  if (path.startsWith("/api/scrobble")) {
+  if (path.startsWith("/api/scrobble") || path.indexOf("/api/nuvio-tv/") === 0) {
     return null;
   }
   // Exactly the eight provider routes (tests/route-access.json). This was

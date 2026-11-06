@@ -1067,7 +1067,25 @@ function findChartOrCollectionEntry(id, type) {
   const cleanId = String(id).trim();
   const reqType = type === "series" ? "series" : "movie";
 
-  // 1. Direct TMDB chart / kids / holiday / genre slug prefixes
+  // 1. Direct TMDB chart / kids / holiday / genre slug prefixes and Nuvio defaults
+  if (cleanId === "chart:combined:trending_movies" || (cleanId === "chart:combined:trending" && reqType === "movie")) {
+    return { id: "chart:combined:trending_movies", name: "Trending", type: "movie", url: COMBINED_CHART_LISTS[1].movieUrls.join("\n"), enabled: true, randomizeItemsDaily: true };
+  }
+  if (cleanId === "chart:combined:trending_tv" || (cleanId === "chart:combined:trending" && reqType === "series")) {
+    return { id: "chart:combined:trending_tv", name: "Trending", type: "series", url: COMBINED_CHART_LISTS[1].showUrls.join("\n"), enabled: true, randomizeItemsDaily: true };
+  }
+  if (cleanId === "chart:combined:popular_movies" || (cleanId === "chart:combined:popular" && reqType === "movie")) {
+    return { id: "chart:combined:popular_movies", name: "Popular", type: "movie", url: COMBINED_CHART_LISTS[0].movieUrls.join("\n"), enabled: true, randomizeItemsDaily: true };
+  }
+  if (cleanId === "chart:combined:popular_tv" || (cleanId === "chart:combined:popular" && reqType === "series")) {
+    return { id: "chart:combined:popular_tv", name: "Popular", type: "series", url: COMBINED_CHART_LISTS[0].showUrls.join("\n"), enabled: true, randomizeItemsDaily: true };
+  }
+  if (cleanId === "chart:trakt:boxoffice_movies" || (cleanId === "chart:trakt:boxoffice" && reqType === "movie")) {
+    return { id: "chart:trakt:boxoffice_movies", name: "Trakt Box Office", type: "movie", url: "trakt:chart:box_office", enabled: true, randomizeItemsDaily: true };
+  }
+  if (cleanId === "chart:trakt:boxoffice_tv" || (cleanId === "chart:trakt:boxoffice" && reqType === "series")) {
+    return { id: "chart:trakt:boxoffice_tv", name: "Trakt Box Office", type: "series", url: "trakt:chart:box_office", enabled: true, randomizeItemsDaily: true };
+  }
   if (cleanId.startsWith("tmdb-chart-")) {
     const net = cleanId.replace(/^tmdb-chart-/, "");
     const provider = (typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.movieUrl === `tmdb:chart:${net}` || s.showUrl === `tmdb:chart:${net}`) : null) ||
@@ -1264,5 +1282,409 @@ function getPremadeCollectionManifestCatalogs(includeStreamingRows = false) {
 
   return list;
 }
+
+// --- Nuvio TV Launcher Default Preset & Premade Collections ------------------
+
+const PREMADE_FRANCHISES = [
+  { id: 86311, name: "The Avengers Collection" },
+  { id: 10, name: "Star Wars Collection" },
+  { id: 1241, name: "Harry Potter Collection" },
+  { id: 119, name: "The Lord of the Rings Collection" },
+  { id: 263, name: "The Dark Knight Collection" },
+  { id: 645, name: "James Bond Collection" },
+  { id: 558216, name: "Spider-Man Collection" },
+  { id: 9485, name: "Fast & Furious Collection" },
+  { id: 328, name: "Jurassic Park Collection" },
+  { id: 87359, name: "Mission: Impossible Collection" },
+  { id: 8091, name: "Alien Collection" },
+  { id: 556, name: "Pixar Animation Collection" },
+  { id: 2150, name: "Shrek Collection" },
+  { id: 295, name: "Pirates of the Caribbean Collection" },
+  { id: 2344, name: "The Matrix Collection" },
+  { id: 645043, name: "John Wick Collection" },
+];
+
+const PREMADE_STUDIOS = [
+  { id: 420, name: "Marvel Studios" },
+  { id: 1, name: "Lucasfilm" },
+  { id: 3, name: "Pixar" },
+  { id: 6125, name: "Walt Disney Animation" },
+  { id: 25, name: "20th Century Studios" },
+  { id: 174, name: "Warner Bros." },
+  { id: 9993, name: "DC" },
+  { id: 33, name: "Universal Pictures" },
+  { id: 4, name: "Paramount Pictures" },
+];
+
+function buildStreamingServiceFolders() {
+  const serviceDefs = [
+    { id: "col_appletv", name: "Apple TV+", key: "appletv" },
+    { id: "col_discovery", name: "Discovery+", key: "discovery" },
+    { id: "col_disney", name: "Disney+", key: "disney" },
+    { id: "col_hbomax", name: "HBO Max", key: "hbomax" },
+    { id: "col_hulu", name: "Hulu", key: "hulu" },
+    { id: "col_netflix", name: "Netflix", key: "netflix" },
+    { id: "col_netflixkids", name: "Netflix Kids", key: "netflixkids" },
+    { id: "col_paramount", name: "Paramount+", key: "paramount" },
+    { id: "col_primevideo", name: "Prime Video", key: "primevideo" },
+    { id: "col_peacock", name: "Peacock", key: "peacock" },
+    { id: "col_kids", name: "Kids", key: "kids" },
+  ];
+  return serviceDefs.map((svc) => {
+    const sources = [];
+    const topMatch = typeof STREAMING_TOP10 !== "undefined" ? STREAMING_TOP10.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === svc.key) : null;
+    if (topMatch) {
+      if (topMatch.movieUrl) sources.push({ addonId: "app.my-list.collections", catalogId: typeof slugifyServer === "function" ? slugifyServer(topMatch.movieUrl) : topMatch.movieUrl, name: `${svc.name} Top 10`, title: `${svc.name} Top 10`, type: "movie" });
+      if (topMatch.showUrl) sources.push({ addonId: "app.my-list.collections", catalogId: typeof slugifyServer === "function" ? slugifyServer(topMatch.showUrl) : topMatch.showUrl, name: `${svc.name} Top 10`, title: `${svc.name} Top 10`, type: "series" });
+    }
+    const allMatch = typeof STREAMING_ALL !== "undefined" ? STREAMING_ALL.find((s) => s.name.toLowerCase().replace(/[^a-z0-9]+/g, "") === svc.key) : null;
+    if (allMatch) {
+      const net = allMatch.movieUrl && allMatch.movieUrl.startsWith("tmdb:chart:") ? allMatch.movieUrl.replace(/^tmdb:chart:/, "") : "";
+      const catId = net ? `tmdb-chart-${net}` : (typeof slugifyServer === "function" ? slugifyServer(allMatch.movieUrl) : allMatch.movieUrl);
+      sources.push({ addonId: "app.my-list.collections", catalogId: catId, name: svc.name, title: svc.name, type: "movie" });
+      sources.push({ addonId: "app.my-list.collections", catalogId: catId, name: svc.name, title: svc.name, type: "series" });
+    } else if (svc.key === "kids" && typeof KIDS_LISTS !== "undefined") {
+      KIDS_LISTS.forEach((k) => {
+        const rating = k.movieUrl.replace(/^tmdb:kids:/, "");
+        const catId = `tmdb-kids-${rating}`;
+        sources.push({ addonId: "app.my-list.collections", catalogId: catId, name: k.name, title: k.name, type: "movie" });
+        sources.push({ addonId: "app.my-list.collections", catalogId: catId, name: k.name, title: k.name, type: "series" });
+      });
+    }
+    if (typeof STREAMING_ROW_CATALOGS !== "undefined") {
+      for (const row of STREAMING_ROW_CATALOGS) {
+        if (row.service === svc.key) {
+          if (row.kinds.movie) sources.push({ addonId: "app.my-list.collections", catalogId: row.catalogId, name: row.name, title: row.name, type: "movie" });
+          if (row.kinds.series) sources.push({ addonId: "app.my-list.collections", catalogId: row.catalogId, name: row.name, title: row.name, type: "series" });
+        }
+      }
+    }
+    const coverImageUrl = "https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(svc.name) + "&format=landscape&v=6";
+    return {
+      id: svc.id,
+      title: svc.name,
+      name: svc.name,
+      tileShape: "LANDSCAPE",
+      hideTitle: false,
+      coverImageUrl: coverImageUrl,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      catalogSources: sources,
+    };
+  });
+}
+
+function buildGenreFolders() {
+  const genres = typeof GENRE_LISTS !== "undefined" ? GENRE_LISTS : [];
+  return genres.map((g) => {
+    const slug = g.movieUrl ? g.movieUrl.replace(/^tmdb:genre:/, "") : typeof slugifyServer === "function" ? slugifyServer(g.name) : g.name;
+    const catId = `tmdb-genre-${slug}`;
+    const coverImageUrl = g.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(g.name) + "&v=6");
+    return {
+      id: `col_genre_${slug}`,
+      title: g.name,
+      name: g.name,
+      tileShape: "POSTER",
+      hideTitle: false,
+      coverImageUrl: coverImageUrl,
+      hidden: false,
+      isVisible: true,
+      enabled: true,
+      catalogSources: [
+        { addonId: "app.my-list.collections", catalogId: catId, name: g.name, title: g.name, type: "movie" },
+        { addonId: "app.my-list.collections", catalogId: catId, name: g.name, title: g.name, type: "series" },
+      ],
+    };
+  });
+}
+
+function buildFranchiseFolders() {
+  return PREMADE_FRANCHISES.map((f) => ({
+    id: `col_franchise_${f.id}`,
+    title: f.name,
+    name: f.name,
+    tileShape: "LANDSCAPE",
+    hideTitle: false,
+    coverImageUrl: f.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(f.name) + "&format=landscape&v=6"),
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    catalogSources: [
+      { addonId: "app.my-list.collections", catalogId: `tmdb-collection-${f.id}`, name: f.name, title: f.name, type: "movie" },
+    ],
+  }));
+}
+
+function buildStudioFolders() {
+  return PREMADE_STUDIOS.map((st) => ({
+    id: `col_studio_${st.id}`,
+    title: st.name,
+    name: st.name,
+    tileShape: "LANDSCAPE",
+    hideTitle: false,
+    coverImageUrl: st.coverImageUrl || ("https://mylistsaddon.com/api/channel-poster?name=" + encodeURIComponent(st.name) + "&format=landscape&v=6"),
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    catalogSources: [
+      { addonId: "app.my-list.collections", catalogId: `tmdb-studio-${st.id}`, name: st.name, title: st.name, type: "movie" },
+    ],
+  }));
+}
+
+const PREMADE_COLLECTIONS = [
+  {
+    id: "col_mylists_streaming_services",
+    title: "Streaming Services",
+    name: "Streaming Services",
+    viewMode: "FOLLOW_LAYOUT",
+    showAllTab: false,
+    pinToTop: false,
+    focusGlowEnabled: true,
+    backdropImageUrl: "/icon.png",
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    folders: buildStreamingServiceFolders(),
+  },
+  {
+    id: "col_mylists_genres",
+    title: "Genres",
+    name: "Genres",
+    viewMode: "FOLLOW_LAYOUT",
+    showAllTab: false,
+    pinToTop: false,
+    focusGlowEnabled: true,
+    backdropImageUrl: "/icon.png",
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    folders: buildGenreFolders(),
+  },
+  {
+    id: "col_mylists_franchises",
+    title: "Franchises",
+    name: "Franchises",
+    viewMode: "FOLLOW_LAYOUT",
+    showAllTab: false,
+    pinToTop: false,
+    focusGlowEnabled: true,
+    backdropImageUrl: "/icon.png",
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    folders: buildFranchiseFolders(),
+  },
+  {
+    id: "col_mylists_studios",
+    title: "Studios",
+    name: "Studios",
+    viewMode: "FOLLOW_LAYOUT",
+    showAllTab: false,
+    pinToTop: false,
+    focusGlowEnabled: true,
+    backdropImageUrl: "/icon.png",
+    hidden: false,
+    isVisible: true,
+    enabled: true,
+    folders: buildStudioFolders(),
+  },
+];
+
+function buildNuvioDefaultChannels() {
+  const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined" ? QUICK_CHANNEL_PRESETS : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
+  return networks.map((net, i) => {
+    const posterUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`;
+    const backdropUrl = `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&format=landscape&v=6`;
+    const logoUrl = net.logoPath
+      ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7`
+      : `/api/channel-logo?netId=${net.id}&v=7`;
+    return {
+      id: `ch_preset_${net.id}`,
+      name: net.name,
+      poster: posterUrl,
+      posterUrl,
+      backdrop: backdropUrl,
+      backdropUrl,
+      logoUrl,
+      category: "My Lists Addon Channels",
+      catalogId: `channel_preset_${net.id}`,
+      playOrder: i + 1,
+    };
+  });
+}
+
+function buildNuvioTvDefaultConfig() {
+  const catalogOrder = [
+    "chart:combined:trending_movies",
+    "chart:combined:trending_tv",
+    "chart:combined:popular_movies",
+    "chart:combined:popular_tv",
+    "chart:trakt:boxoffice_movies",
+  ];
+  const lists = [
+    {
+      id: "chart:combined:trending_movies",
+      name: "Trending",
+      type: "movie",
+      url: COMBINED_CHART_LISTS[1].movieUrls.join("\n"),
+      enabled: true,
+      randomizeItemsDaily: true,
+      randomizeDaily: true,
+    },
+    {
+      id: "chart:combined:trending_tv",
+      name: "Trending",
+      type: "series",
+      url: COMBINED_CHART_LISTS[1].showUrls.join("\n"),
+      enabled: true,
+      randomizeItemsDaily: true,
+      randomizeDaily: true,
+    },
+    {
+      id: "chart:combined:popular_movies",
+      name: "Popular",
+      type: "movie",
+      url: COMBINED_CHART_LISTS[0].movieUrls.join("\n"),
+      enabled: true,
+      randomizeItemsDaily: true,
+      randomizeDaily: true,
+    },
+    {
+      id: "chart:combined:popular_tv",
+      name: "Popular",
+      type: "series",
+      url: COMBINED_CHART_LISTS[0].showUrls.join("\n"),
+      enabled: true,
+      randomizeItemsDaily: true,
+      randomizeDaily: true,
+    },
+    {
+      id: "chart:trakt:boxoffice_movies",
+      name: "Trakt Box Office",
+      type: "movie",
+      url: "trakt:chart:box_office",
+      enabled: true,
+      randomizeItemsDaily: true,
+      randomizeDaily: true,
+    },
+  ];
+
+  return {
+    version: 1,
+    randomizeItemsDaily: true,
+    shuffleItems: true,
+    catalogOrder,
+    catalogIds: catalogOrder,
+    lists,
+    entries: lists,
+    collections: PREMADE_COLLECTIONS,
+    channels: buildNuvioDefaultChannels(),
+  };
+}
+
+function buildNuvioTvDefaultPreset() {
+  return buildNuvioTvDefaultConfig();
+}
+
+async function seedNuvioTvNewUser(env, username, accountId) {
+  if (!env || !env.CONFIGS) return;
+  const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
+  const now = Date.now();
+
+  // 1. Seed user's initial builder / catalog config
+  const syncBlob = {
+    config: defaultConfig.lists || [],
+    entries: defaultConfig.lists || [],
+    randomizeItemsDaily: true,
+    shuffleItems: true,
+    catalogOrder: defaultConfig.catalogOrder || [],
+    catalogIds: defaultConfig.catalogOrder || [],
+    keys: {},
+    collapsedPanels: {},
+    likedLists: [],
+    hiddenLists: [],
+    hiddenMyListsSections: [],
+    updatedAt: now,
+  };
+  await env.CONFIGS.put(`creatorsync:${username}`, JSON.stringify(syncBlob));
+
+  // 2. Seed Channels -> My Channels (all QUICK_CHANNEL_PRESETS)
+  const networks = typeof QUICK_CHANNEL_PRESETS !== "undefined"
+    ? QUICK_CHANNEL_PRESETS
+    : (typeof CHANNEL_PRESET_NETWORKS !== "undefined" ? CHANNEL_PRESET_NETWORKS : []);
+  const channelsMap = {};
+  for (let i = 0; i < networks.length; i++) {
+    const net = networks[i];
+    const chId = `ch_preset_${net.id}`;
+    channelsMap[chId] = {
+      channelId: chId,
+      id: chId,
+      name: net.name,
+      poster: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`,
+      posterUrl: `https://mylistsaddon.com/api/channel-poster?name=${encodeURIComponent(net.name)}&v=6`,
+      logoUrl: net.logoPath ? `https://mylistsaddon.com/api/channel-logo?path=${encodeURIComponent(net.logoPath)}&v=7` : `/api/channel-logo?netId=${net.id}&v=7`,
+      backdrop: "",
+      presetNetworkId: String(net.id),
+      networkId: String(net.id),
+      category: "My Lists Addon Channels",
+      catalogId: `channel_preset_${net.id}`,
+      items: [],
+      shuffle: false,
+      dailyRotate: true,
+      liveSync: false,
+      sourceUrl: "",
+      playOrder: i + 1,
+    };
+  }
+  await env.CONFIGS.put(`creatorsyncchannels:${username}`, JSON.stringify({
+    channels: channelsMap,
+    mergedChannels: {},
+    updatedAt: now,
+  }));
+
+  // 3. Seed Lists -> Collections (all PREMADE_COLLECTIONS)
+  const premades = typeof PREMADE_COLLECTIONS !== "undefined" ? PREMADE_COLLECTIONS : [];
+  await env.CONFIGS.put(`creatorsyncpresets:${username}`, JSON.stringify({
+    presets: {},
+    customCollections: premades,
+    customCollectionGroups: [
+      { id: "streaming-services", title: "Streaming Services" },
+      { id: "genres", title: "Genres" },
+      { id: "franchises", title: "Franchises" },
+      { id: "studios", title: "Studios" },
+    ],
+    updatedAt: now,
+  }));
+
+  // 4. If DB is present, seed an initial install
+  let acctId = accountId;
+  if (!acctId && env.DB) {
+    try {
+      const acct = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1").bind(username).first();
+      if (acct) acctId = acct.id;
+    } catch {}
+  }
+  if (env.DB && acctId) {
+    try {
+      const token = typeof generateInstallToken === "function" ? generateInstallToken() : `i_${Math.random().toString(36).slice(2, 10)}`;
+      const tokenHash = typeof installTokenHash === "function" ? await installTokenHash(token) : token;
+      const installConfig = {
+        entries: defaultConfig.lists || [],
+        randomizeItemsDaily: true,
+        shuffleItems: true,
+      };
+      await env.DB.prepare(
+        "INSERT INTO installs (token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at) " +
+        "VALUES (?, NULL, ?, 'Nuvio TV', ?, 1, 'read', ?, ?)"
+      ).bind(tokenHash, acctId, JSON.stringify(installConfig), now, now).run();
+    } catch (e) {
+      console.error("seedNuvioTvNewUser: install insert failed", e);
+    }
+  }
+}
+
+
 
 

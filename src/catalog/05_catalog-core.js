@@ -624,19 +624,19 @@ function generateChannelBackdropSvg(name, backdropUrl = "") {
 }
 
 function getChannelBackdropUrl(payload) {
-  if (payload.backdrop && payload.backdrop.startsWith("http") && !payload.backdrop.includes("/api/channel-")) {
+  const poster = payload.posterUrl || payload.poster || "";
+  if (payload.backdrop && payload.backdrop.startsWith("http") && !payload.backdrop.includes("/api/channel-") && payload.backdrop !== poster) {
     return payload.backdrop;
+  }
+  if (payload.backdropUrl && payload.backdropUrl.startsWith("http") && !payload.backdropUrl.includes("/api/channel-") && payload.backdropUrl !== poster) {
+    return payload.backdropUrl;
   }
   if (payload.items && payload.items.length) {
     for (const it of payload.items) {
-      if (it.backdrop && it.backdrop.startsWith("http") && !it.backdrop.includes("/api/channel-")) return it.backdrop;
-      if (it.showBackdrop && it.showBackdrop.startsWith("http") && !it.showBackdrop.includes("/api/channel-")) return it.showBackdrop;
-      if (it.thumbnail && it.thumbnail.startsWith("http") && !it.thumbnail.includes("/api/channel-")) return it.thumbnail;
+      if (it.backdrop && it.backdrop.startsWith("http") && !it.backdrop.includes("/api/channel-") && it.backdrop !== poster) return it.backdrop;
+      if (it.showBackdrop && it.showBackdrop.startsWith("http") && !it.showBackdrop.includes("/api/channel-") && it.showBackdrop !== poster) return it.showBackdrop;
+      if (it.thumbnail && it.thumbnail.startsWith("http") && !it.thumbnail.includes("/api/channel-") && it.thumbnail !== poster) return it.thumbnail;
     }
-  }
-  // If a custom URL poster was set but no separate backdrop was saved, use the poster URL as the backdrop too
-  if (payload.poster && payload.poster.startsWith("http") && !payload.poster.includes("/api/channel-")) {
-    return payload.poster;
   }
   return "";
 }

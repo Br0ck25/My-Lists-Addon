@@ -3923,7 +3923,7 @@ function initAppShell() {
     appShellApplyRoute(route);
   } else if (appShellTrimSlashes(location.pathname) === '/' && !location.hash) {
     const open = appShellRouteForName(window._originTab || '') || { tab: 'discover', sub: '' };
-    try { history.replaceState({ appShell: true }, '', appShellPathFor(open.tab, '')); } catch (e) {}
+    try { history.replaceState({ appShell: true }, '', appShellPathFor(open.tab, '') + (location.search || '')); } catch (e) {}
     // ...and the page is then the page at that path, with the view's own
     // cards drawn (Settings' were missing when "/" reopened Settings).
     appShellApplyRoute({ tab: open.tab, sub: '' });

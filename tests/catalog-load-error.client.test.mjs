@@ -16,8 +16,7 @@ describe("catalog preview failure", () => {
   });
 
   it("the preview's catch block uses it, not its old wording", () => {
-    const root = new URL("../", import.meta.url).pathname;
-    const src = fs.readFileSync(root + "src/client/23_client-list-management.js", "utf8");
+    const src = fs.readFileSync(new URL("../src/client/23_client-list-management.js", import.meta.url), "utf8");
     assert.doesNotMatch(src, /Network error loading this catalog/);
     assert.match(src, /catalogLoadErrorHtml\(\)/);
   });
@@ -25,8 +24,7 @@ describe("catalog preview failure", () => {
 
 describe("no loader calls a server failure a network error", () => {
   it("the MDBList, Trakt, TMDB and Simkl list loaders word it 'Could not load ...'", () => {
-    const root = new URL("../", import.meta.url).pathname;
-    const src = fs.readFileSync(root + "src/client/17_client-my-lists-and-trakt-oauth.js", "utf8");
+    const src = fs.readFileSync(new URL("../src/client/17_client-my-lists-and-trakt-oauth.js", import.meta.url), "utf8");
     assert.doesNotMatch(src, /Network error loading/);
     for (const name of ["MDBList", "Trakt", "TMDB", "Simkl"]) assert.match(src, new RegExp("Could not load your " + name + " lists"));
   });
