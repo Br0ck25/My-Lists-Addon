@@ -70,8 +70,8 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
         });
       }
       // The standalone collection install advertises only its saved sources,
-      // not the home install's search rows or every premade service catalog.
-      if (collectionsAddon) return list;
+      // not the home install's search rows or every premade service catalog. Metadata off drops search rows too.
+      if (collectionsAddon || !provideMetadata) return list;
       addC({
         type: "movie",
         id: "search_movies",

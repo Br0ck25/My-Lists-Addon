@@ -222,7 +222,7 @@
       <div class="settings-toggle-row u-p-0 u-bdb-none">
         <div class="u-flex-1 u-minw-0 u-pr-12px">
           <span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Use My Lists Addon metadata</span>
-          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
+          <p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Lets this add-on supply a title's details page (synopsis, cast, trailers, episodes) and search results in Stremio and Nuvio. Turn it off to use My Lists Addon for lists only and let another add-on supply the details and search. TV Channel titles keep their details page. Reinstall the add-on after changing this. Posters on the list tiles still come from this add-on (see Better Posters and Pictorium above), not from the other add-on.</p>
         </div>
         <label class="ui-toggle" aria-label="Use My Lists Addon metadata">
           <input type="checkbox" id="provideMetadataCheckbox" ${initialProvideMetadata ? 'checked' : ''} data-act="toggleBetterPostersSetting" data-act-args="[&quot;provideMetadata&quot;,&quot;@checked&quot;]">

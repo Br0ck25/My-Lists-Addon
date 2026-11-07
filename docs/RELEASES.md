@@ -2555,3 +2555,8 @@ The *Playback streams* column in the admin Traffic table fell from 200+ a day to
 
 ### Checked
 `bash verify.sh -q` passes. New test in `perf-stat-batching`: one lone playback ping is in D1 with no later bump; it fails without the change.
+
+## 2026-11-07 — "Use My Lists Addon metadata" off now really turns metadata off (build `13cefeda99`, prepared; not deployed)
+
+- With the toggle off, the install no longer lists the Movies and Series search rows, and its `/meta` and search routes answer nothing for real titles, so Stremio and Nuvio send details and search to another add-on. TV Channel pages are unchanged. Reinstall after changing the toggle.
+- Tests: `tests/metadata-off.test.mjs` (new); `tests/pictorium.test.mjs` no longer expects search rows with metadata off, because that was the reported bug.
