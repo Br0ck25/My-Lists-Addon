@@ -200,9 +200,11 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
   if (isSearchCatalog) {
     if (!searchQuery) return jsonPublic({ metas: [] });
+    const searchConfig = config ? await resolveConfig(config, env) : {};
+    // Metadata off: an app still holding an old manifest gets no results.
+    if (searchConfig.provideMetadata === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
     const searchLimited = await searchRateLimitResponse(request, env, ctx);
     if (searchLimited) return searchLimited;
-    const searchConfig = config ? await resolveConfig(config, env) : {};
     const effectiveTmdbKey = searchConfig.tmdbKey || TMDB_API_KEY;
     let metas = await searchCatalogMetas(searchQuery, type, skip, effectiveTmdbKey, env, ctx, url.origin);
     // FF_CANONICAL_IDS (43_catalog-ids.js), as fetchCatalog does for rows.
@@ -518,6 +520,8 @@ async function stremioMetaItem(env, ctx, url, m) {
   if (id.startsWith("tt") || id.startsWith("tmdb:")) {
     try {
       const metaConfig = config ? await resolveConfig(config, env) : {};
+      // Metadata off: an app still holding an old manifest gets nothing.
+      if (metaConfig.provideMetadata === false) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
       const effectiveKey = metaConfig.tmdbKey || TMDB_API_KEY;
       let meta = await fetchStandardItemMeta(id, metaType, effectiveKey, env, ctx);
       if (!meta) return jsonPublic({ meta: null });

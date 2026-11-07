@@ -86,14 +86,16 @@ describe("Use My Lists Addon metadata", () => {
     assert.deepEqual(m.idPrefixes, ["tt", "tmdb:", "channel_"]);
   });
 
-  it("off: only TV Channel ids are answered here, and the catalogs and search stay", async () => {
+  it("off: only TV Channel ids are answered here; list catalogs stay, search rows go", async () => {
     const { env, id } = await saveAndFetch({ provideMetadata: false });
     const m = (await call(env, `/${id}/manifest.json`)).body;
     assert.deepEqual(resourceNames(m), ["catalog", "meta"]);
     assert.deepEqual(m.resources[1].idPrefixes, ["channel_"]);
     assert.deepEqual(m.idPrefixes, ["channel_"]);
     assert.ok(m.catalogs.some((c) => c.id === "pic-roundtrip"));
-    assert.ok(m.catalogs.some((c) => c.id === "search_movies") && m.catalogs.some((c) => c.id === "search_series"));
+    // Search results are this add-on's metadata, so off means no search rows
+    // either (reported: search kept answering after the toggle was turned off).
+    assert.ok(!m.catalogs.some((c) => c.id === "search_movies" || c.id === "search_series"));
   });
 
   it("is shown in Settings", async () => {
