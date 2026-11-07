@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-07";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "13cefeda99";
+const WORKER_BUILD = "334ba9a9da";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -139,6 +139,8 @@ function isSecretFieldName(name) {
 const ADDON_ID = "app.my-list";
 const COLLECTIONS_ADDON_ID = "app.my-list.collections";
 const COLLECTIONS_ADDON_NAME = "My Lists Collections";
+const TV_LAUNCHER_ADDON_ID = "app.my-list.tv";
+const TV_LAUNCHER_ADDON_NAME = "My Lists TV Launcher";
 const ADDON_VERSION = "1.5.7";
 const ADDON_NAME = "My Lists";
 
@@ -17700,9 +17702,38 @@ function savedConfigKey(id) {
 
 // `withTracking`: also read the owner's tracking record (creatorsynctracking:)
 // and fill watchHistory / continueWatching / watchlist / airingNext from it.
-async function resolveCreatorSyncConfig(username, env) {
+async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } = {}) {
   if (!username || !env || !env.CONFIGS) return null;
   try {
+    if (isTvLauncher) {
+      const tvRaw = await env.CONFIGS.get(`creatorsync:${username}:tv`);
+      if (tvRaw) {
+        const tvParsed = JSON.parse(tvRaw);
+        if (tvParsed && tvParsed.mirror === false) {
+          const tvList = Array.isArray(tvParsed.config)
+            ? tvParsed.config
+            : (Array.isArray(tvParsed.entries)
+              ? tvParsed.entries
+              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []));
+          return {
+            entries: tvList,
+            lists: tvList,
+            catalogOrder: tvParsed.catalogOrder || tvParsed.catalogIds || tvList.map((e) => e.id || e.catalogId || e.name),
+            catalogIds: tvParsed.catalogIds || tvParsed.catalogOrder || tvList.map((e) => e.id || e.catalogId || e.name),
+            channelIds: Array.isArray(tvParsed.channelIds) ? tvParsed.channelIds : null,
+            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(tvParsed) : {}),
+            randomizeItemsDaily: tvParsed.randomizeItemsDaily !== undefined ? tvParsed.randomizeItemsDaily : true,
+            shuffleItems: true,
+            track: false,
+            trackOwner: username,
+            installTrackOwner: username,
+            trackCreatorName: username,
+            updatedAt: tvParsed.updatedAt || 0,
+            isTvLauncher: true,
+          };
+        }
+      }
+    }
     const raw = await env.CONFIGS.get(`creatorsync:${username}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
@@ -17715,6 +17746,8 @@ async function resolveCreatorSyncConfig(username, env) {
     return {
       entries: list,
       lists: list,
+      catalogOrder: parsed.catalogOrder || parsed.catalogIds || list.map((e) => e.id || e.catalogId || e.name),
+      catalogIds: parsed.catalogIds || parsed.catalogOrder || list.map((e) => e.id || e.catalogId || e.name),
       ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(parsed) : {}),
       randomizeItemsDaily: parsed.randomizeItemsDaily !== undefined
         ? parsed.randomizeItemsDaily
@@ -17725,6 +17758,7 @@ async function resolveCreatorSyncConfig(username, env) {
       installTrackOwner: username,
       trackCreatorName: username,
       updatedAt: parsed.updatedAt || 0,
+      isTvLauncher,
     };
   } catch {
     return null;
@@ -17736,12 +17770,12 @@ async function resolveCreatorSyncConfig(username, env) {
 // as for Continue Watching -- while nothing on those paths used it. The
 // channel meta route and /api/resolve ask for it; a personal shelf reads its
 // own data in fetchAutoTrackedCatalog.
-async function resolveConfig(configParam, env, { withTracking = false } = {}) {
+async function resolveConfig(configParam, env, { withTracking = false, isTvLauncher = false } = {}) {
   const cleanParam = String(configParam || "").replace(/^c\//, "");
   if (cleanParam === "nuvio-default" || cleanParam === "default") {
     return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
   }
-  const creatorSync = await resolveCreatorSyncConfig(cleanParam, env);
+  const creatorSync = await resolveCreatorSyncConfig(cleanParam, env, { isTvLauncher });
   if (creatorSync) return creatorSync;
   // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
   if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
@@ -18825,7 +18859,7 @@ async function bumpStatBy(env, kind, amount) {
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false, collectionsAddon = false) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false, collectionsAddon = false, isTvLauncher = false) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -18846,26 +18880,21 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
   const metaPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : ["channel_"];
   const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: metaPrefixes }];
   const idPrefixes = metaPrefixes;
-  // Stremio/wako call every installed addon's subtitles resource the
-  // instant ANY video starts playing (checking for subtitle tracks) --
-  // regardless of which addon's catalog the video came from, or whether
-  // this addon has any subtitles to offer (it doesn't; see the
-  // /:config/subtitles/... route in 25_api-catalog-routes.js). That's a
-  // real, reliable "this just started playing" signal to hang automatic
-  // watch-tracking off of -- just not a *completion* one, since it's one
-  // request at the very start of playback, no ongoing position data. Only
-  // declared when the person has turned on "Auto-track playback" in
-  // Settings, since otherwise every video played anywhere would ping this
-  // addon for no reason.
-  if (track) {
+  // Subtitles resource pings on playback start for Stremio/Wako auto-tracking.
+  // Omitted for Nuvio TV Launcher since it reports true completion via /api/nuvio-tv/history.
+  if (track && !isTvLauncher) {
     resources.push({ name: "subtitles", types: ["movie", "series"], idPrefixes: ["tt", "tmdb", "kitsu"] });
   }
+  const desc = isTvLauncher
+    ? "Browse your custom catalogs, 24/7 channels, and curated lists on Nuvio TV Launcher."
+    : (collectionsAddon
+      ? "Access your saved Nuvio Collections, genres, studios, and custom folders."
+      : "Browse your own mdblist.com, trakt.tv, and themoviedb.org lists (and your MDBList watchlist) as catalogs on the home screen.");
   return {
-    id: collectionsAddon ? COLLECTIONS_ADDON_ID : ADDON_ID,
+    id: collectionsAddon ? COLLECTIONS_ADDON_ID : (isTvLauncher ? TV_LAUNCHER_ADDON_ID : ADDON_ID),
     version: ADDON_VERSION,
-    name: collectionsAddon ? COLLECTIONS_ADDON_NAME : ADDON_NAME,
-    description:
-      "Browse your own mdblist.com, trakt.tv, and themoviedb.org lists (and your MDBList watchlist) as catalogs on the home screen.",
+    name: collectionsAddon ? COLLECTIONS_ADDON_NAME : (isTvLauncher ? TV_LAUNCHER_ADDON_NAME : ADDON_NAME),
+    description: desc,
     logo: `${origin}/icon.png`,
     resources,
     types: ["movie", "series"],
@@ -92650,7 +92679,7 @@ function traktLimitNote(res, text, retrySec) {
 // GET /api/nuvio-tv/sync/:target -- unified sync route for Nuvio TV Launcher
 async function buildNuvioTvSyncDefaultResponse(url) {
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
-  const manifestUrl = `${url.origin}/nuvio-default/manifest.json`;
+  const manifestUrl = `${url.origin}/nuvio-default/tv/manifest.json`;
   const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/default`;
   const catalogIds = defaultConfig.catalogIds || defaultConfig.catalogOrder || [];
   const catalogOrder = defaultConfig.catalogOrder || catalogIds;
@@ -92900,7 +92929,7 @@ async function resolveNuvioTvTargetData(target, env) {
 
   if (username && env && env.CONFIGS) {
     try {
-      const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env) : null;
+      const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env, { isTvLauncher: true }) : null;
       if (creatorConfig && Array.isArray(creatorConfig.entries)) {
         resolved = creatorConfig;
         updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
@@ -93606,12 +93635,12 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   const channels = formatNuvioUserChannels(userChannelsRaw);
 
   const manifestUrl = username
-    ? `${url.origin}/${username}/manifest.json`
+    ? `${url.origin}/${username}/tv/manifest.json`
     : (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
-      ? `${url.origin}/${installToken}/manifest.json`
+      ? `${url.origin}/${installToken}/tv/manifest.json`
       : installToken.length === 43
-        ? `${url.origin}/i/${installToken}/manifest.json`
-        : `${url.origin}/${installToken}/manifest.json`;
+        ? `${url.origin}/i/${installToken}/tv/manifest.json`
+        : `${url.origin}/${installToken}/tv/manifest.json`;
 
   const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${username || target}`;
 
@@ -94015,6 +94044,458 @@ export default {
     }
   },
 };
+// Standalone management page for Nuvio TV Launcher (/nuvio-tv-launcher)
+
+function handleNuvioTvLauncherPage(request, env, ctx, url, path) {
+  ctx.waitUntil(bumpStat(env, "pageviews"));
+  const origin = url ? url.origin : "";
+  const html = buildNuvioTvLauncherPageHtml(origin);
+  return pageResponseWithBody(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+function buildNuvioTvLauncherLayoutCss() {
+  return `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-4) var(--space-3);
+    }
+    .launcher-container {
+      width: 100%;
+      max-width: 840px;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding-bottom: var(--space-2);
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--font-size-sm);
+      color: var(--muted);
+      text-decoration: none;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .back-btn:hover {
+      color: var(--text);
+      border-color: var(--border-strong);
+    }
+    .launcher-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    .card-title {
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-2);
+    }
+    .card-desc {
+      font-size: var(--font-size-sm);
+      color: var(--muted);
+      margin-bottom: var(--space-3);
+      line-height: 1.5;
+    }
+  `;
+}
+
+function buildNuvioTvLauncherComponentCss() {
+  return `
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-3);
+    }
+    .switch-info { display: flex; flex-direction: column; gap: 2px; }
+    .switch-label { font-size: var(--font-size-base); font-weight: 600; color: var(--text); }
+    .switch-sub { font-size: var(--font-size-xs); color: var(--muted); }
+    .toggle-control {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+    .toggle-control input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--border-strong);
+      transition: .2s; border-radius: 26px;
+    }
+    .toggle-slider:before {
+      position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+      background-color: white; transition: .2s; border-radius: 50%;
+    }
+    .toggle-control input:checked + .toggle-slider { background-color: var(--accent); }
+    .toggle-control input:checked + .toggle-slider:before { transform: translateX(22px); }
+    .banner-info {
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: var(--space-3);
+      font-size: var(--font-size-sm);
+      color: var(--muted);
+      margin-bottom: var(--space-3);
+      line-height: 1.4;
+    }
+    .items-list { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+    .item-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--space-2) var(--space-3); background: var(--bg);
+      border: 1px solid var(--border); border-radius: var(--radius-sm); gap: var(--space-2);
+    }
+    .item-left { display: flex; align-items: center; gap: var(--space-2); overflow: hidden; }
+    .item-title { font-size: var(--font-size-sm); font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-pill {
+      font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-pill);
+      background: var(--surface); border: 1px solid var(--border); color: var(--muted); flex-shrink: 0;
+    }
+    .copy-box {
+      display: flex; align-items: center; gap: var(--space-2); background: var(--bg);
+      border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-3);
+    }
+    .copy-input { flex: 1; background: transparent; border: none; color: var(--text); font-family: monospace; font-size: var(--font-size-xs); outline: none; }
+    .action-bar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
+    .toast-msg {
+      position: fixed; bottom: var(--space-4); right: var(--space-4);
+      background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
+      padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); font-size: var(--font-size-sm); z-index: 1000; display: none;
+    }
+  `;
+}
+
+function buildNuvioTvLauncherPageCss() {
+  return `${buildNuvioTvLauncherLayoutCss()}\n${buildNuvioTvLauncherComponentCss()}`;
+}
+
+function buildNuvioTvLauncherConfigJs() {
+  return `
+    var currentUsername = "";
+    var currentTvConfig = null;
+    var currentMainLists = [];
+    var currentTvLists = [];
+
+    function showToast(text) {
+      var t = document.getElementById("toastMsg");
+      if (!t) return;
+      t.textContent = text;
+      t.style.display = "block";
+      setTimeout(function() { t.style.display = "none"; }, 3000);
+    }
+
+    async function loadAccount() {
+      try {
+        var res = await fetch("/api/me", { credentials: "same-origin" });
+        if (res.ok) {
+          var data = await res.json();
+          if (data && data.username) {
+            currentUsername = data.username;
+            var pill = document.getElementById("userPill");
+            if (pill) pill.textContent = "@" + currentUsername;
+            var input = document.getElementById("manifestUrlInput");
+            if (input) input.value = window.location.origin + "/" + currentUsername + "/tv/manifest.json";
+            loadTvConfig();
+            return;
+          }
+        }
+      } catch (e) {}
+      var localName = localStorage.getItem("creatorName") || "";
+      if (localName) {
+        currentUsername = localName;
+        var pill = document.getElementById("userPill");
+        if (pill) pill.textContent = "@" + currentUsername;
+        var input = document.getElementById("manifestUrlInput");
+        if (input) input.value = window.location.origin + "/" + currentUsername + "/tv/manifest.json";
+        loadTvConfig();
+      } else {
+        var pill = document.getElementById("userPill");
+        if (pill) pill.textContent = "Guest Mode (Sign in on main dashboard to sync)";
+      }
+    }
+
+    async function loadTvConfig() {
+      if (!currentUsername) return;
+      try {
+        var creatorKey = localStorage.getItem("creatorKey") || "";
+        var url = "/api/nuvio-tv/config?creatorName=" + encodeURIComponent(currentUsername);
+        if (creatorKey) url += "&creatorKey=" + encodeURIComponent(creatorKey);
+        var res = await fetch(url, { credentials: "same-origin" });
+        if (res.ok) {
+          var data = await res.json();
+          currentTvConfig = data;
+          currentMainLists = data.mainLists || [];
+          currentTvLists = data.tvLists || [];
+          var toggle = document.getElementById("mirrorToggle");
+          if (toggle) toggle.checked = data.mirror !== false;
+          renderCatalogs();
+        }
+      } catch (e) {
+        console.error("Failed to load TV config", e);
+      }
+    }
+  `;
+}
+
+function buildNuvioTvLauncherDomJs() {
+  return `
+    function renderCatalogs() {
+      var toggle = document.getElementById("mirrorToggle");
+      var isMirror = toggle ? toggle.checked : true;
+      var banner = document.getElementById("mirrorBanner");
+      var customControls = document.getElementById("customControls");
+      var saveBar = document.getElementById("saveBar");
+      var listEl = document.getElementById("catalogsList");
+
+      if (isMirror) {
+        if (banner) {
+          banner.innerHTML = "&#9432; <strong>Mirroring Active:</strong> Your TV displays the same catalogs as your main account. Changes on the main dashboard reflect on your TV instantly.";
+        }
+        if (customControls) customControls.style.display = "none";
+        if (saveBar) saveBar.style.display = "none";
+
+        var lists = currentMainLists.length ? currentMainLists : [{ name: "Trending", type: "movie" }, { name: "Trending", type: "series" }, { name: "Popular", type: "movie" }, { name: "Popular", type: "series" }];
+        var html = "";
+        for (var i = 0; i < lists.length; i++) {
+          var it = lists[i];
+          html += '<div class="item-row">' +
+            '<div class="item-left">' +
+              '<span class="item-title">' + (it.name || "Untitled") + '</span>' +
+              '<span class="item-pill">' + (it.type || "catalog") + '</span>' +
+            '</div>' +
+            '<span class="item-pill">Mirrored</span>' +
+          '</div>';
+        }
+        if (listEl) listEl.innerHTML = html;
+      } else {
+        if (banner) {
+          banner.innerHTML = "&#9881; <strong>Custom TV Setup:</strong> This TV maintains its own independent catalogs and shelf order.";
+        }
+        if (customControls) customControls.style.display = "block";
+        if (saveBar) saveBar.style.display = "flex";
+
+        var lists = currentTvLists.length ? currentTvLists : currentMainLists;
+        if (!currentTvLists.length) currentTvLists = JSON.parse(JSON.stringify(lists));
+
+        var html = "";
+        for (var i = 0; i < currentTvLists.length; i++) {
+          var it = currentTvLists[i];
+          html += '<div class="item-row">' +
+            '<div class="item-left">' +
+              '<span class="item-title">' + (it.name || "Untitled") + '</span>' +
+              '<span class="item-pill">' + (it.type || "catalog") + '</span>' +
+            '</div>' +
+            '<button type="button" class="btn btn-ghost" data-remove-idx="' + i + '" style="color:var(--danger);">&#10005;</button>' +
+          '</div>';
+        }
+        if (!currentTvLists.length) {
+          html = '<div style="color:var(--muted); font-size:var(--font-size-sm);">No TV catalogs selected. Click &ldquo;Copy from Main Setup&rdquo; to begin.</div>';
+        }
+        if (listEl) listEl.innerHTML = html;
+
+        var removeBtns = listEl ? listEl.querySelectorAll("[data-remove-idx]") : [];
+        for (var b = 0; b < removeBtns.length; b++) {
+          removeBtns[b].addEventListener("click", function(e) {
+            var idx = parseInt(this.getAttribute("data-remove-idx"), 10);
+            if (!isNaN(idx)) {
+              currentTvLists.splice(idx, 1);
+              renderCatalogs();
+            }
+          });
+        }
+      }
+    }
+
+    async function saveTvConfig() {
+      if (!currentUsername) {
+        showToast("Please sign in to save TV setup.");
+        return;
+      }
+      var toggle = document.getElementById("mirrorToggle");
+      var isMirror = toggle ? toggle.checked : true;
+      var creatorKey = localStorage.getItem("creatorKey") || "";
+      var payload = {
+        creatorName: currentUsername,
+        creatorKey: creatorKey,
+        mirror: isMirror,
+        lists: isMirror ? currentMainLists : currentTvLists
+      };
+
+      try {
+        var res = await fetch("/api/nuvio-tv/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showToast("TV Launcher setup saved!");
+        } else {
+          showToast("Failed to save TV setup.");
+        }
+      } catch (e) {
+        showToast("Network error while saving.");
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      var copyBtn = document.getElementById("copyManifestBtn");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", function() {
+          var input = document.getElementById("manifestUrlInput");
+          if (input) {
+            input.select();
+            navigator.clipboard.writeText(input.value);
+            showToast("Copied add-on manifest URL!");
+          }
+        });
+      }
+
+      var toggle = document.getElementById("mirrorToggle");
+      if (toggle) {
+        toggle.addEventListener("change", function() {
+          renderCatalogs();
+          saveTvConfig();
+        });
+      }
+
+      var copyMainBtn = document.getElementById("copyFromMainBtn");
+      if (copyMainBtn) {
+        copyMainBtn.addEventListener("click", function() {
+          currentTvLists = JSON.parse(JSON.stringify(currentMainLists));
+          renderCatalogs();
+          showToast("Copied catalogs from main setup!");
+        });
+      }
+
+      var saveBtn = document.getElementById("saveTvBtn");
+      if (saveBtn) saveBtn.addEventListener("click", saveTvConfig);
+
+      loadAccount();
+    });
+  `;
+}
+
+function buildNuvioTvLauncherPageJs() {
+  return `${buildNuvioTvLauncherConfigJs()}\n${buildNuvioTvLauncherDomJs()}`;
+}
+
+function buildNuvioTvLauncherPageHtml(origin) {
+  const css = buildNuvioTvLauncherPageCss();
+  const js = buildNuvioTvLauncherPageJs();
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nuvio TV Launcher Hub &bull; My Lists Addon</title>
+  <script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
+  <style nonce="${CSP_NONCE_PLACEHOLDER}">
+${DESIGN_TOKENS_CSS}
+${css}
+  </style>
+</head>
+<body>
+  <div class="launcher-container">
+    <div class="top-bar">
+      <a href="/" class="back-btn">&#8592; Main Dashboard</a>
+      <span class="item-pill" id="userPill">Checking account&hellip;</span>
+    </div>
+
+    <!-- Status & Addon Manifest -->
+    <div class="launcher-card">
+      <div class="card-title">&#128250; Nuvio TV Launcher Add-on</div>
+      <div class="card-desc">
+        This dedicated version (<strong>app.my-list.tv</strong>) serves your living room TV screen with full Live TV channels, 16:9 landscape backdrops, and big-screen catalogs.
+      </div>
+
+      <div class="copy-box">
+        <input type="text" id="manifestUrlInput" class="copy-input" readonly value="${origin}/nuvio-default/tv/manifest.json">
+        <button type="button" class="btn btn-secondary" id="copyManifestBtn">Copy URL</button>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="/link" class="btn btn-primary" id="pairTvBtn">Pair TV Device</a>
+        <a href="/tv" class="btn btn-secondary">Enter 6-Digit Code</a>
+      </div>
+    </div>
+
+    <!-- Mirroring & Catalogs -->
+    <div class="launcher-card">
+      <div class="card-title">&#128260; TV Catalogs &amp; Shelves</div>
+      <div class="card-desc">Choose whether your TV mirrors your regular My Lists catalogs or maintains an independent living room lineup.</div>
+
+      <div class="switch-row">
+        <div class="switch-info">
+          <div class="switch-label">Mirror Main My Lists Setup</div>
+          <div class="switch-sub">When enabled, any lists added on your main dashboard automatically sync to your TV.</div>
+        </div>
+        <label class="toggle-control">
+          <input type="checkbox" id="mirrorToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="banner-info" id="mirrorBanner">
+        &#9432; <strong>Mirroring Active:</strong> Your TV displays the same catalogs as your main account. Changes on the main dashboard reflect on your TV instantly.
+      </div>
+
+      <div id="customControls" style="display:none; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span class="switch-label">Independent TV Catalogs</span>
+          <button type="button" class="btn btn-secondary" id="copyFromMainBtn">Copy from Main Setup</button>
+        </div>
+      </div>
+
+      <div class="items-list" id="catalogsList">
+        <div style="color:var(--muted); font-size:var(--font-size-sm);">Loading catalogs&hellip;</div>
+      </div>
+
+      <div class="action-bar" id="saveBar" style="display:none;">
+        <button type="button" class="btn btn-primary" id="saveTvBtn">Save TV Setup</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-msg" id="toastMsg"></div>
+
+  <script nonce="${CSP_NONCE_PLACEHOLDER}">${js}<\/script>
+</body>
+</html>`;
+}
 
 // --- Installs (Phase 3a, P3a-8) ---------------------------------------------
 //
@@ -116360,6 +116841,7 @@ async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
   if (path === "/api/nuvio-tv/device/code") return handleNuvioTvDeviceCode(request, env, ctx, url);
   if (path === "/api/nuvio-tv/device/poll") return handleNuvioTvDevicePoll(request, env, ctx, url);
   if (path === "/api/nuvio-tv/device/claim") return handleNuvioTvDeviceClaim(request, env, ctx, url, path);
+  if (path === "/api/nuvio-tv/config") return handleNuvioTvConfig(request, env, ctx, url, path);
   return null;
 }
 
@@ -117232,7 +117714,7 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
   }
 
   const origin = url ? url.origin : "";
-  const manifestUrl = `${origin}/${auth.username}/manifest.json`;
+  const manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
   const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
 
   const updated = {
@@ -117251,6 +117733,81 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
   await kv.put("nuvio_tv_code:" + cleanCode, updatedStr, { expirationTtl: 600 });
 
   return json({ ok: true, installId: updated.installId, manifestUrl, syncUrl }, 200, corsHeaders());
+}
+
+// GET/POST /api/nuvio-tv/config -- reads or updates TV Launcher specific config (mirror toggle and custom TV lists/channels)
+async function handleNuvioTvConfig(request, env, ctx, url, path) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders() });
+  }
+  let body = {};
+  if (request.method === "POST") {
+    try {
+      body = await readJsonObject(request);
+    } catch {
+      return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
+    }
+  }
+  const creatorName = (body && body.creatorName) || (url && url.searchParams.get("creatorName")) || "";
+  const creatorKey = (body && body.creatorKey) || (url && url.searchParams.get("creatorKey")) || "";
+  const auth = await authenticateCreatorFor(request, env, ctx, path, creatorName, creatorKey);
+  if (!auth.ok) return authFailureResponse(auth);
+
+  const kv = env && (env.CONFIGS || env["LIST_CACHE"]);
+  if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+
+  if (request.method === "GET") {
+    let tvConfig = null;
+    let mainConfig = null;
+    try {
+      const [tvRaw, mainRaw] = await Promise.all([
+        kv.get(`creatorsync:${auth.username}:tv`),
+        kv.get(`creatorsync:${auth.username}`)
+      ]);
+      if (tvRaw) tvConfig = JSON.parse(tvRaw);
+      if (mainRaw) mainConfig = JSON.parse(mainRaw);
+    } catch {}
+
+    const mirror = tvConfig ? tvConfig.mirror !== false : true;
+    const mainEntries = (mainConfig && (mainConfig.entries || mainConfig.config || mainConfig.lists)) || [];
+    const tvEntries = (tvConfig && (tvConfig.entries || tvConfig.config || tvConfig.lists)) || [];
+
+    return json({
+      ok: true,
+      username: auth.username,
+      mirror,
+      lists: mirror ? mainEntries : tvEntries,
+      mainLists: mainEntries,
+      tvLists: tvEntries,
+      catalogOrder: (tvConfig && tvConfig.catalogOrder) || null,
+      channelIds: (tvConfig && tvConfig.channelIds) || null,
+      updatedAt: (tvConfig && tvConfig.updatedAt) || (mainConfig && mainConfig.updatedAt) || 0,
+      manifestUrl: `${url ? url.origin : ""}/${auth.username}/tv/manifest.json`,
+      syncUrl: `${url ? url.origin : ""}/api/nuvio-tv/sync/${auth.username}`
+    }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
+  if (request.method === "POST") {
+    const mirror = body.mirror !== false;
+    const entries = Array.isArray(body.lists) ? body.lists : (Array.isArray(body.entries) ? body.entries : []);
+    const catalogOrder = Array.isArray(body.catalogOrder) ? body.catalogOrder : entries.map((e) => e.id || e.catalogId || e.name);
+    const channelIds = Array.isArray(body.channelIds) ? body.channelIds : null;
+    const now = Date.now();
+
+    const tvPayload = {
+      mirror,
+      entries,
+      lists: entries,
+      catalogOrder,
+      channelIds,
+      updatedAt: now
+    };
+
+    await kv.put(`creatorsync:${auth.username}:tv`, JSON.stringify(tvPayload));
+    return json({ ok: true, mirror, updatedAt: now }, 200, corsHeaders());
+  }
+
+  return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
 }
 // Routes the Stremio, Nuvio and Wako apps call (configure, manifest, subtitles ping, catalog rows, meta, scrobble webhook), moved out of handleFetch (CQ-01).
 
@@ -117339,9 +117896,9 @@ async function builderConfigurePage(request, env, ctx, url) {
 
 // /:config/manifest.json, /manifest.json and /:config/subtitles/..., at their original place. Returns a Response promise, or null.
 function handleStremioManifestRoutes(request, env, ctx, url, path) {
-  let m = path.match(/^\/([^/]+)\/manifest\.json$/);
-  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/manifest\.json$/);
-  if (m) return installManifest(request, env, ctx, url, m);
+  let m = path.match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
+  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
+  if (m) return installManifest(request, env, ctx, url, m, path);
   if (path === "/manifest.json" || path.indexOf("/c/manifest.json") === 0) return bareManifest(request, url);
   m = path.match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
@@ -117350,14 +117907,17 @@ function handleStremioManifestRoutes(request, env, ctx, url, path) {
 }
 
 // /:config/manifest.json
-async function installManifest(request, env, ctx, url, m) {
+async function installManifest(request, env, ctx, url, m, rawPath) {
+  const currentPath = rawPath || (url ? url.pathname : "") || "";
+  const isTvLauncher = currentPath.endsWith("/tv/manifest.json") || currentPath.includes("/tv/manifest.json");
   // If this looks like a browser page-load (e.g. wako sent you here for
   // "Configure") rather than a JSON fetch by the app, send the user to
   // the actual editable configure page instead of showing raw JSON.
   if (isBrowserNavigation(request) && m[1] !== "nuvio-default") {
+    if (isTvLauncher) return Response.redirect(`${url.origin}/nuvio-tv-launcher`, 302);
     return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
   }
-  const resolved = await resolveConfig(m[1], env);
+  const resolved = await resolveConfig(m[1], env, { isTvLauncher });
   // Nothing by that name: a 404 the app can show, and nothing cached, so a
   // link whose record is not yet visible here works on the next try.
   if (resolved.unresolved) {
@@ -117390,7 +117950,7 @@ async function installManifest(request, env, ctx, url, m) {
   const userChannels = await loadUserChannelsForManifest(m[1], env);
   const hasLiveState = (hasLiveShelf || resolved.collectionsAddon || !!resolved.trackOwner || (Array.isArray(userChannels) && userChannels.length > 0));
   return jsonPublic(
-    buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
+    buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true, isTvLauncher),
     200,
     hasLiveState ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
@@ -117430,8 +117990,8 @@ async function subtitlesPing(request, env, ctx, path, m) {
 
 // /:config/catalog/:type/:id.json, at its original place. Returns a Response promise, or null.
 function handleStremioCatalogRoute(request, env, ctx, url, path) {
-  let m = path.match(/^(?:\/([^/]+))?\/catalog\/([^/]+)\/(.+)\.json$/);
-  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^(?:\/([^/]+))?\/catalog\/([^/]+)\/(.+)\.json$/);
+  let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
+  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
   if (m) return stremioCatalogRow(request, env, ctx, url, m);
   return null;
 }
@@ -117440,6 +118000,7 @@ function handleStremioCatalogRoute(request, env, ctx, url, path) {
 // optionally /:config/catalog/:type/:id/skip=N.json or /:config/catalog/:type/:id/search=Q.json
 async function stremioCatalogRow(request, env, ctx, url, m) {
   const [, config, type, idWithExtra] = m;
+  const isTvRoute = (url && url.pathname && url.pathname.includes("/tv/")) || false;
   const [id, extraStr] = idWithExtra.split("/");
   // New browse rows have explicit kind restrictions, even when a stale or
   // hand-edited install config tries to address the other kind.
@@ -117454,7 +118015,7 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
   if (isSearchCatalog) {
     if (!searchQuery) return jsonPublic({ metas: [] });
-    const searchConfig = config ? await resolveConfig(config, env) : {};
+    const searchConfig = config ? await resolveConfig(config, env, { isTvLauncher: isTvRoute }) : {};
     // Metadata off: an app still holding an old manifest gets no results.
     if (searchConfig.provideMetadata === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
     const searchLimited = await searchRateLimitResponse(request, env, ctx);
@@ -117493,7 +118054,7 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   // Kept as a whole object as well as destructured: the betterPosters*
   // style keys are passed through wholesale rather than one at a time.
   const resolvedConfig = config
-    ? await resolveConfig(config, env)
+    ? await resolveConfig(config, env, { isTvLauncher: isTvRoute })
     : { entries: [unconfiguredEntry], tmdbKey: null, mdblistKey: null, mdblistAccessToken: null, traktKey: null, traktAccessToken: null, simklKey: null, simklAccessToken: null, shuffleItems: false, trackCreatorName: null, trackOwner: null, region: null, hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: null, showBadgesStremio: false, showBadgesStremioAiringNext: false, showBadgesStremioContinueWatching: false, showBadgesStremioCatalogs: false, showBadgesStremioWatchlist: false };
 
   // As in the manifest route: most installs ask for catalogs far more often.
@@ -117705,7 +118266,7 @@ async function stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, s
 // /api/scrobble and /:config/meta/:type/:id.json, at their original place. Returns a Response promise, or null.
 function handleScrobbleAndMetaRoutes(request, env, ctx, url, path) {
   if (path.startsWith("/api/scrobble")) return mediaServerScrobbleRoute(request, env, ctx, url);
-  let m = path.match(/^(?:\/([^/]+))?\/meta\/([^/]+)\/(.+)\.json$/);
+  let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/meta\/([^/]+)\/(.+)\.json$/);
   if (m) return stremioMetaItem(env, ctx, url, m);
   return null;
 }
@@ -126660,6 +127221,7 @@ async function apiChannelUnpublish(request, env, ctx, path) {
 // The home page, the app shell paths and the shell sub-tab pages, at their original place. Returns a Response promise, or null.
 function handleAppShellRoutes(request, env, ctx, url, path) {
   if (path === "/" || path === "") return appHomePage(request, env, ctx, url);
+  if (path === "/nuvio-tv-launcher") return handleNuvioTvLauncherPage(request, env, ctx, url, path);
   if (APP_SHELL_PATHS.has(path)) return appShellPage(request, env, ctx, url);
   return appShellTabPage(request, env, ctx, url, path);
 }

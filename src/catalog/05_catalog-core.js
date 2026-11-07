@@ -6,7 +6,7 @@
 // the link said the day it was generated. A name that is absent or unchanged
 // leaves the config's own name alone -- a row with nothing live behind it has
 // nothing newer to say.
-function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false, collectionsAddon = false) {
+function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveNames = null, provideMetadata = true, includeStreamingRows = false, collectionsAddon = false, isTvLauncher = false) {
   let active = entries.filter((e) => e.enabled !== false);
   if (shuffleShelves && active.length > 1) {
     active = deterministicDailyShuffle(active, `shelves:${configSeed || ''}`);
@@ -27,26 +27,21 @@ function buildManifest(entries, origin, track, shuffleShelves, configSeed, liveN
   const metaPrefixes = provideMetadata ? ["tt", "tmdb:", "channel_"] : ["channel_"];
   const resources = ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: metaPrefixes }];
   const idPrefixes = metaPrefixes;
-  // Stremio/wako call every installed addon's subtitles resource the
-  // instant ANY video starts playing (checking for subtitle tracks) --
-  // regardless of which addon's catalog the video came from, or whether
-  // this addon has any subtitles to offer (it doesn't; see the
-  // /:config/subtitles/... route in 25_api-catalog-routes.js). That's a
-  // real, reliable "this just started playing" signal to hang automatic
-  // watch-tracking off of -- just not a *completion* one, since it's one
-  // request at the very start of playback, no ongoing position data. Only
-  // declared when the person has turned on "Auto-track playback" in
-  // Settings, since otherwise every video played anywhere would ping this
-  // addon for no reason.
-  if (track) {
+  // Subtitles resource pings on playback start for Stremio/Wako auto-tracking.
+  // Omitted for Nuvio TV Launcher since it reports true completion via /api/nuvio-tv/history.
+  if (track && !isTvLauncher) {
     resources.push({ name: "subtitles", types: ["movie", "series"], idPrefixes: ["tt", "tmdb", "kitsu"] });
   }
+  const desc = isTvLauncher
+    ? "Browse your custom catalogs, 24/7 channels, and curated lists on Nuvio TV Launcher."
+    : (collectionsAddon
+      ? "Access your saved Nuvio Collections, genres, studios, and custom folders."
+      : "Browse your own mdblist.com, trakt.tv, and themoviedb.org lists (and your MDBList watchlist) as catalogs on the home screen.");
   return {
-    id: collectionsAddon ? COLLECTIONS_ADDON_ID : ADDON_ID,
+    id: collectionsAddon ? COLLECTIONS_ADDON_ID : (isTvLauncher ? TV_LAUNCHER_ADDON_ID : ADDON_ID),
     version: ADDON_VERSION,
-    name: collectionsAddon ? COLLECTIONS_ADDON_NAME : ADDON_NAME,
-    description:
-      "Browse your own mdblist.com, trakt.tv, and themoviedb.org lists (and your MDBList watchlist) as catalogs on the home screen.",
+    name: collectionsAddon ? COLLECTIONS_ADDON_NAME : (isTvLauncher ? TV_LAUNCHER_ADDON_NAME : ADDON_NAME),
+    description: desc,
     logo: `${origin}/icon.png`,
     resources,
     types: ["movie", "series"],

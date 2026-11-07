@@ -406,7 +406,7 @@ function traktLimitNote(res, text, retrySec) {
 // GET /api/nuvio-tv/sync/:target -- unified sync route for Nuvio TV Launcher
 async function buildNuvioTvSyncDefaultResponse(url) {
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
-  const manifestUrl = `${url.origin}/nuvio-default/manifest.json`;
+  const manifestUrl = `${url.origin}/nuvio-default/tv/manifest.json`;
   const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/default`;
   const catalogIds = defaultConfig.catalogIds || defaultConfig.catalogOrder || [];
   const catalogOrder = defaultConfig.catalogOrder || catalogIds;
@@ -656,7 +656,7 @@ async function resolveNuvioTvTargetData(target, env) {
 
   if (username && env && env.CONFIGS) {
     try {
-      const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env) : null;
+      const creatorConfig = typeof resolveCreatorSyncConfig === "function" ? await resolveCreatorSyncConfig(username, env, { isTvLauncher: true }) : null;
       if (creatorConfig && Array.isArray(creatorConfig.entries)) {
         resolved = creatorConfig;
         updatedAt = Math.max(updatedAt, creatorConfig.updatedAt || 0);
@@ -1362,12 +1362,12 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   const channels = formatNuvioUserChannels(userChannelsRaw);
 
   const manifestUrl = username
-    ? `${url.origin}/${username}/manifest.json`
+    ? `${url.origin}/${username}/tv/manifest.json`
     : (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
-      ? `${url.origin}/${installToken}/manifest.json`
+      ? `${url.origin}/${installToken}/tv/manifest.json`
       : installToken.length === 43
-        ? `${url.origin}/i/${installToken}/manifest.json`
-        : `${url.origin}/${installToken}/manifest.json`;
+        ? `${url.origin}/i/${installToken}/tv/manifest.json`
+        : `${url.origin}/${installToken}/tv/manifest.json`;
 
   const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${username || target}`;
 

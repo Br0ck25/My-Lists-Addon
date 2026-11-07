@@ -73,10 +73,10 @@ const PREFIXES = {
 // Several of them read account data (a Creator list, a channel, an install
 // manifest), so "public" below means the handler decides what to show.
 const REGEX_ROUTES = {
-  "/^(?:\\/([^/]+))?\\/catalog\\/([^/]+)\\/(.+)\\.json$/": "public: Stremio catalog, the config in the URL is the credential",
-  "/^(?:\\/([^/]+))?\\/meta\\/([^/]+)\\/(.+)\\.json$/": "public: Stremio meta",
+  "/^(?:\\/([^/]+))?(?:\\/tv)?\\/catalog\\/([^/]+)\\/(.+)\\.json$/": "public: Stremio catalog, the config in the URL is the credential",
+  "/^(?:\\/([^/]+))?(?:\\/tv)?\\/meta\\/([^/]+)\\/(.+)\\.json$/": "public: Stremio meta",
   "/^\\/([^/]+)\\/configure$/": "public: the configure redirect",
-  "/^\\/([^/]+)\\/manifest\\.json$/": "public: Stremio manifest",
+  "/^\\/([^/]+)(?:\\/tv)?\\/manifest\\.json$/": "public: Stremio manifest",
   "/^\\/([^/]+)\\/subtitles\\/(movie|series)\\/([^/]+?)(?:\\/[^/]+)?\\.json$/": "public: Stremio subtitles",
   "/^\\/channel\\/([A-Za-z0-9_-]{1,64})$/": "public: a channel by its code",
   "/^\\/lists\\/([A-Za-z0-9-]+)$/": "public: a creator page",
