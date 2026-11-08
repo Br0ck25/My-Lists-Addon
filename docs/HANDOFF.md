@@ -1,27 +1,32 @@
 # Handoff
 
-## Current work: Dedicated Nuvio TV Launcher Add-on & Management Hub (2026-11-07)
+## Current work: Dedicated Nuvio TV Launcher Add-on & Management Hub (2026-11-08)
 - **Dedicated Add-on Identity (`app.my-list.tv`)**:
   - Split the TV Launcher add-on (`TV_LAUNCHER_ADDON_ID = "app.my-list.tv"`, `TV_LAUNCHER_ADDON_NAME = "My Lists TV Launcher"`) from the regular add-on (`app.my-list`) and Collections add-on (`app.my-list.collections`).
   - Eliminates device collisions in Nuvio profile sync when pairing TVs alongside desktop/mobile clients.
   - Manifest endpoints: `GET /:config/tv/manifest.json` and `/nuvio-default/tv/manifest.json` declare `id: "app.my-list.tv"`, drop unnecessary subtitles tracking (since TV Launcher uses `/api/nuvio-tv/history`), and expose custom channels and TV shelves.
   - Catalog and meta endpoints accept optional `/tv/` prefix (`/:config/tv/catalog/...` and `/:config/tv/meta/...`).
   - `/api/nuvio-tv/sync/:target` and `/api/nuvio-tv/device/claim` now return `manifestUrl` pointing to `/tv/manifest.json`.
-- **Dedicated Management Page (`/nuvio-tv-launcher`)**:
-  - Implemented standalone management hub at `https://mylistsaddon.com/nuvio-tv-launcher` using design system tokens (`DESIGN_TOKENS_CSS`).
-  - Features the **"Mirror Main My Lists Setup"** toggle:
-    - **ON (Default)**: Automatically mirrors the user's regular account catalogs with zero maintenance. Changes made on the main dashboard update the TV in real time.
-    - **OFF**: Unlocks independent list customization, removal, and reordering specifically for the living room TV screen without affecting mobile/desktop setups. Includes a "Copy from Main Setup" button.
-  - Displays pairing status, TV pairing buttons (`/link` and `/tv`), and copyable TV add-on manifest URL.
+- **Full Web App Shell on `/nuvio-tv-launcher`**:
+  - Rebuilt `https://mylistsaddon.com/nuvio-tv-launcher` to render the authentic cached web app shell (`data-app-shell="1"`), achieving 100% design system parity, dark mode, responsive layout, and navigation.
+  - Dynamically configures the desktop and mobile navigation bars with 5 dedicated tabs:
+    1. **Home (`tv-home`)**: Installed TV shelves with live mirror toggle switch (`#tvMirrorSwitch`), Pair TV Device link (`/link`), Copy TV Manifest (`.../tv/manifest.json`), Exit TV Mode, and shelf reordering (`↑`/`↓`) and removal (`✕`).
+    2. **Library (`tv-library`)**: Continue Watching, Watch History, and Nuvio Library cards with `Manage →` links, inline remove buttons, and `+ Add title` search modals.
+    3. **Collections (`tv-collections`)**: Mounts the authentic Nuvio collections view with `+ Create collection`, `Sync to Nuvio`, `Pull from Nuvio`, `Export JSON`, `Import JSON`, folders, and lists.
+    4. **Discover (`discover`)**: Full Discover shelves to quickly find items/lists to add.
+    5. **Search (`search`)**: Full Search interface to quickly find items/lists to add.
+  - Integrated list addition: Clicking `+ Add` in Discover or Search while on `/nuvio-tv-launcher` automatically adds catalogs to the TV Launcher configuration (`POST /api/nuvio-tv/config`).
 - **TV Configuration API (`/api/nuvio-tv/config`)**:
   - `GET /api/nuvio-tv/config`: returns current mirror status, active TV lists, main lists, and manifest/sync URLs.
   - `POST /api/nuvio-tv/config`: persists TV configuration in `creatorsync:${username}:tv` and bumps `updatedAt`.
   - Registered as `account` route in `tests/route-access.json`.
+- **Performance & Asset Size Budget**:
+  - Kept TV Hub script isolated to `/nuvio-tv-launcher` via `26_page-nuvio-tv-launcher.js`, avoiding bundle bloat on `/app-features.js` (preserving the $\le 433,210$ B gzip budget).
+  - All sub-helpers in `26_page-nuvio-tv-launcher.js` stay strictly under the 150-line limit (`tests/size-budget.test.mjs`).
 - **Verification**:
   - All 28 tests in `tests/nuvio-tv-sync.test.mjs` pass.
-  - All 173 tests in `tests/route-access.test.mjs` pass.
-  - Size budget passed (split into sub-150-line helpers in `src/page/26_page-nuvio-tv-launcher.js`, condensed `src/catalog/05_catalog-core.js` to 4,708 lines).
-  - Fast build, syntax, and identifier scope checks passed.
+  - All 248 tests across `tests/route-access.test.mjs`, `tests/size-budget.test.mjs`, `tests/asset-size-budget.test.mjs`, `tests/design-system.test.mjs`, and `tests/app-shell.test.mjs` pass.
+  - All changes pushed to remote branch `feat/nuvio-tv-launcher-addon`.
 
 ## Earlier work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
 - **16:9 Landscape Backdrops & Logo URL Cleanup for Channels**:
