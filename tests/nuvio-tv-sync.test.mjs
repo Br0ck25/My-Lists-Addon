@@ -1061,15 +1061,20 @@ describe("Nuvio TV Launcher - Dedicated TV Addon (app.my-list.tv) & /nuvio-tv-la
     assert.ok(!regManifestRes.body.catalogs.some((c) => c.name === "Kids Movies"));
   });
 
-  it("GET /nuvio-tv-launcher renders the dedicated TV management page", async () => {
+  it("GET /nuvio-tv-launcher renders the full web app shell with TV Launcher hub", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
     const res = await call(env, "/nuvio-tv-launcher");
     assert.equal(res.status, 200);
-    const html = typeof res.body === "string" ? res.body : JSON.stringify(res.body);
-    assert.ok(html.includes("Nuvio TV Launcher Hub"));
+    const html = res.text;
+    assert.ok(html.includes('data-app-shell="1"'));
     assert.ok(html.includes("app.my-list.tv"));
-    assert.ok(html.includes("mirrorToggle"));
-    assert.ok(html.includes("Mirror Main My Lists Setup"));
+    assert.ok(html.includes("initNuvioTvLauncherMode"));
+    assert.ok(html.includes("tv-home"));
+    assert.ok(html.includes("tv-library"));
+    assert.ok(html.includes("tv-collections"));
   });
 });
+
+
+
 

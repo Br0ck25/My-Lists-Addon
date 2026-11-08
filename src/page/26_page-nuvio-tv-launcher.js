@@ -1,452 +1,357 @@
-// Standalone management page for Nuvio TV Launcher (/nuvio-tv-launcher)
+// Standalone management page handler for Nuvio TV Launcher (/nuvio-tv-launcher)
+// Renders the full web app shell so the TV Launcher management view has
+// 100% parity with the rest of the website (design system tokens, navigation,
+// dark mode, modals, and responsive layout), with dedicated TV launcher controls.
 
-function handleNuvioTvLauncherPage(request, env, ctx, url, path) {
+function buildNuvioTvNavScript() {
+  return 'function buildTvNavTabsHtml(style) {\n' +
+    '  var isDesk = style === "desktop";\n' +
+    '  var tabs = [\n' +
+    '    { id: "tv-home", label: "Home", icon: "<path d=\\"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\\"></path><polyline points=\\"9 22 9 12 15 12 15 22\\"></polyline>" },\n' +
+    '    { id: "tv-library", label: "Library", icon: "<path d=\\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\\"></path><path d=\\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 6.5 2z\\"></path>" },\n' +
+    '    { id: "tv-collections", label: "Collections", icon: "<path d=\\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\\"></path>" },\n' +
+    '    { id: "discover", label: "Discover", icon: "<rect x=\\"3\\" y=\\"3\\" width=\\"7\\" height=\\"7\\"></rect><rect x=\\"14\\" y=\\"3\\" width=\\"7\\" height=\\"7\\"></rect><rect x=\\"14\\" y=\\"14\\" width=\\"7\\" height=\\"7\\"></rect><rect x=\\"3\\" y=\\"14\\" width=\\"7\\" height=\\"7\\"></rect>" },\n' +
+    '    { id: "search", label: "Search", icon: "<circle cx=\\"11\\" cy=\\"11\\" r=\\"8\\"></circle><line x1=\\"21\\" y1=\\"21\\" x2=\\"16.65\\" y2=\\"16.65\\"></line>" }\n' +
+    '  ];\n' +
+    '  return tabs.map(function(t) {\n' +
+    '    var active = t.id === tvLauncherActiveTab;\n' +
+    '    var cls = (isDesk ? "tab-btn" : "bottom-nav-item") + (active ? " active" : "");\n' +
+    '    var attrs = "class=\\"" + cls + "\\" data-tab=\\"" + t.id + "\\" data-act=\\"switchTvLauncherTab\\" data-act-args=\\"[&quot;" + t.id + "&quot;]\\"" +\n' +
+    '      (active ? " aria-current=\\"page\\"" : "");\n' +
+    '    if (isDesk) return "<a " + attrs + ">" + escapeHtml(t.label) + "</a>";\n' +
+    '    return "<a " + attrs + "><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"2\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\" aria-hidden=\\"true\\">" + t.icon + "</svg>" + escapeHtml(t.label) + "</a>";\n' +
+    '  }).join("");\n' +
+    '}\n' +
+    'function renderTvNavTabs() {\n' +
+    '  var d = document.getElementById("appShellDesktopNav");\n' +
+    '  if (d) d.innerHTML = "<nav aria-label=\\"Main navigation\\" class=\\"u-gap-8px u-ovx-auto\\" style=\\"display:flex; width:100%;\\">" + buildTvNavTabsHtml("desktop") + "</nav>";\n' +
+    '  var m = document.getElementById("appShellMobileNav");\n' +
+    '  if (m) m.innerHTML = buildTvNavTabsHtml("mobile");\n' +
+    '}\n' +
+    'function switchTvLauncherTab(tabId) {\n' +
+    '  if (!tabId) return;\n' +
+    '  tvLauncherActiveTab = tabId;\n' +
+    '  var tabBtns = document.querySelectorAll(".tab-btn, .bottom-nav-item");\n' +
+    '  for (var i = 0; i < tabBtns.length; i++) {\n' +
+    '    var b = tabBtns[i];\n' +
+    '    var on = b.getAttribute("data-tab") === tabId;\n' +
+    '    b.classList.toggle("active", on);\n' +
+    '    if (on) b.setAttribute("aria-current", "page");\n' +
+    '    else b.removeAttribute("aria-current");\n' +
+    '  }\n' +
+    '  var titles = {\n' +
+    '    "tv-home": { title: "Nuvio TV Launcher", sub: "Installed Shelves & Living Room Lineup" },\n' +
+    '    "tv-library": { title: "Library", sub: "Continue Watching, Watch History & Saved Library" },\n' +
+    '    "tv-collections": { title: "Collections", sub: "Nuvio Collections & Folders" },\n' +
+    '    "discover": { title: "Discover", sub: "Explore Popular & Streaming" },\n' +
+    '    "search": { title: "Search", sub: "Find Movies, Shows & Lists" }\n' +
+    '  };\n' +
+    '  var t = titles[tabId] || { title: "Nuvio TV Launcher", sub: "" };\n' +
+    '  var tEl = document.getElementById("pageMainTitle");\n' +
+    '  var sEl = document.getElementById("pageSubtitle");\n' +
+    '  if (tEl) tEl.textContent = t.title;\n' +
+    '  if (sEl) sEl.textContent = t.sub;\n' +
+    '  var panels = document.querySelectorAll(".tab-panel");\n' +
+    '  for (var j = 0; j < panels.length; j++) {\n' +
+    '    var p = panels[j];\n' +
+    '    p.hidden = (p.getAttribute("data-tab-panel") !== tabId);\n' +
+    '  }\n' +
+    '  if (tabId === "tv-collections") renderTvCollectionsTab();\n' +
+    '  else if (tabId === "tv-library") renderTvLibraryTab();\n' +
+    '  else if (tabId === "tv-home") renderTvHomeShelves();\n' +
+    '}\n';
+}
+
+function buildNuvioTvDomTemplates(origin) {
+  return 'function buildTvBannerHtml() {\n' +
+    '  var isMirror = tvLauncherIsMirror;\n' +
+    '  var username = (typeof activeCreator !== "undefined" && activeCreator && (activeCreator.displayName || activeCreator.creatorName))\n' +
+    '    || localStorage.getItem("myListAddon:creatorDisplayName")\n' +
+    '    || localStorage.getItem("myListAddon:creatorName")\n' +
+    '    || "Account";\n' +
+    '  var manifestUrl = ORIGIN + "/" + (encodeURIComponent(username !== "Account" ? username : "nuvio-default")) + "/tv/manifest.json";\n' +
+    '  return "<div class=\\"panel u-mb-16px\\" id=\\"nuvioTvBanner\\">" +\n' +
+    '    "<div class=\\"u-ai-center u-jc-space_between u-gap-12px u-fw2-wrap\\" style=\\"display:flex;\\">" +\n' +
+    '      "<div class=\\"u-ai-center u-gap-10px\\" style=\\"display:flex;\\">" +\n' +
+    '        "<span style=\\"font-size:24px;\\" aria-hidden=\\"true\\">&#128250;</span>" +\n' +
+    '        "<div>" +\n' +
+    '          "<div class=\\"u-fw-700 u-fs-v_font_size_lg u-c-v_text\\">Nuvio TV Launcher Setup</div>" +\n' +
+    '          "<div class=\\"u-fs-v_font_size_xs u-c-v_muted\\" id=\\"nuvioTvStatusText\\">" +\n' +
+    '            (username !== "Account" ? "@" + escapeHtml(username) + " &bull; " : "") +\n' +
+    '            (isMirror ? "Mirroring Main Setup" : "Custom Independent TV Shelves") +\n' +
+    '            " &bull; app.my-list.tv" +\n' +
+    '          "</div>" +\n' +
+    '        "</div>" +\n' +
+    '      "</div>" +\n' +
+    '      "<div class=\\"u-ai-center u-gap-8px u-fw2-wrap\\" style=\\"display:flex;\\">" +\n' +
+    '        "<a href=\\"/link\\" class=\\"lc-btn secondary u-fs-v_font_size_xs\\">Pair TV Device</a>" +\n' +
+    '        "<button type=\\"button\\" class=\\"lc-btn secondary u-fs-v_font_size_xs\\" data-act=\\"copyTvManifestUrl\\" data-act-args=\\"[&quot;" + escapeAttr(manifestUrl) + "&quot;]\\">Copy TV Manifest</button>" +\n' +
+    '        "<a href=\\"/catalogs\\" class=\\"lc-btn ghost u-fs-v_font_size_xs\\">Exit TV Mode &rarr;</a>" +\n' +
+    '      "</div>" +\n' +
+    '    "</div>" +\n' +
+    '    "<div class=\\"u-bdt-1px_solid_v_border u-mt-12px u-pt-12px u-ai-center u-jc-space_between u-gap-12px\\" style=\\"display:flex;\\">" +\n' +
+    '      "<div class=\\"u-flex-1 u-minw-0\\">" +\n' +
+    '        "<span class=\\"u-fw-600 u-fs-v_font_size_sm u-c-v_text\\" style=\\"display:block;\\">Mirror Main Add-on Setup</span>" +\n' +
+    '        "<span class=\\"u-fs-v_font_size_xs u-c-v_muted u-mt-2px\\" style=\\"display:block;\\">When ON, TV automatically mirrors all catalogs from your main account. Turn OFF to customize independent shelves for TV.</span>" +\n' +
+    '      "</div>" +\n' +
+    '      "<label class=\\"ui-toggle\\" aria-label=\\"Mirror Main Add-on Setup\\">" +\n' +
+    '        "<input type=\\"checkbox\\" id=\\"tvMirrorSwitch\\" " + (isMirror ? "checked" : "") + " data-act=\\"onTvMirrorToggle\\" data-act-args=\\"[&quot;@checked&quot;]\\">" +\n' +
+    '        "<span class=\\"ui-toggle-slider\\"></span>" +\n' +
+    '      "</label>" +\n' +
+    '    "</div>" +\n' +
+    '  "</div>";\n' +
+    '}\n' +
+    'function buildTvHomePanelHtml() {\n' +
+    '  return "<div class=\\"tab-panel\\" data-tab-panel=\\"tv-home\\" id=\\"content-tv-home\\" role=\\"tabpanel\\">" +\n' +
+    '    buildTvBannerHtml() +\n' +
+    '    "<div class=\\"panel\\">" +\n' +
+    '      "<div class=\\"shelf-header u-mb-12px u-ai-center u-jc-space_between u-gap-12px\\" style=\\"display:flex; flex-wrap:wrap;\\">" +\n' +
+    '        "<div>" +\n' +
+    '          "<h2 class=\\"panel-title u-mb-0\\">TV Installed Shelves</h2>" +\n' +
+    '          "<p class=\\"u-m-0 u-c-v_muted u-fs-v_font_size_sm\\">Active catalog rows displayed on your Nuvio TV Launcher home screen.</p>" +\n' +
+    '        "</div>" +\n' +
+    '        "<div class=\\"actions u-fd-row u-fw2-wrap u-ai-center u-gap-6px u-fsh-0\\" style=\\"display:flex;\\">" +\n' +
+    '          "<button type=\\"button\\" class=\\"primary lc-btn\\" data-act=\\"openAddShelfModal\\">+ New Catalog</button>" +\n' +
+    '          "<button type=\\"button\\" class=\\"secondary lc-btn\\" id=\\"tvCopyMainBtn\\" data-act=\\"copyTvMainSetup\\" style=\\"display:" + (tvLauncherIsMirror ? "none" : "inline-flex") + ";\\">Copy from Main Setup</button>" +\n' +
+    '          "<button type=\\"button\\" class=\\"secondary lc-btn refresh-btn\\" data-act=\\"renderTvHomeShelves\\" title=\\"Refresh TV shelves\\">Refresh</button>" +\n' +
+    '        "</div>" +\n' +
+    '      "</div>" +\n' +
+    '      "<div id=\\"tvHomeShelvesNotice\\"></div>" +\n' +
+    '      "<div id=\\"tvHomeShelvesList\\"></div>" +\n' +
+    '    "</div>" +\n' +
+    '  "</div>";\n' +
+    '}\n' +
+    'function buildTvLibraryPanelHtml() {\n' +
+    '  return "<div class=\\"tab-panel\\" data-tab-panel=\\"tv-library\\" id=\\"content-tv-library\\" role=\\"tabpanel\\" hidden>" +\n' +
+    '    "<div class=\\"panel u-mb-14px\\">" +\n' +
+    '      "<div class=\\"shelf-header u-mb-10px u-ai-center u-jc-space_between u-gap-12px\\" style=\\"display:flex; flex-wrap:wrap;\\">" +\n' +
+    '        "<div>" +\n' +
+    '          "<h2 class=\\"panel-title u-mb-0\\">Your Nuvio Library</h2>" +\n' +
+    '          "<p class=\\"u-m-0 u-c-v_muted u-fs-v_font_size_sm\\">Continue Watching, Watch History, and Library items from your connected Nuvio account.</p>" +\n' +
+    '        "</div>" +\n' +
+    '        "<button type=\\"button\\" class=\\"secondary lc-btn refresh-btn\\" data-act=\\"renderTvLibraryTab\\" title=\\"Refresh library\\">Refresh</button>" +\n' +
+    '      "</div>" +\n' +
+    '    "</div>" +\n' +
+    '    "<div id=\\"tvLibraryContent\\"></div>" +\n' +
+    '  "</div>";\n' +
+    '}\n' +
+    'function buildTvCollectionsPanelHtml() {\n' +
+    '  return "<div class=\\"tab-panel\\" data-tab-panel=\\"tv-collections\\" id=\\"content-tv-collections\\" role=\\"tabpanel\\" hidden>" +\n' +
+    '    "<div id=\\"tvCollectionsResult\\"></div>" +\n' +
+    '  "</div>";\n' +
+    '}\n';
+}
+
+function buildNuvioTvConfigScript(origin) {
+  return 'var ORIGIN = ' + JSON.stringify(origin || '') + ' || (typeof location !== "undefined" ? location.origin : "");\n' +
+    'var tvLauncherConfig = null, tvLauncherMainLists = [], tvLauncherTvLists = [], tvLauncherIsMirror = true, tvLauncherActiveTab = "tv-home";\n' +
+    'function isTvLauncherPage() { return typeof window !== "undefined" && window.location && window.location.pathname === "/nuvio-tv-launcher"; }\n' +
+    'async function loadTvLauncherConfig() {\n' +
+    '  try {\n' +
+    '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
+    '    var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
+    '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "") + (creatorKey ? (creatorName ? "&" : "?") + "creatorKey=" + encodeURIComponent(creatorKey) : "");\n' +
+    '    var res = (typeof creatorApiFetch === "function") ? await creatorApiFetch(url, { credentials: "same-origin" }) : await fetch(url, { credentials: "same-origin" });\n' +
+    '    if (res && res.ok) {\n' +
+    '      var data = await res.json();\n' +
+    '      if (data && data.ok) {\n' +
+    '        tvLauncherConfig = data;\n' +
+    '        tvLauncherIsMirror = data.mirror !== false;\n' +
+    '        tvLauncherMainLists = Array.isArray(data.mainLists) ? data.mainLists : [];\n' +
+    '        tvLauncherTvLists = Array.isArray(data.tvLists) ? data.tvLists : [];\n' +
+    '        var sw = document.getElementById("tvMirrorSwitch");\n' +
+    '        if (sw) sw.checked = tvLauncherIsMirror;\n' +
+    '        var copyBtn = document.getElementById("tvCopyMainBtn");\n' +
+    '        if (copyBtn) copyBtn.style.display = tvLauncherIsMirror ? "none" : "inline-flex";\n' +
+    '        renderTvHomeShelves();\n' +
+    '      }\n' +
+    '    }\n' +
+    '  } catch (err) { console.error("loadTvLauncherConfig error:", err); }\n' +
+    '}\n' +
+    'async function saveTvLauncherConfig(mirrorVal, listsVal) {\n' +
+    '  try {\n' +
+    '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
+    '    var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
+    '    var payload = { creatorName: creatorName, creatorKey: creatorKey, mirror: mirrorVal !== undefined ? mirrorVal : tvLauncherIsMirror, lists: listsVal !== undefined ? listsVal : (tvLauncherIsMirror ? tvLauncherMainLists : tvLauncherTvLists) };\n' +
+    '    var res = (typeof creatorApiFetch === "function")\n' +
+    '      ? await creatorApiFetch(ORIGIN + "/api/nuvio-tv/config", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) })\n' +
+    '      : await fetch(ORIGIN + "/api/nuvio-tv/config", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) });\n' +
+    '    if (res && res.ok) { showToast("Saved TV Launcher setup.", "success"); return true; }\n' +
+    '    showToast("Could not save TV setup.", "error"); return false;\n' +
+    '  } catch (err) { console.error("saveTvLauncherConfig error:", err); showToast("Network error while saving TV setup.", "error"); return false; }\n' +
+    '}\n' +
+    'function turnOffTvMirrorAndCustomize() {\n' +
+    '  tvLauncherIsMirror = false;\n' +
+    '  if (!tvLauncherTvLists.length) { var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof entries !== "undefined") ? entries : []); tvLauncherTvLists = JSON.parse(JSON.stringify(src)); }\n' +
+    '  var sw = document.getElementById("tvMirrorSwitch"); if (sw) sw.checked = false;\n' +
+    '  saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves();\n' +
+    '}\n' +
+    'function copyTvMainSetup() {\n' +
+    '  var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof entries !== "undefined") ? entries : []);\n' +
+    '  tvLauncherTvLists = JSON.parse(JSON.stringify(src)); saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves(); showToast("Copied catalogs from main setup.", "success");\n' +
+    '}\n' +
+    'function onTvMirrorToggle(checked) {\n' +
+    '  tvLauncherIsMirror = !!checked;\n' +
+    '  if (!tvLauncherIsMirror && !tvLauncherTvLists.length) { var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof entries !== "undefined") ? entries : []); tvLauncherTvLists = JSON.parse(JSON.stringify(src)); }\n' +
+    '  saveTvLauncherConfig(tvLauncherIsMirror, tvLauncherIsMirror ? tvLauncherMainLists : tvLauncherTvLists); renderTvHomeShelves();\n' +
+    '}\n' +
+    'function copyTvManifestUrl(url) {\n' +
+    '  if (!url) return;\n' +
+    '  try { navigator.clipboard.writeText(url); showToast("Copied TV Manifest URL to clipboard.", "success"); }\n' +
+    '  catch(e) { showToast("Manifest URL: " + url, "info"); }\n' +
+    '}\n';
+}
+
+function buildNuvioTvShelvesAndLibraryScript() {
+  return 'function renderTvHomeShelves() {\n' +
+    '  var container = document.getElementById("tvHomeShelvesList");\n' +
+    '  var noticeEl = document.getElementById("tvHomeShelvesNotice");\n' +
+    '  if (!container) return;\n' +
+    '  var isMirror = tvLauncherIsMirror;\n' +
+    '  var sw = document.getElementById("tvMirrorSwitch");\n' +
+    '  if (sw) sw.checked = isMirror;\n' +
+    '  var copyBtn = document.getElementById("tvCopyMainBtn");\n' +
+    '  if (copyBtn) copyBtn.style.display = isMirror ? "none" : "inline-flex";\n' +
+    '  if (noticeEl) {\n' +
+    '    noticeEl.innerHTML = isMirror\n' +
+    '      ? "<div class=\\"u-p-12px_16px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-14px u-ai-center u-jc-space_between u-gap-12px\\" style=\\"display:flex; flex-wrap:wrap;\\"><div class=\\"u-flex-1 u-minw-0\\"><span class=\\"u-fw-600 u-fs-v_font_size_sm u-c-v_text\\" style=\\"display:block;\\">Mirroring Active</span><span class=\\"u-fs-v_font_size_xs u-c-v_muted u-mt-2px\\" style=\\"display:block;\\">Your TV displays the same shelves as your main account. Changes on the main dashboard reflect on your TV instantly.</span></div><button type=\\"button\\" class=\\"lc-btn secondary u-fs-v_font_size_xs\\" data-act=\\"turnOffTvMirrorAndCustomize\\">Customize Separate TV Shelves</button></div>"\n' +
+    '      : "<div class=\\"u-p-12px_16px u-br-v_radius_md u-bg-v_surface u-bd-1px_solid_v_border u-mb-14px\\"><span class=\\"u-fw-600 u-fs-v_font_size_sm u-c-v_text\\" style=\\"display:block;\\">Custom TV Lineup Active</span><span class=\\"u-fs-v_font_size_xs u-c-v_muted u-mt-2px\\" style=\\"display:block;\\">This TV maintains its own independent catalogs and shelf order. Reorder with &uarr; and &darr; or remove items below.</span></div>";\n' +
+    '  }\n' +
+    '  var lists = isMirror ? ((tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof entries !== "undefined" && entries.length) ? entries : [])) : tvLauncherTvLists;\n' +
+    '  if (!lists.length) { container.innerHTML = "<p class=\\"u-ta-center u-mt-14px u-c-v_muted u-fs-v_font_size_sm\\">No shelves found. Use <strong>+ New Catalog</strong> or turn on <strong>Mirror Main Setup</strong> above.</p>"; return; }\n' +
+    '  container.innerHTML = lists.map(function(item, idx) {\n' +
+    '    var title = item.name || "Untitled Catalog";\n' +
+    '    var type = item.type || "mixed";\n' +
+    '    var isFirst = idx === 0, isLast = idx === lists.length - 1;\n' +
+    '    var actionsHtml = isMirror\n' +
+    '      ? "<span class=\\"u-fs-v_font_size_xs u-c-v_muted u-p-2px_8px u-br-v_radius_pill u-bd-1px_solid_v_border\\">Mirrored</span>"\n' +
+    '      : "<div class=\\"u-ai-center u-gap-4px\\" style=\\"display:flex;\\"><button type=\\"button\\" class=\\"lc-btn ghost\\" data-act=\\"moveTvShelf\\" data-act-args=\\"[" + idx + ",-1]\\"" + (isFirst ? " disabled" : "") + " aria-label=\\"Up\\">&uarr;</button><button type=\\"button\\" class=\\"lc-btn ghost\\" data-act=\\"moveTvShelf\\" data-act-args=\\"[" + idx + ",1]\\"" + (isLast ? " disabled" : "") + " aria-label=\\"Down\\">&darr;</button><button type=\\"button\\" class=\\"lc-btn danger\\" data-act=\\"removeTvShelfItem\\" data-act-args=\\"[" + idx + "]\\" aria-label=\\"Remove\\" style=\\"color:var(--color-danger);\\">&#10005;</button></div>";\n' +
+    '    return "<div class=\\"list-card u-mb-8px\\" style=\\"display:flex; align-items:center; justify-content:space-between; padding:var(--space-2) var(--space-3);\\"><div class=\\"u-ai-center u-gap-10px u-minw-0\\" style=\\"display:flex;\\"><span class=\\"u-fw-600 u-fs-v_font_size_sm u-c-v_text u-to-ellipsis u-minw-0\\">" + escapeHtml(title) + "</span><span class=\\"u-fs-v_font_size_xs u-c-v_muted u-p-2px_6px u-br-v_radius_sm u-bg-v_surface_raised\\">" + escapeHtml(type) + "</span></div>" + actionsHtml + "</div>";\n' +
+    '  }).join("");\n' +
+    '}\n' +
+    'function moveTvShelf(idx, dir) {\n' +
+    '  if (tvLauncherIsMirror) return;\n' +
+    '  var target = idx + dir;\n' +
+    '  if (target < 0 || target >= tvLauncherTvLists.length) return;\n' +
+    '  var item = tvLauncherTvLists.splice(idx, 1)[0]; tvLauncherTvLists.splice(target, 0, item);\n' +
+    '  saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves();\n' +
+    '}\n' +
+    'function removeTvShelfItem(idx) {\n' +
+    '  if (tvLauncherIsMirror) return;\n' +
+    '  if (idx < 0 || idx >= tvLauncherTvLists.length) return;\n' +
+    '  var rem = tvLauncherTvLists.splice(idx, 1)[0]; saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves(); showToast("Removed \\"" + (rem.name || "Catalog") + "\\".", "success");\n' +
+    '}\n' +
+    'function renderTvLibraryTab() {\n' +
+    '  var box = document.getElementById("tvLibraryContent"); if (!box) return;\n' +
+    '  var isConnected = !!(typeof mediaAppListsLive !== "undefined" && mediaAppListsLive.nuvio);\n' +
+    '  if (!isConnected) {\n' +
+    '    box.innerHTML = "<div class=\\"panel u-ta-center u-p-24px\\"><div style=\\"font-size:32px; margin-bottom:8px;\\" aria-hidden=\\"true\\">&#128218;</div><h3 class=\\"u-fs-v_font_size_lg u-fw-700 u-c-v_text u-mb-6px\\">Connect Your Nuvio Account</h3><p class=\\"u-fs-v_font_size_sm u-c-v_muted u-maxw-420px u-m-0_auto_16px\\">Connect your Nuvio account to manage Continue Watching, Watch History, and Library items directly from this dashboard.</p><button type=\\"button\\" class=\\"lc-btn primary\\" data-act=\\"toggleListsMediaAppConnection\\" data-act-args=\\"[&quot;nuvio&quot;]\\">Connect Nuvio</button></div>";\n' +
+    '    return;\n' +
+    '  }\n' +
+    '  var cards = [\n' +
+    '    { title: "Continue Watching", sub: "Titles currently in progress.", slug: "continue-watching", slot: "tvLibraryCwSlot", add: false },\n' +
+    '    { title: "Watch History", sub: "Titles you have watched.", slug: "watch-history", slot: "tvLibraryWhSlot", add: true },\n' +
+    '    { title: "Nuvio Library", sub: "Movies and shows saved in your library.", slug: "library", slot: "tvLibraryLibSlot", add: true }\n' +
+    '  ];\n' +
+    '  box.innerHTML = "<div class=\\"u-fd-column u-gap-14px\\" style=\\"display:flex;\\">" +\n' +
+    '    cards.map(function(c) {\n' +
+    '      return "<div class=\\"panel\\"><div class=\\"shelf-header u-mb-10px u-ai-center u-jc-space_between\\" style=\\"display:flex;\\"><div><h3 class=\\"panel-title u-mb-0\\">" + c.title + "</h3><p class=\\"u-m-0 u-c-v_muted u-fs-v_font_size_xs\\">" + c.sub + "</p></div><div class=\\"u-gap-6px u-ai-center\\" style=\\"display:flex;\\">" + (c.add ? "<button type=\\"button\\" class=\\"lc-btn primary u-fs-v_font_size_xs\\" data-act=\\"openTvMediaAdd\\" data-act-args=\\"[&quot;" + c.slug + "&quot;]\\">+ Add title</button>" : "") + "<button type=\\"button\\" class=\\"lc-btn secondary u-fs-v_font_size_xs\\" data-act=\\"openTvMediaAll\\" data-act-args=\\"[&quot;" + c.slug + "&quot;]\\">Manage &rarr;</button></div></div><div id=\\"" + c.slot + "\\" class=\\"poster-preview-slot\\" data-url=\\"autotrack:nuvio-" + c.slug + ":mixed\\" data-type=\\"mixed\\"></div></div>";\n' +
+    '    }).join("") + "</div>";\n' +
+    '  if (typeof populateSearchResultPosters === "function") populateSearchResultPosters();\n' +
+    '}\n' +
+    'function openTvMediaAdd(target) {\n' +
+    '  window._mediaHistoryAddProvider = "nuvio";\n' +
+    '  window._mediaAppAddTarget = target;\n' +
+    '  window._currentListDetailsParams = { listUrl: "autotrack:nuvio-" + target + ":mixed" };\n' +
+    '  if (typeof openMediaHistoryAdd === "function") openMediaHistoryAdd();\n' +
+    '}\n' +
+    'function openTvMediaAll(slug) {\n' +
+    '  if (typeof openMediaAppListDetails === "function") openMediaAppListDetails("nuvio", slug);\n' +
+    '}\n';
+}
+
+function buildNuvioTvClientLogicScript(origin) {
+  return 'function renderTvCollectionsTab() {\n' +
+    '  var container = document.getElementById("tvCollectionsResult"); if (!container) return;\n' +
+    '  var subCol = document.getElementById("listsSubCollections");\n' +
+    '  if (subCol) {\n' +
+    '    subCol.style.display = "block";\n' +
+    '    if (subCol.parentNode !== container) container.appendChild(subCol);\n' +
+    '  }\n' +
+    '  if (typeof renderCustomCollections === "function") renderCustomCollections();\n' +
+    '}\n' +
+    'function addTvCatalogRow(name, url, type) {\n' +
+    '  if (!url) return;\n' +
+    '  if (tvLauncherIsMirror) turnOffTvMirrorAndCustomize();\n' +
+    '  var cleanUrl = String(url).trim(), cleanType = type || "mixed", cleanName = name || "New Catalog";\n' +
+    '  var exists = tvLauncherTvLists.some(function(it) { return it.url === cleanUrl && it.type === cleanType; });\n' +
+    '  if (exists) { showToast("\\"" + cleanName + "\\" is already on your TV shelves.", "info"); return; }\n' +
+    '  tvLauncherTvLists.push({ name: cleanName, url: cleanUrl, type: cleanType, enabled: true });\n' +
+    '  saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves(); showToast("Added \\"" + cleanName + "\\" to TV Launcher shelves.", "success");\n' +
+    '}\n' +
+    'function initNuvioTvLauncherMode() {\n' +
+    '  if (!isTvLauncherPage()) return;\n' +
+    '  document.documentElement.setAttribute("data-tv-launcher", "1");\n' +
+    '  renderTvNavTabs();\n' +
+    '  var mainHost = document.querySelector(".page") || document.querySelector("main") || document.body;\n' +
+    '  if (mainHost && !document.getElementById("content-tv-home")) {\n' +
+    '    var tvPanelsWrap = document.createElement("div");\n' +
+    '    tvPanelsWrap.id = "tvPanelsWrap";\n' +
+    '    tvPanelsWrap.innerHTML = buildTvHomePanelHtml() + buildTvLibraryPanelHtml() + buildTvCollectionsPanelHtml();\n' +
+    '    var catalogsPanel = document.getElementById("content-catalogs");\n' +
+    '    if (catalogsPanel && catalogsPanel.parentNode) catalogsPanel.parentNode.insertBefore(tvPanelsWrap, catalogsPanel);\n' +
+    '    else mainHost.insertBefore(tvPanelsWrap, mainHost.firstChild);\n' +
+    '  }\n' +
+    '  document.addEventListener("click", function(e) {\n' +
+    '    if (!isTvLauncherPage()) return;\n' +
+    '    var btn = e.target && e.target.closest ? e.target.closest(".list-add-btn, .myListAddBtn") : null;\n' +
+    '    if (!btn || btn.closest("#content-tv-home") || btn.closest("#content-tv-library")) return;\n' +
+    '    var url = btn.dataset.url, name = btn.dataset.name, type = btn.dataset.type;\n' +
+    '    if (url && !btn.classList.contains("is-added")) addTvCatalogRow(name, url, type);\n' +
+    '  });\n' +
+    '  switchTvLauncherTab("tv-home");\n' +
+    '  loadTvLauncherConfig();\n' +
+    '}\n' +
+    'if (typeof document !== "undefined") {\n' +
+    '  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initNuvioTvLauncherMode);\n' +
+    '  else initNuvioTvLauncherMode();\n' +
+    '}\n' +
+    'window.isTvLauncherPage = isTvLauncherPage;\n' +
+    'window.switchTvLauncherTab = switchTvLauncherTab;\n' +
+    'window.renderTvHomeShelves = renderTvHomeShelves;\n' +
+    'window.turnOffTvMirrorAndCustomize = turnOffTvMirrorAndCustomize;\n' +
+    'window.copyTvMainSetup = copyTvMainSetup;\n' +
+    'window.moveTvShelf = moveTvShelf;\n' +
+    'window.removeTvShelfItem = removeTvShelfItem;\n' +
+    'window.onTvMirrorToggle = onTvMirrorToggle;\n' +
+    'window.copyTvManifestUrl = copyTvManifestUrl;\n' +
+    'window.renderTvLibraryTab = renderTvLibraryTab;\n' +
+    'window.openTvMediaAdd = openTvMediaAdd;\n' +
+    'window.openTvMediaAll = openTvMediaAll;\n' +
+    'window.renderTvCollectionsTab = renderTvCollectionsTab;\n' +
+    'window.addTvCatalogRow = addTvCatalogRow;\n' +
+    'window.initNuvioTvLauncherMode = initNuvioTvLauncherMode;\n';
+}
+
+function buildNuvioTvLauncherClientScript(origin) {
+  return '<script nonce="' + CSP_NONCE_PLACEHOLDER + '">\n' +
+    '(function() {\n' +
+    buildNuvioTvConfigScript(origin) +
+    buildNuvioTvShelvesAndLibraryScript() +
+    buildNuvioTvClientLogicScript(origin) +
+    buildNuvioTvNavScript() +
+    buildNuvioTvDomTemplates(origin) +
+    '})();\n' +
+    '</script>\n';
+}
+
+async function handleNuvioTvLauncherPage(request, env, ctx, url, path) {
   ctx.waitUntil(bumpStat(env, "pageviews"));
   const origin = url ? url.origin : "";
-  const html = buildNuvioTvLauncherPageHtml(origin);
-  return pageResponseWithBody(html, {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
-}
-
-function buildNuvioTvLauncherLayoutCss() {
-  return `
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: var(--space-4) var(--space-3);
-    }
-    .launcher-container {
-      width: 100%;
-      max-width: 840px;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-4);
-    }
-    .top-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      padding-bottom: var(--space-2);
-    }
-    .back-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      font-size: var(--font-size-sm);
-      color: var(--muted);
-      text-decoration: none;
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: var(--surface);
-    }
-    .back-btn:hover {
-      color: var(--text);
-      border-color: var(--border-strong);
-    }
-    .launcher-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: var(--space-4);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-    .card-title {
-      font-size: var(--font-size-lg);
-      font-weight: 600;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      margin-bottom: var(--space-2);
-    }
-    .card-desc {
-      font-size: var(--font-size-sm);
-      color: var(--muted);
-      margin-bottom: var(--space-3);
-      line-height: 1.5;
-    }
-  `;
-}
-
-function buildNuvioTvLauncherComponentCss() {
-  return `
-    .switch-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-      padding: var(--space-3);
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      margin-bottom: var(--space-3);
-    }
-    .switch-info { display: flex; flex-direction: column; gap: 2px; }
-    .switch-label { font-size: var(--font-size-base); font-weight: 600; color: var(--text); }
-    .switch-sub { font-size: var(--font-size-xs); color: var(--muted); }
-    .toggle-control {
-      position: relative;
-      display: inline-block;
-      width: 48px;
-      height: 26px;
-      flex-shrink: 0;
-    }
-    .toggle-control input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider {
-      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-      background-color: var(--border-strong);
-      transition: .2s; border-radius: 26px;
-    }
-    .toggle-slider:before {
-      position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
-      background-color: white; transition: .2s; border-radius: 50%;
-    }
-    .toggle-control input:checked + .toggle-slider { background-color: var(--accent); }
-    .toggle-control input:checked + .toggle-slider:before { transform: translateX(22px); }
-    .banner-info {
-      background: var(--surface-raised);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: var(--space-3);
-      font-size: var(--font-size-sm);
-      color: var(--muted);
-      margin-bottom: var(--space-3);
-      line-height: 1.4;
-    }
-    .items-list { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
-    .item-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: var(--space-2) var(--space-3); background: var(--bg);
-      border: 1px solid var(--border); border-radius: var(--radius-sm); gap: var(--space-2);
-    }
-    .item-left { display: flex; align-items: center; gap: var(--space-2); overflow: hidden; }
-    .item-title { font-size: var(--font-size-sm); font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .item-pill {
-      font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-pill);
-      background: var(--surface); border: 1px solid var(--border); color: var(--muted); flex-shrink: 0;
-    }
-    .copy-box {
-      display: flex; align-items: center; gap: var(--space-2); background: var(--bg);
-      border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-3);
-    }
-    .copy-input { flex: 1; background: transparent; border: none; color: var(--text); font-family: monospace; font-size: var(--font-size-xs); outline: none; }
-    .action-bar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
-    .toast-msg {
-      position: fixed; bottom: var(--space-4); right: var(--space-4);
-      background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
-      padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); font-size: var(--font-size-sm); z-index: 1000; display: none;
-    }
-  `;
-}
-
-function buildNuvioTvLauncherPageCss() {
-  return `${buildNuvioTvLauncherLayoutCss()}\n${buildNuvioTvLauncherComponentCss()}`;
-}
-
-function buildNuvioTvLauncherConfigJs() {
-  return `
-    var currentUsername = "";
-    var currentTvConfig = null;
-    var currentMainLists = [];
-    var currentTvLists = [];
-
-    function showToast(text) {
-      var t = document.getElementById("toastMsg");
-      if (!t) return;
-      t.textContent = text;
-      t.style.display = "block";
-      setTimeout(function() { t.style.display = "none"; }, 3000);
-    }
-
-    async function loadAccount() {
-      try {
-        var res = await fetch("/api/me", { credentials: "same-origin" });
-        if (res.ok) {
-          var data = await res.json();
-          if (data && data.username) {
-            currentUsername = data.username;
-            var pill = document.getElementById("userPill");
-            if (pill) pill.textContent = "@" + currentUsername;
-            var input = document.getElementById("manifestUrlInput");
-            if (input) input.value = window.location.origin + "/" + currentUsername + "/tv/manifest.json";
-            loadTvConfig();
-            return;
-          }
-        }
-      } catch (e) {}
-      var localName = localStorage.getItem("creatorName") || "";
-      if (localName) {
-        currentUsername = localName;
-        var pill = document.getElementById("userPill");
-        if (pill) pill.textContent = "@" + currentUsername;
-        var input = document.getElementById("manifestUrlInput");
-        if (input) input.value = window.location.origin + "/" + currentUsername + "/tv/manifest.json";
-        loadTvConfig();
-      } else {
-        var pill = document.getElementById("userPill");
-        if (pill) pill.textContent = "Guest Mode (Sign in on main dashboard to sync)";
-      }
-    }
-
-    async function loadTvConfig() {
-      if (!currentUsername) return;
-      try {
-        var creatorKey = localStorage.getItem("creatorKey") || "";
-        var url = "/api/nuvio-tv/config?creatorName=" + encodeURIComponent(currentUsername);
-        if (creatorKey) url += "&creatorKey=" + encodeURIComponent(creatorKey);
-        var res = await fetch(url, { credentials: "same-origin" });
-        if (res.ok) {
-          var data = await res.json();
-          currentTvConfig = data;
-          currentMainLists = data.mainLists || [];
-          currentTvLists = data.tvLists || [];
-          var toggle = document.getElementById("mirrorToggle");
-          if (toggle) toggle.checked = data.mirror !== false;
-          renderCatalogs();
-        }
-      } catch (e) {
-        console.error("Failed to load TV config", e);
-      }
-    }
-  `;
-}
-
-function buildNuvioTvLauncherDomJs() {
-  return `
-    function renderCatalogs() {
-      var toggle = document.getElementById("mirrorToggle");
-      var isMirror = toggle ? toggle.checked : true;
-      var banner = document.getElementById("mirrorBanner");
-      var customControls = document.getElementById("customControls");
-      var saveBar = document.getElementById("saveBar");
-      var listEl = document.getElementById("catalogsList");
-
-      if (isMirror) {
-        if (banner) {
-          banner.innerHTML = "&#9432; <strong>Mirroring Active:</strong> Your TV displays the same catalogs as your main account. Changes on the main dashboard reflect on your TV instantly.";
-        }
-        if (customControls) customControls.style.display = "none";
-        if (saveBar) saveBar.style.display = "none";
-
-        var lists = currentMainLists.length ? currentMainLists : [{ name: "Trending", type: "movie" }, { name: "Trending", type: "series" }, { name: "Popular", type: "movie" }, { name: "Popular", type: "series" }];
-        var html = "";
-        for (var i = 0; i < lists.length; i++) {
-          var it = lists[i];
-          html += '<div class="item-row">' +
-            '<div class="item-left">' +
-              '<span class="item-title">' + (it.name || "Untitled") + '</span>' +
-              '<span class="item-pill">' + (it.type || "catalog") + '</span>' +
-            '</div>' +
-            '<span class="item-pill">Mirrored</span>' +
-          '</div>';
-        }
-        if (listEl) listEl.innerHTML = html;
-      } else {
-        if (banner) {
-          banner.innerHTML = "&#9881; <strong>Custom TV Setup:</strong> This TV maintains its own independent catalogs and shelf order.";
-        }
-        if (customControls) customControls.style.display = "block";
-        if (saveBar) saveBar.style.display = "flex";
-
-        var lists = currentTvLists.length ? currentTvLists : currentMainLists;
-        if (!currentTvLists.length) currentTvLists = JSON.parse(JSON.stringify(lists));
-
-        var html = "";
-        for (var i = 0; i < currentTvLists.length; i++) {
-          var it = currentTvLists[i];
-          html += '<div class="item-row">' +
-            '<div class="item-left">' +
-              '<span class="item-title">' + (it.name || "Untitled") + '</span>' +
-              '<span class="item-pill">' + (it.type || "catalog") + '</span>' +
-            '</div>' +
-            '<button type="button" class="btn btn-ghost" data-remove-idx="' + i + '" style="color:var(--danger);">&#10005;</button>' +
-          '</div>';
-        }
-        if (!currentTvLists.length) {
-          html = '<div style="color:var(--muted); font-size:var(--font-size-sm);">No TV catalogs selected. Click &ldquo;Copy from Main Setup&rdquo; to begin.</div>';
-        }
-        if (listEl) listEl.innerHTML = html;
-
-        var removeBtns = listEl ? listEl.querySelectorAll("[data-remove-idx]") : [];
-        for (var b = 0; b < removeBtns.length; b++) {
-          removeBtns[b].addEventListener("click", function(e) {
-            var idx = parseInt(this.getAttribute("data-remove-idx"), 10);
-            if (!isNaN(idx)) {
-              currentTvLists.splice(idx, 1);
-              renderCatalogs();
-            }
-          });
-        }
-      }
-    }
-
-    async function saveTvConfig() {
-      if (!currentUsername) {
-        showToast("Please sign in to save TV setup.");
-        return;
-      }
-      var toggle = document.getElementById("mirrorToggle");
-      var isMirror = toggle ? toggle.checked : true;
-      var creatorKey = localStorage.getItem("creatorKey") || "";
-      var payload = {
-        creatorName: currentUsername,
-        creatorKey: creatorKey,
-        mirror: isMirror,
-        lists: isMirror ? currentMainLists : currentTvLists
-      };
-
-      try {
-        var res = await fetch("/api/nuvio-tv/config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          showToast("TV Launcher setup saved!");
-        } else {
-          showToast("Failed to save TV setup.");
-        }
-      } catch (e) {
-        showToast("Network error while saving.");
-      }
-    }
-
-    document.addEventListener("DOMContentLoaded", function() {
-      var copyBtn = document.getElementById("copyManifestBtn");
-      if (copyBtn) {
-        copyBtn.addEventListener("click", function() {
-          var input = document.getElementById("manifestUrlInput");
-          if (input) {
-            input.select();
-            navigator.clipboard.writeText(input.value);
-            showToast("Copied add-on manifest URL!");
-          }
-        });
-      }
-
-      var toggle = document.getElementById("mirrorToggle");
-      if (toggle) {
-        toggle.addEventListener("change", function() {
-          renderCatalogs();
-          saveTvConfig();
-        });
-      }
-
-      var copyMainBtn = document.getElementById("copyFromMainBtn");
-      if (copyMainBtn) {
-        copyMainBtn.addEventListener("click", function() {
-          currentTvLists = JSON.parse(JSON.stringify(currentMainLists));
-          renderCatalogs();
-          showToast("Copied catalogs from main setup!");
-        });
-      }
-
-      var saveBtn = document.getElementById("saveTvBtn");
-      if (saveBtn) saveBtn.addEventListener("click", saveTvConfig);
-
-      loadAccount();
-    });
-  `;
-}
-
-function buildNuvioTvLauncherPageJs() {
-  return `${buildNuvioTvLauncherConfigJs()}\n${buildNuvioTvLauncherDomJs()}`;
-}
-
-function buildNuvioTvLauncherPageHtml(origin) {
-  const css = buildNuvioTvLauncherPageCss();
-  const js = buildNuvioTvLauncherPageJs();
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nuvio TV Launcher Hub &bull; My Lists Addon</title>
-  <script nonce="${CSP_NONCE_PLACEHOLDER}">try { if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark-theme'); } catch (e) {}<\/script>
-  <style nonce="${CSP_NONCE_PLACEHOLDER}">
-${DESIGN_TOKENS_CSS}
-${css}
-  </style>
-</head>
-<body>
-  <div class="launcher-container">
-    <div class="top-bar">
-      <a href="/" class="back-btn">&#8592; Main Dashboard</a>
-      <span class="item-pill" id="userPill">Checking account&hellip;</span>
-    </div>
-
-    <!-- Status & Addon Manifest -->
-    <div class="launcher-card">
-      <div class="card-title">&#128250; Nuvio TV Launcher Add-on</div>
-      <div class="card-desc">
-        This dedicated version (<strong>app.my-list.tv</strong>) serves your living room TV screen with full Live TV channels, 16:9 landscape backdrops, and big-screen catalogs.
-      </div>
-
-      <div class="copy-box">
-        <input type="text" id="manifestUrlInput" class="copy-input" readonly value="${origin}/nuvio-default/tv/manifest.json">
-        <button type="button" class="btn btn-secondary" id="copyManifestBtn">Copy URL</button>
-      </div>
-
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="/link" class="btn btn-primary" id="pairTvBtn">Pair TV Device</a>
-        <a href="/tv" class="btn btn-secondary">Enter 6-Digit Code</a>
-      </div>
-    </div>
-
-    <!-- Mirroring & Catalogs -->
-    <div class="launcher-card">
-      <div class="card-title">&#128260; TV Catalogs &amp; Shelves</div>
-      <div class="card-desc">Choose whether your TV mirrors your regular My Lists catalogs or maintains an independent living room lineup.</div>
-
-      <div class="switch-row">
-        <div class="switch-info">
-          <div class="switch-label">Mirror Main My Lists Setup</div>
-          <div class="switch-sub">When enabled, any lists added on your main dashboard automatically sync to your TV.</div>
-        </div>
-        <label class="toggle-control">
-          <input type="checkbox" id="mirrorToggle" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="banner-info" id="mirrorBanner">
-        &#9432; <strong>Mirroring Active:</strong> Your TV displays the same catalogs as your main account. Changes on the main dashboard reflect on your TV instantly.
-      </div>
-
-      <div id="customControls" style="display:none; margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span class="switch-label">Independent TV Catalogs</span>
-          <button type="button" class="btn btn-secondary" id="copyFromMainBtn">Copy from Main Setup</button>
-        </div>
-      </div>
-
-      <div class="items-list" id="catalogsList">
-        <div style="color:var(--muted); font-size:var(--font-size-sm);">Loading catalogs&hellip;</div>
-      </div>
-
-      <div class="action-bar" id="saveBar" style="display:none;">
-        <button type="button" class="btn btn-primary" id="saveTvBtn">Save TV Setup</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="toast-msg" id="toastMsg"></div>
-
-  <script nonce="${CSP_NONCE_PLACEHOLDER}">${js}<\/script>
-</body>
-</html>`;
+  const baseHtml = renderPageCached(request, origin, {});
+  const scriptTag = buildNuvioTvLauncherClientScript(origin);
+  const fullHtml = baseHtml.indexOf("</body>") !== -1
+    ? baseHtml.replace("</body>", scriptTag + "</body>")
+    : baseHtml + scriptTag;
+  return await htmlPageResponse(request, fullHtml);
 }
