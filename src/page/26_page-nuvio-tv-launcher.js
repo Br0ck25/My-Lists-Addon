@@ -8,8 +8,10 @@ function buildNuvioTvNavScript() {
     '  var isDesk = style === "desktop";\n' +
     '  var tabs = [\n' +
     '    { id: "tv-home", label: "Home", icon: "<path d=\\"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\\"></path><polyline points=\\"9 22 9 12 15 12 15 22\\"></polyline>" },\n' +
-    '    { id: "tv-library", label: "Library", icon: "<path d=\\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\\"></path><path d=\\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 6.5 2z\\"></path>" },\n' +
+    '    { id: "tv-lists", label: "Lists", icon: "<path d=\\"M8 6h13\\"></path><path d=\\"M8 12h13\\"></path><path d=\\"M8 18h13\\"></path><path d=\\"M3 6h.01\\"></path><path d=\\"M3 12h.01\\"></path><path d=\\"M3 18h.01\\"></path>" },\n' +
+    '    { id: "tv-channels", label: "Channels", icon: "<rect x=\\"2\\" y=\\"7\\" width=\\"20\\" height=\\"15\\" rx=\\"2\\" ry=\\"2\\"></rect><polyline points=\\"17 2 12 7 7 2\\"></polyline>" },\n' +
     '    { id: "tv-collections", label: "Collections", icon: "<path d=\\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\\"></path>" },\n' +
+    '    { id: "tv-library", label: "Library", icon: "<path d=\\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\\"></path><path d=\\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 6.5 2z\\"></path>" },\n' +
     '    { id: "discover", label: "Discover", icon: "<rect x=\\"3\\" y=\\"3\\" width=\\"7\\" height=\\"7\\"></rect><rect x=\\"14\\" y=\\"3\\" width=\\"7\\" height=\\"7\\"></rect><rect x=\\"14\\" y=\\"14\\" width=\\"7\\" height=\\"7\\"></rect><rect x=\\"3\\" y=\\"14\\" width=\\"7\\" height=\\"7\\"></rect>" },\n' +
     '    { id: "search", label: "Search", icon: "<circle cx=\\"11\\" cy=\\"11\\" r=\\"8\\"></circle><line x1=\\"21\\" y1=\\"21\\" x2=\\"16.65\\" y2=\\"16.65\\"></line>" }\n' +
     '  ];\n' +
@@ -30,6 +32,7 @@ function buildNuvioTvNavScript() {
     '}\n' +
     'function switchTvLauncherTab(tabId) {\n' +
     '  if (!tabId) return;\n' +
+    '  if (tabId !== "list-details" && tabId !== "item-details") window._tvPreviousTab = tabId;\n' +
     '  tvLauncherActiveTab = tabId;\n' +
     '  var tabBtns = document.querySelectorAll(".tab-btn, .bottom-nav-item");\n' +
     '  for (var i = 0; i < tabBtns.length; i++) {\n' +
@@ -41,8 +44,10 @@ function buildNuvioTvNavScript() {
     '  }\n' +
     '  var titles = {\n' +
     '    "tv-home": { title: "Nuvio TV Launcher", sub: "Installed Shelves & Living Room Lineup" },\n' +
-    '    "tv-library": { title: "Library", sub: "Continue Watching, Watch History & Saved Library" },\n' +
+    '    "tv-lists": { title: "Lists", sub: "Custom, Connected & Liked Lists" },\n' +
+    '    "tv-channels": { title: "Channels", sub: "24/7 Continuous TV Streaming" },\n' +
     '    "tv-collections": { title: "Collections", sub: "Nuvio Collections & Folders" },\n' +
+    '    "tv-library": { title: "Library", sub: "Continue Watching, Watch History & Saved Library" },\n' +
     '    "discover": { title: "Discover", sub: "Explore Popular & Streaming" },\n' +
     '    "search": { title: "Search", sub: "Find Movies, Shows & Lists" }\n' +
     '  };\n' +
@@ -51,14 +56,29 @@ function buildNuvioTvNavScript() {
     '  var sEl = document.getElementById("pageSubtitle");\n' +
     '  if (tEl) tEl.textContent = t.title;\n' +
     '  if (sEl) sEl.textContent = t.sub;\n' +
+    '  var panelMap = {\n' +
+    '    "tv-home": "content-tv-home",\n' +
+    '    "tv-lists": "content-lists",\n' +
+    '    "tv-channels": "content-channels",\n' +
+    '    "tv-collections": "content-tv-collections",\n' +
+    '    "tv-library": "content-tv-library",\n' +
+    '    "discover": "content-discover",\n' +
+    '    "search": "content-search"\n' +
+    '  };\n' +
+    '  var targetPanelId = panelMap[tabId];\n' +
     '  var panels = document.querySelectorAll(".tab-panel");\n' +
     '  for (var j = 0; j < panels.length; j++) {\n' +
     '    var p = panels[j];\n' +
-    '    p.hidden = (p.getAttribute("data-tab-panel") !== tabId);\n' +
+    '    p.hidden = targetPanelId ? (p.id !== targetPanelId) : (p.getAttribute("data-tab-panel") !== tabId);\n' +
     '  }\n' +
-    '  if (tabId === "tv-collections") renderTvCollectionsTab();\n' +
+    '  if (tabId === "tv-home") renderTvHomeShelves();\n' +
+    '  else if (tabId === "tv-lists") renderTvListsTab();\n' +
+    '  else if (tabId === "tv-channels") renderTvChannelsTab();\n' +
+    '  else if (tabId === "tv-collections") renderTvCollectionsTab();\n' +
     '  else if (tabId === "tv-library") renderTvLibraryTab();\n' +
-    '  else if (tabId === "tv-home") renderTvHomeShelves();\n' +
+    '  else if (tabId === "discover") {\n' +
+    '    if (typeof filterDiscoverShelves === "function") filterDiscoverShelves(localStorage.getItem("myListAddon:discoverSubmenu") || "movie");\n' +
+    '  }\n' +
     '}\n';
 }
 
@@ -83,9 +103,8 @@ function buildNuvioTvDomTemplates(origin) {
     '        "</div>" +\n' +
     '      "</div>" +\n' +
     '      "<div class=\\"u-ai-center u-gap-8px u-fw2-wrap\\" style=\\"display:flex;\\">" +\n' +
-    '        "<a href=\\"/link\\" class=\\"lc-btn secondary u-fs-v_font_size_xs\\">Pair TV Device</a>" +\n' +
+    '        "<a href=\\"/link\\" target=\\"_blank\\" rel=\\"noopener\\" class=\\"lc-btn secondary u-fs-v_font_size_xs\\">Pair TV Device</a>" +\n' +
     '        "<button type=\\"button\\" class=\\"lc-btn secondary u-fs-v_font_size_xs\\" data-act=\\"copyTvManifestUrl\\" data-act-args=\\"[&quot;" + escapeAttr(manifestUrl) + "&quot;]\\">Copy TV Manifest</button>" +\n' +
-    '        "<a href=\\"/catalogs\\" class=\\"lc-btn ghost u-fs-v_font_size_xs\\">Exit TV Mode &rarr;</a>" +\n' +
     '      "</div>" +\n' +
     '    "</div>" +\n' +
     '    "<div class=\\"u-bdt-1px_solid_v_border u-mt-12px u-pt-12px u-ai-center u-jc-space_between u-gap-12px\\" style=\\"display:flex;\\">" +\n' +
@@ -145,6 +164,67 @@ function buildNuvioTvConfigScript(origin) {
   return 'var ORIGIN = ' + JSON.stringify(origin || '') + ' || (typeof location !== "undefined" ? location.origin : "");\n' +
     'var tvLauncherConfig = null, tvLauncherMainLists = [], tvLauncherTvLists = [], tvLauncherIsMirror = true, tvLauncherActiveTab = "tv-home";\n' +
     'function isTvLauncherPage() { return typeof window !== "undefined" && window.location && window.location.pathname === "/nuvio-tv-launcher"; }\n' +
+    'function isListAddedToTvConfig(url, type, slug) {\n' +
+    '  if (!Array.isArray(tvLauncherTvLists)) return false;\n' +
+    '  var cleanUrl = String(url || "").trim(), targetSlug = String(slug || "").trim();\n' +
+    '  if (!targetSlug && cleanUrl) {\n' +
+    '    if (cleanUrl.startsWith("autotrack:")) targetSlug = cleanUrl.split(":")[1] || "";\n' +
+    '    else if (cleanUrl.startsWith("custom:") && !cleanUrl.startsWith("custom:curated:")) targetSlug = cleanUrl.slice("custom:".length);\n' +
+    '    else if (cleanUrl.startsWith("customlist:v1:")) {\n' +
+    '      var p = (typeof parseCustomListPayloadClient === "function") ? parseCustomListPayloadClient(cleanUrl) : null;\n' +
+    '      if (p) targetSlug = p.localSlug || p.listSlug || p.creatorSlug || p.slug || "";\n' +
+    '    }\n' +
+    '  }\n' +
+    '  return tvLauncherTvLists.some(function(item) {\n' +
+    '    if (!item || !item.url) return false;\n' +
+    '    var u = String(item.url).trim();\n' +
+    '    if (cleanUrl && (u === cleanUrl || (cleanUrl.startsWith("autotrack:") && u.startsWith("autotrack:") && u.split(":")[1] === cleanUrl.split(":")[1]))) return true;\n' +
+    '    if (targetSlug) {\n' +
+    '      if (u === "custom:" + targetSlug || u === "autotrack:" + targetSlug) return true;\n' +
+    '      if (u.startsWith("autotrack:" + targetSlug + ":") || u.startsWith("autotrack:" + targetSlug)) return true;\n' +
+    '      if (u.startsWith("/lists/") && u.endsWith("/" + targetSlug)) return true;\n' +
+    '      var payload = (typeof parseCustomListPayloadClient === "function") ? parseCustomListPayloadClient(u) : null;\n' +
+    '      if (payload && (payload.localSlug === targetSlug || payload.listSlug === targetSlug || payload.creatorSlug === targetSlug || payload.slug === targetSlug)) return true;\n' +
+    '      if (item.name && item.name.toLowerCase() === targetSlug.toLowerCase().replace(/-/g, " ")) return true;\n' +
+    '    }\n' +
+    '    return false;\n' +
+    '  });\n' +
+    '}\n' +
+    'function removeTvCatalogRow(url, type, slug) {\n' +
+    '  if (!Array.isArray(tvLauncherTvLists)) return;\n' +
+    '  var cleanUrl = String(url || "").trim(), targetSlug = String(slug || "").trim();\n' +
+    '  if (!targetSlug && cleanUrl) {\n' +
+    '    if (cleanUrl.startsWith("autotrack:")) targetSlug = cleanUrl.split(":")[1] || "";\n' +
+    '    else if (cleanUrl.startsWith("custom:") && !cleanUrl.startsWith("custom:curated:")) targetSlug = cleanUrl.slice("custom:".length);\n' +
+    '    else if (cleanUrl.startsWith("customlist:v1:")) {\n' +
+    '      var p = (typeof parseCustomListPayloadClient === "function") ? parseCustomListPayloadClient(cleanUrl) : null;\n' +
+    '      if (p) targetSlug = p.localSlug || p.listSlug || p.creatorSlug || p.slug || "";\n' +
+    '    }\n' +
+    '  }\n' +
+    '  var remName = "";\n' +
+    '  tvLauncherTvLists = tvLauncherTvLists.filter(function(it) {\n' +
+    '    if (!it || !it.url) return false;\n' +
+    '    var u = String(it.url).trim();\n' +
+    '    var match = false;\n' +
+    '    if (cleanUrl && (u === cleanUrl || (cleanUrl.startsWith("autotrack:") && u.startsWith("autotrack:") && u.split(":")[1] === cleanUrl.split(":")[1]))) match = true;\n' +
+    '    if (!match && targetSlug) {\n' +
+    '      if (u === "custom:" + targetSlug || u === "autotrack:" + targetSlug) match = true;\n' +
+    '      else if (u.startsWith("autotrack:" + targetSlug + ":") || u.startsWith("autotrack:" + targetSlug)) match = true;\n' +
+    '      else if (u.startsWith("/lists/") && u.endsWith("/" + targetSlug)) match = true;\n' +
+    '      else {\n' +
+    '        var payload = (typeof parseCustomListPayloadClient === "function") ? parseCustomListPayloadClient(u) : null;\n' +
+    '        if (payload && (payload.localSlug === targetSlug || payload.listSlug === targetSlug || payload.creatorSlug === targetSlug || payload.slug === targetSlug)) match = true;\n' +
+    '        else if (it.name && it.name.toLowerCase() === targetSlug.toLowerCase().replace(/-/g, " ")) match = true;\n' +
+    '      }\n' +
+    '    }\n' +
+    '    if (match) { remName = it.name || "Catalog"; return false; }\n' +
+    '    return true;\n' +
+    '  });\n' +
+    '  saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves();\n' +
+    '  if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
+    '  if (remName) showToast("Removed \\"" + remName + "\\" from TV Launcher shelves.", "success");\n' +
+    '}\n' +
     'async function loadTvLauncherConfig() {\n' +
     '  try {\n' +
     '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
@@ -163,6 +243,8 @@ function buildNuvioTvConfigScript(origin) {
     '        var copyBtn = document.getElementById("tvCopyMainBtn");\n' +
     '        if (copyBtn) copyBtn.style.display = tvLauncherIsMirror ? "none" : "inline-flex";\n' +
     '        renderTvHomeShelves();\n' +
+    '        if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '        if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
     '      }\n' +
     '    }\n' +
     '  } catch (err) { console.error("loadTvLauncherConfig error:", err); }\n' +
@@ -181,23 +263,272 @@ function buildNuvioTvConfigScript(origin) {
     '}\n' +
     'function turnOffTvMirrorAndCustomize() {\n' +
     '  tvLauncherIsMirror = false;\n' +
-    '  if (!tvLauncherTvLists.length) { var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof entries !== "undefined") ? entries : []); tvLauncherTvLists = JSON.parse(JSON.stringify(src)); }\n' +
+    '  if (!tvLauncherTvLists.length) { var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof collectEntries === "function") ? collectEntries() : ((typeof entries !== "undefined") ? entries : [])); tvLauncherTvLists = JSON.parse(JSON.stringify(src)); }\n' +
     '  var sw = document.getElementById("tvMirrorSwitch"); if (sw) sw.checked = false;\n' +
     '  saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves();\n' +
+    '  if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
     '}\n' +
     'function copyTvMainSetup() {\n' +
-    '  var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof entries !== "undefined") ? entries : []);\n' +
+    '  var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof collectEntries === "function") ? collectEntries() : ((typeof entries !== "undefined") ? entries : []));\n' +
     '  tvLauncherTvLists = JSON.parse(JSON.stringify(src)); saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves(); showToast("Copied catalogs from main setup.", "success");\n' +
+    '  if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
     '}\n' +
     'function onTvMirrorToggle(checked) {\n' +
     '  tvLauncherIsMirror = !!checked;\n' +
-    '  if (!tvLauncherIsMirror && !tvLauncherTvLists.length) { var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof entries !== "undefined") ? entries : []); tvLauncherTvLists = JSON.parse(JSON.stringify(src)); }\n' +
+    '  if (!tvLauncherIsMirror && !tvLauncherTvLists.length) { var src = (tvLauncherMainLists && tvLauncherMainLists.length) ? tvLauncherMainLists : ((typeof collectEntries === "function") ? collectEntries() : ((typeof entries !== "undefined") ? entries : [])); tvLauncherTvLists = JSON.parse(JSON.stringify(src)); }\n' +
     '  saveTvLauncherConfig(tvLauncherIsMirror, tvLauncherIsMirror ? tvLauncherMainLists : tvLauncherTvLists); renderTvHomeShelves();\n' +
+    '  if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
+    '  if (tvLauncherActiveTab === "tv-channels" && typeof renderTvChannelsTab === "function") renderTvChannelsTab();\n' +
+    '  if (tvLauncherActiveTab === "tv-lists" && typeof renderTvListsTab === "function") renderTvListsTab();\n' +
     '}\n' +
     'function copyTvManifestUrl(url) {\n' +
     '  if (!url) return;\n' +
     '  try { navigator.clipboard.writeText(url); showToast("Copied TV Manifest URL to clipboard.", "success"); }\n' +
     '  catch(e) { showToast("Manifest URL: " + url, "info"); }\n' +
+    '}\n';
+}
+
+function buildNuvioTvNavInterceptorsScript() {
+  return 'function initTvNavInterceptors() {\n' +
+    '  var origPushState = history.pushState;\n' +
+    '  var origReplaceState = history.replaceState;\n' +
+    '  history.pushState = function(state, title, url) {\n' +
+    '    if (isTvLauncherPage() || (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1")) {\n' +
+    '      if (typeof url === "string") {\n' +
+    '        if (url.startsWith("/#")) url = "/nuvio-tv-launcher" + url.slice(1);\n' +
+    '        else if (url.startsWith("#")) url = "/nuvio-tv-launcher" + url;\n' +
+    '        else if (url.startsWith("/") && !url.startsWith("/nuvio-tv-launcher")) url = "/nuvio-tv-launcher" + (url.indexOf("#") !== -1 ? url.slice(url.indexOf("#")) : "");\n' +
+    '      }\n' +
+    '    }\n' +
+    '    return origPushState.apply(this, [state, title, url]);\n' +
+    '  };\n' +
+    '  history.replaceState = function(state, title, url) {\n' +
+    '    if (isTvLauncherPage() || (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1")) {\n' +
+    '      if (typeof url === "string") {\n' +
+    '        if (url.startsWith("/#")) url = "/nuvio-tv-launcher" + url.slice(1);\n' +
+    '        else if (url.startsWith("#")) url = "/nuvio-tv-launcher" + url;\n' +
+    '        else if (url.startsWith("/") && !url.startsWith("/nuvio-tv-launcher")) url = "/nuvio-tv-launcher" + (url.indexOf("#") !== -1 ? url.slice(url.indexOf("#")) : "");\n' +
+    '      }\n' +
+    '    }\n' +
+    '    return origReplaceState.apply(this, [state, title, url]);\n' +
+    '  };\n' +
+    '  var origAppShellHandleNav = window.appShellHandleNav;\n' +
+    '  window.appShellHandleNav = function(kind, a, b, opts) {\n' +
+    '    if (isTvLauncherPage() || (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1")) return false;\n' +
+    '    return origAppShellHandleNav ? origAppShellHandleNav.apply(this, arguments) : false;\n' +
+    '  };\n' +
+    '  var origAppShellGo = window.appShellGo;\n' +
+    '  window.appShellGo = function(path, options) {\n' +
+    '    if (isTvLauncherPage() || (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1")) {\n' +
+    '      var p = String(path || "");\n' +
+    '      if (p.startsWith("/catalogs") || p === "/" || p.startsWith("/nuvio-tv-launcher")) switchTvLauncherTab("tv-home");\n' +
+    '      else if (p.startsWith("/lists")) switchTvLauncherTab("tv-lists");\n' +
+    '      else if (p.startsWith("/channels")) switchTvLauncherTab("tv-channels");\n' +
+    '      else if (p.startsWith("/collections")) switchTvLauncherTab("tv-collections");\n' +
+    '      else if (p.startsWith("/library")) switchTvLauncherTab("tv-library");\n' +
+    '      else if (p.startsWith("/discover")) switchTvLauncherTab("discover");\n' +
+    '      else if (p.startsWith("/search")) switchTvLauncherTab("search");\n' +
+    '      return true;\n' +
+    '    }\n' +
+    '    return origAppShellGo ? origAppShellGo.apply(this, arguments) : false;\n' +
+    '  };\n' +
+    '  var origSwitchTab = window.switchTab;\n' +
+    '  window.switchTab = function(tabId, opts) {\n' +
+    '    if (isTvLauncherPage() || (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1")) {\n' +
+    '      if (tabId === "catalogs") return switchTvLauncherTab("tv-home");\n' +
+    '      if (tabId === "lists") return switchTvLauncherTab("tv-lists");\n' +
+    '      if (tabId === "channels") return switchTvLauncherTab("tv-channels");\n' +
+    '      if (tabId === "discover") return switchTvLauncherTab("discover");\n' +
+    '      if (tabId === "search") return switchTvLauncherTab("search");\n' +
+    '      if (tabId === "list-details" || tabId === "item-details") {\n' +
+    '        if (tvLauncherActiveTab !== "list-details" && tvLauncherActiveTab !== "item-details") window._tvPreviousTab = tvLauncherActiveTab;\n' +
+    '        return origSwitchTab ? origSwitchTab.apply(this, arguments) : undefined;\n' +
+    '      }\n' +
+    '    }\n' +
+    '    return origSwitchTab ? origSwitchTab.apply(this, arguments) : undefined;\n' +
+    '  };\n' +
+    '  var origNavigateBackFromDetail = window.navigateBackFromDetail;\n' +
+    '  window.navigateBackFromDetail = function() {\n' +
+    '    if (isTvLauncherPage() || (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1")) {\n' +
+    '      var cur = window._currentTab || (document.querySelector(".tab-panel:not([hidden])") ? document.querySelector(".tab-panel:not([hidden])").getAttribute("data-tab-panel") : "");\n' +
+    '      if (cur === "item-details" && window._previousTab === "list-details") {\n' +
+    '        if (typeof switchTab === "function") switchTab("list-details");\n' +
+    '        var scrollPos = typeof window._listScrollY === "number" ? window._listScrollY : 0;\n' +
+    '        if (typeof restoreListScroll === "function") restoreListScroll(scrollPos);\n' +
+    '        return;\n' +
+    '      }\n' +
+    '      var prev = window._tvPreviousTab || "tv-home";\n' +
+    '      switchTvLauncherTab(prev);\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (origNavigateBackFromDetail) return origNavigateBackFromDetail.apply(this, arguments);\n' +
+    '  };\n' +
+    '  window.addEventListener("popstate", function(e) {\n' +
+    '    if (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1") {\n' +
+    '      if (location.pathname !== "/nuvio-tv-launcher") history.replaceState(null, "", "/nuvio-tv-launcher");\n' +
+    '      var cur = window._currentTab || (document.querySelector(".tab-panel:not([hidden])") ? document.querySelector(".tab-panel:not([hidden])").getAttribute("data-tab-panel") : "");\n' +
+    '      if (cur === "item-details" && window._previousTab === "list-details") {\n' +
+    '        if (typeof switchTab === "function") switchTab("list-details");\n' +
+    '      } else if (cur === "item-details" || cur === "list-details") {\n' +
+    '        switchTvLauncherTab(window._tvPreviousTab || "tv-home");\n' +
+    '      }\n' +
+    '    }\n' +
+    '  });\n' +
+    '  document.addEventListener("click", function(e) {\n' +
+    '    if (document.documentElement.getAttribute("data-tv-launcher") !== "1") return;\n' +
+    '    var a = e.target && e.target.closest ? e.target.closest("a") : null;\n' +
+    '    if (!a) return;\n' +
+    '    var href = a.getAttribute("href") || "";\n' +
+    '    if (!href) return;\n' +
+    '    var target = a.getAttribute("target");\n' +
+    '    if (target === "_blank") return;\n' +
+    '    if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:") || href.startsWith("javascript:")) return;\n' +
+    '    e.preventDefault(); e.stopPropagation();\n' +
+    '    if (href.startsWith("/catalogs") || href === "/" || href.startsWith("/nuvio-tv-launcher")) switchTvLauncherTab("tv-home");\n' +
+    '    else if (href.startsWith("/lists")) switchTvLauncherTab("tv-lists");\n' +
+    '    else if (href.startsWith("/channels")) switchTvLauncherTab("tv-channels");\n' +
+    '    else if (href.startsWith("/collections")) switchTvLauncherTab("tv-collections");\n' +
+    '    else if (href.startsWith("/library")) switchTvLauncherTab("tv-library");\n' +
+    '    else if (href.startsWith("/discover")) switchTvLauncherTab("discover");\n' +
+    '    else if (href.startsWith("/search")) switchTvLauncherTab("search");\n' +
+    '    else if (href.startsWith("/link")) window.open("/link", "_blank", "noopener");\n' +
+    '  }, true);\n' +
+    '}\n';
+}
+
+function buildNuvioTvCatalogInterceptorsScript() {
+  return 'function isChannelInTvConfig(channelId) {\n' +
+    '  var wanted = String(channelId || "").trim();\n' +
+    '  if (!wanted || !Array.isArray(tvLauncherTvLists)) return false;\n' +
+    '  return tvLauncherTvLists.some(function(item) {\n' +
+    '    if (!item || !item.url) return false;\n' +
+    '    var u = String(item.url);\n' +
+    '    if (u.includes(wanted)) return true;\n' +
+    '    if (wanted.startsWith("channel-")) {\n' +
+    '      var rawId = wanted.replace(/^channel-/, "");\n' +
+    '      if (u.includes(rawId)) return true;\n' +
+    '    }\n' +
+    '    return false;\n' +
+    '  });\n' +
+    '}\n' +
+    'function updateTvChannelAndStorylineButtons() {\n' +
+    '  if (tvLauncherIsMirror) return;\n' +
+    '  var cards = document.querySelectorAll("#storylinesContent .list-card[data-universe-id]");\n' +
+    '  cards.forEach(function(card) {\n' +
+    '    var uid = card.getAttribute("data-universe-id"); if (!uid) return;\n' +
+    '    var chId = "channel-" + uid;\n' +
+    '    var added = isChannelInTvConfig(chId);\n' +
+    '    var btn = card.querySelector(".channelAddBtn");\n' +
+    '    if (btn) {\n' +
+    '      btn.classList.toggle("is-added", added);\n' +
+    '      btn.classList.toggle("secondary", added);\n' +
+    '      btn.classList.toggle("primary", !added);\n' +
+    '      btn.textContent = added ? "Remove" : "+ Add";\n' +
+    '      btn.style.color = added ? "var(--danger)" : "";\n' +
+    '    }\n' +
+    '  });\n' +
+    '  var chCards = document.querySelectorAll("#myChannelsList .list-card");\n' +
+    '  chCards.forEach(function(card) {\n' +
+    '    var addBtn = card.querySelector(".channelAddBtn[data-act=\\"toggleChannelInCatalog\\"]");\n' +
+    '    if (!addBtn) return;\n' +
+    '    var args = addBtn.getAttribute("data-act-args"); var cid = "";\n' +
+    '    try { cid = JSON.parse(args || "[]")[0]; } catch(e){}\n' +
+    '    if (!cid) return;\n' +
+    '    var added = isChannelInTvConfig(cid);\n' +
+    '    addBtn.classList.toggle("is-added", added);\n' +
+    '    addBtn.classList.toggle("secondary", added);\n' +
+    '    addBtn.classList.toggle("primary", !added);\n' +
+    '    addBtn.textContent = added ? "Remove" : "+ Add to Catalog";\n' +
+    '    addBtn.style.color = added ? "var(--danger)" : "";\n' +
+    '  });\n' +
+    '}\n' +
+    'function initTvCatalogInterceptors() {\n' +
+    '  var origIsListAddedToConfig = window.isListAddedToConfig;\n' +
+    '  window.isListAddedToConfig = function(url, type, slug) {\n' +
+    '    if (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1") {\n' +
+    '      if (!tvLauncherIsMirror) return isListAddedToTvConfig(url, type, slug);\n' +
+    '    }\n' +
+    '    return origIsListAddedToConfig ? origIsListAddedToConfig.apply(this, arguments) : false;\n' +
+    '  };\n' +
+    '  var origAddRow = window.addRow;\n' +
+    '  window.addRow = function(name, url, type, enabled, group, channelId, noShuffle) {\n' +
+    '    if (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1") {\n' +
+    '      if (!tvLauncherIsMirror) {\n' +
+    '        addTvCatalogRow(name, url, type);\n' +
+    '        return null;\n' +
+    '      }\n' +
+    '      var res = origAddRow ? origAddRow.apply(this, arguments) : null;\n' +
+    '      var cur = (typeof collectEntries === "function") ? collectEntries() : [];\n' +
+    '      tvLauncherMainLists = JSON.parse(JSON.stringify(cur));\n' +
+    '      renderTvHomeShelves();\n' +
+    '      return res;\n' +
+    '    }\n' +
+    '    return origAddRow ? origAddRow.apply(this, arguments) : null;\n' +
+    '  };\n' +
+    '  var origRemoveListFromConfig = window.removeListFromConfig;\n' +
+    '  window.removeListFromConfig = function(url, type, slug) {\n' +
+    '    if (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1") {\n' +
+    '      if (!tvLauncherIsMirror) {\n' +
+    '        removeTvCatalogRow(url, type, slug);\n' +
+    '        return;\n' +
+    '      }\n' +
+    '      if (origRemoveListFromConfig) origRemoveListFromConfig.apply(this, arguments);\n' +
+    '      var cur = (typeof collectEntries === "function") ? collectEntries() : [];\n' +
+    '      tvLauncherMainLists = JSON.parse(JSON.stringify(cur));\n' +
+    '      renderTvHomeShelves();\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (origRemoveListFromConfig) return origRemoveListFromConfig.apply(this, arguments);\n' +
+    '  };\n' +
+    '  var origToggleChannelInCatalog = window.toggleChannelInCatalog;\n' +
+    '  window.toggleChannelInCatalog = function(channelId) {\n' +
+    '    if (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1") {\n' +
+    '      if (!tvLauncherIsMirror) {\n' +
+    '        var map = (typeof loadLocalChannels === "function") ? loadLocalChannels() : {};\n' +
+    '        var ch = map[channelId];\n' +
+    '        if (ch) {\n' +
+    '          var chUrl = (typeof channelRowUrl === "function") ? channelRowUrl(ch) : ("channel:local:" + channelId);\n' +
+    '          if (isChannelInTvConfig(channelId) || isListAddedToTvConfig(chUrl, "series", channelId)) removeTvCatalogRow(chUrl, "series", channelId);\n' +
+    '          else addTvCatalogRow(ch.name || "Channel", chUrl, "series");\n' +
+    '          if (typeof renderMyCreatedChannelsList === "function") renderMyCreatedChannelsList();\n' +
+    '          updateTvChannelAndStorylineButtons();\n' +
+    '        }\n' +
+    '        return;\n' +
+    '      }\n' +
+    '      if (origToggleChannelInCatalog) origToggleChannelInCatalog.apply(this, arguments);\n' +
+    '      var cur = (typeof collectEntries === "function") ? collectEntries() : [];\n' +
+    '      tvLauncherMainLists = JSON.parse(JSON.stringify(cur));\n' +
+    '      renderTvHomeShelves();\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (origToggleChannelInCatalog) return origToggleChannelInCatalog.apply(this, arguments);\n' +
+    '  };\n' +
+    '  var origCreateInstantStorylineChannel = window.createInstantStorylineChannel;\n' +
+    '  window.createInstantStorylineChannel = function(eventId, btn) {\n' +
+    '    if (typeof document !== "undefined" && document.documentElement.getAttribute("data-tv-launcher") === "1") {\n' +
+    '      if (!tvLauncherIsMirror) {\n' +
+    '        var ev = (typeof TV_CROSSOVER_EVENTS !== "undefined") ? TV_CROSSOVER_EVENTS.find(function(it){ return it.id === eventId; }) : null;\n' +
+    '        if (ev) {\n' +
+    '          var chId = "channel-" + ev.id;\n' +
+    '          var chUrl = (typeof storylineChannelRowUrl === "function") ? storylineChannelRowUrl(ev) : ("channel:storyline:" + ev.id);\n' +
+    '          if (isChannelInTvConfig(chId) || isListAddedToTvConfig(chUrl, "series", chId)) removeTvCatalogRow(chUrl, "series", chId);\n' +
+    '          else addTvCatalogRow(ev.name, chUrl, "series");\n' +
+    '          if (typeof renderStorylinesCategory === "function") renderStorylinesCategory(window._activeStorylinesCategory || "all");\n' +
+    '          updateTvChannelAndStorylineButtons();\n' +
+    '        }\n' +
+    '        return;\n' +
+    '      }\n' +
+    '      if (origCreateInstantStorylineChannel) origCreateInstantStorylineChannel.apply(this, arguments);\n' +
+    '      var cur = (typeof collectEntries === "function") ? collectEntries() : [];\n' +
+    '      tvLauncherMainLists = JSON.parse(JSON.stringify(cur));\n' +
+    '      renderTvHomeShelves();\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (origCreateInstantStorylineChannel) return origCreateInstantStorylineChannel.apply(this, arguments);\n' +
+    '  };\n' +
     '}\n';
 }
 
@@ -280,7 +611,23 @@ function buildNuvioTvShelvesAndLibraryScript() {
 }
 
 function buildNuvioTvClientLogicScript(origin) {
-  return 'function renderTvCollectionsTab() {\n' +
+  return 'function renderTvListsTab() {\n' +
+    '  document.documentElement.removeAttribute("data-initial-lists-sub");\n' +
+    '  var activeSub = localStorage.getItem("myListAddon:listsSubmenu") || "my-lists";\n' +
+    '  if (activeSub === "collections") activeSub = "my-lists";\n' +
+    '  var myListsSub = document.getElementById("listsSubMyLists");\n' +
+    '  if (myListsSub && activeSub === "my-lists") myListsSub.style.display = "block";\n' +
+    '  if (typeof switchListsSubmenu === "function") switchListsSubmenu(activeSub);\n' +
+    '  if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '}\n' +
+    'function renderTvChannelsTab() {\n' +
+    '  var activeSub = localStorage.getItem("myListAddon:channelsSubmenu") || "my-channels";\n' +
+    '  if (typeof switchChannelsSubmenu === "function") switchChannelsSubmenu(activeSub);\n' +
+    '  if (typeof renderMyCreatedChannelsList === "function") renderMyCreatedChannelsList();\n' +
+    '  if (typeof renderStorylinesCategory === "function") renderStorylinesCategory(window._activeStorylinesCategory || "all");\n' +
+    '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
+    '}\n' +
+    'function renderTvCollectionsTab() {\n' +
     '  var container = document.getElementById("tvCollectionsResult"); if (!container) return;\n' +
     '  var subCol = document.getElementById("listsSubCollections");\n' +
     '  if (subCol) {\n' +
@@ -302,11 +649,16 @@ function buildNuvioTvClientLogicScript(origin) {
     '  var exists = tvLauncherTvLists.some(function(it) { return it.url === cleanUrl && it.type === cleanType; });\n' +
     '  if (exists) { showToast("\\"" + cleanName + "\\" is already on your TV shelves.", "info"); return; }\n' +
     '  tvLauncherTvLists.push({ name: cleanName, url: cleanUrl, type: cleanType, enabled: true });\n' +
-    '  saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves(); showToast("Added \\"" + cleanName + "\\" to TV Launcher shelves.", "success");\n' +
+    '  saveTvLauncherConfig(false, tvLauncherTvLists); renderTvHomeShelves();\n' +
+    '  if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
+    '  showToast("Added \\"" + cleanName + "\\" to TV Launcher shelves.", "success");\n' +
     '}\n' +
     'function initNuvioTvLauncherMode() {\n' +
     '  if (!isTvLauncherPage()) return;\n' +
     '  document.documentElement.setAttribute("data-tv-launcher", "1");\n' +
+    '  if (typeof initTvNavInterceptors === "function") initTvNavInterceptors();\n' +
+    '  if (typeof initTvCatalogInterceptors === "function") initTvCatalogInterceptors();\n' +
     '  renderTvNavTabs();\n' +
     '  var mainHost = document.querySelector(".page") || document.querySelector("main") || document.body;\n' +
     '  if (mainHost && !document.getElementById("content-tv-home")) {\n' +
@@ -324,13 +676,8 @@ function buildNuvioTvClientLogicScript(origin) {
     '    }\n' +
     '  }\n' +
     '  document.documentElement.removeAttribute("data-initial-lists-sub");\n' +
-    '  document.addEventListener("click", function(e) {\n' +
-    '    if (!isTvLauncherPage()) return;\n' +
-    '    var btn = e.target && e.target.closest ? e.target.closest(".list-add-btn, .myListAddBtn") : null;\n' +
-    '    if (!btn || btn.closest("#content-tv-home") || btn.closest("#content-tv-library")) return;\n' +
-    '    var url = btn.dataset.url, name = btn.dataset.name, type = btn.dataset.type;\n' +
-    '    if (url && !btn.classList.contains("is-added")) addTvCatalogRow(name, url, type);\n' +
-    '  });\n' +
+    '  var colPill = document.querySelector("#listsSubnavBar .subnav-pill[data-sub=\\"collections\\"]");\n' +
+    '  if (colPill) colPill.style.display = "none";\n' +
     '  switchTvLauncherTab("tv-home");\n' +
     '  loadTvLauncherConfig();\n' +
     '}\n' +
@@ -351,7 +698,13 @@ function buildNuvioTvClientLogicScript(origin) {
     'window.openTvMediaAdd = openTvMediaAdd;\n' +
     'window.openTvMediaAll = openTvMediaAll;\n' +
     'window.renderTvCollectionsTab = renderTvCollectionsTab;\n' +
+    'window.renderTvListsTab = renderTvListsTab;\n' +
+    'window.renderTvChannelsTab = renderTvChannelsTab;\n' +
     'window.addTvCatalogRow = addTvCatalogRow;\n' +
+    'window.removeTvCatalogRow = removeTvCatalogRow;\n' +
+    'window.isListAddedToTvConfig = isListAddedToTvConfig;\n' +
+    'window.isChannelInTvConfig = isChannelInTvConfig;\n' +
+    'window.updateTvChannelAndStorylineButtons = updateTvChannelAndStorylineButtons;\n' +
     'window.initNuvioTvLauncherMode = initNuvioTvLauncherMode;\n';
 }
 
@@ -360,6 +713,8 @@ function buildNuvioTvLauncherClientScript(origin) {
     '(function() {\n' +
     buildNuvioTvConfigScript(origin) +
     buildNuvioTvShelvesAndLibraryScript() +
+    buildNuvioTvNavInterceptorsScript() +
+    buildNuvioTvCatalogInterceptorsScript() +
     buildNuvioTvClientLogicScript(origin) +
     buildNuvioTvNavScript() +
     buildNuvioTvDomTemplates(origin) +

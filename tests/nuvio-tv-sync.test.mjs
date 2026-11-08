@@ -1070,10 +1070,17 @@ describe("Nuvio TV Launcher - Dedicated TV Addon (app.my-list.tv) & /nuvio-tv-la
     assert.ok(html.includes("app.my-list.tv"));
     assert.ok(html.includes("initNuvioTvLauncherMode"));
     assert.ok(html.includes("tv-home"));
-    assert.ok(html.includes("tv-library"));
+    assert.ok(html.includes("tv-lists"));
+    assert.ok(html.includes("tv-channels"));
     assert.ok(html.includes("tv-collections"));
+    assert.ok(html.includes("tv-library"));
+    assert.ok(html.includes("initTvNavInterceptors"));
+    assert.ok(html.includes("initTvCatalogInterceptors"));
+    assert.ok(html.includes("updateTvChannelAndStorylineButtons"));
+    assert.ok(html.includes("isChannelInTvConfig"));
   });
 });
+
 
 
 
