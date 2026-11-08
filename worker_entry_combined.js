@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-08";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "fb46723e02";
+const WORKER_BUILD = "bd468bc7e7";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -94119,7 +94119,6 @@ function buildNuvioTvDomTemplates(origin) {
     '  return "<div class=\\"panel u-mb-16px\\" id=\\"nuvioTvBanner\\">" +\n' +
     '    "<div class=\\"u-ai-center u-jc-space_between u-gap-12px u-fw2-wrap\\" style=\\"display:flex;\\">" +\n' +
     '      "<div class=\\"u-ai-center u-gap-10px\\" style=\\"display:flex;\\">" +\n' +
-    '        "<span style=\\"font-size:24px;\\" aria-hidden=\\"true\\">&#128250;</span>" +\n' +
     '        "<div>" +\n' +
     '          "<div class=\\"u-fw-700 u-fs-v_font_size_lg u-c-v_text\\">Nuvio TV Launcher Setup</div>" +\n' +
     '          "<div class=\\"u-fs-v_font_size_xs u-c-v_muted\\" id=\\"nuvioTvStatusText\\">" +\n' +
@@ -94272,8 +94271,18 @@ function buildNuvioTvShelvesAndLibraryScript() {
     '    var actionsHtml = isMirror\n' +
     '      ? "<span class=\\"u-fs-v_font_size_xs u-c-v_muted u-p-2px_8px u-br-v_radius_pill u-bd-1px_solid_v_border\\">Mirrored</span>"\n' +
     '      : "<div class=\\"u-ai-center u-gap-4px\\" style=\\"display:flex;\\"><button type=\\"button\\" class=\\"lc-btn ghost\\" data-act=\\"moveTvShelf\\" data-act-args=\\"[" + idx + ",-1]\\"" + (isFirst ? " disabled" : "") + " aria-label=\\"Up\\">&uarr;</button><button type=\\"button\\" class=\\"lc-btn ghost\\" data-act=\\"moveTvShelf\\" data-act-args=\\"[" + idx + ",1]\\"" + (isLast ? " disabled" : "") + " aria-label=\\"Down\\">&darr;</button><button type=\\"button\\" class=\\"lc-btn danger\\" data-act=\\"removeTvShelfItem\\" data-act-args=\\"[" + idx + "]\\" aria-label=\\"Remove\\" style=\\"color:var(--color-danger);\\">&#10005;</button></div>";\n' +
-    '    return "<div class=\\"list-card u-mb-8px\\" style=\\"display:flex; align-items:center; justify-content:space-between; padding:var(--space-2) var(--space-3);\\"><div class=\\"u-ai-center u-gap-10px u-minw-0\\" style=\\"display:flex;\\"><span class=\\"u-fw-600 u-fs-v_font_size_sm u-c-v_text u-to-ellipsis u-minw-0\\">" + escapeHtml(title) + "</span><span class=\\"u-fs-v_font_size_xs u-c-v_muted u-p-2px_6px u-br-v_radius_sm u-bg-v_surface_raised\\">" + escapeHtml(type) + "</span></div>" + actionsHtml + "</div>";\n' +
+    '    return "<div class=\\"list-card u-mb-12px\\" data-url=\\"" + escapeAttr(item.url || "") + "\\" data-type=\\"" + escapeAttr(type) + "\\">" +\n' +
+    '      "<div class=\\"list-card-header u-ai-center u-jc-space_between\\" style=\\"display:flex; flex-wrap:wrap; gap:8px;\\">" +\n' +
+    '        "<div class=\\"list-card-body u-ai-center u-gap-8px u-minw-0\\" style=\\"display:flex; flex-wrap:wrap;\\">" +\n' +
+    '          "<span class=\\"list-card-title u-fw-600 u-fs-v_font_size_sm u-c-v_text\\">" + escapeHtml(title) + "</span>" +\n' +
+    '          "<span class=\\"u-fs-v_font_size_xs u-p-2px_6px u-br-v_radius_pill u-bg-v_surface u-c-v_muted u-bd-1px_solid_v_border\\">" + escapeHtml(type) + "</span>" +\n' +
+    '        "</div>" +\n' +
+    '        "<div class=\\"list-card-actions u-ai-center u-gap-6px\\" style=\\"display:flex;\\">" + actionsHtml + "</div>" +\n' +
+    '      "</div>" +\n' +
+    '      "<div class=\\"list-card-posters poster-preview-slot\\" data-name=\\"" + escapeAttr(title) + "\\" data-url=\\"" + escapeAttr(item.url || "") + "\\" data-type=\\"" + escapeAttr(type) + "\\"></div>" +\n' +
+    '    "</div>";\n' +
     '  }).join("");\n' +
+    '  if (typeof populateSearchResultPosters === "function") populateSearchResultPosters();\n' +
     '}\n' +
     'function moveTvShelf(idx, dir) {\n' +
     '  if (tvLauncherIsMirror) return;\n' +
@@ -94321,10 +94330,16 @@ function buildNuvioTvClientLogicScript(origin) {
     '  var container = document.getElementById("tvCollectionsResult"); if (!container) return;\n' +
     '  var subCol = document.getElementById("listsSubCollections");\n' +
     '  if (subCol) {\n' +
-    '    subCol.style.display = "block";\n' +
+    '    document.documentElement.removeAttribute("data-initial-lists-sub");\n' +
+    '    subCol.style.setProperty("display", "block", "important");\n' +
     '    if (subCol.parentNode !== container) container.appendChild(subCol);\n' +
     '  }\n' +
-    '  if (typeof renderCustomCollections === "function") renderCustomCollections();\n' +
+    '  if (typeof renderCollectionsView === "function") renderCollectionsView();\n' +
+    '  else {\n' +
+    '    if (typeof renderCustomCollections === "function") renderCustomCollections();\n' +
+    '    if (typeof renderPremadeCollections === "function") renderPremadeCollections();\n' +
+    '  }\n' +
+    '  if (typeof refreshMediaAppConnections === "function") refreshMediaAppConnections();\n' +
     '}\n' +
     'function addTvCatalogRow(name, url, type) {\n' +
     '  if (!url) return;\n' +
@@ -94347,7 +94362,14 @@ function buildNuvioTvClientLogicScript(origin) {
     '    var catalogsPanel = document.getElementById("content-catalogs");\n' +
     '    if (catalogsPanel && catalogsPanel.parentNode) catalogsPanel.parentNode.insertBefore(tvPanelsWrap, catalogsPanel);\n' +
     '    else mainHost.insertBefore(tvPanelsWrap, mainHost.firstChild);\n' +
+    '    var subCol = document.getElementById("listsSubCollections");\n' +
+    '    var colBox = document.getElementById("tvCollectionsResult");\n' +
+    '    if (subCol && colBox && subCol.parentNode !== colBox) {\n' +
+    '      subCol.style.setProperty("display", "block", "important");\n' +
+    '      colBox.appendChild(subCol);\n' +
+    '    }\n' +
     '  }\n' +
+    '  document.documentElement.removeAttribute("data-initial-lists-sub");\n' +
     '  document.addEventListener("click", function(e) {\n' +
     '    if (!isTvLauncherPage()) return;\n' +
     '    var btn = e.target && e.target.closest ? e.target.closest(".list-add-btn, .myListAddBtn") : null;\n' +
