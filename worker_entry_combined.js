@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-08";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0a8e9b49b8";
+const WORKER_BUILD = "c68a130cd9";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -53518,7 +53518,7 @@ async function loadPosterSlot(slot) {
             const itemPoster = resolveClientPoster(Object.assign({}, s, { listName, listUrl }), s.poster);
             const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
             const resume = resumeProgressParts(s);
-            const resumeText = resume.label ? ((s.seasonNum != null && s.episodeNum != null ? 'S' + s.seasonNum + 'E' + s.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
+            const tile = mediaAppTileText(s, resume.label, listUrl);
             inner += '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' +
               '<div class="list-card-mini-poster-img-wrap clickable-poster" data-id="' + escapeAttr(s.id || '') + '" data-type="' + escapeAttr(s.type || type || '') + '" data-title="' + escapeAttr(s.name || '') + '" data-poster="' + escapeAttr(itemPoster || '') + '">' +
                 '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' +
@@ -53527,8 +53527,8 @@ async function loadPosterSlot(slot) {
                 resume.barHtml +
                 overlays +
               '</div>' +
-              '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((resumeText || s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(resumeText || s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              '<div class="list-card-mini-poster-name">' + escapeHtml(tile.name) + '</div>' +
+              ((tile.sub || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(tile.sub) + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';
@@ -57725,6 +57725,19 @@ async function runCatalogSearch() {
 
 
 
+// Poster-tile text for Nuvio and Stremio list cards. An episode reads like the
+// other lists ("Show S04E05", its title underneath) via formatWatchItemLabel;
+// a movie keeps its own name. listUrl picks the app lists; resumeLabel is "44m left" style text, or ''.
+function mediaAppTileText(s, resumeLabel, listUrl) {
+  const isMediaApp = /^autotrack:(nuvio|stremio)-/.test(String(listUrl || ''));
+  const isEpisode = isMediaApp && s.seasonNum != null && s.episodeNum != null && !!(s.showTitle || s.name);
+  const ep = isEpisode && typeof formatWatchItemLabel === 'function'
+    ? formatWatchItemLabel({ showTitle: s.showTitle || s.name, seasonNum: s.seasonNum, episodeNum: s.episodeNum, title: s.episodeTitle || '', isSeasonPremiere: s.isSeasonPremiere })
+    : null;
+  const code = s.seasonNum != null && s.episodeNum != null && !ep ? 'S' + s.seasonNum + 'E' + s.episodeNum + ' · ' : '';
+  const resume = resumeLabel ? code + resumeLabel : '';
+  return { name: ep ? ep.title : (s.name || ''), sub: resume || (ep ? ep.subtitle : '') || s.year || '' };
+}
 // What a My Catalogs row shows when its preview could not be loaded. A server
 // hiccup (a 502 page that is not JSON) lands in the same catch as a lost
 // connection, so it must not say "network"; Retry re-runs the catalogs preview,

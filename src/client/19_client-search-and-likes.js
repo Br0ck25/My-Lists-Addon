@@ -1403,7 +1403,7 @@ async function loadPosterSlot(slot) {
             const itemPoster = resolveClientPoster(Object.assign({}, s, { listName, listUrl }), s.poster);
             const ratingSpan = typeof formatRatingSpanHtml === 'function' ? formatRatingSpanHtml(s) : '';
             const resume = resumeProgressParts(s);
-            const resumeText = resume.label ? ((s.seasonNum != null && s.episodeNum != null ? 'S' + s.seasonNum + 'E' + s.episodeNum + ' \u00b7 ' : '') + resume.label) : '';
+            const tile = mediaAppTileText(s, resume.label, listUrl);
             inner += '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(listName) + '" data-url="' + escapeAttr(listUrl) + '" data-type="' + escapeAttr(type) + '" data-creator="' + escapeAttr(cardCreator) + '" data-items="' + escapeAttr(exactCount) + '" data-likes="' + escapeAttr(cardLikes) + '">' +
               '<div class="list-card-mini-poster-img-wrap clickable-poster" data-id="' + escapeAttr(s.id || '') + '" data-type="' + escapeAttr(s.type || type || '') + '" data-title="' + escapeAttr(s.name || '') + '" data-poster="' + escapeAttr(itemPoster || '') + '">' +
                 '<img src="' + escapeAttr(itemPoster) + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' +
@@ -1412,8 +1412,8 @@ async function loadPosterSlot(slot) {
                 resume.barHtml +
                 overlays +
               '</div>' +
-              '<div class="list-card-mini-poster-name">' + escapeHtml(s.name || '') + '</div>' +
-              ((resumeText || s.year || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(resumeText || s.year || '') + '</span>' + ratingSpan + '</div>' : '') +
+              '<div class="list-card-mini-poster-name">' + escapeHtml(tile.name) + '</div>' +
+              ((tile.sub || ratingSpan) ? '<div class="list-card-mini-poster-year u-ai-center u-jc-space_between u-gap-4px" style="display:flex; width:100%;"><span>' + escapeHtml(tile.sub) + '</span>' + ratingSpan + '</div>' : '') +
             '</div>';
           });
           slot.className = 'list-card-posters';
