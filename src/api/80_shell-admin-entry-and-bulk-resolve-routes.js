@@ -7,6 +7,7 @@
 // The home page, the app shell paths and the shell sub-tab pages, at their original place. Returns a Response promise, or null.
 function handleAppShellRoutes(request, env, ctx, url, path) {
   if (path === "/" || path === "") return appHomePage(request, env, ctx, url);
+  if (path === "/nuvio-tv-launcher") return handleNuvioTvLauncherPage(request, env, ctx, url, path);
   if (APP_SHELL_PATHS.has(path)) return appShellPage(request, env, ctx, url);
   return appShellTabPage(request, env, ctx, url, path);
 }

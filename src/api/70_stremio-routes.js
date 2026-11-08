@@ -85,9 +85,9 @@ async function builderConfigurePage(request, env, ctx, url) {
 
 // /:config/manifest.json, /manifest.json and /:config/subtitles/..., at their original place. Returns a Response promise, or null.
 function handleStremioManifestRoutes(request, env, ctx, url, path) {
-  let m = path.match(/^\/([^/]+)\/manifest\.json$/);
-  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/manifest\.json$/);
-  if (m) return installManifest(request, env, ctx, url, m);
+  let m = path.match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
+  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)(?:\/tv)?\/manifest\.json$/);
+  if (m) return installManifest(request, env, ctx, url, m, path);
   if (path === "/manifest.json" || path.indexOf("/c/manifest.json") === 0) return bareManifest(request, url);
   m = path.match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
   if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^\/([^/]+)\/subtitles\/(movie|series)\/([^/]+?)(?:\/[^/]+)?\.json$/);
@@ -96,14 +96,17 @@ function handleStremioManifestRoutes(request, env, ctx, url, path) {
 }
 
 // /:config/manifest.json
-async function installManifest(request, env, ctx, url, m) {
+async function installManifest(request, env, ctx, url, m, rawPath) {
+  const currentPath = rawPath || (url ? url.pathname : "") || "";
+  const isTvLauncher = currentPath.endsWith("/tv/manifest.json") || currentPath.includes("/tv/manifest.json");
   // If this looks like a browser page-load (e.g. wako sent you here for
   // "Configure") rather than a JSON fetch by the app, send the user to
   // the actual editable configure page instead of showing raw JSON.
   if (isBrowserNavigation(request) && m[1] !== "nuvio-default") {
+    if (isTvLauncher) return Response.redirect(`${url.origin}/nuvio-tv-launcher`, 302);
     return Response.redirect(`${url.origin}/${m[1]}/configure`, 302);
   }
-  const resolved = await resolveConfig(m[1], env);
+  const resolved = await resolveConfig(m[1], env, { isTvLauncher });
   // Nothing by that name: a 404 the app can show, and nothing cached, so a
   // link whose record is not yet visible here works on the next try.
   if (resolved.unresolved) {
@@ -136,7 +139,7 @@ async function installManifest(request, env, ctx, url, m) {
   const userChannels = await loadUserChannelsForManifest(m[1], env);
   const hasLiveState = (hasLiveShelf || resolved.collectionsAddon || !!resolved.trackOwner || (Array.isArray(userChannels) && userChannels.length > 0));
   return jsonPublic(
-    buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true),
+    buildManifest(manifestEntries, url.origin, track, shuffleShelves, m[1], liveNames, resolved.provideMetadata !== false, url.searchParams.get("collections") === "1", resolved.collectionsAddon === true, isTvLauncher),
     200,
     hasLiveState ? { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" } : {}
   );
@@ -176,8 +179,8 @@ async function subtitlesPing(request, env, ctx, path, m) {
 
 // /:config/catalog/:type/:id.json, at its original place. Returns a Response promise, or null.
 function handleStremioCatalogRoute(request, env, ctx, url, path) {
-  let m = path.match(/^(?:\/([^/]+))?\/catalog\/([^/]+)\/(.+)\.json$/);
-  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^(?:\/([^/]+))?\/catalog\/([^/]+)\/(.+)\.json$/);
+  let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
+  if (!m && path.indexOf("/c/") === 0) m = path.slice(2).match(/^(?:\/([^/]+))?(?:\/tv)?\/catalog\/([^/]+)\/(.+)\.json$/);
   if (m) return stremioCatalogRow(request, env, ctx, url, m);
   return null;
 }
@@ -186,6 +189,7 @@ function handleStremioCatalogRoute(request, env, ctx, url, path) {
 // optionally /:config/catalog/:type/:id/skip=N.json or /:config/catalog/:type/:id/search=Q.json
 async function stremioCatalogRow(request, env, ctx, url, m) {
   const [, config, type, idWithExtra] = m;
+  const isTvRoute = (url && url.pathname && url.pathname.includes("/tv/")) || false;
   const [id, extraStr] = idWithExtra.split("/");
   // New browse rows have explicit kind restrictions, even when a stale or
   // hand-edited install config tries to address the other kind.
@@ -200,7 +204,7 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   const isSearchCatalog = id === "search_movies" || id === "search_series" || id === "search" || id === "search_movie" || (id === "top" && searchQuery);
   if (isSearchCatalog) {
     if (!searchQuery) return jsonPublic({ metas: [] });
-    const searchConfig = config ? await resolveConfig(config, env) : {};
+    const searchConfig = config ? await resolveConfig(config, env, { isTvLauncher: isTvRoute }) : {};
     // Metadata off: an app still holding an old manifest gets no results.
     if (searchConfig.provideMetadata === false) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
     const searchLimited = await searchRateLimitResponse(request, env, ctx);
@@ -239,7 +243,7 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   // Kept as a whole object as well as destructured: the betterPosters*
   // style keys are passed through wholesale rather than one at a time.
   const resolvedConfig = config
-    ? await resolveConfig(config, env)
+    ? await resolveConfig(config, env, { isTvLauncher: isTvRoute })
     : { entries: [unconfiguredEntry], tmdbKey: null, mdblistKey: null, mdblistAccessToken: null, traktKey: null, traktAccessToken: null, simklKey: null, simklAccessToken: null, shuffleItems: false, trackCreatorName: null, trackOwner: null, region: null, hideNonDigitalReleases: false, adultContentFilter: false, dedupeAcrossLists: false, betterPosters: null, showBadgesStremio: false, showBadgesStremioAiringNext: false, showBadgesStremioContinueWatching: false, showBadgesStremioCatalogs: false, showBadgesStremioWatchlist: false };
 
   // As in the manifest route: most installs ask for catalogs far more often.
@@ -451,7 +455,7 @@ async function stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, s
 // /api/scrobble and /:config/meta/:type/:id.json, at their original place. Returns a Response promise, or null.
 function handleScrobbleAndMetaRoutes(request, env, ctx, url, path) {
   if (path.startsWith("/api/scrobble")) return mediaServerScrobbleRoute(request, env, ctx, url);
-  let m = path.match(/^(?:\/([^/]+))?\/meta\/([^/]+)\/(.+)\.json$/);
+  let m = path.match(/^(?:\/([^/]+))?(?:\/tv)?\/meta\/([^/]+)\/(.+)\.json$/);
   if (m) return stremioMetaItem(env, ctx, url, m);
   return null;
 }

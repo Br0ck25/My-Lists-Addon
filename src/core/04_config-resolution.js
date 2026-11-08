@@ -22,9 +22,38 @@ function savedConfigKey(id) {
 
 // `withTracking`: also read the owner's tracking record (creatorsynctracking:)
 // and fill watchHistory / continueWatching / watchlist / airingNext from it.
-async function resolveCreatorSyncConfig(username, env) {
+async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } = {}) {
   if (!username || !env || !env.CONFIGS) return null;
   try {
+    if (isTvLauncher) {
+      const tvRaw = await env.CONFIGS.get(`creatorsync:${username}:tv`);
+      if (tvRaw) {
+        const tvParsed = JSON.parse(tvRaw);
+        if (tvParsed && tvParsed.mirror === false) {
+          const tvList = Array.isArray(tvParsed.config)
+            ? tvParsed.config
+            : (Array.isArray(tvParsed.entries)
+              ? tvParsed.entries
+              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []));
+          return {
+            entries: tvList,
+            lists: tvList,
+            catalogOrder: tvParsed.catalogOrder || tvParsed.catalogIds || tvList.map((e) => e.id || e.catalogId || e.name),
+            catalogIds: tvParsed.catalogIds || tvParsed.catalogOrder || tvList.map((e) => e.id || e.catalogId || e.name),
+            channelIds: Array.isArray(tvParsed.channelIds) ? tvParsed.channelIds : null,
+            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(tvParsed) : {}),
+            randomizeItemsDaily: tvParsed.randomizeItemsDaily !== undefined ? tvParsed.randomizeItemsDaily : true,
+            shuffleItems: true,
+            track: false,
+            trackOwner: username,
+            installTrackOwner: username,
+            trackCreatorName: username,
+            updatedAt: tvParsed.updatedAt || 0,
+            isTvLauncher: true,
+          };
+        }
+      }
+    }
     const raw = await env.CONFIGS.get(`creatorsync:${username}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
@@ -37,6 +66,8 @@ async function resolveCreatorSyncConfig(username, env) {
     return {
       entries: list,
       lists: list,
+      catalogOrder: parsed.catalogOrder || parsed.catalogIds || list.map((e) => e.id || e.catalogId || e.name),
+      catalogIds: parsed.catalogIds || parsed.catalogOrder || list.map((e) => e.id || e.catalogId || e.name),
       ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(parsed) : {}),
       randomizeItemsDaily: parsed.randomizeItemsDaily !== undefined
         ? parsed.randomizeItemsDaily
@@ -47,6 +78,7 @@ async function resolveCreatorSyncConfig(username, env) {
       installTrackOwner: username,
       trackCreatorName: username,
       updatedAt: parsed.updatedAt || 0,
+      isTvLauncher,
     };
   } catch {
     return null;
@@ -58,12 +90,12 @@ async function resolveCreatorSyncConfig(username, env) {
 // as for Continue Watching -- while nothing on those paths used it. The
 // channel meta route and /api/resolve ask for it; a personal shelf reads its
 // own data in fetchAutoTrackedCatalog.
-async function resolveConfig(configParam, env, { withTracking = false } = {}) {
+async function resolveConfig(configParam, env, { withTracking = false, isTvLauncher = false } = {}) {
   const cleanParam = String(configParam || "").replace(/^c\//, "");
   if (cleanParam === "nuvio-default" || cleanParam === "default") {
     return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
   }
-  const creatorSync = await resolveCreatorSyncConfig(cleanParam, env);
+  const creatorSync = await resolveCreatorSyncConfig(cleanParam, env, { isTvLauncher });
   if (creatorSync) return creatorSync;
   // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
   if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });

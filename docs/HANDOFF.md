@@ -1,6 +1,40 @@
 # Handoff
 
-## Current work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
+## Current work: Dedicated Nuvio TV Launcher Add-on & Management Hub (2026-11-08)
+- **Isolated Standalone Navigation on `/nuvio-tv-launcher`**:
+  - The TV Launcher management hub operates as a completely separate application.
+  - Monkey-patches `history.pushState`, `history.replaceState`, `appShellHandleNav`, `appShellGo`, and `switchTab` directly inside `src/page/26_page-nuvio-tv-launcher.js`, preventing any navigation from changing `location.pathname` away from `/nuvio-tv-launcher`.
+  - Captures and intercepts internal link clicks (`a[href^="/"]`, `a[data-app-route]`) including the site logo, preventing default navigation and smoothly switching tabs within `/nuvio-tv-launcher`.
+  - Intercepts `navigateBackFromDetail()`: when on TV Launcher, returning from `list-details` or `item-details` returns to `window._tvPreviousTab || 'tv-home'` without calling `history.back()`, preventing the user from ever being kicked back to the main site.
+  - Added `popstate` guard to restore state to `/nuvio-tv-launcher` and close detail views without navigating to other pages.
+- **Channels & Lists Sections with Mirror Toggle**:
+  - Added dedicated navigation tabs: **Home (`tv-home`)**, **Lists (`tv-lists`)**, **Channels (`tv-channels`)**, **Collections (`tv-collections`)**, **Library (`tv-library`)**, **Discover (`discover`)**, and **Search (`search`)**.
+  - **Mirror ON (`tvMirrorSwitch` checked)**:
+    - Adding or removing catalogs, lists, or channels mutates the main account setup (`#lists .entry` and `entries`), and mirrors them live to TV shelves.
+  - **Mirror OFF (`tvMirrorSwitch` unchecked)**:
+    - Adding or removing catalogs, lists, or channels mutates ONLY `tvLauncherTvLists` saved to `/api/nuvio-tv/config`.
+    - Main site `mylistsaddon.com` (`entries`) remains 100% untouched.
+    - Wrapped `addRow`, `removeListFromConfig`, `isListAddedToConfig`, `toggleChannelInCatalog`, and `createInstantStorylineChannel` to isolate TV mutations and sync button state.
+- **Dedicated Add-on Identity (`app.my-list.tv`)**:
+  - Split the TV Launcher add-on (`TV_LAUNCHER_ADDON_ID = "app.my-list.tv"`, `TV_LAUNCHER_ADDON_NAME = "My Lists TV Launcher"`) from the regular add-on (`app.my-list`) and Collections add-on (`app.my-list.collections`).
+  - Eliminates device collisions in Nuvio profile sync when pairing TVs alongside desktop/mobile clients.
+  - Manifest endpoints: `GET /:config/tv/manifest.json` and `/nuvio-default/tv/manifest.json` declare `id: "app.my-list.tv"`, drop unnecessary subtitles tracking (since TV Launcher uses `/api/nuvio-tv/history`), and expose custom channels and TV shelves.
+  - Catalog and meta endpoints accept optional `/tv/` prefix (`/:config/tv/catalog/...` and `/:config/tv/meta/...`).
+  - `/api/nuvio-tv/sync/:target` and `/api/nuvio-tv/device/claim` now return `manifestUrl` pointing to `/tv/manifest.json`.
+- **TV Configuration API (`/api/nuvio-tv/config`)**:
+  - `GET /api/nuvio-tv/config`: returns current mirror status, active TV lists, main lists, and manifest/sync URLs.
+  - `POST /api/nuvio-tv/config`: persists TV configuration in `creatorsync:${username}:tv` and bumps `updatedAt`.
+  - Registered as `account` route in `tests/route-access.json`.
+- **Performance & Asset Size Budget**:
+  - All TV Hub scripts and interceptors stay isolated to `/nuvio-tv-launcher` via `26_page-nuvio-tv-launcher.js`, avoiding bundle bloat on `/app-features.js`.
+  - Avoided adding lines to `16_client-row-core.js` or `24_client-backup-restore-presets.js` to strictly preserve size budget rules.
+  - All helper functions stay strictly under the 150-line limit (`tests/size-budget.test.mjs`).
+- **Verification**:
+  - All 28 tests in `tests/nuvio-tv-sync.test.mjs` pass.
+  - All tests across `tests/size-budget.test.mjs`, `tests/design-system.test.mjs`, `tests/route-access.test.mjs`, and `tests/asset-size-budget.test.mjs` pass (232 tests, 0 failures).
+  - All changes pushed to remote branch `feat/nuvio-tv-launcher-addon`.
+
+## Earlier work: Phase 1, 2 & 3 Nuvio TV Launcher backend integration (2026-11-05, branch `feat/nuvio-tv-phase1`)
 - **16:9 Landscape Backdrops & Logo URL Cleanup for Channels**:
   - **Issue Resolved**: When users created custom channels (e.g. "Pokemon") on `mylistsaddon.com`, the channel metadata only attached the show/movie's vertical 2:3 poster, leaving `backdropUrl` empty or set to the vertical poster. When loaded into TV launchers (like Nuvio TV Launcher's Live TV / EPG Guide), the guide fell back to vertical posters or stretched them. In addition, vertical posters were mistakenly copied into `logoUrl`.
   - **Fix Implemented**:

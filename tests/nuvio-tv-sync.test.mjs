@@ -50,7 +50,7 @@ describe("Nuvio TV Launcher - Unified Sync Route (/api/nuvio-tv/sync/:target)", 
 
     assert.equal(data.ok, true);
     assert.ok(typeof data.versionHash === "string" && data.versionHash.length === 64, "valid SHA-256 versionHash");
-    assert.ok(data.manifestUrl.includes("/nuvio-default/manifest.json"), "manifestUrl points to nuvio-default manifest");
+    assert.ok(data.manifestUrl.includes("/nuvio-default/tv/manifest.json"), "manifestUrl points to nuvio-default tv manifest");
     assert.ok(data.collectionsUrl.includes("/api/nuvio-tv/collections/default"), "collectionsUrl points to default collections");
     assert.equal(data.randomizeItemsDaily, true, "randomizeItemsDaily is true");
 
@@ -957,3 +957,131 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
     assert.ok(diag.matched.includes("skipped (Nuvio client reports true completion via /api/nuvio-tv/history)"));
   });
 });
+
+describe("Nuvio TV Launcher - Dedicated TV Addon (app.my-list.tv) & /nuvio-tv-launcher Page", () => {
+  it("GET /nuvio-default/tv/manifest.json serves app.my-list.tv and drops subtitles resource", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const res = await call(env, "/nuvio-default/tv/manifest.json");
+    assert.equal(res.status, 200);
+    const m = res.body;
+
+    assert.equal(m.id, "app.my-list.tv");
+    assert.equal(m.name, "My Lists TV Launcher");
+    assert.ok(m.description.includes("Nuvio TV Launcher"));
+
+    // Verify subtitles resource is not declared (TV reports via /api/nuvio-tv/history)
+    const hasSubtitles = Array.isArray(m.resources) && m.resources.some((r) => r === "subtitles" || (r && r.name === "subtitles"));
+    assert.equal(hasSubtitles, false, "TV launcher manifest omits subtitles tracking resource");
+
+    // Regular manifest remains app.my-list
+    const regRes = await call(env, "/nuvio-default/manifest.json");
+    assert.equal(regRes.status, 200);
+    assert.equal(regRes.body.id, "app.my-list");
+    assert.equal(regRes.body.name, "My Lists");
+  });
+
+  it("GET /api/nuvio-tv/config requires auth and returns mirror status", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+
+    // Unauthenticated GET returns 401/403
+    const unauthRes = await call(env, "/api/nuvio-tv/config");
+    assert.ok(unauthRes.status === 401 || unauthRes.status === 403);
+
+    // Register creator user
+    const regRes = await call(env, "/api/creator/register", {
+      method: "POST",
+      json: { creatorName: "tvtestuser" },
+    });
+    assert.equal(regRes.status, 200);
+    const { creatorKey } = regRes.body;
+
+    // Seed regular lists
+    await env.CONFIGS.put("creatorsync:tvtestuser", JSON.stringify({
+      config: [
+        { id: "reg_list_1", name: "Main Phone List", type: "movie", enabled: true }
+      ],
+      updatedAt: Date.now()
+    }));
+
+    // Authenticated GET
+    const authRes = await call(env, "/api/nuvio-tv/config?creatorName=tvtestuser&creatorKey=" + encodeURIComponent(creatorKey));
+    assert.equal(authRes.status, 200);
+    assert.equal(authRes.body.ok, true);
+    assert.equal(authRes.body.mirror, true);
+    assert.equal(authRes.body.lists.length, 1);
+    assert.equal(authRes.body.lists[0].name, "Main Phone List");
+    assert.ok(authRes.body.manifestUrl.includes("/tvtestuser/tv/manifest.json"));
+  });
+
+  it("POST /api/nuvio-tv/config saves independent TV lists when mirror is false", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const regRes = await call(env, "/api/creator/register", {
+      method: "POST",
+      json: { creatorName: "customtvuser" },
+    });
+    const { creatorKey } = regRes.body;
+
+    // Main lists
+    await env.CONFIGS.put("creatorsync:customtvuser", JSON.stringify({
+      config: [
+        { id: "phone_list", name: "Personal Anime", type: "series", enabled: true }
+      ],
+      updatedAt: Date.now()
+    }));
+
+    // Save TV custom setup with mirror: false
+    const saveTvRes = await call(env, "/api/nuvio-tv/config", {
+      method: "POST",
+      json: {
+        creatorName: "customtvuser",
+        creatorKey,
+        mirror: false,
+        lists: [
+          { id: "living_room_kids", name: "Kids Movies", type: "movie", enabled: true }
+        ]
+      }
+    });
+    assert.equal(saveTvRes.status, 200);
+    assert.equal(saveTvRes.body.ok, true);
+
+    // GET /:username/tv/manifest.json returns TV custom lists
+    const tvManifestRes = await call(env, "/customtvuser/tv/manifest.json");
+    assert.equal(tvManifestRes.status, 200);
+    assert.equal(tvManifestRes.body.id, "app.my-list.tv");
+    assert.equal(tvManifestRes.body.name, "My Lists TV Launcher");
+    assert.ok(tvManifestRes.body.catalogs.some((c) => c.name === "Kids Movies"));
+    assert.ok(!tvManifestRes.body.catalogs.some((c) => c.name === "Personal Anime"));
+
+    // Meanwhile GET /:username/manifest.json still returns the regular main lists!
+    const regManifestRes = await call(env, "/customtvuser/manifest.json");
+    assert.equal(regManifestRes.status, 200);
+    assert.equal(regManifestRes.body.id, "app.my-list");
+    assert.equal(regManifestRes.body.name, "My Lists");
+    assert.ok(regManifestRes.body.catalogs.some((c) => c.name === "Personal Anime"));
+    assert.ok(!regManifestRes.body.catalogs.some((c) => c.name === "Kids Movies"));
+  });
+
+  it("GET /nuvio-tv-launcher renders the full web app shell with TV Launcher hub", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const res = await call(env, "/nuvio-tv-launcher");
+    assert.equal(res.status, 200);
+    const html = res.text;
+    assert.ok(html.includes('data-app-shell="1"'));
+    assert.ok(html.includes("app.my-list.tv"));
+    assert.ok(html.includes("initNuvioTvLauncherMode"));
+    assert.ok(html.includes("tv-home"));
+    assert.ok(html.includes("tv-lists"));
+    assert.ok(html.includes("tv-channels"));
+    assert.ok(html.includes("tv-collections"));
+    assert.ok(html.includes("tv-library"));
+    assert.ok(html.includes("initTvNavInterceptors"));
+    assert.ok(html.includes("initTvCatalogInterceptors"));
+    assert.ok(html.includes("updateTvChannelAndStorylineButtons"));
+    assert.ok(html.includes("isChannelInTvConfig"));
+  });
+});
+
+
+
+
+

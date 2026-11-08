@@ -15,6 +15,7 @@ async function handleCreatorApiSyncRoutes(request, env, ctx, url, path) {
   if (path === "/api/nuvio-tv/device/code") return handleNuvioTvDeviceCode(request, env, ctx, url);
   if (path === "/api/nuvio-tv/device/poll") return handleNuvioTvDevicePoll(request, env, ctx, url);
   if (path === "/api/nuvio-tv/device/claim") return handleNuvioTvDeviceClaim(request, env, ctx, url, path);
+  if (path === "/api/nuvio-tv/config") return handleNuvioTvConfig(request, env, ctx, url, path);
   return null;
 }
 
@@ -887,7 +888,7 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
   }
 
   const origin = url ? url.origin : "";
-  const manifestUrl = `${origin}/${auth.username}/manifest.json`;
+  const manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
   const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
 
   const updated = {
@@ -906,4 +907,79 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
   await kv.put("nuvio_tv_code:" + cleanCode, updatedStr, { expirationTtl: 600 });
 
   return json({ ok: true, installId: updated.installId, manifestUrl, syncUrl }, 200, corsHeaders());
+}
+
+// GET/POST /api/nuvio-tv/config -- reads or updates TV Launcher specific config (mirror toggle and custom TV lists/channels)
+async function handleNuvioTvConfig(request, env, ctx, url, path) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders() });
+  }
+  let body = {};
+  if (request.method === "POST") {
+    try {
+      body = await readJsonObject(request);
+    } catch {
+      return json({ ok: false, error: "Invalid JSON body." }, 400, corsHeaders());
+    }
+  }
+  const creatorName = (body && body.creatorName) || (url && url.searchParams.get("creatorName")) || "";
+  const creatorKey = (body && body.creatorKey) || (url && url.searchParams.get("creatorKey")) || "";
+  const auth = await authenticateCreatorFor(request, env, ctx, path, creatorName, creatorKey);
+  if (!auth.ok) return authFailureResponse(auth);
+
+  const kv = env && (env.CONFIGS || env["LIST_CACHE"]);
+  if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+
+  if (request.method === "GET") {
+    let tvConfig = null;
+    let mainConfig = null;
+    try {
+      const [tvRaw, mainRaw] = await Promise.all([
+        kv.get(`creatorsync:${auth.username}:tv`),
+        kv.get(`creatorsync:${auth.username}`)
+      ]);
+      if (tvRaw) tvConfig = JSON.parse(tvRaw);
+      if (mainRaw) mainConfig = JSON.parse(mainRaw);
+    } catch {}
+
+    const mirror = tvConfig ? tvConfig.mirror !== false : true;
+    const mainEntries = (mainConfig && (mainConfig.entries || mainConfig.config || mainConfig.lists)) || [];
+    const tvEntries = (tvConfig && (tvConfig.entries || tvConfig.config || tvConfig.lists)) || [];
+
+    return json({
+      ok: true,
+      username: auth.username,
+      mirror,
+      lists: mirror ? mainEntries : tvEntries,
+      mainLists: mainEntries,
+      tvLists: tvEntries,
+      catalogOrder: (tvConfig && tvConfig.catalogOrder) || null,
+      channelIds: (tvConfig && tvConfig.channelIds) || null,
+      updatedAt: (tvConfig && tvConfig.updatedAt) || (mainConfig && mainConfig.updatedAt) || 0,
+      manifestUrl: `${url ? url.origin : ""}/${auth.username}/tv/manifest.json`,
+      syncUrl: `${url ? url.origin : ""}/api/nuvio-tv/sync/${auth.username}`
+    }, 200, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
+  if (request.method === "POST") {
+    const mirror = body.mirror !== false;
+    const entries = Array.isArray(body.lists) ? body.lists : (Array.isArray(body.entries) ? body.entries : []);
+    const catalogOrder = Array.isArray(body.catalogOrder) ? body.catalogOrder : entries.map((e) => e.id || e.catalogId || e.name);
+    const channelIds = Array.isArray(body.channelIds) ? body.channelIds : null;
+    const now = Date.now();
+
+    const tvPayload = {
+      mirror,
+      entries,
+      lists: entries,
+      catalogOrder,
+      channelIds,
+      updatedAt: now
+    };
+
+    await kv.put(`creatorsync:${auth.username}:tv`, JSON.stringify(tvPayload));
+    return json({ ok: true, mirror, updatedAt: now }, 200, corsHeaders());
+  }
+
+  return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
 }
