@@ -53,6 +53,7 @@ const PREFIXES = {
   "/api/lists/": "public reads, account writes, tests/lists-v2.test.mjs",
   "/api/me/": "account, tests/security-suite.test.mjs",
   "/api/nuvio-tv/schedule/": "public (like /api/nuvio-tv/sync), tests/nuvio-tv-schedule.test.mjs",
+  "/api/nuvio-tv/schedules/": "public (like /api/nuvio-tv/sync), tests/nuvio-tv-schedule.test.mjs",
   "/api/poster/": "public images",
   "/api/safe-poster": "public images",
   "/api/scrobble": "token in the URL or body, tests/scrobble-queue.test.mjs",

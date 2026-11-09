@@ -1317,6 +1317,8 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   }
   const schedRes = await handleNuvioTvScheduleRoute(request, env, ctx, url, path);
   if (schedRes) return schedRes;
+  const schedsRes = await handleNuvioTvSchedulesRoute(request, env, ctx, url, path);
+  if (schedsRes) return schedsRes;
   const colRes = await handleNuvioTvCollectionsRoute(request, env, ctx, url, path);
   if (colRes) return colRes;
   const histRes = await handleNuvioTvHistoryRoute(request, env, ctx, url, path);
