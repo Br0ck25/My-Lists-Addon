@@ -56,6 +56,10 @@ function fakeServices(state) {
       return eps ? json({ meta: { videos: eps } }) : json({}, 404);
     }
     if (url.hostname === "api.nuvio.tv") {
+      if (url.pathname === "/auth/v1/logout") {
+        seen.nuvioLogouts = (seen.nuvioLogouts || []).concat([{ auth: new Headers(init.headers || {}).get("authorization"), apikey: new Headers(init.headers || {}).get("apikey") }]);
+        return new Response(null, { status: state.logoutFails ? 500 : 204 });
+      }
       if (url.pathname === "/auth/v1/token") {
         const grant = url.searchParams.get("grant_type");
         if (grant === "password") {
@@ -84,6 +88,8 @@ function fakeServices(state) {
         const auth = new Headers(init.headers || {}).get("authorization");
         seen.nuvio.push({ fn, auth, body });
         if (state.nuvioRejects || auth !== "Bearer " + state.nuvioToken) return json({ message: "JWT expired" }, 401);
+        if (state.rateLimited > 0) { state.rateLimited--; return new Response("{}", { status: 429, headers: { "retry-after": "0" } }); }
+        if (state.rpcStatus && state.rpcStatus[fn]) return json({ message: "no" }, state.rpcStatus[fn]);
         // The documented shape: profile rows carry no collections; those come from sync_pull_collections.
         if (fn === "sync_pull_profiles") return json((state.profiles || [{ profile_index: 1, name: "Main" }]).map(({ collections_json, ...profile }) => profile));
         if (fn === "sync_pull_collections") {
@@ -2481,5 +2487,64 @@ describe("two-way sync: Nuvio positions", () => {
     await runAgain(ctx, "nuvio");
     assert.equal((seen.progressPushed || []).length, 0);
     assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_positions WHERE source = 'nuvio'").get().n, 1, "Nuvio's own is stored, just not returned");
+  });
+});
+
+describe("Nuvio: rate limits, errors and signing out", () => {
+  const watched = () => [{ content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR }];
+  async function connected(name, extra = {}) {
+    const state = { watched: watched(), progress: [], ...extra };
+    const seen = fakeServices(state);
+    const ctx = await setup(name);
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    return { state, seen, ctx };
+  }
+  const lastError = (ctx) => ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync").get().last_error;
+
+  it("waits and tries again when Nuvio answers 429, and the sync still finishes", async () => {
+    const { state, seen, ctx } = await connected("nu429");
+    state.watched.push({ content_id: "tt4444444", content_type: "movie", title: "Movie D", watched_at: NOW - HOUR });
+    state.rateLimited = 2;
+    seen.nuvio.length = 0;
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt4444444"), "the play arrived despite two refusals");
+    assert.equal(state.rateLimited, 0, "both refusals were used up");
+    const repeated = seen.nuvio.some((c, i) => i >= 2 && c.fn === seen.nuvio[i - 1].fn && c.fn === seen.nuvio[i - 2].fn && JSON.stringify(c.body) === JSON.stringify(seen.nuvio[i - 1].body));
+    assert.ok(repeated, "the refused call was sent again, three times in all, not given up on");
+  });
+
+  it("says Nuvio is busy, instead of a bare status, when it keeps answering 429", async () => {
+    const { state, ctx } = await connected("nu429b");
+    state.rateLimited = 99;
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } }).catch(() => null);
+    assert.match(lastError(ctx) || "", /busy/i);
+    assert.doesNotMatch(lastError(ctx) || "", /429/);
+  });
+
+  it("explains a conflict and an unprocessable request in words", async () => {
+    const { state, ctx } = await connected("nu409");
+    for (const [status, pattern] of [[409, /conflict/i], [422, /could not accept/i]]) {
+      state.rpcStatus = { sync_pull_watched_items: status };
+      await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } }).catch(() => null);
+      assert.match(lastError(ctx) || "", pattern, `status ${status}`);
+    }
+  });
+
+  it("signs out at Nuvio when the account is disconnected, with the stored token", async () => {
+    const { seen, ctx } = await connected("nulogout");
+    const gone = await call(ctx.env, "/api/connections/nuvio", { method: "DELETE", cookie: ctx.cookie });
+    assert.equal(gone.body.removed, true);
+    assert.equal(gone.body.revokedAtProvider, true);
+    assert.equal(seen.nuvioLogouts.length, 1);
+    assert.match(seen.nuvioLogouts[0].auth, /^Bearer ACCESS-/);
+    assert.ok(seen.nuvioLogouts[0].apikey);
+  });
+
+  it("still disconnects here when Nuvio's sign-out fails", async () => {
+    const { ctx } = await connected("nulogout2", { logoutFails: true });
+    const gone = await call(ctx.env, "/api/connections/nuvio", { method: "DELETE", cookie: ctx.cookie });
+    assert.equal(gone.body.removed, true);
+    assert.equal(ctx.env.DB._db.prepare("SELECT count(*) AS n FROM provider_connections WHERE provider = 'nuvio'").get().n, 0);
   });
 });

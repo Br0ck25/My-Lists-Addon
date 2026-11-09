@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b6c365f18d";
+const WORKER_BUILD = "9eab2e5d19";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -96017,6 +96017,15 @@ async function revokeAtProvider(env, provider, conn) {
       await stremioLogout(conn.accessToken);
       return true;
     }
+    if (provider === "nuvio" && conn.accessToken) {
+      // The session at Nuvio (its API's sign-out). The token may have expired, which Nuvio answers 401: nothing to end then.
+      const res = await fetch(`${nuvioBase(env)}/auth/v1/logout`, {
+        method: "POST",
+        headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${conn.accessToken}`, "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      return res.ok;
+    }
     if (provider === "tmdb" && conn.accessToken) {
       const apiKey = conn.apiKey || TMDB_API_KEY;
       if (!apiKey) return false;
@@ -109740,7 +109749,7 @@ async function nuvioToken(env, grant, body) {
   if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 422) {
     throw mediaAppError("invalid", grant === "password" ? "Nuvio did not accept that email and password." : "Nuvio refused to renew this sign-in.");
   }
-  if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
+  if (!res.ok) throw nuvioStatusError(res.status);
   const d = await res.json().catch(() => null);
   if (!d || !d.access_token || !d.refresh_token) throw mediaAppError("unreachable", "Nuvio sent a reply we could not read.");
   const user = d.user && typeof d.user === "object" ? d.user : {};
@@ -109754,17 +109763,22 @@ async function nuvioToken(env, grant, body) {
 }
 
 async function nuvioRpc(env, accessToken, fn, params, options = {}) {
-  const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
-    body: JSON.stringify(params || {}),
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
+      body: JSON.stringify(params || {}),
+    });
+    if (res.status !== 429 || attempt >= NUVIO_RETRIES) break;
+    await nuvioBackoff(res, attempt);
+  }
   if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Nuvio refused this sign-in.");
   if (options.range && res.status === 416) {
     const match = /^\*\/(\d+)$/.exec(res.headers.get("content-range") || "");
     if (match && Number(options.range.split("-")[0]) >= Number(match[1])) return options.returnPage ? { rows: [], total: Number(match[1]) } : [];
   }
-  if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
+  if (!res.ok) throw nuvioStatusError(res.status);
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
@@ -110193,6 +110207,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
       await setMediaAppSyncError(env, accountId, provider, "Sign in again to keep syncing.");
       return { done: true, skipped: "reauth" };
     }
+    // Busy, a conflict, data refused: say so on the settings page, and let the job try again.
+    if (e && e.nuvioStatus) await setMediaAppSyncError(env, accountId, provider, e.message);
     throw e;
   }
   const applied = await applyMediaAppRecords(env, accountId, provider, fetched.records);
@@ -111624,6 +111640,35 @@ async function nuvioReadProfile(env, token, profileIndex, step) {
     }
   }
   return { mode: "snapshot", pending, cleared: [], removed: [], profile: await nuvioFetchProfile(env, token, profileIndex) };
+}
+// Nuvio's rate limit and error answers (public API: 100 requests per second per
+// user as a client-side guideline; 429 when limited; 409 duplicate key; 422
+// unprocessable). A 429 is waited out and tried again, which is safe for the
+// writes too: a refused request was not applied. Anything still refused after
+// NUVIO_RETRIES waits becomes a message the settings page can show.
+
+const NUVIO_RETRIES = 3;
+const NUVIO_RETRY_MAX_MS = 3000;
+
+// Waits before trying again: Nuvio's Retry-After (seconds) if it sent one, else
+// 0.4 s, 0.8 s, 1.6 s; never more than NUVIO_RETRY_MAX_MS.
+async function nuvioBackoff(res, attempt) {
+  const asked = Number(res.headers && res.headers.get && res.headers.get("retry-after"));
+  const ms = Number.isFinite(asked) && asked >= 0 ? asked * 1000 : 400 * 2 ** attempt;
+  const wait = Math.min(ms, NUVIO_RETRY_MAX_MS);
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+}
+
+// The error for a Nuvio answer that is not a success, in words. nuvioStatus marks
+// it as one of these so the pull can show the message.
+function nuvioStatusError(status) {
+  let message = `Nuvio answered ${status}.`;
+  if (status === 429) message = "Nuvio is busy. It will try again.";
+  else if (status === 409) message = "Nuvio reported a conflict with something already saved. It will try again.";
+  else if (status === 422) message = "Nuvio could not accept that data.";
+  const e = mediaAppError("unreachable", message);
+  e.nuvioStatus = status;
+  return e;
 }
 // Stored playback positions, and Nuvio "mirroring" (activity migration A0003).
 //

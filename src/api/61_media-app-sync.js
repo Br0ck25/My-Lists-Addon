@@ -350,7 +350,7 @@ async function nuvioToken(env, grant, body) {
   if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 422) {
     throw mediaAppError("invalid", grant === "password" ? "Nuvio did not accept that email and password." : "Nuvio refused to renew this sign-in.");
   }
-  if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
+  if (!res.ok) throw nuvioStatusError(res.status);
   const d = await res.json().catch(() => null);
   if (!d || !d.access_token || !d.refresh_token) throw mediaAppError("unreachable", "Nuvio sent a reply we could not read.");
   const user = d.user && typeof d.user === "object" ? d.user : {};
@@ -364,17 +364,22 @@ async function nuvioToken(env, grant, body) {
 }
 
 async function nuvioRpc(env, accessToken, fn, params, options = {}) {
-  const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
-    body: JSON.stringify(params || {}),
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
+      body: JSON.stringify(params || {}),
+    });
+    if (res.status !== 429 || attempt >= NUVIO_RETRIES) break;
+    await nuvioBackoff(res, attempt);
+  }
   if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Nuvio refused this sign-in.");
   if (options.range && res.status === 416) {
     const match = /^\*\/(\d+)$/.exec(res.headers.get("content-range") || "");
     if (match && Number(options.range.split("-")[0]) >= Number(match[1])) return options.returnPage ? { rows: [], total: Number(match[1]) } : [];
   }
-  if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
+  if (!res.ok) throw nuvioStatusError(res.status);
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
@@ -803,6 +808,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
       await setMediaAppSyncError(env, accountId, provider, "Sign in again to keep syncing.");
       return { done: true, skipped: "reauth" };
     }
+    // Busy, a conflict, data refused: say so on the settings page, and let the job try again.
+    if (e && e.nuvioStatus) await setMediaAppSyncError(env, accountId, provider, e.message);
     throw e;
   }
   const applied = await applyMediaAppRecords(env, accountId, provider, fetched.records);

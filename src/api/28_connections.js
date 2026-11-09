@@ -199,6 +199,15 @@ async function revokeAtProvider(env, provider, conn) {
       await stremioLogout(conn.accessToken);
       return true;
     }
+    if (provider === "nuvio" && conn.accessToken) {
+      // The session at Nuvio (its API's sign-out). The token may have expired, which Nuvio answers 401: nothing to end then.
+      const res = await fetch(`${nuvioBase(env)}/auth/v1/logout`, {
+        method: "POST",
+        headers: { "apikey": nuvioKey(env), "Authorization": `Bearer ${conn.accessToken}`, "User-Agent": `my-list-addon/${ADDON_VERSION}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      return res.ok;
+    }
     if (provider === "tmdb" && conn.accessToken) {
       const apiKey = conn.apiKey || TMDB_API_KEY;
       if (!apiKey) return false;
