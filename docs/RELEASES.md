@@ -2596,10 +2596,12 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 ### Checked
 `bash verify.sh -q` passes. New `tests/nuvio-tv-schedule.test.mjs` (6): contiguous programmes from now covering a day, identical on every request and isolate, an edit keeps what is on air and rebuilds after it, default runtimes, ETag/304 and 404s, an empty lineup. Shown red by breaking the edit rule and the start-on-a-mark rule. Not tested: a real KV, and two simultaneous first requests (last write wins, by design).
 
-## 2026-11-09 — Better Posters missing on the TV Launcher, and one request for all schedules (build `0ab6bd9227`, prepared; not deployed)
+## 2026-11-09 — Better Posters missing on the TV Launcher, and one request for all schedules (build `b5654a9f87`, prepared; not deployed)
 
 - **Fixed: Better Posters (and every other account setting) was dropped for an account whose TV Launcher has its own lists.** A TV-only lineup (the TV hub's "mirror" switch off) is saved with just its lists (`POST /api/nuvio-tv/config`), and the TV catalogs read their settings off that record alone, so Better Posters, provider keys, region, badges and the rest came back as defaults. Nuvio, reading the main config, kept them, which is why posters showed there and not on the launcher. The TV record now takes its settings from the account's main synced config (the lists stay the TV ones). `tests/nuvio-tv-tv-settings.test.mjs`; the Better Posters test fails without the fix.
 - **New `GET /api/nuvio-tv/schedules/:target?channels=a,b,c`** (public, like `/sync`; ETag and 304): every channel's schedule in one response with one tag, capped at 40 channels; an unknown channel is listed under `missing`, not an error. The launcher used to ask once per channel every five minutes. The single-channel route is unchanged and answers from the same code.
+- **The schedule routes are rate limited.** `/api/nuvio-tv/schedule/` and `/schedules/` are public and a lookup can mean resolving a lineup (TMDB calls), so each request now spends one unit per channel it names from a per-address budget of 120 a minute (a launcher uses a handful every five minutes). Over it: 429 with `Retry-After`. Both routes share the budget; no client address is refused, like the other limiters.
+- **The sync payload lists what the server offers** (`features`: `etag`, `schedule`, `schedules`), so a launcher asks only for what exists instead of probing and backing off on a 404. An older launcher ignores it.
 
 ### Owner steps
 1. Paste the new Worker. Nothing else. An account with TV-only lists needs no re-save: the next launcher sync sees the poster settings.

@@ -110,3 +110,14 @@ describe("sync route: Better Posters", () => {
     assert.notEqual(before, after);
   });
 });
+
+describe("sync route: what the server offers", () => {
+  it("lists its launcher-facing features, for the default target and an account", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    await savedUser(env, "feat1");
+    for (const target of ["default", "feat1"]) {
+      const res = await call(env, `/api/nuvio-tv/sync/${target}`);
+      assert.deepEqual([...res.body.features].sort(), ["etag", "schedule", "schedules"], target);
+    }
+  });
+});

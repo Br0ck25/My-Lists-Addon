@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0ab6bd9227";
+const WORKER_BUILD = "b5654a9f87";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -92718,6 +92718,11 @@ function nuvioTvSyncResponse(request, payload, versionHash, cacheControl) {
   return jsonPublic(payload, 200, headers);
 }
 
+// What this Worker offers a launcher beyond the original sync payload, so it asks only for what
+// exists instead of probing and backing off on a 404. Add a name when a launcher-facing feature
+// is added; never remove one a released launcher may rely on.
+const NUVIO_TV_SERVER_FEATURES = ["etag", "schedule", "schedules"];
+
 // GET /api/nuvio-tv/sync/:target -- unified sync route for Nuvio TV Launcher
 async function buildNuvioTvSyncDefaultResponse(url, request) {
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
@@ -92744,6 +92749,7 @@ async function buildNuvioTvSyncDefaultResponse(url, request) {
     catalogOrder,
     collections,
     channels,
+    features: NUVIO_TV_SERVER_FEATURES,
   }, versionHash, "public, max-age=300");
 }
 
@@ -93718,6 +93724,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     channels,
     betterPosters,
     ...(customPosterPattern ? { customPosterPattern } : {}),
+    features: NUVIO_TV_SERVER_FEATURES,
   }, versionHash, "no-cache, no-store, must-revalidate, max-age=0");
 }
 
@@ -97763,6 +97770,22 @@ async function nuvioTvScheduleFor(env, ctx, url, target, wantedId, now) {
 
 const NUVIO_TV_SCHEDULE_NO_STORE = "no-cache, no-store, must-revalidate, max-age=0";
 const NUVIO_TV_SCHEDULE_BATCH_MAX = 40;
+// Channel lookups one address may spend a minute. A schedule can mean resolving a lineup (TMDB
+// calls, KV reads), and these routes are public like /sync, so a request is charged one unit per
+// channel it asks for. A launcher uses a handful every five minutes; this is far above that
+// (several households behind one address) and far below what a loop could spend.
+const NUVIO_TV_SCHEDULE_MAX_PER_MINUTE = 120;
+
+// A ready 429 when this address has spent its lookups, else null. Fails closed with no client
+// address, like the other limiters (searchRateLimitResponse, 02_).
+async function nuvioTvScheduleRateLimit(request, env, ctx, cost) {
+  const ip = clientIpKey(request);
+  if (!ip) return json({ ok: false, error: "Could not process this request." }, 400, { "Cache-Control": "no-store" });
+  if (await consumeRateLimit(env, ctx, "nuviotvsched", ip, NUVIO_TV_SCHEDULE_MAX_PER_MINUTE, 60, cost)) {
+    return json({ ok: false, error: "Too many schedule requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store", "Retry-After": "30" });
+  }
+  return null;
+}
 
 function nuvioTvScheduleNotFound() {
   return json({ ok: false, error: "Channel not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
@@ -97779,6 +97802,8 @@ async function handleNuvioTvScheduleRoute(request, env, ctx, url, path) {
   const target = safeDecodeURIComponent(rest[0] || "").trim();
   const wantedId = safeDecodeURIComponent(rest.slice(1).join("/")).trim().replace(/^channel_/, "");
   if (!target || !wantedId) return nuvioTvScheduleNotFound();
+  const limited = await nuvioTvScheduleRateLimit(request, env, ctx, 1);
+  if (limited) return limited;
 
   const slots = await nuvioTvScheduleFor(env, ctx, url, target, wantedId, Date.now());
   if (!slots) return nuvioTvScheduleNotFound();
@@ -97799,6 +97824,8 @@ async function handleNuvioTvSchedulesRoute(request, env, ctx, url, path) {
   const wanted = [...new Set(String(url.searchParams.get("channels") || "")
     .split(",").map((c) => c.trim().replace(/^channel_/, "")).filter(Boolean))].slice(0, NUVIO_TV_SCHEDULE_BATCH_MAX);
   if (!target || !wanted.length) return nuvioTvScheduleNotFound();
+  const limited = await nuvioTvScheduleRateLimit(request, env, ctx, wanted.length);
+  if (limited) return limited;
 
   const now = Date.now();
   const results = await Promise.all(wanted.map((id) => nuvioTvScheduleFor(env, ctx, url, target, id, now).catch(() => null)));

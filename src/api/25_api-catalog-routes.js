@@ -417,6 +417,11 @@ function nuvioTvSyncResponse(request, payload, versionHash, cacheControl) {
   return jsonPublic(payload, 200, headers);
 }
 
+// What this Worker offers a launcher beyond the original sync payload, so it asks only for what
+// exists instead of probing and backing off on a 404. Add a name when a launcher-facing feature
+// is added; never remove one a released launcher may rely on.
+const NUVIO_TV_SERVER_FEATURES = ["etag", "schedule", "schedules"];
+
 // GET /api/nuvio-tv/sync/:target -- unified sync route for Nuvio TV Launcher
 async function buildNuvioTvSyncDefaultResponse(url, request) {
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
@@ -443,6 +448,7 @@ async function buildNuvioTvSyncDefaultResponse(url, request) {
     catalogOrder,
     collections,
     channels,
+    features: NUVIO_TV_SERVER_FEATURES,
   }, versionHash, "public, max-age=300");
 }
 
@@ -1417,6 +1423,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     channels,
     betterPosters,
     ...(customPosterPattern ? { customPosterPattern } : {}),
+    features: NUVIO_TV_SERVER_FEATURES,
   }, versionHash, "no-cache, no-store, must-revalidate, max-age=0");
 }
 

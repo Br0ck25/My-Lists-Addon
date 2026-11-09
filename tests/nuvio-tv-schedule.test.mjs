@@ -2,7 +2,7 @@
 // shows the same guide. See src/api/29_nuvio-tv-schedule.js.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { makeEnv, makeD1, makeKv, call, accountProof, freshIsolate } from "./harness.mjs";
+import { makeEnv, makeD1, makeKv, call, accountProof, freshIsolate, awaitFreshRateWindow } from "./harness.mjs";
 
 const MIN = 60000;
 const ep = (n, runtime) => ({ kind: "episode", imdbId: "tt0108778", season: 1, episode: n, showName: "Friends", epName: `Ep ${n}`, title: `Friends S1E${n}`, runtime });
@@ -127,5 +127,21 @@ describe("nuvio tv schedule", () => {
     const res = await get(env, `/api/nuvio-tv/schedules/nobody?channels=${many}`);
     assert.equal(res.status, 200);
     assert.equal(res.body.missing.length, 40, "capped, so one request cannot fan out without limit");
+  });
+
+  it("one address can only spend so many channel lookups a minute, and others are unaffected", async () => {
+    // The schedule routes are public and a lookup can mean resolving a lineup, so a request is charged
+    // one unit per channel it names. 120 a minute: three full batches pass, the fourth is refused.
+    await awaitFreshRateWindow();
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const forty = Array.from({ length: 40 }, (_, i) => `c${i}`).join(",");
+    const ask = (ip) => get(env, `/api/nuvio-tv/schedules/nobody?channels=${forty}`, { ip });
+    for (let i = 0; i < 3; i++) assert.equal((await ask("203.0.113.7")).status, 200, `batch ${i + 1} is within the budget`);
+    const refused = await ask("203.0.113.7");
+    assert.equal(refused.status, 429);
+    assert.ok(Number(refused.headers.get("Retry-After")) > 0, "says when to come back");
+    assert.equal((await ask("203.0.113.8")).status, 200, "another address has its own budget");
+    // The single-channel route spends from the same budget.
+    assert.equal((await get(env, "/api/nuvio-tv/schedule/nobody/ch_x", { ip: "203.0.113.7" })).status, 429);
   });
 });
