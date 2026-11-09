@@ -2560,3 +2560,38 @@ The *Playback streams* column in the admin Traffic table fell from 200+ a day to
 
 - With the toggle off, the install no longer lists the Movies and Series search rows, and its `/meta` and search routes answer nothing for real titles, so Stremio and Nuvio send details and search to another add-on. TV Channel pages are unchanged. Reinstall after changing the toggle.
 - Tests: `tests/metadata-off.test.mjs` (new); `tests/pictorium.test.mjs` no longer expects search rows with metadata off, because that was the reported bug.
+
+## 2026-11-09 — Nuvio TV Launcher sync: 304s and Better Posters answered in the payload (build `e5c45f3bbd`, prepared; not deployed)
+
+- **`/api/nuvio-tv/sync/:target` sends an `ETag`** (its `versionHash`) and answers a matching `If-None-Match` (a W/ tag, a list, or `*`) with a bare 304, for the default target as well as a user's. The launcher polls this every five minutes; it no longer has to download and parse an unchanged payload. The Worker still does the same reads to know it is unchanged, so this saves bandwidth, not Worker work. `Cache-Control` is unchanged (`no-store` for a user, `public, max-age=300` for the default).
+- **The payload now says whether Better Posters is on** (`betterPosters`) **and the URL pattern for it** (`customPosterPattern`, this Worker's own `/bp/…/{imdb_id}.jpg` with the account's chosen style). The launcher used to download the first catalog and search it for `/bp/` or `btttr.cc` to find out. Pictorium and RatingPosterDB win over Better Posters, so with either on it says false. Both fields are in the hash, so a change of poster style reaches the launcher.
+
+### Owner steps
+1. Paste the new Worker. Nothing else; an older launcher ignores the new fields and keeps probing.
+
+### Checked
+New tests in `tests/nuvio-tv-sync-etag-posters.test.mjs` (9; all failed before the change): tag equals the hash, 304 and its tag forms, a changed payload sends in full again, the default target, the flag and pattern, the style, and the hash moving with the style. The existing sync tests still pass unchanged.
+
+## 2026-11-09 — A channel's episodes now carry their runtime (build `147acb579f`, prepared; not deployed)
+
+- **`/meta/series/channel_<id>.json` videos include `runtime`** ("136 min") for every pick whose runtime the builder stored. Without it the Nuvio TV Launcher sized each programme slot from a 100-minute default, so its guide could say a film had a minute left when it had 40. The launcher already reads `runtime` from a video; it asks TMDB only when none is given.
+- Picks without a stored runtime are unchanged (no `runtime` key).
+
+### Owner steps
+1. Paste the new Worker. Nothing else.
+
+### Checked
+New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and an episode with runtimes come out as "136 min" and "22 min", a pick with none has no key; it failed before the change.
+
+## 2026-11-09 — One schedule per channel for the Nuvio TV Launcher (build `488e106c20`, prepared; not deployed)
+
+- **New `GET /api/nuvio-tv/schedule/:target/:channelId`** (public, like `/sync`; ETag and 304). The Worker keeps one schedule per channel in KV (`nuviotvsched:<account>:<channel>`, 14-day expiry), laid end to end from the channel's lineup and extended to 26 hours ahead, and every device that asks gets the same programmes with the same start and end times. Before, each launcher built its own timeline from the moment it first opened a channel, so devices on one account showed different guides.
+- **A new channel** starts its first programme at the current five-minute mark. **An edited channel** (picks added, removed or reordered, or a rotating channel's day turning over) keeps the programme airing now exactly as it was and rebuilds what follows from the new lineup; programmes already aired are never rewritten.
+- A pick with no runtime on record counts as 100 minutes (movie) or 45 (episode), the launcher's own defaults. Dynamic "Next Up" and "Hide watched" channels are planned without the account's watch history, so they are the same on every device.
+- Edits show up within about five minutes (the lineup is re-read at most that often per isolate); the schedule write happens only when it changed.
+
+### Owner steps
+1. Paste the new Worker. Nothing else; the route is new and nothing else changes.
+
+### Checked
+`bash verify.sh -q` passes. New `tests/nuvio-tv-schedule.test.mjs` (6): contiguous programmes from now covering a day, identical on every request and isolate, an edit keeps what is on air and rebuilds after it, default runtimes, ETag/304 and 404s, an empty lineup. Shown red by breaking the edit rule and the start-on-a-mark rule. Not tested: a real KV, and two simultaneous first requests (last write wins, by design).

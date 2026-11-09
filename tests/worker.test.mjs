@@ -12557,6 +12557,17 @@ describe("worker: a movie inside a channel", () => {
     assert.notEqual(res.status, 200, "and must not serve a stream route either");
   });
 
+  it("passes a pick's runtime on, so a TV launcher can size its slot to the real length", async () => {
+    // The builder stores a pick's runtime in minutes when it knows it. Without
+    // it in the video, the Nuvio TV Launcher fell back to a 100-minute guess,
+    // and its guide showed a film as nearly over when it had 40 minutes left.
+    const meta = await channelFns.buildChannelMeta(
+      channelEntry([{ ...MOVIE, runtime: 136 }, { ...EPISODE, runtime: 22 }, { ...EPISODE, episode: 14 }]),
+      "https://example.com",
+    );
+    assert.deepEqual(Array.from(meta.videos, (v) => v.runtime), ["136 min", "22 min", undefined]);
+  });
+
   it("dates a pick so it reads the same on every clock", async () => {
     // Midnight UTC is the previous evening anywhere west of Greenwich, which
     // is how a 1996 movie in a channel came out as "Dec 31, 1995" in the US.
