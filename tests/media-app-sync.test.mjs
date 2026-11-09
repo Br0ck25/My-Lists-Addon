@@ -120,6 +120,14 @@ function fakeServices(state) {
           if (match && start >= all.length && all.length) return new Response("", { status: 416, headers: { "Content-Range": `*/${all.length}` } });
           return new Response(JSON.stringify(all.slice(start, end + 1)), { status: 200, headers: { "content-type": "application/json", "content-range": `${start}-${Math.min(end, all.length - 1)}/${all.length}` } });
         }
+        // The documented incremental endpoints. Only answered when a test sets *Events, so older tests see none.
+        if (fn === "sync_get_watched_items_delta_cursor" && state.historyEvents) return json(state.historyCursor ?? Math.max(0, ...state.historyEvents.map((e) => e.event_id)));
+        if (fn === "sync_get_watch_progress_delta_cursor" && state.progressEvents) return json(state.progressCursor ?? Math.max(0, ...state.progressEvents.map((e) => e.event_id)));
+        if ((fn === "sync_pull_watched_items_delta" && state.historyEvents) || (fn === "sync_pull_watch_progress_delta" && state.progressEvents)) {
+          if (state.deltaFails) return json({ message: "boom" }, 500);
+          const all = fn === "sync_pull_watched_items_delta" ? state.historyEvents : state.progressEvents;
+          return json(all.filter((e) => e.event_id > body.p_since_event_id).slice(0, Math.min(body.p_limit, 1000)));
+        }
         if (fn === "sync_delete_watched_items") {
           if (state.deleteFails) return json({ message: "boom" }, 500);
           seen.deleted = (seen.deleted || []).concat(body.p_keys);
@@ -2203,5 +2211,123 @@ describe("Nuvio collections push: install modes", () => {
     const { pushed } = await push("replace");
     assert.equal(pushed.length, 1);
     assert.equal(pushed[0].folders[0].id, "f_mine");
+  });
+});
+
+describe("Nuvio: incremental pull from the documented event cursors", () => {
+  const cursorOf = (env) => JSON.parse(env.DB._db.prepare("SELECT cursor_json FROM media_app_sync WHERE provider = 'nuvio'").get().cursor_json);
+  const fns = (seen) => seen.nuvio.map((c) => c.fn);
+  const resync = async (ctx) => {
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: {} });
+    await pull(ctx.env);
+  };
+  const upsertHistory = (id, over) => ({ event_id: id, operation: "upsert", content_id: "tt4444444", content_type: "movie", title: "Movie D", watched_at: NOW - HOUR, ...over });
+  async function bootstrapped(name, over = {}) {
+    const state = {
+      watched: [{ content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR }],
+      progress: [{ content_id: "tt3333333", content_type: "movie", name: "Movie Half", position: 1500000, duration: 6000000, last_watched: NOW - 2 * HOUR }],
+      historyEvents: [{ event_id: 5, operation: "upsert", content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR }],
+      progressEvents: [{ event_id: 7, operation: "upsert", progress_key: "tt3333333", content_id: "tt3333333", content_type: "movie", position: 1500000, duration: 6000000, last_watched: NOW - 2 * HOUR }],
+      ...over,
+    };
+    const seen = fakeServices(state);
+    const ctx = await setup(name);
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    return { state, seen, ctx };
+  }
+
+  it("takes the cursors before reading the snapshot, and keeps them", async () => {
+    const { seen, ctx } = await bootstrapped("nudbase");
+    const f = fns(seen);
+    assert.ok(f.indexOf("sync_get_watched_items_delta_cursor") >= 0 && f.indexOf("sync_get_watched_items_delta_cursor") < f.indexOf("sync_pull_watched_items"), "history cursor first");
+    assert.ok(f.indexOf("sync_get_watch_progress_delta_cursor") >= 0 && f.indexOf("sync_get_watch_progress_delta_cursor") < f.indexOf("sync_pull_watch_progress"), "progress cursor first");
+    const c = cursorOf(ctx.env);
+    assert.deepEqual([c.delta.history, c.delta.progress, c.delta.profile], [5, 7, 1]);
+    assert.equal(c.pendingDelta, undefined, "the pending mark is promoted once the pull finishes");
+  });
+
+  it("later pulls read only what changed, not the whole profile", async () => {
+    const { state, seen, ctx } = await bootstrapped("nudlater");
+    seen.nuvio.length = 0;
+    // The snapshot lists below are left stale on purpose: only the events can supply this play.
+    state.historyEvents.push(upsertHistory(6));
+    await resync(ctx);
+    const f = fns(seen);
+    assert.ok(f.includes("sync_pull_watched_items_delta") && f.includes("sync_pull_watch_progress_delta"));
+    assert.ok(!f.includes("sync_pull_watched_items") && !f.includes("sync_pull_watch_progress"), `no full read: ${f.join(",")}`);
+    assert.deepEqual(events(ctx.env, ctx.accountId).filter((e) => e.imdb === "tt4444444").map((e) => [e.watched_at, e.source]), [[NOW - HOUR, "nuvio"]]);
+    assert.equal(cursorOf(ctx.env).delta.history, 6, "the cursor moved to the last event read");
+    const asked = seen.nuvio.find((c) => c.fn === "sync_pull_watched_items_delta").body;
+    assert.equal(asked.p_since_event_id, 5);
+  });
+
+  it("uses the last write for a title and pages past 1000 events", async () => {
+    const { state, seen, ctx } = await bootstrapped("nudpage");
+    seen.nuvio.length = 0;
+    for (let i = 0; i < 1200; i++) state.historyEvents.push(upsertHistory(10 + i, { watched_at: NOW - 3000 * HOUR + i * 1000 }));
+    await resync(ctx);
+    assert.equal(seen.nuvio.filter((c) => c.fn === "sync_pull_watched_items_delta").length, 2, "1000, then the rest");
+    assert.deepEqual(events(ctx.env, ctx.accountId).filter((e) => e.imdb === "tt4444444").map((e) => e.watched_at), [NOW - 3000 * HOUR + 1199 * 1000]);
+    assert.equal(cursorOf(ctx.env).delta.history, 1209);
+  });
+
+  it("a change to a watched title does not lose its stored Continue Watching point", async () => {
+    const { state, ctx } = await bootstrapped("nudkeep");
+    const id = ctx.env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = 'tt3333333'").get().id;
+    assert.equal(JSON.parse(ctx.env.DB_ACTIVITY._db.prepare("SELECT companion_json FROM show_progress WHERE media_id = ?").get(id).companion_json).progress, 25);
+    // An older play of the same movie arrives with no progress event of its own.
+    state.historyEvents.push(upsertHistory(6, { content_id: "tt3333333", title: "Movie Half", watched_at: NOW - 40 * HOUR }));
+    await resync(ctx);
+    assert.equal(JSON.parse(ctx.env.DB_ACTIVITY._db.prepare("SELECT companion_json FROM show_progress WHERE media_id = ?").get(id).companion_json).progress, 25, "still part way through");
+    assert.ok(cursorOf(ctx.env).resumes["tt3333333"], "and still in the resume map");
+  });
+
+  it("a deleted progress entry clears only the resume point it was", async () => {
+    const { state, ctx } = await bootstrapped("nuddel");
+    const gone = (episode) => ({ event_id: 8, operation: "delete", progress_key: `tt2222222_s1e${episode}`, content_id: SHOW, content_type: "series", season: 1, episode, position: 1, duration: 2 });
+    state.progressEvents.push({ event_id: 8, operation: "delete", progress_key: "tt3333333", content_id: "tt3333333", content_type: "movie", position: 1500000, duration: 6000000 });
+    await resync(ctx);
+    assert.equal(cursorOf(ctx.env).resumes["tt3333333"], undefined, "Nuvio dropped it, so the map does");
+    // A delete for some other episode of a show leaves the show's stored point alone.
+    state.progressEvents.push({ event_id: 9, operation: "upsert", progress_key: `${SHOW}_s1e3`, content_id: SHOW, content_type: "series", season: 1, episode: 3, position: 600000, duration: 2400000, last_watched: NOW - HOUR });
+    await resync(ctx);
+    assert.equal(cursorOf(ctx.env).resumes[SHOW].episode, 3);
+    state.progressEvents.push({ ...gone(1), event_id: 10 });
+    await resync(ctx);
+    assert.equal(cursorOf(ctx.env).resumes[SHOW].episode, 3, "E1's delete is not E3's resume");
+    state.progressEvents.push({ ...gone(3), event_id: 11 });
+    await resync(ctx);
+    assert.equal(cursorOf(ctx.env).resumes[SHOW], undefined);
+  });
+
+  it("never deletes local history because Nuvio deleted a watched item", async () => {
+    const { state, ctx } = await bootstrapped("nudhist");
+    const before = events(ctx.env, ctx.accountId).length;
+    assert.ok(before >= 1);
+    state.historyEvents.push({ event_id: 6, operation: "delete", content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR });
+    await resync(ctx);
+    assert.equal(events(ctx.env, ctx.accountId).length, before, "history here is merge-only");
+    assert.equal(cursorOf(ctx.env).delta.history, 6, "but the event is consumed, not read again");
+  });
+
+  it("falls back to a full read when the change feed fails, and still syncs", async () => {
+    const { state, seen, ctx } = await bootstrapped("nudfall");
+    seen.nuvio.length = 0;
+    state.deltaFails = true;
+    state.watched.push({ content_id: "tt4444444", content_type: "movie", title: "Movie D", watched_at: NOW - HOUR });
+    state.historyEvents.push(upsertHistory(6));
+    await resync(ctx);
+    assert.ok(fns(seen).includes("sync_pull_watched_items"), "read it all instead");
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt4444444"));
+  });
+
+  it("a forced sync and a new profile read everything again", async () => {
+    const { state, seen, ctx } = await bootstrapped("nudforce");
+    seen.nuvio.length = 0;
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+    await pull(ctx.env);
+    assert.ok(fns(seen).includes("sync_pull_watched_items"), "force means a full read");
+    assert.ok(state.historyEvents.length > 0);
   });
 });

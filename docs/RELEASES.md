@@ -60,6 +60,18 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Nuvio pulls only what changed (built 2026-11-09, stamp ; prepared, not deployed)
+
+From the Nuvio API document (v1.3). Before this, every Nuvio pull re-read the whole watch history and all progress, and read progress with a paging header the document does not describe. Now:
+- The first pull of a profile still reads everything, but first asks Nuvio for its current history and progress event numbers, so nothing changed during the read is missed. They are kept with the profile's sync state.
+- Every later pull asks Nuvio only for events after those numbers (`sync_pull_watched_items_delta`, `sync_pull_watch_progress_delta`). A profile with nothing new costs four small calls.
+- **Sync now with Force**, choosing another profile, or any failure of the change feed reads everything again, so a bad cursor repairs itself.
+- A progress entry deleted in Nuvio clears the Continue Watching point here only if it was that same episode or movie.
+- A watched item deleted in Nuvio does **not** delete the play here (history is merge-only, as for two-way sync). Owner decision pending: say if it should.
+- Fixed on the way: a movie with an older watched play lost its Continue Watching point even when the resume was newer (`applyMediaAppRecords`).
+- Not built: pushing Continue Watching progress to Nuvio. This site never stores a playback position or length, only that a play happened, and a progress push replaces the entry Nuvio already has, so it could only overwrite real positions with invented ones.
+- No migration, binding or flag. Deploy the rebuilt Worker. Not tested against a live Nuvio account.
+
 ## Frontend audit fixes UI-01 to UI-18 (built 2026-11-04, stamp a4b163e906; prepared, not deployed)
 
 From `docs/audits/2026-11-03-frontend.md`. What people will notice:

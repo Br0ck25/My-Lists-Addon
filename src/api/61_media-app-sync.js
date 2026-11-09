@@ -583,8 +583,10 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
       if (isSeries && (!datedLast || p.season > datedLast.season || (p.season === datedLast.season && p.episode > datedLast.episode))) datedLast = p;
       if (isSeries && !knownShows.has(r.mediaId) && !newShows.includes(r.mediaId)) newShows.push(r.mediaId);
     }
-    if (!isSeries && r.plays.length) {
-      // A movie that is finished no longer has a resume point.
+    if (!isSeries && r.plays.length && !r.resume) {
+      // A movie that is finished no longer has a resume point. (nuvioRecords already
+      // dropped a resume that an equal or later play cancels, so one still here is a
+      // rewatch in progress and stays.)
       stmts.push(actDb.prepare("UPDATE show_progress SET companion_json = NULL WHERE account_id = ? AND media_id = ? AND last_season IS NULL").bind(accountId, r.mediaId));
     }
     if (isSeries && r.furthest && (!datedLast || r.furthest.season > datedLast.season
@@ -754,12 +756,15 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
     }
     return { records, total: changed.length, libraryTotal: library.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
   }
-  const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
-  const every = nuvioRecords(profile);
-  const all = every.filter(fresh);
-  const snapshotResumes = step.offset === 0 ? mediaAppResumeChanges(every, provider).filter(([, value]) => value) : null;
+  const read = await nuvioReadProfile(env, conn.accessToken, sync.profile_index, step);
+  const delta = read.mode === "delta";
+  const every = nuvioRecords(delta ? read : read.profile);
+  // A change read has no "changed since" filter (the events are the changes) and
+  // no whole-profile resume map: it edits the stored one.
+  const all = delta ? every : every.filter(fresh);
+  const snapshotResumes = !delta && step.offset === 0 ? mediaAppResumeChanges(every, provider).filter(([, value]) => value) : null;
   if (snapshotResumes && snapshotResumes.length > MEDIA_APP_RESUMES_MAX) throw mediaAppError("unreachable", "Nuvio has too many resume points to sync safely.");
-  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes };
+  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: delta ? null : every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes, delta, clearedResumes: read.cleared, pendingDelta: read.pending };
 }
 
 // One step of an account's pull. Returns { done, offset, total, ... }; throws
@@ -786,7 +791,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   const since = cursorSince != null ? cursorSince : (provider === "nuvio" && cursor.provenanceVersion !== 1 ? 0 : (Number(cursor.mtime) > 0 ? Number(cursor.mtime) - MEDIA_APP_OVERLAP_MS : 0));
   let fetched;
   try {
-    fetched = await mediaAppFetchRecords(env, accountId, provider, conn, sync, { offset, since });
+    fetched = await mediaAppFetchRecords(env, accountId, provider, conn, sync, { offset, since, cursor, delta: provider === "nuvio" && cursorSince == null });
   } catch (e) {
     if (e && e.kind === "invalid") {
       await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
@@ -801,20 +806,36 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     return { done: true, skipped: applied.skipped };
   }
   if (fetched.snapshotResumes) cursor.resumes = mergeMediaAppResumes({}, fetched.snapshotResumes);
+  // Resume points Nuvio dropped go first, so a title that also changed keeps its new one.
+  if (offset === 0 && fetched.clearedResumes && fetched.clearedResumes.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, fetched.clearedResumes.map((k) => [k, null]));
   if (applied.resumeChanges && applied.resumeChanges.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, applied.resumeChanges);
+  if (offset === 0) {
+    // Never keep a mark from an earlier, abandoned pull.
+    if (fetched.pendingDelta) cursor.pendingDelta = fetched.pendingDelta;
+    else delete cursor.pendingDelta;
+  }
   const next = offset + MEDIA_APP_STEP_ITEMS;
   if (next < fetched.total) {
-    if (fetched.snapshotResumes || (applied.resumeChanges && applied.resumeChanges.length)) {
+    if (fetched.snapshotResumes || fetched.pendingDelta || (fetched.clearedResumes && fetched.clearedResumes.length) || (applied.resumeChanges && applied.resumeChanges.length)) {
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
     }
-    return { done: false, offset: next, total: fetched.total, since, applied };
+    // A change read continues as one (no "since"), a full read with the mark it started with.
+    return { done: false, offset: next, total: fetched.total, since: fetched.delta ? null : since, applied };
   }
   if (provider === "nuvio" && since === 0) cursor.provenanceVersion = 1;
+  if (provider === "nuvio") {
+    // The change cursors are kept only once everything up to them has been applied.
+    if (cursor.pendingDelta) cursor.delta = cursor.pendingDelta;
+    else delete cursor.delta;
+    delete cursor.pendingDelta;
+  }
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
   ).bind(JSON.stringify({ ...cursor, mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
-  return { done: true, total: fetched.total, found: fetched.libraryTotal, applied, pullDone: true };
+  // A change read does not count the whole profile, so the last full count stands.
+  const found = fetched.libraryTotal != null ? fetched.libraryTotal : ((mediaAppLastResultOf(sync) || {}).found || 0);
+  return { done: true, total: fetched.total, found, applied, pullDone: true };
 }
 
 // The job. Each run is one bounded step: a slice of the pull, then (when
