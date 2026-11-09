@@ -2887,3 +2887,96 @@ describe("Stremio: removing one episode", () => {
   });
 });
 
+
+describe("two-way sync: Stremio positions", () => {
+  const old = new Date(NOW - 50 * HOUR).toISOString();
+  const movie = (state = {}) => ({ _id: "tt5555555", type: "movie", name: "Movie P", _mtime: old, state: { lastWatched: old, timesWatched: 0, flaggedWatched: 0, duration: 0, timeOffset: 0, ...state } });
+  const show = (state = {}) => ({ _id: SHOW, type: "series", name: "Show S", _mtime: old, state: { video_id: `${SHOW}:1:1`, lastWatched: old, watched: bitfield(SHOW_EPS, [0, 1]), duration: 0, timeOffset: 0, ...state } });
+
+  async function ready(name, library, { push = true } = {}) {
+    const state = { approved: true, library, episodes: { [SHOW]: SHOW_EPS } };
+    const seen = fakeServices(state);
+    const ctx = await setup(name, { FF_MEDIA_APP_PUSH: "1" });
+    await connectStremio(ctx, state);
+    await pull(ctx.env);
+    if (push) { await call(ctx.env, "/api/connections/stremio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } }); await pull(ctx.env); }
+    return { state, seen, ctx };
+  }
+  function addPosition(ctx, imdb, kind, season, episode, position, duration, at, source = "plex") {
+    const db = ctx.env.DB._db;
+    let m = db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(imdb);
+    if (!m) m = { id: Number(db.prepare("INSERT INTO media (kind, imdb_id, title, created_at, updated_at) VALUES (?, ?, ?, 1, 1)").run(kind, imdb, "Title " + imdb).lastInsertRowid) };
+    ctx.env.DB_ACTIVITY._db.prepare("INSERT INTO watch_positions (account_id, media_id, source, season, episode, position_ms, duration_ms, watched_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(ctx.accountId, m.id, source, season, episode, position, duration, at, at);
+  }
+  const item = (state, id) => state.library.find((i) => i._id === id);
+
+  it("puts a movie's position from another app on the library item, and nothing else", async () => {
+    const { state, seen, ctx } = await ready("stpos1", [movie({ timesWatched: 2 })]);
+    const at = NOW - 2 * HOUR;
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, at);
+    await runAgain(ctx, "stremio");
+    const st = item(state, "tt5555555").state;
+    assert.deepEqual([st.timeOffset, st.duration, st.lastWatched], [600000, 6000000, new Date(at).toISOString()]);
+    assert.deepEqual([st.timesWatched, st.flaggedWatched], [2, 0], "the watched counts are not touched");
+    assert.equal(st.video_id, undefined, "a movie has no episode id");
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 1, "each position is sent once");
+  });
+
+  it("points a show at the episode, leaving which episodes are watched alone", async () => {
+    const { state, ctx } = await ready("stpos2", [show()]);
+    const before = item(state, SHOW).state.watched;
+    addPosition(ctx, SHOW, "series", 1, 3, 900000, 2400000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    const st = item(state, SHOW).state;
+    assert.deepEqual([st.video_id, st.timeOffset, st.duration], [`${SHOW}:1:3`, 900000, 2400000]);
+    assert.equal(st.watched, before, "the watched bitfield is exactly as it was");
+  });
+
+  it("carries Nuvio's own positions too, but never Stremio's back to Stremio", async () => {
+    const { state, ctx } = await ready("stpos3", [movie(), show()]);
+    addPosition(ctx, "tt5555555", "movie", null, null, 500000, 5000000, NOW - 3 * HOUR, "nuvio");
+    addPosition(ctx, SHOW, "series", 1, 3, 700000, 2400000, NOW - HOUR, "stremio");
+    await runAgain(ctx, "stremio");
+    assert.equal(item(state, "tt5555555").state.timeOffset, 500000, "from Nuvio");
+    assert.equal(item(state, SHOW).state.timeOffset, 0, "Stremio's own is left alone");
+  });
+
+  it("never overwrites a resume point that is as new or newer, or sends a finished title", async () => {
+    const fresh = new Date(NOW).toISOString();
+    const { state, seen, ctx } = await ready("stpos4", [movie({ lastWatched: fresh, timeOffset: 1234, duration: 9999 }), show()]);
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - HOUR);
+    addPosition(ctx, SHOW, "series", 1, 3, 2300000, 2400000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.deepEqual([item(state, "tt5555555").state.timeOffset, item(state, "tt5555555").state.duration], [1234, 9999], "Stremio's newer point stays");
+    assert.equal(item(state, SHOW).state.timeOffset, 0, "95% is a finished play, not a resume point");
+    assert.equal(seen.puts.length, 0, "nothing was written");
+  });
+
+  it("leaves titles that are not in the Stremio library alone", async () => {
+    const { seen, ctx } = await ready("stpos5", [movie()]);
+    addPosition(ctx, "tt8888888", "movie", null, null, 600000, 6000000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 0);
+  });
+
+  it("does not push positions while two-way sync is off", async () => {
+    const { seen, ctx } = await ready("stpos6", [movie()], { push: false });
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 0);
+  });
+
+  it("a position that arrives later is sent without resending the earlier ones", async () => {
+    const { state, seen, ctx } = await ready("stpos7", [movie(), show()]);
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - 3 * HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 1);
+    addPosition(ctx, SHOW, "series", 1, 3, 900000, 2400000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 2);
+    assert.deepEqual(seen.puts[1].map((c) => c._id), [SHOW], "only the new one");
+    assert.equal(item(state, SHOW).state.timeOffset, 900000);
+  });
+});

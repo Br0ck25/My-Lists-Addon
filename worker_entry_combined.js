@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a9795bb506";
+const WORKER_BUILD = "2b6ce2b944";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -110644,8 +110644,8 @@ async function pushMediaAppStep(env, accountId, provider) {
       cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
     } catch {}
     const after = Number(cursor.pushedId) || 0;
-    if (provider === "nuvio") await refreshTraktPositions(env, accountId);
-    const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : 0;
+    await refreshTraktPositions(env, accountId);
+    const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : await pushStremioPositions(env, accountId, conn, actDb, cursor);
     const { results: rows } = await actDb.prepare(
       "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? AND NOT EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?) ORDER BY id LIMIT ?"
     ).bind(accountId, after, provider, provider, MEDIA_APP_PUSH_EVENTS).all();
@@ -112283,6 +112283,59 @@ function mediaAppEpisodeOf(body) {
   const episode = mediaAppInt(body.episode);
   if (season == null && episode == null) return null;
   return season != null && episode != null ? { season, episode } : false;
+}
+
+// --- Sending positions recorded here to Stremio ---------------------------------------------
+//
+// A position from any app but Stremio itself (Nuvio's, Plex's, Jellyfin's, Emby's, Trakt's) is
+// written on that title's library item as Stremio's own resume point: timeOffset and duration
+// (milliseconds), lastWatched, and for a show video_id, the episode it is at ("tt123:1:3").
+// Nothing else on the item changes: not which episodes are watched, not the watched counts.
+// Rules: only part way through (90% or more is a finished play, which the history push covers);
+// only titles already in the person's library; only when the item's lastWatched is older than the
+// position, so a resume point Stremio already holds that is as new or newer is never replaced.
+// Behind the same switches as the history push. The pushed_at column is Nuvio's; this keeps its
+// own place in the sync state (positionsPushedAt, the newest updated_at looked at), so sending to
+// one app never hides a position from the other. Returns how many items were written.
+async function pushStremioPositions(env, accountId, conn, actDb, cursor) {
+  if (!(await mediaAppPositionsReady(actDb))) return 0;
+  const since = Number(cursor.positionsPushedAt) || 0;
+  const { results } = await actDb.prepare(
+    "SELECT media_id, season, episode, position_ms, duration_ms, watched_at, updated_at FROM watch_positions WHERE account_id = ? AND source != 'stremio' AND updated_at > ? ORDER BY updated_at LIMIT ?"
+  ).bind(accountId, since, MEDIA_APP_PUSH_EVENTS).all();
+  const rows = results || [];
+  if (!rows.length) return 0;
+  const { results: media } = await env.DB.prepare("SELECT id, kind, imdb_id FROM media WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify([...new Set(rows.map((r) => r.media_id))])).all();
+  const titleOf = new Map((media || []).filter((m) => m.imdb_id).map((m) => [m.id, m]));
+  const library = new Map((await stremioFetchLibrary(conn.accessToken)).map((it) => [String(it._id), it]));
+  const latest = new Map(); // one position per title: the newest
+  for (const r of rows) {
+    const m = titleOf.get(r.media_id);
+    const series = r.season != null && r.episode != null;
+    if (m && library.has(m.imdb_id) && (m.kind === "series") === series && r.duration_ms > 0 && r.position_ms / r.duration_ms < MEDIA_APP_FINISHED) latest.set(m.imdb_id, r);
+  }
+  const now = new Date().toISOString();
+  const changes = [];
+  for (const [id, r] of latest) {
+    const item = library.get(id);
+    const st = item.state && typeof item.state === "object" ? item.state : {};
+    const at = Number(r.watched_at);
+    if (mediaAppTime(st.lastWatched) >= at) continue;
+    const state = { ...st, timeOffset: r.position_ms, duration: r.duration_ms, lastWatched: new Date(at).toISOString() };
+    if (r.season != null) state.video_id = `${id}:${r.season}:${r.episode}`;
+    changes.push({ ...item, _mtime: now, state });
+  }
+  for (let i = 0; i < changes.length; i += 50) {
+    const res = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: changes.slice(i, i + 50) });
+    if (!res || res.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
+  }
+  // A full page may have more of the same millisecond behind it: step back one, which only repeats
+  // work the lastWatched rule above already skips.
+  const newest = Number(rows[rows.length - 1].updated_at);
+  cursor.positionsPushedAt = Math.max(since, rows.length >= MEDIA_APP_PUSH_EVENTS ? newest - 1 : newest);
+  await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = 'stremio'").bind(JSON.stringify(cursor), accountId).run();
+  return changes.length;
 }
 // POST /api/connections/stremio/install-addon: puts this site's addon in the person's Stremio
 // account, so they need not open the stremio:// link on the device (which TVs and some phones
