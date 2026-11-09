@@ -2560,3 +2560,14 @@ The *Playback streams* column in the admin Traffic table fell from 200+ a day to
 
 - With the toggle off, the install no longer lists the Movies and Series search rows, and its `/meta` and search routes answer nothing for real titles, so Stremio and Nuvio send details and search to another add-on. TV Channel pages are unchanged. Reinstall after changing the toggle.
 - Tests: `tests/metadata-off.test.mjs` (new); `tests/pictorium.test.mjs` no longer expects search rows with metadata off, because that was the reported bug.
+
+## 2026-11-09 — Nuvio TV Launcher sync: 304s and Better Posters answered in the payload (build `e5c45f3bbd`, prepared; not deployed)
+
+- **`/api/nuvio-tv/sync/:target` sends an `ETag`** (its `versionHash`) and answers a matching `If-None-Match` (a W/ tag, a list, or `*`) with a bare 304, for the default target as well as a user's. The launcher polls this every five minutes; it no longer has to download and parse an unchanged payload. The Worker still does the same reads to know it is unchanged, so this saves bandwidth, not Worker work. `Cache-Control` is unchanged (`no-store` for a user, `public, max-age=300` for the default).
+- **The payload now says whether Better Posters is on** (`betterPosters`) **and the URL pattern for it** (`customPosterPattern`, this Worker's own `/bp/…/{imdb_id}.jpg` with the account's chosen style). The launcher used to download the first catalog and search it for `/bp/` or `btttr.cc` to find out. Pictorium and RatingPosterDB win over Better Posters, so with either on it says false. Both fields are in the hash, so a change of poster style reaches the launcher.
+
+### Owner steps
+1. Paste the new Worker. Nothing else; an older launcher ignores the new fields and keeps probing.
+
+### Checked
+New tests in `tests/nuvio-tv-sync-etag-posters.test.mjs` (9; all failed before the change): tag equals the hash, 304 and its tag forms, a changed payload sends in full again, the default target, the flag and pattern, the style, and the hash moving with the style. The existing sync tests still pass unchanged.

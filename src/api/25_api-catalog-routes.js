@@ -403,8 +403,22 @@ function traktLimitNote(res, text, retrySec) {
   return parts.join(", ");
 }
 
+// The sync payload's tag is its versionHash, so a launcher that sends it back
+// (If-None-Match) gets a bare 304 instead of the whole payload when nothing
+// changed. If-None-Match can carry a list and a cache may weaken a tag, so each
+// entry is compared with any W/ prefix removed, as htmlPageResponse (05_) does.
+function nuvioTvSyncResponse(request, payload, versionHash, cacheControl) {
+  const etag = `"${versionHash}"`;
+  const headers = { ...corsHeaders(), "Cache-Control": cacheControl, "ETag": etag };
+  const inm = request && request.headers ? (request.headers.get("If-None-Match") || "") : "";
+  if (inm && inm.split(",").map((t) => t.trim().replace(/^W\//, "")).some((t) => t === etag || t === "*")) {
+    return new Response(null, { status: 304, headers });
+  }
+  return jsonPublic(payload, 200, headers);
+}
+
 // GET /api/nuvio-tv/sync/:target -- unified sync route for Nuvio TV Launcher
-async function buildNuvioTvSyncDefaultResponse(url) {
+async function buildNuvioTvSyncDefaultResponse(url, request) {
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
   const manifestUrl = `${url.origin}/nuvio-default/tv/manifest.json`;
   const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/default`;
@@ -419,7 +433,7 @@ async function buildNuvioTvSyncDefaultResponse(url) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payloadToHash));
   const versionHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-  return jsonPublic({
+  return nuvioTvSyncResponse(request, {
     ok: true,
     versionHash,
     manifestUrl,
@@ -429,10 +443,7 @@ async function buildNuvioTvSyncDefaultResponse(url) {
     catalogOrder,
     collections,
     channels,
-  }, 200, {
-    ...corsHeaders(),
-    "Cache-Control": "public, max-age=300",
-  });
+  }, versionHash, "public, max-age=300");
 }
 
 function formatNuvioUserCollections(userCollections) {
@@ -1322,7 +1333,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   }
   if (!target || target === ":target") target = "default";
 
-  if (target === "default") return buildNuvioTvSyncDefaultResponse(url);
+  if (target === "default") return buildNuvioTvSyncDefaultResponse(url, request);
 
   const { resolved, installToken, username, updatedAt } = await resolveNuvioTvTargetData(target, env);
   if (!resolved) {
@@ -1376,11 +1387,21 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   const catalogIds = entries.map((e) => e.id || e.catalogId || (typeof slugifyServer === "function" ? slugifyServer(e.url || e.name || "") : (e.name || "catalog")));
   const catalogOrder = [...catalogIds];
 
-  const payloadToHash = JSON.stringify({ catalogIds, catalogOrder, collections: formattedCollections, channels, randomizeItemsDaily, updatedAt: currentUpdatedAt });
+  // Whether the account draws its posters through Better Posters, and the URL
+  // pattern for them, so the launcher need not download a catalog and search it
+  // for "/bp/" to find out. Pictorium and RatingPosterDB win over Better Posters
+  // (only one can draw a poster), so then it is off as far as the launcher goes.
+  const posterOptions = betterPostersOptionsFrom(resolved, url.origin, installToken);
+  const betterPosters = Boolean(resolved.betterPosters) && !posterOptions.pictoriumTemplate && !posterOptions.rpdbBase;
+  const customPosterPattern = betterPosters ? buildBetterPosterUrl("{imdb_id}", posterOptions) : undefined;
+
+  const payloadToHash = JSON.stringify({ catalogIds, catalogOrder, collections: formattedCollections, channels, randomizeItemsDaily, updatedAt: currentUpdatedAt, betterPosters, customPosterPattern });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payloadToHash));
   const versionHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-  return jsonPublic({
+  // Still no-store: the launcher keeps the tag itself and sends it back as
+  // If-None-Match, so nothing here needs a shared cache to hold the payload.
+  return nuvioTvSyncResponse(request, {
     ok: true,
     versionHash,
     manifestUrl,
@@ -1390,10 +1411,9 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     catalogOrder,
     collections: formattedCollections,
     channels,
-  }, 200, {
-    ...corsHeaders(),
-    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-  });
+    betterPosters,
+    ...(customPosterPattern ? { customPosterPattern } : {}),
+  }, versionHash, "no-cache, no-store, must-revalidate, max-age=0");
 }
 
 async function handleFetch(request, env, ctx) {
