@@ -2,7 +2,7 @@
 // shows the same guide. See src/api/29_nuvio-tv-schedule.js.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { makeEnv, makeD1, makeKv, call, accountProof, freshIsolate } from "./harness.mjs";
+import { makeEnv, makeD1, makeKv, call, accountProof, freshIsolate, awaitFreshRateWindow } from "./harness.mjs";
 
 const MIN = 60000;
 const ep = (n, runtime) => ({ kind: "episode", imdbId: "tt0108778", season: 1, episode: n, showName: "Friends", epName: `Ep ${n}`, title: `Friends S1E${n}`, runtime });
@@ -93,5 +93,55 @@ describe("nuvio tv schedule", () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
     await userWithChannel(env, "sched6", []);
     assert.equal((await get(env, "/api/nuvio-tv/schedule/sched6/ch_sched")).status, 404);
+  });
+
+  it("the batch route gives every channel's schedule in one request, same as asking one by one", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const proof = await accountProof(env, "sched7");
+    assert.equal((await call(env, "/api/save", { method: "POST", json: { ...proof, entries: [{ id: "x", name: "X", type: "movie" }] } })).status, 200);
+    await env.CONFIGS.put("creatorsyncchannels:sched7", JSON.stringify({
+      channels: {
+        ch_a: { id: "ch_a", channelId: "ch_a", name: "A", items: [ep(1, 22), ep(2, 22)] },
+        ch_b: { id: "ch_b", channelId: "ch_b", name: "B", items: [movie("tt0133093", "The Matrix", 136)] },
+      },
+      updatedAt: Date.now(),
+    }));
+    const batch = await get(env, "/api/nuvio-tv/schedules/sched7?channels=ch_a,ch_b,ch_nope,channel_ch_a");
+    assert.equal(batch.status, 200);
+    assert.deepEqual(Object.keys(batch.body.schedules).sort(), ["ch_a", "ch_b"], "a repeated id is one entry; channel_ is stripped");
+    assert.deepEqual(batch.body.missing, ["ch_nope"], "an unknown channel is listed, not an error");
+    for (const id of ["ch_a", "ch_b"]) {
+      const single = await get(env, `/api/nuvio-tv/schedule/sched7/${id}`);
+      assert.deepEqual(batch.body.schedules[id], single.body.slots, `${id} is the same schedule either way`);
+    }
+    // One tag for the lot, and a bare 304 when nothing moved.
+    const etag = batch.headers.get("ETag");
+    assert.equal(etag, `"${batch.body.versionHash}"`);
+    assert.equal((await get(env, "/api/nuvio-tv/schedules/sched7?channels=ch_a,ch_b,ch_nope,channel_ch_a", { headers: { "If-None-Match": etag } })).status, 304);
+  });
+
+  it("the batch route asks for at most a bounded number of channels and needs some", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    assert.equal((await get(env, "/api/nuvio-tv/schedules/nobody")).status, 404);
+    const many = Array.from({ length: 80 }, (_, i) => `c${i}`).join(",");
+    const res = await get(env, `/api/nuvio-tv/schedules/nobody?channels=${many}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.missing.length, 40, "capped, so one request cannot fan out without limit");
+  });
+
+  it("one address can only spend so many channel lookups a minute, and others are unaffected", async () => {
+    // The schedule routes are public and a lookup can mean resolving a lineup, so a request is charged
+    // one unit per channel it names. 120 a minute: three full batches pass, the fourth is refused.
+    await awaitFreshRateWindow();
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const forty = Array.from({ length: 40 }, (_, i) => `c${i}`).join(",");
+    const ask = (ip) => get(env, `/api/nuvio-tv/schedules/nobody?channels=${forty}`, { ip });
+    for (let i = 0; i < 3; i++) assert.equal((await ask("203.0.113.7")).status, 200, `batch ${i + 1} is within the budget`);
+    const refused = await ask("203.0.113.7");
+    assert.equal(refused.status, 429);
+    assert.ok(Number(refused.headers.get("Retry-After")) > 0, "says when to come back");
+    assert.equal((await ask("203.0.113.8")).status, 200, "another address has its own budget");
+    // The single-channel route spends from the same budget.
+    assert.equal((await get(env, "/api/nuvio-tv/schedule/nobody/ch_x", { ip: "203.0.113.7" })).status, 429);
   });
 });

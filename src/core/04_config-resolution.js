@@ -30,6 +30,17 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
       if (tvRaw) {
         const tvParsed = JSON.parse(tvRaw);
         if (tvParsed && tvParsed.mirror === false) {
+          // A TV-only lineup stores just its lists (see POST /api/nuvio-tv/config), never the
+          // account's settings: Better Posters, provider keys, region, badges and the rest.
+          // Taken from the account's main synced config, so TV catalogs and the sync payload
+          // honour them like every other install does; reading them off the TV record alone
+          // returned defaults, and posters came out plain on the launcher only.
+          let settingsSource = tvParsed;
+          try {
+            const mainRaw = await env.CONFIGS.get(`creatorsync:${username}`);
+            const mainParsed = mainRaw ? JSON.parse(mainRaw) : null;
+            if (mainParsed && typeof mainParsed === "object") settingsSource = mainParsed;
+          } catch {}
           const tvList = Array.isArray(tvParsed.config)
             ? tvParsed.config
             : (Array.isArray(tvParsed.entries)
@@ -41,7 +52,7 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
             catalogOrder: tvParsed.catalogOrder || tvParsed.catalogIds || tvList.map((e) => e.id || e.catalogId || e.name),
             catalogIds: tvParsed.catalogIds || tvParsed.catalogOrder || tvList.map((e) => e.id || e.catalogId || e.name),
             channelIds: Array.isArray(tvParsed.channelIds) ? tvParsed.channelIds : null,
-            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(tvParsed) : {}),
+            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(settingsSource) : {}),
             randomizeItemsDaily: tvParsed.randomizeItemsDaily !== undefined ? tvParsed.randomizeItemsDaily : true,
             shuffleItems: true,
             track: false,

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "488e106c20";
+const WORKER_BUILD = "b5654a9f87";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -17710,6 +17710,17 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
       if (tvRaw) {
         const tvParsed = JSON.parse(tvRaw);
         if (tvParsed && tvParsed.mirror === false) {
+          // A TV-only lineup stores just its lists (see POST /api/nuvio-tv/config), never the
+          // account's settings: Better Posters, provider keys, region, badges and the rest.
+          // Taken from the account's main synced config, so TV catalogs and the sync payload
+          // honour them like every other install does; reading them off the TV record alone
+          // returned defaults, and posters came out plain on the launcher only.
+          let settingsSource = tvParsed;
+          try {
+            const mainRaw = await env.CONFIGS.get(`creatorsync:${username}`);
+            const mainParsed = mainRaw ? JSON.parse(mainRaw) : null;
+            if (mainParsed && typeof mainParsed === "object") settingsSource = mainParsed;
+          } catch {}
           const tvList = Array.isArray(tvParsed.config)
             ? tvParsed.config
             : (Array.isArray(tvParsed.entries)
@@ -17721,7 +17732,7 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
             catalogOrder: tvParsed.catalogOrder || tvParsed.catalogIds || tvList.map((e) => e.id || e.catalogId || e.name),
             catalogIds: tvParsed.catalogIds || tvParsed.catalogOrder || tvList.map((e) => e.id || e.catalogId || e.name),
             channelIds: Array.isArray(tvParsed.channelIds) ? tvParsed.channelIds : null,
-            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(tvParsed) : {}),
+            ...(typeof readInstallConfigFields === "function" ? readInstallConfigFields(settingsSource) : {}),
             randomizeItemsDaily: tvParsed.randomizeItemsDaily !== undefined ? tvParsed.randomizeItemsDaily : true,
             shuffleItems: true,
             track: false,
@@ -92707,6 +92718,11 @@ function nuvioTvSyncResponse(request, payload, versionHash, cacheControl) {
   return jsonPublic(payload, 200, headers);
 }
 
+// What this Worker offers a launcher beyond the original sync payload, so it asks only for what
+// exists instead of probing and backing off on a 404. Add a name when a launcher-facing feature
+// is added; never remove one a released launcher may rely on.
+const NUVIO_TV_SERVER_FEATURES = ["etag", "schedule", "schedules"];
+
 // GET /api/nuvio-tv/sync/:target -- unified sync route for Nuvio TV Launcher
 async function buildNuvioTvSyncDefaultResponse(url, request) {
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
@@ -92733,6 +92749,7 @@ async function buildNuvioTvSyncDefaultResponse(url, request) {
     catalogOrder,
     collections,
     channels,
+    features: NUVIO_TV_SERVER_FEATURES,
   }, versionHash, "public, max-age=300");
 }
 
@@ -93607,6 +93624,8 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   }
   const schedRes = await handleNuvioTvScheduleRoute(request, env, ctx, url, path);
   if (schedRes) return schedRes;
+  const schedsRes = await handleNuvioTvSchedulesRoute(request, env, ctx, url, path);
+  if (schedsRes) return schedsRes;
   const colRes = await handleNuvioTvCollectionsRoute(request, env, ctx, url, path);
   if (colRes) return colRes;
   const histRes = await handleNuvioTvHistoryRoute(request, env, ctx, url, path);
@@ -93705,6 +93724,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
     channels,
     betterPosters,
     ...(customPosterPattern ? { customPosterPattern } : {}),
+    features: NUVIO_TV_SERVER_FEATURES,
   }, versionHash, "no-cache, no-store, must-revalidate, max-age=0");
 }
 
@@ -97710,22 +97730,13 @@ async function nuvioTvScheduleSha(text) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function handleNuvioTvScheduleRoute(request, env, ctx, url, path) {
-  // Written as a literal startsWith so tests/route-access.test.mjs sees this route.
-  if (!path.startsWith("/api/nuvio-tv/schedule/")) return null;
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
-  }
-  const rest = path.slice(NUVIO_TV_SCHEDULE_PREFIX.length).split("/");
-  const target = safeDecodeURIComponent(rest[0] || "").trim();
-  const wantedId = safeDecodeURIComponent(rest.slice(1).join("/")).trim().replace(/^channel_/, "");
-  if (!target || !wantedId) return json({ ok: false, error: "Channel not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
-
+// One channel's schedule as of `now`: the saved plan, extended or rebuilt when the lineup
+// changed. Null when the channel is unknown or has nothing to play.
+async function nuvioTvScheduleFor(env, ctx, url, target, wantedId, now) {
   const found = await findNuvioTvScheduleChannel(target, wantedId, env);
-  if (!found) return json({ ok: false, error: "Channel not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+  if (!found) return null;
 
   const key = `nuviotvsched:${found.scope}:${wantedId}`;
-  const now = Date.now();
   let saved = null;
   try {
     const raw = env && env.CONFIGS ? await env.CONFIGS.get(key) : null;
@@ -97753,12 +97764,76 @@ async function handleNuvioTvScheduleRoute(request, env, ctx, url, path) {
       }
     }
   }
-  if (!state || !Array.isArray(state.slots) || !state.slots.length) {
-    return json({ ok: false, error: "No programmes could be planned for this channel." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+  if (!state || !Array.isArray(state.slots) || !state.slots.length) return null;
+  return state.slots.filter((s) => s.endMs > now - NUVIO_TV_SCHEDULE_KEEP_PAST_MS);
+}
+
+const NUVIO_TV_SCHEDULE_NO_STORE = "no-cache, no-store, must-revalidate, max-age=0";
+const NUVIO_TV_SCHEDULE_BATCH_MAX = 40;
+// Channel lookups one address may spend a minute. A schedule can mean resolving a lineup (TMDB
+// calls, KV reads), and these routes are public like /sync, so a request is charged one unit per
+// channel it asks for. A launcher uses a handful every five minutes; this is far above that
+// (several households behind one address) and far below what a loop could spend.
+const NUVIO_TV_SCHEDULE_MAX_PER_MINUTE = 120;
+
+// A ready 429 when this address has spent its lookups, else null. Fails closed with no client
+// address, like the other limiters (searchRateLimitResponse, 02_).
+async function nuvioTvScheduleRateLimit(request, env, ctx, cost) {
+  const ip = clientIpKey(request);
+  if (!ip) return json({ ok: false, error: "Could not process this request." }, 400, { "Cache-Control": "no-store" });
+  if (await consumeRateLimit(env, ctx, "nuviotvsched", ip, NUVIO_TV_SCHEDULE_MAX_PER_MINUTE, 60, cost)) {
+    return json({ ok: false, error: "Too many schedule requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store", "Retry-After": "30" });
   }
-  const slots = state.slots.filter((s) => s.endMs > now - NUVIO_TV_SCHEDULE_KEEP_PAST_MS);
+  return null;
+}
+
+function nuvioTvScheduleNotFound() {
+  return json({ ok: false, error: "Channel not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
+}
+
+// GET /api/nuvio-tv/schedule/:target/:channelId  -- one channel
+async function handleNuvioTvScheduleRoute(request, env, ctx, url, path) {
+  // Written as a literal startsWith so tests/route-access.test.mjs sees this route.
+  if (!path.startsWith("/api/nuvio-tv/schedule/")) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  }
+  const rest = path.slice(NUVIO_TV_SCHEDULE_PREFIX.length).split("/");
+  const target = safeDecodeURIComponent(rest[0] || "").trim();
+  const wantedId = safeDecodeURIComponent(rest.slice(1).join("/")).trim().replace(/^channel_/, "");
+  if (!target || !wantedId) return nuvioTvScheduleNotFound();
+  const limited = await nuvioTvScheduleRateLimit(request, env, ctx, 1);
+  if (limited) return limited;
+
+  const slots = await nuvioTvScheduleFor(env, ctx, url, target, wantedId, Date.now());
+  if (!slots) return nuvioTvScheduleNotFound();
   const versionHash = await nuvioTvScheduleSha(JSON.stringify(slots));
-  return nuvioTvSyncResponse(request, { ok: true, channelId: wantedId, versionHash, slots }, versionHash, "no-cache, no-store, must-revalidate, max-age=0");
+  return nuvioTvSyncResponse(request, { ok: true, channelId: wantedId, versionHash, slots }, versionHash, NUVIO_TV_SCHEDULE_NO_STORE);
+}
+
+// GET /api/nuvio-tv/schedules/:target?channels=a,b,c  -- many channels in one request, with one
+// ETag for the lot, so a launcher refreshing every channel it has costs one round trip (a bare
+// 304 when nothing moved) rather than one per channel. A channel with no schedule is listed
+// under `missing`, not as an error.
+async function handleNuvioTvSchedulesRoute(request, env, ctx, url, path) {
+  if (!path.startsWith("/api/nuvio-tv/schedules/")) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+  }
+  const target = safeDecodeURIComponent(path.slice("/api/nuvio-tv/schedules/".length).split("/")[0] || "").trim();
+  const wanted = [...new Set(String(url.searchParams.get("channels") || "")
+    .split(",").map((c) => c.trim().replace(/^channel_/, "")).filter(Boolean))].slice(0, NUVIO_TV_SCHEDULE_BATCH_MAX);
+  if (!target || !wanted.length) return nuvioTvScheduleNotFound();
+  const limited = await nuvioTvScheduleRateLimit(request, env, ctx, wanted.length);
+  if (limited) return limited;
+
+  const now = Date.now();
+  const results = await Promise.all(wanted.map((id) => nuvioTvScheduleFor(env, ctx, url, target, id, now).catch(() => null)));
+  const schedules = {};
+  const missing = [];
+  wanted.forEach((id, i) => { if (results[i]) schedules[id] = results[i]; else missing.push(id); });
+  const versionHash = await nuvioTvScheduleSha(JSON.stringify([schedules, missing]));
+  return nuvioTvSyncResponse(request, { ok: true, versionHash, schedules, missing }, versionHash, NUVIO_TV_SCHEDULE_NO_STORE);
 }
 
 // --- Lists v2 backfill: migrate.lists (Phase 3b, P3b-3) ----------------------
