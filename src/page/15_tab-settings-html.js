@@ -663,6 +663,16 @@
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="nuvioMirrorRow">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Mirror deletions</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">When you delete a watched title in Nuvio, delete it here too. Only deletions from now on. Anything removed can be restored for 30 days.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Mirror Nuvio deletions">
+              <input type="checkbox" id="nuvioMirrorCheckbox" data-act="setNuvioMirror" data-act-args="[&quot;@checked&quot;,&quot;@self&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
           <div class="u-p-0_0_10px" id="nuvioProfileRow">
             <label for="nuvioProfileSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Nuvio profile to read</label>
             <select id="nuvioProfileSelect" aria-label="Nuvio profile" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;profileIndex&quot;,&quot;@value&quot;]" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;"></select>
@@ -670,7 +680,10 @@
           <p id="nuvioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
           <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioRestoreBtn" data-act="restoreNuvioRemoved" data-act-args="[&quot;@self&quot;]">Restore removed plays</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioHomeCheckBtn" data-act="checkNuvioHomeSettings" data-act-args="[&quot;@self&quot;]">Check home settings</button>
           </div>
+          <p id="nuvioHomeCheckResult" class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
         </div>
       </div>
     </div>

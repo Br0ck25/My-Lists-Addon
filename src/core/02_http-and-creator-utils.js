@@ -2463,8 +2463,8 @@ async function splitAppBundle(html) {
     const bodyStart = start + APP_BUNDLE_START.length;
     const end = page.indexOf(APP_BUNDLE_END, bodyStart);
     if (end !== -1) {
-      const bundle = page.slice(bodyStart, end);
       if (!APP_BUNDLE) {
+        const bundle = stripJsComments(page.slice(bodyStart, end));
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(bundle));
         const hash = [...new Uint8Array(digest)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
         APP_BUNDLE = { js: bundle, hash };
@@ -2482,8 +2482,8 @@ async function splitAppBundle(html) {
     const fBodyStart = fStart + APP_FEATURES_BUNDLE_START.length;
     const fEnd = page.indexOf(APP_FEATURES_BUNDLE_END, fBodyStart);
     if (fEnd !== -1) {
-      const fBundle = page.slice(fBodyStart, fEnd);
       if (!APP_FEATURES_BUNDLE) {
+        const fBundle = stripJsComments(page.slice(fBodyStart, fEnd));
         const fDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fBundle));
         const fHash = [...new Uint8Array(fDigest)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
         APP_FEATURES_BUNDLE = { js: fBundle, hash: fHash };

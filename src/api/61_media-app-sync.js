@@ -350,7 +350,7 @@ async function nuvioToken(env, grant, body) {
   if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 422) {
     throw mediaAppError("invalid", grant === "password" ? "Nuvio did not accept that email and password." : "Nuvio refused to renew this sign-in.");
   }
-  if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
+  if (!res.ok) throw nuvioStatusError(res.status);
   const d = await res.json().catch(() => null);
   if (!d || !d.access_token || !d.refresh_token) throw mediaAppError("unreachable", "Nuvio sent a reply we could not read.");
   const user = d.user && typeof d.user === "object" ? d.user : {};
@@ -364,17 +364,22 @@ async function nuvioToken(env, grant, body) {
 }
 
 async function nuvioRpc(env, accessToken, fn, params, options = {}) {
-  const res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
-    body: JSON.stringify(params || {}),
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await mediaAppFetch(`${nuvioBase(env)}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": nuvioKey(env), "Authorization": `Bearer ${accessToken}`, ...(options.range ? { "Range-Unit": "items", "Range": options.range, "Prefer": "count=exact" } : {}) },
+      body: JSON.stringify(params || {}),
+    });
+    if (res.status !== 429 || attempt >= NUVIO_RETRIES) break;
+    await nuvioBackoff(res, attempt);
+  }
   if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Nuvio refused this sign-in.");
   if (options.range && res.status === 416) {
     const match = /^\*\/(\d+)$/.exec(res.headers.get("content-range") || "");
     if (match && Number(options.range.split("-")[0]) >= Number(match[1])) return options.returnPage ? { rows: [], total: Number(match[1]) } : [];
   }
-  if (!res.ok) throw mediaAppError("unreachable", `Nuvio answered ${res.status}.`);
+  if (!res.ok) throw nuvioStatusError(res.status);
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
@@ -529,6 +534,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
   // would rebuild show_progress and undo these, so wait.
   const copied = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(`${ACTIVITY_BACKFILL_TYPE}:acct:${accountId}`).first();
   if (!copied || copied.status !== "done") return { skipped: "Your existing history is still being copied. This will run again shortly." };
+  const positionsReady = await mediaAppPositionsReady(actDb);
   const out = { plays: 0, progress: 0, resumes: 0, unresolved: 0, lookups: 0 };
   // How far through each title is, for the lists' bars: set for a title part way through with a
   // known length, removed for one that is not (finished, or not started).
@@ -583,8 +589,10 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
       if (isSeries && (!datedLast || p.season > datedLast.season || (p.season === datedLast.season && p.episode > datedLast.episode))) datedLast = p;
       if (isSeries && !knownShows.has(r.mediaId) && !newShows.includes(r.mediaId)) newShows.push(r.mediaId);
     }
-    if (!isSeries && r.plays.length) {
-      // A movie that is finished no longer has a resume point.
+    if (!isSeries && r.plays.length && !r.resume) {
+      // A movie that is finished no longer has a resume point. (nuvioRecords already
+      // dropped a resume that an equal or later play cancels, so one still here is a
+      // rewatch in progress and stays.)
       stmts.push(actDb.prepare("UPDATE show_progress SET companion_json = NULL WHERE account_id = ? AND media_id = ? AND last_season IS NULL").bind(accountId, r.mediaId));
     }
     if (isSeries && r.furthest && (!datedLast || r.furthest.season > datedLast.season
@@ -615,6 +623,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
       }
     }
   }
+  if (positionsReady) stmts.push(...mediaAppPositionStatements(actDb, accountId, provider, usable, now));
   for (let i = 0; i < stmts.length; i += 50) await actDb.batch(stmts.slice(i, i + 50));
   // The first time an account watches a show, one more watcher on its schedule.
   for (const mediaId of newShows) {
@@ -754,12 +763,18 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
     }
     return { records, total: changed.length, libraryTotal: library.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
   }
-  const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
-  const every = nuvioRecords(profile);
-  const all = every.filter(fresh);
-  const snapshotResumes = step.offset === 0 ? mediaAppResumeChanges(every, provider).filter(([, value]) => value) : null;
+  const read = await nuvioReadProfile(env, conn.accessToken, sync.profile_index, step);
+  const delta = read.mode === "delta";
+  const every = nuvioRecords(delta ? read : read.profile);
+  // A resume point Nuvio dropped is written as a record with none, unless the title has a record already.
+  const have = new Set(every.map((r) => r.imdbId || `${r.kind}|tmdb:${r.tmdbId}`));
+  for (const c of read.cleared) if (!have.has(c.key)) every.push(nuvioClearedStub(c.key, c.kind));
+  // A change read has no "changed since" filter (the events are the changes) and
+  // no whole-profile resume map: it edits the stored one.
+  const all = delta ? every : every.filter(fresh);
+  const snapshotResumes = !delta && step.offset === 0 ? mediaAppResumeChanges(every, provider).filter(([, value]) => value) : null;
   if (snapshotResumes && snapshotResumes.length > MEDIA_APP_RESUMES_MAX) throw mediaAppError("unreachable", "Nuvio has too many resume points to sync safely.");
-  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes };
+  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: delta ? null : every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes, delta, removedPlays: read.removed, pendingDelta: read.pending };
 }
 
 // One step of an account's pull. Returns { done, offset, total, ... }; throws
@@ -786,13 +801,15 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   const since = cursorSince != null ? cursorSince : (provider === "nuvio" && cursor.provenanceVersion !== 1 ? 0 : (Number(cursor.mtime) > 0 ? Number(cursor.mtime) - MEDIA_APP_OVERLAP_MS : 0));
   let fetched;
   try {
-    fetched = await mediaAppFetchRecords(env, accountId, provider, conn, sync, { offset, since });
+    fetched = await mediaAppFetchRecords(env, accountId, provider, conn, sync, { offset, since, cursor, delta: provider === "nuvio" && cursorSince == null });
   } catch (e) {
     if (e && e.kind === "invalid") {
       await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
       await setMediaAppSyncError(env, accountId, provider, "Sign in again to keep syncing.");
       return { done: true, skipped: "reauth" };
     }
+    // Busy, a conflict, data refused, or Nuvio down: say so on the settings page, and let the job try again.
+    if (provider === "nuvio" && e && e.kind === "unreachable") await setMediaAppSyncError(env, accountId, provider, await nuvioFailureMessage(env, e));
     throw e;
   }
   const applied = await applyMediaAppRecords(env, accountId, provider, fetched.records);
@@ -801,20 +818,40 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     return { done: true, skipped: applied.skipped };
   }
   if (fetched.snapshotResumes) cursor.resumes = mergeMediaAppResumes({}, fetched.snapshotResumes);
+  // Watched items deleted in Nuvio, when this account mirrors it: once, on the first step of a change read.
+  if (offset === 0 && fetched.delta && fetched.removedPlays && fetched.removedPlays.length && mediaAppMirrorOn(sync)) {
+    applied.removed = await mirrorRemovePlays(env, accountId, provider, fetched.removedPlays);
+  }
   if (applied.resumeChanges && applied.resumeChanges.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, applied.resumeChanges);
+  if (offset === 0) {
+    // Never keep a mark from an earlier, abandoned pull.
+    if (fetched.pendingDelta) cursor.pendingDelta = fetched.pendingDelta;
+    else delete cursor.pendingDelta;
+  }
   const next = offset + MEDIA_APP_STEP_ITEMS;
   if (next < fetched.total) {
-    if (fetched.snapshotResumes || (applied.resumeChanges && applied.resumeChanges.length)) {
+    if (fetched.snapshotResumes || fetched.pendingDelta || (applied.resumeChanges && applied.resumeChanges.length)) {
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
     }
-    return { done: false, offset: next, total: fetched.total, since, applied };
+    // A change read continues as one (no "since"), a full read with the mark it started with.
+    return { done: false, offset: next, total: fetched.total, since: fetched.delta ? null : since, applied };
   }
   if (provider === "nuvio" && since === 0) cursor.provenanceVersion = 1;
+  if (provider === "nuvio") {
+    // The change cursors are kept only once everything up to them has been applied.
+    if (cursor.pendingDelta) cursor.delta = cursor.pendingDelta;
+    else delete cursor.delta;
+    delete cursor.pendingDelta;
+  }
+  await purgeRemovedPlays(env, accountId);
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
   ).bind(JSON.stringify({ ...cursor, mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
-  return { done: true, total: fetched.total, found: fetched.libraryTotal, applied, pullDone: true };
+  // A change read does not count the whole profile, so the last full count stands.
+  const found = fetched.libraryTotal != null ? fetched.libraryTotal : ((mediaAppLastResultOf(sync) || {}).found || 0);
+  const overview = provider === "nuvio" ? await nuvioFetchOverview(env, conn.accessToken, sync.profile_index) : undefined;
+  return { done: true, total: fetched.total, found, applied, pullDone: true, overview };
 }
 
 // The job. Each run is one bounded step: a slice of the pull, then (when
@@ -839,7 +876,7 @@ async function runMediaAppSyncJob(env, payload, job = {}) {
     }
     if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
     if (!out.pullDone) return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
-    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, plays: totals.plays, progress: totals.progress, resumes: totals.resumes, unresolved: totals.unresolved });
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, plays: totals.plays, progress: totals.progress, resumes: totals.resumes, unresolved: totals.unresolved, overview: out.overview });
   }
   const pushed = await pushMediaAppStep(env, accountId, provider);
   totals.pushed += pushed.sent || 0;
@@ -956,11 +993,13 @@ async function pushMediaAppStep(env, accountId, provider) {
       cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
     } catch {}
     const after = Number(cursor.pushedId) || 0;
+    if (provider === "nuvio") await refreshTraktPositions(env, accountId);
+    const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : 0;
     const { results: rows } = await actDb.prepare(
       "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? AND NOT EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?) ORDER BY id LIMIT ?"
     ).bind(accountId, after, provider, provider, MEDIA_APP_PUSH_EVENTS).all();
     const events = rows || [];
-    if (!events.length) return none(null);
+    if (!events.length) return { sent: positionsSent, more: false, skipped: null };
     const ids = [...new Set(events.map((e) => e.media_id))];
     const { results: media } = await env.DB.prepare(
       "SELECT id, kind, imdb_id, title FROM media WHERE id IN (SELECT value FROM json_each(?))"
@@ -1001,7 +1040,7 @@ async function pushMediaAppStep(env, accountId, provider) {
     const nowMs = Date.now();
     await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ?, last_push_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?")
       .bind(JSON.stringify({ ...cursor, pushedId: events[events.length - 1].id }), nowMs, nowMs, accountId, provider).run();
-    return { sent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
+    return { sent: sent + positionsSent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
   } catch (e) {
     if (e && e.kind === "invalid") {
       await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
@@ -1039,9 +1078,10 @@ async function stremioRemoveTitle(conn, imdbId, target) {
   return true;
 }
 
-async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind) {
+async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind, episode) {
   const profile = await nuvioFetchProfile(env, conn.accessToken, profileIndex);
-  const mine = (row) => titleIds.includes(String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase()) && (!kind || mediaAppKind(mediaAppPick(row, "content_type", "contentType")) === kind);
+  const mine = (row) => titleIds.includes(String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase()) && (!kind || mediaAppKind(mediaAppPick(row, "content_type", "contentType")) === kind)
+    && (!episode || (mediaAppInt(row.season) === episode.season && mediaAppInt(row.episode) === episode.episode));
   if (target === "history") {
     const rows = profile.watched.filter(mine);
     // The public delete RPC always expects snake_case identity keys.
@@ -1070,7 +1110,11 @@ async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind)
 // The same removal here: the app's own plays of the title (history), its resume numbers, and
 // for Continue Watching the kept movie entry or, for a show, a dismissal at the furthest episode
 // watched (the way the website's own Continue Watching removal works). Returns the plays removed.
-async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target) {
+async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode) {
+  // One episode: only that season and episode (null, null is the whole title).
+  const sNum = episode ? episode.season : null;
+  const eNum = episode ? episode.episode : null;
+  const only = "AND (? IS NULL OR (season IS ? AND episode IS ?))";
   const actDb = activityDb(env, accountId);
   let removed = 0;
   if (actDb && media && (await activitySchemaReady(actDb))) {
@@ -1079,10 +1123,10 @@ async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId
       // this app but another app also reported it, transfer ownership rather
       // than deleting that other app's only copy.
       const out = await actDb.batch([
-        actDb.prepare("DELETE FROM watch_event_sources WHERE source = ? AND event_id IN (SELECT id FROM watch_events WHERE account_id = ? AND media_id = ?)").bind(provider, accountId, media.id),
+        actDb.prepare(`DELETE FROM watch_event_sources WHERE source = ? AND event_id IN (SELECT id FROM watch_events WHERE account_id = ? AND media_id = ? ${only})`).bind(provider, accountId, media.id, sNum, sNum, eNum),
         actDb.prepare(`UPDATE watch_events SET source = (SELECT s.source FROM watch_event_sources s WHERE s.event_id = watch_events.id ORDER BY s.source LIMIT 1)
-          WHERE account_id = ? AND media_id = ? AND source = ? AND EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id)`).bind(accountId, media.id, provider),
-        actDb.prepare("DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ?").bind(accountId, media.id, provider),
+          WHERE account_id = ? AND media_id = ? AND source = ? AND EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id) ${only}`).bind(accountId, media.id, provider, sNum, sNum, eNum),
+        actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ? ${only}`).bind(accountId, media.id, provider, sNum, sNum, eNum),
       ]);
       removed = out.reduce((n, r) => n + (Number(r && r.meta && r.meta.changes) || 0), 0);
     } else {
@@ -1092,7 +1136,7 @@ async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId
       ]);
     }
   }
-  const row = await loadMediaAppSync(env, accountId, provider);
+  const row = episode ? null : await loadMediaAppSync(env, accountId, provider);
   if (row) {
     let cursor = {};
     try {
@@ -1162,7 +1206,7 @@ async function refreshMediaAppNow(env, accountId, provider, { maxSteps = MEDIA_A
       continue;
     }
     if (!out.pullDone) return { done: true, skipped: out.skipped || "off" };
-    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, ...totals });
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, ...totals, overview: out.overview });
     return { done: true, completed: true };
   }
   await startMediaAppSync(env, accountId, provider, { offset, since });
@@ -1216,6 +1260,7 @@ function mediaAppSyncSummary(row) {
     profileIndex: row.profile_index == null ? null : row.profile_index,
     pull: Boolean(row.pull_enabled),
     push: Boolean(row.push_enabled),
+    mirror: mediaAppMirrorOn(row),
     lastPullAt: row.last_pull_at || null,
     lastPushAt: row.last_push_at || null,
     lastResult: mediaAppLastResultOf(row),
@@ -1712,6 +1757,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), profiles: provider === "nuvio" ? mediaAppProfilesOf(row) : undefined, sync: mediaAppSyncSummary(row) });
   }
 
+  if (sub === "home-settings-check" && request.method === "GET") return mediaAppHomeSettingsCheck(env, accountId, provider);
+
   if (sub === "collections" && request.method === "GET") {
     if (provider !== "nuvio") return json({ ok: false, error: "Collections sync is only supported for Nuvio." }, 400);
     let conn = await loadProviderConnection(env, accountId, provider);
@@ -1771,39 +1818,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (row && row.profile_index) await refreshAfterConnect(env, accountId, provider);
       return json({ ok: true, status: "connected", username: session.email || email, profiles, profileIndex: row ? row.profile_index : only });
     }
-    if (sub === "settings") {
-      const row = await loadMediaAppSync(env, accountId, provider);
-      if (!row) return json({ ok: false, error: "That account isn't connected." }, 404);
-      const sets = [];
-      const binds = [];
-      if (body.pull != null) {
-        sets.push("pull_enabled = ?");
-        binds.push(body.pull ? 1 : 0);
-      }
-      if (body.push != null) {
-        if (body.push && !mediaAppPushFlag(env)) return json({ ok: false, error: "Two-way sync isn't switched on yet." }, 409);
-        sets.push("push_enabled = ?");
-        binds.push(body.push ? 1 : 0);
-      }
-      if (body.profileIndex != null) {
-        const idx = mediaAppInt(body.profileIndex);
-        if (idx == null || idx < 1 || idx > 6) return json({ ok: false, error: "Choose one of your profiles." }, 400);
-        // A new profile starts its pull over; the profile names are kept.
-        const keep = {};
-        const names = mediaAppProfilesOf(row);
-        if (names.length) keep.profiles = names;
-        const last = mediaAppLastResultOf(row);
-        if (last) keep.last = last;
-        sets.push("profile_index = ?", "cursor_json = ?", "last_pull_at = NULL");
-        binds.push(idx, Object.keys(keep).length ? JSON.stringify(keep) : null);
-      }
-      if (sets.length) {
-        await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)
-          .bind(...binds, Date.now(), accountId, provider).run();
-        if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
-      }
-      return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
-    }
+    if (sub === "settings") return mediaAppSaveSettings(env, accountId, provider, body);
+    if (sub === "restore-removed") return mediaAppRestoreRoute(env, accountId, provider);
     if (sub === "library-item") {
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
       const id = mediaAppTitleId(body.id);
@@ -1896,6 +1912,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const id = mediaAppTitleId(body.id);
       if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id) return json({ ok: false, error: "Choose an item to remove." }, 400);
       const requestedKind = mediaAppKind(body.mediaType);
+      const episode = mediaAppEpisodeOf(body);
+      if (episode === false || (episode && (target !== "history" || provider !== "nuvio"))) return json({ ok: false, error: "Removing one episode works only from Nuvio's Watch History." }, 400);
       let media;
       if (id.imdbId) {
         media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE imdb_id = ?").bind(id.imdbId).first();
@@ -1921,8 +1939,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       // In the app first: if it refuses, nothing here changes either.
       const inApp = provider === "stremio"
         ? await stremioRemoveTitle(conn, imdbId, target)
-        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind));
-      const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target);
+        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind), episode);
+      const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode);
       if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);
       return json({ ok: true, removedInApp: inApp, removedPlays: here.removed });
     }

@@ -214,6 +214,7 @@ async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmd
         showId: m.showId || undefined,
         type: m.type || (m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv" ? "series" : (m.mediatype === "episode" ? "episode" : (type === "series" ? "series" : "movie"))),
         name: m.name,
+        subtitle: m.subtitle || undefined,
         poster: m.poster,
         year: m.releaseInfo,
         showTitle: m.showTitle,

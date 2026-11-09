@@ -5352,16 +5352,14 @@ ${appShellMobileNavHtml}
         <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
-        <label class="wh-group-shows-toggle u-ai-center u-gap-6px u-ml-8px u-cur-pointer u-fs-v_font_size_sm u-c-v_text u-us-none" style="display:inline-flex;">
-          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" class="u-acc-v_accent u-cur-pointer">
-          <span>Shows instead of episodes</span>
-        </label>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="episode" data-act="setWatchHistoryFilter" data-act-args="[&quot;episode&quot;,&quot;@self&quot;]">Episodes</button>
         <button type="button" class="btn-danger btn-sm u-ml-auto" id="whClearHistoryBtn" data-act="clearWatchHistoryAll">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" class="u-gap-6px u-fw2-wrap u-ai-center" style="display:none; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeEpisodeBtn" data-act="switchListDetailsType" data-act-args="[&quot;episode&quot;]" style="display:none;">Episodes</button>
         <button type="button" class="btn-danger btn-sm u-ml-auto" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none;">Clear All</button>
       </div>
       <div id="whSortControls" class="u-ai-center u-gap-8px" style="display:flex;">

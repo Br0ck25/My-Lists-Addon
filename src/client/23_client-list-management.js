@@ -1978,7 +1978,7 @@ function livePreviewPosterHtml(m) {
   let removeBtn = '';
   if (!m.isLivePreviewShelf && !m.hideRemoveBtn) {
     if (m.removeExternalProvider) {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-name="' + escapeAttr(m.showTitle || m.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.removeExternalId || m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '"' + (m.removeExternalEpisode != null ? ' data-season="' + escapeAttr(m.removeExternalSeason) + '" data-episode="' + escapeAttr(m.removeExternalEpisode) + '"' : '') + ' data-name="' + escapeAttr(m.removeExternalEpisode != null ? m.name : (m.showTitle || m.name || '')) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
     } else {
       const cwRemoveTarget = m.removeShowId || (isCwItem ? (m.showId || m.id || m.imdbId) : null);
       if (cwRemoveTarget) {
@@ -2300,11 +2300,6 @@ window.setWatchHistorySort = function(sortVal) {
   if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
 };
 
-window.toggleWatchHistoryGroupShows = function(checked) {
-  localStorage.setItem('myListAddon:watchHistoryGroupShows', checked ? 'true' : 'false');
-  if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
-};
-
 // The type a raw Watch History entry shows up as in the ungrouped grid, and
 // whether it survives the current filter pill. Shared so that the full render
 // below and the in-place update beside it cannot disagree about what "3 items"
@@ -2315,7 +2310,7 @@ function watchHistoryGridType(it) {
 function watchHistoryPassesFilter(it, filter) {
   const t = watchHistoryGridType(it);
   if (filter === 'movie') return t === 'movie';
-  if (filter === 'series') return t === 'series' || t === 'episode';
+  if (filter === 'series' || filter === 'episode') return t === 'series' || t === 'episode';
   return true;
 }
 
@@ -2358,7 +2353,7 @@ function watchHistoryTileCount(items, filter, grouped) {
 // disjoint set of raw items -- one show, or one movie -- so removing one can
 // never change another's episode count; and there is no way to remove a single
 // episode while grouped, because the grid has no episode tiles. Toggling the
-// grouping re-renders on its own (toggleWatchHistoryGroupShows), so a count
+// grouping re-renders on its own (setWatchHistoryFilter), so a count
 // that went stale in the other mode is recomputed on the way in.
 function updateWatchHistoryGridAfterRemoval() {
   const gridEl = document.getElementById('detailGrid');
@@ -2373,7 +2368,7 @@ function updateWatchHistoryGridAfterRemoval() {
   // No usable item list to reconcile against -- say so and let the full render
   // work it out from whatever state there is.
   if (!Array.isArray(window._rawWatchHistoryItems)) return false;
-  const grouped = localStorage.getItem('myListAddon:watchHistoryGroupShows') === 'true';
+  const grouped = window._watchHistoryFilter === 'series';
 
   // Both tile identities: an ungrouped tile carries the item's own id, a
   // grouped show tile carries the show id. A show keeps its tile for as long
@@ -2432,7 +2427,7 @@ function renderWatchHistoryGrid() {
 
   const filter = window._watchHistoryFilter || 'all';
   const sortMode = window._watchHistorySort || 'recent';
-  const groupShows = (localStorage.getItem('myListAddon:watchHistoryGroupShows') === 'true');
+  const groupShows = filter === 'series';
 
   let processed = [];
 
@@ -2526,7 +2521,7 @@ function renderWatchHistoryGrid() {
   // (grouping rewrites an episode's type, so this cannot read the raw item).
   if (filter === 'movie') {
     processed = processed.filter((it) => it.type === 'movie');
-  } else if (filter === 'series') {
+  } else if (filter === 'series' || filter === 'episode') {
     processed = processed.filter((it) => it.type === 'series' || it.type === 'episode');
   }
 
@@ -2650,6 +2645,7 @@ window.switchListDetailsType = function(newType) {
   if (aBtn) aBtn.classList.toggle('active', newType === 'all');
   if (mBtn) mBtn.classList.toggle('active', newType === 'movie');
   if (sBtn) sBtn.classList.toggle('active', newType === 'series');
+  if (mediaAppHistorySwitch(p, newType)) return;
 
   // "On Today" is not a filter over what is loaded -- it is a different
   // question, answered by the Worker: out of this channel's whole pool,
@@ -3258,7 +3254,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     if (creatorName) parts.push('by ' + creatorName);
     const filter = window._currentListDetailsFilter;
     const filtered = type === 'mixed' && (filter === 'movie' || filter === 'series');
-    parts.push(filtered ? (filter === 'series' ? 'Shows' : 'Movies') : (type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies')));
+    parts.push(filter === 'episode' ? 'Episodes' : (filtered ? (filter === 'series' ? 'Shows' : 'Movies') : (type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies'))));
     const loaded = (count === undefined || count === null) ? null : Number(count);
     // A known total is only believable while it is at least what is already
     // on screen. One that the loaded items have overtaken was never the
@@ -3359,7 +3355,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   }
 
   window._currentListDetailsParams = { name, type, listUrl };
-  window._currentListDetailsFilter = (isDualTypeChart && !isContinueWatching) ? type : 'all';
+  window._currentListDetailsFilter = opts.initialFilter || mediaAppHistoryFilter(listUrl) || ((isDualTypeChart && !isContinueWatching) ? type : 'all');
   window._currentListDetailsAllItems = [];
   // A fresh list page: whatever subtitle On Today had stashed belongs to the
   // list we just left.
@@ -3404,10 +3400,6 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (whSortControls) whSortControls.style.display = 'flex';
       if (genericTypeControls) genericTypeControls.style.display = 'none';
 
-      const groupShowsCb = document.getElementById('whGroupShowsCheckbox');
-      if (groupShowsCb) {
-        groupShowsCb.checked = localStorage.getItem('myListAddon:watchHistoryGroupShows') === 'true';
-      }
       const sortSel = document.getElementById('whSortSelect');
       if (sortSel) {
         sortSel.value = window._watchHistorySort || 'recent';
@@ -3428,6 +3420,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         const aBtn = document.getElementById('detailTypeAllBtn');
         const mBtn = document.getElementById('detailTypeMovieBtn');
         const sBtn = document.getElementById('detailTypeSeriesBtn');
+        mediaAppHistoryPill(listUrl, window._currentListDetailsFilter);
         const isExternalProvider = isExternalHistory || (listUrl && (listUrl.includes('trakt:watchlist') || (listUrl.includes('trakt.tv/users/') && listUrl.includes('/watchlist')) || listUrl.includes('mdblist:watchlist')));
         if (canShowLineup && !channelHasBothTypes) {
           // One kind of thing in this channel, so Movies and Shows would be
@@ -3681,17 +3674,11 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
   // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
-  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.exec(String(listUrl || ''));
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library):/.test(String(listUrl || ''));
 
   function annotatePersonalItem(it) {
     if (!it) return it;
-    if (mediaAppList) {
-      return Object.assign({}, it, {
-        removeExternalProvider: mediaAppList[1],
-        removeExternalTarget: mediaAppList[2] === 'watch-history' ? 'history' : mediaAppList[2],
-        removeExternalListId: mediaAppList[2],
-      });
-    }
+    if (mediaAppList) return Object.assign({}, it, mediaAppRemoveFields(listUrl, it));
     if (isSimklUserList) {
       return Object.assign({}, it, {
         removeExternalProvider: 'simkl',

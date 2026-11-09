@@ -2138,8 +2138,7 @@ function mediaAppUiSyncLine(sync) {
     let line = 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
     const r = sync.lastResult;
     if (r) {
-      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.');
-      if (r.unresolved) line += ' ' + r.unresolved + ' could not be matched.';
+      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.') + (r.unresolved ? ' ' + r.unresolved + ' could not be matched.' : '') + mediaAppOverviewText(r.overview);
     }
     return line;
   }
@@ -2247,10 +2246,7 @@ function renderMediaAppStatus(provider, info) {
   if (wrap) wrap.style.display = live ? '' : 'none';
   if (!live) return;
   const sync = info.sync || {};
-  const pull = document.getElementById(provider + 'PullCheckbox');
-  if (pull) pull.checked = !!sync.pull;
-  const push = document.getElementById(provider + 'PushCheckbox');
-  if (push) push.checked = !!sync.push;
+  ['Pull', 'Push', 'Mirror'].forEach(function (k) { const box = document.getElementById(provider + k + 'Checkbox'); if (box) box.checked = !!sync[k.toLowerCase()]; });
   const pushRow = document.getElementById(provider + 'PushRow');
   if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
   const statusLine = document.getElementById(provider + 'SyncStatus');
@@ -2521,12 +2517,12 @@ function removeMediaAppItem(btn) {
   const itemName = btn.dataset.name || 'This title';
   const app = MEDIA_APP_UI_NAMES[provider];
   if (!app || !id || (target !== 'history' && target !== 'continue-watching' && target !== 'library')) return;
-  const isShow = mediaType === 'series' || mediaType === 'episode';
+  const isShow = (mediaType === 'series' || mediaType === 'episode') && btn.dataset.episode == null;
   const message = target === 'history'
     ? '"' + itemName + '"' + (isShow ? ' and all its watched episodes' : '') + ' will be removed from your Watch History in ' + app + ', and from ' + app + ' itself.'
     : target === 'library' ? '"' + itemName + '" will be removed from your ' + app + ' Library.' : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
   showAppConfirm('Remove from ' + app + '?', message, 'Remove', async function () {
-    const body = { target: target, id: id, mediaType: mediaType };
+    const body = Object.assign({ target: target, id: id, mediaType: mediaType }, mediaAppEpisodeBody(btn));
     if (target === 'library') body.action = 'remove';
     const r = await mediaAppUiCall(provider, target === 'library' ? 'library-item' : 'remove', 'POST', body);
     if (!r.ok) {
