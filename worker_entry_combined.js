@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9eab2e5d19";
+const WORKER_BUILD = "04aade4679";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -46913,8 +46913,7 @@ function mediaAppUiSyncLine(sync) {
     let line = 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
     const r = sync.lastResult;
     if (r) {
-      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.');
-      if (r.unresolved) line += ' ' + r.unresolved + ' could not be matched.';
+      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.') + (r.unresolved ? ' ' + r.unresolved + ' could not be matched.' : '') + mediaAppOverviewText(r.overview);
     }
     return line;
   }
@@ -50392,6 +50391,17 @@ async function restoreNuvioRemoved(btn) {
   if (btn) btn.disabled = false;
   if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not restore your plays. Please try again.'), 'error');
   else showToast(r.data.restored ? 'Restored ' + r.data.restored + (r.data.restored === 1 ? ' play.' : ' plays.') : 'Nothing to restore.', r.data.restored ? 'success' : 'info');
+}
+
+// Nuvio's own counts for the chosen profile, from its sync overview: ' Nuvio holds 42 library items, 150 in progress.'
+function mediaAppOverviewText(o) {
+  if (!o) return '';
+  const parts = [];
+  if (o.library != null) parts.push(o.library + (o.library === 1 ? ' library item' : ' library items'));
+  if (o.progress != null) parts.push(o.progress + ' in progress');
+  if (o.watched != null) parts.push(o.watched + ' watched');
+  if (o.addons != null) parts.push(o.addons + (o.addons === 1 ? ' addon' : ' addons'));
+  return parts.length ? ' Nuvio holds ' + parts.join(', ') + '.' : '';
 }
 // Wraps a timer callback so a tick that arrives while the previous run is still
 // waiting (a slow fetch) is skipped instead of starting a second request.
@@ -110207,8 +110217,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
       await setMediaAppSyncError(env, accountId, provider, "Sign in again to keep syncing.");
       return { done: true, skipped: "reauth" };
     }
-    // Busy, a conflict, data refused: say so on the settings page, and let the job try again.
-    if (e && e.nuvioStatus) await setMediaAppSyncError(env, accountId, provider, e.message);
+    // Busy, a conflict, data refused, or Nuvio down: say so on the settings page, and let the job try again.
+    if (provider === "nuvio" && e && e.kind === "unreachable") await setMediaAppSyncError(env, accountId, provider, await nuvioFailureMessage(env, e));
     throw e;
   }
   const applied = await applyMediaAppRecords(env, accountId, provider, fetched.records);
@@ -110249,7 +110259,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   ).bind(JSON.stringify({ ...cursor, mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
   // A change read does not count the whole profile, so the last full count stands.
   const found = fetched.libraryTotal != null ? fetched.libraryTotal : ((mediaAppLastResultOf(sync) || {}).found || 0);
-  return { done: true, total: fetched.total, found, applied, pullDone: true };
+  const overview = provider === "nuvio" ? await nuvioFetchOverview(env, conn.accessToken, sync.profile_index) : undefined;
+  return { done: true, total: fetched.total, found, applied, pullDone: true, overview };
 }
 
 // The job. Each run is one bounded step: a slice of the pull, then (when
@@ -110274,7 +110285,7 @@ async function runMediaAppSyncJob(env, payload, job = {}) {
     }
     if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
     if (!out.pullDone) return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
-    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, plays: totals.plays, progress: totals.progress, resumes: totals.resumes, unresolved: totals.unresolved });
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, plays: totals.plays, progress: totals.progress, resumes: totals.resumes, unresolved: totals.unresolved, overview: out.overview });
   }
   const pushed = await pushMediaAppStep(env, accountId, provider);
   totals.pushed += pushed.sent || 0;
@@ -110599,7 +110610,7 @@ async function refreshMediaAppNow(env, accountId, provider, { maxSteps = MEDIA_A
       continue;
     }
     if (!out.pullDone) return { done: true, skipped: out.skipped || "off" };
-    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, ...totals });
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, ...totals, overview: out.overview });
     return { done: true, completed: true };
   }
   await startMediaAppSync(env, accountId, provider, { offset, since });
@@ -111669,6 +111680,46 @@ function nuvioStatusError(status) {
   const e = mediaAppError("unreachable", message);
   e.nuvioStatus = status;
   return e;
+}
+// Two read-only extras from the Nuvio API, both best effort: neither can fail a sync.
+//
+// get_sync_overview: per-profile counts (library, progress, watched, addons), kept in
+// the last-result record after a completed pull for the settings card.
+// GET /functions/v1/health-check: asked only after a pull failed, so the message can
+// say Nuvio itself is down instead of leaving it to look like the sign-in.
+
+// { library, progress, watched, addons } for one profile, or undefined.
+async function nuvioFetchOverview(env, accessToken, profileIndex) {
+  try {
+    const o = await nuvioRpc(env, accessToken, "get_sync_overview", {});
+    if (!o || typeof o !== "object") return undefined;
+    const at = (map) => (map && typeof map === "object" && Number.isFinite(Number(map[String(profileIndex)])) ? Number(map[String(profileIndex)]) : undefined);
+    const out = { library: at(o.library_items), progress: at(o.watch_progress), watched: at(o.watched_items), addons: at(o.addons) };
+    return Object.values(out).some((v) => v !== undefined) ? JSON.parse(JSON.stringify(out)) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// "healthy", "slow", "degraded" or "down"; null when Nuvio does not answer sensibly.
+async function nuvioHealth(env) {
+  try {
+    const res = await mediaAppFetch(`${nuvioBase(env)}/functions/v1/health-check`, { headers: { "apikey": nuvioKey(env) }, signal: AbortSignal.timeout(5000) });
+    const d = await res.json().catch(() => null);
+    return d && ["healthy", "slow", "degraded", "down"].includes(d.status) ? d.status : null;
+  } catch {
+    return null;
+  }
+}
+
+// What to show on the settings card for a failed Nuvio read. A refusal Nuvio gave on
+// purpose (429, 409, 422) keeps its own message; anything else asks the health check.
+async function nuvioFailureMessage(env, e) {
+  if ([429, 409, 422].includes(e && e.nuvioStatus)) return e.message;
+  const health = await nuvioHealth(env);
+  if (health === "down") return "Nuvio is down right now. It will try again.";
+  if (health === "degraded") return "Nuvio is having problems right now. It will try again.";
+  return e.message;
 }
 // Stored playback positions, and Nuvio "mirroring" (activity migration A0003).
 //

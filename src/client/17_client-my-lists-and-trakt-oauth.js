@@ -2138,8 +2138,7 @@ function mediaAppUiSyncLine(sync) {
     let line = 'Last checked ' + new Date(sync.lastPullAt).toLocaleString() + '.';
     const r = sync.lastResult;
     if (r) {
-      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.');
-      if (r.unresolved) line += ' ' + r.unresolved + ' could not be matched.';
+      line += ' Found ' + r.found + (r.found === 1 ? ' title.' : ' titles.') + (r.unresolved ? ' ' + r.unresolved + ' could not be matched.' : '') + mediaAppOverviewText(r.overview);
     }
     return line;
   }

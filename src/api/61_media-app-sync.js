@@ -808,8 +808,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
       await setMediaAppSyncError(env, accountId, provider, "Sign in again to keep syncing.");
       return { done: true, skipped: "reauth" };
     }
-    // Busy, a conflict, data refused: say so on the settings page, and let the job try again.
-    if (e && e.nuvioStatus) await setMediaAppSyncError(env, accountId, provider, e.message);
+    // Busy, a conflict, data refused, or Nuvio down: say so on the settings page, and let the job try again.
+    if (provider === "nuvio" && e && e.kind === "unreachable") await setMediaAppSyncError(env, accountId, provider, await nuvioFailureMessage(env, e));
     throw e;
   }
   const applied = await applyMediaAppRecords(env, accountId, provider, fetched.records);
@@ -850,7 +850,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   ).bind(JSON.stringify({ ...cursor, mtime: Math.max(Number(cursor.mtime) || 0, fetched.newest || 0) }), nowMs, nowMs, accountId, provider).run();
   // A change read does not count the whole profile, so the last full count stands.
   const found = fetched.libraryTotal != null ? fetched.libraryTotal : ((mediaAppLastResultOf(sync) || {}).found || 0);
-  return { done: true, total: fetched.total, found, applied, pullDone: true };
+  const overview = provider === "nuvio" ? await nuvioFetchOverview(env, conn.accessToken, sync.profile_index) : undefined;
+  return { done: true, total: fetched.total, found, applied, pullDone: true, overview };
 }
 
 // The job. Each run is one bounded step: a slice of the pull, then (when
@@ -875,7 +876,7 @@ async function runMediaAppSyncJob(env, payload, job = {}) {
     }
     if (!out.done) return { progress: { offset: out.offset, since: out.since, total: out.total, ...totals }, again: true };
     if (!out.pullDone) return { progress: { finishedAt: Date.now(), total: out.total || 0, skipped: out.skipped || null, ...totals } };
-    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, plays: totals.plays, progress: totals.progress, resumes: totals.resumes, unresolved: totals.unresolved });
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, plays: totals.plays, progress: totals.progress, resumes: totals.resumes, unresolved: totals.unresolved, overview: out.overview });
   }
   const pushed = await pushMediaAppStep(env, accountId, provider);
   totals.pushed += pushed.sent || 0;
@@ -1200,7 +1201,7 @@ async function refreshMediaAppNow(env, accountId, provider, { maxSteps = MEDIA_A
       continue;
     }
     if (!out.pullDone) return { done: true, skipped: out.skipped || "off" };
-    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, ...totals });
+    await saveMediaAppLastResult(env, accountId, provider, { found: out.found || 0, ...totals, overview: out.overview });
     return { done: true, completed: true };
   }
   await startMediaAppSync(env, accountId, provider, { offset, since });

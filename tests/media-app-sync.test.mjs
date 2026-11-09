@@ -56,6 +56,10 @@ function fakeServices(state) {
       return eps ? json({ meta: { videos: eps } }) : json({}, 404);
     }
     if (url.hostname === "api.nuvio.tv") {
+      if (url.pathname === "/functions/v1/health-check") {
+        seen.healthChecks = (seen.healthChecks || 0) + 1;
+        return state.health ? json({ status: state.health, database: "connected", latency_ms: 40 }, state.health === "down" ? 503 : 200) : new Response("{}", { status: 404 });
+      }
       if (url.pathname === "/auth/v1/logout") {
         seen.nuvioLogouts = (seen.nuvioLogouts || []).concat([{ auth: new Headers(init.headers || {}).get("authorization"), apikey: new Headers(init.headers || {}).get("apikey") }]);
         return new Response(null, { status: state.logoutFails ? 500 : 204 });
@@ -97,6 +101,7 @@ function fakeServices(state) {
           const p = (state.profiles || []).find((r) => r.profile_index === body.p_profile_id);
           return json(p && p.collections_json ? [{ profile_id: p.profile_index, collections_json: p.collections_json, updated_at: "2026-01-01T00:00:00Z" }] : []);
         }
+        if (fn === "get_sync_overview" && state.overview) return state.overviewFails ? json({ message: "boom" }, 500) : json(state.overview);
         if (fn === "sync_get_library_delta_cursor") return json(state.libraryCursor || 0);
         if (fn === "sync_pull_library") {
           if (state.libraryReadFails) return json({ message: "boom" }, 500);
@@ -2546,5 +2551,45 @@ describe("Nuvio: rate limits, errors and signing out", () => {
     const gone = await call(ctx.env, "/api/connections/nuvio", { method: "DELETE", cookie: ctx.cookie });
     assert.equal(gone.body.removed, true);
     assert.equal(ctx.env.DB._db.prepare("SELECT count(*) AS n FROM provider_connections WHERE provider = 'nuvio'").get().n, 0);
+  });
+
+  const OVERVIEW = { addons: { "1": 5, "2": 3 }, library_items: { "1": 42, "2": 10 }, watch_progress: { "1": 150, "2": 30 }, watched_items: { "1": 200, "2": 50 }, profiles: { "1": { name: "Main", color: "#1E88E5" } } };
+  const settings = async (ctx) => (await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.sync;
+
+  it("keeps the selected profile's counts from Nuvio's sync overview for the settings card", async () => {
+    const { ctx } = await connected("nuover", { overview: OVERVIEW });
+    assert.deepEqual((await settings(ctx)).lastResult.overview, { library: 42, progress: 150, watched: 200, addons: 5 }, "profile 1's, not profile 2's");
+  });
+
+  it("still finishes the sync, with no counts, when the overview fails or is missing", async () => {
+    const bad = await connected("nuover2", { overview: OVERVIEW, overviewFails: true });
+    const sync = await settings(bad.ctx);
+    assert.equal(sync.lastResult.overview, undefined);
+    assert.ok(sync.lastPullAt, "the pull itself completed");
+    const none = await connected("nuover3");
+    assert.equal((await settings(none.ctx)).lastResult.overview, undefined);
+  });
+
+  it("says Nuvio is down, and not that the sign-in failed, when its health check says so", async () => {
+    const { state, seen, ctx } = await connected("nuhealth", { health: "down" });
+    state.pullFails = true;
+    seen.healthChecks = 0;
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } }).catch(() => null);
+    assert.ok(seen.healthChecks >= 1, "the health check was asked");
+    assert.match(lastError(ctx) || "", /down/i);
+    assert.doesNotMatch(lastError(ctx) || "", /sign in/i);
+  });
+
+  it("keeps the plain error when Nuvio's health check says it is fine", async () => {
+    const { state, ctx } = await connected("nuhealth2", { health: "healthy" });
+    state.pullFails = true;
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } }).catch(() => null);
+    assert.match(lastError(ctx) || "", /answered 500/);
+    assert.doesNotMatch(lastError(ctx) || "", /down/i);
+  });
+
+  it("does not call the health check when the sync works", async () => {
+    const { seen } = await connected("nuhealth3", { health: "healthy" });
+    assert.equal(seen.healthChecks || 0, 0);
   });
 });
