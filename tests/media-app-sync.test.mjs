@@ -34,6 +34,14 @@ function fakeServices(state) {
     if (url.hostname === "api.strem.io") {
       const method = url.pathname.replace("/api/", "");
       seen.stremio.push(method);
+      (seen.stremioCalls = seen.stremioCalls || []).push({ method, body });
+      if (method === "addonCollectionGet" && state.stremioAddons) {
+        if (state.addonsMalformed) return json({ result: { addons: "nope" } });
+        for (const u of body.addFromURL || []) if (!state.addFromUrlIgnored && !state.stremioAddons.some((x) => x.transportUrl === u)) state.stremioAddons.push({ transportUrl: u, transportName: "http", manifest: { id: "app.my-list", name: "My Lists" }, flags: {} });
+        return json({ result: { addons: state.stremioAddons, lastModified: new Date().toISOString() } });
+      }
+      if (method === "addonCollectionSet") return json({ result: { success: true } });
+      if (state.stremioRateLimited > 0) { state.stremioRateLimited--; return new Response("{}", { status: 429, headers: { "retry-after": "0" } }); }
       if (state.stremioDown) return new Response("down", { status: state.stremioDown });
       if (body.authKey !== "AUTHKEY-SECRET") return json({ error: { message: "Session does not exist" } });
       if (method === "getUser") return json({ result: { _id: "u1", email: "viewer@example.test" } });
@@ -865,7 +873,7 @@ describe("saying why a connection could not be made", () => {
     const ctx = await setup("nodetail3");
     const r = await call(ctx.env, "/api/connections/stremio/link/complete", { method: "POST", cookie: ctx.cookie, json: { authKey: "AUTHKEY-SECRET" } });
     assert.equal(r.status, 502);
-    assert.match(r.body.detail, /Stremio answered 500/);
+    assert.match(r.body.detail, /Stremio had a problem \(500\)/, "the status stays in the message");
   });
 
   it("says when the request itself failed", async () => {
@@ -1079,13 +1087,12 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     assert.ok(cursor.resumes[SHOW], "the show's Continue Watching point is not touched by removing a watched episode");
   });
 
-  it("asks for a season and an episode together, and only for Nuvio's Watch History", async () => {
+  it("asks for a season and an episode together, and only for Watch History", async () => {
     const ctx = await connected("lsepbad", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
     const remove = (provider, json) => call(ctx.env, `/api/connections/${provider}/remove`, { method: "POST", cookie: ctx.cookie, json });
     assert.equal((await remove("nuvio", { target: "history", id: SHOW, mediaType: "series", season: 1 })).status, 400, "a season alone");
     assert.equal((await remove("nuvio", { target: "continue-watching", id: SHOW, mediaType: "series", season: 1, episode: 3 })).status, 400, "not for Continue Watching");
-    const stremio = await remove("stremio", { target: "history", id: SHOW, mediaType: "series", season: 1, episode: 1 });
-    assert.equal(stremio.status, 400, "Stremio cannot do one episode, and must not fall back to the whole show");
+    assert.equal((await remove("stremio", { target: "continue-watching", id: SHOW, mediaType: "series", season: 1, episode: 1 })).status, 400, "not for Continue Watching on Stremio either");
     assert.equal(ctx.state.watched.length, 3, "nothing was removed by any of them");
   });
 
@@ -2691,5 +2698,335 @@ describe("Nuvio: rate limits, errors and signing out", () => {
     ] })] } });
     const keys = (await check(ctx)).body.platforms.find((p) => p.platform === "home_catalog_shared").keys;
     assert.deepEqual(keys, { items: 6, items_hidden: 3, my_collection_rows_shown: 1, my_collection_rows_hidden: 2, collection_tiles: 1 });
+  });
+});
+
+describe("Stremio: rate limits and errors", () => {
+  const library = () => [{ _id: "tt1111111", type: "movie", name: "Movie A", poster: "https://img.test/a.jpg", _mtime: new Date(NOW - HOUR).toISOString(), state: { lastWatched: new Date(NOW - 30 * HOUR).toISOString(), timesWatched: 1, duration: 7200000, timeOffset: 7100000 } }];
+  async function connected(name) {
+    const state = { library: library(), episodes: {} };
+    const seen = fakeServices(state);
+    const ctx = await setup(name);
+    await connectStremio(ctx, state);
+    await pull(ctx.env);
+    return { state, seen, ctx };
+  }
+  const syncNow = (ctx) => call(ctx.env, "/api/connections/stremio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } }).catch(() => null);
+  const lastError = (ctx) => ctx.env.DB._db.prepare("SELECT last_error FROM media_app_sync WHERE provider = 'stremio'").get().last_error;
+
+  it("waits and tries again when Stremio answers 429, and the pull still finishes", async () => {
+    const { state, seen, ctx } = await connected("st429");
+    state.library.push({ _id: "tt4444444", type: "movie", name: "Movie D", _mtime: new Date(NOW).toISOString(), state: { lastWatched: new Date(NOW - HOUR).toISOString(), timesWatched: 1, duration: 6000000, timeOffset: 5900000 } });
+    seen.stremio.length = 0;
+    state.stremioRateLimited = 2;
+    await syncNow(ctx);
+    assert.equal(state.stremioRateLimited, 0, "both refusals were used up");
+    assert.ok(seen.stremio.filter((m) => m === "datastoreGet").length >= 3, "the library read was repeated, not given up on");
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt4444444"), "and the play arrived");
+  });
+
+  it("says Stremio is busy, not a bare status, when it keeps answering 429", async () => {
+    const { state, ctx } = await connected("st429b");
+    state.stremioRateLimited = 99;
+    await syncNow(ctx);
+    assert.match(lastError(ctx) || "", /busy/i);
+    assert.doesNotMatch(lastError(ctx) || "", /429/);
+  });
+
+  it("says Stremio had a problem when it answers with a server error", async () => {
+    const { state, ctx } = await connected("st503");
+    state.stremioDown = 503;
+    await syncNow(ctx);
+    assert.match(lastError(ctx) || "", /Stremio had a problem \(503\)/);
+  });
+
+  it("does not turn a refused sign-in into a busy or outage message", async () => {
+    const { ctx } = await connected("st401");
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input, init) => (String(input.url || input).includes("datastoreGet") ? json({ error: { message: "Session does not exist" } }) : real(input, init));
+    const prev = restore;
+    restore = () => { globalThis.fetch = real; prev(); };
+    await syncNow(ctx);
+    assert.match(lastError(ctx) || "", /Sign in again/);
+  });
+});
+
+describe("Stremio: installing the addon in the account", () => {
+  const URL_OK = "https://example.test/i/" + "a".repeat(43) + "/manifest.json";
+  const OTHER = { transportUrl: "https://v3-cinemeta.strem.io/manifest.json", transportName: "http", manifest: { id: "com.linvo.cinemeta", name: "Cinemeta" }, flags: { official: true, protected: true } };
+  async function connected(name, extra = {}, env = { FF_MEDIA_APP_PUSH: "1" }) {
+    const state = { library: [], episodes: {}, stremioAddons: [structuredClone(OTHER)], ...extra };
+    const seen = fakeServices(state);
+    const ctx = await setup(name, env);
+    await connectStremio(ctx, state);
+    return { state, seen, ctx };
+  }
+  const install = (ctx, manifestUrl = URL_OK) => call(ctx.env, "/api/connections/stremio/install-addon", { method: "POST", cookie: ctx.cookie, json: { manifestUrl } });
+  const methods = (seen) => (seen.stremioCalls || []).map((c) => c.method);
+
+  it("asks Stremio to add the addon from its URL, without replacing the collection", async () => {
+    const { state, seen, ctx } = await connected("stinst1");
+    const r = await install(ctx);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.installed, true);
+    assert.ok(!methods(seen).includes("addonCollectionSet"), "no full replace of the person's addons");
+    const add = seen.stremioCalls.filter((c) => c.method === "addonCollectionGet" && (c.body.addFromURL || []).length);
+    assert.deepEqual(add.map((c) => c.body.addFromURL), [[URL_OK]]);
+    assert.ok(state.stremioAddons.some((a) => a.transportUrl === OTHER.transportUrl), "their other addons are untouched");
+    assert.ok(state.stremioAddons.some((a) => a.transportUrl === URL_OK));
+  });
+
+  it("does nothing when the addon is already there", async () => {
+    const { seen, ctx } = await connected("stinst2", { stremioAddons: [structuredClone(OTHER), { transportUrl: URL_OK, manifest: { id: "app.my-list" }, flags: {} }] });
+    const r = await install(ctx);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.alreadyInstalled, true);
+    assert.equal(seen.stremioCalls.filter((c) => (c.body.addFromURL || []).length).length, 0, "nothing was asked of Stremio");
+  });
+
+  it("says so, and does not claim success, when Stremio did not add it", async () => {
+    const { ctx } = await connected("stinst3", { addFromUrlIgnored: true });
+    const r = await install(ctx);
+    assert.equal(r.status, 502);
+    assert.match(r.body.error, /did not add/i);
+  });
+
+  it("never sends anything when it could not read the collection", async () => {
+    const { seen, ctx } = await connected("stinst4", { addonsMalformed: true });
+    const r = await install(ctx);
+    assert.notEqual(r.status, 200);
+    assert.ok(!methods(seen).includes("addonCollectionSet"));
+    assert.equal(seen.stremioCalls.filter((c) => (c.body.addFromURL || []).length).length, 0);
+  });
+
+  it("only installs this site's own manifest links", async () => {
+    const { seen, ctx } = await connected("stinst5");
+    for (const bad of ["https://evil.example/manifest.json", "https://example.test/not-a-manifest", "javascript:alert(1)", "", "https://example.test/i/x/manifest.json?next=https://evil.example"]) {
+      assert.equal((await install(ctx, bad)).status, 400, bad);
+    }
+    assert.equal(methods(seen).filter((m) => m === "addonCollectionGet").length, 0, "Stremio was never asked");
+  });
+
+  it("is off until app writes are switched on, and needs a connected account", async () => {
+    const off = await connected("stinst6", {}, {});
+    assert.equal((await install(off.ctx)).status, 409);
+    fakeServices({ library: [], episodes: {} });
+    const ctx = await setup("stinst7", { FF_MEDIA_APP_PUSH: "1" });
+    assert.equal((await install(ctx)).status, 404);
+  });
+
+  it("is for Stremio only", async () => {
+    const { ctx } = await connected("stinst8");
+    const r = await call(ctx.env, "/api/connections/nuvio/install-addon", { method: "POST", cookie: ctx.cookie, json: { manifestUrl: URL_OK } });
+    assert.ok(r.status === 400 || r.status === 404);
+  });
+});
+
+describe("Stremio: removing one episode", () => {
+  // The bitfield as Stremio stores it: "<anchor episode id>:<length>:<deflated bits>".
+  const watchedOf = (value, eps) => {
+    const last = value.lastIndexOf(":"), mid = value.lastIndexOf(":", last - 1);
+    const anchor = eps.findIndex((e) => e.id === value.slice(0, mid));
+    const length = Number(value.slice(mid + 1, last));
+    const data = inflateSync(Buffer.from(value.slice(last + 1), "base64"));
+    const out = [];
+    for (let p = 0; p < length; p++) if (data[p >> 3] & (1 << (p & 7))) out.push(eps[p + anchor + 1 - length].episode);
+    return out;
+  };
+  async function connected(name, watchedIdx, extra = {}) {
+    const state = { library: [{ _id: SHOW, type: "series", name: "Show S", _mtime: new Date(NOW - HOUR).toISOString(), state: { watched: watchedIdx.length ? bitfield(SHOW_EPS, watchedIdx) : undefined, lastWatched: new Date(NOW - 2 * HOUR).toISOString(), timeOffset: 0 } }], episodes: { [SHOW]: SHOW_EPS }, ...extra };
+    const seen = fakeServices(state);
+    const ctx = await setup(name, { FF_MEDIA_APP_PUSH: "1" });
+    await connectStremio(ctx, state);
+    await pull(ctx.env);
+    return { state, seen, ctx };
+  }
+  const remove = (ctx, body) => call(ctx.env, "/api/connections/stremio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "history", id: SHOW, mediaType: "series", ...body } });
+  const stored = (state) => state.library.find((i) => i._id === SHOW).state;
+
+  it("clears only that episode's bit and leaves the others watched", async () => {
+    const { state, seen, ctx } = await connected("strmep1", [0, 1, 2]);
+    const r = await remove(ctx, { season: 1, episode: 2 });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.removedInApp, true);
+    assert.deepEqual(watchedOf(stored(state).watched, SHOW_EPS), [1, 3], "E2 is no longer watched; E1 and E3 still are");
+    assert.equal(seen.puts.length, 1);
+    assert.equal(seen.puts[0].length, 1, "one library item written, nothing else touched");
+  });
+
+  it("removing the only watched episode leaves the show with none watched", async () => {
+    const { state, ctx } = await connected("strmep2", [1]);
+    const r = await remove(ctx, { season: 1, episode: 2 });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(stored(state).watched, undefined);
+  });
+
+  it("changes nothing in Stremio for an episode it does not have as watched", async () => {
+    const { state, seen, ctx } = await connected("strmep3", [0]);
+    const before = JSON.stringify(stored(state));
+    const r = await remove(ctx, { season: 1, episode: 4 });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.removedInApp, false);
+    assert.equal(seen.puts.length, 0, "nothing was written");
+    assert.equal(JSON.stringify(stored(state)), before);
+  });
+
+  it("writes nothing when the show's episode list cannot be had", async () => {
+    const { state, seen, ctx } = await connected("strmep4", [0, 1]);
+    state.episodes = {};
+    const r = await remove(ctx, { season: 1, episode: 2 });
+    assert.notEqual(r.status, 200);
+    assert.equal(seen.puts.length, 0, "an unreadable list must never turn into a rewritten bitfield");
+  });
+
+  it("a title removal still clears the whole watched state", async () => {
+    const { state, ctx } = await connected("strmep5", [0, 1, 2]);
+    const r = await remove(ctx, {});
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(stored(state).watched, undefined);
+  });
+});
+
+
+describe("two-way sync: Stremio positions", () => {
+  const old = new Date(NOW - 50 * HOUR).toISOString();
+  const movie = (state = {}) => ({ _id: "tt5555555", type: "movie", name: "Movie P", _mtime: old, state: { lastWatched: old, timesWatched: 0, flaggedWatched: 0, duration: 0, timeOffset: 0, ...state } });
+  const show = (state = {}) => ({ _id: SHOW, type: "series", name: "Show S", _mtime: old, state: { video_id: `${SHOW}:1:1`, lastWatched: old, watched: bitfield(SHOW_EPS, [0, 1]), duration: 0, timeOffset: 0, ...state } });
+
+  async function ready(name, library, { push = true } = {}) {
+    const state = { approved: true, library, episodes: { [SHOW]: SHOW_EPS } };
+    const seen = fakeServices(state);
+    const ctx = await setup(name, { FF_MEDIA_APP_PUSH: "1" });
+    await connectStremio(ctx, state);
+    await pull(ctx.env);
+    if (push) { await call(ctx.env, "/api/connections/stremio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } }); await pull(ctx.env); }
+    return { state, seen, ctx };
+  }
+  function addPosition(ctx, imdb, kind, season, episode, position, duration, at, source = "plex") {
+    const db = ctx.env.DB._db;
+    let m = db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(imdb);
+    if (!m) m = { id: Number(db.prepare("INSERT INTO media (kind, imdb_id, title, created_at, updated_at) VALUES (?, ?, ?, 1, 1)").run(kind, imdb, "Title " + imdb).lastInsertRowid) };
+    ctx.env.DB_ACTIVITY._db.prepare("INSERT INTO watch_positions (account_id, media_id, source, season, episode, position_ms, duration_ms, watched_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(ctx.accountId, m.id, source, season, episode, position, duration, at, at);
+  }
+  const item = (state, id) => state.library.find((i) => i._id === id);
+
+  it("puts a movie's position from another app on the library item, and nothing else", async () => {
+    const { state, seen, ctx } = await ready("stpos1", [movie({ timesWatched: 2 })]);
+    const at = NOW - 2 * HOUR;
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, at);
+    await runAgain(ctx, "stremio");
+    const st = item(state, "tt5555555").state;
+    assert.deepEqual([st.timeOffset, st.duration, st.lastWatched], [600000, 6000000, new Date(at).toISOString()]);
+    assert.deepEqual([st.timesWatched, st.flaggedWatched], [2, 0], "the watched counts are not touched");
+    assert.equal(st.video_id, undefined, "a movie has no episode id");
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 1, "each position is sent once");
+  });
+
+  it("points a show at the episode, leaving which episodes are watched alone", async () => {
+    const { state, ctx } = await ready("stpos2", [show()]);
+    const before = item(state, SHOW).state.watched;
+    addPosition(ctx, SHOW, "series", 1, 3, 900000, 2400000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    const st = item(state, SHOW).state;
+    assert.deepEqual([st.video_id, st.timeOffset, st.duration], [`${SHOW}:1:3`, 900000, 2400000]);
+    assert.equal(st.watched, before, "the watched bitfield is exactly as it was");
+  });
+
+  it("carries Nuvio's own positions too, but never Stremio's back to Stremio", async () => {
+    const { state, ctx } = await ready("stpos3", [movie(), show()]);
+    addPosition(ctx, "tt5555555", "movie", null, null, 500000, 5000000, NOW - 3 * HOUR, "nuvio");
+    addPosition(ctx, SHOW, "series", 1, 3, 700000, 2400000, NOW - HOUR, "stremio");
+    await runAgain(ctx, "stremio");
+    assert.equal(item(state, "tt5555555").state.timeOffset, 500000, "from Nuvio");
+    assert.equal(item(state, SHOW).state.timeOffset, 0, "Stremio's own is left alone");
+  });
+
+  it("never overwrites a resume point that is as new or newer, or sends a finished title", async () => {
+    const fresh = new Date(NOW).toISOString();
+    const { state, seen, ctx } = await ready("stpos4", [movie({ lastWatched: fresh, timeOffset: 1234, duration: 9999 }), show()]);
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - HOUR);
+    addPosition(ctx, SHOW, "series", 1, 3, 2300000, 2400000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.deepEqual([item(state, "tt5555555").state.timeOffset, item(state, "tt5555555").state.duration], [1234, 9999], "Stremio's newer point stays");
+    assert.equal(item(state, SHOW).state.timeOffset, 0, "95% is a finished play, not a resume point");
+    assert.equal(seen.puts.length, 0, "nothing was written");
+  });
+
+  it("leaves titles that are not in the Stremio library alone", async () => {
+    const { seen, ctx } = await ready("stpos5", [movie()]);
+    addPosition(ctx, "tt8888888", "movie", null, null, 600000, 6000000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 0);
+  });
+
+  it("does not push positions while two-way sync is off", async () => {
+    const { seen, ctx } = await ready("stpos6", [movie()], { push: false });
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 0);
+  });
+
+  it("a position that arrives later is sent without resending the earlier ones", async () => {
+    const { state, seen, ctx } = await ready("stpos7", [movie(), show()]);
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - 3 * HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 1);
+    addPosition(ctx, SHOW, "series", 1, 3, 900000, 2400000, NOW - HOUR);
+    await runAgain(ctx, "stremio");
+    assert.equal(seen.puts.length, 2);
+    assert.deepEqual(seen.puts[1].map((c) => c._id), [SHOW], "only the new one");
+    assert.equal(item(state, SHOW).state.timeOffset, 900000);
+  });
+});
+
+describe("playback pings (Auto-track) and a connected Stremio", () => {
+  const STREMIO_UA = "Mozilla/5.0 (Linux; Android 13) stremio/1.6.0";
+  async function account(name, { connect = true, pulling = true } = {}) {
+    const state = { approved: true, library: [], episodes: {} };
+    fakeServices(state);
+    const ctx = await setup(name);
+    await ctx.env.CONFIGS.put(`creatorsync:${name}`, JSON.stringify({ config: [], trackOwner: name, trackCreatorName: name, track: true }));
+    if (connect) {
+      await connectStremio(ctx, state);
+      await pull(ctx.env);
+      if (!pulling) ctx.env.DB._db.exec("UPDATE media_app_sync SET pull_enabled = 0");
+    }
+    return ctx;
+  }
+  const ping = (ctx, name, ua) => call(ctx.env, `/${name}/subtitles/movie/tt0468569.json`, { headers: { "user-agent": ua } });
+  const diag = async (ctx, name) => JSON.parse((await ctx.env.CONFIGS.get(`creatortrack:${name}`)) || "{}");
+  const recorded = async (ctx, name) => (await ctx.env.CONFIGS.get(`creatorsynctracking:${name}`)) !== null;
+
+  it("does not record a play from Stremio when the account is connected and pulling its real history", async () => {
+    const ctx = await account("pingskip");
+    const r = await ping(ctx, "pingskip", STREMIO_UA);
+    assert.equal(r.status, 200);
+    assert.equal(await recorded(ctx, "pingskip"), false);
+    assert.match((await diag(ctx, "pingskip")).matched, /skipped \(Stremio is connected/);
+  });
+
+  it("still records a play from any other app, even with Stremio connected", async () => {
+    const ctx = await account("pingwako");
+    await ping(ctx, "pingwako", "Wako/2.1 (iOS)");
+    assert.doesNotMatch((await diag(ctx, "pingwako")).matched || "", /skipped/);
+    assert.equal(await recorded(ctx, "pingwako"), true);
+  });
+
+  it("still records a play from Stremio when the account is not connected, or its pull is off", async () => {
+    const none = await account("pingnone", { connect: false });
+    await ping(none, "pingnone", STREMIO_UA);
+    assert.equal(await recorded(none, "pingnone"), true, "not connected");
+    const off = await account("pingoff", { pulling: false });
+    await ping(off, "pingoff", STREMIO_UA);
+    assert.equal(await recorded(off, "pingoff"), true, "pull switched off");
+  });
+
+  it("records again once the connection needs signing in again", async () => {
+    const ctx = await account("pingreauth");
+    ctx.env.DB._db.prepare("UPDATE provider_connections SET status = 'reauth_required' WHERE provider = 'stremio'").run();
+    await ping(ctx, "pingreauth", STREMIO_UA);
+    assert.equal(await recorded(ctx, "pingreauth"), true, "nothing is syncing, so the ping is the only record");
   });
 });

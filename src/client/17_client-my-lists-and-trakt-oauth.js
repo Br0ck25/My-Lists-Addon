@@ -2247,6 +2247,7 @@ function renderMediaAppStatus(provider, info) {
   if (!live) return;
   const sync = info.sync || {};
   ['Pull', 'Push', 'Mirror'].forEach(function (k) { const box = document.getElementById(provider + k + 'Checkbox'); if (box) box.checked = !!sync[k.toLowerCase()]; });
+  mediaAppInstallRow(provider, info);
   const pushRow = document.getElementById(provider + 'PushRow');
   if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
   const statusLine = document.getElementById(provider + 'SyncStatus');

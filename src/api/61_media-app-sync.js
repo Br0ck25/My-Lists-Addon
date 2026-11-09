@@ -148,13 +148,18 @@ function mediaAppTitleId(v) {
 
 // One call on the account API. Resolves to the "result"; throws a mediaAppError.
 async function stremioCall(method, body) {
-  const res = await mediaAppFetch(STREMIO_API_URL + method, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await mediaAppFetch(STREMIO_API_URL + method, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 429 || attempt >= NUVIO_RETRIES) break;
+    await nuvioBackoff(res, attempt);
+  }
   if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Stremio refused this sign-in.");
-  if (!res.ok) throw mediaAppError("unreachable", `Stremio answered ${res.status}.`);
+  if (!res.ok) throw stremioStatusError(res.status);
   const data = await res.json().catch(() => null);
   if (!data || typeof data !== "object") throw mediaAppError("unreachable", "Stremio sent a reply we could not read.");
   if (data.error) {
@@ -809,7 +814,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
       return { done: true, skipped: "reauth" };
     }
     // Busy, a conflict, data refused, or Nuvio down: say so on the settings page, and let the job try again.
-    if (provider === "nuvio" && e && e.kind === "unreachable") await setMediaAppSyncError(env, accountId, provider, await nuvioFailureMessage(env, e));
+    const shown = e && e.kind === "unreachable" ? await mediaAppFailureMessage(env, provider, e) : null;
+    if (shown) await setMediaAppSyncError(env, accountId, provider, shown);
     throw e;
   }
   const applied = await applyMediaAppRecords(env, accountId, provider, fetched.records);
@@ -993,8 +999,8 @@ async function pushMediaAppStep(env, accountId, provider) {
       cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
     } catch {}
     const after = Number(cursor.pushedId) || 0;
-    if (provider === "nuvio") await refreshTraktPositions(env, accountId);
-    const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : 0;
+    await refreshTraktPositions(env, accountId);
+    const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : await pushStremioPositions(env, accountId, conn, actDb, cursor);
     const { results: rows } = await actDb.prepare(
       "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? AND NOT EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?) ORDER BY id LIMIT ?"
     ).bind(accountId, after, provider, provider, MEDIA_APP_PUSH_EVENTS).all();
@@ -1820,6 +1826,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     }
     if (sub === "settings") return mediaAppSaveSettings(env, accountId, provider, body);
     if (sub === "restore-removed") return mediaAppRestoreRoute(env, accountId, provider);
+    if (sub === "install-addon") return mediaAppStremioInstall(env, accountId, provider, body, new URL(request.url).origin);
     if (sub === "library-item") {
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
       const id = mediaAppTitleId(body.id);
@@ -1913,7 +1920,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id) return json({ ok: false, error: "Choose an item to remove." }, 400);
       const requestedKind = mediaAppKind(body.mediaType);
       const episode = mediaAppEpisodeOf(body);
-      if (episode === false || (episode && (target !== "history" || provider !== "nuvio"))) return json({ ok: false, error: "Removing one episode works only from Nuvio's Watch History." }, 400);
+      if (episode === false || (episode && target !== "history")) return json({ ok: false, error: "Removing one episode works only from Watch History." }, 400);
       let media;
       if (id.imdbId) {
         media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE imdb_id = ?").bind(id.imdbId).first();
@@ -1938,7 +1945,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       // In the app first: if it refuses, nothing here changes either.
       const inApp = provider === "stremio"
-        ? await stremioRemoveTitle(conn, imdbId, target)
+        ? await (episode ? stremioRemoveEpisode(conn, imdbId, episode) : stremioRemoveTitle(conn, imdbId, target))
         : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind), episode);
       const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode);
       if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);

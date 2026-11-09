@@ -1144,7 +1144,7 @@ function renderTrackPlaybackSection() {
       '<div class="settings-toggle-row">' +
         '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
           '<span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Enable In-App Playback Auto-Tracking</span>' +
-          '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+          '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Marks a movie or episode as watched the moment playback starts, in apps we cannot read your history from, such as Wako or another addon player. It is not used for Nuvio, or for Stremio once you have connected it under External Accounts: their real watch history is brought in instead. Takes effect on your next install link.</p>' +
         '</div>' +
         '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
           '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +

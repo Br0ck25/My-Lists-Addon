@@ -804,9 +804,10 @@ describe("The Episodes pill on the Nuvio and Stremio Watch History pages", () =>
       assert.equal(marks(c, "trakt:history", EP), null);
     });
 
-    it("a Stremio episode tile has no remove button, since Stremio cannot remove one episode", () => {
+    it("a Stremio episode tile removes one episode as well", () => {
       const c = loadClient({ signedIn: "alice" });
-      assert.equal(marks(c, "autotrack:stremio-watch-episodes:mixed:alice", EP), null);
+      const f = marks(c, "autotrack:stremio-watch-episodes:mixed:alice", EP);
+      assert.deepEqual([f.removeExternalProvider, f.removeExternalTarget, f.removeExternalId, f.removeExternalSeason, f.removeExternalEpisode], ["stremio", "history", "tt2222222", 1, 2]);
     });
 
     it("the tile's button carries the show id, season, episode and the episode's own name", () => {
@@ -847,3 +848,40 @@ describe("The Episodes pill on the Nuvio and Stremio Watch History pages", () =>
   });
 });
 
+
+describe("The Stremio card's Add to Stremio button", () => {
+  it("is in the page, hidden until the server allows app writes", () => {
+    const html = renderPage();
+    assert.match(html, /id="stremioInstallRow"[^>]*style="display:none;"/);
+    assert.match(html, /id="stremioInstallBtn"[^>]*data-act="installAddonInStremio"/);
+    const c = loadClient({ signedIn: "alice" });
+    c.call("renderMediaAppStatus", "stremio", { connected: true, status: "ok", username: "a@b.test", pushAvailable: true, sync: { pull: true, push: false } });
+    assert.equal(el(c, "stremioInstallRow").style.display, "");
+    c.call("renderMediaAppStatus", "stremio", { connected: true, status: "ok", username: "a@b.test", pushAvailable: false, sync: { pull: true, push: false } });
+    assert.equal(el(c, "stremioInstallRow").style.display, "none");
+  });
+
+  const run = async (installLink) => {
+    const c = loadClient({ signedIn: "alice" });
+    const sent = [];
+    const toasts = [];
+    c.set("getNuvioManifestUrl", () => installLink);
+    c.set("mediaAppUiCall", async (provider, path, method, body) => { sent.push({ provider, path, method, body }); return { ok: true, data: { installed: true } }; });
+    c.set("showToast", (message, kind) => toasts.push([message, kind]));
+    await c.call("installAddonInStremio", { disabled: false });
+    return { sent, toasts };
+  };
+
+  it("sends the person's current install link", async () => {
+    const link = "https://example.com/i/" + "a".repeat(43) + "/manifest.json";
+    const { sent, toasts } = await run(link);
+    assert.deepEqual(sent.map((s) => [s.provider, s.path, s.method, s.body.manifestUrl]), [["stremio", "install-addon", "POST", link]]);
+    assert.deepEqual(toasts[0], ["Added your My Lists addon to Stremio.", "success"]);
+  });
+
+  it("asks for an install link first when there is only the site's plain manifest", async () => {
+    const { sent, toasts } = await run("https://example.com/manifest.json");
+    assert.equal(sent.length, 0, "nothing is sent");
+    assert.match(toasts[0][0], /install link first/i);
+  });
+});
