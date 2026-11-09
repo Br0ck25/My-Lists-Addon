@@ -25,14 +25,12 @@ function mediaAppHistorySwitch(params, newType) {
   return true;
 }
 
-// A tile's remove-button properties, or null for none. Nuvio's episode tile removes one episode;
-// Stremio cannot, so its episodes list has no button.
+// A tile's remove-button properties, or null for none. An episode tile removes one episode.
 function mediaAppRemoveFields(listUrl, item) {
   const m = /^autotrack:(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library):/.exec(String(listUrl || ''));
   if (!m) return null;
   const fields = { removeExternalProvider: m[1], removeExternalTarget: m[2] === 'library' || m[2] === 'continue-watching' ? m[2] : 'history', removeExternalListId: m[2] === 'watch-episodes' ? 'watch-history' : m[2] };
   if (m[2] !== 'watch-episodes') return fields;
-  if (m[1] !== 'nuvio') return null;
   return Object.assign(fields, { removeExternalId: item.showId, removeExternalSeason: item.seasonNum, removeExternalEpisode: item.episodeNum });
 }
 

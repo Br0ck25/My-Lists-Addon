@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7ac66b1ae7";
+const WORKER_BUILD = "a9795bb506";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -40153,6 +40153,13 @@ if ('serviceWorker' in navigator) {
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="stremioInstallRow" style="display:none;">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Add to Stremio</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Adds your My Lists addon to your Stremio account, for devices where the Install in Stremio link does not open. Your other addons are not changed.</p>
+            </div>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="stremioInstallBtn" data-act="installAddonInStremio" data-act-args="[&quot;@self&quot;]">Add to Stremio</button>
+          </div>
           <p id="stremioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
           <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="stremioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;stremio&quot;,&quot;@self&quot;]">Sync now</button>
@@ -47159,6 +47166,7 @@ function renderMediaAppStatus(provider, info) {
   if (!live) return;
   const sync = info.sync || {};
   ['Pull', 'Push', 'Mirror'].forEach(function (k) { const box = document.getElementById(provider + k + 'Checkbox'); if (box) box.checked = !!sync[k.toLowerCase()]; });
+  mediaAppInstallRow(provider, info);
   const pushRow = document.getElementById(provider + 'PushRow');
   if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
   const statusLine = document.getElementById(provider + 'SyncStatus');
@@ -50568,6 +50576,26 @@ function skipWhileBusy(fn) {
     busy = true;
     try { return await fn.apply(this, arguments); } finally { busy = false; }
   };
+}
+// Stremio card: Add to Stremio (server: 61_stremio-install.js).
+
+function mediaAppInstallRow(provider, info) {
+  const row = document.getElementById(provider + 'InstallRow');
+  if (row) row.style.display = info && info.pushAvailable ? '' : 'none';
+}
+
+async function installAddonInStremio(btn) {
+  const link = getNuvioManifestUrl();
+  if (new URL(link, ORIGIN).pathname === '/manifest.json') {
+    showToast('Make an install link first, then try again.', 'error');
+    return;
+  }
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall('stremio', 'install-addon', 'POST', { manifestUrl: link });
+  if (btn) btn.disabled = false;
+  if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not add the addon to Stremio. Please try again.'), 'error');
+  else if (r.data.alreadyInstalled) showToast('Your My Lists addon is already in Stremio.', 'info');
+  else showToast('Added your My Lists addon to Stremio.', 'success');
 }
 // The key an import row and its /api/bulk-resolve answer are matched by. The
 // type is part of it: a movie and a show with the same title and year must not
@@ -83677,14 +83705,12 @@ function mediaAppHistorySwitch(params, newType) {
   return true;
 }
 
-// A tile's remove-button properties, or null for none. Nuvio's episode tile removes one episode;
-// Stremio cannot, so its episodes list has no button.
+// A tile's remove-button properties, or null for none. An episode tile removes one episode.
 function mediaAppRemoveFields(listUrl, item) {
   const m = /^autotrack:(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library):/.exec(String(listUrl || ''));
   if (!m) return null;
   const fields = { removeExternalProvider: m[1], removeExternalTarget: m[2] === 'library' || m[2] === 'continue-watching' ? m[2] : 'history', removeExternalListId: m[2] === 'watch-episodes' ? 'watch-history' : m[2] };
   if (m[2] !== 'watch-episodes') return fields;
-  if (m[1] !== 'nuvio') return null;
   return Object.assign(fields, { removeExternalId: item.showId, removeExternalSeason: item.seasonNum, removeExternalEpisode: item.episodeNum });
 }
 
@@ -109767,13 +109793,18 @@ function mediaAppTitleId(v) {
 
 // One call on the account API. Resolves to the "result"; throws a mediaAppError.
 async function stremioCall(method, body) {
-  const res = await mediaAppFetch(STREMIO_API_URL + method, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await mediaAppFetch(STREMIO_API_URL + method, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 429 || attempt >= NUVIO_RETRIES) break;
+    await nuvioBackoff(res, attempt);
+  }
   if (res.status === 401 || res.status === 403) throw mediaAppError("invalid", "Stremio refused this sign-in.");
-  if (!res.ok) throw mediaAppError("unreachable", `Stremio answered ${res.status}.`);
+  if (!res.ok) throw stremioStatusError(res.status);
   const data = await res.json().catch(() => null);
   if (!data || typeof data !== "object") throw mediaAppError("unreachable", "Stremio sent a reply we could not read.");
   if (data.error) {
@@ -110428,7 +110459,8 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
       return { done: true, skipped: "reauth" };
     }
     // Busy, a conflict, data refused, or Nuvio down: say so on the settings page, and let the job try again.
-    if (provider === "nuvio" && e && e.kind === "unreachable") await setMediaAppSyncError(env, accountId, provider, await nuvioFailureMessage(env, e));
+    const shown = e && e.kind === "unreachable" ? await mediaAppFailureMessage(env, provider, e) : null;
+    if (shown) await setMediaAppSyncError(env, accountId, provider, shown);
     throw e;
   }
   const applied = await applyMediaAppRecords(env, accountId, provider, fetched.records);
@@ -111439,6 +111471,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     }
     if (sub === "settings") return mediaAppSaveSettings(env, accountId, provider, body);
     if (sub === "restore-removed") return mediaAppRestoreRoute(env, accountId, provider);
+    if (sub === "install-addon") return mediaAppStremioInstall(env, accountId, provider, body, new URL(request.url).origin);
     if (sub === "library-item") {
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
       const id = mediaAppTitleId(body.id);
@@ -111532,7 +111565,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id) return json({ ok: false, error: "Choose an item to remove." }, 400);
       const requestedKind = mediaAppKind(body.mediaType);
       const episode = mediaAppEpisodeOf(body);
-      if (episode === false || (episode && (target !== "history" || provider !== "nuvio"))) return json({ ok: false, error: "Removing one episode works only from Nuvio's Watch History." }, 400);
+      if (episode === false || (episode && target !== "history")) return json({ ok: false, error: "Removing one episode works only from Watch History." }, 400);
       let media;
       if (id.imdbId) {
         media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE imdb_id = ?").bind(id.imdbId).first();
@@ -111557,7 +111590,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       // In the app first: if it refuses, nothing here changes either.
       const inApp = provider === "stremio"
-        ? await stremioRemoveTitle(conn, imdbId, target)
+        ? await (episode ? stremioRemoveEpisode(conn, imdbId, episode) : stremioRemoveTitle(conn, imdbId, target))
         : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind), episode);
       const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode);
       if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);
@@ -112250,6 +112283,102 @@ function mediaAppEpisodeOf(body) {
   const episode = mediaAppInt(body.episode);
   if (season == null && episode == null) return null;
   return season != null && episode != null ? { season, episode } : false;
+}
+// POST /api/connections/stremio/install-addon: puts this site's addon in the person's Stremio
+// account, so they need not open the stremio:// link on the device (which TVs and some phones
+// cannot do).
+//
+// Stremio's account API has addonCollectionSet, but it REPLACES the whole collection, and a
+// partial list would silently delete someone's addons. This never calls it. The client library
+// (Stremio/stremio-api-client) sends addonCollectionGet with an addFromURL list, and the server
+// adds those addons itself, so the collection is only ever added to. The collection is read
+// first (a reply we cannot read stops everything), and the result is read back: success is only
+// reported if the addon is really in the returned list. Behind FF_MEDIA_APP_PUSH like the other
+// writes into an app account. The request and reply shapes come from the client library's source;
+// none was checked against a live account.
+
+// The manifest URL to install, or null: our own origin only, an install link or a config id,
+// nothing after the path (no query, no fragment, no credentials).
+function stremioManifestUrlOk(raw, origin) {
+  let u;
+  try {
+    u = new URL(String(raw || ""));
+  } catch {
+    return null;
+  }
+  if (u.origin !== origin || u.search || u.hash || u.username || u.password) return null;
+  return /^\/(?:i\/[A-Za-z0-9_-]{43}|[A-Za-z0-9_-]{6,64})\/manifest\.json$/.test(u.pathname) ? u.origin + u.pathname : null;
+}
+
+async function stremioAddonList(authKey, addFromURL) {
+  const result = await stremioCall("addonCollectionGet", { authKey, update: true, addFromURL });
+  if (!result || !Array.isArray(result.addons)) throw mediaAppError("unreachable", "Stremio sent an addon list we could not read.");
+  return result.addons;
+}
+
+async function mediaAppStremioInstall(env, accountId, provider, body, origin) {
+  if (provider !== "stremio") return json({ ok: false, error: "This is only for Stremio." }, 400);
+  if (!mediaAppPushFlag(env)) return json({ ok: false, error: "Installing in Stremio isn't switched on yet." }, 409);
+  const url = stremioManifestUrlOk(body && body.manifestUrl, origin);
+  if (!url) return json({ ok: false, error: "Make an install link first, then try again." }, 400);
+  const conn = await loadProviderConnection(env, accountId, provider);
+  if (!conn || conn.status !== "ok" || !conn.accessToken) return json({ ok: false, error: "Your Stremio account isn't connected." }, 404);
+  const has = (list) => list.some((a) => a && typeof a.transportUrl === "string" && a.transportUrl.replace(/\/+$/, "") === url);
+  try {
+    if (has(await stremioAddonList(conn.accessToken, []))) return json({ ok: true, alreadyInstalled: true });
+    if (!has(await stremioAddonList(conn.accessToken, [url]))) return json({ ok: false, error: "Stremio did not add the addon. Use the Install in Stremio link instead." }, 502);
+    return json({ ok: true, installed: true });
+  } catch (e) {
+    if (e && e.kind === "invalid") {
+      await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
+      return json({ ok: false, error: "Sign in to Stremio again first." }, 400);
+    }
+    return json({ ok: false, error: String((e && e.message) || "Could not reach Stremio.") }, 502);
+  }
+}
+
+// --- Removing one episode from a show's watched state ------------------------------------------
+//
+// Stremio keeps a show's watched episodes in one bitfield (see stremioEncodeWatched). Removing one
+// episode reads the show's episode list, clears that episode's bit and writes the item back with
+// the new bitfield, changing nothing else on it. Anything it cannot read cleanly (no library item,
+// no episode list, an anchor episode that is not in the list) changes nothing, so a failed read
+// can never become a rewritten bitfield. Returns whether Stremio had that episode as watched.
+async function stremioRemoveEpisode(conn, imdbId, episode) {
+  const library = await stremioFetchLibrary(conn.accessToken);
+  const item = library.find((it) => String(it._id) === imdbId);
+  if (!item) return false;
+  const eps = await stremioEpisodes(imdbId);
+  if (!eps) throw mediaAppError("unreachable", "Could not list this show's episodes just now. Please try again.");
+  const state = item.state && typeof item.state === "object" ? { ...item.state } : {};
+  const have = new Set((state.watched ? await stremioWatchedEpisodes(state.watched, eps) : []).map((e) => `${e.season}:${e.episode}`));
+  const key = `${episode.season}:${episode.episode}`;
+  if (!have.delete(key)) return false;
+  if (have.size) state.watched = await stremioEncodeWatched(eps, have);
+  else delete state.watched;
+  const res = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: [{ ...item, _mtime: new Date().toISOString(), state }] });
+  if (!res || res.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the change.");
+  return true;
+}
+// Stremio's rate-limit and error answers, the same handling Nuvio gets (61_nuvio-limits.js).
+// Stremio's API (api.strem.io) states no limits, so this is ordinary good manners: a 429 is
+// waited out and tried again (a refused request was not applied, so a write is safe to repeat),
+// and what still fails is said in words on the settings card instead of "Stremio answered 429".
+
+// The error for a Stremio answer that is not a success. stremioStatus marks it as one of these.
+function stremioStatusError(status) {
+  let message = `Stremio answered ${status}.`;
+  if (status === 429) message = "Stremio is busy. It will try again.";
+  else if (status >= 500) message = `Stremio had a problem (${status}). It will try again.`;
+  const e = mediaAppError("unreachable", message);
+  e.stremioStatus = status;
+  return e;
+}
+
+// What to show on the settings card for a failed read of this app, or null to show nothing.
+async function mediaAppFailureMessage(env, provider, e) {
+  if (provider === "nuvio") return nuvioFailureMessage(env, e);
+  return e && e.stremioStatus ? e.message : null;
 }
 // Creator Key and session check behind every authenticated creator route (moved out of handleFetch, CQ-01)
 

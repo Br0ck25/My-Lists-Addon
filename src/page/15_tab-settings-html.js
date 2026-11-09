@@ -610,6 +610,13 @@
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="stremioInstallRow" style="display:none;">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Add to Stremio</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">Adds your My Lists addon to your Stremio account, for devices where the Install in Stremio link does not open. Your other addons are not changed.</p>
+            </div>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="stremioInstallBtn" data-act="installAddonInStremio" data-act-args="[&quot;@self&quot;]">Add to Stremio</button>
+          </div>
           <p id="stremioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
           <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="stremioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;stremio&quot;,&quot;@self&quot;]">Sync now</button>
