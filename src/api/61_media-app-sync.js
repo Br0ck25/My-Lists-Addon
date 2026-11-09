@@ -985,6 +985,7 @@ async function pushMediaAppStep(env, accountId, provider) {
       cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
     } catch {}
     const after = Number(cursor.pushedId) || 0;
+    if (provider === "nuvio") await refreshTraktPositions(env, accountId);
     const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : 0;
     const { results: rows } = await actDb.prepare(
       "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? AND NOT EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?) ORDER BY id LIMIT ?"

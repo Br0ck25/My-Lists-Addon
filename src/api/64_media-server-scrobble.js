@@ -91,6 +91,8 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   }
 
   if (!isPlayed) {
+    // A pause is not a play, but it says where the person stopped.
+    if (eventType === "media.pause") await recordPausedPosition(env, authUser, payload, { server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey });
     return json({ ok: true, ignored: `Event '${eventType}' is not a scrobble/play event.` });
   }
 
@@ -109,6 +111,8 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   } catch (err) {
     matched = `error (${server}): ` + (err && err.message ? err.message : String(err));
   }
+
+  if (matched.startsWith("yes")) await recordScrobblePosition(env, authUser, payload, { server, mediaType, title, showTitle, season, episode, imdbId, tmdbId });
 
   // Update diagnostics
   const diagnosticsKey = `creatortrack:${authUser}`;

@@ -45,7 +45,9 @@ function mediaAppPositionStatements(actDb, accountId, provider, usable, now) {
       `INSERT INTO watch_positions (account_id, media_id, source, season, episode, position_ms, duration_ms, watched_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (account_id, media_id, source) DO UPDATE SET season = excluded.season, episode = excluded.episode,
-         position_ms = excluded.position_ms, duration_ms = excluded.duration_ms, watched_at = excluded.watched_at, updated_at = excluded.updated_at`
+         updated_at = CASE WHEN position_ms IS excluded.position_ms AND duration_ms IS excluded.duration_ms AND season IS excluded.season AND episode IS excluded.episode
+           THEN updated_at ELSE excluded.updated_at END,
+         position_ms = excluded.position_ms, duration_ms = excluded.duration_ms, watched_at = excluded.watched_at`
     ).bind(accountId, r.mediaId, provider, r.kind === "series" ? resume.season : null, r.kind === "series" ? resume.episode : null,
       Math.round(resume.position), Math.round(resume.duration), resume.at || r.at || now, now);
   });
