@@ -5184,10 +5184,11 @@ describe("watch history See All: removing an item does not rebuild the grid", ()
     };
   }
   function load(dom, win, grouped) {
+    // One tile per show is the Shows pill; every other pill lists plays one by one.
+    if (grouped) win._watchHistoryFilter = "series";
     return loadOneClientFunction("src/client/23_client-list-management.js", "updateWatchHistoryGridAfterRemoval", {
       document: dom.document,
       window: win,
-      localStorage: { getItem: (k) => (k === "myListAddon:watchHistoryGroupShows" ? (grouped ? "true" : "false") : null) },
       watchHistoryTileCount: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryTileCount", {
         watchHistoryPassesFilter: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryPassesFilter", {
           watchHistoryGridType: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryGridType"),
@@ -5274,7 +5275,7 @@ describe("watch history See All: removing an item does not rebuild the grid", ()
     assert.equal(dom.sub.textContent, "1 item", "grouped counts tiles, not raw items");
   });
 
-  it("counts grouped tiles, not the episodes behind them", () => {
+  it("counts grouped tiles, not the episodes behind them (the Shows pill leaves movies out)", () => {
     const dom = makeDom([makeCard("s1"), makeCard("tt9")]);
     const win = {
       _currentListDetailsParams: { listUrl: "watch-history", name: "Watch History" },
@@ -5285,7 +5286,7 @@ describe("watch history See All: removing an item does not rebuild the grid", ()
       _watchHistoryFilter: "all",
     };
     assert.equal(load(dom, win, true)(), true);
-    assert.equal(dom.sub.textContent, "2 items", "3 episodes of one show plus a movie is 2 tiles");
+    assert.equal(dom.sub.textContent, "1 item", "3 episodes of one show is 1 tile; the movie is not on the Shows pill");
   });
 
   it("falls back to the full render when there is no item list to reconcile against", () => {
@@ -5373,13 +5374,12 @@ describe("watch history: grouped show tiles remove from Watch History", () => {
     const win = {
       _currentListDetailsParams: { listUrl: "watch-history", name: "Watch History" },
       _rawWatchHistoryItems: rawItems,
-      _watchHistoryFilter: opts.filter || "all",
+      _watchHistoryFilter: opts.grouped ? "series" : (opts.filter || "all"),
       _watchHistorySort: "recent",
     };
     const render = loadOneClientFunction("src/client/23_client-list-management.js", "renderWatchHistoryGrid", {
       document: { getElementById: (id) => els[id] || null },
       window: win,
-      localStorage: { getItem: (k) => (k === "myListAddon:watchHistoryGroupShows" ? (opts.grouped ? "true" : "false") : null) },
       formatWatchItemLabel: (it) => ({ title: it.title || it.name || "", subtitle: "" }),
       watchHistoryGridType: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryGridType"),
       renderPosterGridChunked: (_grid, items) => { captured = items; },
@@ -5436,13 +5436,21 @@ describe("watch history: grouped show tiles remove from Watch History", () => {
         watchHistoryGridType: loadOneClientFunction("src/client/23_client-list-management.js", "watchHistoryGridType"),
       }),
     });
-    for (const grouped of [false, true]) {
-      for (const filter of ["all", "movie", "series"]) {
-        const { tiles } = renderGrouped(HISTORY, { grouped, filter });
-        assert.equal(count(HISTORY, filter, grouped), tiles.length,
-          `helper and renderer disagree (grouped=${grouped}, filter=${filter})`);
-      }
+    // The Shows pill is the grouped view; All, Movies and Episodes list plays one by one.
+    for (const filter of ["all", "movie", "series", "episode"]) {
+      const grouped = filter === "series";
+      const { tiles } = renderGrouped(HISTORY, { filter });
+      assert.equal(count(HISTORY, filter, grouped), tiles.length,
+        `helper and renderer disagree (filter=${filter})`);
     }
+  });
+
+  it("the Shows pill groups by show, and the Episodes pill lists every episode and no movie", () => {
+    const shows = renderGrouped(HISTORY, { filter: "series" }).tiles;
+    assert.equal(JSON.stringify(shows.map((t) => [t.type, t.name, t.subtitle])), JSON.stringify([["series", "A Show", "2 episodes watched"]]), "one tile for the show, no movie");
+    const episodes = renderGrouped(HISTORY, { filter: "episode" }).tiles;
+    assert.deepEqual(episodes.map((t) => t.removeHistoryId).sort(), ["s1:1:1", "s1:1:2"], "each episode on its own, the movie left out");
+    assert.deepEqual(renderGrouped(HISTORY, { filter: "all" }).tiles.map((t) => t.removeHistoryId).sort(), ["s1:1:1", "s1:1:2", "tt9"], "All is unchanged: movies and every episode");
   });
 });
 

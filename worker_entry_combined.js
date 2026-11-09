@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9058583166";
+const WORKER_BUILD = "1b2e3efb92";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -18238,7 +18238,7 @@ const CATALOG_SOURCES = [
     match: (s) => s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:"),
     fetchPage: async (ref, { entry, skip, keys }) => {
       const items = await fetchAutoTrackedCatalog(entry, keys.env, keys);
-      if (!/^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.test(String(entry.url || ""))) return items;
+      if (!/^autotrack:(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library):/.test(String(entry.url || ""))) return items;
       const page = items.slice(skip, skip + PAGE_SIZE);
       page.totalItems = items.length;
       return page;
@@ -21544,7 +21544,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
     // the activity database. Owner only (the gate above), and nothing when the
     // account is not served from it: the legacy records know no source, so
     // falling back to them would show everything under the app's name.
-    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching|library)$/.exec(slug);
+    const appShelf = /^(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library)$/.exec(slug);
     if (appShelf) {
       if (appShelf[2] === 'library') {
         const account = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL").bind(username).first();
@@ -21553,10 +21553,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       } else {
         const accountId = await eventTrackingOwns(env, username);
         if (accountId == null) return [];
-        const read = appShelf[2] === 'watch-history'
-          ? await watchHistoryAll(env, accountId, appShelf[1])
-          : await appContinueWatching(env, accountId, appShelf[1]);
-        items = read.map(({ mediaId, ...it }) => it);
+        items = (await appShelfRead(env, accountId, appShelf[1], appShelf[2])).map(({ mediaId, ...it }) => it);
       }
     }
     // D1 is the cheap read, but only while it is current: a tracking write
@@ -21823,6 +21820,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       //
       // A real movie entry has none of these fields, so it still falls
       // through to the type/kind check exactly as before.
+      const ep = /-watch-episodes$/.test(slug) ? appEpisodeFields(it) : null;
       const isCompanionMovie = !!(it.isCompanion && (it.kind === 'movie' || it.type === 'movie' || it.companionType === 'bridge_movie' || it.companionType === 'sequel_movie'));
       const hasSeriesShape = !isCompanionMovie && !!(it.showId || it.showTitle || it.seasonNum != null || it.episodeNum != null);
       const isMovie = isCompanionMovie || (!hasSeriesShape && (it.kind === 'movie' || it.type === 'movie'));
@@ -21898,13 +21896,14 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       }
 
       const mapped = {
-        id: isMovie ? (it.imdbId || it.id) : (showId || it.id),
+        id: isMovie ? (it.imdbId || it.id) : (ep ? ep.id : (showId || it.id)),
         showId: showId || undefined,
         showTitle: isMovie ? undefined : (it.showTitle || it.title || it.name),
         seasonNum: it.seasonNum != null ? it.seasonNum : undefined,
         episodeNum: it.episodeNum != null ? it.episodeNum : undefined,
         type: mappedType,
-        name: isMovie ? (it.title || it.name) : (it.showTitle || it.title || it.name),
+        name: isMovie ? (it.title || it.name) : (ep ? ep.name : (it.showTitle || it.title || it.name)),
+        subtitle: ep ? ep.subtitle : undefined,
         poster: showPoster,
         releaseInfo: it.year || undefined,
         airDate: effectiveAirDate,
@@ -37747,16 +37746,14 @@ ${appShellMobileNavHtml}
         <button type="button" class="subnav-pill active wh-filter-pill" data-wh-filter="all" data-act="setWatchHistoryFilter" data-act-args="[&quot;all&quot;,&quot;@self&quot;]">All</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="movie" data-act="setWatchHistoryFilter" data-act-args="[&quot;movie&quot;,&quot;@self&quot;]">Movies</button>
         <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="series" data-act="setWatchHistoryFilter" data-act-args="[&quot;series&quot;,&quot;@self&quot;]">Shows</button>
-        <label class="wh-group-shows-toggle u-ai-center u-gap-6px u-ml-8px u-cur-pointer u-fs-v_font_size_sm u-c-v_text u-us-none" style="display:inline-flex;">
-          <input type="checkbox" id="whGroupShowsCheckbox" data-act="toggleWatchHistoryGroupShows" data-act-args="[&quot;@checked&quot;]" class="u-acc-v_accent u-cur-pointer">
-          <span>Shows instead of episodes</span>
-        </label>
+        <button type="button" class="subnav-pill wh-filter-pill" data-wh-filter="episode" data-act="setWatchHistoryFilter" data-act-args="[&quot;episode&quot;,&quot;@self&quot;]">Episodes</button>
         <button type="button" class="btn-danger btn-sm u-ml-auto" id="whClearHistoryBtn" data-act="clearWatchHistoryAll">Clear History</button>
       </div>
       <div id="genericTypeFilterControls" class="u-gap-6px u-fw2-wrap u-ai-center" style="display:none; width:100%;">
         <button type="button" class="subnav-pill active generic-type-pill" id="detailTypeAllBtn" data-act="switchListDetailsType" data-act-args="[&quot;all&quot;]">All</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeMovieBtn" data-act="switchListDetailsType" data-act-args="[&quot;movie&quot;]">Movies</button>
         <button type="button" class="subnav-pill generic-type-pill" id="detailTypeSeriesBtn" data-act="switchListDetailsType" data-act-args="[&quot;series&quot;]">Shows</button>
+        <button type="button" class="subnav-pill generic-type-pill" id="detailTypeEpisodeBtn" data-act="switchListDetailsType" data-act-args="[&quot;episode&quot;]" style="display:none;">Episodes</button>
         <button type="button" class="btn-danger btn-sm u-ml-auto" id="cwClearHistoryBtn" data-act="clearContinueWatchingAll" style="display:none;">Clear All</button>
       </div>
       <div id="whSortControls" class="u-ai-center u-gap-8px" style="display:flex;">
@@ -47294,12 +47291,12 @@ function removeMediaAppItem(btn) {
   const itemName = btn.dataset.name || 'This title';
   const app = MEDIA_APP_UI_NAMES[provider];
   if (!app || !id || (target !== 'history' && target !== 'continue-watching' && target !== 'library')) return;
-  const isShow = mediaType === 'series' || mediaType === 'episode';
+  const isShow = (mediaType === 'series' || mediaType === 'episode') && btn.dataset.episode == null;
   const message = target === 'history'
     ? '"' + itemName + '"' + (isShow ? ' and all its watched episodes' : '') + ' will be removed from your Watch History in ' + app + ', and from ' + app + ' itself.'
     : target === 'library' ? '"' + itemName + '" will be removed from your ' + app + ' Library.' : '"' + itemName + '" will be removed from Continue Watching in ' + app + '. Your Watch History is not changed.';
   showAppConfirm('Remove from ' + app + '?', message, 'Remove', async function () {
-    const body = { target: target, id: id, mediaType: mediaType };
+    const body = Object.assign({ target: target, id: id, mediaType: mediaType }, mediaAppEpisodeBody(btn));
     if (target === 'library') body.action = 'remove';
     const r = await mediaAppUiCall(provider, target === 'library' ? 'library-item' : 'remove', 'POST', body);
     if (!r.ok) {
@@ -50357,10 +50354,7 @@ function showNuvioPushToast(msg, res) {
     showToast(msg, 'success');
   }
 }
-// Nuvio mirroring (settings): the toggle that makes deletions in Nuvio happen here
-// too, and the button that puts removed plays back. The server rules are in
-// src/api/61_nuvio-positions.js. The checkbox state is drawn with the other sync
-// options in renderMediaAppStatus (17_client-my-lists-and-trakt-oauth.js).
+// Nuvio settings card (server: 61_nuvio-*.js).
 
 async function saveNuvioMirror(on, box) {
   const r = await mediaAppUiCall('nuvio', 'settings', 'POST', { mirror: on });
@@ -50383,7 +50377,6 @@ function setNuvioMirror(on, box) {
     function () { saveNuvioMirror(true, box); },
     false
   );
-  // Cancelling leaves the box as it was.
   if (box) box.checked = false;
 }
 
@@ -50395,7 +50388,7 @@ async function restoreNuvioRemoved(btn) {
   else showToast(r.data.restored ? 'Restored ' + r.data.restored + (r.data.restored === 1 ? ' play.' : ' plays.') : 'Nothing to restore.', r.data.restored ? 'success' : 'info');
 }
 
-// Nuvio's own counts for the chosen profile, from its sync overview: ' Nuvio holds 42 library items, 150 progress records.'
+// ' Nuvio holds 42 library items, 150 progress records.' from the sync overview.
 function mediaAppOverviewText(o) {
   if (!o) return '';
   const parts = [];
@@ -50406,7 +50399,7 @@ function mediaAppOverviewText(o) {
   return parts.length ? ' Nuvio holds ' + parts.join(', ') + '.' : '';
 }
 
-// "Check home settings": what Nuvio holds under each home catalog platform, as one line each.
+// One line per home catalog platform.
 function mediaAppHomeCheckText(data) {
   const lines = [];
   const list = (data && data.platforms) || [];
@@ -83519,6 +83512,50 @@ window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
 window.applyChannelLogoUrl = applyChannelLogoUrl;
 window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
 window.setChannelDraftLogo = setChannelDraftLogo;
+// Nuvio/Stremio Watch History: Episodes opens <app>-watch-episodes, the other pills <app>-watch-history.
+
+const APP_HISTORY_URL = /^(autotrack:(?:nuvio|stremio)-)watch-(history|episodes):/;
+
+function mediaAppHistoryFilter(listUrl) {
+  const m = APP_HISTORY_URL.exec(String(listUrl || ''));
+  return m && m[2] === 'episodes' ? 'episode' : '';
+}
+
+function mediaAppHistoryPill(listUrl, filter) {
+  const btn = document.getElementById('detailTypeEpisodeBtn');
+  if (!btn) return;
+  const on = APP_HISTORY_URL.test(String(listUrl || ''));
+  btn.style.display = on ? '' : 'none';
+  btn.classList.toggle('active', on && filter === 'episode');
+}
+
+// True when the pill opened the other list.
+function mediaAppHistorySwitch(params, newType) {
+  const btn = document.getElementById('detailTypeEpisodeBtn');
+  if (btn) btn.classList.toggle('active', newType === 'episode');
+  const m = APP_HISTORY_URL.exec(String(params.listUrl || ''));
+  if (!m || (newType === 'episode') === (m[2] === 'episodes')) return false;
+  openListDetailsPage(params.name, 'mixed', params.listUrl.replace(APP_HISTORY_URL, '$1watch-' + (newType === 'episode' ? 'episodes' : 'history') + ':'), null, { preserveScroll: true, initialFilter: newType });
+  return true;
+}
+
+// A tile's remove-button properties, or null for none. Nuvio's episode tile removes one episode;
+// Stremio cannot, so its episodes list has no button.
+function mediaAppRemoveFields(listUrl, item) {
+  const m = /^autotrack:(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library):/.exec(String(listUrl || ''));
+  if (!m) return null;
+  const fields = { removeExternalProvider: m[1], removeExternalTarget: m[2] === 'library' || m[2] === 'continue-watching' ? m[2] : 'history', removeExternalListId: m[2] === 'watch-episodes' ? 'watch-history' : m[2] };
+  if (m[2] !== 'watch-episodes') return fields;
+  if (m[1] !== 'nuvio') return null;
+  return Object.assign(fields, { removeExternalId: item.showId, removeExternalSeason: item.seasonNum, removeExternalEpisode: item.episodeNum });
+}
+
+// {season, episode} from a remove button, {} for a whole title.
+function mediaAppEpisodeBody(btn) {
+  const season = Number(btn.dataset.season);
+  const episode = Number(btn.dataset.episode);
+  return btn.dataset.season != null && btn.dataset.episode != null && Number.isFinite(season) && Number.isFinite(episode) ? { season: season, episode: episode } : {};
+}
 // Reordering & position management
 function moveRow(btn, dir) {
   const entry = btn.closest('.entry');
@@ -85499,7 +85536,7 @@ function livePreviewPosterHtml(m) {
   let removeBtn = '';
   if (!m.isLivePreviewShelf && !m.hideRemoveBtn) {
     if (m.removeExternalProvider) {
-      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '" data-name="' + escapeAttr(m.showTitle || m.name || '') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
+      removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="' + escapeAttr(m.removeExternalProvider) + '" data-target="' + escapeAttr(m.removeExternalTarget || '') + '" data-list-id="' + escapeAttr(m.removeExternalListId || '') + '" data-remove-id="' + escapeAttr(m.removeExternalId || m.id) + '" data-media-type="' + escapeAttr(m.type || 'movie') + '"' + (m.removeExternalEpisode != null ? ' data-season="' + escapeAttr(m.removeExternalSeason) + '" data-episode="' + escapeAttr(m.removeExternalEpisode) + '"' : '') + ' data-name="' + escapeAttr(m.removeExternalEpisode != null ? m.name : (m.showTitle || m.name || '')) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from ' + escapeAttr(m.removeExternalProvider) + '" aria-label="Remove from ' + escapeAttr(m.removeExternalProvider) + '">\u2715</button>';
     } else {
       const cwRemoveTarget = m.removeShowId || (isCwItem ? (m.showId || m.id || m.imdbId) : null);
       if (cwRemoveTarget) {
@@ -85821,11 +85858,6 @@ window.setWatchHistorySort = function(sortVal) {
   if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
 };
 
-window.toggleWatchHistoryGroupShows = function(checked) {
-  localStorage.setItem('myListAddon:watchHistoryGroupShows', checked ? 'true' : 'false');
-  if (typeof renderWatchHistoryGrid === 'function') renderWatchHistoryGrid();
-};
-
 // The type a raw Watch History entry shows up as in the ungrouped grid, and
 // whether it survives the current filter pill. Shared so that the full render
 // below and the in-place update beside it cannot disagree about what "3 items"
@@ -85836,7 +85868,7 @@ function watchHistoryGridType(it) {
 function watchHistoryPassesFilter(it, filter) {
   const t = watchHistoryGridType(it);
   if (filter === 'movie') return t === 'movie';
-  if (filter === 'series') return t === 'series' || t === 'episode';
+  if (filter === 'series' || filter === 'episode') return t === 'series' || t === 'episode';
   return true;
 }
 
@@ -85879,7 +85911,7 @@ function watchHistoryTileCount(items, filter, grouped) {
 // disjoint set of raw items -- one show, or one movie -- so removing one can
 // never change another's episode count; and there is no way to remove a single
 // episode while grouped, because the grid has no episode tiles. Toggling the
-// grouping re-renders on its own (toggleWatchHistoryGroupShows), so a count
+// grouping re-renders on its own (setWatchHistoryFilter), so a count
 // that went stale in the other mode is recomputed on the way in.
 function updateWatchHistoryGridAfterRemoval() {
   const gridEl = document.getElementById('detailGrid');
@@ -85894,7 +85926,7 @@ function updateWatchHistoryGridAfterRemoval() {
   // No usable item list to reconcile against -- say so and let the full render
   // work it out from whatever state there is.
   if (!Array.isArray(window._rawWatchHistoryItems)) return false;
-  const grouped = localStorage.getItem('myListAddon:watchHistoryGroupShows') === 'true';
+  const grouped = window._watchHistoryFilter === 'series';
 
   // Both tile identities: an ungrouped tile carries the item's own id, a
   // grouped show tile carries the show id. A show keeps its tile for as long
@@ -85953,7 +85985,7 @@ function renderWatchHistoryGrid() {
 
   const filter = window._watchHistoryFilter || 'all';
   const sortMode = window._watchHistorySort || 'recent';
-  const groupShows = (localStorage.getItem('myListAddon:watchHistoryGroupShows') === 'true');
+  const groupShows = filter === 'series';
 
   let processed = [];
 
@@ -86047,7 +86079,7 @@ function renderWatchHistoryGrid() {
   // (grouping rewrites an episode's type, so this cannot read the raw item).
   if (filter === 'movie') {
     processed = processed.filter((it) => it.type === 'movie');
-  } else if (filter === 'series') {
+  } else if (filter === 'series' || filter === 'episode') {
     processed = processed.filter((it) => it.type === 'series' || it.type === 'episode');
   }
 
@@ -86171,6 +86203,7 @@ window.switchListDetailsType = function(newType) {
   if (aBtn) aBtn.classList.toggle('active', newType === 'all');
   if (mBtn) mBtn.classList.toggle('active', newType === 'movie');
   if (sBtn) sBtn.classList.toggle('active', newType === 'series');
+  if (mediaAppHistorySwitch(p, newType)) return;
 
   // "On Today" is not a filter over what is loaded -- it is a different
   // question, answered by the Worker: out of this channel's whole pool,
@@ -86779,7 +86812,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
     if (creatorName) parts.push('by ' + creatorName);
     const filter = window._currentListDetailsFilter;
     const filtered = type === 'mixed' && (filter === 'movie' || filter === 'series');
-    parts.push(filtered ? (filter === 'series' ? 'Shows' : 'Movies') : (type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies')));
+    parts.push(filter === 'episode' ? 'Episodes' : (filtered ? (filter === 'series' ? 'Shows' : 'Movies') : (type === 'series' ? 'Shows' : (type === 'mixed' ? 'Mixed' : 'Movies'))));
     const loaded = (count === undefined || count === null) ? null : Number(count);
     // A known total is only believable while it is at least what is already
     // on screen. One that the loaded items have overtaken was never the
@@ -86880,7 +86913,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   }
 
   window._currentListDetailsParams = { name, type, listUrl };
-  window._currentListDetailsFilter = (isDualTypeChart && !isContinueWatching) ? type : 'all';
+  window._currentListDetailsFilter = opts.initialFilter || mediaAppHistoryFilter(listUrl) || ((isDualTypeChart && !isContinueWatching) ? type : 'all');
   window._currentListDetailsAllItems = [];
   // A fresh list page: whatever subtitle On Today had stashed belongs to the
   // list we just left.
@@ -86925,10 +86958,6 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
       if (whSortControls) whSortControls.style.display = 'flex';
       if (genericTypeControls) genericTypeControls.style.display = 'none';
 
-      const groupShowsCb = document.getElementById('whGroupShowsCheckbox');
-      if (groupShowsCb) {
-        groupShowsCb.checked = localStorage.getItem('myListAddon:watchHistoryGroupShows') === 'true';
-      }
       const sortSel = document.getElementById('whSortSelect');
       if (sortSel) {
         sortSel.value = window._watchHistorySort || 'recent';
@@ -86949,6 +86978,7 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
         const aBtn = document.getElementById('detailTypeAllBtn');
         const mBtn = document.getElementById('detailTypeMovieBtn');
         const sBtn = document.getElementById('detailTypeSeriesBtn');
+        mediaAppHistoryPill(listUrl, window._currentListDetailsFilter);
         const isExternalProvider = isExternalHistory || (listUrl && (listUrl.includes('trakt:watchlist') || (listUrl.includes('trakt.tv/users/') && listUrl.includes('/watchlist')) || listUrl.includes('mdblist:watchlist')));
         if (canShowLineup && !channelHasBothTypes) {
           // One kind of thing in this channel, so Movies and Shows would be
@@ -87202,17 +87232,11 @@ async function openListDetailsPage(name, type, listUrl, preloaded, opts) {
   const mdbListId = isMdbUserList ? (listUrl.includes('mdblist.com/lists/') ? (listUrl.split('/lists/')[1] || '').split('/')[1] || (listUrl.split('/lists/')[1] || '').split('/')[0] : (listUrl.split(':')[2] || '')) : '';
 
   // The Nuvio and Stremio lists: removing an item removes it in the app too (17_).
-  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.exec(String(listUrl || ''));
+  const mediaAppList = /^autotrack:(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library):/.test(String(listUrl || ''));
 
   function annotatePersonalItem(it) {
     if (!it) return it;
-    if (mediaAppList) {
-      return Object.assign({}, it, {
-        removeExternalProvider: mediaAppList[1],
-        removeExternalTarget: mediaAppList[2] === 'watch-history' ? 'history' : mediaAppList[2],
-        removeExternalListId: mediaAppList[2],
-      });
-    }
+    if (mediaAppList) return Object.assign({}, it, mediaAppRemoveFields(listUrl, it));
     if (isSimklUserList) {
       return Object.assign({}, it, {
         removeExternalProvider: 'simkl',
@@ -103229,6 +103253,29 @@ async function watchlistShelf(env, accountId) {
   }
 }
 
+// An app's shelf as the list pages read it. watch-history keeps one entry per play and the list
+// code shows one tile per show (the same list is a Stremio/Nuvio catalog); watch-episodes is the
+// page's Episodes view: every watched episode on its own, no movies.
+async function appShelfRead(env, accountId, source, kind) {
+  if (kind === "continue-watching") return appContinueWatching(env, accountId, source);
+  const all = await watchHistoryAll(env, accountId, source);
+  return kind === "watch-episodes" ? all.filter((it) => it.type === "episode") : all;
+}
+
+// An episode's tile in the Episodes view: its own id, named like the main Watch History names
+// an episode ("Show S02E01") with the episode's own title under it. A generic "Episode 2" is not
+// repeated as a subtitle.
+function appEpisodeFields(it) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const base = it.showTitle || it.title || it.name || "";
+  const title = String(it.name || "").trim();
+  return {
+    id: it.id,
+    name: it.seasonNum != null && it.episodeNum != null ? `${base} S${pad(it.seasonNum)}E${pad(it.episodeNum)}` : base,
+    subtitle: title && !/^Episode \d+$/i.test(title) ? title : undefined,
+  };
+}
+
 // --- The tracking record served from the activity database (P3c-6) ------------
 //
 // FF_EVENT_TRACKING (off). With it on, for an account whose history copy
@@ -110512,9 +110559,10 @@ async function stremioRemoveTitle(conn, imdbId, target) {
   return true;
 }
 
-async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind) {
+async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind, episode) {
   const profile = await nuvioFetchProfile(env, conn.accessToken, profileIndex);
-  const mine = (row) => titleIds.includes(String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase()) && (!kind || mediaAppKind(mediaAppPick(row, "content_type", "contentType")) === kind);
+  const mine = (row) => titleIds.includes(String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase()) && (!kind || mediaAppKind(mediaAppPick(row, "content_type", "contentType")) === kind)
+    && (!episode || (mediaAppInt(row.season) === episode.season && mediaAppInt(row.episode) === episode.episode));
   if (target === "history") {
     const rows = profile.watched.filter(mine);
     // The public delete RPC always expects snake_case identity keys.
@@ -110543,7 +110591,11 @@ async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind)
 // The same removal here: the app's own plays of the title (history), its resume numbers, and
 // for Continue Watching the kept movie entry or, for a show, a dismissal at the furthest episode
 // watched (the way the website's own Continue Watching removal works). Returns the plays removed.
-async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target) {
+async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode) {
+  // One episode: only that season and episode (null, null is the whole title).
+  const sNum = episode ? episode.season : null;
+  const eNum = episode ? episode.episode : null;
+  const only = "AND (? IS NULL OR (season IS ? AND episode IS ?))";
   const actDb = activityDb(env, accountId);
   let removed = 0;
   if (actDb && media && (await activitySchemaReady(actDb))) {
@@ -110552,10 +110604,10 @@ async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId
       // this app but another app also reported it, transfer ownership rather
       // than deleting that other app's only copy.
       const out = await actDb.batch([
-        actDb.prepare("DELETE FROM watch_event_sources WHERE source = ? AND event_id IN (SELECT id FROM watch_events WHERE account_id = ? AND media_id = ?)").bind(provider, accountId, media.id),
+        actDb.prepare(`DELETE FROM watch_event_sources WHERE source = ? AND event_id IN (SELECT id FROM watch_events WHERE account_id = ? AND media_id = ? ${only})`).bind(provider, accountId, media.id, sNum, sNum, eNum),
         actDb.prepare(`UPDATE watch_events SET source = (SELECT s.source FROM watch_event_sources s WHERE s.event_id = watch_events.id ORDER BY s.source LIMIT 1)
-          WHERE account_id = ? AND media_id = ? AND source = ? AND EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id)`).bind(accountId, media.id, provider),
-        actDb.prepare("DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ?").bind(accountId, media.id, provider),
+          WHERE account_id = ? AND media_id = ? AND source = ? AND EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id) ${only}`).bind(accountId, media.id, provider, sNum, sNum, eNum),
+        actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ? ${only}`).bind(accountId, media.id, provider, sNum, sNum, eNum),
       ]);
       removed = out.reduce((n, r) => n + (Number(r && r.meta && r.meta.changes) || 0), 0);
     } else {
@@ -110565,7 +110617,7 @@ async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId
       ]);
     }
   }
-  const row = await loadMediaAppSync(env, accountId, provider);
+  const row = episode ? null : await loadMediaAppSync(env, accountId, provider);
   if (row) {
     let cursor = {};
     try {
@@ -111341,6 +111393,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const id = mediaAppTitleId(body.id);
       if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id) return json({ ok: false, error: "Choose an item to remove." }, 400);
       const requestedKind = mediaAppKind(body.mediaType);
+      const episode = mediaAppEpisodeOf(body);
+      if (episode === false || (episode && (target !== "history" || provider !== "nuvio"))) return json({ ok: false, error: "Removing one episode works only from Nuvio's Watch History." }, 400);
       let media;
       if (id.imdbId) {
         media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE imdb_id = ?").bind(id.imdbId).first();
@@ -111366,8 +111420,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       // In the app first: if it refuses, nothing here changes either.
       const inApp = provider === "stremio"
         ? await stremioRemoveTitle(conn, imdbId, target)
-        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind));
-      const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target);
+        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind), episode);
+      const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode);
       if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);
       return json({ ok: true, removedInApp: inApp, removedPlays: here.removed });
     }
@@ -112049,6 +112103,15 @@ async function mediaAppSaveSettings(env, accountId, provider, body) {
 async function mediaAppRestoreRoute(env, accountId, provider) {
   if (provider !== "nuvio") return json({ ok: false, error: "Only Nuvio mirroring removes plays." }, 400);
   return json({ ok: true, restored: await restoreRemovedPlays(env, accountId, provider) });
+}
+
+// A remove request for one episode: { season, episode } when the body names both, null when
+// it names neither, false when it names only one (a request that cannot be honoured).
+function mediaAppEpisodeOf(body) {
+  const season = mediaAppInt(body.season);
+  const episode = mediaAppInt(body.episode);
+  if (season == null && episode == null) return null;
+  return season != null && episode != null ? { season, episode } : false;
 }
 // Creator Key and session check behind every authenticated creator route (moved out of handleFetch, CQ-01)
 
@@ -121639,6 +121702,7 @@ async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmd
         showId: m.showId || undefined,
         type: m.type || (m.mediatype === "show" || m.mediatype === "series" || m.mediatype === "tv" ? "series" : (m.mediatype === "episode" ? "episode" : (type === "series" ? "series" : "movie"))),
         name: m.name,
+        subtitle: m.subtitle || undefined,
         poster: m.poster,
         year: m.releaseInfo,
         showTitle: m.showTitle,

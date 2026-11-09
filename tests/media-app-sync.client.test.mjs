@@ -725,3 +725,125 @@ describe("The home settings check on the Nuvio card", () => {
   });
 });
 
+
+describe("The Episodes pill on the Nuvio and Stremio Watch History pages", () => {
+  const HISTORY = "autotrack:nuvio-watch-history:mixed:alice";
+  const EPISODES = "autotrack:nuvio-watch-episodes:mixed:alice";
+  const opened = (c) => {
+    const calls = [];
+    c.set("openListDetailsPage", (...args) => { calls.push(args); });
+    return calls;
+  };
+
+  it("Episodes opens the episodes list of the same app, keeping the page name", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const calls = opened(c);
+    c.set("_currentListDetailsParams", { name: "Nuvio Watch History", type: "mixed", listUrl: HISTORY });
+    c.call("switchListDetailsType", "episode");
+    assert.equal(calls.length, 1);
+    assert.deepEqual([calls[0][0], calls[0][1], calls[0][2]], ["Nuvio Watch History", "mixed", EPISODES]);
+    assert.equal(calls[0][4].initialFilter, "episode");
+    assert.equal(calls[0][4].preserveScroll, true);
+  });
+
+  it("from Episodes, All, Movies and Shows go back to the show list with that filter", () => {
+    for (const pill of ["all", "movie", "series"]) {
+      const c = loadClient({ signedIn: "alice" });
+      const calls = opened(c);
+      c.set("_currentListDetailsParams", { name: "Nuvio Watch History", type: "mixed", listUrl: EPISODES });
+      c.call("switchListDetailsType", pill);
+      assert.equal(calls.length, 1, pill);
+      assert.equal(calls[0][2], HISTORY, pill);
+      assert.equal(calls[0][4].initialFilter, pill);
+    }
+  });
+
+  it("filters in place, with no reload, between the pills that share the show list", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const calls = opened(c);
+    c.set("_currentListDetailsParams", { name: "Nuvio Watch History", type: "mixed", listUrl: HISTORY });
+    c.call("switchListDetailsType", "movie");
+    c.call("switchListDetailsType", "series");
+    assert.equal(calls.length, 0);
+  });
+
+  it("works the same for Stremio", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const calls = opened(c);
+    c.set("_currentListDetailsParams", { name: "Stremio Watch History", type: "mixed", listUrl: "autotrack:stremio-watch-history:mixed:alice" });
+    c.call("switchListDetailsType", "episode");
+    assert.equal(calls[0][2], "autotrack:stremio-watch-episodes:mixed:alice");
+  });
+
+  it("is in the page, hidden until a Watch History from an app is open", () => {
+    assert.match(renderPage(), /id="detailTypeEpisodeBtn"[^>]*style="display:none;"[^>]*>Episodes<\/button>/);
+  });
+
+  it("the main Watch History has an Episodes pill and no checkbox", () => {
+    const html = renderPage();
+    assert.match(html, /data-wh-filter="episode"[^>]*data-act="setWatchHistoryFilter"[^>]*>Episodes<\/button>/);
+    assert.doesNotMatch(html, /whGroupShowsCheckbox|Shows instead of episodes/);
+  });
+
+  describe("removing one episode from the Episodes list", () => {
+    const EP = { id: "tt2222222:1:2", showId: "tt2222222", type: "series", name: "Show S S01E02", showTitle: "Show S", seasonNum: 1, episodeNum: 2, poster: "https://img.test/p.jpg" };
+    const marks = (c, listUrl, item) => c.call("mediaAppRemoveFields", listUrl, item);
+
+    it("a Nuvio episode tile removes that title's id with its season and episode", () => {
+      const c = loadClient({ signedIn: "alice" });
+      const f = marks(c, "autotrack:nuvio-watch-episodes:mixed:alice", EP);
+      assert.deepEqual([f.removeExternalProvider, f.removeExternalTarget, f.removeExternalId, f.removeExternalSeason, f.removeExternalEpisode], ["nuvio", "history", "tt2222222", 1, 2]);
+    });
+
+    it("the show list and the other lists keep removing the whole title", () => {
+      const c = loadClient({ signedIn: "alice" });
+      const f = marks(c, "autotrack:nuvio-watch-history:mixed:alice", EP);
+      assert.deepEqual([f.removeExternalProvider, f.removeExternalTarget, f.removeExternalSeason], ["nuvio", "history", undefined]);
+      const cw = marks(c, "autotrack:stremio-continue-watching:mixed:alice", EP);
+      assert.deepEqual([cw.removeExternalProvider, cw.removeExternalTarget, cw.removeExternalSeason], ["stremio", "continue-watching", undefined]);
+      assert.equal(marks(c, "trakt:history", EP), null);
+    });
+
+    it("a Stremio episode tile has no remove button, since Stremio cannot remove one episode", () => {
+      const c = loadClient({ signedIn: "alice" });
+      assert.equal(marks(c, "autotrack:stremio-watch-episodes:mixed:alice", EP), null);
+    });
+
+    it("the tile's button carries the show id, season, episode and the episode's own name", () => {
+      const c = loadClient({ signedIn: "alice" });
+      const html = c.call("livePreviewPosterHtml", Object.assign({}, EP, marks(c, "autotrack:nuvio-watch-episodes:mixed:alice", EP)));
+      assert.match(html, /data-remove-id="tt2222222"/);
+      assert.match(html, /data-season="1" data-episode="2"/);
+      assert.match(html, /data-name="Show S S01E02"/);
+    });
+
+    it("pressing it asks about that one episode, then sends the season and episode", async () => {
+      const c = loadClient({ signedIn: "alice" });
+      let asked = null;
+      let sent = null;
+      c.set("showAppConfirm", (title, message, label, onConfirm) => { asked = { title, message }; onConfirm(); });
+      c.set("mediaAppUiCall", async (provider, path, method, body) => { sent = { provider, path, body }; return { ok: true, data: {} }; });
+      c.set("showToast", () => {});
+      const btn = { dataset: { provider: "nuvio", target: "history", removeId: "tt2222222", mediaType: "series", name: "Show S S01E02", season: "1", episode: "2" }, closest: () => null };
+      c.call("removeMediaAppItem", btn);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.match(asked.message, /"Show S S01E02" will be removed/);
+      assert.doesNotMatch(asked.message, /all its watched episodes/, "one episode, not the show");
+      assert.deepEqual([sent.provider, sent.path, sent.body.target, sent.body.id, sent.body.season, sent.body.episode], ["nuvio", "remove", "history", "tt2222222", 1, 2]);
+    });
+
+    it("a title removal still says it takes every watched episode, and sends no season", async () => {
+      const c = loadClient({ signedIn: "alice" });
+      let asked = null;
+      let sent = null;
+      c.set("showAppConfirm", (title, message, label, onConfirm) => { asked = message; onConfirm(); });
+      c.set("mediaAppUiCall", async (provider, path, method, body) => { sent = body; return { ok: true, data: {} }; });
+      c.set("showToast", () => {});
+      c.call("removeMediaAppItem", { dataset: { provider: "nuvio", target: "history", removeId: "tt2222222", mediaType: "series", name: "Show S" }, closest: () => null });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.match(asked, /all its watched episodes/);
+      assert.equal(sent.season, undefined);
+    });
+  });
+});
+

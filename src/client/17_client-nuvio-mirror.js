@@ -1,7 +1,4 @@
-// Nuvio mirroring (settings): the toggle that makes deletions in Nuvio happen here
-// too, and the button that puts removed plays back. The server rules are in
-// src/api/61_nuvio-positions.js. The checkbox state is drawn with the other sync
-// options in renderMediaAppStatus (17_client-my-lists-and-trakt-oauth.js).
+// Nuvio settings card (server: 61_nuvio-*.js).
 
 async function saveNuvioMirror(on, box) {
   const r = await mediaAppUiCall('nuvio', 'settings', 'POST', { mirror: on });
@@ -24,7 +21,6 @@ function setNuvioMirror(on, box) {
     function () { saveNuvioMirror(true, box); },
     false
   );
-  // Cancelling leaves the box as it was.
   if (box) box.checked = false;
 }
 
@@ -36,7 +32,7 @@ async function restoreNuvioRemoved(btn) {
   else showToast(r.data.restored ? 'Restored ' + r.data.restored + (r.data.restored === 1 ? ' play.' : ' plays.') : 'Nothing to restore.', r.data.restored ? 'success' : 'info');
 }
 
-// Nuvio's own counts for the chosen profile, from its sync overview: ' Nuvio holds 42 library items, 150 progress records.'
+// ' Nuvio holds 42 library items, 150 progress records.' from the sync overview.
 function mediaAppOverviewText(o) {
   if (!o) return '';
   const parts = [];
@@ -47,7 +43,7 @@ function mediaAppOverviewText(o) {
   return parts.length ? ' Nuvio holds ' + parts.join(', ') + '.' : '';
 }
 
-// "Check home settings": what Nuvio holds under each home catalog platform, as one line each.
+// One line per home catalog platform.
 function mediaAppHomeCheckText(data) {
   const lines = [];
   const list = (data && data.platforms) || [];

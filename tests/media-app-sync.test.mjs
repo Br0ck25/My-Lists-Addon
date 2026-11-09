@@ -1065,6 +1065,50 @@ describe("Nuvio and Stremio lists as Stremio/Nuvio catalog rows", () => {
     assert.equal(denied.body.count, 0, "another account's key reads nothing");
   });
 
+  it("removes one episode from Nuvio and from here, and nothing else of the show", async () => {
+    const ctx = await connected("lsepremove", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    const ask = () => call(ctx.env, "/api/preview", { method: "POST", json: { url: `autotrack:nuvio-watch-episodes:mixed:${ctx.owner.creatorName}`, type: "mixed", sample: 20, creatorName: ctx.owner.creatorName, creatorKey: ctx.owner.creatorKey } });
+    assert.deepEqual((await ask()).body.sample.map((m) => m.episodeNum).sort(), [1, 2]);
+    const r = await call(ctx.env, "/api/connections/nuvio/remove", { method: "POST", cookie: ctx.cookie, json: { target: "history", id: SHOW, mediaType: "series", season: 1, episode: 1 } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.removedInApp, true);
+    assert.deepEqual(ctx.state.watched.map((w) => [w.content_id, w.season ?? null, w.episode ?? null]).sort(), [[SHOW, 1, 2], ["tt1111111", null, null]].sort(), "only S1E1 left Nuvio");
+    assert.deepEqual((await ask()).body.sample.map((m) => m.episodeNum), [2], "and only that episode left the list here");
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === SHOW && e.episode === 2), "the other episode's play is still recorded");
+    const cursor = JSON.parse(ctx.env.DB._db.prepare("SELECT cursor_json FROM media_app_sync WHERE provider = 'nuvio'").get().cursor_json);
+    assert.ok(cursor.resumes[SHOW], "the show's Continue Watching point is not touched by removing a watched episode");
+  });
+
+  it("asks for a season and an episode together, and only for Nuvio's Watch History", async () => {
+    const ctx = await connected("lsepbad", { FF_EVENT_TRACKING: "1", FF_MEDIA_APP_PUSH: "1" });
+    const remove = (provider, json) => call(ctx.env, `/api/connections/${provider}/remove`, { method: "POST", cookie: ctx.cookie, json });
+    assert.equal((await remove("nuvio", { target: "history", id: SHOW, mediaType: "series", season: 1 })).status, 400, "a season alone");
+    assert.equal((await remove("nuvio", { target: "continue-watching", id: SHOW, mediaType: "series", season: 1, episode: 3 })).status, 400, "not for Continue Watching");
+    const stremio = await remove("stremio", { target: "history", id: SHOW, mediaType: "series", season: 1, episode: 1 });
+    assert.equal(stremio.status, 400, "Stremio cannot do one episode, and must not fall back to the whole show");
+    assert.equal(ctx.state.watched.length, 3, "nothing was removed by any of them");
+  });
+
+  it("lists every watched episode, not one tile per show, from the app's episodes list", async () => {
+    const ctx = await connected("lsepisodes");
+    const ask = (url, creator = ctx.owner) => call(ctx.env, "/api/preview", { method: "POST", json: { url, type: "mixed", sample: 20, creatorName: creator.creatorName, creatorKey: creator.creatorKey } });
+    const r = await ask(`autotrack:nuvio-watch-episodes:mixed:${ctx.owner.creatorName}`);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(r.body.sample.map((m) => [m.id, m.showId, m.seasonNum, m.episodeNum]).sort(), [[`${SHOW}:1:1`, SHOW, 1, 1], [`${SHOW}:1:2`, SHOW, 1, 2]], "each episode on its own, no movies");
+    assert.equal(r.body.count, 2);
+    assert.ok(r.body.sample.every((m) => m.showTitle), "the tile can name its show");
+    const byEp = Object.fromEntries(r.body.sample.map((m) => [m.episodeNum, m]));
+    assert.equal(byEp[2].name, `${byEp[2].showTitle} S01E02`, "the tile says which episode, as the main Watch History does");
+    assert.equal(byEp[2].subtitle, undefined, "a generic 'Episode 2' name is not repeated as a subtitle");
+    // A named episode keeps its own title as the subtitle.
+    ctx.env.DB._db.prepare("INSERT INTO media_episodes (media_id, season, episode, title, updated_at) VALUES (?, 1, 2, 'The Second One', 1)").run(ctx.env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(SHOW).id);
+    const named = await ask(`autotrack:nuvio-watch-episodes:mixed:${ctx.owner.creatorName}`);
+    assert.equal(Object.fromEntries(named.body.sample.map((m) => [m.episodeNum, m]))[2].subtitle, "The Second One");
+    assert.equal((await ask(`autotrack:stremio-watch-episodes:mixed:${ctx.owner.creatorName}`)).body.count, 0, "only that app's plays");
+    const other = await createUser(ctx.env, "lsepiother");
+    assert.equal((await ask(`autotrack:nuvio-watch-episodes:mixed:${ctx.owner.creatorName}`, other)).body.count, 0, "another account's key reads nothing");
+  });
+
   it("pages all app history beyond the first 100 plays without repeating titles", async () => {
     const ctx = await connected("lspages");
     for (let i = 0; i < 120; i++) addEvent(ctx, `tt${String(2000000 + i)}`, "movie", null, null, NOW - i * 1000, "nuvio");

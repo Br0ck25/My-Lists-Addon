@@ -1078,9 +1078,10 @@ async function stremioRemoveTitle(conn, imdbId, target) {
   return true;
 }
 
-async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind) {
+async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind, episode) {
   const profile = await nuvioFetchProfile(env, conn.accessToken, profileIndex);
-  const mine = (row) => titleIds.includes(String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase()) && (!kind || mediaAppKind(mediaAppPick(row, "content_type", "contentType")) === kind);
+  const mine = (row) => titleIds.includes(String(mediaAppPick(row, "content_id", "contentId") || "").toLowerCase()) && (!kind || mediaAppKind(mediaAppPick(row, "content_type", "contentType")) === kind)
+    && (!episode || (mediaAppInt(row.season) === episode.season && mediaAppInt(row.episode) === episode.episode));
   if (target === "history") {
     const rows = profile.watched.filter(mine);
     // The public delete RPC always expects snake_case identity keys.
@@ -1109,7 +1110,11 @@ async function nuvioRemoveTitle(env, conn, profileIndex, titleIds, target, kind)
 // The same removal here: the app's own plays of the title (history), its resume numbers, and
 // for Continue Watching the kept movie entry or, for a show, a dismissal at the furthest episode
 // watched (the way the website's own Continue Watching removal works). Returns the plays removed.
-async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target) {
+async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode) {
+  // One episode: only that season and episode (null, null is the whole title).
+  const sNum = episode ? episode.season : null;
+  const eNum = episode ? episode.episode : null;
+  const only = "AND (? IS NULL OR (season IS ? AND episode IS ?))";
   const actDb = activityDb(env, accountId);
   let removed = 0;
   if (actDb && media && (await activitySchemaReady(actDb))) {
@@ -1118,10 +1123,10 @@ async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId
       // this app but another app also reported it, transfer ownership rather
       // than deleting that other app's only copy.
       const out = await actDb.batch([
-        actDb.prepare("DELETE FROM watch_event_sources WHERE source = ? AND event_id IN (SELECT id FROM watch_events WHERE account_id = ? AND media_id = ?)").bind(provider, accountId, media.id),
+        actDb.prepare(`DELETE FROM watch_event_sources WHERE source = ? AND event_id IN (SELECT id FROM watch_events WHERE account_id = ? AND media_id = ? ${only})`).bind(provider, accountId, media.id, sNum, sNum, eNum),
         actDb.prepare(`UPDATE watch_events SET source = (SELECT s.source FROM watch_event_sources s WHERE s.event_id = watch_events.id ORDER BY s.source LIMIT 1)
-          WHERE account_id = ? AND media_id = ? AND source = ? AND EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id)`).bind(accountId, media.id, provider),
-        actDb.prepare("DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ?").bind(accountId, media.id, provider),
+          WHERE account_id = ? AND media_id = ? AND source = ? AND EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id) ${only}`).bind(accountId, media.id, provider, sNum, sNum, eNum),
+        actDb.prepare(`DELETE FROM watch_events WHERE account_id = ? AND media_id = ? AND source = ? ${only}`).bind(accountId, media.id, provider, sNum, sNum, eNum),
       ]);
       removed = out.reduce((n, r) => n + (Number(r && r.meta && r.meta.changes) || 0), 0);
     } else {
@@ -1131,7 +1136,7 @@ async function removeMediaAppItemLocally(env, accountId, provider, media, imdbId
       ]);
     }
   }
-  const row = await loadMediaAppSync(env, accountId, provider);
+  const row = episode ? null : await loadMediaAppSync(env, accountId, provider);
   if (row) {
     let cursor = {};
     try {
@@ -1907,6 +1912,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       const id = mediaAppTitleId(body.id);
       if (!MEDIA_APP_REMOVE_TARGETS.includes(target) || !id) return json({ ok: false, error: "Choose an item to remove." }, 400);
       const requestedKind = mediaAppKind(body.mediaType);
+      const episode = mediaAppEpisodeOf(body);
+      if (episode === false || (episode && (target !== "history" || provider !== "nuvio"))) return json({ ok: false, error: "Removing one episode works only from Nuvio's Watch History." }, 400);
       let media;
       if (id.imdbId) {
         media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE imdb_id = ?").bind(id.imdbId).first();
@@ -1932,8 +1939,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       // In the app first: if it refuses, nothing here changes either.
       const inApp = provider === "stremio"
         ? await stremioRemoveTitle(conn, imdbId, target)
-        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind));
-      const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target);
+        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind), episode);
+      const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode);
       if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);
       return json({ ok: true, removedInApp: inApp, removedPlays: here.removed });
     }

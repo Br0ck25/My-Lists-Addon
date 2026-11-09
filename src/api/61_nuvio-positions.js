@@ -238,3 +238,12 @@ async function mediaAppRestoreRoute(env, accountId, provider) {
   if (provider !== "nuvio") return json({ ok: false, error: "Only Nuvio mirroring removes plays." }, 400);
   return json({ ok: true, restored: await restoreRemovedPlays(env, accountId, provider) });
 }
+
+// A remove request for one episode: { season, episode } when the body names both, null when
+// it names neither, false when it names only one (a request that cannot be honoured).
+function mediaAppEpisodeOf(body) {
+  const season = mediaAppInt(body.season);
+  const episode = mediaAppInt(body.episode);
+  if (season == null && episode == null) return null;
+  return season != null && episode != null ? { season, episode } : false;
+}

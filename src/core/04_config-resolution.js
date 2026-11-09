@@ -558,7 +558,7 @@ const CATALOG_SOURCES = [
     match: (s) => s.startsWith("autotrack:") || s === "custom:watch-history" || s === "custom:continue-watching" || s === "custom:watchlist" || s.startsWith("custom:watch-history:") || s.startsWith("custom:continue-watching:"),
     fetchPage: async (ref, { entry, skip, keys }) => {
       const items = await fetchAutoTrackedCatalog(entry, keys.env, keys);
-      if (!/^autotrack:(nuvio|stremio)-(watch-history|continue-watching|library):/.test(String(entry.url || ""))) return items;
+      if (!/^autotrack:(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library):/.test(String(entry.url || ""))) return items;
       const page = items.slice(skip, skip + PAGE_SIZE);
       page.totalItems = items.length;
       return page;

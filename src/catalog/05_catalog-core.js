@@ -2680,7 +2680,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
     // the activity database. Owner only (the gate above), and nothing when the
     // account is not served from it: the legacy records know no source, so
     // falling back to them would show everything under the app's name.
-    const appShelf = /^(nuvio|stremio)-(watch-history|continue-watching|library)$/.exec(slug);
+    const appShelf = /^(nuvio|stremio)-(watch-history|watch-episodes|continue-watching|library)$/.exec(slug);
     if (appShelf) {
       if (appShelf[2] === 'library') {
         const account = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND deleted_at IS NULL").bind(username).first();
@@ -2689,10 +2689,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       } else {
         const accountId = await eventTrackingOwns(env, username);
         if (accountId == null) return [];
-        const read = appShelf[2] === 'watch-history'
-          ? await watchHistoryAll(env, accountId, appShelf[1])
-          : await appContinueWatching(env, accountId, appShelf[1]);
-        items = read.map(({ mediaId, ...it }) => it);
+        items = (await appShelfRead(env, accountId, appShelf[1], appShelf[2])).map(({ mediaId, ...it }) => it);
       }
     }
     // D1 is the cheap read, but only while it is current: a tracking write
@@ -2959,6 +2956,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       //
       // A real movie entry has none of these fields, so it still falls
       // through to the type/kind check exactly as before.
+      const ep = /-watch-episodes$/.test(slug) ? appEpisodeFields(it) : null;
       const isCompanionMovie = !!(it.isCompanion && (it.kind === 'movie' || it.type === 'movie' || it.companionType === 'bridge_movie' || it.companionType === 'sequel_movie'));
       const hasSeriesShape = !isCompanionMovie && !!(it.showId || it.showTitle || it.seasonNum != null || it.episodeNum != null);
       const isMovie = isCompanionMovie || (!hasSeriesShape && (it.kind === 'movie' || it.type === 'movie'));
@@ -3034,13 +3032,14 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
       }
 
       const mapped = {
-        id: isMovie ? (it.imdbId || it.id) : (showId || it.id),
+        id: isMovie ? (it.imdbId || it.id) : (ep ? ep.id : (showId || it.id)),
         showId: showId || undefined,
         showTitle: isMovie ? undefined : (it.showTitle || it.title || it.name),
         seasonNum: it.seasonNum != null ? it.seasonNum : undefined,
         episodeNum: it.episodeNum != null ? it.episodeNum : undefined,
         type: mappedType,
-        name: isMovie ? (it.title || it.name) : (it.showTitle || it.title || it.name),
+        name: isMovie ? (it.title || it.name) : (ep ? ep.name : (it.showTitle || it.title || it.name)),
+        subtitle: ep ? ep.subtitle : undefined,
         poster: showPoster,
         releaseInfo: it.year || undefined,
         airDate: effectiveAirDate,

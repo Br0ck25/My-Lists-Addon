@@ -502,3 +502,26 @@ async function watchlistShelf(env, accountId) {
     throw e;
   }
 }
+
+// An app's shelf as the list pages read it. watch-history keeps one entry per play and the list
+// code shows one tile per show (the same list is a Stremio/Nuvio catalog); watch-episodes is the
+// page's Episodes view: every watched episode on its own, no movies.
+async function appShelfRead(env, accountId, source, kind) {
+  if (kind === "continue-watching") return appContinueWatching(env, accountId, source);
+  const all = await watchHistoryAll(env, accountId, source);
+  return kind === "watch-episodes" ? all.filter((it) => it.type === "episode") : all;
+}
+
+// An episode's tile in the Episodes view: its own id, named like the main Watch History names
+// an episode ("Show S02E01") with the episode's own title under it. A generic "Episode 2" is not
+// repeated as a subtitle.
+function appEpisodeFields(it) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const base = it.showTitle || it.title || it.name || "";
+  const title = String(it.name || "").trim();
+  return {
+    id: it.id,
+    name: it.seasonNum != null && it.episodeNum != null ? `${base} S${pad(it.seasonNum)}E${pad(it.episodeNum)}` : base,
+    subtitle: title && !/^Episode \d+$/i.test(title) ? title : undefined,
+  };
+}
