@@ -78,6 +78,8 @@ async function handleSubtitlesTrackFor(configParam, stremioType, id, env, reques
     return;
   }
 
+  if (await stremioSyncCoversPing(env, auth, incomingClient, diagnosticsKey, pingId)) return;
+
   if (!auth.ok) {
     await env.CONFIGS.put(diagnosticsKey, JSON.stringify({
       lastPingAt: Date.now(),

@@ -2980,3 +2980,53 @@ describe("two-way sync: Stremio positions", () => {
     assert.equal(item(state, SHOW).state.timeOffset, 900000);
   });
 });
+
+describe("playback pings (Auto-track) and a connected Stremio", () => {
+  const STREMIO_UA = "Mozilla/5.0 (Linux; Android 13) stremio/1.6.0";
+  async function account(name, { connect = true, pulling = true } = {}) {
+    const state = { approved: true, library: [], episodes: {} };
+    fakeServices(state);
+    const ctx = await setup(name);
+    await ctx.env.CONFIGS.put(`creatorsync:${name}`, JSON.stringify({ config: [], trackOwner: name, trackCreatorName: name, track: true }));
+    if (connect) {
+      await connectStremio(ctx, state);
+      await pull(ctx.env);
+      if (!pulling) ctx.env.DB._db.exec("UPDATE media_app_sync SET pull_enabled = 0");
+    }
+    return ctx;
+  }
+  const ping = (ctx, name, ua) => call(ctx.env, `/${name}/subtitles/movie/tt0468569.json`, { headers: { "user-agent": ua } });
+  const diag = async (ctx, name) => JSON.parse((await ctx.env.CONFIGS.get(`creatortrack:${name}`)) || "{}");
+  const recorded = async (ctx, name) => (await ctx.env.CONFIGS.get(`creatorsynctracking:${name}`)) !== null;
+
+  it("does not record a play from Stremio when the account is connected and pulling its real history", async () => {
+    const ctx = await account("pingskip");
+    const r = await ping(ctx, "pingskip", STREMIO_UA);
+    assert.equal(r.status, 200);
+    assert.equal(await recorded(ctx, "pingskip"), false);
+    assert.match((await diag(ctx, "pingskip")).matched, /skipped \(Stremio is connected/);
+  });
+
+  it("still records a play from any other app, even with Stremio connected", async () => {
+    const ctx = await account("pingwako");
+    await ping(ctx, "pingwako", "Wako/2.1 (iOS)");
+    assert.doesNotMatch((await diag(ctx, "pingwako")).matched || "", /skipped/);
+    assert.equal(await recorded(ctx, "pingwako"), true);
+  });
+
+  it("still records a play from Stremio when the account is not connected, or its pull is off", async () => {
+    const none = await account("pingnone", { connect: false });
+    await ping(none, "pingnone", STREMIO_UA);
+    assert.equal(await recorded(none, "pingnone"), true, "not connected");
+    const off = await account("pingoff", { pulling: false });
+    await ping(off, "pingoff", STREMIO_UA);
+    assert.equal(await recorded(off, "pingoff"), true, "pull switched off");
+  });
+
+  it("records again once the connection needs signing in again", async () => {
+    const ctx = await account("pingreauth");
+    ctx.env.DB._db.prepare("UPDATE provider_connections SET status = 'reauth_required' WHERE provider = 'stremio'").run();
+    await ping(ctx, "pingreauth", STREMIO_UA);
+    assert.equal(await recorded(ctx, "pingreauth"), true, "nothing is syncing, so the ping is the only record");
+  });
+});

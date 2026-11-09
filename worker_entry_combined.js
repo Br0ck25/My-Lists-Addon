@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2b6ce2b944";
+const WORKER_BUILD = "3a2da7f553";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -77401,7 +77401,7 @@ function renderTrackPlaybackSection() {
       '<div class="settings-toggle-row">' +
         '<div class="u-flex-1 u-minw-0 u-pr-12px">' +
           '<span class="u-fw-600 u-fs-v_font_size_base u-c-v_text">Enable In-App Playback Auto-Tracking</span>' +
-          '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Automatically marks movies and episodes as watched whenever playback starts in any supported streaming app or addon player (Stremio, Nuvio, Wako, etc.) via the built-in playback hook. Takes effect on your next install link.</p>' +
+          '<p class="u-m-3px_0_0 u-c-v_muted u-fs-v_font_size_sm u-lh-1_35">Marks a movie or episode as watched the moment playback starts, in apps we cannot read your history from, such as Wako or another addon player. It is not used for Nuvio, or for Stremio once you have connected it under External Accounts: their real watch history is brought in instead. Takes effect on your next install link.</p>' +
         '</div>' +
         '<label class="ui-toggle" aria-label="Enable In-App Playback Auto-Tracking">' +
           '<input type="checkbox" id="trackPlaybackCheck" ' + (enabled ? 'checked' : '') + ' data-act="onTrackPlaybackToggle" data-act-args="[&quot;@self&quot;]">' +
@@ -109643,6 +109643,40 @@ async function purgeAnonymousLikes(env, { cursor, limit, apply } = {}) {
   if (out.failed.length) out.ok = false;
   return out;
 }
+// Whether a playback ping (the subtitles request, 63_subtitles-track.js) should be left unrecorded
+// because the person's app is already syncing its real watch history here.
+//
+// A ping fires when playback STARTS and marks the title watched there and then, so a movie begun and
+// abandoned counted as watched. A connected Stremio account is read for its real watch dates and
+// resume points instead (pullMediaAppStep). So a ping from Stremio is skipped only when that
+// account is connected, its sign-in works and its pull is on: with any of those off nothing else
+// would record the play. A ping from any other app (Wako, other players) is always recorded, and
+// so is one from a client we do not recognise as Stremio. Nuvio's pings are skipped separately.
+
+async function mediaAppPullsFrom(env, accountId, provider) {
+  if (!env || !env.DB || accountId == null) return false;
+  try {
+    const row = await env.DB.prepare(
+      `SELECT 1 AS yes FROM media_app_sync s JOIN provider_connections c ON c.account_id = s.account_id AND c.provider = s.provider
+       WHERE s.account_id = ? AND s.provider = ? AND s.pull_enabled = 1 AND c.status = 'ok'`
+    ).bind(accountId, provider).first();
+    return Boolean(row);
+  } catch {
+    return false;
+  }
+}
+
+// True when the ping was skipped (and says why on the diagnostics key).
+async function stremioSyncCoversPing(env, auth, client, diagnosticsKey, pingId) {
+  if (client !== "Stremio" || !auth.ok || !(await mediaAppPullsFrom(env, await activityAccountId(env, auth.username), "stremio"))) return false;
+  await env.CONFIGS.put(diagnosticsKey, JSON.stringify({
+    lastPingAt: Date.now(),
+    lastPingId: pingId,
+    lastServer: "Stremio",
+    matched: "skipped (Stremio is connected and syncing your real watch history)",
+  }));
+  return true;
+}
 
 // --- Stremio and Nuvio accounts: connect, pull watch history (Release 20) ----------
 //
@@ -112770,6 +112804,8 @@ async function handleSubtitlesTrackFor(configParam, stremioType, id, env, reques
     }));
     return;
   }
+
+  if (await stremioSyncCoversPing(env, auth, incomingClient, diagnosticsKey, pingId)) return;
 
   if (!auth.ok) {
     await env.CONFIGS.put(diagnosticsKey, JSON.stringify({
