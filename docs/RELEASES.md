@@ -80,6 +80,14 @@ From the Nuvio API document (v1.3). Before this, every Nuvio pull re-read the wh
 - **Check home settings (Settings, Nuvio card):** a read-only button that shows, for your chosen profile, what Nuvio holds under each home catalog platform, `tv` and `home_catalog_shared` (key names and sizes only), and which one this site writes. It exists to settle from a real account whether `home_catalog_shared` is what Nuvio's apps read (the API document only describes `tv`). `GET /api/connections/nuvio/home-settings-check`; it writes nothing. For the shared home rows it also counts `items_hidden`, this site's collection rows shown and hidden (`my_collection_rows_shown/hidden`) and `collection_tiles` (the collection itself, which "Hide collection catalogs" does not hide).
 - **Run migration A0003 on every activity database before deploying** (`npx wrangler d1 execute mylists-activity --remote --file=./migrations/activity/A0003_watch_positions.sql`). Safe to run twice. Not tested against a live Nuvio account.
 
+## The shipped JavaScript is sent without comments (built 2026-11-09, stamp ; prepared, not deployed)
+
+The page's two script files, `/app.js` and `/app-features.js`, carried every comment from the sources to every visitor: about a quarter of the code. They are now stripped as the bundles are first built in each Worker isolate (`src/core/05_js-comment-strip.js`, called from `splitAppBundle`). The sources keep all their comments; only what is sent changes.
+- Compressed size: `/app-features.js` 424,716 -> 284,490 bytes (-33%), `/app.js` 136,144 -> 108,150 (-21%), about 168 KB less per first visit. The asset-size baselines in `tests/asset-size-budget.json` were lowered to match, so the budget has real headroom again.
+- It reads the code the way a browser does (strings, template literals and their `${ }` code, regular expressions versus division), and changes nothing else: no renaming, no whitespace squeezing. `tests/strip-js-comments.test.mjs` has unit cases and then parses both real bundles before and after with Node's own parser (acorn, through `--expose-internals`, in `tests/tools/compare-js-ast.cjs`) and requires identical syntax trees, so a stripped bundle that differs in anything but comments fails the build.
+- Cost: about 55-85 ms of CPU, once per isolate, when the bundle is first built (the page render already builds the same 1.6 MB). The file hashes change, so every visitor fetches the new files once.
+- When debugging the live site, the served file has no comments: read the sources in `src/`.
+
 ## Episodes pill on Watch History (built 2026-11-09, stamp ; prepared, not deployed)
 
 Your request: a way to see the episodes watched on the Nuvio Watch History page, and the same pill instead of the checkbox on the main Watch History.
