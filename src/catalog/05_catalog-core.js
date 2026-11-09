@@ -4668,6 +4668,10 @@ async function buildChannelMeta(entry, origin, opts = {}) {
       episode: i + 1,
       released: releaseDate ? `${releaseDate}T11:00:00.000Z` : undefined,
       thumbnail: it.thumbnail || it.poster || payload.poster || undefined,
+      // Minutes, as the builder stored them. Same "NN min" shape a meta's own
+      // runtime has, so a TV launcher can size its programme slot to the real
+      // length instead of guessing (it read the 100-minute default before).
+      runtime: Number.isInteger(it.runtime) && it.runtime > 0 ? `${it.runtime} min` : undefined,
     };
   });
   // Premade network channels with an official logo

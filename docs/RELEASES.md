@@ -2571,3 +2571,14 @@ The *Playback streams* column in the admin Traffic table fell from 200+ a day to
 
 ### Checked
 New tests in `tests/nuvio-tv-sync-etag-posters.test.mjs` (9; all failed before the change): tag equals the hash, 304 and its tag forms, a changed payload sends in full again, the default target, the flag and pattern, the style, and the hash moving with the style. The existing sync tests still pass unchanged.
+
+## 2026-11-09 — A channel's episodes now carry their runtime (build `147acb579f`, prepared; not deployed)
+
+- **`/meta/series/channel_<id>.json` videos include `runtime`** ("136 min") for every pick whose runtime the builder stored. Without it the Nuvio TV Launcher sized each programme slot from a 100-minute default, so its guide could say a film had a minute left when it had 40. The launcher already reads `runtime` from a video; it asks TMDB only when none is given.
+- Picks without a stored runtime are unchanged (no `runtime` key).
+
+### Owner steps
+1. Paste the new Worker. Nothing else.
+
+### Checked
+New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and an episode with runtimes come out as "136 min" and "22 min", a pick with none has no key; it failed before the change.
