@@ -529,6 +529,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
   // would rebuild show_progress and undo these, so wait.
   const copied = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(`${ACTIVITY_BACKFILL_TYPE}:acct:${accountId}`).first();
   if (!copied || copied.status !== "done") return { skipped: "Your existing history is still being copied. This will run again shortly." };
+  const positionsReady = await mediaAppPositionsReady(actDb);
   const out = { plays: 0, progress: 0, resumes: 0, unresolved: 0, lookups: 0 };
   // How far through each title is, for the lists' bars: set for a title part way through with a
   // known length, removed for one that is not (finished, or not started).
@@ -617,6 +618,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
       }
     }
   }
+  if (positionsReady) stmts.push(...mediaAppPositionStatements(actDb, accountId, provider, usable, now));
   for (let i = 0; i < stmts.length; i += 50) await actDb.batch(stmts.slice(i, i + 50));
   // The first time an account watches a show, one more watcher on its schedule.
   for (const mediaId of newShows) {
@@ -759,12 +761,15 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
   const read = await nuvioReadProfile(env, conn.accessToken, sync.profile_index, step);
   const delta = read.mode === "delta";
   const every = nuvioRecords(delta ? read : read.profile);
+  // A resume point Nuvio dropped is written as a record with none, unless the title has a record already.
+  const have = new Set(every.map((r) => r.imdbId || `${r.kind}|tmdb:${r.tmdbId}`));
+  for (const c of read.cleared) if (!have.has(c.key)) every.push(nuvioClearedStub(c.key, c.kind));
   // A change read has no "changed since" filter (the events are the changes) and
   // no whole-profile resume map: it edits the stored one.
   const all = delta ? every : every.filter(fresh);
   const snapshotResumes = !delta && step.offset === 0 ? mediaAppResumeChanges(every, provider).filter(([, value]) => value) : null;
   if (snapshotResumes && snapshotResumes.length > MEDIA_APP_RESUMES_MAX) throw mediaAppError("unreachable", "Nuvio has too many resume points to sync safely.");
-  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: delta ? null : every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes, delta, clearedResumes: read.cleared, pendingDelta: read.pending };
+  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: delta ? null : every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes, delta, removedPlays: read.removed, pendingDelta: read.pending };
 }
 
 // One step of an account's pull. Returns { done, offset, total, ... }; throws
@@ -806,8 +811,10 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     return { done: true, skipped: applied.skipped };
   }
   if (fetched.snapshotResumes) cursor.resumes = mergeMediaAppResumes({}, fetched.snapshotResumes);
-  // Resume points Nuvio dropped go first, so a title that also changed keeps its new one.
-  if (offset === 0 && fetched.clearedResumes && fetched.clearedResumes.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, fetched.clearedResumes.map((k) => [k, null]));
+  // Watched items deleted in Nuvio, when this account mirrors it: once, on the first step of a change read.
+  if (offset === 0 && fetched.delta && fetched.removedPlays && fetched.removedPlays.length && mediaAppMirrorOn(sync)) {
+    applied.removed = await mirrorRemovePlays(env, accountId, provider, fetched.removedPlays);
+  }
   if (applied.resumeChanges && applied.resumeChanges.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, applied.resumeChanges);
   if (offset === 0) {
     // Never keep a mark from an earlier, abandoned pull.
@@ -816,7 +823,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   }
   const next = offset + MEDIA_APP_STEP_ITEMS;
   if (next < fetched.total) {
-    if (fetched.snapshotResumes || fetched.pendingDelta || (fetched.clearedResumes && fetched.clearedResumes.length) || (applied.resumeChanges && applied.resumeChanges.length)) {
+    if (fetched.snapshotResumes || fetched.pendingDelta || (applied.resumeChanges && applied.resumeChanges.length)) {
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
     }
     // A change read continues as one (no "since"), a full read with the mark it started with.
@@ -829,6 +836,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     else delete cursor.delta;
     delete cursor.pendingDelta;
   }
+  await purgeRemovedPlays(env, accountId);
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
@@ -977,11 +985,12 @@ async function pushMediaAppStep(env, accountId, provider) {
       cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
     } catch {}
     const after = Number(cursor.pushedId) || 0;
+    const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : 0;
     const { results: rows } = await actDb.prepare(
       "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? AND NOT EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?) ORDER BY id LIMIT ?"
     ).bind(accountId, after, provider, provider, MEDIA_APP_PUSH_EVENTS).all();
     const events = rows || [];
-    if (!events.length) return none(null);
+    if (!events.length) return { sent: positionsSent, more: false, skipped: null };
     const ids = [...new Set(events.map((e) => e.media_id))];
     const { results: media } = await env.DB.prepare(
       "SELECT id, kind, imdb_id, title FROM media WHERE id IN (SELECT value FROM json_each(?))"
@@ -1022,7 +1031,7 @@ async function pushMediaAppStep(env, accountId, provider) {
     const nowMs = Date.now();
     await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ?, last_push_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?")
       .bind(JSON.stringify({ ...cursor, pushedId: events[events.length - 1].id }), nowMs, nowMs, accountId, provider).run();
-    return { sent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
+    return { sent: sent + positionsSent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
   } catch (e) {
     if (e && e.kind === "invalid") {
       await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
@@ -1237,6 +1246,7 @@ function mediaAppSyncSummary(row) {
     profileIndex: row.profile_index == null ? null : row.profile_index,
     pull: Boolean(row.pull_enabled),
     push: Boolean(row.push_enabled),
+    mirror: mediaAppMirrorOn(row),
     lastPullAt: row.last_pull_at || null,
     lastPushAt: row.last_push_at || null,
     lastResult: mediaAppLastResultOf(row),
@@ -1792,39 +1802,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (row && row.profile_index) await refreshAfterConnect(env, accountId, provider);
       return json({ ok: true, status: "connected", username: session.email || email, profiles, profileIndex: row ? row.profile_index : only });
     }
-    if (sub === "settings") {
-      const row = await loadMediaAppSync(env, accountId, provider);
-      if (!row) return json({ ok: false, error: "That account isn't connected." }, 404);
-      const sets = [];
-      const binds = [];
-      if (body.pull != null) {
-        sets.push("pull_enabled = ?");
-        binds.push(body.pull ? 1 : 0);
-      }
-      if (body.push != null) {
-        if (body.push && !mediaAppPushFlag(env)) return json({ ok: false, error: "Two-way sync isn't switched on yet." }, 409);
-        sets.push("push_enabled = ?");
-        binds.push(body.push ? 1 : 0);
-      }
-      if (body.profileIndex != null) {
-        const idx = mediaAppInt(body.profileIndex);
-        if (idx == null || idx < 1 || idx > 6) return json({ ok: false, error: "Choose one of your profiles." }, 400);
-        // A new profile starts its pull over; the profile names are kept.
-        const keep = {};
-        const names = mediaAppProfilesOf(row);
-        if (names.length) keep.profiles = names;
-        const last = mediaAppLastResultOf(row);
-        if (last) keep.last = last;
-        sets.push("profile_index = ?", "cursor_json = ?", "last_pull_at = NULL");
-        binds.push(idx, Object.keys(keep).length ? JSON.stringify(keep) : null);
-      }
-      if (sets.length) {
-        await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)
-          .bind(...binds, Date.now(), accountId, provider).run();
-        if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
-      }
-      return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
-    }
+    if (sub === "settings") return mediaAppSaveSettings(env, accountId, provider, body);
+    if (sub === "restore-removed") return mediaAppRestoreRoute(env, accountId, provider);
     if (sub === "library-item") {
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
       const id = mediaAppTitleId(body.id);

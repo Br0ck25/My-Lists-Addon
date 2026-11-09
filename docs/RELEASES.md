@@ -60,7 +60,7 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
-## Nuvio pulls only what changed (built 2026-11-09, stamp ; prepared, not deployed)
+## Nuvio pulls only what changed, stores positions, mirrors deletions (built 2026-11-09, stamp ; prepared, not deployed)
 
 From the Nuvio API document (v1.3). Before this, every Nuvio pull re-read the whole watch history and all progress, and read progress with a paging header the document does not describe. Now:
 - The first pull of a profile still reads everything, but first asks Nuvio for its current history and progress event numbers, so nothing changed during the read is missed. They are kept with the profile's sync state.
@@ -69,8 +69,10 @@ From the Nuvio API document (v1.3). Before this, every Nuvio pull re-read the wh
 - A progress entry deleted in Nuvio clears the Continue Watching point here only if it was that same episode or movie.
 - A watched item deleted in Nuvio does **not** delete the play here (history is merge-only, as for two-way sync). Owner decision pending: say if it should.
 - Fixed on the way: a movie with an older watched play lost its Continue Watching point even when the resume was newer (`applyMediaAppRecords`).
-- Not built: pushing Continue Watching progress to Nuvio. This site never stores a playback position or length, only that a play happened, and a progress push replaces the entry Nuvio already has, so it could only overwrite real positions with invented ones.
-- No migration, binding or flag. Deploy the rebuilt Worker. Not tested against a live Nuvio account.
+- **Positions are now stored.** New activity migration **A0003** (`watch_positions`, `watch_events_removed`): one resume point (position and length, in milliseconds) per title and source. Nuvio's progress fills it. Without A0003 nothing else changes and mirroring cannot be turned on.
+- **Mirror deletions** (Settings, Nuvio; off by default, kept in the sync state, not a column). On: a watched title deleted in Nuvio is deleted here, but only deletions from now on, never from a full read; a play another app also reported is kept and only Nuvio's claim on it goes; each removed play is copied aside and **Restore removed plays** (or `POST /api/connections/nuvio/restore-removed`) brings them back for 30 days, then they are purged. A progress entry deleted in Nuvio also clears its stored position.
+- **Positions go to Nuvio** (behind `FF_MEDIA_APP_PUSH` and the Two-way sync toggle): only positions from a source other than Nuvio, only part way through, and only when Nuvio has nothing as new or newer for that title and episode, because a progress push replaces what Nuvio holds. **No source other than Nuvio records positions yet** (Plex, Jellyfin and Trakt payloads were not checked), so today nothing is sent; the table and push are ready for it.
+- **Run migration A0003 on every activity database before deploying** (`npx wrangler d1 execute mylists-activity --remote --file=./migrations/activity/A0003_watch_positions.sql`). Safe to run twice. Not tested against a live Nuvio account.
 
 ## Frontend audit fixes UI-01 to UI-18 (built 2026-11-04, stamp a4b163e906; prepared, not deployed)
 

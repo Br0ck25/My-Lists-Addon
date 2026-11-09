@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0ad81b5ddc";
+const WORKER_BUILD = "dc34c5ce23";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -40071,6 +40071,16 @@ if ('serviceWorker' in navigator) {
               <span class="ui-toggle-slider"></span>
             </label>
           </div>
+          <div class="settings-toggle-row u-p-0_0_10px" id="nuvioMirrorRow">
+            <div class="u-flex-1 u-minw-0 u-pr-12px">
+              <span class="u-fw-600 u-fs-v_font_size_sm u-c-v_text">Mirror deletions</span>
+              <p class="u-m-2px_0_0 u-c-v_muted u-fs-v_font_size_xs">When you delete a watched title in Nuvio, delete it here too. Only deletions from now on. Anything removed can be restored for 30 days.</p>
+            </div>
+            <label class="ui-toggle" aria-label="Mirror Nuvio deletions">
+              <input type="checkbox" id="nuvioMirrorCheckbox" data-act="setNuvioMirror" data-act-args="[&quot;@checked&quot;,&quot;@self&quot;]">
+              <span class="ui-toggle-slider"></span>
+            </label>
+          </div>
           <div class="u-p-0_0_10px" id="nuvioProfileRow">
             <label for="nuvioProfileSelect" class="u-fw-600 u-fs-v_font_size_sm u-mb-6px u-c-v_text" style="display:block;">Nuvio profile to read</label>
             <select id="nuvioProfileSelect" aria-label="Nuvio profile" data-act="setMediaAppSyncOption" data-act-args="[&quot;nuvio&quot;,&quot;profileIndex&quot;,&quot;@value&quot;]" class="u-maxw-320px u-p-7px_12px u-br-v_radius_pill u-bd-1_5px_solid_v_border_strong u-bg-v_surface u-c-v_text u-fs-v_font_size_sm u-bs-border_box" style="width:100%;"></select>
@@ -40078,6 +40088,7 @@ if ('serviceWorker' in navigator) {
           <p id="nuvioSyncStatus" class="u-m-0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
           <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioRestoreBtn" data-act="restoreNuvioRemoved" data-act-args="[&quot;@self&quot;]">Restore removed plays</button>
           </div>
         </div>
       </div>
@@ -47011,10 +47022,7 @@ function renderMediaAppStatus(provider, info) {
   if (wrap) wrap.style.display = live ? '' : 'none';
   if (!live) return;
   const sync = info.sync || {};
-  const pull = document.getElementById(provider + 'PullCheckbox');
-  if (pull) pull.checked = !!sync.pull;
-  const push = document.getElementById(provider + 'PushCheckbox');
-  if (push) push.checked = !!sync.push;
+  ['Pull', 'Push', 'Mirror'].forEach(function (k) { const box = document.getElementById(provider + k + 'Checkbox'); if (box) box.checked = !!sync[k.toLowerCase()]; });
   const pushRow = document.getElementById(provider + 'PushRow');
   if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
   const statusLine = document.getElementById(provider + 'SyncStatus');
@@ -50347,6 +50355,43 @@ function showNuvioPushToast(msg, res) {
   } else {
     showToast(msg, 'success');
   }
+}
+// Nuvio mirroring (settings): the toggle that makes deletions in Nuvio happen here
+// too, and the button that puts removed plays back. The server rules are in
+// src/api/61_nuvio-positions.js. The checkbox state is drawn with the other sync
+// options in renderMediaAppStatus (17_client-my-lists-and-trakt-oauth.js).
+
+async function saveNuvioMirror(on, box) {
+  const r = await mediaAppUiCall('nuvio', 'settings', 'POST', { mirror: on });
+  if (!r.ok) {
+    if (box) box.checked = !on;
+    showToast(mediaAppUiMessage(r, 'Could not save that setting. Please try again.'), 'error');
+  }
+  mediaAppUiRefresh('nuvio');
+}
+
+function setNuvioMirror(on, box) {
+  if (!on) {
+    saveNuvioMirror(false, box);
+    return;
+  }
+  showAppConfirm(
+    'Mirror Nuvio deletions?',
+    'From now on, a watched title you delete in Nuvio is deleted here too. A play that another app also reported is kept. Anything removed can be restored here for 30 days.',
+    'Turn on',
+    function () { saveNuvioMirror(true, box); },
+    false
+  );
+  // Cancelling leaves the box as it was.
+  if (box) box.checked = false;
+}
+
+async function restoreNuvioRemoved(btn) {
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall('nuvio', 'restore-removed', 'POST', {});
+  if (btn) btn.disabled = false;
+  if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not restore your plays. Please try again.'), 'error');
+  else showToast(r.data.restored ? 'Restored ' + r.data.restored + (r.data.restored === 1 ? ' play.' : ' plays.') : 'Nothing to restore.', r.data.restored ? 'success' : 'info');
 }
 // Wraps a timer callback so a tick that arrives while the previous run is still
 // waiting (a slow fetch) is skipped instead of starting a second request.
@@ -109874,6 +109919,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
   // would rebuild show_progress and undo these, so wait.
   const copied = await env.DB.prepare("SELECT status FROM jobs WHERE dedupe_key = ?").bind(`${ACTIVITY_BACKFILL_TYPE}:acct:${accountId}`).first();
   if (!copied || copied.status !== "done") return { skipped: "Your existing history is still being copied. This will run again shortly." };
+  const positionsReady = await mediaAppPositionsReady(actDb);
   const out = { plays: 0, progress: 0, resumes: 0, unresolved: 0, lookups: 0 };
   // How far through each title is, for the lists' bars: set for a title part way through with a
   // known length, removed for one that is not (finished, or not started).
@@ -109962,6 +110008,7 @@ async function applyMediaAppRecords(env, accountId, provider, records, { lookups
       }
     }
   }
+  if (positionsReady) stmts.push(...mediaAppPositionStatements(actDb, accountId, provider, usable, now));
   for (let i = 0; i < stmts.length; i += 50) await actDb.batch(stmts.slice(i, i + 50));
   // The first time an account watches a show, one more watcher on its schedule.
   for (const mediaId of newShows) {
@@ -110104,12 +110151,15 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
   const read = await nuvioReadProfile(env, conn.accessToken, sync.profile_index, step);
   const delta = read.mode === "delta";
   const every = nuvioRecords(delta ? read : read.profile);
+  // A resume point Nuvio dropped is written as a record with none, unless the title has a record already.
+  const have = new Set(every.map((r) => r.imdbId || `${r.kind}|tmdb:${r.tmdbId}`));
+  for (const c of read.cleared) if (!have.has(c.key)) every.push(nuvioClearedStub(c.key, c.kind));
   // A change read has no "changed since" filter (the events are the changes) and
   // no whole-profile resume map: it edits the stored one.
   const all = delta ? every : every.filter(fresh);
   const snapshotResumes = !delta && step.offset === 0 ? mediaAppResumeChanges(every, provider).filter(([, value]) => value) : null;
   if (snapshotResumes && snapshotResumes.length > MEDIA_APP_RESUMES_MAX) throw mediaAppError("unreachable", "Nuvio has too many resume points to sync safely.");
-  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: delta ? null : every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes, delta, clearedResumes: read.cleared, pendingDelta: read.pending };
+  return { records: all.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS), total: all.length, libraryTotal: delta ? null : every.length, newest: all.length ? all[0].mtime : 0, snapshotResumes, delta, removedPlays: read.removed, pendingDelta: read.pending };
 }
 
 // One step of an account's pull. Returns { done, offset, total, ... }; throws
@@ -110151,8 +110201,10 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     return { done: true, skipped: applied.skipped };
   }
   if (fetched.snapshotResumes) cursor.resumes = mergeMediaAppResumes({}, fetched.snapshotResumes);
-  // Resume points Nuvio dropped go first, so a title that also changed keeps its new one.
-  if (offset === 0 && fetched.clearedResumes && fetched.clearedResumes.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, fetched.clearedResumes.map((k) => [k, null]));
+  // Watched items deleted in Nuvio, when this account mirrors it: once, on the first step of a change read.
+  if (offset === 0 && fetched.delta && fetched.removedPlays && fetched.removedPlays.length && mediaAppMirrorOn(sync)) {
+    applied.removed = await mirrorRemovePlays(env, accountId, provider, fetched.removedPlays);
+  }
   if (applied.resumeChanges && applied.resumeChanges.length) cursor.resumes = mergeMediaAppResumes(cursor.resumes, applied.resumeChanges);
   if (offset === 0) {
     // Never keep a mark from an earlier, abandoned pull.
@@ -110161,7 +110213,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
   }
   const next = offset + MEDIA_APP_STEP_ITEMS;
   if (next < fetched.total) {
-    if (fetched.snapshotResumes || fetched.pendingDelta || (fetched.clearedResumes && fetched.clearedResumes.length) || (applied.resumeChanges && applied.resumeChanges.length)) {
+    if (fetched.snapshotResumes || fetched.pendingDelta || (applied.resumeChanges && applied.resumeChanges.length)) {
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
     }
     // A change read continues as one (no "since"), a full read with the mark it started with.
@@ -110174,6 +110226,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     else delete cursor.delta;
     delete cursor.pendingDelta;
   }
+  await purgeRemovedPlays(env, accountId);
   const nowMs = Date.now();
   await env.DB.prepare(
     "UPDATE media_app_sync SET cursor_json = ?, last_pull_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?"
@@ -110322,11 +110375,12 @@ async function pushMediaAppStep(env, accountId, provider) {
       cursor = sync.cursor_json ? JSON.parse(sync.cursor_json) : {};
     } catch {}
     const after = Number(cursor.pushedId) || 0;
+    const positionsSent = provider === "nuvio" ? await pushNuvioPositions(env, accountId, conn, sync, actDb) : 0;
     const { results: rows } = await actDb.prepare(
       "SELECT id, media_id, season, episode, watched_at FROM watch_events WHERE account_id = ? AND id > ? AND source != ? AND NOT EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?) ORDER BY id LIMIT ?"
     ).bind(accountId, after, provider, provider, MEDIA_APP_PUSH_EVENTS).all();
     const events = rows || [];
-    if (!events.length) return none(null);
+    if (!events.length) return { sent: positionsSent, more: false, skipped: null };
     const ids = [...new Set(events.map((e) => e.media_id))];
     const { results: media } = await env.DB.prepare(
       "SELECT id, kind, imdb_id, title FROM media WHERE id IN (SELECT value FROM json_each(?))"
@@ -110367,7 +110421,7 @@ async function pushMediaAppStep(env, accountId, provider) {
     const nowMs = Date.now();
     await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ?, last_push_at = ?, last_error = NULL, updated_at = ? WHERE account_id = ? AND provider = ?")
       .bind(JSON.stringify({ ...cursor, pushedId: events[events.length - 1].id }), nowMs, nowMs, accountId, provider).run();
-    return { sent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
+    return { sent: sent + positionsSent, more: events.length >= MEDIA_APP_PUSH_EVENTS, skipped: null };
   } catch (e) {
     if (e && e.kind === "invalid") {
       await markConnectionStatus(env, accountId, provider, "reauth_required", "The service refused this sign-in. Connect it again.");
@@ -110582,6 +110636,7 @@ function mediaAppSyncSummary(row) {
     profileIndex: row.profile_index == null ? null : row.profile_index,
     pull: Boolean(row.pull_enabled),
     push: Boolean(row.push_enabled),
+    mirror: mediaAppMirrorOn(row),
     lastPullAt: row.last_pull_at || null,
     lastPushAt: row.last_push_at || null,
     lastResult: mediaAppLastResultOf(row),
@@ -111137,39 +111192,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       if (row && row.profile_index) await refreshAfterConnect(env, accountId, provider);
       return json({ ok: true, status: "connected", username: session.email || email, profiles, profileIndex: row ? row.profile_index : only });
     }
-    if (sub === "settings") {
-      const row = await loadMediaAppSync(env, accountId, provider);
-      if (!row) return json({ ok: false, error: "That account isn't connected." }, 404);
-      const sets = [];
-      const binds = [];
-      if (body.pull != null) {
-        sets.push("pull_enabled = ?");
-        binds.push(body.pull ? 1 : 0);
-      }
-      if (body.push != null) {
-        if (body.push && !mediaAppPushFlag(env)) return json({ ok: false, error: "Two-way sync isn't switched on yet." }, 409);
-        sets.push("push_enabled = ?");
-        binds.push(body.push ? 1 : 0);
-      }
-      if (body.profileIndex != null) {
-        const idx = mediaAppInt(body.profileIndex);
-        if (idx == null || idx < 1 || idx > 6) return json({ ok: false, error: "Choose one of your profiles." }, 400);
-        // A new profile starts its pull over; the profile names are kept.
-        const keep = {};
-        const names = mediaAppProfilesOf(row);
-        if (names.length) keep.profiles = names;
-        const last = mediaAppLastResultOf(row);
-        if (last) keep.last = last;
-        sets.push("profile_index = ?", "cursor_json = ?", "last_pull_at = NULL");
-        binds.push(idx, Object.keys(keep).length ? JSON.stringify(keep) : null);
-      }
-      if (sets.length) {
-        await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)
-          .bind(...binds, Date.now(), accountId, provider).run();
-        if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
-      }
-      return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
-    }
+    if (sub === "settings") return mediaAppSaveSettings(env, accountId, provider, body);
+    if (sub === "restore-removed") return mediaAppRestoreRoute(env, accountId, provider);
     if (sub === "library-item") {
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
       const id = mediaAppTitleId(body.id);
@@ -111557,7 +111581,13 @@ async function nuvioReadChanges(env, token, profileIndex, base, to, resumes) {
   const stored = resumes && typeof resumes === "object" ? resumes : {};
   const history = await nuvioPullEvents(env, token, "sync_pull_watched_items_delta", profileIndex, base.history, to.history);
   const progressEvents = await nuvioPullEvents(env, token, "sync_pull_watch_progress_delta", profileIndex, base.progress, to.progress);
-  const watched = nuvioLastByKey(history, nuvioEventKey).filter((e) => e.operation === "upsert");
+  const finalHistory = nuvioLastByKey(history, nuvioEventKey);
+  const watched = finalHistory.filter((e) => e.operation === "upsert");
+  const removed = finalHistory.filter((e) => e.operation === "delete").map((e) => {
+    const id = mediaAppTitleId(mediaAppPick(e, "content_id", "contentId"));
+    const season = mediaAppInt(e.season), episode = mediaAppInt(e.episode);
+    return id ? { ...id, kind: season != null && episode != null ? "series" : (mediaAppKind(mediaAppPick(e, "content_type", "contentType")) || "movie"), season, episode, watchedAt: mediaAppTime(mediaAppPick(e, "watched_at", "watchedAt")) } : null;
+  }).filter(Boolean);
   const progress = [];
   const cleared = new Set();
   for (const e of nuvioLastByKey(progressEvents, (x) => String(mediaAppPick(x, "progress_key", "progressKey") || nuvioEventKey(x)))) {
@@ -111571,10 +111601,11 @@ async function nuvioReadChanges(env, token, profileIndex, base, to, resumes) {
   }
   const touched = new Set([...watched, ...progress].map(nuvioTitleKey).filter(Boolean));
   for (const key of touched) if (stored[key] && !cleared.has(key)) progress.push(nuvioResumeRow(key, stored[key]));
-  return { watched, progress, cleared: [...cleared] };
+  return { watched, progress, removed, cleared: [...cleared].map((key) => ({ key, kind: stored[key].kind })) };
 }
 
-// Reads what this step needs. { mode: "delta" | "snapshot", profile, cleared, pending }.
+// Reads what this step needs. { mode: "delta" | "snapshot", profile, cleared, removed, pending }.
+// `removed` are watched items Nuvio deleted (see mirrorRemovePlays); `cleared` resume points it dropped.
 // `pending` is the cursor pair to keep when the pull finishes (null if Nuvio gave none).
 // It is taken on the first step and carried in cursor_json.pendingDelta for the rest.
 // `step` = { offset, cursor, delta } where delta says a delta read may be tried.
@@ -111591,7 +111622,245 @@ async function nuvioReadProfile(env, token, profileIndex, step) {
       console.error("mediaapp: Nuvio change feed failed, reading everything", e);
     }
   }
-  return { mode: "snapshot", pending, cleared: [], profile: await nuvioFetchProfile(env, token, profileIndex) };
+  return { mode: "snapshot", pending, cleared: [], removed: [], profile: await nuvioFetchProfile(env, token, profileIndex) };
+}
+// Stored playback positions, and Nuvio "mirroring" (activity migration A0003).
+//
+// Positions. Where a person stopped in a title (position and length in
+// milliseconds) is kept in watch_positions, one row per account, title and
+// source. Nuvio is the only source that reports one today. A title that is
+// finished, or whose progress Nuvio deleted, has no row.
+//
+// Mirroring (off until the person turns it on, per account; kept as `mirror` in
+// media_app_sync.cursor_json). With it on, a watched item deleted in Nuvio is
+// removed here too, with these limits:
+//   * only deletions made from now on: they come from the change feed, which a
+//     full read cannot replace, so a full read never deletes anything;
+//   * a play another app also reported is never deleted: only Nuvio's claim on it
+//     goes (ownership moves to the other app, as the tile remove button does);
+//   * every play actually removed is copied to watch_events_removed first and can
+//     be restored for NUVIO_REMOVED_KEEP_MS (30 days), then it is purged.
+// Without A0003 positions are not stored and mirroring cannot be turned on; the
+// rest of the sync is unaffected.
+
+const NUVIO_REMOVED_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+
+async function mediaAppPositionsReady(actDb) {
+  try {
+    return Boolean(await actDb.prepare("SELECT version FROM schema_migrations WHERE version = 'A0003'").first());
+  } catch {
+    return false;
+  }
+}
+
+function mediaAppMirrorOn(row) {
+  try {
+    return Boolean(row && row.cursor_json && JSON.parse(row.cursor_json).mirror === true);
+  } catch {
+    return false;
+  }
+}
+
+// Statements that make watch_positions match what the app says about these
+// titles: a row for one part way through (with a known length), none otherwise.
+function mediaAppPositionStatements(actDb, accountId, provider, usable, now) {
+  return usable.map((r) => {
+    const resume = r.resume && r.resume.duration > 0 && r.resume.position >= 0 ? r.resume : null;
+    if (!resume) return actDb.prepare("DELETE FROM watch_positions WHERE account_id = ? AND media_id = ? AND source = ?").bind(accountId, r.mediaId, provider);
+    return actDb.prepare(
+      `INSERT INTO watch_positions (account_id, media_id, source, season, episode, position_ms, duration_ms, watched_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (account_id, media_id, source) DO UPDATE SET season = excluded.season, episode = excluded.episode,
+         position_ms = excluded.position_ms, duration_ms = excluded.duration_ms, watched_at = excluded.watched_at, updated_at = excluded.updated_at`
+    ).bind(accountId, r.mediaId, provider, r.kind === "series" ? resume.season : null, r.kind === "series" ? resume.episode : null,
+      Math.round(resume.position), Math.round(resume.duration), resume.at || r.at || now, now);
+  });
+}
+
+// A record with nothing in it, standing for a resume point Nuvio dropped, so the
+// normal write path clears the stored point and position for that title.
+function nuvioClearedStub(key, kind) {
+  const tmdb = key.includes("|") ? /tmdb:(\d+)$/.exec(key) : null;
+  const id = tmdb ? { tmdbId: Number(tmdb[1]) } : { imdbId: key };
+  return { ...id, kind: kind === "series" ? "series" : "movie", title: "", poster: "", mtime: 0, plays: [], furthest: null, at: 1, resume: null };
+}
+
+// The local plays of the same episode (or movie) that Nuvio claimed, within the
+// play window of the deleted one.
+async function nuvioClaimedPlays(actDb, accountId, provider, mediaId, play) {
+  const { results } = await actDb.prepare(
+    `SELECT id, source, watched_at, season, episode, dedupe_key, legacy_id FROM watch_events
+     WHERE account_id = ? AND media_id = ? AND season IS ? AND episode IS ?
+       AND (source = ? OR EXISTS (SELECT 1 FROM watch_event_sources s WHERE s.event_id = watch_events.id AND s.source = ?))`
+  ).bind(accountId, mediaId, play.season, play.episode, provider, provider).all();
+  return (results || []).filter((e) => !play.watchedAt || Math.abs(Number(e.watched_at) - play.watchedAt) < MEDIA_APP_PLAY_WINDOW_MS);
+}
+
+// Applies Nuvio's deletions of watched items here. `removed` = [{ imdbId, tmdbId, kind, season, episode, watchedAt }].
+// Returns how many plays were removed (plays that stay because another app also
+// reported them are not counted).
+async function mirrorRemovePlays(env, accountId, provider, removed) {
+  const actDb = activityDb(env, accountId);
+  if (!removed.length || !actDb || !(await mediaAppPositionsReady(actDb))) return 0;
+  const refs = removed.map((r) => normalizeMediaRef({ imdbId: r.imdbId, tmdbId: r.tmdbId, kind: r.kind, title: "" }));
+  const known = indexMediaRows(await lookupMediaRows(env, refs.filter(Boolean)));
+  const now = Date.now();
+  let count = 0;
+  for (let i = 0; i < removed.length; i++) {
+    const row = refs[i] ? matchMediaRow(known, refs[i]) : null;
+    if (!row) continue;
+    for (const e of await nuvioClaimedPlays(actDb, accountId, provider, row.id, removed[i])) {
+      const { results: others } = await actDb.prepare("SELECT source FROM watch_event_sources WHERE event_id = ? AND source != ? ORDER BY source").bind(e.id, provider).all();
+      const stmts = [actDb.prepare("DELETE FROM watch_event_sources WHERE event_id = ? AND source = ?").bind(e.id, provider)];
+      if (e.source !== provider) {
+        // Another app's play that Nuvio also reported: only Nuvio's claim goes.
+      } else if (others && others.length) {
+        stmts.push(actDb.prepare("UPDATE watch_events SET source = ? WHERE id = ?").bind(others[0].source, e.id));
+      } else {
+        stmts.unshift(actDb.prepare(
+          `INSERT INTO watch_events_removed (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id, sources_json, removed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?)`
+        ).bind(accountId, row.id, e.season, e.episode, e.watched_at, provider, e.dedupe_key, e.legacy_id, now));
+        stmts.push(actDb.prepare("DELETE FROM watch_events WHERE id = ?").bind(e.id));
+        count++;
+      }
+      await actDb.batch(stmts);
+    }
+  }
+  return count;
+}
+
+// Puts back the plays mirroring removed (all of them for this app that are still kept).
+async function restoreRemovedPlays(env, accountId, provider) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb || !(await mediaAppPositionsReady(actDb))) return 0;
+  const { results } = await actDb.prepare("SELECT id FROM watch_events_removed WHERE account_id = ? AND source = ?").bind(accountId, provider).all();
+  const ids = (results || []).map((r) => r.id);
+  if (!ids.length) return 0;
+  const idsJson = JSON.stringify(ids);
+  await actDb.batch([
+    actDb.prepare(
+      `INSERT OR IGNORE INTO watch_events (account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id)
+       SELECT account_id, media_id, season, episode, watched_at, source, dedupe_key, legacy_id FROM watch_events_removed WHERE id IN (SELECT value FROM json_each(?))`
+    ).bind(idsJson),
+    actDb.prepare("DELETE FROM watch_events_removed WHERE id IN (SELECT value FROM json_each(?))").bind(idsJson),
+  ]);
+  return ids.length;
+}
+
+async function purgeRemovedPlays(env, accountId) {
+  const actDb = activityDb(env, accountId);
+  if (!actDb || !(await mediaAppPositionsReady(actDb))) return;
+  await actDb.prepare("DELETE FROM watch_events_removed WHERE account_id = ? AND removed_at < ?").bind(accountId, Date.now() - NUVIO_REMOVED_KEEP_MS).run();
+}
+
+// --- Sending positions recorded here to Nuvio ---------------------------------------------
+//
+// Only positions from another source (never Nuvio's own), only part way through
+// (90% or more is a finished play, which the history push covers), and only when
+// Nuvio has no progress for that title and episode that is as new or newer, or a
+// watched item at least as new: a progress push replaces what Nuvio holds under
+// that key, so it must never replace something real with something older.
+// Behind the same switches as the history push. Returns how many were sent.
+async function pushNuvioPositions(env, accountId, conn, sync, actDb) {
+  if (!(await mediaAppPositionsReady(actDb))) return 0;
+  const { results } = await actDb.prepare(
+    `SELECT media_id, season, episode, position_ms, duration_ms, watched_at, updated_at FROM watch_positions
+     WHERE account_id = ? AND source != 'nuvio' AND (pushed_at IS NULL OR updated_at > pushed_at) ORDER BY updated_at LIMIT ?`
+  ).bind(accountId, MEDIA_APP_PUSH_EVENTS).all();
+  const rows = results || [];
+  if (!rows.length) return 0;
+  const { results: media } = await env.DB.prepare("SELECT id, imdb_id FROM media WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify([...new Set(rows.map((r) => r.media_id))])).all();
+  const imdbOf = new Map((media || []).filter((m) => m.imdb_id).map((m) => [m.id, m.imdb_id]));
+  const profile = await nuvioFetchProfile(env, conn.accessToken, sync.profile_index);
+  const slot = (id, season, episode) => `${String(id || "").toLowerCase()}|${season == null ? "" : season}|${episode == null ? "" : episode}`;
+  const newest = new Map();
+  for (const p of profile.progress) {
+    const k = slot(mediaAppPick(p, "content_id", "contentId"), mediaAppInt(p.season), mediaAppInt(p.episode));
+    newest.set(k, Math.max(newest.get(k) || 0, mediaAppTime(mediaAppPick(p, "last_watched", "lastWatched"))));
+  }
+  for (const w of profile.watched) {
+    const k = slot(mediaAppPick(w, "content_id", "contentId"), mediaAppInt(w.season), mediaAppInt(w.episode));
+    newest.set(k, Math.max(newest.get(k) || 0, mediaAppTime(mediaAppPick(w, "watched_at", "watchedAt"))));
+  }
+  const entries = [];
+  for (const r of rows) {
+    const id = imdbOf.get(r.media_id);
+    const at = Number(r.watched_at);
+    if (!id || !(r.duration_ms > 0) || r.position_ms / r.duration_ms >= MEDIA_APP_FINISHED || (newest.get(slot(id, r.season, r.episode)) || 0) >= at) continue;
+    const series = r.season != null && r.episode != null;
+    entries.push({ content_id: id, content_type: series ? "series" : "movie", video_id: series ? `${id}:${r.season}:${r.episode}` : id,
+      ...(series ? { season: r.season, episode: r.episode } : {}), position: r.position_ms, duration: r.duration_ms, last_watched: at });
+  }
+  for (let i = 0; i < entries.length; i += MEDIA_APP_PUSH_CHUNK) {
+    await nuvioRpc(env, conn.accessToken, "sync_push_watch_progress", { p_profile_id: sync.profile_index, p_entries: entries.slice(i, i + MEDIA_APP_PUSH_CHUNK) });
+  }
+  // Every row looked at is marked, sent or not, so a skipped one is not retried until it changes.
+  const now = Date.now();
+  await actDb.prepare("UPDATE watch_positions SET pushed_at = ? WHERE account_id = ? AND source != 'nuvio' AND updated_at <= ? AND (pushed_at IS NULL OR updated_at > pushed_at) AND media_id IN (SELECT value FROM json_each(?))")
+    .bind(now, accountId, Math.max(...rows.map((r) => Number(r.updated_at))), JSON.stringify([...new Set(rows.map((r) => r.media_id))])).run();
+  return entries.length;
+}
+
+// POST /api/connections/:provider/settings: pull, push, mirror, and the chosen profile.
+async function mediaAppSaveSettings(env, accountId, provider, body) {
+  const row = await loadMediaAppSync(env, accountId, provider);
+  if (!row) return json({ ok: false, error: "That account isn't connected." }, 404);
+  const sets = [];
+  const binds = [];
+  if (body.pull != null) {
+    sets.push("pull_enabled = ?");
+    binds.push(body.pull ? 1 : 0);
+  }
+  if (body.push != null) {
+    if (body.push && !mediaAppPushFlag(env)) return json({ ok: false, error: "Two-way sync isn't switched on yet." }, 409);
+    sets.push("push_enabled = ?");
+    binds.push(body.push ? 1 : 0);
+  }
+  // Mirroring lives in cursor_json (no column), so it is rewritten with the cursor and kept across a profile change.
+  let mirror = mediaAppMirrorOn(row);
+  if (body.mirror != null) {
+    if (provider !== "nuvio") return json({ ok: false, error: "Mirroring is only for Nuvio." }, 400);
+    const actDb = activityDb(env, accountId);
+    if (body.mirror && !(actDb && await mediaAppPositionsReady(actDb))) return json({ ok: false, error: "The activity database needs migration A0003 before mirroring can be turned on." }, 409);
+    mirror = Boolean(body.mirror);
+    if (body.profileIndex == null) {
+      let current = {};
+      try {
+        current = row.cursor_json ? JSON.parse(row.cursor_json) : {};
+      } catch {}
+      if (mirror) current.mirror = true;
+      else delete current.mirror;
+      sets.push("cursor_json = ?");
+      binds.push(JSON.stringify(current));
+    }
+  }
+  if (body.profileIndex != null) {
+    const idx = mediaAppInt(body.profileIndex);
+    if (idx == null || idx < 1 || idx > 6) return json({ ok: false, error: "Choose one of your profiles." }, 400);
+    // A new profile starts its pull over; the profile names are kept.
+    const keep = {};
+    const names = mediaAppProfilesOf(row);
+    if (names.length) keep.profiles = names;
+    const last = mediaAppLastResultOf(row);
+    if (last) keep.last = last;
+    if (mirror) keep.mirror = true;
+    sets.push("profile_index = ?", "cursor_json = ?", "last_pull_at = NULL");
+    binds.push(idx, Object.keys(keep).length ? JSON.stringify(keep) : null);
+  }
+  if (sets.length) {
+    await env.DB.prepare(`UPDATE media_app_sync SET ${sets.join(", ")}, updated_at = ? WHERE account_id = ? AND provider = ?`)
+      .bind(...binds, Date.now(), accountId, provider).run();
+    if (body.profileIndex != null || body.pull || body.push) await startMediaAppSync(env, accountId, provider);
+  }
+  return json({ ok: true, sync: mediaAppSyncSummary(await loadMediaAppSync(env, accountId, provider)) });
+}
+
+// POST /api/connections/nuvio/restore-removed: puts back the plays mirroring removed.
+async function mediaAppRestoreRoute(env, accountId, provider) {
+  if (provider !== "nuvio") return json({ ok: false, error: "Only Nuvio mirroring removes plays." }, 400);
+  return json({ ok: true, restored: await restoreRemovedPlays(env, accountId, provider) });
 }
 // Creator Key and session check behind every authenticated creator route (moved out of handleFetch, CQ-01)
 

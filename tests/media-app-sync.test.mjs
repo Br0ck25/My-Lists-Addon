@@ -2330,4 +2330,156 @@ describe("Nuvio: incremental pull from the documented event cursors", () => {
     assert.ok(fns(seen).includes("sync_pull_watched_items"), "force means a full read");
     assert.ok(state.historyEvents.length > 0);
   });
+
+  // --- Positions, mirroring and recovery --------------------------------------
+  const positions = (env) => env.DB_ACTIVITY._db.prepare("SELECT p.*, 0 AS x FROM watch_positions p ORDER BY media_id").all();
+  const mediaIdOf = (env, imdb) => env.DB._db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(imdb).id;
+  const setMirror = (ctx, on) => call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { mirror: on } });
+  const goneMovie = (id, over) => ({ event_id: id, operation: "delete", content_id: "tt1111111", content_type: "movie", title: "Movie A", watched_at: NOW - 30 * HOUR, ...over });
+
+  it("keeps Nuvio's position and length for a title part way through", async () => {
+    const { ctx } = await bootstrapped("nupos");
+    const rows = positions(ctx.env);
+    assert.equal(rows.length, 1);
+    assert.deepEqual([rows[0].media_id, rows[0].source, rows[0].position_ms, rows[0].duration_ms, rows[0].season, rows[0].episode], [mediaIdOf(ctx.env, "tt3333333"), "nuvio", 1500000, 6000000, null, null]);
+  });
+
+  it("moves a show's position to the newer episode, and drops it when finished or deleted", async () => {
+    const { state, ctx } = await bootstrapped("nupos2");
+    const ep = (n, position, id) => ({ event_id: id, operation: "upsert", progress_key: `${SHOW}_s1e${n}`, content_id: SHOW, content_type: "series", season: 1, episode: n, position, duration: 2400000, last_watched: NOW - HOUR + id });
+    state.progressEvents.push(ep(3, 600000, 8));
+    await resync(ctx);
+    const show = mediaIdOf(ctx.env, SHOW);
+    const row = () => positions(ctx.env).find((r) => r.media_id === show);
+    assert.deepEqual([row().season, row().episode, row().position_ms], [1, 3, 600000]);
+    state.progressEvents.push(ep(4, 900000, 9));
+    await resync(ctx);
+    assert.deepEqual([row().season, row().episode], [1, 4], "one point per title");
+    state.progressEvents.push(ep(4, 2300000, 10));
+    await resync(ctx);
+    assert.equal(row(), undefined, "90% or more is a finished play, not a position");
+    state.progressEvents.push(ep(5, 500000, 11), { ...ep(5, 1, 12), operation: "delete" });
+    await resync(ctx);
+    assert.equal(row(), undefined, "Nuvio deleted it");
+  });
+
+  it("mirroring is off until asked for, and only for Nuvio", async () => {
+    const { ctx } = await bootstrapped("numirdef");
+    const r = await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie });
+    assert.equal(r.body.sync.mirror, false);
+    assert.equal((await setMirror(ctx, true)).status, 200);
+    assert.equal((await call(ctx.env, "/api/connections/nuvio/settings", { cookie: ctx.cookie })).body.sync.mirror, true);
+  });
+
+  it("with mirroring on, a play only Nuvio reported is removed here and kept for 30 days", async () => {
+    const { state, ctx } = await bootstrapped("numir1");
+    await setMirror(ctx, true);
+    state.historyEvents.push(goneMovie(6));
+    await resync(ctx);
+    assert.ok(!events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt1111111"), "gone from history");
+    const kept = ctx.env.DB_ACTIVITY._db.prepare("SELECT * FROM watch_events_removed").all();
+    assert.equal(kept.length, 1);
+    assert.deepEqual([kept[0].media_id, kept[0].source, kept[0].watched_at], [mediaIdOf(ctx.env, "tt1111111"), "nuvio", NOW - 30 * HOUR]);
+  });
+
+  it("with mirroring on, a play another app also reported stays, and only Nuvio's claim goes", async () => {
+    const { state, ctx } = await bootstrapped("numir2");
+    const act = ctx.env.DB_ACTIVITY._db;
+    const id = mediaIdOf(ctx.env, "tt1111111");
+    const ev = act.prepare("SELECT id FROM watch_events WHERE media_id = ?").get(id).id;
+    act.prepare("UPDATE watch_events SET source = 'trakt' WHERE id = ?").run(ev);
+    act.prepare("INSERT OR REPLACE INTO watch_event_sources (event_id, source, watched_at) VALUES (?, 'nuvio', ?)").run(ev, NOW - 30 * HOUR);
+    await setMirror(ctx, true);
+    state.historyEvents.push(goneMovie(6));
+    await resync(ctx);
+    assert.equal(act.prepare("SELECT count(*) AS n FROM watch_events WHERE id = ?").get(ev).n, 1, "Trakt's play is not Nuvio's to delete");
+    assert.equal(act.prepare("SELECT count(*) AS n FROM watch_event_sources WHERE event_id = ? AND source = 'nuvio'").get(ev).n, 0, "but Nuvio no longer claims it");
+    assert.equal(act.prepare("SELECT count(*) AS n FROM watch_events_removed").get().n, 0, "nothing was lost, so nothing to restore");
+  });
+
+  it("a removed play comes back with restore, and is purged after 30 days", async () => {
+    const { state, ctx } = await bootstrapped("numir3");
+    await setMirror(ctx, true);
+    state.historyEvents.push(goneMovie(6));
+    await resync(ctx);
+    const back = await call(ctx.env, "/api/connections/nuvio/restore-removed", { method: "POST", cookie: ctx.cookie, json: {} });
+    assert.equal(back.status, 200);
+    assert.equal(back.body.restored, 1);
+    assert.deepEqual(events(ctx.env, ctx.accountId).filter((e) => e.imdb === "tt1111111").map((e) => [e.watched_at, e.source]), [[NOW - 30 * HOUR, "nuvio"]]);
+    state.historyEvents.push(goneMovie(7));
+    await resync(ctx);
+    ctx.env.DB_ACTIVITY._db.prepare("UPDATE watch_events_removed SET removed_at = ?").run(Date.now() - 31 * 24 * HOUR);
+    state.historyEvents.push({ event_id: 8, operation: "upsert", content_id: "tt4444444", content_type: "movie", title: "Movie D", watched_at: NOW - HOUR });
+    await resync(ctx);
+    assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_events_removed").get().n, 0, "older than 30 days is gone");
+  });
+
+  it("turning mirroring on does not remove anything Nuvio deleted before", async () => {
+    const { state, ctx } = await bootstrapped("numir4");
+    state.historyEvents.push(goneMovie(6));
+    await resync(ctx);
+    await setMirror(ctx, true);
+    await resync(ctx);
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt1111111"), "only deletions from now on");
+  });
+
+  it("a full read never deletes, even with mirroring on", async () => {
+    const { state, ctx } = await bootstrapped("numir5");
+    await setMirror(ctx, true);
+    state.watched = [];
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+    await pull(ctx.env);
+    assert.ok(events(ctx.env, ctx.accountId).some((e) => e.imdb === "tt1111111"), "a snapshot cannot tell a delete from a gap");
+  });
+});
+
+describe("two-way sync: Nuvio positions", () => {
+  async function ready(name, progress = []) {
+    const state = { watched: [], progress };
+    const seen = fakeServices(state);
+    const ctx = await setup(name, { FF_MEDIA_APP_PUSH: "1" });
+    await call(ctx.env, "/api/connections/nuvio/login", { method: "POST", cookie: ctx.cookie, json: { email: "viewer@example.test", password: "right-password" } });
+    await pull(ctx.env);
+    await call(ctx.env, "/api/connections/nuvio/settings", { method: "POST", cookie: ctx.cookie, json: { push: true } });
+    await pull(ctx.env);
+    return { state, seen, ctx };
+  }
+  function addPosition(ctx, imdb, kind, season, episode, position, duration, at, source = "plex") {
+    const db = ctx.env.DB._db;
+    let m = db.prepare("SELECT id FROM media WHERE imdb_id = ?").get(imdb);
+    if (!m) m = { id: Number(db.prepare("INSERT INTO media (kind, imdb_id, title, created_at, updated_at) VALUES (?, ?, ?, 1, 1)").run(kind, imdb, "Title " + imdb).lastInsertRowid) };
+    ctx.env.DB_ACTIVITY._db.prepare("INSERT INTO watch_positions (account_id, media_id, source, season, episode, position_ms, duration_ms, watched_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(ctx.accountId, m.id, source, season, episode, position, duration, at, at);
+  }
+
+  it("sends a position recorded here to Nuvio as progress, once", async () => {
+    const { seen, ctx } = await ready("nupush1");
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - 2 * HOUR);
+    addPosition(ctx, SHOW, "series", 1, 2, 900000, 2400000, NOW - HOUR);
+    await runAgain(ctx, "nuvio");
+    const sent = (seen.progressPushed || []).map((e) => [e.content_id, e.content_type, e.video_id, e.season, e.episode, e.position, e.duration, e.last_watched]);
+    assert.deepEqual(sent, [
+      ["tt5555555", "movie", "tt5555555", undefined, undefined, 600000, 6000000, NOW - 2 * HOUR],
+      [SHOW, "series", `${SHOW}:1:2`, 1, 2, 900000, 2400000, NOW - HOUR],
+    ]);
+    await runAgain(ctx, "nuvio");
+    assert.equal(seen.progressPushed.length, 2, "each position is sent once");
+  });
+
+  it("never overwrites a position Nuvio has that is as new or newer", async () => {
+    const { state, seen, ctx } = await ready("nupush2");
+    state.progress = [{ content_id: "tt5555555", content_type: "movie", position: 3000000, duration: 6000000, last_watched: NOW }];
+    addPosition(ctx, "tt5555555", "movie", null, null, 600000, 6000000, NOW - HOUR);
+    await runAgain(ctx, "nuvio");
+    assert.equal((seen.progressPushed || []).length, 0);
+  });
+
+  it("does not send a finished title as progress, nor Nuvio's own positions back to it", async () => {
+    const { state, seen, ctx } = await ready("nupush3");
+    addPosition(ctx, "tt5555555", "movie", null, null, 5800000, 6000000, NOW - HOUR);
+    state.progress = [{ content_id: "tt3333333", content_type: "movie", position: 1500000, duration: 6000000, last_watched: NOW - 2 * HOUR }];
+    await runAgain(ctx, "nuvio");
+    assert.equal((seen.progressPushed || []).length, 0);
+    assert.equal(ctx.env.DB_ACTIVITY._db.prepare("SELECT count(*) AS n FROM watch_positions WHERE source = 'nuvio'").get().n, 1, "Nuvio's own is stored, just not returned");
+  });
 });

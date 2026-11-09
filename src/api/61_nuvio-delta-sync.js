@@ -89,7 +89,13 @@ async function nuvioReadChanges(env, token, profileIndex, base, to, resumes) {
   const stored = resumes && typeof resumes === "object" ? resumes : {};
   const history = await nuvioPullEvents(env, token, "sync_pull_watched_items_delta", profileIndex, base.history, to.history);
   const progressEvents = await nuvioPullEvents(env, token, "sync_pull_watch_progress_delta", profileIndex, base.progress, to.progress);
-  const watched = nuvioLastByKey(history, nuvioEventKey).filter((e) => e.operation === "upsert");
+  const finalHistory = nuvioLastByKey(history, nuvioEventKey);
+  const watched = finalHistory.filter((e) => e.operation === "upsert");
+  const removed = finalHistory.filter((e) => e.operation === "delete").map((e) => {
+    const id = mediaAppTitleId(mediaAppPick(e, "content_id", "contentId"));
+    const season = mediaAppInt(e.season), episode = mediaAppInt(e.episode);
+    return id ? { ...id, kind: season != null && episode != null ? "series" : (mediaAppKind(mediaAppPick(e, "content_type", "contentType")) || "movie"), season, episode, watchedAt: mediaAppTime(mediaAppPick(e, "watched_at", "watchedAt")) } : null;
+  }).filter(Boolean);
   const progress = [];
   const cleared = new Set();
   for (const e of nuvioLastByKey(progressEvents, (x) => String(mediaAppPick(x, "progress_key", "progressKey") || nuvioEventKey(x)))) {
@@ -103,10 +109,11 @@ async function nuvioReadChanges(env, token, profileIndex, base, to, resumes) {
   }
   const touched = new Set([...watched, ...progress].map(nuvioTitleKey).filter(Boolean));
   for (const key of touched) if (stored[key] && !cleared.has(key)) progress.push(nuvioResumeRow(key, stored[key]));
-  return { watched, progress, cleared: [...cleared] };
+  return { watched, progress, removed, cleared: [...cleared].map((key) => ({ key, kind: stored[key].kind })) };
 }
 
-// Reads what this step needs. { mode: "delta" | "snapshot", profile, cleared, pending }.
+// Reads what this step needs. { mode: "delta" | "snapshot", profile, cleared, removed, pending }.
+// `removed` are watched items Nuvio deleted (see mirrorRemovePlays); `cleared` resume points it dropped.
 // `pending` is the cursor pair to keep when the pull finishes (null if Nuvio gave none).
 // It is taken on the first step and carried in cursor_json.pendingDelta for the rest.
 // `step` = { offset, cursor, delta } where delta says a delta read may be tried.
@@ -123,5 +130,5 @@ async function nuvioReadProfile(env, token, profileIndex, step) {
       console.error("mediaapp: Nuvio change feed failed, reading everything", e);
     }
   }
-  return { mode: "snapshot", pending, cleared: [], profile: await nuvioFetchProfile(env, token, profileIndex) };
+  return { mode: "snapshot", pending, cleared: [], removed: [], profile: await nuvioFetchProfile(env, token, profileIndex) };
 }

@@ -2247,10 +2247,7 @@ function renderMediaAppStatus(provider, info) {
   if (wrap) wrap.style.display = live ? '' : 'none';
   if (!live) return;
   const sync = info.sync || {};
-  const pull = document.getElementById(provider + 'PullCheckbox');
-  if (pull) pull.checked = !!sync.pull;
-  const push = document.getElementById(provider + 'PushCheckbox');
-  if (push) push.checked = !!sync.push;
+  ['Pull', 'Push', 'Mirror'].forEach(function (k) { const box = document.getElementById(provider + k + 'Checkbox'); if (box) box.checked = !!sync[k.toLowerCase()]; });
   const pushRow = document.getElementById(provider + 'PushRow');
   if (pushRow) pushRow.style.display = info.pushAvailable ? '' : 'none';
   const statusLine = document.getElementById(provider + 'SyncStatus');
