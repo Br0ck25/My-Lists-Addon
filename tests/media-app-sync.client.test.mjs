@@ -709,3 +709,19 @@ describe("Nuvio's own counts on the card", () => {
   });
 });
 
+describe("The home settings check on the Nuvio card", () => {
+  it("writes one line per platform: its keys and sizes, or why it could not be read", () => {
+    const c = loadClient({ signedIn: "alice" });
+    const text = c.call("mediaAppHomeCheckText", { usedByThisSite: "home_catalog_shared", platforms: [
+      { platform: "tv", rows: 1, keys: { rows: 3, hidden_catalogs: 0, theme: "string" } },
+      { platform: "home_catalog_shared", rows: 1, keys: { items: 2, enabled: true } },
+      { platform: "other", rows: 0, keys: {} },
+      { platform: "bad", error: "Nuvio answered 500." },
+    ] });
+    assert.match(text, /tv: rows 3, hidden_catalogs 0, theme string/);
+    assert.match(text, /home_catalog_shared \(used by this site\): items 2, enabled true/);
+    assert.match(text, /other: nothing saved/);
+    assert.match(text, /bad: could not be read \(Nuvio answered 500\.\)/);
+  });
+});
+

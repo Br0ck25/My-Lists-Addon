@@ -681,7 +681,9 @@
           <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioRestoreBtn" data-act="restoreNuvioRemoved" data-act-args="[&quot;@self&quot;]">Restore removed plays</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioHomeCheckBtn" data-act="checkNuvioHomeSettings" data-act-args="[&quot;@self&quot;]">Check home settings</button>
           </div>
+          <p id="nuvioHomeCheckResult" class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
         </div>
       </div>
     </div>

@@ -1752,6 +1752,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), profiles: provider === "nuvio" ? mediaAppProfilesOf(row) : undefined, sync: mediaAppSyncSummary(row) });
   }
 
+  if (sub === "home-settings-check" && request.method === "GET") return mediaAppHomeSettingsCheck(env, accountId, provider);
+
   if (sub === "collections" && request.method === "GET") {
     if (provider !== "nuvio") return json({ ok: false, error: "Collections sync is only supported for Nuvio." }, 400);
     let conn = await loadProviderConnection(env, accountId, provider);

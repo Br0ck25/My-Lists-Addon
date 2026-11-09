@@ -77,6 +77,7 @@ From the Nuvio API document (v1.3). Before this, every Nuvio pull re-read the wh
 - **Disconnecting Nuvio signs out at Nuvio** (`POST /auth/v1/logout` with the stored token). If that fails the account is still disconnected here.
 - **Nuvio's own counts on the settings card:** after each completed pull, `get_sync_overview` is read once and the chosen profile's library, in-progress, watched and addon counts are kept with the last result and shown ("Nuvio holds 42 library items, 150 in progress, ..."). If that call fails the card simply omits them.
 - **A failed Nuvio read asks Nuvio's health check** (`/functions/v1/health-check`, no sign-in needed) and says "Nuvio is down right now" or "is having problems" when it is, instead of a bare status. Never asked when a sync works.
+- **Check home settings (Settings, Nuvio card):** a read-only button that shows, for your chosen profile, what Nuvio holds under each home catalog platform, `tv` and `home_catalog_shared` (key names and sizes only), and which one this site writes. It exists to settle from a real account whether `home_catalog_shared` is what Nuvio's apps read (the API document only describes `tv`). `GET /api/connections/nuvio/home-settings-check`; it writes nothing.
 - **Run migration A0003 on every activity database before deploying** (`npx wrangler d1 execute mylists-activity --remote --file=./migrations/activity/A0003_watch_positions.sql`). Safe to run twice. Not tested against a live Nuvio account.
 
 ## Frontend audit fixes UI-01 to UI-18 (built 2026-11-04, stamp a4b163e906; prepared, not deployed)

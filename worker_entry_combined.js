@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "04aade4679";
+const WORKER_BUILD = "b280a8f45f";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -40089,7 +40089,9 @@ if ('serviceWorker' in navigator) {
           <div class="u-mt-8px">
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioSyncNowBtn" data-act="syncMediaAppNow" data-act-args="[&quot;nuvio&quot;,&quot;@self&quot;]">Sync now</button>
             <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioRestoreBtn" data-act="restoreNuvioRemoved" data-act-args="[&quot;@self&quot;]">Restore removed plays</button>
+            <button type="button" class="secondary lc-btn u-p-4px_10px u-fs-v_font_size_sm" id="nuvioHomeCheckBtn" data-act="checkNuvioHomeSettings" data-act-args="[&quot;@self&quot;]">Check home settings</button>
           </div>
+          <p id="nuvioHomeCheckResult" class="u-m-6px_0_0 u-fs-v_font_size_xs u-c-v_muted" role="status"></p>
         </div>
       </div>
     </div>
@@ -50402,6 +50404,29 @@ function mediaAppOverviewText(o) {
   if (o.watched != null) parts.push(o.watched + ' watched');
   if (o.addons != null) parts.push(o.addons + (o.addons === 1 ? ' addon' : ' addons'));
   return parts.length ? ' Nuvio holds ' + parts.join(', ') + '.' : '';
+}
+
+// "Check home settings": what Nuvio holds under each home catalog platform, as one line each.
+function mediaAppHomeCheckText(data) {
+  const lines = [];
+  const list = (data && data.platforms) || [];
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    const name = p.platform + (p.platform === data.usedByThisSite ? ' (used by this site)' : '');
+    if (p.error) { lines.push(p.platform + ': could not be read (' + p.error + ')'); continue; }
+    const keys = Object.keys(p.keys || {});
+    lines.push(keys.length ? name + ': ' + keys.map(function (k) { return k + ' ' + p.keys[k]; }).join(', ') : p.platform + ': nothing saved');
+  }
+  return lines.join(' · ');
+}
+
+async function checkNuvioHomeSettings(btn) {
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall('nuvio', 'home-settings-check', 'GET');
+  if (btn) btn.disabled = false;
+  const out = document.getElementById('nuvioHomeCheckResult');
+  if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not read your Nuvio home settings. Please try again.'), 'error');
+  else if (out) out.textContent = mediaAppHomeCheckText(r.data);
 }
 // Wraps a timer callback so a tick that arrives while the previous run is still
 // waiting (a slow fetch) is skipped instead of starting a second request.
@@ -111161,6 +111186,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
     return json({ ok: true, provider, connected: Boolean(conn && conn.accessToken), status: conn ? conn.status : null, username: conn ? conn.username : null, pushAvailable: mediaAppPushFlag(env), profiles: provider === "nuvio" ? mediaAppProfilesOf(row) : undefined, sync: mediaAppSyncSummary(row) });
   }
 
+  if (sub === "home-settings-check" && request.method === "GET") return mediaAppHomeSettingsCheck(env, accountId, provider);
+
   if (sub === "collections" && request.method === "GET") {
     if (provider !== "nuvio") return json({ ok: false, error: "Collections sync is only supported for Nuvio." }, 400);
     let conn = await loadProviderConnection(env, accountId, provider);
@@ -111651,6 +111678,49 @@ async function nuvioReadProfile(env, token, profileIndex, step) {
     }
   }
   return { mode: "snapshot", pending, cleared: [], removed: [], profile: await nuvioFetchProfile(env, token, profileIndex) };
+}
+// A read-only look at what Nuvio holds for the home catalog settings, for the
+// Nuvio card's "Check home settings" button. This site writes them under
+// p_platform "home_catalog_shared" (nuvioPullHomeSettings, nuvioSaveHomeVisibility);
+// Nuvio's API document only describes "tv" as the platform namespace. The button
+// shows both for the signed-in person's own profile, so which one a real Nuvio
+// app reads can be settled from facts. It writes nothing and returns only the
+// names of the saved keys with their sizes, never the settings themselves.
+
+const NUVIO_HOME_PLATFORMS = ["tv", "home_catalog_shared"];
+
+// { key: size } for the keys of a settings object: an array's length, a boolean
+// as it is, anything else its type.
+function nuvioSettingsShape(settings) {
+  let value = settings;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return {}; }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(value)) out[k] = Array.isArray(v) ? v.length : (typeof v === "boolean" ? v : typeof v);
+  return out;
+}
+
+async function mediaAppHomeSettingsCheck(env, accountId, provider) {
+  if (provider !== "nuvio") return json({ ok: false, error: "This check is only for Nuvio." }, 400);
+  let conn = await loadProviderConnection(env, accountId, provider);
+  const row = await loadMediaAppSync(env, accountId, provider);
+  if (!conn || conn.status !== "ok" || !row) return json({ ok: false, error: "Your Nuvio account isn't connected." }, 404);
+  conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
+  if (!conn || !conn.accessToken) return json({ ok: false, error: "Sign in to Nuvio again first." }, 400);
+  const profileId = Number(row.profile_index) || 1;
+  const platforms = [];
+  for (const platform of NUVIO_HOME_PLATFORMS) {
+    try {
+      const rows = await nuvioRpc(env, conn.accessToken, "sync_pull_home_catalog_settings", { p_profile_id: profileId, p_platform: platform });
+      const list = Array.isArray(rows) ? rows : [];
+      platforms.push({ platform, rows: list.length, updatedAt: (list[0] && list[0].updated_at) || undefined, keys: nuvioSettingsShape(list[0] && list[0].settings_json) });
+    } catch (e) {
+      platforms.push({ platform, error: String((e && e.message) || "Could not be read.").slice(0, 200) });
+    }
+  }
+  return json({ ok: true, profileId, usedByThisSite: "home_catalog_shared", platforms });
 }
 // Nuvio's rate limit and error answers (public API: 100 requests per second per
 // user as a client-side guideline; 429 when limited; 409 duplicate key; 422

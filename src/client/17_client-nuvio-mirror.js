@@ -46,3 +46,26 @@ function mediaAppOverviewText(o) {
   if (o.addons != null) parts.push(o.addons + (o.addons === 1 ? ' addon' : ' addons'));
   return parts.length ? ' Nuvio holds ' + parts.join(', ') + '.' : '';
 }
+
+// "Check home settings": what Nuvio holds under each home catalog platform, as one line each.
+function mediaAppHomeCheckText(data) {
+  const lines = [];
+  const list = (data && data.platforms) || [];
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    const name = p.platform + (p.platform === data.usedByThisSite ? ' (used by this site)' : '');
+    if (p.error) { lines.push(p.platform + ': could not be read (' + p.error + ')'); continue; }
+    const keys = Object.keys(p.keys || {});
+    lines.push(keys.length ? name + ': ' + keys.map(function (k) { return k + ' ' + p.keys[k]; }).join(', ') : p.platform + ': nothing saved');
+  }
+  return lines.join(' · ');
+}
+
+async function checkNuvioHomeSettings(btn) {
+  if (btn) btn.disabled = true;
+  const r = await mediaAppUiCall('nuvio', 'home-settings-check', 'GET');
+  if (btn) btn.disabled = false;
+  const out = document.getElementById('nuvioHomeCheckResult');
+  if (!r.ok) showToast(mediaAppUiMessage(r, 'Could not read your Nuvio home settings. Please try again.'), 'error');
+  else if (out) out.textContent = mediaAppHomeCheckText(r.data);
+}

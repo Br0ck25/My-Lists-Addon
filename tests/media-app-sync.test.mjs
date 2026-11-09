@@ -166,6 +166,10 @@ function fakeServices(state) {
         }
         if (fn === "sync_pull_home_catalog_settings") {
           if (state.homeReadFails || (state.homeReadbackFails && seen.homePushed)) return json({ message: "boom" }, 500);
+          if (state.homeByPlatform) {
+            if (state.homeFailPlatform === body.p_platform) return json({ message: "boom" }, 500);
+            return json(state.homeByPlatform[body.p_platform] || []);
+          }
           return json(state.homeRows || []);
         }
         if (fn === "sync_push_home_catalog_settings") {
@@ -2591,5 +2595,45 @@ describe("Nuvio: rate limits, errors and signing out", () => {
   it("does not call the health check when the sync works", async () => {
     const { seen } = await connected("nuhealth3", { health: "healthy" });
     assert.equal(seen.healthChecks || 0, 0);
+  });
+
+  const ROW = (platform, settings_json) => ({ id: "r-" + platform, profile_id: 1, platform, settings_json, updated_at: "2026-01-01T00:00:00Z" });
+  const check = (ctx) => call(ctx.env, "/api/connections/nuvio/home-settings-check", { cookie: ctx.cookie });
+
+  it("shows what Nuvio holds for both home catalog platforms, and which one this site uses, reading only", async () => {
+    const { seen, ctx } = await connected("nuhome", { homeByPlatform: {
+      tv: [ROW("tv", { rows: [1, 2, 3], hidden_catalogs: [], theme: "dark" })],
+      home_catalog_shared: [ROW("home_catalog_shared", { items: [{ key: "a" }, { key: "b" }], enabled: true })],
+    } });
+    seen.nuvio.length = 0;
+    const r = await check(ctx);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.usedByThisSite, "home_catalog_shared");
+    assert.deepEqual(r.body.platforms, [
+      { platform: "tv", rows: 1, updatedAt: "2026-01-01T00:00:00Z", keys: { rows: 3, hidden_catalogs: 0, theme: "string" } },
+      { platform: "home_catalog_shared", rows: 1, updatedAt: "2026-01-01T00:00:00Z", keys: { items: 2, enabled: true } },
+    ]);
+    assert.deepEqual([...new Set(seen.nuvio.map((c) => c.fn))].sort(), ["sync_pull_home_catalog_settings"], "nothing is written");
+    assert.deepEqual(seen.nuvio.map((c) => c.body.p_platform).sort(), ["home_catalog_shared", "tv"]);
+  });
+
+  it("reports an empty platform as empty, and one that cannot be read without losing the other", async () => {
+    const { ctx } = await connected("nuhome2", { homeByPlatform: { home_catalog_shared: [ROW("home_catalog_shared", { items: [] })] }, homeFailPlatform: "tv" });
+    const r = await check(ctx);
+    assert.equal(r.status, 200);
+    const by = Object.fromEntries(r.body.platforms.map((p) => [p.platform, p]));
+    assert.match(by.tv.error, /answered 500/);
+    assert.deepEqual([by.home_catalog_shared.rows, by.home_catalog_shared.keys], [1, { items: 0 }]);
+    const { ctx: ctx2 } = await connected("nuhome3", { homeByPlatform: {} });
+    const empty = await check(ctx2);
+    assert.deepEqual(empty.body.platforms.map((p) => [p.platform, p.rows, p.keys]), [["tv", 0, {}], ["home_catalog_shared", 0, {}]]);
+  });
+
+  it("needs a connected Nuvio account", async () => {
+    const fake = { watched: [], progress: [] };
+    fakeServices(fake);
+    const ctx = await setup("nuhome4");
+    const r = await check(ctx);
+    assert.equal(r.status, 404);
   });
 });
