@@ -18,6 +18,25 @@ function nuvioSettingsShape(settings) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const out = {};
   for (const [k, v] of Object.entries(value)) out[k] = Array.isArray(v) ? v.length : (typeof v === "boolean" ? v : typeof v);
+  if (Array.isArray(value.items)) Object.assign(out, nuvioItemsShape(value.items));
+  return out;
+}
+
+// What the saved home rows say about this site's collection: how many of its catalog
+// rows Nuvio shows and hides, and how many collection tiles there are (a tile is the
+// collection itself, which "Hide collection catalogs" leaves alone).
+function nuvioItemsShape(items) {
+  const out = { items_hidden: 0, my_collection_rows_shown: 0, my_collection_rows_hidden: 0, collection_tiles: 0 };
+  for (const i of items) {
+    if (!i || typeof i !== "object" || Array.isArray(i)) continue;
+    if (i.is_collection) {
+      out.collection_tiles++;
+      continue;
+    }
+    const hidden = i.enabled === false;
+    if (hidden) out.items_hidden++;
+    if (nuvioHomeCatalogKey(i).startsWith(COLLECTIONS_ADDON_ID + ":")) out[hidden ? "my_collection_rows_hidden" : "my_collection_rows_shown"]++;
+  }
   return out;
 }
 

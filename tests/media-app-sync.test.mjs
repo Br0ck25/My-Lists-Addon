@@ -2611,7 +2611,7 @@ describe("Nuvio: rate limits, errors and signing out", () => {
     assert.equal(r.body.usedByThisSite, "home_catalog_shared");
     assert.deepEqual(r.body.platforms, [
       { platform: "tv", rows: 1, updatedAt: "2026-01-01T00:00:00Z", keys: { rows: 3, hidden_catalogs: 0, theme: "string" } },
-      { platform: "home_catalog_shared", rows: 1, updatedAt: "2026-01-01T00:00:00Z", keys: { items: 2, enabled: true } },
+      { platform: "home_catalog_shared", rows: 1, updatedAt: "2026-01-01T00:00:00Z", keys: { items: 2, enabled: true, items_hidden: 0, my_collection_rows_shown: 0, my_collection_rows_hidden: 0, collection_tiles: 0 } },
     ]);
     assert.deepEqual([...new Set(seen.nuvio.map((c) => c.fn))].sort(), ["sync_pull_home_catalog_settings"], "nothing is written");
     assert.deepEqual(seen.nuvio.map((c) => c.body.p_platform).sort(), ["home_catalog_shared", "tv"]);
@@ -2623,7 +2623,7 @@ describe("Nuvio: rate limits, errors and signing out", () => {
     assert.equal(r.status, 200);
     const by = Object.fromEntries(r.body.platforms.map((p) => [p.platform, p]));
     assert.match(by.tv.error, /answered 500/);
-    assert.deepEqual([by.home_catalog_shared.rows, by.home_catalog_shared.keys], [1, { items: 0 }]);
+    assert.deepEqual([by.home_catalog_shared.rows, by.home_catalog_shared.keys.items], [1, 0]);
     const { ctx: ctx2 } = await connected("nuhome3", { homeByPlatform: {} });
     const empty = await check(ctx2);
     assert.deepEqual(empty.body.platforms.map((p) => [p.platform, p.rows, p.keys]), [["tv", 0, {}], ["home_catalog_shared", 0, {}]]);
@@ -2635,5 +2635,17 @@ describe("Nuvio: rate limits, errors and signing out", () => {
     const ctx = await setup("nuhome4");
     const r = await check(ctx);
     assert.equal(r.status, 404);
+  });
+
+  it("counts, among the home rows, which of this site's collection rows Nuvio shows and hides", async () => {
+    const mine = (id, enabled) => ({ key: `app.my-list.collections:movie:${id}`, addon_id: "app.my-list.collections", type: "movie", catalog_id: id, enabled, is_collection: false });
+    const { ctx } = await connected("nuhome5", { homeByPlatform: { home_catalog_shared: [ROW("home_catalog_shared", { items: [
+      mine("a", false), mine("b", false), mine("c", true),
+      { key: "com.other:movie:top", enabled: true, is_collection: false },
+      { key: "com.other:movie:old", enabled: false, is_collection: false },
+      { key: "collection:1", enabled: true, is_collection: true, collection_id: "1" },
+    ] })] } });
+    const keys = (await check(ctx)).body.platforms.find((p) => p.platform === "home_catalog_shared").keys;
+    assert.deepEqual(keys, { items: 6, items_hidden: 3, my_collection_rows_shown: 1, my_collection_rows_hidden: 2, collection_tiles: 1 });
   });
 });
