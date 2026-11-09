@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-09";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9f1064ae76";
+const WORKER_BUILD = "9058583166";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -50395,12 +50395,12 @@ async function restoreNuvioRemoved(btn) {
   else showToast(r.data.restored ? 'Restored ' + r.data.restored + (r.data.restored === 1 ? ' play.' : ' plays.') : 'Nothing to restore.', r.data.restored ? 'success' : 'info');
 }
 
-// Nuvio's own counts for the chosen profile, from its sync overview: ' Nuvio holds 42 library items, 150 in progress.'
+// Nuvio's own counts for the chosen profile, from its sync overview: ' Nuvio holds 42 library items, 150 progress records.'
 function mediaAppOverviewText(o) {
   if (!o) return '';
   const parts = [];
   if (o.library != null) parts.push(o.library + (o.library === 1 ? ' library item' : ' library items'));
-  if (o.progress != null) parts.push(o.progress + ' in progress');
+  if (o.progress != null) parts.push(o.progress + (o.progress === 1 ? ' progress record' : ' progress records'));
   if (o.watched != null) parts.push(o.watched + ' watched');
   if (o.addons != null) parts.push(o.addons + (o.addons === 1 ? ' addon' : ' addons'));
   return parts.length ? ' Nuvio holds ' + parts.join(', ') + '.' : '';

@@ -36,12 +36,12 @@ async function restoreNuvioRemoved(btn) {
   else showToast(r.data.restored ? 'Restored ' + r.data.restored + (r.data.restored === 1 ? ' play.' : ' plays.') : 'Nothing to restore.', r.data.restored ? 'success' : 'info');
 }
 
-// Nuvio's own counts for the chosen profile, from its sync overview: ' Nuvio holds 42 library items, 150 in progress.'
+// Nuvio's own counts for the chosen profile, from its sync overview: ' Nuvio holds 42 library items, 150 progress records.'
 function mediaAppOverviewText(o) {
   if (!o) return '';
   const parts = [];
   if (o.library != null) parts.push(o.library + (o.library === 1 ? ' library item' : ' library items'));
-  if (o.progress != null) parts.push(o.progress + ' in progress');
+  if (o.progress != null) parts.push(o.progress + (o.progress === 1 ? ' progress record' : ' progress records'));
   if (o.watched != null) parts.push(o.watched + ' watched');
   if (o.addons != null) parts.push(o.addons + (o.addons === 1 ? ' addon' : ' addons'));
   return parts.length ? ' Nuvio holds ' + parts.join(', ') + '.' : '';

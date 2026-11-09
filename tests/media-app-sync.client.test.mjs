@@ -703,7 +703,7 @@ describe("Nuvio's own counts on the card", () => {
   it("adds what Nuvio holds to the last-checked line, only the numbers it gave", () => {
     const c = loadClient({ signedIn: "alice" });
     const line = (overview) => c.call("mediaAppUiSyncLine", { lastPullAt: 1, lastResult: { found: 3, unresolved: 0, overview } });
-    assert.match(line({ library: 42, progress: 150, watched: 200, addons: 1 }), /Found 3 titles\. Nuvio holds 42 library items, 150 in progress, 200 watched, 1 addon\.$/);
+    assert.match(line({ library: 42, progress: 150, watched: 200, addons: 1 }), /Found 3 titles\. Nuvio holds 42 library items, 150 progress records, 200 watched, 1 addon\.$/);
     assert.match(line({ library: 1 }), /Nuvio holds 1 library item\.$/);
     assert.doesNotMatch(line(undefined), /Nuvio holds/);
   });
