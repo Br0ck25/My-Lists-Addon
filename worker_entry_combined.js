@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a5b32bd9e5";
+const WORKER_BUILD = "c6605dac4d";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -94155,7 +94155,7 @@ async function handleFetch(request, env, ctx) {
       request.session = sessionAuth.session;
     }
 
-    const nuvioTvSyncResponse = await handleNuvioTvSyncRoute(request, env, ctx, url, path);
+    const nuvioTvSyncResponse = (await adminApiGate(request, env, path)) || await handleNuvioTvSyncRoute(request, env, ctx, url, path);
     if (nuvioTvSyncResponse) return nuvioTvSyncResponse;
     const installsResponse = await handleInstallsApi(request, env, url, path);
     if (installsResponse) return installsResponse;
@@ -117812,6 +117812,18 @@ async function deleteFeedbackThreadsFromCreator(env, username) {
     if (!env.DB) break;
   }
   return deleted;
+}
+// One check for every /admin/api/ route (audit TEST-04). Each admin route also
+// checks isAdminRequest itself, but a route added without that check, however it
+// is matched, used to answer a stranger. handleFetch (25_) calls this before any
+// route, so such a route answers 401 to anyone without an admin identity.
+//
+// It asks only who the caller is (resolveAdminIdentity), not isAdminRequest,
+// which also writes the audit row: the route's own check still does that, once.
+async function adminApiGate(request, env, path) {
+  if (!String(path || "").startsWith("/admin/api/")) return null;
+  if (await resolveAdminIdentity(request, env)) return null;
+  return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
 }
 // Creator list delete/reorder, account reset/delete and the sync save routes (/api/creator/lists/delete ... /sync/save-tracking), moved out of handleFetch (CQ-01).
 

@@ -1476,7 +1476,7 @@ async function handleFetch(request, env, ctx) {
       request.session = sessionAuth.session;
     }
 
-    const nuvioTvSyncResponse = await handleNuvioTvSyncRoute(request, env, ctx, url, path);
+    const nuvioTvSyncResponse = (await adminApiGate(request, env, path)) || await handleNuvioTvSyncRoute(request, env, ctx, url, path);
     if (nuvioTvSyncResponse) return nuvioTvSyncResponse;
     const installsResponse = await handleInstallsApi(request, env, url, path);
     if (installsResponse) return installsResponse;
