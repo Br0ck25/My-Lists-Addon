@@ -183,6 +183,4 @@ If an unrecoverable defect, latency spike, or data regression occurs during the 
      ```bash
      npx wrangler d1 time-travel restore my-lists-db --bookmark=<saved_bookmark>
      ```
-   - Or restore the off-Cloudflare copy from step 3 of Phase B: follow "Restoring a daily copy" in `docs/OPERATIONS.md` section 5 (load it into a new, empty database first; never on top of the live one).bash
-     npx wrangler d1 execute my-lists-db --file=backups/my-lists-db-pre-deploy-XXXX.sql --remote
-     ```
+   - Or restore the off-Cloudflare copy from step 3 of Phase B: follow "Restoring a daily copy" in `docs/OPERATIONS.md` section 5 (load it into a new, empty database first; never on top of the live one).
