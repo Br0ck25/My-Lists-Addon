@@ -22,7 +22,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | SEC-01 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-01 block). Old TVs must pair again. | 2026-11-10, independent review |
 | SEC-02 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-02 block). LEGACY_USERNAME_OWNER_LINKS=1 undoes it. | 2026-11-10, independent review |
 | SEC-03 | open |  |  |  |
-| SEC-04 | open (partially fixed, see Verification) | a1ecc1f, 5997fe0 | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). | 2026-11-10, independent review |
+| SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0, 1ffc61e | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). |  |
 | SEC-05 | open |  |  |  |
 | SEC-06 | open |  |  |  |
 
