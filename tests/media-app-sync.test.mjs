@@ -1588,6 +1588,25 @@ describe("removing an item from the app, from the website", () => {
     assert.equal(ctx.state.watched.some((w) => w.content_id === "tmdb:550"), false);
   });
 
+  it("a film Nuvio labels a movie stays a movie even when the row carries season and episode numbers", async () => {
+    const ctx = await nuvio("mvwithnumbers", flags);
+    ctx.state.watched.push({ content_id: "tt4444444", content_type: "movie", title: "Odd Film", season: 1, episode: 1, watched_at: NOW - 3 * HOUR });
+    await call(ctx.env, "/api/connections/nuvio/sync", { method: "POST", cookie: ctx.cookie, json: { wait: true, force: true } });
+    const media = ctx.env.DB._db.prepare("SELECT kind FROM media WHERE imdb_id = 'tt4444444'").get();
+    assert.equal(media.kind, "movie", "the app's own word for the title wins over stray numbers");
+    assert.ok((await list(ctx, "nuvio", "watch-history", "movie")).includes("tt4444444"));
+    assert.equal((await list(ctx, "nuvio", "watch-history", "series")).includes("tt4444444"), false);
+  });
+
+  it("removes a movie the page was showing as a show (old episode-numbered plays), not refusing on the kind", async () => {
+    const ctx = await nuvio("rmwrongkind");
+    ctx.env.DB_ACTIVITY._db.prepare("UPDATE watch_events SET season = 1, episode = 1 WHERE account_id = ? AND source = 'nuvio' AND media_id = ?").run(ctx.accountId, ctx.mediaId("tt1111111"));
+    const r = await remove(ctx, "nuvio", { target: "history", id: "tt1111111", mediaType: "series" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(ctx.seen.deleted.map((k) => mediaAppId(k)), ["tt1111111"], "deleted in Nuvio under the movie's own identity");
+    assert.equal(eventsOf(ctx, "nuvio").some((e) => e.media_id === ctx.mediaId("tt1111111")), false, "and here, episode numbers or not");
+  });
+
   it("deletes movie progress with null season and episode using the movie key", async () => {
     const ctx = await nuvio("rmnullprogress");
     ctx.state.progress[0].season = null;
