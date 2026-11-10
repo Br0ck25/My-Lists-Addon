@@ -34,6 +34,11 @@ async function populated(extra = {}) {
   // foreign key), saved presets, and the search-index row of its list.
   env.DB_ACTIVITY._db.prepare("INSERT INTO watch_positions (account_id, media_id, source, position_ms, duration_ms, watched_at, updated_at) VALUES (?, 77, 'nuvio', 1000, 5000, 1, 1)").run(id);
   env.DB_ACTIVITY._db.prepare("INSERT INTO watch_events_removed (account_id, media_id, watched_at, source, dedupe_key, removed_at) VALUES (?, 77, 1, 'nuvio', ?, 1)").run(id, `r${id}`);
+  // A list of its own, with the search-index row that carries its name and the owner's username
+  // (the purge must remove that row by list id, before the list goes).
+  db.prepare("INSERT INTO lists (id, public_id, owner_account_id, slug, name, media_type, visibility, created_at, updated_at) VALUES (9001, 'ownL1', ?, 'mine-fts', 'Mine Fts', 'movie', 'public', 0, 0)").run(id);
+  db.prepare("INSERT INTO lists_fts2 (rowid, name, description, owner_name) VALUES (9001, 'Mine Fts', '', 'annpurge')").run();
+  assert.equal(count(db, "SELECT count(*) AS n FROM lists_fts2_content WHERE c2 = 'annpurge'"), 1, "the search-index row exists before the purge");
   db.prepare("INSERT INTO presets (account_id, name, config_json, position, created_at, updated_at) VALUES (?, 'Mine', '{}', 0, 0, 0)").run(id);
   // A support/feedback thread filed under the account (D1 row and KV copy), and
   // another person's that must stay.
