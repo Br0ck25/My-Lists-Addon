@@ -69,3 +69,53 @@ describe("API-04: Trakt rows continue where the app is", () => {
     assert.ok(r.traktPagesAsked.length <= 2, "pages asked: " + r.traktPagesAsked.join(","));
   });
 });
+
+// Audit API-04 verification: a long list whose pages all shrink (watch history: many episodes of
+// one show) stopped after five Trakt pages, so 400 of 800 titles were reachable.
+// Each walk uses its own list name: the Worker keeps fetched Trakt pages in memory between tests.
+async function walkAll(pages, titlesPerPage, rawTotal) {
+  const slug = "long" + pages + "x" + titlesPerPage;
+  const rows = (page) => {
+    if (page > pages) return [];
+    const show = (n) => ({ type: "show", show: { title: "S" + n, year: 2000, ids: { imdb: "tt" + String(2000000 + n), tmdb: 9000 + n } } });
+    return Array.from({ length: 100 }, (_, j) => show(page * 1000 + (j % titlesPerPage)));
+  };
+  globalThis.fetch = async (u) => {
+    const href = typeof u === "string" ? u : u.url;
+    if (href.includes("/users/bob/lists/" + slug + "/items")) {
+      const page = Number((href.match(/[?&]page=(\d+)/) || [])[1] || 1);
+      return new Response(JSON.stringify(rows(page)), { status: 200, headers: { "content-type": "application/json", "X-Pagination-Item-Count": String(rawTotal) } });
+    }
+    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TRAKT_CLIENT_ID: "cid" });
+    const saved = await call(env, "/api/save", { method: "POST", json: { entries: [{ id: "tl", url: "https://trakt.tv/users/bob/lists/" + slug, name: "Best", type: "series" }], traktKey: "cid" } });
+    const all = [];
+    let held = 0;
+    for (let guard = 0; guard < 80; guard++) {
+      const r = await call(env, `/${saved.body.id}/catalog/series/tl${held ? `/skip=${held}` : ""}.json`, { ip: nextIp() });
+      const metas = r.body.metas || [];
+      if (!metas.length) break;
+      all.push(...metas.map((m) => m.id));
+      held += metas.length;
+    }
+    return all;
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+describe("API-04: a long list of shrinking pages is reachable to its end", () => {
+  it("10 Trakt pages of 80 titles each: all 800 titles, none twice", async () => {
+    const all = await walkAll(10, 80, 1000);
+    assert.equal(new Set(all).size, all.length, "no title twice");
+    assert.equal(all.length, 800);
+  });
+
+  it("40 shrinking pages (past the walk's page cap) still reach the end instead of stopping half way", async () => {
+    const all = await walkAll(40, 80, 4000);
+    assert.ok(all.length >= 3000, "reached " + all.length + " of 3200 titles");
+  });
+});
+

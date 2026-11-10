@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "4fa1489c6f";
+const WORKER_BUILD = "a5b32bd9e5";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -32532,8 +32532,10 @@ async function seedNuvioTvNewUser(env, username, accountId) {
 //
 // loadPage(rawSkip) is the existing fetcher for one Trakt page (rawSkip is
 // 0, 100, 200, ...). At most TRAKT_WINDOW_MAX_PAGES pages are read for one
-// request; a skip beyond what that can reach keeps the old page arithmetic.
-const TRAKT_WINDOW_MAX_PAGES = 5;
+// request (each is cached, so a long scroll mostly re-reads cached pages). A skip the
+// walk cannot reach in that many pages falls back to the old page arithmetic, which
+// may repeat a few titles but never ends the row early.
+const TRAKT_WINDOW_MAX_PAGES = 30;
 
 async function traktWindowedPage(skip, loadPage) {
   if (skip >= TRAKT_WINDOW_MAX_PAGES * PAGE_SIZE) return loadPage(Math.floor(skip / PAGE_SIZE) * PAGE_SIZE);
@@ -32541,6 +32543,7 @@ async function traktWindowedPage(skip, loadPage) {
   const seen = new Set();
   const titles = [];
   let total = null;
+  let reachedEnd = false;
   for (let i = 0; i < TRAKT_WINDOW_MAX_PAGES && titles.length < want; i++) {
     let metas;
     try {
@@ -32552,14 +32555,14 @@ async function traktWindowedPage(skip, loadPage) {
     if (!Array.isArray(metas)) break;
     if (total == null && metas.totalItems != null) total = metas.totalItems;
     if (i === 0 && metas.length === 0 && skip === 0) return metas; // keep the caller's empty-row handling
-    const before = titles.length;
     for (const m of metas) {
       if (m && !seen.has(m.id)) { seen.add(m.id); titles.push(m); }
     }
-    if (i > 0 && titles.length === before) break; // a page with nothing new: stop rather than read on
     // The end of the list: nothing came back, Trakt sent a short page, or the total is reached.
-    if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (total != null && (i + 1) * PAGE_SIZE >= total)) break;
+    if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (total != null && (i + 1) * PAGE_SIZE >= total)) { reachedEnd = true; break; }
   }
+  // The pages read did not get as far as `skip` and the list goes on: never answer empty.
+  if (!reachedEnd && titles.length <= skip) return loadPage(Math.floor(skip / PAGE_SIZE) * PAGE_SIZE);
   const out = titles.slice(skip, skip + PAGE_SIZE);
   if (total != null) out.totalItems = total;
   return out;
