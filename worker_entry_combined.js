@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b915eb949e";
+const WORKER_BUILD = "8b6f6ec5a7";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -113462,6 +113462,8 @@ async function refreshTraktPositions(env, accountId) {
 // because it reads the ids and flags parsed above.
 
 const SCROBBLE_MAX_BODY_BYTES = 8 * 1024 * 1024;
+// Events that are not a play but say where the person stopped: a pause, or a stop before the end.
+const MEDIA_SERVER_POSITION_EVENTS = new Set(["media.pause", "media.stop", "playbackstop", "playback.stop"]);
 const SCROBBLE_BAD_TOKEN_MAX = 30;
 const SCROBBLE_BAD_TOKEN_WINDOW_SEC = 600;
 
@@ -113545,8 +113547,8 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   }
 
   if (!isPlayed) {
-    // A pause is not a play, but it says where the person stopped.
-    if (eventType === "media.pause") await recordPausedPosition(env, authUser, payload, { server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey });
+    // A pause or an early stop is not a play, but it says where the person stopped.
+    if (MEDIA_SERVER_POSITION_EVENTS.has(eventType)) await recordPausedPosition(env, authUser, payload, { server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey });
     return json({ ok: true, ignored: `Event '${eventType}' is not a scrobble/play event.` });
   }
 
@@ -113711,7 +113713,8 @@ function detectMediaServerPayload(payload) {
   if (payload.Metadata || payload.event) {
     server = "Plex";
     eventType = String(payload.event || "").toLowerCase();
-    isPlayed = eventType === "media.scrobble" || eventType === "media.play" || eventType === "media.stop" || eventType === "media.resume";
+    // A play counts only when finished (Plex sends media.scrobble at about 90%); play, resume and stop do not.
+    isPlayed = eventType === "media.scrobble";
 
     let pUser = (payload.Account && (payload.Account.title || payload.Account.name || payload.Account.id)) ||
                 (payload.User && (payload.User.title || payload.User.name || payload.User.Name)) ||
@@ -113772,7 +113775,8 @@ function detectMediaServerPayload(payload) {
   else if (payload.NotificationType || payload.ItemType || payload.ServerId) {
     server = "Jellyfin";
     eventType = String(payload.NotificationType || payload.Event || "").toLowerCase();
-    isPlayed = eventType.includes("playback") || eventType.includes("userdata") || eventType.includes("scrobble") || payload.Played === true;
+    // Finished only: a stop that played to completion, or "mark as played" (UserDataSaved with Played).
+    isPlayed = (eventType === "playbackstop" && payload.PlayedToCompletion === true) || (eventType === "userdatasaved" && payload.Played === true) || eventType.includes("scrobble");
 
     let jUser = payload.NotificationUsername || payload.UserName || payload.Username || (payload.User && (payload.User.Name || payload.User.name)) || payload.user || "";
     if (typeof jUser !== "string" && typeof jUser !== "number") jUser = "";
@@ -113796,7 +113800,8 @@ function detectMediaServerPayload(payload) {
   else if (payload.Item || (payload.Event && String(payload.Event).startsWith("playback."))) {
     server = "Emby";
     eventType = String(payload.Event || "").toLowerCase();
-    isPlayed = eventType.includes("scrobble") || eventType.includes("playback.start") || eventType.includes("playback.stop") || eventType.includes("markplayed");
+    // Finished only: a stop that played to completion, or "mark as played".
+    isPlayed = eventType.includes("scrobble") || eventType.includes("markplayed") || (eventType === "playback.stop" && !!payload.PlaybackInfo && payload.PlaybackInfo.PlayedToCompletion === true);
 
     let eUser = (payload.User && (payload.User.Name || payload.User.name || payload.User.Id || payload.User.id)) || payload.UserName || payload.Username || payload.user || "";
     if (typeof eUser !== "string" && typeof eUser !== "number") eUser = "";
