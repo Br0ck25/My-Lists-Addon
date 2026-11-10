@@ -391,9 +391,8 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "This account's saved data is too large to store (over the 25MB limit)." });
   }
-  if (env.DB) {
-    await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
-  }
+  // A failed D1 write is told to the client (it retries), not answered ok.
+  if (env.DB && !(await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections))) return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
   try {
     await env.CONFIGS.put(`creatorsync:${auth.username}`, serialized);
   } catch (e) {

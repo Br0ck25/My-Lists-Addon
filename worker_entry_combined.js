@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "78ae1edb6c";
+const WORKER_BUILD = "5246f862d2";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -10757,43 +10757,27 @@ async function readCreatorTrackingD1(env, username) {
   }
 }
 
+// Inserts first (ignoring what is there), stale rows deleted last: a failure
+// part-way leaves extra ids, never a truncated list (audit DB-02). Returns
+// true only when every statement ran.
 async function saveCreatorUserListsD1(env, username, likedLists, hiddenLists, hiddenSections) {
   if (!env || !env.DB || !username) return false;
   try {
-    const stmts = [
-      env.DB.prepare("DELETE FROM creator_user_lists WHERE username = ?").bind(username),
-    ];
     const now = Date.now();
-    if (Array.isArray(likedLists)) {
-      for (const id of likedLists) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'liked', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
-    if (Array.isArray(hiddenLists)) {
-      for (const id of hiddenLists) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'hidden', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
-    if (Array.isArray(hiddenSections)) {
-      for (const id of hiddenSections) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'hidden_section', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
+    const wanted = new Map();
+    const collect = (type, list) => {
+      if (!Array.isArray(list)) return;
+      for (const id of list) if (typeof id === "string" && id) wanted.set(`${type}\u0000${id}`, [id, type]);
+    };
+    collect("liked", likedLists);
+    collect("hidden", hiddenLists);
+    collect("hidden_section", hiddenSections);
+    const insertSql = "INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, ?, ?)";
+    const inserts = [...wanted.values()].map(([id, type]) => env.DB.prepare(insertSql).bind(username, id, type, now));
+    const { results } = await env.DB.prepare("SELECT list_id, list_type FROM creator_user_lists WHERE username = ?").bind(username).all();
+    const stale = (results || []).filter((r) => !wanted.has(`${r.list_type}\u0000${r.list_id}`));
+    const removals = stale.map((r) => env.DB.prepare("DELETE FROM creator_user_lists WHERE username = ? AND list_id = ? AND list_type = ?").bind(username, r.list_id, r.list_type));
+    const stmts = inserts.concat(removals);
     const CHUNK_SIZE = 80;
     for (let i = 0; i < stmts.length; i += CHUNK_SIZE) {
       await env.DB.batch(stmts.slice(i, i + CHUNK_SIZE));
@@ -118049,9 +118033,8 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "This account's saved data is too large to store (over the 25MB limit)." });
   }
-  if (env.DB) {
-    await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
-  }
+  // A failed D1 write is told to the client (it retries), not answered ok.
+  if (env.DB && !(await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections))) return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
   try {
     await env.CONFIGS.put(`creatorsync:${auth.username}`, serialized);
   } catch (e) {
