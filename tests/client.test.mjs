@@ -5104,7 +5104,13 @@ describe("client: a not-yet-aired episode is not something anyone watched", () =
 // directions -- the show's own page, a Continue Watching entry built from
 // /api/season, an Airing Next tile restored from local storage.
 describe("client: air times", () => {
-  const dayOffset = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  // The page decides "today" in the viewer's own time zone, so the dates here are local too
+  // (UTC dates made this fail in Tokyo, or after 17:00 UTC in Berlin: audit TEST-05).
+  const dayOffset = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
 
   const DETAILS = {
     id: "tt_air", tmdbId: "777", title: "Air Show", overview: "x", poster: "", seasons: 3,
