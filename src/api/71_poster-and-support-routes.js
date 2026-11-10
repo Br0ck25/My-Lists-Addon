@@ -132,6 +132,38 @@ async function apiSiteNotice(env) {
   }, 200, { "Cache-Control": "public, max-age=60" });
 }
 
+// The request body as text, read only up to `maxBytes`. A size check on the
+// Content-Length header trusts the sender (a chunked request has none), so
+// this counts what actually arrives and stops reading at the first byte past
+// the cap. Returns { text, tooLarge }; text is "" when tooLarge.
+async function readRequestTextCapped(request, maxBytes) {
+  if (!request.body) return { text: "", tooLarge: false };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return { text: "", tooLarge: true };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  return { text: new TextDecoder().decode(bytes), tooLarge: false };
+}
+
 // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
 // payment to the support strip's total. Ko-fi posts form data whose `data`
 // field is a JSON string; the verification token inside it has to match the
@@ -151,9 +183,11 @@ async function apiKofiWebhook(request, env, ctx) {
   }
   let data = null;
   try {
-    // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
-    // (and multipart) alike.
-    const raw = (await request.formData()).get("data");
+    // Ko-fi posts application/x-www-form-urlencoded. Read at most the cap
+    // (the Content-Length above is only the sender's word), then parse it.
+    const body = await readRequestTextCapped(request, KOFI_WEBHOOK_BODY_MAX);
+    if (body.tooLarge) return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+    const raw = new URLSearchParams(body.text).get("data");
     if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
     data = JSON.parse(raw);
   } catch {

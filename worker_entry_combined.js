@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b3f404dfab";
+const WORKER_BUILD = "6d2a02eae5";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -4165,11 +4165,11 @@ async function handleCspReport(request, env, ctx) {
   if (declared > CSP_REPORT_MAX_BYTES) return done();
   let raw = "";
   try {
-    raw = await request.text();
+    raw = (await readRequestTextCapped(request, CSP_REPORT_MAX_BYTES)).text; // "" when over the cap
   } catch {
     return done();
   }
-  if (!raw || raw.length > CSP_REPORT_MAX_BYTES) return done();
+  if (!raw) return done();
 
   const reports = parseCspReport(raw);
   for (const report of reports) {
@@ -103896,7 +103896,9 @@ function eventTrackingUnboundEnv(env) {
 // the last good copy is served straight away. When the time is up the next
 // call is let through; one success closes it, one more failure opens it again.
 //
-//   A failure is: no answer (a network error or a timeout), a 5xx, or a 429.
+//   A failure is: no answer (a network error or a timeout), a 5xx, or a 429
+//   (except from MDBList, Trakt and Simkl, whose limits are per key: see
+//   PROVIDER_PER_KEY_LIMIT).
 //   A 401, 403 or 404 is an answer about that request (a wrong key, a title
 //   that does not exist), not about the provider, so it closes the count.
 //
@@ -104002,7 +104004,13 @@ function providerUnavailableError(provider) {
   return err;
 }
 
-function isProviderFailureStatus(status) {
+// These providers limit per API key or user token, so a 429 from them is
+// about that one caller (like a 401/403), not about the provider being down.
+// Counting it would let one person's spent key refuse the provider for all.
+const PROVIDER_PER_KEY_LIMIT = new Set(["mdblist", "trakt", "simkl"]);
+
+function isProviderFailureStatus(status, provider) {
+  if (status === 429 && PROVIDER_PER_KEY_LIMIT.has(provider)) return false;
   return !status || status >= 500 || status === 429;
 }
 
@@ -104011,7 +104019,7 @@ function providerBreakerRecord(provider, status, latencyMs) {
   const now = Date.now();
   st.calls++;
   st.latencyMs += Math.max(0, latencyMs || 0);
-  if (!isProviderFailureStatus(status)) {
+  if (!isProviderFailureStatus(status, provider)) {
     st.failures = 0;
     return;
   }
@@ -109993,12 +110001,24 @@ async function mediaAppLibraryItems(env, accountId, provider) {
   return rows.filter((r) => !r.temp && mediaAppTitleId(r._id) && mediaAppKind(r.type)).map((r) => ({ id: r._id, type: mediaAppKind(r.type), name: r.name || "", poster: r.poster || (String(r._id).startsWith("tt") ? `https://images.metahub.space/poster/medium/${r._id}/img` : "") }));
 }
 
+function cinemetaUnreachableError() {
+  const e = mediaAppError("unreachable", "Cinemeta (Stremio's episode list) is not answering. It will try again.");
+  e.cinemeta = true;
+  return e;
+}
+
 // A show's episodes in the order Stremio numbers them: by season, with
-// specials (season 0) last. null when Cinemeta cannot say.
-async function stremioEpisodes(imdbId) {
+// specials (season 0) last. null when Cinemeta cannot say. With `strict`, a
+// Cinemeta that failed (no answer, a 5xx or 429) throws an "unreachable"
+// error instead, so the caller can try again later; a show Cinemeta does not
+// list (404) is still null.
+async function stremioEpisodes(imdbId, strict = false) {
   try {
     const res = await mediaAppFetch(`${CINEMETA_URL}/meta/series/${encodeURIComponent(imdbId)}.json`);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (strict && (res.status >= 500 || res.status === 429)) throw cinemetaUnreachableError();
+      return null;
+    }
     const data = await res.json().catch(() => null);
     const videos = data && data.meta && Array.isArray(data.meta.videos) ? data.meta.videos : [];
     const eps = [];
@@ -110010,7 +110030,8 @@ async function stremioEpisodes(imdbId) {
     }
     eps.sort((a, b) => ((a.season === 0) - (b.season === 0)) || a.season - b.season || a.episode - b.episode);
     return eps.length ? eps : null;
-  } catch {
+  } catch (e) {
+    if (strict && e && e.kind === "unreachable") throw e.cinemeta ? e : cinemetaUnreachableError();
     return null;
   }
 }
@@ -110517,17 +110538,21 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
     const slice = changed.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS);
     let cinemeta = MEDIA_APP_CINEMETA_PER_STEP;
     const records = [];
+    let consumed = 0;
     for (const item of slice) {
       let episodes = null;
       const hasBits = mediaAppKind(item.type) === "series" && item.state && item.state.watched;
-      if (hasBits && cinemeta > 0) {
+      if (hasBits) {
+        // Out of Cinemeta reads for this step: stop here, so the next step starts with this show.
+        if (cinemeta <= 0) break;
         cinemeta--;
-        episodes = await stremioEpisodes(String(item._id));
+        episodes = await stremioEpisodes(String(item._id), true);
       }
       const rec = await stremioItemRecord(item, episodes);
       if (rec) records.push(rec);
+      consumed++;
     }
-    return { records, total: changed.length, libraryTotal: library.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
+    return { records, consumed, total: changed.length, libraryTotal: library.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
   }
   const read = await nuvioReadProfile(env, conn.accessToken, sync.profile_index, step);
   const delta = read.mode === "delta";
@@ -110595,7 +110620,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     if (fetched.pendingDelta) cursor.pendingDelta = fetched.pendingDelta;
     else delete cursor.pendingDelta;
   }
-  const next = offset + MEDIA_APP_STEP_ITEMS;
+  const next = offset + (fetched.consumed || MEDIA_APP_STEP_ITEMS);
   if (next < fetched.total) {
     if (fetched.snapshotResumes || fetched.pendingDelta || (applied.resumeChanges && applied.resumeChanges.length)) {
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();
@@ -112503,7 +112528,7 @@ function stremioStatusError(status) {
 // What to show on the settings card for a failed read of this app, or null to show nothing.
 async function mediaAppFailureMessage(env, provider, e) {
   if (provider === "nuvio") return nuvioFailureMessage(env, e);
-  return e && e.stremioStatus ? e.message : null;
+  return e && (e.stremioStatus || e.cinemeta) ? e.message : null;
 }
 // Creator Key and session check behind every authenticated creator route (moved out of handleFetch, CQ-01)
 
@@ -113437,6 +113462,8 @@ async function refreshTraktPositions(env, accountId) {
 // because it reads the ids and flags parsed above.
 
 const SCROBBLE_MAX_BODY_BYTES = 8 * 1024 * 1024;
+// Events that are not a play but say where the person stopped: a pause, or a stop before the end.
+const MEDIA_SERVER_POSITION_EVENTS = new Set(["media.pause", "media.stop", "playbackstop", "playback.stop"]);
 const SCROBBLE_BAD_TOKEN_MAX = 30;
 const SCROBBLE_BAD_TOKEN_WINDOW_SEC = 600;
 
@@ -113520,8 +113547,8 @@ async function handleMediaServerScrobbleFor(request, url, env, ctx) {
   }
 
   if (!isPlayed) {
-    // A pause is not a play, but it says where the person stopped.
-    if (eventType === "media.pause") await recordPausedPosition(env, authUser, payload, { server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey });
+    // A pause or an early stop is not a play, but it says where the person stopped.
+    if (MEDIA_SERVER_POSITION_EVENTS.has(eventType)) await recordPausedPosition(env, authUser, payload, { server, mediaType, title, showTitle, season, episode, imdbId, tmdbId, plexShowTvdbId, plexEpisodeImdbId, plexEpisodeTvdbId, effectiveTmdbKey });
     return json({ ok: true, ignored: `Event '${eventType}' is not a scrobble/play event.` });
   }
 
@@ -113686,7 +113713,8 @@ function detectMediaServerPayload(payload) {
   if (payload.Metadata || payload.event) {
     server = "Plex";
     eventType = String(payload.event || "").toLowerCase();
-    isPlayed = eventType === "media.scrobble" || eventType === "media.play" || eventType === "media.stop" || eventType === "media.resume";
+    // A play counts only when finished (Plex sends media.scrobble at about 90%); play, resume and stop do not.
+    isPlayed = eventType === "media.scrobble";
 
     let pUser = (payload.Account && (payload.Account.title || payload.Account.name || payload.Account.id)) ||
                 (payload.User && (payload.User.title || payload.User.name || payload.User.Name)) ||
@@ -113747,7 +113775,8 @@ function detectMediaServerPayload(payload) {
   else if (payload.NotificationType || payload.ItemType || payload.ServerId) {
     server = "Jellyfin";
     eventType = String(payload.NotificationType || payload.Event || "").toLowerCase();
-    isPlayed = eventType.includes("playback") || eventType.includes("userdata") || eventType.includes("scrobble") || payload.Played === true;
+    // Finished only: a stop that played to completion, or "mark as played" (UserDataSaved with Played).
+    isPlayed = (eventType === "playbackstop" && payload.PlayedToCompletion === true) || (eventType === "userdatasaved" && payload.Played === true) || eventType.includes("scrobble");
 
     let jUser = payload.NotificationUsername || payload.UserName || payload.Username || (payload.User && (payload.User.Name || payload.User.name)) || payload.user || "";
     if (typeof jUser !== "string" && typeof jUser !== "number") jUser = "";
@@ -113771,7 +113800,8 @@ function detectMediaServerPayload(payload) {
   else if (payload.Item || (payload.Event && String(payload.Event).startsWith("playback."))) {
     server = "Emby";
     eventType = String(payload.Event || "").toLowerCase();
-    isPlayed = eventType.includes("scrobble") || eventType.includes("playback.start") || eventType.includes("playback.stop") || eventType.includes("markplayed");
+    // Finished only: a stop that played to completion, or "mark as played".
+    isPlayed = eventType.includes("scrobble") || eventType.includes("markplayed") || (eventType === "playback.stop" && !!payload.PlaybackInfo && payload.PlaybackInfo.PlayedToCompletion === true);
 
     let eUser = (payload.User && (payload.User.Name || payload.User.name || payload.User.Id || payload.User.id)) || payload.UserName || payload.Username || payload.user || "";
     if (typeof eUser !== "string" && typeof eUser !== "number") eUser = "";
@@ -120105,7 +120135,7 @@ async function stremioMetaItem(env, ctx, url, m) {
       });
       return jsonPublic({ meta: meta || null });
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) });
+      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -120117,7 +120147,7 @@ async function stremioMetaItem(env, ctx, url, m) {
       if (metaConfig.provideMetadata === false) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
       const effectiveKey = metaConfig.tmdbKey || TMDB_API_KEY;
       let meta = await fetchStandardItemMeta(id, metaType, effectiveKey, env, ctx);
-      if (!meta) return jsonPublic({ meta: null });
+      if (!meta) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
       // Same opt-in artwork the catalog rows get, so a title's detail
       // page does not fall back to the plain poster the moment it is
       // opened. Only the poster is touched -- background, logo, cast and
@@ -120133,7 +120163,7 @@ async function stremioMetaItem(env, ctx, url, m) {
         { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
       );
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) });
+      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -120443,6 +120473,38 @@ async function apiSiteNotice(env) {
   }, 200, { "Cache-Control": "public, max-age=60" });
 }
 
+// The request body as text, read only up to `maxBytes`. A size check on the
+// Content-Length header trusts the sender (a chunked request has none), so
+// this counts what actually arrives and stops reading at the first byte past
+// the cap. Returns { text, tooLarge }; text is "" when tooLarge.
+async function readRequestTextCapped(request, maxBytes) {
+  if (!request.body) return { text: "", tooLarge: false };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return { text: "", tooLarge: true };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  return { text: new TextDecoder().decode(bytes), tooLarge: false };
+}
+
 // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
 // payment to the support strip's total. Ko-fi posts form data whose `data`
 // field is a JSON string; the verification token inside it has to match the
@@ -120462,9 +120524,11 @@ async function apiKofiWebhook(request, env, ctx) {
   }
   let data = null;
   try {
-    // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
-    // (and multipart) alike.
-    const raw = (await request.formData()).get("data");
+    // Ko-fi posts application/x-www-form-urlencoded. Read at most the cap
+    // (the Content-Length above is only the sender's word), then parse it.
+    const body = await readRequestTextCapped(request, KOFI_WEBHOOK_BODY_MAX);
+    if (body.tooLarge) return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+    const raw = new URLSearchParams(body.text).get("data");
     if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
     data = JSON.parse(raw);
   } catch {

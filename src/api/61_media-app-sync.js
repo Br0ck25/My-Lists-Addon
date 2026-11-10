@@ -238,12 +238,24 @@ async function mediaAppLibraryItems(env, accountId, provider) {
   return rows.filter((r) => !r.temp && mediaAppTitleId(r._id) && mediaAppKind(r.type)).map((r) => ({ id: r._id, type: mediaAppKind(r.type), name: r.name || "", poster: r.poster || (String(r._id).startsWith("tt") ? `https://images.metahub.space/poster/medium/${r._id}/img` : "") }));
 }
 
+function cinemetaUnreachableError() {
+  const e = mediaAppError("unreachable", "Cinemeta (Stremio's episode list) is not answering. It will try again.");
+  e.cinemeta = true;
+  return e;
+}
+
 // A show's episodes in the order Stremio numbers them: by season, with
-// specials (season 0) last. null when Cinemeta cannot say.
-async function stremioEpisodes(imdbId) {
+// specials (season 0) last. null when Cinemeta cannot say. With `strict`, a
+// Cinemeta that failed (no answer, a 5xx or 429) throws an "unreachable"
+// error instead, so the caller can try again later; a show Cinemeta does not
+// list (404) is still null.
+async function stremioEpisodes(imdbId, strict = false) {
   try {
     const res = await mediaAppFetch(`${CINEMETA_URL}/meta/series/${encodeURIComponent(imdbId)}.json`);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (strict && (res.status >= 500 || res.status === 429)) throw cinemetaUnreachableError();
+      return null;
+    }
     const data = await res.json().catch(() => null);
     const videos = data && data.meta && Array.isArray(data.meta.videos) ? data.meta.videos : [];
     const eps = [];
@@ -255,7 +267,8 @@ async function stremioEpisodes(imdbId) {
     }
     eps.sort((a, b) => ((a.season === 0) - (b.season === 0)) || a.season - b.season || a.episode - b.episode);
     return eps.length ? eps : null;
-  } catch {
+  } catch (e) {
+    if (strict && e && e.kind === "unreachable") throw e.cinemeta ? e : cinemetaUnreachableError();
     return null;
   }
 }
@@ -762,17 +775,21 @@ async function mediaAppFetchRecords(env, accountId, provider, conn, sync, step) 
     const slice = changed.slice(step.offset, step.offset + MEDIA_APP_STEP_ITEMS);
     let cinemeta = MEDIA_APP_CINEMETA_PER_STEP;
     const records = [];
+    let consumed = 0;
     for (const item of slice) {
       let episodes = null;
       const hasBits = mediaAppKind(item.type) === "series" && item.state && item.state.watched;
-      if (hasBits && cinemeta > 0) {
+      if (hasBits) {
+        // Out of Cinemeta reads for this step: stop here, so the next step starts with this show.
+        if (cinemeta <= 0) break;
         cinemeta--;
-        episodes = await stremioEpisodes(String(item._id));
+        episodes = await stremioEpisodes(String(item._id), true);
       }
       const rec = await stremioItemRecord(item, episodes);
       if (rec) records.push(rec);
+      consumed++;
     }
-    return { records, total: changed.length, libraryTotal: library.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
+    return { records, consumed, total: changed.length, libraryTotal: library.length, newest: library.length ? mediaAppTime(library[0]._mtime) : 0 };
   }
   const read = await nuvioReadProfile(env, conn.accessToken, sync.profile_index, step);
   const delta = read.mode === "delta";
@@ -840,7 +857,7 @@ async function pullMediaAppStep(env, accountId, provider, offset, cursorSince) {
     if (fetched.pendingDelta) cursor.pendingDelta = fetched.pendingDelta;
     else delete cursor.pendingDelta;
   }
-  const next = offset + MEDIA_APP_STEP_ITEMS;
+  const next = offset + (fetched.consumed || MEDIA_APP_STEP_ITEMS);
   if (next < fetched.total) {
     if (fetched.snapshotResumes || fetched.pendingDelta || (applied.resumeChanges && applied.resumeChanges.length)) {
       await env.DB.prepare("UPDATE media_app_sync SET cursor_json = ? WHERE account_id = ? AND provider = ?").bind(JSON.stringify(cursor), accountId, provider).run();

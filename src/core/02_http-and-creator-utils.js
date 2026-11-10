@@ -291,11 +291,11 @@ async function handleCspReport(request, env, ctx) {
   if (declared > CSP_REPORT_MAX_BYTES) return done();
   let raw = "";
   try {
-    raw = await request.text();
+    raw = (await readRequestTextCapped(request, CSP_REPORT_MAX_BYTES)).text; // "" when over the cap
   } catch {
     return done();
   }
-  if (!raw || raw.length > CSP_REPORT_MAX_BYTES) return done();
+  if (!raw) return done();
 
   const reports = parseCspReport(raw);
   for (const report of reports) {

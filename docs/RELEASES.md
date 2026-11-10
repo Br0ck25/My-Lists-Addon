@@ -2668,3 +2668,17 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 
 ### Checked
 `bash verify.sh -q` passes. New tests: 3 in `nuvio-tv-tv-settings` (settings kept with TV-only lists, off stays off, mirrored lineup unchanged) and 2 in `nuvio-tv-schedule` (batch equals one-by-one, one tag and a 304, capped and needs channels). The cap and the poster test were shown red by removing the cap and reverting the fix.
+
+## 2026-11-10 — API audit fixes: provider breaker, Stremio pull, media server plays, meta caching, body caps (build `2b4d554b56`, prepared; not deployed)
+
+- **Fixed (API-05): one person's spent MDBList, Trakt or Simkl key no longer switches that provider off for everyone.** A 429 from those providers is that caller's answer (their limits are per key), so it no longer counts toward the provider breaker. 5xx answers and timeouts still open it. A 429 on a personal TMDB key still counts, because the fetch guard cannot tell it from the shared key.
+- **Fixed (API-04): a Stremio pull no longer skips shows.** A step that ran out of Cinemeta reads used to import the remaining shows as having nothing watched and move the "changed since" mark past them. The step now stops at that show and the next step starts with it. When Cinemeta itself fails (5xx, 429, timeout) the pull fails with a message on the settings page, the job retries, and the mark does not move. A show Cinemeta does not list (404) is still read as having no episodes.
+- **Fixed (API-01): a Plex, Jellyfin or Emby viewing is one play, counted when it is finished** (owner decision). Only Plex `media.scrobble`, Jellyfin `PlaybackStop` with `PlayedToCompletion` (or `UserDataSaved` with `Played`) and Emby `playback.stop` with `PlayedToCompletion` (or mark-played) count. Play, resume, start and an early stop no longer do; an early stop still saves where the person stopped. Most Watched totals will drop, because they were inflated.
+- **Fixed (API-03): a title page that failed to load is answered `no-store`**, so an app that honours Cache-Control does not keep the empty page for an hour.
+- **Fixed (API-02): the Ko-fi webhook and the CSP report sink cap the body by what they read**, not by the Content-Length header. The Ko-fi webhook now reads its form as urlencoded only (what Ko-fi sends), no longer as multipart.
+
+### Owner steps
+1. Paste the new Worker. Nothing else.
+
+### Checked
+`bash verify.sh -q` passes (API-02's first commit broke the file-size budget for `02_`; fixed by moving the body reader to `71_`). Each fix has a test that failed first for the reason in the audit: `tests/providers.test.mjs` (API-05), `tests/media-app-sync.test.mjs` (API-04, 2 tests), `tests/media-server-plays.test.mjs` (API-01, 4 tests), `tests/metadata-off.test.mjs` (API-03), `tests/body-cap.test.mjs` (API-02, 2 tests).
