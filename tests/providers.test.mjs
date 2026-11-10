@@ -536,6 +536,22 @@ describe("P4-4: the provider breaker", () => {
     }
   });
 
+  it("API-05: a 429 from a per-key provider is that caller's answer, not an outage", () => {
+    // MDBList, Trakt and Simkl limits are per API key / token, so one person's
+    // exhausted key must not refuse the provider for everyone.
+    const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/04_config-resolution.js", "src/catalog/41_provider-breaker.js");
+    for (const provider of ["mdblist", "trakt", "simkl"]) {
+      for (let i = 0; i < 8; i++) sb.providerBreakerRecord(provider, 429, 5);
+      assert.equal(sb.providerBreakerIsOpen(provider), false, provider + " stays closed on 429s");
+    }
+    // The site's own key is shared, so a 429 there is about everyone: it still counts.
+    for (let i = 0; i < 5; i++) sb.providerBreakerRecord("cinemeta", 429, 5);
+    assert.equal(sb.providerBreakerIsOpen("cinemeta"), true, "a shared-key provider still opens on 429s");
+    // A 5xx still opens a per-key provider.
+    for (let i = 0; i < 5; i++) sb.providerBreakerRecord("mdblist", 503, 5);
+    assert.equal(sb.providerBreakerIsOpen("mdblist"), true, "five 5xx answers still open it");
+  });
+
   it("is off without FF_PROVIDER_BREAKER: every request still calls the provider", async () => {
     try {
       const tmdb = makeFakeTmdb({ status: 503 });

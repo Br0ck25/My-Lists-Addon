@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "b3f404dfab";
+const WORKER_BUILD = "d29756de2e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -103896,7 +103896,9 @@ function eventTrackingUnboundEnv(env) {
 // the last good copy is served straight away. When the time is up the next
 // call is let through; one success closes it, one more failure opens it again.
 //
-//   A failure is: no answer (a network error or a timeout), a 5xx, or a 429.
+//   A failure is: no answer (a network error or a timeout), a 5xx, or a 429
+//   (except from MDBList, Trakt and Simkl, whose limits are per key: see
+//   PROVIDER_PER_KEY_LIMIT).
 //   A 401, 403 or 404 is an answer about that request (a wrong key, a title
 //   that does not exist), not about the provider, so it closes the count.
 //
@@ -104002,7 +104004,13 @@ function providerUnavailableError(provider) {
   return err;
 }
 
-function isProviderFailureStatus(status) {
+// These providers limit per API key or user token, so a 429 from them is
+// about that one caller (like a 401/403), not about the provider being down.
+// Counting it would let one person's spent key refuse the provider for all.
+const PROVIDER_PER_KEY_LIMIT = new Set(["mdblist", "trakt", "simkl"]);
+
+function isProviderFailureStatus(status, provider) {
+  if (status === 429 && PROVIDER_PER_KEY_LIMIT.has(provider)) return false;
   return !status || status >= 500 || status === 429;
 }
 
@@ -104011,7 +104019,7 @@ function providerBreakerRecord(provider, status, latencyMs) {
   const now = Date.now();
   st.calls++;
   st.latencyMs += Math.max(0, latencyMs || 0);
-  if (!isProviderFailureStatus(status)) {
+  if (!isProviderFailureStatus(status, provider)) {
     st.failures = 0;
     return;
   }
