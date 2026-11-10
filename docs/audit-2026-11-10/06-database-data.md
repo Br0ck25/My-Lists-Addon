@@ -13,7 +13,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | DB-01 | verified fixed | a1ecc1f | node --test tests/account-purge.test.mjs | 2026-11-10, independent review |
-| DB-02 | verified fixed | e5110e0 | node --test tests/creator-user-lists-save.test.mjs | 2026-11-10, independent review |
+| DB-02 | regression introduced (see Verification) | e5110e0 | node --test tests/creator-user-lists-save.test.mjs | 2026-11-10, independent review |
 | DB-03 | verified fixed | 35f1c3f | node --test tests/accounts-key-hash-index.test.mjs. Live: apply migrations/0026_accounts_key_hash_index.sql. | 2026-11-10, independent review |
 | DB-04 | open |  |  |  |
 | DB-05 | open |  |  |  |
@@ -57,6 +57,8 @@ sync/load returns likedLists: 79
 - Recommended fix and effort: do not delete first. Insert-or-ignore the incoming ids, then delete only the ids no longer present (the pattern `d1ReplaceRowsById` already uses for tracking rows, 02_http-and-creator-utils.js around line 6120), and check the return value (report an error or set a "D1 behind" marker). M.
 
 **Verification.** 2026-11-10, independent review: **verified fixed**. Read e5110e0. The new test fails against the parent commit (1 pass, 1 fail). The save is now insert-or-ignore first and stale rows are deleted last, so a failed later batch leaves extra ids, never a short list. A failed write answers `ok:false`. Behaviour change worth knowing: when D1 cannot be written (or read: the new SELECT runs first), the whole sync save now answers 500 and the KV copy (config included) is not written. Before, the config still reached KV. The client is told and can retry; this is what the finding suggested (`report an error`).
+
+**Verification (second independent review, 2026-11-10): regression introduced.** I agree that the truncation is fixed, but not that "the client is told and can retry". `pushCreatorSync` (src/client/22_client-creator-profile.js:2547-2593) only looks at a 409. On an `ok:false` 500 it does nothing: no message, no retry. The edit goes up again only with the person's next edit. Probe through the real Worker, failing only the `creator_user_lists` statements: a save that adds a row answers 500, and `creatorsync:<user>` in KV still holds the old rows. With the parent commit, the same save answered 200 and KV held the new row. So during a fault in that one side table, a row someone adds never reaches their Stremio/Nuvio/Wako install link, and the page does not say so. Needed: write the KV record even when the liked-lists D1 copy fails (that copy can no longer be shorter, only have extra ids) and report the D1 failure separately; or make the client show the failure and retry. Status changed to `regression introduced`.
 
 ### DB-03 Every Stremio/Nuvio manifest request scans the whole `accounts` table
 - Severity: Medium (cost and latency that grow with the number of accounts; nothing breaks at today's size)

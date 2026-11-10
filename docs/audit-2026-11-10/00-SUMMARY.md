@@ -185,7 +185,7 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | TEST-06 | verified fixed | acba574 | 2026-11-10, independent review |
 | TEST-07 | verified fixed | 8a27e51 | 2026-11-10, independent review |
 | DB-01 | verified fixed | a1ecc1f | 2026-11-10, independent review |
-| DB-02 | verified fixed | e5110e0 | 2026-11-10, independent review |
+| DB-02 | regression introduced (see Verification) | e5110e0 | 2026-11-10, independent review |
 | DB-03 | verified fixed | 35f1c3f | 2026-11-10, independent review |
 | UI-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | API-01 | verified fixed | 5b60aa2 | 2026-11-10, independent review |
@@ -203,4 +203,4 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | PROD-03 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | PROD-04 | verified fixed | ae33b9f | 2026-11-10, independent review |
 
-Independent review, 2026-11-10: of the 30 rows above, 24 are verified fixed. 3 are partially fixed and back to open (SEC-04, TEST-04, OPS-04), and 3 fixes introduced a regression (PERF-03, API-04, PROD-02). Each report's **Verification.** note under the finding says what is still wrong. The other 37 findings were not touched and are still open (SEC-03, SEC-05 and SEC-06 among them).
+Independent review, 2026-11-10: of the 30 rows above, 23 are verified fixed. 3 are partially fixed and back to open (SEC-04, TEST-04, OPS-04), and 4 fixes introduced a regression (PERF-03, API-04, PROD-02, and DB-02 after a second review). Each report's **Verification.** note under the finding says what is still wrong. The other 37 findings were not touched and are still open (SEC-03, SEC-05 and SEC-06 among them).
