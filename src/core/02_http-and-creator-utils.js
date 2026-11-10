@@ -4889,7 +4889,7 @@ async function purgeCreatorData(env, username, options = {}) {
   // other leftover: the name is not freed.
   if (deleteIdentity || options.detachSupportThreads === true) {
     try {
-      await detachFeedbackThreadsFromCreator(env, u);
+      await (deleteIdentity ? deleteFeedbackThreadsFromCreator(env, u) : detachFeedbackThreadsFromCreator(env, u));
     } catch (e) {
       console.error("purgeCreatorData: could not detach the support threads", e);
       dataSweepFailed = true;

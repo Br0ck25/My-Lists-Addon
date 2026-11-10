@@ -193,7 +193,9 @@ describe("support threads of a deleted account", () => {
   const deleteAccount = (env, who) =>
     call(env, "/api/creator/delete-account", { method: "POST", json: { creatorName: who.creatorName, creatorKey: who.creatorKey, confirm: "DELETE" } });
 
-  it("are not shown to whoever registers the name next, but are kept", async () => {
+  // Owner decision 2026-11-10 (audit SEC-04): deleting an account deletes its
+  // support threads. They used to be kept, detached from the name.
+  it("are deleted with the account, so the next holder of the name sees nothing; another account's stay", async () => {
     const env = newEnv();
     const alice = await createUser(env, "reuseme");
     const bob = await createUser(env, "keepbob");
@@ -205,11 +207,11 @@ describe("support threads of a deleted account", () => {
     const stranger = await createUser(env, "reuseme");
     assert.deepEqual((await mine(env, stranger)).body.threads, [], "the new holder of the name sees nothing");
 
-    assert.deepEqual(await stored(env, t.id), { d1: true, kv: true }, "the conversation is kept");
+    assert.deepEqual(await stored(env, t.id), { d1: false, kv: false }, "the conversation is deleted");
     const byId = await call(env, "/api/feedback/threads", { method: "POST", json: { threadIds: [t.id] } });
-    assert.equal(byId.body.threads[0].message, "my private problem", "still readable with its id");
-    assert.equal(byId.body.threads[0].creatorName, null);
+    assert.deepEqual(byId.body.threads || [], [], "not readable with its id either");
     assert.deepEqual((await mine(env, bob)).body.threads.map((x) => x.id), [other.id], "another account's thread keeps its owner");
+    assert.deepEqual(await stored(env, other.id), { d1: true, kv: true });
   });
 
   it("are detached when the name is registered again, even if the account was deleted long ago", async () => {
@@ -224,12 +226,12 @@ describe("support threads of a deleted account", () => {
     assert.deepEqual(await stored(env, entry.id), { d1: true, kv: true });
   });
 
-  it("a deletion that cannot detach them does not free the name", async () => {
+  it("a deletion that cannot delete them does not free the name", async () => {
     const DB = makeD1();
     const env = makeEnv({ DB, CONFIGS: makeKv() });
     const alice = await createUser(env, "stuckname");
     await file(env, "kept", alice);
-    DB.failWhen((sql) => /^\s*UPDATE feedback/i.test(sql));
+    DB.failWhen((sql) => /^\s*DELETE FROM feedback/i.test(sql));
     const r = await deleteAccount(env, alice);
     assert.equal(r.body.ok, false, "reported as not deleted");
     DB.failWhen(null);
