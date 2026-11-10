@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "694d15adfc";
+const WORKER_BUILD = "9b7519997e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -119849,7 +119849,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   const browseRow = browseKey && typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" ? STREAMING_ROW_BY_CHART_KEY[browseKey] : null;
   if (browseRow && browseRow.additional && !browseRow.kinds[type]) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
   const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
-  const skip = parseInt(extra.skip, 10) || 0;
+  // A whole number from 0 to 9,900 (a row page is 100 titles and TMDB stops at page 500, 20 titles each): a negative or enormous skip is not forwarded to a provider (audit API-05).
+  const skip = Math.min(Math.max(parseInt(extra.skip, 10) || 0, 0), 9900);
   const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
 
   // Dedicated search catalogs for Stremio and Nuvio
