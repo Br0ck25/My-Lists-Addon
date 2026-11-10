@@ -13,7 +13,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | OPS-01 | verified fixed | 034fdb6 | node --test tests/build-source-names.test.mjs | 2026-11-10, independent review |
 | OPS-02 | verified fixed | 8a27e51 | bash verify.sh -q (last line); no Playwright here, so it must say the browser tests were skipped | 2026-11-10, independent review |
 | OPS-03 | verified fixed | 8a27e51 | git check-ignore rendered-admin.html rendered-scope.html rendered-hostile.html service-worker.js | 2026-11-10, independent review |
-| OPS-04 | open (partially fixed, see Verification) | 26148a7 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) | 2026-11-10, independent review |
+| OPS-04 | fixed (awaiting verification) | 26148a7, bbae733 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) |  |
 | OPS-05 | verified fixed | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) | 2026-11-10, independent review |
 | OPS-07 | open |  |  |  |
 | OPS-08 | verified fixed | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) | 2026-11-10, independent review |

@@ -195,7 +195,7 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | OPS-01 | verified fixed | 034fdb6 | 2026-11-10, independent review |
 | OPS-02 | verified fixed | 8a27e51 | 2026-11-10, independent review |
 | OPS-03 | verified fixed | 8a27e51 | 2026-11-10, independent review |
-| OPS-04 | open (partially fixed, see Verification) | 26148a7 | 2026-11-10, independent review |
+| OPS-04 | fixed (awaiting verification) | 26148a7, bbae733 |  |
 | OPS-05 | verified fixed | 26148a7, 9496b00 | 2026-11-10, independent review |
 | OPS-08 | verified fixed | 26148a7, 9496b00 | 2026-11-10, independent review |
 | PROD-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
