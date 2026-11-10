@@ -1868,52 +1868,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       return json({ ok: true });
     }
-    if (sub === "add-history") {
-      if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
-      const id = mediaAppTitleId(body.id);
-      const kind = mediaAppKind(body.mediaType);
-      const season = body.season == null ? null : mediaAppInt(body.season);
-      const episode = body.episode == null ? null : mediaAppInt(body.episode);
-      if (!id || !kind || (kind === "series" && (season == null || episode == null || episode < 1))) {
-        return json({ ok: false, error: "Choose a movie or a show episode." }, 400);
-      }
-      let conn = await loadProviderConnection(env, accountId, provider);
-      const sync = await loadMediaAppSync(env, accountId, provider);
-      if (!conn || conn.status !== "ok" || !sync) return json({ ok: false, error: "That account isn't connected." }, 404);
-      const now = Date.now();
-      const contentId = id.imdbId || `tmdb:${id.tmdbId}`;
-      const play = { contentId, kind, title: String(body.title || "").slice(0, 200), season: kind === "series" ? season : null, episode: kind === "series" ? episode : null, watchedAt: now };
-      if (provider === "nuvio") {
-        conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
-        if (!conn || !conn.accessToken || !sync.profile_index) return json({ ok: false, error: "Sign in and choose a Nuvio profile first." }, 400);
-        await nuvioRpc(env, conn.accessToken, "sync_push_watched_items", { p_profile_id: sync.profile_index, p_items: [nuvioWatchedItem(play)] });
-      } else {
-        if (!id.imdbId) return json({ ok: false, error: "Stremio needs an IMDb ID for this title." }, 400);
-        const library = await stremioFetchLibrary(conn.accessToken);
-        const item = library.find((it) => String(it._id) === id.imdbId && mediaAppKind(it.type) === kind);
-        if (!item) return json({ ok: false, error: "Add this title to your Stremio library first." }, 400);
-        let state = { ...(item.state || {}) };
-        if (kind === "series") {
-          const eps = await stremioEpisodes(id.imdbId);
-          if (!eps || !eps.some((e) => e.season === season && e.episode === episode)) return json({ ok: false, error: "Stremio could not find that episode." }, 400);
-          const watched = new Set((state.watched ? await stremioWatchedEpisodes(state.watched, eps) : []).map((e) => `${e.season}:${e.episode}`));
-          watched.add(`${season}:${episode}`);
-          state.watched = await stremioEncodeWatched(eps, watched);
-          state.video_id = `${id.imdbId}:${season}:${episode}`;
-        } else {
-          state.timesWatched = Math.max(1, Number(state.timesWatched) || 0);
-          state.flaggedWatched = 1;
-        }
-        state.lastWatched = new Date(now).toISOString();
-        const result = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: [{ ...item, _mtime: new Date(now).toISOString(), state }] });
-        if (!result || result.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
-      }
-      const rec = { ...id, kind, title: play.title, mtime: now, at: now, plays: [{ season: play.season, episode: play.episode, watchedAt: now }], furthest: kind === "series" ? { season, episode } : null, resume: null };
-      let local = null;
-      try { local = await applyMediaAppRecords(env, accountId, provider, [rec]); }
-      catch (e) { console.error("mediaapp: could not mirror added history", e); }
-      return json({ ok: true, mirrored: !!local && !local.skipped && !local.unresolved && local.plays > 0 });
-    }
+    if (sub === "add-history") return mediaAppAddHistory(env, accountId, provider, body);
     if (sub === "remove") {
       const name = provider === "nuvio" ? "Nuvio" : "Stremio";
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: `Removing from ${name} isn't switched on yet.` }, 409);

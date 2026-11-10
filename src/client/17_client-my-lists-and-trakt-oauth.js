@@ -2444,7 +2444,7 @@ function openMediaHistoryAdd() {
   showModal('<h2>Add to ' + escapeHtml(MEDIA_APP_UI_NAMES[match[1]]) + (library ? ' Library' : ' Watch History') + '</h2>' +
     '<label for="mediaHistoryQuery">Title</label><input id="mediaHistoryQuery" type="search" autocomplete="off">' +
     '<label for="mediaHistoryKind">Type</label><select id="mediaHistoryKind"><option value="movie">Movie</option><option value="series">' + (library ? 'Show' : 'Show episode') + '</option></select>' +
-    (library ? '' : '<p class="u-c-v_muted u-fs-v_font_size_sm">For a show, enter the season and episode before adding it.</p>' +
+    (library ? '' : '<p class="u-c-v_muted u-fs-v_font_size_sm">For a show, enter the season. Add an episode number for one episode, or leave it empty for the whole season.</p>' +
     '<label for="mediaHistorySeason">Season</label><input id="mediaHistorySeason" type="number" min="0" step="1">' +
     '<label for="mediaHistoryEpisode">Episode</label><input id="mediaHistoryEpisode" type="number" min="1" step="1">') +
     '<button type="button" class="btn-secondary btn-sm" data-act="searchMediaHistoryAdd">Search</button>' +
@@ -2482,11 +2482,10 @@ async function addMediaHistoryResult(tmdbId, kind, title, btn) {
   const season = seasonEl && seasonEl.value !== '' ? Number(seasonEl.value) : null;
   const episode = episodeEl && episodeEl.value !== '' ? Number(episodeEl.value) : null;
   const library = window._mediaAppAddTarget === 'library';
-  if (!library && kind === 'series' && (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1)) {
-    showToast('Enter a season and episode first.', 'error');
-    return;
-  }
+  if (!library && kind === 'series' && (!Number.isInteger(season) || season < 0 || (episode != null && (!Number.isInteger(episode) || episode < 1)))) { showToast('Enter a season first.', 'error'); return; }
   if (btn) btn.disabled = true;
+  const episodes = !library && kind === 'series' && episode == null ? await mediaHistorySeasonEpisodes(tmdbId, season) : null;
+  if (!library && kind === 'series' && episode == null && !episodes) { if (btn) btn.disabled = false; showToast('Could not list that season. Try a single episode.', 'error'); return; }
   let id = 'tmdb:' + tmdbId;
   if (provider === 'stremio') {
     try {
@@ -2495,7 +2494,7 @@ async function addMediaHistoryResult(tmdbId, kind, title, btn) {
       if (data.ok && data.imdbId) id = data.imdbId;
     } catch (e) {}
   }
-  const body = { id: id, mediaType: kind, season: season, episode: episode, title: title };
+  const body = { id: id, mediaType: kind, season: season, episode: episode, episodes: episodes || undefined, title: title };
   if (library) body.action = 'add';
   const result = await mediaAppUiCall(provider, library ? 'library-item' : 'add-history', 'POST', body);
   if (btn) btn.disabled = false;

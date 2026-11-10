@@ -1555,6 +1555,19 @@ describe("removing an item from the app, from the website", () => {
     assert.equal(anon.status, 401);
   });
 
+  it("adds a whole season to Nuvio history in one push, and refuses a bad episode list", async () => {
+    const ctx = await nuvio("seasonadd");
+    const add = (json) => call(ctx.env, "/api/connections/nuvio/add-history", { method: "POST", cookie: ctx.cookie, json });
+    const r = await add({ id: "tmdb:9999", mediaType: "series", title: "Whole Show", season: 2, episodes: [3, 1, 2, 2] });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.added, 3, "each episode once");
+    assert.deepEqual(ctx.seen.pushed.map((p) => [p.content_type, p.season, p.episode]), [["series", 2, 1], ["series", 2, 2], ["series", 2, 3]]);
+    for (const episodes of [[], [0], ["x"], "1,2", Array.from({ length: 201 }, (_, i) => i + 1)]) {
+      assert.equal((await add({ id: "tmdb:9999", mediaType: "series", season: 2, episodes })).status, 400, JSON.stringify(episodes).slice(0, 20));
+    }
+    assert.equal((await add({ id: "tmdb:9999", mediaType: "series", episodes: [1] })).status, 400, "a season is needed");
+  });
+
   it("Nuvio, Watch History, a show: every watched episode is deleted there, here, and does not come back", async () => {
     const ctx = await nuvio("rmhist");
     const r = await remove(ctx, "nuvio", { target: "history", id: SHOW, mediaType: "series" });
