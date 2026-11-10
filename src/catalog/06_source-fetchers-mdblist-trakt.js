@@ -241,8 +241,11 @@ function traktPayloadTotal(payload) {
 // metas.totalItems and hands it to the browser as the list's size (see
 // 25_api-catalog-routes.js). In-process only, so unlike the cached payload
 // above there is no serialization to lose it.
-function withTraktTotal(metas, totalItems) {
+function withTraktTotal(metas, totalItems, rawRows) {
   if (totalItems != null && Array.isArray(metas)) metas.totalItems = totalItems;
+  // How many rows Trakt sent for this page, before they were mapped to titles
+  // (traktWindowedPage uses it to tell the last page from a shrunk one).
+  if (Array.isArray(rawRows) && Array.isArray(metas)) metas.rawRows = rawRows.length;
   return metas;
 }
 
@@ -595,7 +598,7 @@ async function fetchTrakt(entry, skip = 0, traktKey = "", accessToken = "", env 
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Pulls the connected account's Trakt watchlist
@@ -645,7 +648,7 @@ async function fetchTraktWatchlist(entry, skip = 0, traktKey = "", accessToken =
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // History's shape is different from a plain list/watchlist -- each row is
@@ -788,7 +791,7 @@ async function fetchTraktHistory(entry, skip = 0, traktKey = "", accessToken = "
   });
 
   const metas = await enrichTrailers(mapTraktHistoryItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Pulls the connected account's Trakt Airing Next shows

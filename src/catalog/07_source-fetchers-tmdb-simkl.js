@@ -298,7 +298,7 @@ async function fetchTraktChart(entry, skip, traktKey, chartKey, env = null, ctx 
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Runs async `fn` over `items` with at most `limit` running at once, rather

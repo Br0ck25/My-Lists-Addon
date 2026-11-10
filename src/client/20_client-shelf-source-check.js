@@ -4,7 +4,7 @@
 // failed check (server down, offline) lets the row through as it always did.
 async function addShelfLinksUnsupported(links) {
   try {
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: links.join(String.fromCharCode(10)), validateOnly: true }),

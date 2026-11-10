@@ -176,7 +176,7 @@ const SOURCE_CORPUS = [
 ];
 
 describe("P4-1: the provider registry", () => {
-  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/04_config-resolution.js", "src/catalog/05_catalog-core.js");
+  const sb = loadSourceFunctions("src/core/00_constants.js", "src/core/04_config-resolution.js", "src/catalog/05_catalog-core.js", "src/catalog/08_trakt-window.js");
   const CATALOG_SOURCES = vm.runInContext("CATALOG_SOURCES", sb);
   const PROVIDER_ADAPTERS = vm.runInContext("PROVIDER_ADAPTERS", sb);
   const STREMIO_LIVE_ROW_SOURCES = vm.runInContext("STREMIO_LIVE_ROW_SOURCES", sb);
@@ -292,6 +292,7 @@ describe("P4-1: the provider registry", () => {
     const recorder = (name) => function (...args) {
       calls.push([name, args]);
       const out = [{ id: "tt0000001", name }];
+      out.rawRows = 0; // a short (last) page: the Trakt window (08_trakt-window.js) stops after it
       return name === "fetchChannelCatalog" ? out : Promise.resolve(out);
     };
     const f = { parseTmdbWebChartUrl: sb.parseTmdbWebChartUrl };
@@ -318,7 +319,10 @@ describe("P4-1: the provider registry", () => {
           const entry = { id: "row", type: "movie", name: "Row", url };
           calls = [];
           await legacyDispatch(entry, skip, keys, f, K, legacy);
-          const want = calls.map(([n, args]) => [n, args.map((a) => label(a, entry, keys))]);
+          // Trakt rows continue where the app is (audit API-04): they read from Trakt's first
+          // page, and a short page ends the walk, so at skip 100 the fetcher is asked for page 1.
+          const TRAKT_WINDOWED = new Set(["fetchTraktWatchlist", "fetchTraktHistory", "fetchTraktChart", "fetchTrakt"]);
+          const want = calls.map(([n, args]) => [n, args.map((a, i) => label(TRAKT_WINDOWED.has(n) && i === 1 ? 0 : a, entry, keys))]);
           calls = [];
           await sb.fetchCatalog(entry, skip, keys);
           const got = calls.map(([n, args]) => [n, args.map((a) => label(a, entry, keys))]);

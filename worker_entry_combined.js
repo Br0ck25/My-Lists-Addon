@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0b82160766";
+const WORKER_BUILD = "a2586fd3a3";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -18111,12 +18111,12 @@ const CATALOG_SOURCES = [
   {
     name: "trakt-watchlist", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:watchlist") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktWatchlist(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktWatchlist(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx)),
   },
   {
     name: "trakt-history", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:history") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktHistory(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktHistory(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx)),
   },
   {
     name: "trakt-airing-next", provider: "trakt", kind: "personal", apiUse: "trakt",
@@ -18197,7 +18197,7 @@ const CATALOG_SOURCES = [
     snapshot: {},
     match: (s) => s.startsWith("trakt:chart:"),
     arg: sourceArgAfter("trakt:chart:"),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktChart(entry, skip, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktChart(entry, s, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx)),
   },
   {
     name: "simkl-chart", provider: "simkl", kind: "chart", apiUse: "simkl",
@@ -18254,7 +18254,7 @@ const CATALOG_SOURCES = [
   {
     name: "trakt", provider: "trakt", kind: "list", apiUse: "trakt",
     match: (s) => /^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTrakt(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTrakt(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx)),
   },
   {
     name: "tmdb", provider: "tmdb", kind: "list", apiUse: "tmdb",
@@ -24148,8 +24148,11 @@ function traktPayloadTotal(payload) {
 // metas.totalItems and hands it to the browser as the list's size (see
 // 25_api-catalog-routes.js). In-process only, so unlike the cached payload
 // above there is no serialization to lose it.
-function withTraktTotal(metas, totalItems) {
+function withTraktTotal(metas, totalItems, rawRows) {
   if (totalItems != null && Array.isArray(metas)) metas.totalItems = totalItems;
+  // How many rows Trakt sent for this page, before they were mapped to titles
+  // (traktWindowedPage uses it to tell the last page from a shrunk one).
+  if (Array.isArray(rawRows) && Array.isArray(metas)) metas.rawRows = rawRows.length;
   return metas;
 }
 
@@ -24502,7 +24505,7 @@ async function fetchTrakt(entry, skip = 0, traktKey = "", accessToken = "", env 
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Pulls the connected account's Trakt watchlist
@@ -24552,7 +24555,7 @@ async function fetchTraktWatchlist(entry, skip = 0, traktKey = "", accessToken =
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // History's shape is different from a plain list/watchlist -- each row is
@@ -24695,7 +24698,7 @@ async function fetchTraktHistory(entry, skip = 0, traktKey = "", accessToken = "
   });
 
   const metas = await enrichTrailers(mapTraktHistoryItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Pulls the connected account's Trakt Airing Next shows
@@ -25664,7 +25667,7 @@ async function fetchTraktChart(entry, skip, traktKey, chartKey, env = null, ctx 
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Runs async `fn` over `items` with at most `limit` running at once, rather
@@ -32519,6 +32522,47 @@ async function seedNuvioTvNewUser(env, username, accountId) {
 
 
 
+// Trakt pages hold 100 raw rows, but one page can map to fewer titles (several
+// episodes of one show become one title). An app sends the number of titles it
+// already holds as the next `skip`, so "skip / 100" asked Trakt for the same
+// page again and the row repeated itself (audit API-04). This continues where
+// the app is: it walks Trakt pages from the start, each cached on its own,
+// drops a title already seen, and returns the window the app asked for.
+//
+// loadPage(rawSkip) is the existing fetcher for one Trakt page (rawSkip is
+// 0, 100, 200, ...). At most TRAKT_WINDOW_MAX_PAGES pages are read for one
+// request; a skip beyond what that can reach keeps the old page arithmetic.
+const TRAKT_WINDOW_MAX_PAGES = 5;
+
+async function traktWindowedPage(skip, loadPage) {
+  if (skip >= TRAKT_WINDOW_MAX_PAGES * PAGE_SIZE) return loadPage(Math.floor(skip / PAGE_SIZE) * PAGE_SIZE);
+  const want = skip + PAGE_SIZE;
+  const seen = new Set();
+  const titles = [];
+  let total = null;
+  for (let i = 0; i < TRAKT_WINDOW_MAX_PAGES && titles.length < want; i++) {
+    let metas;
+    try {
+      metas = await loadPage(i * PAGE_SIZE);
+    } catch (err) {
+      if (i === 0) throw err;
+      break; // the first page worked: give what there is rather than nothing
+    }
+    if (!Array.isArray(metas)) break;
+    if (total == null && metas.totalItems != null) total = metas.totalItems;
+    if (i === 0 && metas.length === 0 && skip === 0) return metas; // keep the caller's empty-row handling
+    const before = titles.length;
+    for (const m of metas) {
+      if (m && !seen.has(m.id)) { seen.add(m.id); titles.push(m); }
+    }
+    if (i > 0 && titles.length === before) break; // a page with nothing new: stop rather than read on
+    // The end of the list: nothing came back, Trakt sent a short page, or the total is reached.
+    if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (total != null && (i + 1) * PAGE_SIZE >= total)) break;
+  }
+  const out = titles.slice(skip, skip + PAGE_SIZE);
+  if (total != null) out.totalItems = total;
+  return out;
+}
 // --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
 //
 // Every visitor gets this chrome (the classic page was retired in Release 21).
@@ -71609,7 +71653,7 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
 // failed check (server down, offline) lets the row through as it always did.
 async function addShelfLinksUnsupported(links) {
   try {
-    const res = await fetch(ORIGIN + '/api/preview', {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: links.join(String.fromCharCode(10)), validateOnly: true }),
