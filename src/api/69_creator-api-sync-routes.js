@@ -322,7 +322,8 @@ async function creatorApiSyncLoad(request, env, ctx, path) {
     }
   }
   if (data && data.keys) data.keys = await openSyncKeys(env, auth.username, data.keys);
-  if (d1UserLists) {
+  // Not when the last save could not write them: D1 is then behind and KV is the newer copy (audit DB-02).
+  if (d1UserLists && !(data && data.likedListsD1Behind)) {
     if (!data) {
       data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };
     }

@@ -383,7 +383,10 @@ async function creatorApiSyncSave(request, env, ctx, path) {
     hiddenMyListsSections: Array.isArray(body.hiddenMyListsSections) ? body.hiddenMyListsSections.map(String) : [],
     updatedAt: nextSyncVersion(currentUpdatedAt),
   };
-  const serialized = JSON.stringify(blob);
+  // A failed D1 write must not stop the rows reaching KV and the install links: it is reported on its
+  // own, and the KV record says its D1 copy is behind so load answers from KV until a write succeeds (audit DB-02).
+  const likedListsSynced = !env.DB || await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
+  const serialized = JSON.stringify(likedListsSynced ? blob : { ...blob, likedListsD1Behind: true });
   // Workers KV hard-caps a value at 25MB. Presets/Channels and tracking
   // data (watchHistory/continueWatching/etc) no longer live in this
   // blob at all (see above), so this is now just a defensive backstop
@@ -391,9 +394,6 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "This account's saved data is too large to store (over the 25MB limit)." });
   }
-  // The liked-lists copy in D1 can only fall behind (extra ids, never fewer), so a failed write must not
-  // stop the rows reaching KV and the install links: it is reported on its own (audit DB-02).
-  const likedListsSynced = !env.DB || await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
   try {
     await env.CONFIGS.put(`creatorsync:${auth.username}`, serialized);
   } catch (e) {

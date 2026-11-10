@@ -61,4 +61,28 @@ describe("DB-02: saving liked/hidden lists", () => {
     assert.deepEqual(kv.config.map((x) => x.id), ["a", "b"], "the new row reached KV, so the install link has it");
     assert.ok((await load()).body.ok);
   });
+
+  // Third review: with the liked-lists table failing, load used to answer from the stale D1
+  // rows and drop a new like (or bring back an unlike); the next autosave then made it permanent.
+  describe("while the liked-lists table cannot be written", () => {
+    it("load returns what was saved last (KV), not the older D1 rows, and recovers once D1 is back", async () => {
+      const { env, user, load } = await setup();
+      const save = (likedLists) => call(env, "/api/creator/sync/save", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey, config: [], likedLists } });
+      assert.equal((await save(["L1", "L2"])).body.ok, true);
+
+      env.DB.failWhen((sql) => /creator_user_lists/.test(sql) && !/^\s*SELECT/i.test(sql));
+      const added = await save(["L1", "L2", "L3"]);
+      assert.equal(added.body.likedListsSynced, false);
+      assert.deepEqual([...(await load()).body.data.likedLists].sort(), ["L1", "L2", "L3"], "the new like is not lost");
+      const removed = await save(["L2", "L3"]);
+      assert.equal(removed.body.likedListsSynced, false);
+      assert.deepEqual([...(await load()).body.data.likedLists].sort(), ["L2", "L3"], "an unlike does not come back");
+
+      env.DB.failWhen(null);
+      assert.equal((await save(["L2", "L3", "L4"])).body.likedListsSynced, undefined, "a good write reports nothing");
+      assert.deepEqual([...(await load()).body.data.likedLists].sort(), ["L2", "L3", "L4"]);
+      assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM creator_user_lists WHERE username = 'likedlots' AND list_type = 'liked'").get().n, 3, "D1 caught up");
+    });
+  });
 });
+

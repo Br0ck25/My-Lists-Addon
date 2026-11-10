@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "79cb32505d";
+const WORKER_BUILD = "9b4b257bcc";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -118210,7 +118210,10 @@ async function creatorApiSyncSave(request, env, ctx, path) {
     hiddenMyListsSections: Array.isArray(body.hiddenMyListsSections) ? body.hiddenMyListsSections.map(String) : [],
     updatedAt: nextSyncVersion(currentUpdatedAt),
   };
-  const serialized = JSON.stringify(blob);
+  // A failed D1 write must not stop the rows reaching KV and the install links: it is reported on its
+  // own, and the KV record says its D1 copy is behind so load answers from KV until a write succeeds (audit DB-02).
+  const likedListsSynced = !env.DB || await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
+  const serialized = JSON.stringify(likedListsSynced ? blob : { ...blob, likedListsD1Behind: true });
   // Workers KV hard-caps a value at 25MB. Presets/Channels and tracking
   // data (watchHistory/continueWatching/etc) no longer live in this
   // blob at all (see above), so this is now just a defensive backstop
@@ -118218,9 +118221,6 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "This account's saved data is too large to store (over the 25MB limit)." });
   }
-  // The liked-lists copy in D1 can only fall behind (extra ids, never fewer), so a failed write must not
-  // stop the rows reaching KV and the install links: it is reported on its own (audit DB-02).
-  const likedListsSynced = !env.DB || await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
   try {
     await env.CONFIGS.put(`creatorsync:${auth.username}`, serialized);
   } catch (e) {
@@ -119139,7 +119139,8 @@ async function creatorApiSyncLoad(request, env, ctx, path) {
     }
   }
   if (data && data.keys) data.keys = await openSyncKeys(env, auth.username, data.keys);
-  if (d1UserLists) {
+  // Not when the last save could not write them: D1 is then behind and KV is the newer copy (audit DB-02).
+  if (d1UserLists && !(data && data.likedListsD1Behind)) {
     if (!data) {
       data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };
     }
