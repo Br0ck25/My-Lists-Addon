@@ -447,6 +447,12 @@ async function nuvioFetchProfile(env, accessToken, profileIndex) {
 
 // Nuvio's watched items and progress entries as one record per title (the same
 // shape as stremioItemRecord). Both name a title by content_id (or contentId).
+// The type to record for a Nuvio row: its own "movie" wins over stray season/episode numbers,
+// otherwise episode numbers make it a show.
+function nuvioRowType(rawType, season, episode) {
+  return mediaAppKind(rawType) !== "movie" && season != null && episode != null ? "series" : rawType;
+}
+
 function nuvioRecords({ watched, progress }) {
   const by = new Map();
   const recFor = (rawId, rawType, title, poster) => {
@@ -480,14 +486,14 @@ function nuvioRecords({ watched, progress }) {
     const kindRaw = mediaAppPick(w, "content_type", "contentType");
     const season = mediaAppInt(w.season);
     const episode = mediaAppInt(w.episode);
-    const rec = recFor(mediaAppPick(w, "content_id", "contentId"), season != null && episode != null ? "series" : kindRaw, mediaAppPick(w, "title", "name"), mediaAppPick(w, "poster"));
+    const rec = recFor(mediaAppPick(w, "content_id", "contentId"), nuvioRowType(kindRaw, season, episode), mediaAppPick(w, "title", "name"), mediaAppPick(w, "poster"));
     const at = mediaAppTime(mediaAppPick(w, "watched_at", "watchedAt"));
     if (rec && at) addPlay(rec, season, episode, at);
   }
   for (const p of progress || []) {
     const season = mediaAppInt(p.season);
     const episode = mediaAppInt(p.episode);
-    const rec = recFor(mediaAppPick(p, "content_id", "contentId"), season != null && episode != null ? "series" : mediaAppPick(p, "content_type", "contentType"), mediaAppPick(p, "name", "title"), mediaAppPick(p, "poster"));
+    const rec = recFor(mediaAppPick(p, "content_id", "contentId"), nuvioRowType(mediaAppPick(p, "content_type", "contentType"), season, episode), mediaAppPick(p, "name", "title"), mediaAppPick(p, "poster"));
     if (!rec) continue;
     const duration = Number(mediaAppPick(p, "duration")) || 0;
     const position = Number(mediaAppPick(p, "position")) || 0;
@@ -1862,52 +1868,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       }
       return json({ ok: true });
     }
-    if (sub === "add-history") {
-      if (!mediaAppPushFlag(env)) return json({ ok: false, error: "App writes aren't switched on yet." }, 409);
-      const id = mediaAppTitleId(body.id);
-      const kind = mediaAppKind(body.mediaType);
-      const season = body.season == null ? null : mediaAppInt(body.season);
-      const episode = body.episode == null ? null : mediaAppInt(body.episode);
-      if (!id || !kind || (kind === "series" && (season == null || episode == null || episode < 1))) {
-        return json({ ok: false, error: "Choose a movie or a show episode." }, 400);
-      }
-      let conn = await loadProviderConnection(env, accountId, provider);
-      const sync = await loadMediaAppSync(env, accountId, provider);
-      if (!conn || conn.status !== "ok" || !sync) return json({ ok: false, error: "That account isn't connected." }, 404);
-      const now = Date.now();
-      const contentId = id.imdbId || `tmdb:${id.tmdbId}`;
-      const play = { contentId, kind, title: String(body.title || "").slice(0, 200), season: kind === "series" ? season : null, episode: kind === "series" ? episode : null, watchedAt: now };
-      if (provider === "nuvio") {
-        conn = await refreshProviderConnectionIfDue(env, accountId, provider, conn);
-        if (!conn || !conn.accessToken || !sync.profile_index) return json({ ok: false, error: "Sign in and choose a Nuvio profile first." }, 400);
-        await nuvioRpc(env, conn.accessToken, "sync_push_watched_items", { p_profile_id: sync.profile_index, p_items: [nuvioWatchedItem(play)] });
-      } else {
-        if (!id.imdbId) return json({ ok: false, error: "Stremio needs an IMDb ID for this title." }, 400);
-        const library = await stremioFetchLibrary(conn.accessToken);
-        const item = library.find((it) => String(it._id) === id.imdbId && mediaAppKind(it.type) === kind);
-        if (!item) return json({ ok: false, error: "Add this title to your Stremio library first." }, 400);
-        let state = { ...(item.state || {}) };
-        if (kind === "series") {
-          const eps = await stremioEpisodes(id.imdbId);
-          if (!eps || !eps.some((e) => e.season === season && e.episode === episode)) return json({ ok: false, error: "Stremio could not find that episode." }, 400);
-          const watched = new Set((state.watched ? await stremioWatchedEpisodes(state.watched, eps) : []).map((e) => `${e.season}:${e.episode}`));
-          watched.add(`${season}:${episode}`);
-          state.watched = await stremioEncodeWatched(eps, watched);
-          state.video_id = `${id.imdbId}:${season}:${episode}`;
-        } else {
-          state.timesWatched = Math.max(1, Number(state.timesWatched) || 0);
-          state.flaggedWatched = 1;
-        }
-        state.lastWatched = new Date(now).toISOString();
-        const result = await stremioCall("datastorePut", { authKey: conn.accessToken, collection: "libraryItem", changes: [{ ...item, _mtime: new Date(now).toISOString(), state }] });
-        if (!result || result.success !== true) throw mediaAppError("unreachable", "Stremio did not accept the update.");
-      }
-      const rec = { ...id, kind, title: play.title, mtime: now, at: now, plays: [{ season: play.season, episode: play.episode, watchedAt: now }], furthest: kind === "series" ? { season, episode } : null, resume: null };
-      let local = null;
-      try { local = await applyMediaAppRecords(env, accountId, provider, [rec]); }
-      catch (e) { console.error("mediaapp: could not mirror added history", e); }
-      return json({ ok: true, mirrored: !!local && !local.skipped && !local.unresolved && local.plays > 0 });
-    }
+    if (sub === "add-history") return mediaAppAddHistory(env, accountId, provider, body);
     if (sub === "remove") {
       const name = provider === "nuvio" ? "Nuvio" : "Stremio";
       if (!mediaAppPushFlag(env)) return json({ ok: false, error: `Removing from ${name} isn't switched on yet.` }, 409);
@@ -1924,7 +1885,8 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       let media;
       if (id.imdbId) {
         media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE imdb_id = ?").bind(id.imdbId).first();
-        if (media && requestedKind && media.kind !== requestedKind) return json({ ok: false, error: "Choose the matching movie or show." }, 400);
+        // An IMDb id names one row, so its stored kind is the truth; the page may still show a
+        // title under the wrong kind (old episode-numbered plays of a film).
       } else if (requestedKind) {
         media = await env.DB.prepare("SELECT id, kind, imdb_id, tmdb_id FROM media WHERE tmdb_id = ? AND kind = ?").bind(id.tmdbId, requestedKind).first();
       } else {
@@ -1946,7 +1908,7 @@ async function handleMediaAppRoute(request, env, account, provider, sub) {
       // In the app first: if it refuses, nothing here changes either.
       const inApp = provider === "stremio"
         ? await (episode ? stremioRemoveEpisode(conn, imdbId, episode) : stremioRemoveTitle(conn, imdbId, target))
-        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, requestedKind || (media && media.kind), episode);
+        : await nuvioRemoveTitle(env, conn, row.profile_index, titleIds, target, id.imdbId ? null : (requestedKind || (media && media.kind)), episode);
       const here = await removeMediaAppItemLocally(env, accountId, provider, media, imdbId, target, episode);
       if (!inApp && !here.removed && !here.found) return json({ ok: false, error: `That title isn't in your ${name} account.` }, 404);
       return json({ ok: true, removedInApp: inApp, removedPlays: here.removed });
