@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0b1c40b88d";
+const WORKER_BUILD = "8bf7cef29a";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -13232,14 +13232,14 @@ function supportGoalMonth(now = new Date()) {
 // The message every visitor to mylistsaddon.com sees once per browser session
 // (openShutdownNotice, 16_client-row-core.js). The admin turns it off, edits
 // its words and picks its buttons under Management & Tools -> Site Notice.
-// Nothing stored means the original shutdown message, on, with both buttons:
+// Nothing stored means the original shutdown message, OFF (the site is staying online), with both buttons:
 // a self-hosted copy never shows it either way (the page only shows it on
 // mylistsaddon.com). The page asks /api/site-notice once per session.
 const SITE_NOTICE_KEY = "site:notice:v1";
 const SITE_NOTICE_TITLE_MAX = 120;
 const SITE_NOTICE_BODY_MAX = 4000;
 const DEFAULT_SITE_NOTICE = {
-  enabled: true,
+  enabled: false, // the site is not shutting down (owner, 2026-11-10); the words stay for a future notice
   title: "A Message About the Future of My Lists Addon",
   body: [
     "First, I want to say thank you to everyone who has used and supported My Lists Addon. We now have around 1,100 users, and I really appreciate everyone who has given the project a chance.",
@@ -91732,7 +91732,7 @@ function renderGuidePage(origin) { const siteHost = new URL(origin).host, siteHo
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Yes, with no subscriptions, ads, or paywalls. The public site at mylistsaddon.com will shut down on November 8, 2026 unless donations on Ko-fi cover its costs; you can also self-host (docs/SELF-HOSTING.md).",
+            "Yes, with no subscriptions, ads, or paywalls. Running the public site costs the owner real money, so donations on Ko-fi are welcome; you can also self-host (docs/SELF-HOSTING.md).",
         },
       },
     ],
@@ -92547,7 +92547,7 @@ ${UTILITY_CSS}
 
     <div class="faq-item">
       <div class="faq-q">Is My Lists Addon completely free?</div>
-      <div class="faq-a">Yes, it has no subscription, no ads, and no paid tier. Running it costs the owner real money, though, and the public site will shut down on November 8, 2026 unless donations cover its costs (Ko-fi). You can also run your own copy on Cloudflare (a Workers Paid plan, about $5 a month): see <a href="https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md" target="_blank" rel="noopener">docs/SELF-HOSTING.md</a>.</div>
+      <div class="faq-a">Yes, it has no subscription, no ads, and no paid tier. Running it costs the owner real money, though, so donations are welcome (Ko-fi). You can also run your own copy on Cloudflare (a Workers Paid plan, about $5 a month): see <a href="https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md" target="_blank" rel="noopener">docs/SELF-HOSTING.md</a>.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Do I need to sign up or create an account?</div>

@@ -2316,14 +2316,14 @@ function supportGoalMonth(now = new Date()) {
 // The message every visitor to mylistsaddon.com sees once per browser session
 // (openShutdownNotice, 16_client-row-core.js). The admin turns it off, edits
 // its words and picks its buttons under Management & Tools -> Site Notice.
-// Nothing stored means the original shutdown message, on, with both buttons:
+// Nothing stored means the original shutdown message, OFF (the site is staying online), with both buttons:
 // a self-hosted copy never shows it either way (the page only shows it on
 // mylistsaddon.com). The page asks /api/site-notice once per session.
 const SITE_NOTICE_KEY = "site:notice:v1";
 const SITE_NOTICE_TITLE_MAX = 120;
 const SITE_NOTICE_BODY_MAX = 4000;
 const DEFAULT_SITE_NOTICE = {
-  enabled: true,
+  enabled: false, // the site is not shutting down (owner, 2026-11-10); the words stay for a future notice
   title: "A Message About the Future of My Lists Addon",
   body: [
     "First, I want to say thank you to everyone who has used and supported My Lists Addon. We now have around 1,100 users, and I really appreciate everyone who has given the project a chance.",

@@ -137,6 +137,7 @@ Also confirmed by the owner on 2026-09-27: the Cloudflare dashboard offers **Que
 | # | Decision | Consequence in the code |
 |---|---|---|
 | D-35 | **The public site shuts down on 2026-11-08 unless donations cover its costs** (over $100 a month, about 1,100 users). **This replaces D-1:** running your own copy on Cloudflare is now the supported way to keep your data. The Workers Free plan is still not supported; a copy needs Workers Paid. | Every visit to mylistsaddon.com shows a notice (`openShutdownNotice`, `src/client/16_client-row-core.js`) with a Ko-fi donate button and a Back up my data button (the existing full backup). It shows only on `mylistsaddon.com`, so a self-hosted copy never shows the owner's message. The steps are in `docs/SELF-HOSTING.md`, with `wrangler.selfhost.toml` for the terminal route. The owner turns it off, or edits its words and buttons, under `/admin` → Management & Tools → **Site Notice** (`/api/site-notice`, `readSiteNotice` in `src/admin/03_admin.js`); no deploy is needed. When the site is saved or closed, turn it off there and say so here. |
+| D-36 | **The public site is NOT shutting down (owner, 2026-11-10).** This ends D-35's shutdown date. | The default Site Notice is now off (`DEFAULT_SITE_NOTICE.enabled = false`) and the FAQ and SELF-HOSTING no longer give a shutdown date. If a notice was ever saved under `/admin` → Site Notice it stays as saved: turn it off there. |
 
 ## Open questions
 

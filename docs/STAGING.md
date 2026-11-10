@@ -11,7 +11,7 @@ The staging environment operates with **100% resource isolation** from productio
 - **Isolated Authoritative Stores:** Staging runs against dedicated D1 databases (`my-lists-db-staging` and `mylists-activity-staging`) and a dedicated KV namespace. No staging read or write ever touches production data.
 - **Isolated Blob Storage & Queues:** Shared channel pools, backups, and media artifacts live in `mylists-blobs-staging`. Background queue processing runs on `mylists-jobs-staging` with its own dead-letter queue (`mylists-jobs-staging-dlq`).
 - **Independent Cryptographic Secrets:** Staging uses its own `TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER`, and `ADMIN_KEY`. Staging tokens cannot decrypt production records, and production tokens cannot decrypt staging records.
-- **Preview Feature Flags:** Advanced flags (`FF_SESSIONS`, `FF_V2_LISTS_READ`, `FF_EVENT_TRACKING`, ...) are set in `[env.staging.vars]` in `wrangler.toml` to rehearse transitions. Staging does **not** match production exactly: production also runs the one-way `FF_V2_LISTS_ONLY`, which staging leaves off, so a bug that only appears with it can pass staging. `FF_SHOW_SCHEDULE` is off on staging too (commented out in `wrangler.toml`).
+- **Preview Feature Flags:** Advanced flags (`FF_SESSIONS`, `FF_V2_LISTS_READ`, `FF_EVENT_TRACKING`, ...) are set in `[env.staging.vars]` in `wrangler.toml` to rehearse transitions. Staging runs the same list-storage path as production, including the one-way `FF_V2_LISTS_ONLY`. `FF_SHOW_SCHEDULE` is off on staging (commented out in `wrangler.toml`).
 
 ---
 

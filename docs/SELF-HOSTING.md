@@ -1,6 +1,6 @@
 # Run your own My Lists Addon on Cloudflare
 
-The public site, mylistsaddon.com, is shutting down on **November 8, 2026** unless donations cover its running costs. You can keep everything you have built by running your own copy. This guide walks you through it. You do not need to be a programmer: every step is a click or a copy and paste.
+The public site, mylistsaddon.com, is staying online. You can also run your own copy, so your lists and data are never tied to one site. This guide walks you through it. You do not need to be a programmer: every step is a click or a copy and paste.
 
 **What you get:** the same website and add-on, on your own Cloudflare account, with your own address (for example `https://my-lists-addon.yourname.workers.dev`). Only you (and whoever you share the address with) use it.
 
