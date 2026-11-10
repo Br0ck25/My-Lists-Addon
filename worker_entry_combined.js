@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "98d4f4536f";
+const WORKER_BUILD = "0b82160766";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -120041,6 +120041,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
       }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
     }
   }
+  const skipLimited = await catalogSkipLimitResponse(request, env, ctx, skip);
+  if (skipLimited) return skipLimited;
   return stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList });
 }
 
@@ -123614,6 +123616,19 @@ function isFreeChartPreview(testUrl, skip) {
   if (skip !== 0) return false;
   const urls = previewSourceUrls(testUrl);
   return urls.length > 0 && urls.every((u) => /^(?:tmdb|trakt):chart:[a-z0-9_-]+$/i.test(u));
+}
+
+// Catalog rows past the first page: every distinct `skip` is its own cache
+// entry and its own provider call, so one address asking for hundreds of them
+// could spend the shared TMDB and Trakt keys (audit API-05). They share a
+// budget of 120 a minute per address; the first page is never charged and
+// normal scrolling never gets near it. null when allowed.
+const CATALOG_SKIP_MAX_PER_MINUTE = 120;
+async function catalogSkipLimitResponse(request, env, ctx, skip) {
+  if (!(skip > 0)) return null;
+  const ip = clientIpKey(request);
+  if (!ip || !(await consumeRateLimit(env, ctx, "catalog-skip", ip, CATALOG_SKIP_MAX_PER_MINUTE, 60))) return null;
+  return jsonPublic({ metas: [] }, 429, { "Cache-Control": "no-store", "Retry-After": "30" });
 }
 // IMDb id and recommendation lookups, list search/browse for TMDB and Trakt, and the Trakt, MDBList and Simkl sign-in and list routes, moved out of handleFetch (CQ-01).
 

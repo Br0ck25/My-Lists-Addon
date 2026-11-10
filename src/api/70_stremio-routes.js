@@ -330,6 +330,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
       }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
     }
   }
+  const skipLimited = await catalogSkipLimitResponse(request, env, ctx, skip);
+  if (skipLimited) return skipLimited;
   return stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList });
 }
 

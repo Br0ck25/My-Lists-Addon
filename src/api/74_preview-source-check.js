@@ -18,3 +18,16 @@ function isFreeChartPreview(testUrl, skip) {
   const urls = previewSourceUrls(testUrl);
   return urls.length > 0 && urls.every((u) => /^(?:tmdb|trakt):chart:[a-z0-9_-]+$/i.test(u));
 }
+
+// Catalog rows past the first page: every distinct `skip` is its own cache
+// entry and its own provider call, so one address asking for hundreds of them
+// could spend the shared TMDB and Trakt keys (audit API-05). They share a
+// budget of 120 a minute per address; the first page is never charged and
+// normal scrolling never gets near it. null when allowed.
+const CATALOG_SKIP_MAX_PER_MINUTE = 120;
+async function catalogSkipLimitResponse(request, env, ctx, skip) {
+  if (!(skip > 0)) return null;
+  const ip = clientIpKey(request);
+  if (!ip || !(await consumeRateLimit(env, ctx, "catalog-skip", ip, CATALOG_SKIP_MAX_PER_MINUTE, 60))) return null;
+  return jsonPublic({ metas: [] }, 429, { "Cache-Control": "no-store", "Retry-After": "30" });
+}
