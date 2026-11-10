@@ -10,6 +10,8 @@ wrangler.d1test.toml
 # the rendered builder page, not source. A stale committed copy of one of
 # these (test_inner.js) is exactly the kind of drift this ignores.
 rendered.html
+rendered-*.html
+service-worker.js
 test.html
 inner_*.js
 audit/**/*.png
