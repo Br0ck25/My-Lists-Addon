@@ -19,7 +19,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | PROD-01 | verified fixed | ae33b9f | node --test tests/add-shelf-type-guess.client.test.mjs | 2026-11-10, independent review |
-| PROD-02 | regression introduced (see Verification) | 0a7a916 | node --test tests/add-shelf-source-check.test.mjs | 2026-11-10, independent review |
+| PROD-02 | fixed (awaiting verification) | 0a7a916, dd12e81 | node --test tests/add-shelf-source-check.test.mjs |  |
 | PROD-03 | verified fixed | ae33b9f | grep -n "raw items" src/client/18_client-copy-and-trakt-export.js prints nothing | 2026-11-10, independent review |
 | PROD-04 | verified fixed | ae33b9f | grep -n "few minutes" README.md | 2026-11-10, independent review |
 
