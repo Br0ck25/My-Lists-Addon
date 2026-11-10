@@ -176,7 +176,7 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | SEC-01 | verified fixed | ccac5fc | 2026-11-10, independent review |
 | SEC-02 | verified fixed | ccac5fc | 2026-11-10, independent review |
 | SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0, 1ffc61e |  |
-| PERF-03 | regression introduced (see Verification) | 35f1c3f, 7b927c6 | 2026-11-10, independent review |
+| PERF-03 | fixed (awaiting verification) | 35f1c3f, 7b927c6, 605a44b |  |
 | TEST-01 | verified fixed | bf54fbf | 2026-11-10, independent review |
 | TEST-02 | verified fixed | bf54fbf | 2026-11-10, independent review |
 | TEST-03 | verified fixed | a1ecc1f | 2026-11-10, independent review |

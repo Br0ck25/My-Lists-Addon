@@ -15,7 +15,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 |---|---|---|---|---|
 | PERF-01 | open - blocked on an owner decision | (none; a try was reverted) | See docs/HANDOFF.md, PERF-02 section. |  |
 | PERF-02 | open |  |  |  |
-| PERF-03 | regression introduced (see Verification) | 35f1c3f, 7b927c6 | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. | 2026-11-10, independent review |
+| PERF-03 | fixed (awaiting verification) | 35f1c3f, 7b927c6, 605a44b | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. |  |
 | PERF-04 | open |  |  |  |
 | PERF-05 | open |  |  |  |
 | PERF-06 | open |  |  |  |
