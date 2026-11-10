@@ -33,7 +33,7 @@ Do this while mylistsaddon.com is still up.
 - The files from this repository (you will copy and paste from them):
   - [`schema.sql`](../schema.sql): the whole main database, ready to paste.
   - [`schema_activity.sql`](../schema_activity.sql): the watch history database, ready to paste.
-  - [`worker_entry_combined.js`](worker_entry_combined.js): the whole program, in one file.
+  - [`worker_entry_combined.js`](../worker_entry_combined.js): the whole program, in one file.
 
 **How to copy a file from GitHub:** open it, click **Raw** (top right of the file), press `Ctrl+A` (Mac: `Cmd+A`) to select everything, then `Ctrl+C` (Mac: `Cmd+C`) to copy.
 
@@ -83,7 +83,7 @@ Open [dash.cloudflare.com](https://dash.cloudflare.com) and follow the steps in 
 1. **Workers & Pages → Create → Create Worker.**
 2. Name: `my-lists-addon`. Click **Deploy** (it deploys a small "Hello World" first).
 3. Click **Edit code**. Select everything in the editor and delete it.
-4. Copy the **entire** [`worker_entry_combined.js`](worker_entry_combined.js) (about 5.5 MB, so give the copy a moment) and paste it in.
+4. Copy the **entire** [`worker_entry_combined.js`](../worker_entry_combined.js) (about 5.5 MB, so give the copy a moment) and paste it in.
 5. Click **Deploy**.
 
 If the editor is too slow with a file this size, use [Method B](#method-b-from-a-terminal) for this step; everything else stays the same.
@@ -213,9 +213,9 @@ It prints your address. The settings of Step 10 and the schedule of Step 11 are 
 
 ## Keeping it running
 
-**Updating to a newer version:** copy the new `worker_entry_combined.js` over the Worker's code (Step 7) and deploy, or run `git pull` and `npx wrangler deploy -c wrangler.selfhost.toml`. When a release adds a file to [`migrations/`](migrations/), paste that file into the `my-lists-db` Console **before** deploying. `SELECT version FROM schema_migrations ORDER BY version;` shows what is already applied; run only the files after it, in order.
+**Updating to a newer version:** copy the new `worker_entry_combined.js` over the Worker's code (Step 7) and deploy, or run `git pull` and `npx wrangler deploy -c wrangler.selfhost.toml`. When a release adds a file to [`migrations/`](../migrations/), paste that file into the `my-lists-db` Console **before** deploying. `SELECT version FROM schema_migrations ORDER BY version;` shows what is already applied; run only the files after it, in order.
 
-**Runtime version (compatibility date):** `wrangler.selfhost.toml` now says `compatibility_date = "2026-07-27"` (it was `2024-01-01`), so a copy you deploy from the terminal runs on the same Cloudflare runtime version as the public site. The Cloudflare changes between those two dates do not affect this project; the one to know about is that `Authorization` headers are dropped if a request follows a redirect to a different website, which none of the services this add-on calls rely on. The full list, with a yes/no for each, is in [`docs/OPERATIONS.md`](docs/OPERATIONS.md) section 32. If you deployed through the dashboard (Method A), the date is under Worker → **Settings → Runtime**; it needs no change.
+**Runtime version (compatibility date):** `wrangler.selfhost.toml` now says `compatibility_date = "2026-07-27"` (it was `2024-01-01`), so a copy you deploy from the terminal runs on the same Cloudflare runtime version as the public site. The Cloudflare changes between those two dates do not affect this project; the one to know about is that `Authorization` headers are dropped if a request follows a redirect to a different website, which none of the services this add-on calls rely on. The full list, with a yes/no for each, is in [`docs/OPERATIONS.md`](OPERATIONS.md) section 32. If you deployed through the dashboard (Method A), the date is under Worker → **Settings → Runtime**; it needs no change.
 
 **Backing up your own copy:** use **Download Backup File** in Settings now and then. D1 also keeps 30 days of point-in-time recovery (database → **Time Travel**).
 
@@ -231,6 +231,6 @@ It prints your address. The settings of Step 10 and the schedule of Step 11 are 
 | Watch history stays empty | `DB_ACTIVITY` is not bound, or `schema_activity.sql` was not run (Steps 3 and 8). |
 | `/admin` rejects your key | Re-enter `ADMIN_KEY` in Step 9, then deploy again. |
 
-More detail for operators: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) (bindings, secrets, migrations, backups).
+More detail for operators: [`docs/OPERATIONS.md`](OPERATIONS.md) (bindings, secrets, migrations, backups).
 
 This project is licensed for noncommercial use ([PolyForm Noncommercial 1.0.0](../LICENSE)). Running it for yourself and friends is fine; it comes with no support.

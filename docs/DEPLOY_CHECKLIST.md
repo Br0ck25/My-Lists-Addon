@@ -70,28 +70,25 @@ Run these checks in order from the repository root:
 - [ ] **8. Regenerate Function Map:**
   ```bash
   python tools/gen_map.py
-  git diff --quiet -- FUNCTION-MAP.md || echo "FUNCTION-MAP.md was updated"
+  git diff --quiet -- docs/FUNCTION-MAP.md docs/FILE-INDEX.md || echo "the function map was updated"
   ```
 
 ---
 
 ## Phase B: Pre-Deploy Database Backup Gate
 
-Before touching any production database, ensure Time Travel is available and take a point-in-time export:
+Before touching any production database, record a Time Travel bookmark and make sure a recent off-Cloudflare copy exists. (`wrangler d1 export` does **not** work on `my-lists-db`: D1 refuses to export a database with virtual tables. See `docs/OPERATIONS.md` section 5.)
 
-- [ ] **1. Export Production Database (`my-lists-db`):**
-  ```bash
-  npx wrangler d1 export my-lists-db --remote --output=backups/my-lists-db-pre-deploy-$(date +%Y%m%d_%H%M%S).sql
-  ```
-- [ ] **2. Export Activity Database (`mylists-activity`) if modified:**
-  ```bash
-  npx wrangler d1 export mylists-activity --remote --output=backups/mylists-activity-pre-deploy-$(date +%Y%m%d_%H%M%S).sql
-  ```
-- [ ] **3. Record Time Travel Bookmark:**
+- [ ] **1. Record Time Travel Bookmark (`my-lists-db`):**
   ```bash
   npx wrangler d1 time-travel info my-lists-db
   ```
   Save the latest bookmark timestamp to rollback notes.
+- [ ] **2. Record Time Travel Bookmark (`mylists-activity`):**
+  ```bash
+  npx wrangler d1 time-travel info mylists-activity
+  ```
+- [ ] **3. Take a fresh off-Cloudflare copy:** GitHub, Actions, *D1 backup*, *Run workflow*. Wait for the green tick (it checks that the file restores). The daily 04:17 UTC run is enough if the deploy is within a few hours and changes no data.
 
 ---
 
@@ -186,7 +183,6 @@ If an unrecoverable defect, latency spike, or data regression occurs during the 
      ```bash
      npx wrangler d1 time-travel restore my-lists-db --bookmark=<saved_bookmark>
      ```
-   - Or restore from the pre-deploy SQL export:
-     ```bash
+   - Or restore the off-Cloudflare copy from step 3 of Phase B: follow "Restoring a daily copy" in `docs/OPERATIONS.md` section 5 (load it into a new, empty database first; never on top of the live one).bash
      npx wrangler d1 execute my-lists-db --file=backups/my-lists-db-pre-deploy-XXXX.sql --remote
      ```

@@ -11,7 +11,7 @@ The staging environment operates with **100% resource isolation** from productio
 - **Isolated Authoritative Stores:** Staging runs against dedicated D1 databases (`my-lists-db-staging` and `mylists-activity-staging`) and a dedicated KV namespace. No staging read or write ever touches production data.
 - **Isolated Blob Storage & Queues:** Shared channel pools, backups, and media artifacts live in `mylists-blobs-staging`. Background queue processing runs on `mylists-jobs-staging` with its own dead-letter queue (`mylists-jobs-staging-dlq`).
 - **Independent Cryptographic Secrets:** Staging uses its own `TOKEN_ENCRYPTION_KEY`, `LOOKUP_PEPPER`, and `ADMIN_KEY`. Staging tokens cannot decrypt production records, and production tokens cannot decrypt staging records.
-- **Preview Feature Flags:** Advanced flags (`FF_SESSIONS`, `FF_V2_LISTS_READ`, `FF_EVENT_TRACKING`, `FF_SHOW_SCHEDULE`) are activated on staging ahead of production to rehearse transitions and verify zero-regression contracts.
+- **Preview Feature Flags:** Advanced flags (`FF_SESSIONS`, `FF_V2_LISTS_READ`, `FF_EVENT_TRACKING`, ...) are set in `[env.staging.vars]` in `wrangler.toml` to rehearse transitions. Staging does **not** match production exactly: production also runs the one-way `FF_V2_LISTS_ONLY`, which staging leaves off, so a bug that only appears with it can pass staging. `FF_SHOW_SCHEDULE` is off on staging too (commented out in `wrangler.toml`).
 
 ---
 
@@ -100,7 +100,15 @@ npx wrangler secret put TOKEN_ENCRYPTION_KEY --env staging
 npx wrangler secret put LOOKUP_PEPPER --env staging
 npx wrangler secret put TMDB_API_KEY --env staging
 
-# 6. Deploy Code to Staging
+# 6. Put the new ids in wrangler.toml
+#    Replace YOUR_STAGING_KV_NAMESPACE_ID, YOUR_STAGING_DATABASE_ID and
+#    YOUR_STAGING_ACTIVITY_DATABASE_ID under [env.staging] with the ids the
+#    commands above printed. The deploy fails until you do.
+#    [env.staging] also declares the route staging.mylistsaddon.com/*: the
+#    mylistsaddon.com zone must exist in this Cloudflare account, or remove the
+#    route and use the *.workers.dev address.
+
+# 7. Deploy Code to Staging
 npx wrangler deploy --env staging
 ```
 
