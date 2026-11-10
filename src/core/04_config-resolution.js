@@ -41,11 +41,11 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
             const mainParsed = mainRaw ? JSON.parse(mainRaw) : null;
             if (mainParsed && typeof mainParsed === "object") settingsSource = mainParsed;
           } catch {}
-          const tvList = Array.isArray(tvParsed.config)
+          const tvList = (Array.isArray(tvParsed.config)
             ? tvParsed.config
             : (Array.isArray(tvParsed.entries)
               ? tvParsed.entries
-              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []));
+              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []))).filter((e) => e && typeof e === "object");
           return {
             entries: tvList,
             lists: tvList,
@@ -69,11 +69,12 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed) return null;
-    const list = Array.isArray(parsed.config)
+    // An entry that is not an object (a stored null) is skipped, not fatal.
+    const list = (Array.isArray(parsed.config)
       ? parsed.config
       : (Array.isArray(parsed.entries)
         ? parsed.entries
-        : (Array.isArray(parsed.lists) ? parsed.lists : []));
+        : (Array.isArray(parsed.lists) ? parsed.lists : []))).filter((e) => e && typeof e === "object");
     return {
       entries: list,
       lists: list,

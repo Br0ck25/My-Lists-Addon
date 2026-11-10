@@ -254,6 +254,11 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
 // partial-update case that actually needs a smaller request, and one
 // key is simpler to reason about than keeping four in sync with each
 // other.
+// A config row is an object: a null or a number used to break the install link.
+function isPlainConfigEntry(e) {
+  return !!e && typeof e === "object" && !Array.isArray(e);
+}
+
 async function creatorApiSyncSave(request, env, ctx, path) {
   let body;
   try {
@@ -370,7 +375,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   }
 
   const blob = {
-    config: Array.isArray(body.config) ? body.config : [],
+    config: Array.isArray(body.config) ? body.config.filter(isPlainConfigEntry) : [], // a null here broke the install link
     keys: await sealSyncKeys(env, auth.username, mergedKeys),
     collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
     likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],

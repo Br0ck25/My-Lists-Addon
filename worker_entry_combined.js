@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "82ae3986cd";
+const WORKER_BUILD = "78ae1edb6c";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -17721,11 +17721,11 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
             const mainParsed = mainRaw ? JSON.parse(mainRaw) : null;
             if (mainParsed && typeof mainParsed === "object") settingsSource = mainParsed;
           } catch {}
-          const tvList = Array.isArray(tvParsed.config)
+          const tvList = (Array.isArray(tvParsed.config)
             ? tvParsed.config
             : (Array.isArray(tvParsed.entries)
               ? tvParsed.entries
-              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []));
+              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []))).filter((e) => e && typeof e === "object");
           return {
             entries: tvList,
             lists: tvList,
@@ -17749,11 +17749,12 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed) return null;
-    const list = Array.isArray(parsed.config)
+    // An entry that is not an object (a stored null) is skipped, not fatal.
+    const list = (Array.isArray(parsed.config)
       ? parsed.config
       : (Array.isArray(parsed.entries)
         ? parsed.entries
-        : (Array.isArray(parsed.lists) ? parsed.lists : []));
+        : (Array.isArray(parsed.lists) ? parsed.lists : []))).filter((e) => e && typeof e === "object");
     return {
       entries: list,
       lists: list,
@@ -117911,6 +117912,11 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
 // partial-update case that actually needs a smaller request, and one
 // key is simpler to reason about than keeping four in sync with each
 // other.
+// A config row is an object: a null or a number used to break the install link.
+function isPlainConfigEntry(e) {
+  return !!e && typeof e === "object" && !Array.isArray(e);
+}
+
 async function creatorApiSyncSave(request, env, ctx, path) {
   let body;
   try {
@@ -118027,7 +118033,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   }
 
   const blob = {
-    config: Array.isArray(body.config) ? body.config : [],
+    config: Array.isArray(body.config) ? body.config.filter(isPlainConfigEntry) : [], // a null here broke the install link
     keys: await sealSyncKeys(env, auth.username, mergedKeys),
     collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
     likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
