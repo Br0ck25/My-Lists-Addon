@@ -151,9 +151,11 @@ async function apiKofiWebhook(request, env, ctx) {
   }
   let data = null;
   try {
-    // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
-    // (and multipart) alike.
-    const raw = (await request.formData()).get("data");
+    // Ko-fi posts application/x-www-form-urlencoded. Read at most the cap
+    // (the Content-Length above is only the sender's word), then parse it.
+    const body = await readRequestTextCapped(request, KOFI_WEBHOOK_BODY_MAX);
+    if (body.tooLarge) return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+    const raw = new URLSearchParams(body.text).get("data");
     if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
     data = JSON.parse(raw);
   } catch {

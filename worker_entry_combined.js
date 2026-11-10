@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2407decf9b";
+const WORKER_BUILD = "2b4d554b56";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -4159,17 +4159,51 @@ function parseCspReport(raw) {
   return out;
 }
 
+// The request body as text, read only up to `maxBytes`. A size check on the
+// Content-Length header trusts the sender (a chunked request has none), so
+// this counts what actually arrives and stops reading at the first byte past
+// the cap. Returns { text, tooLarge }; text is "" when tooLarge.
+async function readRequestTextCapped(request, maxBytes) {
+  if (!request.body) return { text: "", tooLarge: false };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return { text: "", tooLarge: true };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  return { text: new TextDecoder().decode(bytes), tooLarge: false };
+}
+
 async function handleCspReport(request, env, ctx) {
   const done = () => new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   const declared = parseInt(request.headers.get("Content-Length") || "0", 10) || 0;
   if (declared > CSP_REPORT_MAX_BYTES) return done();
   let raw = "";
   try {
-    raw = await request.text();
+    const read = await readRequestTextCapped(request, CSP_REPORT_MAX_BYTES);
+    if (read.tooLarge) return done();
+    raw = read.text;
   } catch {
     return done();
   }
-  if (!raw || raw.length > CSP_REPORT_MAX_BYTES) return done();
+  if (!raw) return done();
 
   const reports = parseCspReport(raw);
   for (const report of reports) {
@@ -120492,9 +120526,11 @@ async function apiKofiWebhook(request, env, ctx) {
   }
   let data = null;
   try {
-    // Ko-fi posts application/x-www-form-urlencoded; formData() reads that
-    // (and multipart) alike.
-    const raw = (await request.formData()).get("data");
+    // Ko-fi posts application/x-www-form-urlencoded. Read at most the cap
+    // (the Content-Length above is only the sender's word), then parse it.
+    const body = await readRequestTextCapped(request, KOFI_WEBHOOK_BODY_MAX);
+    if (body.tooLarge) return json({ ok: false, error: "Too large." }, 413, { "Cache-Control": "no-store" });
+    const raw = new URLSearchParams(body.text).get("data");
     if (typeof raw !== "string" || raw.length > KOFI_WEBHOOK_BODY_MAX) throw new Error("no data");
     data = JSON.parse(raw);
   } catch {
