@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-09";
+const WORKER_BUILD_DATE = "2026-11-10";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "3a2da7f553";
+const WORKER_BUILD = "4c44f8774b";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -141,7 +141,7 @@ const COLLECTIONS_ADDON_ID = "app.my-list.collections";
 const COLLECTIONS_ADDON_NAME = "My Lists Collections";
 const TV_LAUNCHER_ADDON_ID = "app.my-list.tv";
 const TV_LAUNCHER_ADDON_NAME = "My Lists TV Launcher";
-const ADDON_VERSION = "1.5.7";
+const ADDON_VERSION = "1.5.8";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --

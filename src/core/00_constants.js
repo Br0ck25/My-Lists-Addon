@@ -118,7 +118,7 @@ const COLLECTIONS_ADDON_ID = "app.my-list.collections";
 const COLLECTIONS_ADDON_NAME = "My Lists Collections";
 const TV_LAUNCHER_ADDON_ID = "app.my-list.tv";
 const TV_LAUNCHER_ADDON_NAME = "My Lists TV Launcher";
-const ADDON_VERSION = "1.5.7";
+const ADDON_VERSION = "1.5.8";
 const ADDON_NAME = "My Lists";
 
 // How many items a "Recommended Movies"/"Recommended Shows" list holds --
