@@ -1,8 +1,17 @@
 # 03 Security
-Health grade: (pending, see end)
+Health grade: C - the plumbing is strong (hashed keys and sessions, nonce CSP, parameterised SQL, atomic D1 rate limits, admin routes all gated), but two High holes let a stranger read and rewrite any user's watch history knowing only their public username.
+
+Root cause shared by SEC-01 and SEC-02: the username is used as a credential. The Nuvio TV pairing itself hands the TV nothing but the username (`installId: auth.username`, `src/api/69_creator-api-sync-routes.js:891-899`), and `resolveConfig` serves `creatorsync:<username>` as an owner-verified install. Usernames are public (creator pages, `/lists/public.json`).
 
 ## Scope covered (files, routes, commands run)
-(filled in at the end)
+- Auth: `src/api/62_creator-auth.js`, sessions and key hashing in `src/core/02_http-and-creator-utils.js` (1355-1700), admin identity / Access JWT / admin sessions / audit in `src/admin/03_admin.js` (1625-2150), admin login/logout `src/api/80_*.js`, CSRF `verifyCsrf` (02_:459-522), CORS (02_:1-67), security headers + CSP (02_:162-387), rate limits `clientIpKey` (02_:3098) and D1 counters.
+- Authorization walk: every one of the 184 routes in `tests/route-access.json`, GET and POST, anonymous and as a signed-in user (`walk.mjs`, 736 requests). All 48 admin routes refused anonymous and normal-user calls (401/404); all 31 account routes refused anonymous calls. Then targeted IDOR tests on installs and the session list, and code trace of `/api/lists/:id`, `/api/imports/`, `/api/me/sessions`, feedback threads.
+- Public write routes reviewed for missing auth: nuvio-tv history/sync/config/device, feedback, track-*, external-list, resolve, save.
+- Injection: grep of every `prepare(` with `${}` or `+` (all interpolations are constant table/column names or `?` placeholder lists); XSS payloads planted through the real API in display name, list name/description/items and feedback, then rendered in Chromium (list page, creator page, every admin tab); `__proto__` / `constructor.prototype` JSON bodies on 5 routes.
+- SSRF/redirect: `/api/poster-badge` (`isAllowedPosterUrl` allowlist), `/api/channel-logo` (path regex, fixed host), `/api/bp/warm` (same-origin only), all `Response.redirect`/`Location` sites, OAuth state checks.
+- Secrets: `git grep` of tracked files and `git log -p --all` for key/token patterns (history is a shallow clone of 301 commits); wrangler*.toml; three GitHub workflows (actions pinned by SHA, backups gpg-encrypted).
+- Privacy: delete-account sweep of every KV key and every D1 column (main + activity) after `DELETE /api/me` + purge job + scheduled tick; session lifecycle (sign-out, key reset, cache TTL).
+- Scripts (all in `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s03/`): walk.mjs, sec01_nuvio_history.mjs, sec02_username_install.mjs, xss_probe.mjs, xss_browser.cjs, xss_admin.cjs, delete_account.mjs, misc_checks.mjs, abuse_limits.mjs, feedback_race.mjs, session_checks.mjs. Each imports the real built Worker through `tests/harness.mjs`; nothing in the repo was changed.
 
 ## Proven findings   (ordered by severity)
 
@@ -42,7 +51,9 @@ Health grade: (pending, see end)
   ATTACKER GET /victimsync/subtitles/movie/tt0068646.json -> 200
   victim history after ping (load): ["tt0068646","tt0111161"]  kv: ["tt0068646","tt0111161"]
   diagnostic: {...,"lastPingId":"movie:tt0068646",...,"matched":"yes (tt0068646)"}
+  ATTACKER GET /api/resolve?config=victimsync -> 200 {"ok":true,"entries":[{"id":"watch-history",...,"url":"autotrack:watch-history:movie:victimsync"}],...
   ```
+  The last line shows the same thing on `/api/resolve`: the bare username returns the account's saved rows (list URLs included). Note the media-server webhook already retired its `?config=` form for this kind of reason (`src/api/64_media-server-scrobble.js:169-181`); the subtitles ping and the catalog routes still accept it.
 - Recommended fix: do not treat a username-keyed config as owner-verified. Either stop serving `creatorsync:<username>` as an install (use the hashed v2 install token, which already carries a "track" scope), or resolve it with `trackOwner`/`installTrackOwner` empty so private shelves and the playback ping require the real install token. Check the Nuvio TV launcher, which builds `/<username>/tv/manifest.json` URLs (`src/api/25_api-catalog-routes.js:1385-1386`), before changing. Effort: M.
 
 ### SEC-03 The Account Key is still accepted in a URL query string on /api/nuvio-tv/config
