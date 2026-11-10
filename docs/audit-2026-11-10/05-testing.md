@@ -22,7 +22,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | TEST-01 | verified fixed | bf54fbf | node --test tests/admin-security.test.mjs; mutation: make isValidAdminCookie return true and see it fail | 2026-11-10, independent review |
 | TEST-02 | verified fixed | bf54fbf | node --test tests/admin-security.test.mjs; mutation: drop the expiry check and see it fail | 2026-11-10, independent review |
 | TEST-03 | verified fixed | a1ecc1f | node --test tests/account-purge.test.mjs (presets are seeded and checked) | 2026-11-10, independent review |
-| TEST-04 | open (partially fixed, see Verification) | 034fdb6 | node --test tests/route-access.test.mjs ("no /admin/api/ or /api/ path appears ... however it is matched") | 2026-11-10, independent review |
+| TEST-04 | fixed (awaiting verification) | 034fdb6, cf674d2 | node --test tests/route-access.test.mjs ("no /admin/api/ or /api/ path appears ... however it is matched") |  |
 | TEST-05 | verified fixed | acba574 | TZ=Asia/Tokyo node --test --test-name-pattern="puts the hour under the date" tests/client.test.mjs | 2026-11-10, independent review |
 | TEST-06 | verified fixed | acba574 | node --test tests/load-performance.test.mjs (timing budgets only with MLA_PERF=1) | 2026-11-10, independent review |
 | TEST-07 | verified fixed | 8a27e51 | bash verify.sh -q: the last line says when the browser step was skipped; git config core.hooksPath prints .githooks | 2026-11-10, independent review |
