@@ -514,7 +514,8 @@ async function exchangeRefreshToken(env, provider, conn) {
             expiresAt: d.created_at && d.expires_in ? (d.created_at + d.expires_in) * 1000 : null,
           };
         }
-        if (res.status === 400 || res.status === 401 || res.status === 403) rejected = true;
+        // 403 and 429 are Cloudflare slowing a burst down, not a refusal (audit API-02).
+        if (res.status === 400 || res.status === 401) rejected = true;
         else return null;
       } catch {
         return null;
@@ -563,7 +564,7 @@ async function exchangeRefreshToken(env, provider, conn) {
           expiresAt: d.expires_in ? Date.now() + Number(d.expires_in) * 1000 : null,
         };
       }
-      if (res.status === 400 || res.status === 401 || res.status === 403) return { rejected: true };
+      if (res.status === 400 || res.status === 401) return { rejected: true };
     } catch {}
     return null;
   }
