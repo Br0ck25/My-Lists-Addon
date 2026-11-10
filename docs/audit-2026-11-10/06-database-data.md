@@ -13,7 +13,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | DB-01 | verified fixed | a1ecc1f | node --test tests/account-purge.test.mjs | 2026-11-10, independent review |
-| DB-02 | open (partially fixed, see Verification) | e5110e0, 59b1a77 | node --test tests/creator-user-lists-save.test.mjs | 2026-11-10, independent review |
+| DB-02 | fixed (awaiting verification) | e5110e0, 59b1a77, 008798e | node --test tests/creator-user-lists-save.test.mjs |  |
 | DB-03 | verified fixed | 35f1c3f | node --test tests/accounts-key-hash-index.test.mjs. Live: apply migrations/0026_accounts_key_hash_index.sql. | 2026-11-10, independent review |
 | DB-04 | open |  |  |  |
 | DB-05 | open |  |  |  |
