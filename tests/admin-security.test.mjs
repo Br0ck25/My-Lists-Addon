@@ -273,6 +273,29 @@ describe("P7-2: admin sessions that can be revoked", () => {
     assert.equal(listed.body.unavailable, "no-d1");
   });
 
+  // Audit TEST-01 and TEST-02: the break-glass cookie is `<expiry>.<signature>`
+  // and nothing else proves it. Both ways of getting it wrong must be refused.
+  it("the signed fallback cookie: a wrong signature, an edited expiry and an expired one are all refused", async () => {
+    const env = makeEnv({ CONFIGS: makeKv() });
+    const good = await adminCookie(env);
+    assert.equal((await call(env, "/admin/api/analytics", { cookie: good })).status, 200, "the real cookie works");
+    const [expiry, sig] = good.slice("mla_admin=".length).split(".");
+
+    const forged = `mla_admin=${Date.now() + 86400000}.${"0".repeat(sig.length)}`;
+    assert.equal((await call(env, "/admin/api/analytics", { cookie: forged })).status, 401, "a made-up signature");
+    const anything = "mla_admin=9999999999999.anything";
+    assert.equal((await call(env, "/admin/api/analytics", { cookie: anything })).status, 401, "an arbitrary signature");
+
+    const longer = `mla_admin=${Number(expiry) + 86400000}.${sig}`;
+    assert.equal((await call(env, "/admin/api/analytics", { cookie: longer })).status, 401, "a real signature on an edited expiry");
+
+    // Correctly signed, but already past its expiry.
+    const past = String(Date.now() - 1000);
+    const pastSig = crypto.createHmac("sha256", env.ADMIN_KEY || ADMIN_KEY).update(past).digest("hex");
+    const expired = `mla_admin=${past}.${pastSig}`;
+    assert.equal((await call(env, "/admin/api/analytics", { cookie: expired })).status, 401, "a signed cookie past its expiry");
+  });
+
   it("keeps working when D1 is bound but the migration has not run", async () => {
     const db = makeD1();
     db._db.exec("DROP TABLE admin_sessions");
