@@ -516,7 +516,7 @@ async function stremioMetaItem(env, ctx, url, m) {
       });
       return jsonPublic({ meta: meta || null });
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) });
+      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -528,7 +528,7 @@ async function stremioMetaItem(env, ctx, url, m) {
       if (metaConfig.provideMetadata === false) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
       const effectiveKey = metaConfig.tmdbKey || TMDB_API_KEY;
       let meta = await fetchStandardItemMeta(id, metaType, effectiveKey, env, ctx);
-      if (!meta) return jsonPublic({ meta: null });
+      if (!meta) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
       // Same opt-in artwork the catalog rows get, so a title's detail
       // page does not fall back to the plain poster the moment it is
       // opened. Only the poster is touched -- background, logo, cast and
@@ -544,7 +544,7 @@ async function stremioMetaItem(env, ctx, url, m) {
         { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
       );
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) });
+      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
     }
   }
 

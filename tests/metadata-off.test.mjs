@@ -38,3 +38,19 @@ it('meta and search routes answer nothing for real titles when metadata is off',
     globalThis.fetch = originalFetch;
   }
 });
+
+// API-03: "could not ask" and "nothing found" both answer { meta: null }; an app
+// that honours Cache-Control must not keep that empty page for an hour.
+it('a title page that could not be loaded is not cached by the app', async () => {
+  const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1(), TMDB_API_KEY: 'k' });
+  await install(env, 'metaon', {});
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('down', { status: 503 });
+  try {
+    const r = await call(env, '/metaon/meta/movie/tt0111161.json');
+    assert.equal(r.body.meta, null);
+    assert.match(r.headers.get('cache-control') || '', /no-store/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

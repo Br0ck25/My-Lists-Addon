@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "8b6f6ec5a7";
+const WORKER_BUILD = "2407decf9b";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -120135,7 +120135,7 @@ async function stremioMetaItem(env, ctx, url, m) {
       });
       return jsonPublic({ meta: meta || null });
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) });
+      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -120147,7 +120147,7 @@ async function stremioMetaItem(env, ctx, url, m) {
       if (metaConfig.provideMetadata === false) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
       const effectiveKey = metaConfig.tmdbKey || TMDB_API_KEY;
       let meta = await fetchStandardItemMeta(id, metaType, effectiveKey, env, ctx);
-      if (!meta) return jsonPublic({ meta: null });
+      if (!meta) return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
       // Same opt-in artwork the catalog rows get, so a title's detail
       // page does not fall back to the plain poster the moment it is
       // opened. Only the poster is touched -- background, logo, cast and
@@ -120163,7 +120163,7 @@ async function stremioMetaItem(env, ctx, url, m) {
         { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
       );
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) });
+      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
     }
   }
 
