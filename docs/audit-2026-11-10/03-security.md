@@ -115,3 +115,40 @@ Root cause shared by SEC-01 and SEC-02: the username is used as a credential. Th
   ```
 - Recommended fix: add `consumeRateLimit` per IP to both (e.g. 10/min for device codes). Effort: S.
 
+## Unproven suspicions   (not counted)
+- `/api/nuvio-tv/collections/<username>` and the schedule routes (`/api/nuvio-tv/schedule/`, `/schedules/`) are public and take a username via the same `resolveNuvioTvTargetData`; they probably expose the account's custom collections / channels the way `/api/nuvio-tv/sync/<username>` does (SEC-01 proof shows the sync one answers 200). Not walked one by one.
+- `/api/nuvio-tv/config` POST changes the TV lineup, is exempt from the CSRF check (whole `/api/nuvio-tv/` prefix, `02_:474`) and accepts the session cookie. The session cookie is `SameSite=Lax`, which stops cross-site POSTs in current browsers, so I could not turn it into an attack; it rests on the cookie attribute alone.
+- The old stateless admin cookie (HMAC of its own expiry, `src/admin/03_admin.js:1640-1656`) is still accepted alongside session rows, so "revoke all admin sessions" does not end a cookie issued that way (only when D1 lacked migration 0018 at sign-in). Expires within 7 days.
+- Feedback body size: a 30 MB JSON body was read and parsed before the 4,000-character check (`misc_checks.mjs`), i.e. no early body cap on that route. Workers cap requests at 100 MB, so impact is CPU/memory only.
+- Accounts deleted are still in the encrypted daily D1/KV backups for 30 days (`.github/workflows/d1-backup.yml`, retention-days: 30). Normal practice; worth stating in the privacy notice.
+
+## Checked and rejected  (suspected, turned out handled)
+- Admin routes without `isAdminRequest`: none. Walk shows all 48 refuse anonymous and signed-in-user calls; `/admin/api/installs/*` checks at `src/api/27_installs.js:749`.
+- Forged Cloudflare Access header: `adminAccessIdentity` verifies the RS256 signature against the team's certs, `exp`, `nbf`, `iss`, `aud`, and an optional email allowlist (`src/admin/03_admin.js:1763-1815`).
+- IP spoofing for rate limits: only `CF-Connecting-IP` is read (`02_:3098-3111`); no `X-Forwarded-For` anywhere in `src/`. A forged XFF did not change the bucket (`abuse_limits.mjs`: 10/10 refused 429).
+- SQL injection: every interpolated fragment is a constant or a generated `?` list (e.g. `07_:3064` LIKE uses bound `%q%`).
+- Stored XSS: payloads in display name, list name, description, item titles and feedback rendered as text on the list page, creator page and all admin tabs; no injected nodes, no dialog, no CSP violation (screenshots `xss_listpage.png`, `xss_admin_*.png` in scratch). CSP is nonce-only for scripts, so even a missed escape would not execute.
+- Prototype pollution: raw `"__proto__"` / `constructor.prototype` bodies on sync/save, save-presets, save-channels, /api/save, /api/feedback left `Object.prototype` clean.
+- SSRF/open redirect via `poster=`: blocked by `isAllowedPosterUrl` (https + host allowlist, `25_:67-77`); `/api/channel-logo` pins the host and validates the path.
+- IDOR on installs and v2 lists: every read/write filters on `account_id` / `isOwner` (`27_installs.js` queries; `31_lists-api.js:291-326`). User B got 404 on A's install for GET, PATCH, DELETE.
+- Feedback threads by name: requires the account key (`77_:741-747`); thread ids are 72-bit CSPRNG capabilities, rate limited.
+- Scrobble webhook: only the revocable hashed `?st=` token is accepted; key/config forms answer 410 (`64_:157-181`).
+- OAuth callbacks: state cookie compared in constant time (`75_:596`); tokens go in the URL fragment, or server-side when signed in.
+- Session lifecycle: sign-out ends the session at once; key reset ends all sessions and the old key (`session_checks.mjs`). Cookies are `HttpOnly; Secure; SameSite=Lax` (user) and `SameSite=Strict` (admin).
+- Hardcoded secrets: none in tracked files or reachable history; the one `sk_live_` hit is a deliberately fake string in a redaction test (`tests/worker.test.mjs`, commit f910ed0).
+- Public cron/debug/migration endpoints: none outside `/admin/api/*`.
+
+## Done well (do not change)
+- Account Keys stored as salted PBKDF2 hashes; session and admin tokens stored only as SHA-256; constant-time compares, including the admin key length (`timingSafeEqualSecret`).
+- One CSRF gate and one security-header/CSP boundary for every response; nonce-only `script-src`, `frame-ancestors 'self'`, `form-action 'self'`, HSTS, `no-store` forced on private paths.
+- Atomic D1 rate counters; PBKDF2 work bounded per IP before verification; requests with no `CF-Connecting-IP` refused.
+- Admin: Access JWT properly verified, revocable session rows, audit log of every mutating admin request at the single gate.
+- Webhook credential moved off the Account Key to a revocable, hashed scrobble token; keys refused in URLs on most routes.
+- CI actions pinned by commit SHA; backups encrypted before upload.
+
+## Not audited and why
+- Real Cloudflare behaviour (WAF rules, Access config, KV edge caching, real D1): local harness only.
+- Client-side DOM XSS across all ~300 `innerHTML` sinks: sampled through the browser only for the list page, creator page and admin tabs; the Channel builder and Custom List builder were not driven with payloads.
+- Dependency vulnerabilities: there is no `package.json`; the Worker has no npm runtime dependencies. CI installs pinned `acorn`, `eslint-scope`, `playwright` for tests only; `npm audit` not run (no manifest, no network).
+- Full git history: the clone is shallow (301 commits), so secrets removed before that point could not be checked.
+- Provider-token handling inside `sealSyncKeys`/`openSyncKeys` and connection encryption (28_connections.js): read only in passing.
