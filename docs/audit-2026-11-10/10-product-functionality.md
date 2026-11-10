@@ -14,14 +14,14 @@ Health grade: B+ — the main journeys (create account, sign in elsewhere, add r
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| PROD-01 | fixed (awaiting verification) | ae33b9f | node --test tests/add-shelf-type-guess.client.test.mjs |
-| PROD-02 | fixed (awaiting verification) | 0a7a916 | node --test tests/add-shelf-source-check.test.mjs |
-| PROD-03 | fixed (awaiting verification) | ae33b9f | grep -n "raw items" src/client/18_client-copy-and-trakt-export.js prints nothing |
-| PROD-04 | fixed (awaiting verification) | ae33b9f | grep -n "few minutes" README.md |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| PROD-01 | verified fixed | ae33b9f | node --test tests/add-shelf-type-guess.client.test.mjs | 2026-11-10, independent review |
+| PROD-02 | regression introduced (see Verification) | 0a7a916 | node --test tests/add-shelf-source-check.test.mjs | 2026-11-10, independent review |
+| PROD-03 | verified fixed | ae33b9f | grep -n "raw items" src/client/18_client-copy-and-trakt-export.js prints nothing | 2026-11-10, independent review |
+| PROD-04 | verified fixed | ae33b9f | grep -n "few minutes" README.md | 2026-11-10, independent review |
 
 ## Proven findings   (ordered by severity)
 
@@ -41,6 +41,8 @@ https://www.themoviedb.org/list/8123 -> content type = movie
   And the saved row then really lands in Series: `node .../s10/p1_series.mjs` printed `catalogs [ 'series:Best Action Films', 'movie:Movies', 'series:Series' ]`.
 - Recommended fix and effort: S. Look at the URL path only (not the host), and match whole words like `/shows`, `type=show`.
 
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read ae33b9f. The new test fails against the parent commit (9 pass, 3 fail). Extra inputs: `trakt.tv/users/bob/lists/x` with no scheme stays Movies, and `/tv/`, `best-tv-shows` and `title_type=tv_series` pick Shows. One edge now goes the other way: an IMDb link with `title_type=tvSeries` (one word) used to pick Shows and now stays Movies. Minor.
+
 ### PROD-02 A link the app itself calls "not a supported list source" is still saved as a catalog row and put in the install link
 - Severity: Low
 - Status: Proven
@@ -49,6 +51,8 @@ https://www.themoviedb.org/list/8123 -> content type = movie
 - Impact: a typo or wrong site gives a permanent dead row on the user's TV home screen that they must find and delete; no explanation is shown at the time they add it.
 - Proof: `s10/j4.cjs` output: `RESP POST 400 /api/preview {"ok":false,"error":"That URL isn't a supported list source."}` then `ADD Bad URL ...`; `sync/load` then lists `Bad URL|movie|https://example.com/nothing`; the manifest from the install link contains `movie https-example-com-nothing | Bad URL`; the upstream log shows `GET https://mdblist.com/lists/https%3A/example.com/nothing/json/?append_to_response=poster` (`curl localhost:8901/upstream`). (My fixture returns data for any MDBList path, so the real result is an empty row; the fixture is only why the row showed films.)
 - Recommended fix and effort: S. Reuse the same source check `/api/preview` uses and show its error in the modal before saving.
+
+**Verification.** 2026-11-10, independent review: **regression introduced**. Read 0a7a916 (and the `creatorApiFetch` change in c5dbd27). The new test fails against the parent, and `validateOnly` uses the same `isAllowedCatalogSourceUrl` check as the preview, with no provider call or limiter charge. **What is now wrong:** Add Catalog now waits for the server check before saving, but the dialog stays open and the button stays enabled while it waits. Before, the dialog closed at once. Probe with the client harness: two clicks on Add Catalog before the check answers add the row twice (`addRow` called 2 times). On a slow connection a double tap makes a duplicate row. Fix: disable `addShelfModalBtn` (or ignore a second submit) until the check has answered, and add a test for it.
 
 ### PROD-03 Leftover debug log in the production page
 - Severity: Info
@@ -59,6 +63,8 @@ https://www.themoviedb.org/list/8123 -> content type = movie
 - Proof: line quoted above, from `sed -n 809p`.
 - Recommended fix and effort: S.
 
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read ae33b9f. The `console.log` is gone, and `grep -rnE '^\s*console\.log\(' src/client src/page` finds nothing.
+
 ### PROD-04 README gives two different background-sync intervals
 - Severity: Info
 - Status: Proven
@@ -66,6 +72,8 @@ https://www.themoviedb.org/list/8123 -> content type = movie
 - Impact: none functionally (the job code comments say it copes with 5 or 6); only a documentation mismatch.
 - Proof: `grep -n crons wrangler*.toml`.
 - Recommended fix and effort: S (say "every few minutes").
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read ae33b9f. README now says `every few minutes`. The self-hosting step's `*/5 * * * *` matches `wrangler.selfhost.toml`.
 
 ## Feature table (README claims vs what ran)
 | Feature | Result | Evidence |

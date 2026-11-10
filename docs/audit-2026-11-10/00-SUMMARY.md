@@ -170,37 +170,37 @@ Small, ordered steps that follow the repo rules: a failing test first, a root-ca
 
 Per-finding rows are in each section report (`## Fix progress`). Branch `claude/youthful-galileo-e6ci4l`, commits after `beea09c`. Nothing here is deployed.
 
-| Finding | Status | Commit |
-|---|---|---|
-| BUG-01 | fixed (awaiting verification) | a0b0ea7 |
-| SEC-01 | fixed (awaiting verification) | ccac5fc |
-| SEC-02 | fixed (awaiting verification) | ccac5fc |
-| SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0 |
-| PERF-03 | partly fixed (awaiting verification) | 35f1c3f, 7b927c6 |
-| TEST-01 | fixed (awaiting verification) | bf54fbf |
-| TEST-02 | fixed (awaiting verification) | bf54fbf |
-| TEST-03 | fixed (awaiting verification) | a1ecc1f |
-| TEST-04 | fixed (awaiting verification) | 034fdb6 |
-| TEST-05 | fixed (awaiting verification) | acba574 |
-| TEST-06 | fixed (awaiting verification) | acba574 |
-| TEST-07 | fixed (awaiting verification) | 8a27e51 |
-| DB-01 | fixed (awaiting verification) | a1ecc1f |
-| DB-02 | fixed (awaiting verification) | e5110e0 |
-| DB-03 | fixed (awaiting verification) | 35f1c3f |
-| UI-01 | fixed (awaiting verification) | ae33b9f |
-| API-01 | fixed (awaiting verification) | 5b60aa2 |
-| API-02 | fixed (awaiting verification) | 10c3c33 |
-| API-04 | fixed (awaiting verification) | c5dbd27 |
-| API-05 | fixed (awaiting verification) | 37cdb1a, 75a8244, 7b927c6 |
-| OPS-01 | fixed (awaiting verification) | 034fdb6 |
-| OPS-02 | fixed (awaiting verification) | 8a27e51 |
-| OPS-03 | fixed (awaiting verification) | 8a27e51 |
-| OPS-04 | fixed (awaiting verification) | 26148a7 |
-| OPS-05 | fixed (awaiting verification) | 26148a7, 9496b00 |
-| OPS-08 | fixed (awaiting verification) | 26148a7, 9496b00 |
-| PROD-01 | fixed (awaiting verification) | ae33b9f |
-| PROD-02 | fixed (awaiting verification) | 0a7a916 |
-| PROD-03 | fixed (awaiting verification) | ae33b9f |
-| PROD-04 | fixed (awaiting verification) | ae33b9f |
+| Finding | Status | Commit | Verified |
+|---|---|---|---|
+| BUG-01 | verified fixed | a0b0ea7 | 2026-11-10, independent review |
+| SEC-01 | verified fixed | ccac5fc | 2026-11-10, independent review |
+| SEC-02 | verified fixed | ccac5fc | 2026-11-10, independent review |
+| SEC-04 | open (partially fixed, see Verification) | a1ecc1f, 5997fe0 | 2026-11-10, independent review |
+| PERF-03 | regression introduced (see Verification) | 35f1c3f, 7b927c6 | 2026-11-10, independent review |
+| TEST-01 | verified fixed | bf54fbf | 2026-11-10, independent review |
+| TEST-02 | verified fixed | bf54fbf | 2026-11-10, independent review |
+| TEST-03 | verified fixed | a1ecc1f | 2026-11-10, independent review |
+| TEST-04 | open (partially fixed, see Verification) | 034fdb6 | 2026-11-10, independent review |
+| TEST-05 | verified fixed | acba574 | 2026-11-10, independent review |
+| TEST-06 | verified fixed | acba574 | 2026-11-10, independent review |
+| TEST-07 | verified fixed | 8a27e51 | 2026-11-10, independent review |
+| DB-01 | verified fixed | a1ecc1f | 2026-11-10, independent review |
+| DB-02 | verified fixed | e5110e0 | 2026-11-10, independent review |
+| DB-03 | verified fixed | 35f1c3f | 2026-11-10, independent review |
+| UI-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
+| API-01 | verified fixed | 5b60aa2 | 2026-11-10, independent review |
+| API-02 | verified fixed | 10c3c33 | 2026-11-10, independent review |
+| API-04 | regression introduced (see Verification) | c5dbd27 | 2026-11-10, independent review |
+| API-05 | verified fixed | 37cdb1a, 75a8244, 7b927c6 | 2026-11-10, independent review |
+| OPS-01 | verified fixed | 034fdb6 | 2026-11-10, independent review |
+| OPS-02 | verified fixed | 8a27e51 | 2026-11-10, independent review |
+| OPS-03 | verified fixed | 8a27e51 | 2026-11-10, independent review |
+| OPS-04 | open (partially fixed, see Verification) | 26148a7 | 2026-11-10, independent review |
+| OPS-05 | verified fixed | 26148a7, 9496b00 | 2026-11-10, independent review |
+| OPS-08 | verified fixed | 26148a7, 9496b00 | 2026-11-10, independent review |
+| PROD-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
+| PROD-02 | regression introduced (see Verification) | 0a7a916 | 2026-11-10, independent review |
+| PROD-03 | verified fixed | ae33b9f | 2026-11-10, independent review |
+| PROD-04 | verified fixed | ae33b9f | 2026-11-10, independent review |
 
-30 of 67 findings are fixed or partly fixed and await verification; the rest are open (see each report; SEC-03, SEC-05 and SEC-06 among them).
+Independent review, 2026-11-10: of the 30 rows above, 24 are verified fixed. 3 are partially fixed and back to open (SEC-04, TEST-04, OPS-04), and 3 fixes introduced a regression (PERF-03, API-04, PROD-02). Each report's **Verification.** note under the finding says what is still wrong. The other 37 findings were not touched and are still open (SEC-03, SEC-05 and SEC-06 among them).

@@ -11,17 +11,17 @@ Health grade: B -- the Stremio/Nuvio/Wako contract, CORS, legacy install links, 
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| API-01 | fixed (awaiting verification) | 5b60aa2 | node --test tests/public-routes-kv-outage.test.mjs tests/security-suite.test.mjs |
-| API-02 | fixed (awaiting verification) | 10c3c33 | node --test tests/token-refresh.test.mjs |
-| API-03 | open |  |  |
-| API-04 | fixed (awaiting verification) | c5dbd27 | node --test tests/trakt-paging.test.mjs tests/providers.test.mjs |
-| API-05 | fixed (awaiting verification) | 37cdb1a, 75a8244, 7b927c6 | node --test tests/catalog-skip-clamp.test.mjs tests/catalog-skip-limit.test.mjs tests/preview-chart-limit.test.mjs |
-| API-06 | open |  |  |
-| API-07 | open |  |  |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| API-01 | verified fixed | 5b60aa2 | node --test tests/public-routes-kv-outage.test.mjs tests/security-suite.test.mjs | 2026-11-10, independent review |
+| API-02 | verified fixed | 10c3c33 | node --test tests/token-refresh.test.mjs | 2026-11-10, independent review |
+| API-03 | open |  |  |  |
+| API-04 | regression introduced (see Verification) | c5dbd27 | node --test tests/trakt-paging.test.mjs tests/providers.test.mjs | 2026-11-10, independent review |
+| API-05 | verified fixed | 37cdb1a, 75a8244, 7b927c6 | node --test tests/catalog-skip-clamp.test.mjs tests/catalog-skip-limit.test.mjs tests/preview-chart-limit.test.mjs | 2026-11-10, independent review |
+| API-06 | open |  |  |  |
+| API-07 | open |  |  |  |
 
 ## Proven findings
 
@@ -41,6 +41,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   Contrast: a provider failure on the same route returns 200 with CORS (see t3 output below).
 - Recommended fix: In the top-level catch (line 139) use `jsonPublic`-style CORS headers when `isPublicCorsPath(path)` is true, and for `/catalog/` and `/meta/` paths answer 200 `{metas:[]}` / `{meta:null}` with `no-store`; never echo the platform message. Effort S.
 
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 5b60aa2. The new test fails against the parent commit (1 pass, 4 fail). Extra probes on HEAD with every KV read throwing: `/i/<token>/manifest.json` and `/i/<token>/catalog/...` answer 200 with CORS, `/<user>/catalog/movie/m1/skip=100.json` and a URL with a query string answer `{metas:[]}` with CORS, and subtitles answers `{subtitles:[]}`. No storage error text appears. The one test changed (`security-suite`, 500 to 503 on the manifest) is stricter, not looser, and is explained in the commit.
+
 ### API-02 A broken Trakt token refresh is treated as "the person must sign in again" when Trakt (or Cloudflare in front of it) answers 403
 - Severity: Medium
 - Status: Proven
@@ -54,6 +56,8 @@ mode=403cf refreshCalls=2 {"status":"reauth_required","last_error":"The provider
 ```
   Control run `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t9_refresh.mjs 503` leaves the connection `ok`, so the guard is only wrong for 403.
 - Recommended fix: Treat only 400 (invalid_grant) and 401 as a refusal; treat 403 and 429 as "could not be asked" (return null, retry tomorrow). Optionally require a JSON body with `error=invalid_grant` before marking. Effort S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 10c3c33. The new 403 and 429 cases fail against the parent commit. Other places that mark `reauth_required` are for Stremio/Nuvio (`kind === "invalid"`), not this Cloudflare 403 case. Gap: the same change for MDBList refresh has no test; the Trakt test covers only Trakt.
 
 ### API-03 Anyone can put their own wording into the app's Trakt/MDBList Trakt error dialog through a link; and a real exchange failure is always described as "rate-limited by Cloudflare"
 - Severity: Low
@@ -77,6 +81,8 @@ skip=80 returned 80 items; 80 of them already delivered by skip=0; trakt pages r
 ```
 - Recommended fix: Fetch by `Math.floor(skip / PAGE_SIZE)` but then drop the first `skip % PAGE_SIZE` items of what the mapping produced and, if the result is short, top up from the next Trakt page (as `fetchTmdbPagedResults` does), or record the raw offset in the `skip` the manifest hands out (only possible via `cacheMaxAge`-style ids, so the top-up is simpler). Effort M.
 
+**Verification.** 2026-11-10, independent review: **regression introduced**. Read c5dbd27. The short case the finding describes is fixed: the new test fails against the parent, and with a 3-page list `skip=<titles held>` brings new titles. **What is now wrong:** `traktWindowedPage` reads at most 5 Trakt pages from page 1, and returns `[]` when those pages cannot reach `skip`, so the app thinks the row has ended. Probe: a Trakt list of 10 pages where each page of 100 rows maps to 80 titles (800 titles), scrolled the way the finding says apps do (skip = titles held). On HEAD: skip 0, 100, 200, 300 bring 100 each, skip 400 brings 0, so 400 of 800 titles are reachable. The same walk on the parent commit reached all 800 distinct titles, with 240 repeats. Watch history (many episodes of one show) is the case most likely to shrink and be long. A page whose titles were all seen already also stops the walk (`titles.length === before`), which a binge in history can cause. Also unrelated to API-04 in this commit: `20_client-shelf-source-check.js` switched `fetch` to `creatorApiFetch` (PROD-02 code). Fix: when the window cannot reach `skip` within the page cap, continue from the page arithmetic instead of returning empty, or raise the cap with a total-items stop, and add a test with more than 5 shrinking pages.
+
 ### API-05 `skip` is not validated, there is no rate limit on catalog rows, and every different `skip` is its own cache entry
 - Severity: Low (cost / abuse amplifier on the owner's shared TMDB and Trakt keys and on KV writes; nobody's data is exposed)
 - Status: Proven
@@ -90,6 +96,8 @@ no-config path {"200":50} tmdb calls 376
 ```
   and `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t13_extras.mjs` shows the forwarded values: `themoviedb.org/3/movie/popular?api_key=X&page=-4`, `trakt.tv/users/a/lists/b/items/movies?limit=100&page=1000000000000000000`.
 - Recommended fix: Clamp `skip` to an integer between 0 and a cap (e.g. 10,000 = TMDB's 500-page limit), round it down to a multiple of the page size for cache-key purposes, and apply the same per-IP limiter the search catalog uses to unconfigured and non-cached row requests. Effort S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 37cdb1a, 75a8244 and the skip part of 7b927c6. The clamp test fails against its parent (3 pass, 3 fail), and so does the skip-limit test (0 pass, 2 fail). `skip` is now 0 to 9,900 in catalog rows and in `/api/preview`. Pages after the first share 120 a minute per address and are answered 429 with CORS, no-store and Retry-After. The only early return before the limiter that skips it is the channel row, which makes no provider call. Not done: rounding `skip` to the page size for the cache key (the per-address limit now bounds that). The new uncapped preview path from 7b927c6 is recorded under PERF-03.
 
 ### API-06 Simkl charts drop titles that Trakt and MDBList would keep, never send a year, and force every anime title to the row's type
 - Severity: Low

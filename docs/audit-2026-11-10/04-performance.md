@@ -9,16 +9,16 @@ Health grade: B- — database access is well indexed and flat as lists grow; the
 - Page weight: `hdrs.sh` (curl, identity vs gzip). Home page 428 KB, app.js 536 KB, app-features.js 1.46 MB, app.css 194 KB raw (about 55, 108, 282 and 33 KB gzipped).
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| PERF-01 | open - blocked on an owner decision | (none; a try was reverted) | See docs/HANDOFF.md, PERF-02 section. |
-| PERF-02 | open |  |  |
-| PERF-03 | partly fixed (awaiting verification) | 35f1c3f, 7b927c6 | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. |
-| PERF-04 | open |  |  |
-| PERF-05 | open |  |  |
-| PERF-06 | open |  |  |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| PERF-01 | open - blocked on an owner decision | (none; a try was reverted) | See docs/HANDOFF.md, PERF-02 section. |  |
+| PERF-02 | open |  |  |  |
+| PERF-03 | regression introduced (see Verification) | 35f1c3f, 7b927c6 | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. | 2026-11-10, independent review |
+| PERF-04 | open |  |  |  |
+| PERF-05 | open |  |  |  |
+| PERF-06 | open |  |  |  |
 
 ## Proven findings
 ### PERF-01 Every play (scrobble) re-reads and re-diffs the account's whole watch history
@@ -70,6 +70,8 @@ home page view #10 from one IP: 0 previews served, 30 refused with 429 (retry-af
 ```
   Cold-instance fan-out, `node .../s04/t10.mjs`: `cold isolate (empty KV): 30 previews ... kvGet=102 kvPut=62 fetch=208 hosts=[["api.themoviedb.org",180],...]`, `same isolate again: ... fetch=0`, `NEW isolate, KV already warm: ... kvGet=74 fetch=12` (provider answers were stubbed with 20 items each).
 - Recommended fix and effort: S for the duplicates (store the in-flight promise in `_listPreviewCache` instead of the finished answer), M for the rest: serve the home charts from one cached GET (the chart snapshots already exist server side, FF_CHART_SNAPSHOTS) instead of 30 POSTs, and do not charge the limiter for charts that are public and cached.
+
+**Verification.** 2026-11-10, independent review: **regression introduced**. Read 35f1c3f and 7b927c6. Client part is fine: `preview-inflight.client.test.mjs` fails against its parent. Two identical calls made together send one request, and a failed answer is not kept. The server part opens a new hole. `isFreeChartPreview` lets every first-page `tmdb:chart:*`/`trakt:chart:*` preview skip the per-address limit entirely, but the provider call is cached per `region`, and `region` is any string the caller sends. Probe on HEAD, one address, 400 `POST /api/preview` with `url: tmdb:chart:popular` and a different made-up region each time (`AA`, `BA`, ...): 400 times 200, 0 refused, 2,001 TMDB calls. The same 100 requests with `region: US` made 6 TMDB calls. Before 7b927c6 the same address was cut off at 240 a minute. A preview stacking six charts in one `url` is also free: 50 requests made 705 TMDB calls. This is the shared-key amplification API-05 was about, now with no cap. Fix: only waive the limit when the region is a known country code (or normalise it and leave it out of the cache key for charts that are not regional), and count stacked charts as non-free; or charge free previews to a separate, larger budget. The remaining part the fixer listed (serve the home charts from one cached GET) is still not built.
 
 ### PERF-04 Every media-server webhook, even events that are ignored, reads and rewrites the same KV key
 - Severity: Low

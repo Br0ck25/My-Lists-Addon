@@ -8,16 +8,16 @@ Health grade: B+ — schema, code and backups line up well (691 of 691 checkable
 - Commands: all Node scripts live in `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s06/`. No repo file other than this report was touched; verify.sh and build.py were not run.
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| DB-01 | fixed (awaiting verification) | a1ecc1f | node --test tests/account-purge.test.mjs |
-| DB-02 | fixed (awaiting verification) | e5110e0 | node --test tests/creator-user-lists-save.test.mjs |
-| DB-03 | fixed (awaiting verification) | 35f1c3f | node --test tests/accounts-key-hash-index.test.mjs. Live: apply migrations/0026_accounts_key_hash_index.sql. |
-| DB-04 | open |  |  |
-| DB-05 | open |  |  |
-| DB-06 | open |  |  |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| DB-01 | verified fixed | a1ecc1f | node --test tests/account-purge.test.mjs | 2026-11-10, independent review |
+| DB-02 | verified fixed | e5110e0 | node --test tests/creator-user-lists-save.test.mjs | 2026-11-10, independent review |
+| DB-03 | verified fixed | 35f1c3f | node --test tests/accounts-key-hash-index.test.mjs. Live: apply migrations/0026_accounts_key_hash_index.sql. | 2026-11-10, independent review |
+| DB-04 | open |  |  |  |
+| DB-05 | open |  |  |  |
+| DB-06 | open |  |  |  |
 
 ## Proven findings
 
@@ -39,6 +39,8 @@ stranger sees watch_positions rows: 1
   The existing test `tests/account-purge.test.mjs` only asserts `watch_events` and `show_progress`, so it cannot notice (its helper `assertNothingLeft` never looks at the two tables).
 - Recommended fix and effort: add `DELETE FROM watch_positions WHERE account_id = ?` and `DELETE FROM watch_events_removed WHERE account_id = ?` to the batch in purgeAccountRowsById, and extend `assertNothingLeft`. S.
 
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read a1ecc1f. Mutations on HEAD: disabling the new `watch_positions` DELETE, or the `watch_events_removed` DELETE, each fail `tests/account-purge.test.mjs` (3 pass, 4 fail). The re-used-id test also checks both tables for the new account.
+
 ### DB-02 Saving liked/hidden lists rewrites the D1 copy in several separate batches; a failure part-way leaves a truncated list, the route says "ok", and that truncated copy then wins on load
 - Severity: Medium
 - Status: Proven (by fault injection; the failure itself is the injected part)
@@ -53,6 +55,8 @@ D1 rows now: 79 | KV copy has: 120
 sync/load returns likedLists: 79
 ```
 - Recommended fix and effort: do not delete first. Insert-or-ignore the incoming ids, then delete only the ids no longer present (the pattern `d1ReplaceRowsById` already uses for tracking rows, 02_http-and-creator-utils.js around line 6120), and check the return value (report an error or set a "D1 behind" marker). M.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read e5110e0. The new test fails against the parent commit (1 pass, 1 fail). The save is now insert-or-ignore first and stale rows are deleted last, so a failed later batch leaves extra ids, never a short list. A failed write answers `ok:false`. Behaviour change worth knowing: when D1 cannot be written (or read: the new SELECT runs first), the whole sync save now answers 500 and the KV copy (config included) is not written. Before, the config still reached KV. The client is told and can retry; this is what the finding suggested (`report an error`).
 
 ### DB-03 Every Stremio/Nuvio manifest request scans the whole `accounts` table
 - Severity: Medium (cost and latency that grow with the number of accounts; nothing breaks at today's size)
@@ -70,6 +74,8 @@ EXPLAIN QUERY PLAN  SELECT username FROM accounts WHERE username = ? COLLATE NOC
 EXPLAIN QUERY PLAN  SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ?   -> MULTI-INDEX OR (indexed)
 ```
 - Recommended fix and effort: try the install token first (indexed), and only fall back to accounts with three separate indexed lookups (or add an index on `accounts(key_hash)` through a new migration plus schema.sql). S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 35f1c3f. All three copies of the lookup (`70_stremio-routes.js` x2, `25_api-catalog-routes.js`) dropped the redundant `COLLATE NOCASE` (the column is NOCASE, so a case-insensitive match still works). schema.sql and migration 0026 add `idx_accounts_key_hash`, and `D1_SCHEMA_MANIFEST` lists it. The new test fails against the parent commit and checks the query plan both from schema.sql and after applying the migration twice to an older database.
 
 ### DB-04 Deleting an account makes SQLite scan the whole `lists` and `channels` tables
 - Severity: Low (rare operation; grows with data)

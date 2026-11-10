@@ -13,15 +13,15 @@ All scratch scripts live in `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-12
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| BUG-01 | fixed (awaiting verification) | a0b0ea7 | node --test tests/sync-config-bad-entries.test.mjs |
-| BUG-02 | open |  |  |
-| BUG-03 | open |  |  |
-| BUG-04 | open |  |  |
-| BUG-05 | open |  |  |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| BUG-01 | verified fixed | a0b0ea7 | node --test tests/sync-config-bad-entries.test.mjs | 2026-11-10, independent review |
+| BUG-02 | open |  |  |  |
+| BUG-03 | open |  |  |  |
+| BUG-04 | open |  |  |  |
+| BUG-05 | open |  |  |  |
 
 ## Proven findings   (ordered by severity)
 
@@ -40,6 +40,8 @@ config= [{...},5] save 200 | manifest 200 ...
 ```
   The save itself answers 200 for the bad config. (`/api/save`, the anonymous route, does refuse such entries: "Every list needs to be a list row." — checked with `$S/bugB.mjs`, so only the sync route lacks the check.)
 - Recommended fix and effort: S. In the sync save, keep only entries that are plain objects (or answer 400); and in `resolveCreatorSyncConfig` use `(e && (e.id || ...))` so one bad row is skipped instead of failing the whole link.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read a0b0ea7. Running the new test against the parent commit fails 2 of 2. Two mutations on HEAD each fail it: removing the save filter, and removing the read filter in `resolveCreatorSyncConfig`. All non-object entries (`null`, `5`, `"x"`, `[1]`) are dropped on save, and a `null` already stored no longer breaks the manifest. No other `config.map` reader exists outside the client. One gap remains: the same filter on the TV-launcher record (`tvParsed`) has no test. Removing it leaves both `sync-config-bad-entries` and `nuvio-tv-sync` green. The code there is correct.
 
 ### BUG-02 Deleting an account while a save is in flight leaves the list data behind
 - Severity: Low

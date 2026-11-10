@@ -15,16 +15,16 @@ Root cause shared by SEC-01 and SEC-02: the username is used as a credential. Th
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| SEC-01 | fixed (awaiting verification) | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-01 block). Old TVs must pair again. |
-| SEC-02 | fixed (awaiting verification) | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-02 block). LEGACY_USERNAME_OWNER_LINKS=1 undoes it. |
-| SEC-03 | open |  |  |
-| SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0 | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). |
-| SEC-05 | open |  |  |
-| SEC-06 | open |  |  |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| SEC-01 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-01 block). Old TVs must pair again. | 2026-11-10, independent review |
+| SEC-02 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-02 block). LEGACY_USERNAME_OWNER_LINKS=1 undoes it. | 2026-11-10, independent review |
+| SEC-03 | open |  |  |  |
+| SEC-04 | open (partially fixed, see Verification) | a1ecc1f, 5997fe0 | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). | 2026-11-10, independent review |
+| SEC-05 | open |  |  |  |
+| SEC-06 | open |  |  |  |
 
 ## Proven findings   (ordered by severity)
 
@@ -48,6 +48,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   Trace: `handleNuvioTvHistoryRoute` (25_:1284) -> reads `body.targetId` (1304) -> `resolveNuvioTvTargetData(targetId)` (1309; lookup at 597-599 matches by username or id) -> `handleNuvioTvHistoryRemove/Add(env, username, body)` (1315/1317) which write `creatorsynctracking:<username>` (1128/1268) and D1. No auth call anywhere on the path.
 - Recommended fix: require a secret the TV actually holds (the device pairing token issued by `/api/nuvio-tv/device/claim`, or the 43-char install token) and stop matching `targetId` against `username` and `id` for anything that writes. Effort: M.
 
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read ccac5fc. The new `tests/nuvio-tv-device-token.test.mjs` fails 6 of 10 against the parent commit. On HEAD, `POST /api/nuvio-tv/history` and `/history/remove` answer 404 to `targetId` = username, upper-case username or numeric id, and write nothing. They work only with the token minted at pairing (`resolveNuvioTvDeviceToken` checks the `tv` scope, `revoked_at` and `deleted_at`). An ordinary install link and a revoked TV link are refused. Owner-visible effect (documented in OPERATIONS section 34): TVs paired before this release must pair again to report history.
+
 ### SEC-02 A username alone opens that account's synced install: anyone can read its private Watch History shelf and mark titles watched
 - Severity: High
 - Status: Proven
@@ -68,6 +70,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   ```
   The last line shows the same thing on `/api/resolve`: the bare username returns the account's saved rows (list URLs included). Note the media-server webhook already retired its `?config=` form for this kind of reason (`src/api/64_media-server-scrobble.js:169-181`); the subtitles ping and the catalog routes still accept it.
 - Recommended fix: do not treat a username-keyed config as owner-verified. Either stop serving `creatorsync:<username>` as an install (use the hashed v2 install token, which already carries a "track" scope), or resolve it with `trackOwner`/`installTrackOwner` empty so private shelves and the playback ping require the real install token. Check the Nuvio TV launcher, which builds `/<username>/tv/manifest.json` URLs (`src/api/25_api-catalog-routes.js:1385-1386`), before changing. Effort: M.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read ccac5fc. `resolveConfig` now checks `/i/<token>` first and strips owner proof (`withoutOwnerProof`) from a bare username config, unless `LEGACY_USERNAME_OWNER_LINKS=1`. I probed every route an attacker could try, on HEAD, with a victim who has Watch History and Continue Watching rows. None of `/vic/catalog/movie/watch-history.json`, `/VIC/...`, `/vic/tv/catalog/...`, `/vic/catalog/series/cw.json`, `/api/nuvio-tv/collections/vic`, `/api/nuvio-tv/sync/vic`, `/api/resolve?config=vic`, or `POST /api/preview` with `autotrack:watch-history:movie:vic` (with and without `creatorName`) returns a private title. The owner's own preview with the key still does (control). A subtitles ping on `/vic/` and on `/vic/tv/` records nothing. Owner-visible effect (owner decision, documented): username-link installs lose their private shelves until the person installs an install link.
 
 ### SEC-03 The Account Key is still accepted in a URL query string on /api/nuvio-tv/config
 - Severity: Low
@@ -100,6 +104,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   lists rows left: 0
   ```
 - Recommended fix: delete `lists_fts2` rows by `rowid IN (SELECT id FROM lists WHERE owner_account_id = ?)` inside `purgeAccountRowsById` (by id, before the lists go), and decide/document whether feedback threads are kept or deleted on account deletion. Effort: S.
+
+**Verification.** 2026-11-10, independent review: **partially fixed**. Read a1ecc1f and 5997fe0. The code is right. With a `lists_fts2` row seeded by hand, the purge removes it, and with the new DELETE disabled the row stays. Support threads are deleted with the account, another account's thread is kept, and putting the old detach call back fails both `account-purge` and `support-history`. **What is still wrong:** the new assertion `search index keeps no username` proves nothing. `populated()` in `tests/account-purge.test.mjs` never creates a `lists_fts2` row (`lists_fts2_content` is empty before the purge), so the test passes with the fts DELETE disabled (mutation run: 7 of 7 pass). Fix: seed an fts row for the account's list (or create the list through a route that indexes it), and assert it exists before the purge. Not addressed and not mentioned to users: the `jobs` row whose payload names the user (the finding left open whether that is deliberate retention). Status set back to `open`.
 
 ### SEC-05 The anonymous feedback limit (20 per IP per day) is a racy KV counter: parallel requests bypass it
 - Severity: Low

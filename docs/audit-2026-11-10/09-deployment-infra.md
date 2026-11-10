@@ -6,18 +6,18 @@ Commands run (all in the private copy `/tmp/claude-0/-home-user-My-Lists-Addon/5
 Not run on the real tree: build.py, verify.sh (they write files).
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| OPS-01 | fixed (awaiting verification) | 034fdb6 | node --test tests/build-source-names.test.mjs |
-| OPS-02 | fixed (awaiting verification) | 8a27e51 | bash verify.sh -q (last line); no Playwright here, so it must say the browser tests were skipped |
-| OPS-03 | fixed (awaiting verification) | 8a27e51 | git check-ignore rendered-admin.html rendered-scope.html rendered-hostile.html service-worker.js |
-| OPS-04 | fixed (awaiting verification) | 26148a7 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) |
-| OPS-05 | fixed (awaiting verification) | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) |
-| OPS-07 | open |  |  |
-| OPS-08 | fixed (awaiting verification) | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) |
-| OPS-09 | open |  |  |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| OPS-01 | verified fixed | 034fdb6 | node --test tests/build-source-names.test.mjs | 2026-11-10, independent review |
+| OPS-02 | verified fixed | 8a27e51 | bash verify.sh -q (last line); no Playwright here, so it must say the browser tests were skipped | 2026-11-10, independent review |
+| OPS-03 | verified fixed | 8a27e51 | git check-ignore rendered-admin.html rendered-scope.html rendered-hostile.html service-worker.js | 2026-11-10, independent review |
+| OPS-04 | open (partially fixed, see Verification) | 26148a7 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) | 2026-11-10, independent review |
+| OPS-05 | verified fixed | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) | 2026-11-10, independent review |
+| OPS-07 | open |  |  |  |
+| OPS-08 | verified fixed | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) | 2026-11-10, independent review |
+| OPS-09 | open |  |  |  |
 
 ## Proven findings
 
@@ -39,6 +39,8 @@ gen_map changed docs?: 0 files
   Full suite with `src/core/100_probe.js` present: `# pass 3641  # fail 0`.
 - Recommended fix: have `build.py` list every `*.js` under `src/` and fail if any is not matched by the numbered pattern (or is a duplicate basename). Effort S.
 
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 034fdb6. The new test fails against the parent commit (2 pass, 3 fail). On HEAD the build refuses `src/99_top.js` (a file directly in `src/`) and names it. A `.mjs` file under `src/` is still silently ignored (the check only looks at `.js`), which is unlikely in this project.
+
 ### OPS-02 `verify.sh -q` prints "ALL CHECKS PASSED" even when the browser tests were skipped (and they ARE skipped on this machine)
 - Severity: Medium
 - Status: Proven
@@ -54,6 +56,8 @@ verify.sh:156:echo "ALL CHECKS PASSED"
 ```
 - Recommended fix: make the final line say "ALL CHECKS PASSED (browser tests skipped)" when skipped, or fail unless `--allow-no-browser` is given. Effort S.
 
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 8a27e51. Ran `bash verify.sh -q` on HEAD (9.5 minutes). Last line: `PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them.` `ALL CHECKS PASSED` is printed only when the browser step runs.
+
 ### OPS-03 A failed `verify.sh` step leaves generated files in the repo that git does not ignore
 - Severity: Low
 - Status: Proven
@@ -66,6 +70,8 @@ verify.sh:156:echo "ALL CHECKS PASSED"
 NOT ignored rendered-admin.html / rendered-hostile.html / rendered-scope.html / service-worker.js
 ```
 - Recommended fix: add the four names to `.gitignore` (or write them under a temp dir with `trap`). Effort S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 8a27e51. `git check-ignore -v` matches `rendered-admin.html`, `rendered-hostile.html`, `rendered-scope.html` (`rendered-*.html`) and `service-worker.js`. No tracked file is hidden by the new patterns (`git ls-files -i -c --exclude-standard` is empty).
 
 ### OPS-04 The deploy checklist's backup and restore commands cannot work on the main database (the repo's own backup docs say so)
 - Severity: Medium
@@ -82,6 +88,8 @@ schema.sql:457:CREATE VIRTUAL TABLE IF NOT EXISTS lists_fts2 USING fts5(
 ```
 - Recommended fix: make Phase B use the Time Travel bookmark and "run the D1 backup workflow now (workflow_dispatch)", and make Phase F restore point to OPERATIONS section 5. Effort S.
 
+**Verification.** 2026-11-10, independent review: **partially fixed**. Read 26148a7. Phase B now uses Time Travel bookmarks for both databases plus a manual run of the D1 backup workflow, and no longer uses `d1 export`. **What is still wrong:** in Phase F, step 3 (`docs/DEPLOY_CHECKLIST.md` lines 186-188), the edit lost the code fence opener (the sentence ends `...never on top of the live one).bash`). The old command `npx wrangler d1 execute my-lists-db --file=backups/my-lists-db-pre-deploy-XXXX.sql --remote` is still there, under a sentence that says never to restore on top of the live database. That command restores on top of the live database, from a file Phase B no longer makes. Fix: delete those two leftover lines and the stray closing fence. Status set back to `open`.
+
 ### OPS-05 Staging does not run the production settings, and STAGING.md says it does
 - Severity: Medium
 - Status: Proven
@@ -90,6 +98,8 @@ schema.sql:457:CREATE VIRTUAL TABLE IF NOT EXISTS lists_fts2 USING fts5(
 - Impact: The checklist's "deploy to staging first" rehearsal exercises a different list-storage path than production. A bug that only appears with `FF_V2_LISTS_ONLY=1` passes staging and is found live.
 - Proof: `grep -n 'FF_V2_LISTS_ONLY\|FF_SHOW_SCHEDULE' /home/user/My-Lists-Addon/wrangler.toml` gives only commented lines (154, 162) and the warning text (10); the staging block lines 314-326 (read above) contains neither. `grep -n FF_SHOW_SCHEDULE docs/STAGING.md` -> line 14.
 - Recommended fix: copy the production flag set into the staging block (or generate it), and correct STAGING.md. Effort S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 26148a7 and 9496b00. `[env.staging.vars]` now sets `FF_V2_LISTS_ONLY = "1"`, and STAGING.md no longer claims `FF_SHOW_SCHEDULE` is on for staging. Smaller differences the finding also listed are still there: the staging block has no `keep_vars`, `[[send_email]]` or `[images]`, so `wrangler deploy --env staging` still wipes any variable set by hand in the staging dashboard. Worth a follow-up, but the list-storage mismatch the finding was about is gone.
 
 ### OPS-07 Cron failures are swallowed and never alerted; a permanently failing periodic job is retried forever
 - Severity: Low
@@ -113,6 +123,8 @@ C poison periodic job after 15 more ticks: queued/13, queued/14, queued/15, queu
 - Impact: A self-hoster following Method A cannot click through to the file they must copy; staging setup stalls at the deploy step.
 - Proof: `test -e docs/worker_entry_combined.js; test -e docs/docs/OPERATIONS.md; test -d docs/migrations` -> all three "MISSING".
 - Recommended fix: use `../` links; update the dated notice; fix the paths. Effort S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read 26148a7 and 9496b00. Every relative link in SELF-HOSTING.md, STAGING.md and DEPLOY_CHECKLIST.md now resolves (`test -e` from `docs/`, none missing). The shutdown date is gone from line 3. The function-map check uses `docs/FUNCTION-MAP.md`. STAGING Option B now says to replace the `YOUR_STAGING_*` ids and explains the route. Nearby, not in the finding: the FAQ on the site (`src/client/24_client-backup-restore-presets.js:4846`, a line 9496b00 edited) links to `.../blob/main/SELF-HOSTING.md`, which does not exist (the file is `docs/SELF-HOSTING.md`). SELF-HOSTING.md still says `Do this while mylistsaddon.com is still up.`
 
 ### OPS-09 Production deploy is a hand copy-paste with no technical link to a green CI run
 - Severity: Low

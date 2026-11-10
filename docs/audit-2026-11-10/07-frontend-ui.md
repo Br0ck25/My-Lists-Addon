@@ -15,19 +15,19 @@ Health grade: B+ — The UI is consistent, responsive at all five sizes with no 
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| UI-01 | fixed (awaiting verification) | ae33b9f | node --test tests/search-failure-message.client.test.mjs |
-| UI-02 | open |  | needs a browser to regenerate tests/ui-contract.json |
-| UI-03 | open |  | needs a browser to regenerate tests/ui-contract.json |
-| UI-04 | open |  | needs a browser and an owner choice of text colour |
-| UI-05 | open |  |  |
-| UI-06 | open |  |  |
-| UI-07 | open |  |  |
-| UI-08 | open |  |  |
-| UI-09 | open |  |  |
+| Finding | Status | Commit | How to verify | Verified |
+|---|---|---|---|---|
+| UI-01 | verified fixed | ae33b9f | node --test tests/search-failure-message.client.test.mjs | 2026-11-10, independent review |
+| UI-02 | open |  | needs a browser to regenerate tests/ui-contract.json |  |
+| UI-03 | open |  | needs a browser to regenerate tests/ui-contract.json |  |
+| UI-04 | open |  | needs a browser and an owner choice of text colour |  |
+| UI-05 | open |  |  |  |
+| UI-06 | open |  |  |  |
+| UI-07 | open |  |  |  |
+| UI-08 | open |  |  |  |
+| UI-09 | open |  |  |  |
 
 ## Proven findings   (ordered by severity)
 
@@ -43,6 +43,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   ```
   Compare with the earlier run in `errs.cjs` where the request is aborted (network failure) and the page shows `✗ Could not load top titles.`
 - Recommended fix and effort: When `!res.ok` or `data.ok === false`, show the same "Could not load top titles." message (with a Retry). Do the same for the public lists lookup. S.
+
+**Verification.** 2026-11-10, independent review: **verified fixed**. Read ae33b9f. The new test fails against the parent commit (2 pass, 3 fail). HTTP 500 and `ok:false` from `/api/title-search` show `Could not load top titles.`, and a failed `/api/search-published-lists` shows `Could not load public lists.`. Real empty answers still show the empty messages. Both server routes do return `ok:true` on success, so a good empty answer is not mistaken for an error. No Retry button was added; the finding offered it as optional.
 
 ### UI-02 Search page type pills have only a 31px tap area on phones
 - Severity: Low
