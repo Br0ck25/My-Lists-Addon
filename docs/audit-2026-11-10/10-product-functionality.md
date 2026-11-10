@@ -19,7 +19,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | PROD-01 | verified fixed | ae33b9f | node --test tests/add-shelf-type-guess.client.test.mjs | 2026-11-10, independent review |
-| PROD-02 | fixed (awaiting verification) | 0a7a916, dd12e81 | node --test tests/add-shelf-source-check.test.mjs |  |
+| PROD-02 | verified fixed | 0a7a916, dd12e81 | node --test tests/add-shelf-source-check.test.mjs | 2026-11-10, independent review |
 | PROD-03 | verified fixed | ae33b9f | grep -n "raw items" src/client/18_client-copy-and-trakt-export.js prints nothing | 2026-11-10, independent review |
 | PROD-04 | verified fixed | ae33b9f | grep -n "few minutes" README.md | 2026-11-10, independent review |
 
@@ -53,6 +53,8 @@ https://www.themoviedb.org/list/8123 -> content type = movie
 - Recommended fix and effort: S. Reuse the same source check `/api/preview` uses and show its error in the modal before saving.
 
 **Verification.** 2026-11-10, independent review: **regression introduced**. Read 0a7a916 (and the `creatorApiFetch` change in c5dbd27). The new test fails against the parent, and `validateOnly` uses the same `isAllowedCatalogSourceUrl` check as the preview, with no provider call or limiter charge. **What is now wrong:** Add Catalog now waits for the server check before saving, but the dialog stays open and the button stays enabled while it waits. Before, the dialog closed at once. Probe with the client harness: two clicks on Add Catalog before the check answers add the row twice (`addRow` called 2 times). On a slow connection a double tap makes a duplicate row. Fix: disable `addShelfModalBtn` (or ignore a second submit) until the check has answered, and add a test for it.
+
+**Verification (second independent review, 2026-11-10): verified fixed.** Read dd12e81. `submitAddShelfChecked` ignores a second call while the check is in flight and disables `addShelfModalBtn` meanwhile, restoring its previous state in a `finally`, so a failed or refused check also gives the button back. The only caller is the button's `data-act` (no Enter-key path). `tests/add-shelf-source-check.test.mjs` passes 9 of 9; with the parent's version of the file the new double-click test fails (8 pass, 1 fail). Minor, not blocking: the button's `opacity` style is not changed while it is disabled, so there is no visual cue, and the code does not check whether the dialog was dismissed before the answer arrives (a dismissed add still saves the row, as before the source check existed).
 
 ### PROD-03 Leftover debug log in the production page
 - Severity: Info

@@ -175,31 +175,31 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | BUG-01 | verified fixed | a0b0ea7 | 2026-11-10, independent review |
 | SEC-01 | verified fixed | ccac5fc | 2026-11-10, independent review |
 | SEC-02 | verified fixed | ccac5fc | 2026-11-10, independent review |
-| SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0, 1ffc61e |  |
-| PERF-03 | fixed (awaiting verification) | 35f1c3f, 7b927c6, 605a44b |  |
+| SEC-04 | verified fixed | a1ecc1f, 5997fe0, 1ffc61e | 2026-11-10, independent review |
+| PERF-03 | regression introduced (see Verification) | 35f1c3f, 7b927c6, 605a44b | 2026-11-10, independent review |
 | TEST-01 | verified fixed | bf54fbf | 2026-11-10, independent review |
 | TEST-02 | verified fixed | bf54fbf | 2026-11-10, independent review |
 | TEST-03 | verified fixed | a1ecc1f | 2026-11-10, independent review |
-| TEST-04 | fixed (awaiting verification) | 034fdb6, cf674d2 |  |
+| TEST-04 | verified fixed | 034fdb6, cf674d2 | 2026-11-10, independent review |
 | TEST-05 | verified fixed | acba574 | 2026-11-10, independent review |
 | TEST-06 | verified fixed | acba574 | 2026-11-10, independent review |
 | TEST-07 | verified fixed | 8a27e51 | 2026-11-10, independent review |
 | DB-01 | verified fixed | a1ecc1f | 2026-11-10, independent review |
-| DB-02 | fixed (awaiting verification) | e5110e0, 59b1a77 |  |
+| DB-02 | open (partially fixed, see Verification) | e5110e0, 59b1a77 | 2026-11-10, independent review |
 | DB-03 | verified fixed | 35f1c3f | 2026-11-10, independent review |
 | UI-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | API-01 | verified fixed | 5b60aa2 | 2026-11-10, independent review |
 | API-02 | verified fixed | 10c3c33 | 2026-11-10, independent review |
-| API-04 | fixed (awaiting verification) | c5dbd27, efd3309 |  |
+| API-04 | open (partially fixed, see Verification) | c5dbd27, efd3309 | 2026-11-10, independent review |
 | API-05 | verified fixed | 37cdb1a, 75a8244, 7b927c6 | 2026-11-10, independent review |
 | OPS-01 | verified fixed | 034fdb6 | 2026-11-10, independent review |
 | OPS-02 | verified fixed | 8a27e51 | 2026-11-10, independent review |
 | OPS-03 | verified fixed | 8a27e51 | 2026-11-10, independent review |
-| OPS-04 | fixed (awaiting verification) | 26148a7, bbae733 |  |
+| OPS-04 | verified fixed | 26148a7, bbae733 | 2026-11-10, independent review |
 | OPS-05 | verified fixed | 26148a7, 9496b00 | 2026-11-10, independent review |
 | OPS-08 | verified fixed | 26148a7, 9496b00 | 2026-11-10, independent review |
 | PROD-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
-| PROD-02 | fixed (awaiting verification) | 0a7a916, dd12e81 |  |
+| PROD-02 | verified fixed | 0a7a916, dd12e81 | 2026-11-10, independent review |
 | PROD-03 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | PROD-04 | verified fixed | ae33b9f | 2026-11-10, independent review |
 

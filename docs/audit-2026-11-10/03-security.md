@@ -22,7 +22,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | SEC-01 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-01 block). Old TVs must pair again. | 2026-11-10, independent review |
 | SEC-02 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-02 block). LEGACY_USERNAME_OWNER_LINKS=1 undoes it. | 2026-11-10, independent review |
 | SEC-03 | open |  |  |  |
-| SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0, 1ffc61e | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). |  |
+| SEC-04 | verified fixed | a1ecc1f, 5997fe0, 1ffc61e | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). | 2026-11-10, independent review |
 | SEC-05 | open |  |  |  |
 | SEC-06 | open |  |  |  |
 
@@ -108,6 +108,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Recommended fix: delete `lists_fts2` rows by `rowid IN (SELECT id FROM lists WHERE owner_account_id = ?)` inside `purgeAccountRowsById` (by id, before the lists go), and decide/document whether feedback threads are kept or deleted on account deletion. Effort: S.
 
 **Verification.** 2026-11-10, independent review: **partially fixed**. Read a1ecc1f and 5997fe0. The code is right. With a `lists_fts2` row seeded by hand, the purge removes it, and with the new DELETE disabled the row stays. Support threads are deleted with the account, another account's thread is kept, and putting the old detach call back fails both `account-purge` and `support-history`. **What is still wrong:** the new assertion `search index keeps no username` proves nothing. `populated()` in `tests/account-purge.test.mjs` never creates a `lists_fts2` row (`lists_fts2_content` is empty before the purge), so the test passes with the fts DELETE disabled (mutation run: 7 of 7 pass). Fix: seed an fts row for the account's list (or create the list through a route that indexes it), and assert it exists before the purge. Not addressed and not mentioned to users: the `jobs` row whose payload names the user (the finding left open whether that is deliberate retention). Status set back to `open`.
+
+**Verification (second independent review, 2026-11-10): verified fixed.** Read 1ffc61e (test only; the purge code was already right). `populated()` now creates a list of the account's own with its `lists_fts2` row and asserts the row exists before the purge. Mutation run in a scratch worktree: with the purge's `DELETE FROM lists_fts2 ...` replaced by a no-op and the Worker rebuilt, `tests/account-purge.test.mjs` goes 4 pass / 3 fail (the two purge paths and the retry test); restored, `account-purge` + `support-history` pass 23 of 23. Support threads are deleted with the account and another person's thread stays (asserted). Left as it was, and outside the recommended fix: the `jobs` row whose payload names the user is still kept; if that is not deliberate retention, it is a separate small item.
 
 ### SEC-05 The anonymous feedback limit (20 per IP per day) is a racy KV counter: parallel requests bypass it
 - Severity: Low

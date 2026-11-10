@@ -13,7 +13,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | OPS-01 | verified fixed | 034fdb6 | node --test tests/build-source-names.test.mjs | 2026-11-10, independent review |
 | OPS-02 | verified fixed | 8a27e51 | bash verify.sh -q (last line); no Playwright here, so it must say the browser tests were skipped | 2026-11-10, independent review |
 | OPS-03 | verified fixed | 8a27e51 | git check-ignore rendered-admin.html rendered-scope.html rendered-hostile.html service-worker.js | 2026-11-10, independent review |
-| OPS-04 | fixed (awaiting verification) | 26148a7, bbae733 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) |  |
+| OPS-04 | verified fixed | 26148a7, bbae733 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) | 2026-11-10, independent review |
 | OPS-05 | verified fixed | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) | 2026-11-10, independent review |
 | OPS-07 | open |  |  |  |
 | OPS-08 | verified fixed | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) | 2026-11-10, independent review |
@@ -89,6 +89,8 @@ schema.sql:457:CREATE VIRTUAL TABLE IF NOT EXISTS lists_fts2 USING fts5(
 - Recommended fix: make Phase B use the Time Travel bookmark and "run the D1 backup workflow now (workflow_dispatch)", and make Phase F restore point to OPERATIONS section 5. Effort S.
 
 **Verification.** 2026-11-10, independent review: **partially fixed**. Read 26148a7. Phase B now uses Time Travel bookmarks for both databases plus a manual run of the D1 backup workflow, and no longer uses `d1 export`. **What is still wrong:** in Phase F, step 3 (`docs/DEPLOY_CHECKLIST.md` lines 186-188), the edit lost the code fence opener (the sentence ends `...never on top of the live one).bash`). The old command `npx wrangler d1 execute my-lists-db --file=backups/my-lists-db-pre-deploy-XXXX.sql --remote` is still there, under a sentence that says never to restore on top of the live database. That command restores on top of the live database, from a file Phase B no longer makes. Fix: delete those two leftover lines and the stray closing fence. Status set back to `open`.
+
+**Verification (second independent review, 2026-11-10): verified fixed.** Read bbae733. Phase F step 3 (`docs/DEPLOY_CHECKLIST.md`) now has the Time Travel restore and a pointer to "Restoring a daily copy" in `docs/OPERATIONS.md` section 5 (exists, line 152); the leftover `d1 execute my-lists-db --file=backups/...` line and the stray fence are gone. Phase B uses Time Travel bookmarks for both databases and a manual run of the D1 backup workflow. `grep` over all non-audit Markdown finds no `d1 export my-lists-db` or restore-from-file command left. The new `tests/deploy-checklist.test.mjs` passes 3 of 3 and fails 2 of 3 against the parent's checklist (the no-restore-file and the fence checks).
 
 ### OPS-05 Staging does not run the production settings, and STAGING.md says it does
 - Severity: Medium
