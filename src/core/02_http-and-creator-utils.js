@@ -285,47 +285,13 @@ function parseCspReport(raw) {
   return out;
 }
 
-// The request body as text, read only up to `maxBytes`. A size check on the
-// Content-Length header trusts the sender (a chunked request has none), so
-// this counts what actually arrives and stops reading at the first byte past
-// the cap. Returns { text, tooLarge }; text is "" when tooLarge.
-async function readRequestTextCapped(request, maxBytes) {
-  if (!request.body) return { text: "", tooLarge: false };
-  const reader = request.body.getReader();
-  const chunks = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {});
-        return { text: "", tooLarge: true };
-      }
-      chunks.push(value);
-    }
-  } finally {
-    try { reader.releaseLock(); } catch {}
-  }
-  const bytes = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) {
-    bytes.set(c, at);
-    at += c.byteLength;
-  }
-  return { text: new TextDecoder().decode(bytes), tooLarge: false };
-}
-
 async function handleCspReport(request, env, ctx) {
   const done = () => new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   const declared = parseInt(request.headers.get("Content-Length") || "0", 10) || 0;
   if (declared > CSP_REPORT_MAX_BYTES) return done();
   let raw = "";
   try {
-    const read = await readRequestTextCapped(request, CSP_REPORT_MAX_BYTES);
-    if (read.tooLarge) return done();
-    raw = read.text;
+    raw = (await readRequestTextCapped(request, CSP_REPORT_MAX_BYTES)).text; // "" when over the cap
   } catch {
     return done();
   }

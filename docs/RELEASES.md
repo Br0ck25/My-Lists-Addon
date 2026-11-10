@@ -2681,4 +2681,4 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 1. Paste the new Worker. Nothing else.
 
 ### Checked
-`bash verify.sh -q` passes after each fix. Each fix has a test that failed first for the reason in the audit: `tests/providers.test.mjs` (API-05), `tests/media-app-sync.test.mjs` (API-04, 2 tests), `tests/media-server-plays.test.mjs` (API-01, 4 tests), `tests/metadata-off.test.mjs` (API-03), `tests/body-cap.test.mjs` (API-02, 2 tests).
+`bash verify.sh -q` passes (API-02's first commit broke the file-size budget for `02_`; fixed by moving the body reader to `71_`). Each fix has a test that failed first for the reason in the audit: `tests/providers.test.mjs` (API-05), `tests/media-app-sync.test.mjs` (API-04, 2 tests), `tests/media-server-plays.test.mjs` (API-01, 4 tests), `tests/metadata-off.test.mjs` (API-03), `tests/body-cap.test.mjs` (API-02, 2 tests).

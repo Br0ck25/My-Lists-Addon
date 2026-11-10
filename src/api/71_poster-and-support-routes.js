@@ -132,6 +132,38 @@ async function apiSiteNotice(env) {
   }, 200, { "Cache-Control": "public, max-age=60" });
 }
 
+// The request body as text, read only up to `maxBytes`. A size check on the
+// Content-Length header trusts the sender (a chunked request has none), so
+// this counts what actually arrives and stops reading at the first byte past
+// the cap. Returns { text, tooLarge }; text is "" when tooLarge.
+async function readRequestTextCapped(request, maxBytes) {
+  if (!request.body) return { text: "", tooLarge: false };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return { text: "", tooLarge: true };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  return { text: new TextDecoder().decode(bytes), tooLarge: false };
+}
+
 // /api/kofi-webhook (POST, from Ko-fi) -> adds a donation or membership
 // payment to the support strip's total. Ko-fi posts form data whose `data`
 // field is a JSON string; the verification token inside it has to match the
