@@ -2706,3 +2706,24 @@ Plan and evidence: `docs/audit-2026-11-10/` (finding ids in brackets). Not fixed
 
 ### Checked
 `bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported on the machine used); CI runs it. Each fix has a test that failed first for the reason in the audit.
+
+## 2026-11-10 — Audit fixes, round 2: a username is no longer a password; Trakt paging; limits (build `87b203883c`, prepared; not deployed)
+
+Owner decisions of 2026-11-10 on the open items of `docs/audit-2026-11-10/`. Read the first item before deploying.
+
+- **Fixed (SEC-01, SEC-02): a username no longer proves who is asking.** Pairing a Nuvio TV now makes an install link of its own named *Nuvio TV* (scope `tv`, shown under Install links, at most five per account). The TV is given its secret token as its id; its manifest address is `/i/<token>/tv/manifest.json` and its sync address `/api/nuvio-tv/sync/<token>`. Only that token opens `POST /api/nuvio-tv/history` and `/history/remove`, so a stranger who knows a username or an account number can no longer add or erase someone's watch history. A bare `/<username>/...` link now serves the account's public rows only: a Watch History, Continue Watching or Watchlist row on it comes back empty, and its playback ping records nothing. Full explanation: `docs/OPERATIONS.md` section 34.
+- **Fixed (SEC-04): deleting an account deletes its support threads** (D1 row and KV copy); a reset keeps them.
+- **Fixed (PROD-02): "+ New Catalog" refuses a link that is not a supported list source** and says why, instead of saving a dead row. `/api/preview` takes `validateOnly`.
+- **Fixed (API-04): Trakt rows continue where the app is.** Lists, watchlist, history and charts walk Trakt's pages (at most five per request, each cached on its own), drop titles already seen and return the window asked for, so `skip=<titles held>` no longer returns the same titles again.
+- **Fixed (API-05): catalog pages after the first share 120 a minute per address** (a refused page is a 429 with CORS, no-store and Retry-After); the first page is free. **(PERF-03) the first page of a public TMDB or Trakt chart is not charged to the preview budget**, so the home page no longer spends 30 units a visit; the preview `skip` is capped like catalog rows.
+- **Changed (D-36): the public site is not shutting down.** The default Site Notice is off, and the FAQ and SELF-HOSTING give no shutdown date. Staging now runs `FF_V2_LISTS_ONLY` like production.
+- **Not fixed (PERF-01):** still blocked on the owner's call in `docs/HANDOFF.md`; the one small change tried saved nothing and was reverted.
+
+### Owner steps
+1. **Turn the shutdown notice off in `/admin` → Management & Tools → Site Notice if one was ever saved there.** Only the default changed; a saved notice stays as saved.
+2. **Tell people who installed their username link** (`mylistsaddon.com/<username>/manifest.json`) in Stremio, Nuvio or Wako to install an address from *Install links* instead, or their private shelves stay empty. If that is too sudden, set the Worker variable `LEGACY_USERNAME_OWNER_LINKS` to `1` for now (it reopens the hole for everyone; remove it once people have moved).
+3. **Re-pair each Nuvio TV** that was paired before this release: its rows still load, but its watch history reports are refused until it is paired again.
+4. Paste the new Worker. Migration `0026` from the earlier entry is still to be applied.
+
+### Checked
+`bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported on the machine used). Tests that relied on the username link now use the owner's own install link; two support-history tests and one providers test were changed to the new rules and say why.
