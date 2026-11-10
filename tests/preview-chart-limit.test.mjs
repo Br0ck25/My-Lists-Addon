@@ -77,4 +77,35 @@ describe("PERF-03: public chart previews do not spend the preview budget", () =>
       globalThis.fetch = realFetch;
     }
   });
+
+  // Audit PERF-03 verification: the chart's cache is per region (and per key), so a caller that
+  // changes the region on every request makes every call a cache miss on the shared TMDB key.
+  const refusedCount = async (bodyFor, n = 260) => {
+    stubTmdb();
+    try {
+      const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+      const ip = nextIp();
+      let refused = 0;
+      for (let i = 0; i < n; i++) if ((await preview(env, ip, bodyFor(i))).status === 429) refused++;
+      return refused;
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  };
+
+  it("a made-up region on every request is still limited", async () => {
+    assert.ok(await refusedCount((i) => ({ url: "tmdb:chart:popular", region: "ZZ-" + i })) > 0);
+  });
+
+  it("a real country code is free, in either case", async () => {
+    assert.equal(await refusedCount((i) => ({ url: "tmdb:chart:popular", region: i % 2 ? "GB" : "us" })), 0);
+  });
+
+  it("several charts stacked in one url are limited", async () => {
+    assert.ok(await refusedCount(() => ({ url: "tmdb:chart:popular\ntmdb:chart:trending\ntmdb:chart:top_rated" })) > 0);
+  });
+
+  it("a request carrying its own keys is limited like any other", async () => {
+    assert.ok(await refusedCount((i) => ({ url: "tmdb:chart:popular", tmdbKey: "mine" + i })) > 0);
+  });
 });

@@ -153,7 +153,7 @@ async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmd
   // Discover shelves while protecting against automated scraping.
   const ip = clientIpKey(request);
   if (!ip) return json({ ok: false, error: "Couldn't load that list." }, 400, { "Cache-Control": "no-store" });
-  if (!isFreeChartPreview(testUrl, skip) && await consumeRateLimit(env, ctx, "preview", ip, 240)) {
+  if (!isFreeChartPreview(testUrl, skip, { region, keys: [tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName] }) && await consumeRateLimit(env, ctx, "preview", ip, 240)) {
     return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
   }
 

@@ -10,13 +10,17 @@ function previewSourceCheckResponse(testUrl) {
   return json({ ok: true }, 200, { "Cache-Control": "no-store" });
 }
 
-// The first page of a public TMDB or Trakt chart: shared data that is cached,
-// so a preview of it is not charged to the per-address budget (audit PERF-03).
-// A deep page is, since each distinct page is its own cache entry.
-function isFreeChartPreview(testUrl, skip) {
+// The first page of ONE public TMDB or Trakt chart, asked for with no keys of the
+// caller's own and a real country code (or none): shared data that is cached, so a
+// preview of it is not charged to the per-address budget (audit PERF-03). The cache is
+// per region and per key, so anything else could make every call a miss on the shared
+// provider key; a deep page is its own cache entry too. Those are charged as before.
+function isFreeChartPreview(testUrl, skip, { region = "", keys = [] } = {}) {
   if (skip !== 0) return false;
+  if (region && !/^[A-Za-z]{2}$/.test(String(region))) return false;
+  if (keys.some(Boolean)) return false;
   const urls = previewSourceUrls(testUrl);
-  return urls.length > 0 && urls.every((u) => /^(?:tmdb|trakt):chart:[a-z0-9_-]+$/i.test(u));
+  return urls.length === 1 && /^(?:tmdb|trakt):chart:[a-z0-9_-]+$/i.test(urls[0]);
 }
 
 // Catalog rows past the first page: every distinct `skip` is its own cache
