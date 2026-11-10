@@ -1,7 +1,12 @@
 # 04 Performance and scalability
-Health grade: (pending)
+Health grade: B- — database access is well indexed and flat as lists grow; the weak spots are the play-recording path (cost grows with watch history), the 30-call home page, and installs that carry whole lists in their configuration.
 ## Scope covered (files, routes, commands run)
-(in progress)
+- Method: Node scripts under `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s04/` (shared helper `lib.mjs` wraps the harness KV, D1 and fetch to count reads, writes, statements, batches and outbound calls per request, and times them). Dev server (ports 8840/8841) plus Playwright for the real home page.
+- Hot paths measured: manifest, catalog row, meta, public list page and JSON, owner list APIs, scrobble/Plex webhook (t8, t8b, t14), home page previews (pw1, pw3, t10-t12), cron tick (t9, steady state and backlog), save of lists with 100 to 10,000 items (t15), installs with big saved configuration (t3).
+- D1 index check: `t17.mjs` runs the unique SELECTs that 11 list/account/directory routes issue through `EXPLAIN QUERY PLAN` on the real `schema.sql` (31 queries, 0 table scans). Lists per account 10/100/300/1000: `t18.mjs`.
+- Caching: Cache-Control survey of every route in `tests/route-access.json`, anonymous and with a session cookie, GET and POST (`t13.mjs`, results `cc-sweep.json`); static asset headers with the real `?v=` URLs (`t16.mjs`).
+- Worker size: `size.py` assembles `src/` in memory the way build.py does (nothing written to the repo).
+- Page weight: `hdrs.sh` (curl, identity vs gzip). Home page 428 KB, app.js 536 KB, app-features.js 1.46 MB, app.css 194 KB raw (about 55, 108, 282 and 33 KB gzipped).
 ## Proven findings
 ### PERF-01 Every play (scrobble) re-reads and re-diffs the account's whole watch history
 - Severity: Medium (High for heavy accounts; see impact)
@@ -94,7 +99,30 @@ R=40 N=3000  /<id>/manifest.json 200 143ms kvGetKB=7864 kvGet=3
   A catalog row also makes one outbound Cinemeta call per item shown (`fetch=100` for a 100-item page; src/catalog/05_catalog-core.js:2510-2517). That is within the 1,000-call paid limit but would exceed the 50-call free limit.
 - Recommended fix and effort: M. Keep list items out of the install configuration (reference the stored list by id, as the account lists already do) or store each row separately so a catalog request reads only its own row.
 
-## Unproven suspicions
+## Unproven suspicions   (not counted)
+- U1: The cron job's "copy new activity" backlog run used 825 D1 statements plus 189 KV calls in one tick (t9, a backlog of one account's history), i.e. over 1,000 internal calls with other work in the same invocation. I could not reproduce the real Cloudflare limit locally, so whether a real tick exceeds it is unknown. Steady-state ticks stayed flat at about 533 D1 plus 61 KV for 100 to 400 users.
+- U2: PERF-01's end state at about 18,000 plays (hitting the 1,000-call ceiling and plays being dropped) is an inference from statement counts, not observed.
+- U3: The home page is 428 KB of HTML before assets, and app-features.js is 1.46 MB raw. I measured bytes but did not measure phone CPU parse time, so I make no claim about slowness on weak devices.
+
 ## Checked and rejected
+- Static assets "no-cache": my first sweep requested `/app.js` without `?v=` and saw `no-cache`. With the real URLs from the page (`/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s04/t16.mjs`) all three are `public, max-age=31536000, immutable` with an ETag (`/app.css?v=79fa...`, `/app.js?v=1f4c...`, `/app-features.js?v=adc4...`). Code: src/api/72_static-asset-routes.js:173, 203, 228 (immutable when the hash matches, `no-cache` for a stale hash). The home page is `no-cache` with an ETag, which is correct.
+- Per-user data cached publicly: the sweep found 14 routes returning `public` caching to a request carrying a session cookie (channel-poster, safe-poster, channel directory, nuvio-tv collections/sync, public-lists.json, search-published-lists, site-notice, support-goal, nuvio-default/collections.json). All are shared catalogue data with identical bodies for anonymous and signed-in callers (same lengths), and none set a cookie. The account routes (`/api/me`, `/api/connections`, `/api/channel/mine`, etc.) are `no-store`. Only `/app.webmanifest` has no Cache-Control at all (344 bytes, harmless).
+- N+1 queries and missing indexes on list paths: with 10, 100, 300 and 1,000 lists on one account, `/api/creator/lists` stayed at 15 statements + 1 batch, `/api/lists` at 3, `/api/me` at 1, `/lists/public.json` at 2 (`/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s04/t18.mjs`). Only response size grows (298 KB for 1,000 lists on `/api/lists`, a one-call listing that is not paginated; acceptable for an owner's own list of lists).
+- Public list save at 10,000 items: 21 statements + 2 batches, flat (see PERF-05 proof).
+- Worker script size: raw 6.0 MiB source, gzip -9 = 1,622,961 bytes (1.55 MiB). That is 52% of the 3 MiB free-plan limit and 15% of the 10 MiB paid limit, so it deploys on either plan with margin. The generated bundle was not read (repo rule); this figure is for the assembled sources, so the deployed number may differ slightly. No embedded binary blobs (0 long base64 runs).
+- Response compression: handled by the Cloudflare edge; the dev server returns identity, and I did not treat that as a defect.
+
 ## Done well (do not change)
+- Index coverage on the v2 tables: partial indexes for the public directory sorts, `(owner_account_id, position)` for list ordering, unique entry index on list items, `idx_rate_counters_window` for cleanup.
+- Hashed, immutable static assets with ETags, and 304 handling.
+- Account-scoped data is `no-store`; public catalogue data is cached with sensible short TTLs (60 s to 5 min).
+- `recordActivityPlay` (src/data/38_activity-scrobble.js:73) is a constant-cost single batch; the problem in PERF-01 is only the callers that bypass it.
+- List saves are flat in cost up to the 10,000-item cap.
+- Cron steady-state cost is constant per tick as users grow from 100 to 400.
+
 ## Not audited and why
+- Real Cloudflare CPU-time (10 ms free / 30 s paid), memory (128 MB) and the 1,000-subrequest ceiling cannot be enforced locally; I report counts and wall-clock time from Node only, which are not a stand-in for Worker CPU.
+- Real D1 latency and row-written billing: the harness D1 is local SQLite with zero latency; I report statement and batch counts instead.
+- Activity database (`DB_ACTIVITY`) query plans: the EXPLAIN pass used `schema.sql` only (main DB). The activity schema's hot queries (PERF-01 histogram) were measured by count, not by plan.
+- Behaviour with many thousands of accounts at once (100x users): the harness is single process; I scaled lists, items, history and cron user counts (to 400), not concurrent traffic. `loadtests/` read only as code, its claims not used.
+- KV 25 MB value limit: not reached; the largest install config tested was 7.7 MB (limit in code is 10 MB, src/core/00_constants.js:180).
