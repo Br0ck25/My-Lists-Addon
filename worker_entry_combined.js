@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "fa7fa1ae8b";
+const WORKER_BUILD = "28c89b7312";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -118203,8 +118203,9 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "This account's saved data is too large to store (over the 25MB limit)." });
   }
-  // A failed D1 write is told to the client (it retries), not answered ok.
-  if (env.DB && !(await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections))) return json({ ok: false, error: "Could not save to storage right now. Please try again in a moment." }, 500);
+  // The liked-lists copy in D1 can only fall behind (extra ids, never fewer), so a failed write must not
+  // stop the rows reaching KV and the install links: it is reported on its own (audit DB-02).
+  const likedListsSynced = !env.DB || await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
   try {
     await env.CONFIGS.put(`creatorsync:${auth.username}`, serialized);
   } catch (e) {
@@ -118218,7 +118219,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   }
   // updatedAt lets the client advance its own baseline without a
   // separate /sync/meta round trip -- see expectedUpdatedAt above.
-  return json({ ok: true, updatedAt: blob.updatedAt });
+  return json(likedListsSynced ? { ok: true, updatedAt: blob.updatedAt } : { ok: true, updatedAt: blob.updatedAt, likedListsSynced: false });
 }
 
 // /api/creator/sync/save-tracking  (POST)  { creatorName, creatorKey,

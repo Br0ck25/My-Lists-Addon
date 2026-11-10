@@ -16,11 +16,11 @@ async function setup() {
   const save = (liked, hidden = []) => call(env, "/api/creator/sync/save", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey, config: [], likedLists: liked, hiddenLists: hidden } });
   const load = () => call(env, "/api/creator/sync/load", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey } });
   const rows = () => env.DB._db.prepare("SELECT count(*) AS n FROM creator_user_lists WHERE username = 'likedlots'").get().n;
-  return { env, save, load, rows };
+  return { env, user, save, load, rows };
 }
 
 describe("DB-02: saving liked/hidden lists", () => {
-  it("a failure in a later batch does not truncate the stored lists, and is reported", async () => {
+  it("a failure in a later batch does not truncate the stored lists, and is reported separately", async () => {
     const { env, save, load, rows } = await setup();
     assert.equal((await save(ids(120))).body.ok, true);
     assert.equal(rows(), 120);
@@ -29,7 +29,8 @@ describe("DB-02: saving liked/hidden lists", () => {
     env.DB.failWhen((sql) => /INSERT OR IGNORE INTO creator_user_lists/.test(sql) && ++inserts > 100);
     const bad = await save(ids(130));
     env.DB.failWhen(null);
-    assert.equal(bad.body.ok, false, "a failed D1 write is not answered with ok");
+    assert.equal(bad.body.ok, true, "the config still saved (KV), so the save is ok");
+    assert.equal(bad.body.likedListsSynced, false, "but the liked-lists copy is reported as behind");
     assert.ok(rows() >= 120, "nothing already stored was lost: " + rows());
     const back = await load();
     assert.ok(back.body.data.likedLists.length >= 120, "load still returns every liked list");
@@ -43,5 +44,21 @@ describe("DB-02: saving liked/hidden lists", () => {
     const back = (await load()).body.data;
     assert.deepEqual([...back.likedLists].sort(), ids(90).slice(10).sort());
     assert.deepEqual(back.hiddenLists, ["H1"]);
+  });
+
+  it("a D1 fault on the liked-lists table does not stop the install-link rows from saving", async () => {
+    const { env, user, save, load } = await setup();
+    const saveCfg = (config) => call(env, "/api/creator/sync/save", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey, config, likedLists: ["L1"] } });
+    const row = (id) => ({ id, name: id, type: "movie", url: "tmdb:chart:popular" });
+    assert.equal((await saveCfg([row("a")])).body.ok, true);
+    env.DB.failWhen((sql) => /creator_user_lists/.test(sql));
+    const r = await saveCfg([row("a"), row("b")]);
+    env.DB.failWhen(null);
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.body.ok, true);
+    assert.equal(r.body.likedListsSynced, false);
+    const kv = JSON.parse(env.CONFIGS._store.get("creatorsync:likedlots"));
+    assert.deepEqual(kv.config.map((x) => x.id), ["a", "b"], "the new row reached KV, so the install link has it");
+    assert.ok((await load()).body.ok);
   });
 });
