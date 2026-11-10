@@ -6,6 +6,19 @@ Health grade: B+ — schema, code and backups line up well (691 of 691 checkable
 - Integrity / dual writes: `purgeCreatorData` and `purgeAccountRowsById` read in full; fault injection with the harness (`failWhen`) on `/api/creator/sync/save`; concurrency race on the same route (`s06/race.mjs`); every `DELETE FROM` in `src/` listed and the prune/cron cutoffs checked (streaming_events, sessions, title_daily_stats, admin_audit_log, tombstones, rate_counters).
 - Backup: `.github/workflows/d1-backup.yml`, `.github/scripts/d1-backup.mjs`, `kv-backup.mjs` read; the repo's own `dumpDatabase` was run against a database seeded through the real Worker and restored into an empty SQLite, comparing every table incl. rowids (`s06/d1rt.mjs`). Browser "config JSON" export (`src/client/24_client-backup-restore-presets.js`, `buildFullBackupPayload`) read for what it contains.
 - Commands: all Node scripts live in `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s06/`. No repo file other than this report was touched; verify.sh and build.py were not run.
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| DB-01 | fixed (awaiting verification) | a1ecc1f | node --test tests/account-purge.test.mjs |
+| DB-02 | fixed (awaiting verification) | e5110e0 | node --test tests/creator-user-lists-save.test.mjs |
+| DB-03 | fixed (awaiting verification) | 35f1c3f | node --test tests/accounts-key-hash-index.test.mjs. Live: apply migrations/0026_accounts_key_hash_index.sql. |
+| DB-04 | open |  |  |
+| DB-05 | open |  |  |
+| DB-06 | open |  |  |
+
 ## Proven findings
 
 ### DB-01 Deleting an account leaves its resume positions and Nuvio "removed plays" behind, and the next account with the same id inherits them

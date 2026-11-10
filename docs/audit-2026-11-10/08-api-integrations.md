@@ -9,6 +9,20 @@ Health grade: B -- the Stremio/Nuvio/Wako contract, CORS, legacy install links, 
 - OAuth Trakt/MDBList/Simkl callbacks and token refresh (`src/api/75_*`, `src/api/28_connections.js`, `src/jobs/50_token-refresh.js`), client side pick-up (`src/client/17_client-my-lists-and-trakt-oauth.js`).
 - Harness: `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/` (`lib.mjs` stubs `globalThis.fetch` with the real fixtures from `tests/fixtures/providers`, then calls `worker.fetch` through `tests/harness.mjs`). Dev server on 8880/8881 for the browser checks (stopped at the end).
 
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| API-01 | fixed (awaiting verification) | 5b60aa2 | node --test tests/public-routes-kv-outage.test.mjs tests/security-suite.test.mjs |
+| API-02 | fixed (awaiting verification) | 10c3c33 | node --test tests/token-refresh.test.mjs |
+| API-03 | open |  |  |
+| API-04 | fixed (awaiting verification) | c5dbd27 | node --test tests/trakt-paging.test.mjs tests/providers.test.mjs |
+| API-05 | fixed (awaiting verification) | 37cdb1a, 75a8244, 7b927c6 | node --test tests/catalog-skip-clamp.test.mjs tests/catalog-skip-limit.test.mjs tests/preview-chart-limit.test.mjs |
+| API-06 | open |  |  |
+| API-07 | open |  |  |
+
 ## Proven findings
 
 ### API-01 A failing KV read turns manifest and catalog answers into a bare 500 with no CORS header and an internal error message

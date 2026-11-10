@@ -12,6 +12,17 @@ Health grade: B+ — the main journeys (create account, sign in elsewhere, add r
 - Compared README.md claims with code and config.
 - A full click-every-button sweep (`sweep.cjs`) was started but timed out at 400 s per page, so it is NOT a result; the static handler check above replaces it. Individual button flows I did click: Create Free Account, + New Catalog, Add Catalog, Generate Install Link, Download Backup File, Upload & Restore File, subnav pills.
 
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| PROD-01 | fixed (awaiting verification) | ae33b9f | node --test tests/add-shelf-type-guess.client.test.mjs |
+| PROD-02 | fixed (awaiting verification) | 0a7a916 | node --test tests/add-shelf-source-check.test.mjs |
+| PROD-03 | fixed (awaiting verification) | ae33b9f | grep -n "raw items" src/client/18_client-copy-and-trakt-export.js prints nothing |
+| PROD-04 | fixed (awaiting verification) | ae33b9f | grep -n "few minutes" README.md |
+
 ## Proven findings   (ordered by severity)
 
 ### PROD-01 Any trakt.tv link silently flips the new catalog's type to "Shows"

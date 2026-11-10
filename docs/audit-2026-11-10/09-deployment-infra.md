@@ -4,6 +4,21 @@ Health grade: B- — the build, backup and job-queue machinery is carefully engi
 Files read: build.py, build.ps1, tools/check_sync.py, verify.sh, .githooks/pre-commit, .gitattributes, .gitignore, .github/workflows/{ci,d1-backup,provider-live-check}.yml, .github/scripts/{backup-seal.sh,d1-backup.mjs,kv-backup.mjs} (headers/prefix list), wrangler.toml, wrangler.selfhost.toml, docs/{SELF-HOSTING,DEPLOY_CHECKLIST,STAGING}.md, OPERATIONS.md sections 1/3/4/5, migrations/ (grep for destructive SQL), src/api/26 (fetch/scheduled/queue), src/jobs/45, src/core/00 (redacting console), src/core/02 (safeErrorMessage, schemaWriteGate, writeRequestMetrics).
 Commands run (all in the private copy `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s09/repo` or against read-only scripts): build twice + hash compare + build with no prior bundle (`p01_repro.sh`); mutation of sources / bundle / CRLF (`p03_dropped_source.sh`, `p08_crlf.sh`, `p09_drift.sh`); `verify.sh` gap checks (`p04_verify_gaps.sh`); fault-injected D1 on fetch() and scheduled() (`p02_faults.mjs`, `p06_misconfig.mjs`, `p07_outage_masking.mjs`); cron overlap / poison / stuck-row tests with the real dispatcher (`p05_cron.mjs`); full test suite (3641 pass) with a silently dropped source file; d1/kv backup tests (26 pass).
 Not run on the real tree: build.py, verify.sh (they write files).
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| OPS-01 | fixed (awaiting verification) | 034fdb6 | node --test tests/build-source-names.test.mjs |
+| OPS-02 | fixed (awaiting verification) | 8a27e51 | bash verify.sh -q (last line); no Playwright here, so it must say the browser tests were skipped |
+| OPS-03 | fixed (awaiting verification) | 8a27e51 | git check-ignore rendered-admin.html rendered-scope.html rendered-hostile.html service-worker.js |
+| OPS-04 | fixed (awaiting verification) | 26148a7 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) |
+| OPS-05 | fixed (awaiting verification) | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) |
+| OPS-07 | open |  |  |
+| OPS-08 | fixed (awaiting verification) | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) |
+| OPS-09 | open |  |  |
+
 ## Proven findings
 
 ### OPS-01 A source file with a slightly wrong name is silently left out of the live Worker

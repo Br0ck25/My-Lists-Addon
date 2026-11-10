@@ -165,3 +165,42 @@ Small, ordered steps that follow the repo rules: a failing test first, a root-ca
 11. **PERF-01, then PERF-03 and DB-03.** Record a play without re-reading the whole history; de-duplicate the home page preview calls; add the `key_hash` index with a migration.
 12. **API-04, API-05, TEST-05, TEST-06.** Fix Trakt paging, validate `skip`, and make the two time-dependent tests independent of clock and time zone.
 13. **Remaining Low and Info items** (UI tap targets and contrast, PROD-01, PROD-02, code-quality duplicates) in small batches, each with `node tests/ui-contract.mjs --update` where the look changes on purpose.
+
+## Fix progress
+
+Per-finding rows are in each section report (`## Fix progress`). Branch `claude/youthful-galileo-e6ci4l`, commits after `beea09c`. Nothing here is deployed.
+
+| Finding | Status | Commit |
+|---|---|---|
+| BUG-01 | fixed (awaiting verification) | a0b0ea7 |
+| SEC-01 | fixed (awaiting verification) | ccac5fc |
+| SEC-02 | fixed (awaiting verification) | ccac5fc |
+| SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0 |
+| PERF-03 | partly fixed (awaiting verification) | 35f1c3f, 7b927c6 |
+| TEST-01 | fixed (awaiting verification) | bf54fbf |
+| TEST-02 | fixed (awaiting verification) | bf54fbf |
+| TEST-03 | fixed (awaiting verification) | a1ecc1f |
+| TEST-04 | fixed (awaiting verification) | 034fdb6 |
+| TEST-05 | fixed (awaiting verification) | acba574 |
+| TEST-06 | fixed (awaiting verification) | acba574 |
+| TEST-07 | fixed (awaiting verification) | 8a27e51 |
+| DB-01 | fixed (awaiting verification) | a1ecc1f |
+| DB-02 | fixed (awaiting verification) | e5110e0 |
+| DB-03 | fixed (awaiting verification) | 35f1c3f |
+| UI-01 | fixed (awaiting verification) | ae33b9f |
+| API-01 | fixed (awaiting verification) | 5b60aa2 |
+| API-02 | fixed (awaiting verification) | 10c3c33 |
+| API-04 | fixed (awaiting verification) | c5dbd27 |
+| API-05 | fixed (awaiting verification) | 37cdb1a, 75a8244, 7b927c6 |
+| OPS-01 | fixed (awaiting verification) | 034fdb6 |
+| OPS-02 | fixed (awaiting verification) | 8a27e51 |
+| OPS-03 | fixed (awaiting verification) | 8a27e51 |
+| OPS-04 | fixed (awaiting verification) | 26148a7 |
+| OPS-05 | fixed (awaiting verification) | 26148a7, 9496b00 |
+| OPS-08 | fixed (awaiting verification) | 26148a7, 9496b00 |
+| PROD-01 | fixed (awaiting verification) | ae33b9f |
+| PROD-02 | fixed (awaiting verification) | 0a7a916 |
+| PROD-03 | fixed (awaiting verification) | ae33b9f |
+| PROD-04 | fixed (awaiting verification) | ae33b9f |
+
+30 of 67 findings are fixed or partly fixed and await verification; the rest are open (see each report; SEC-03, SEC-05 and SEC-06 among them).

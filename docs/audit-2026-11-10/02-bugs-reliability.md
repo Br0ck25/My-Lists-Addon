@@ -11,6 +11,18 @@ All scratch scripts live in `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-12
 - Read the code of: `src/api/67_creator-api-routes.js` (list save/create), `src/api/68_creator-api-account-and-save-routes.js`, `src/api/78_save-and-like-routes.js`, `src/api/32_likes-api.js`, `src/admin/04_stat-counters.js`, `src/core/04_config-resolution.js`, `src/core/03_json-object-body.js`, `src/catalog/41_provider-breaker.js`, plus every module-level `Map`/`Set` on the server (32 of them) for size limits, and the client `setInterval`/poll code.
 - Large lists: saved 1,000 / 5,000 / 20,000 items (`$S/big1.mjs`).
 
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| BUG-01 | fixed (awaiting verification) | a0b0ea7 | node --test tests/sync-config-bad-entries.test.mjs |
+| BUG-02 | open |  |  |
+| BUG-03 | open |  |  |
+| BUG-04 | open |  |  |
+| BUG-05 | open |  |  |
+
 ## Proven findings   (ordered by severity)
 
 ### BUG-01 One empty entry in a synced list makes the whole install link "not found"

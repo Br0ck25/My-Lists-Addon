@@ -13,6 +13,19 @@ Root cause shared by SEC-01 and SEC-02: the username is used as a credential. Th
 - Privacy: delete-account sweep of every KV key and every D1 column (main + activity) after `DELETE /api/me` + purge job + scheduled tick; session lifecycle (sign-out, key reset, cache TTL).
 - Scripts (all in `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s03/`): walk.mjs, sec01_nuvio_history.mjs, sec02_username_install.mjs, xss_probe.mjs, xss_browser.cjs, xss_admin.cjs, delete_account.mjs, misc_checks.mjs, abuse_limits.mjs, feedback_race.mjs, session_checks.mjs. Each imports the real built Worker through `tests/harness.mjs`; nothing in the repo was changed.
 
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| SEC-01 | fixed (awaiting verification) | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-01 block). Old TVs must pair again. |
+| SEC-02 | fixed (awaiting verification) | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-02 block). LEGACY_USERNAME_OWNER_LINKS=1 undoes it. |
+| SEC-03 | open |  |  |
+| SEC-04 | fixed (awaiting verification) | a1ecc1f, 5997fe0 | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). |
+| SEC-05 | open |  |  |
+| SEC-06 | open |  |  |
+
 ## Proven findings   (ordered by severity)
 
 ### SEC-01 Anyone can add to and erase any account's watch history by knowing its username (Nuvio TV history routes)

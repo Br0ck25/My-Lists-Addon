@@ -13,6 +13,20 @@ Killed (34): M01 admin identity gate, M02 cross-origin CSRF, M03 JSON content-ty
 Survived (3): M13 (presets not purged), M24 (admin cookie expiry ignored), M25 (admin cookie signature not checked). See TEST-01 to TEST-03.
 Note: in first full-suite attempts M09, M13, M24, M36 looked "killed", but only by the two wall-clock performance tests failing while three suites ran at once on this 4-core box. Rerunning without those two files (`np-M09.out`, `np-M13.out`, `np-M24.out`, `np-M36.out`) gave the true result above. That is itself TEST-06.
 
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| TEST-01 | fixed (awaiting verification) | bf54fbf | node --test tests/admin-security.test.mjs; mutation: make isValidAdminCookie return true and see it fail |
+| TEST-02 | fixed (awaiting verification) | bf54fbf | node --test tests/admin-security.test.mjs; mutation: drop the expiry check and see it fail |
+| TEST-03 | fixed (awaiting verification) | a1ecc1f | node --test tests/account-purge.test.mjs (presets are seeded and checked) |
+| TEST-04 | fixed (awaiting verification) | 034fdb6 | node --test tests/route-access.test.mjs ("no /admin/api/ or /api/ path appears ... however it is matched") |
+| TEST-05 | fixed (awaiting verification) | acba574 | TZ=Asia/Tokyo node --test --test-name-pattern="puts the hour under the date" tests/client.test.mjs |
+| TEST-06 | fixed (awaiting verification) | acba574 | node --test tests/load-performance.test.mjs (timing budgets only with MLA_PERF=1) |
+| TEST-07 | fixed (awaiting verification) | 8a27e51 | bash verify.sh -q: the last line says when the browser step was skipped; git config core.hooksPath prints .githooks |
+
 ## Proven findings   (ordered by severity)
 
 ### TEST-01 Nothing tests that a forged admin cookie is refused

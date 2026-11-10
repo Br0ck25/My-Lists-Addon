@@ -7,6 +7,19 @@ Health grade: B- — database access is well indexed and flat as lists grow; the
 - Caching: Cache-Control survey of every route in `tests/route-access.json`, anonymous and with a session cookie, GET and POST (`t13.mjs`, results `cc-sweep.json`); static asset headers with the real `?v=` URLs (`t16.mjs`).
 - Worker size: `size.py` assembles `src/` in memory the way build.py does (nothing written to the repo).
 - Page weight: `hdrs.sh` (curl, identity vs gzip). Home page 428 KB, app.js 536 KB, app-features.js 1.46 MB, app.css 194 KB raw (about 55, 108, 282 and 33 KB gzipped).
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| PERF-01 | open - blocked on an owner decision | (none; a try was reverted) | See docs/HANDOFF.md, PERF-02 section. |
+| PERF-02 | open |  |  |
+| PERF-03 | partly fixed (awaiting verification) | 35f1c3f, 7b927c6 | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. |
+| PERF-04 | open |  |  |
+| PERF-05 | open |  |  |
+| PERF-06 | open |  |  |
+
 ## Proven findings
 ### PERF-01 Every play (scrobble) re-reads and re-diffs the account's whole watch history
 - Severity: Medium (High for heavy accounts; see impact)

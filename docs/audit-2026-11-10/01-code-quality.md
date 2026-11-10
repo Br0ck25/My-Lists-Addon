@@ -17,6 +17,22 @@ Numbers measured:
 - Functions over 150 lines: 28 on the server side (26 listed in `tests/size-budget.json`, plus the two exempt page renderers). 42 in the builder page script (nothing measures these). 0 in the admin page.
 - Source files over 3,000 lines: 13, all listed in the budget.
 
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| CQ-01 | open |  |  |
+| CQ-02 | open |  |  |
+| CQ-03 | open |  |  |
+| CQ-04 | open |  |  |
+| CQ-05 | open |  |  |
+| CQ-06 | open |  |  |
+| CQ-07 | open |  |  |
+| CQ-08 | open |  |  |
+| CQ-09 | open |  |  |
+
 ## Proven findings
 
 ### CQ-01 The size-budget test cannot see client code: 42 oversized functions are unmeasured

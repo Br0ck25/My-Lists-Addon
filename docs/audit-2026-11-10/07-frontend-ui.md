@@ -13,6 +13,22 @@ Health grade: B+ — The UI is consistent, responsive at all five sizes with no 
 - Pairing page `/tv`: keyboard keys and a click with no code (`tv.cjs`, `tv2.cjs`).
 - Mutation test of `tests/design-system.test.mjs` in a private copy (`repo/`, not the real tree).
 
+## Fix progress
+
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+
+| Finding | Status | Commit | How to verify |
+|---|---|---|---|
+| UI-01 | fixed (awaiting verification) | ae33b9f | node --test tests/search-failure-message.client.test.mjs |
+| UI-02 | open |  | needs a browser to regenerate tests/ui-contract.json |
+| UI-03 | open |  | needs a browser to regenerate tests/ui-contract.json |
+| UI-04 | open |  | needs a browser and an owner choice of text colour |
+| UI-05 | open |  |  |
+| UI-06 | open |  |  |
+| UI-07 | open |  |  |
+| UI-08 | open |  |  |
+| UI-09 | open |  |  |
+
 ## Proven findings   (ordered by severity)
 
 ### UI-01 A failing search shows "No titles found." instead of an error
