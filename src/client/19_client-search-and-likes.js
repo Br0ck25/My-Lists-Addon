@@ -1168,7 +1168,7 @@ function previewCreatorAuth() {
   }
 }
 
-async function fetchListPreviewOnce(listUrl, type, sample) {
+async function requestListPreview(listUrl, type, sample) {
   const isAdultFilterOn = isAdultContentFilterEnabled();
   const cacheKey = String(listUrl) + '|' + String(type) + '|' + String(sample || 12) + (isAdultFilterOn ? '|safe' : '');
   const liveLibrary = /^autotrack:(nuvio|stremio)-library:/.test(String(listUrl || ''));

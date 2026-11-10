@@ -559,7 +559,7 @@ async function loadUserChannelsForManifest(config, env) {
   if (env.DB) {
     try {
       const acct = await env.DB.prepare(
-        "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+        "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
       ).bind(config, config, config).first();
       if (acct) username = acct.username;
       else {
@@ -603,7 +603,7 @@ async function findChannelEntryById(wantedId, config, env) {
     if (env && env.DB) {
       try {
         const acct = await env.DB.prepare(
-          "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+          "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
         ).bind(config, config, config).first();
         if (acct) username = acct.username;
         else {

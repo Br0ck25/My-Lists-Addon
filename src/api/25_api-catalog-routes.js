@@ -595,7 +595,7 @@ async function resolveNuvioTvTargetData(target, env) {
   if (env && env.DB) {
     try {
       const acct = await env.DB.prepare(
-        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
       ).bind(target, target, target).first();
       if (acct) {
         username = acct.username;

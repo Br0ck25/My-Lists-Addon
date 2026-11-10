@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "01ff4a86cc";
+const WORKER_BUILD = "694d15adfc";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1329,6 +1329,10 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0025", kind: "index", name: "idx_lists_owner_deleted",
     consequence: "Each signed-in Lists load reads the whole lists table to find the account's recently deleted lists. Slower, not broken.",
+  },
+  {
+    migration: "0026", kind: "index", name: "idx_accounts_key_hash",
+    consequence: "Each manifest and channel catalog request reads the whole accounts table. Slower, not broken.",
   },
 ];
 
@@ -53521,7 +53525,7 @@ function previewCreatorAuth() {
   }
 }
 
-async function fetchListPreviewOnce(listUrl, type, sample) {
+async function requestListPreview(listUrl, type, sample) {
   const isAdultFilterOn = isAdultContentFilterEnabled();
   const cacheKey = String(listUrl) + '|' + String(type) + '|' + String(sample || 12) + (isAdultFilterOn ? '|safe' : '');
   const liveLibrary = /^autotrack:(nuvio|stremio)-library:/.test(String(listUrl || ''));
@@ -71602,6 +71606,19 @@ function centerActivePill(bar) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();
+// Calls for the same chart made while the first is still on the way share it
+// (the home page shows some charts in two rows); a finished answer is cached by
+// requestListPreview (19_), and a failed one is not kept (audit PERF-03).
+const listPreviewInFlight = new Map();
+async function fetchListPreviewOnce(listUrl, type, sample) {
+  const liveLibrary = /^autotrack:(nuvio|stremio)-library:/.test(String(listUrl || ''));
+  if (liveLibrary) return requestListPreview(listUrl, type, sample);
+  const key = String(listUrl) + '|' + String(type) + '|' + String(sample || 12) + (isAdultContentFilterEnabled() ? '|safe' : '');
+  if (listPreviewInFlight.has(key)) return listPreviewInFlight.get(key);
+  const pending = requestListPreview(listUrl, type, sample).finally(() => { listPreviewInFlight.delete(key); });
+  listPreviewInFlight.set(key, pending);
+  return pending;
+}
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
@@ -93159,7 +93176,7 @@ async function resolveNuvioTvTargetData(target, env) {
   if (env && env.DB) {
     try {
       const acct = await env.DB.prepare(
-        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
       ).bind(target, target, target).first();
       if (acct) {
         username = acct.username;
@@ -120194,7 +120211,7 @@ async function loadUserChannelsForManifest(config, env) {
   if (env.DB) {
     try {
       const acct = await env.DB.prepare(
-        "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+        "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
       ).bind(config, config, config).first();
       if (acct) username = acct.username;
       else {
@@ -120238,7 +120255,7 @@ async function findChannelEntryById(wantedId, config, env) {
     if (env && env.DB) {
       try {
         const acct = await env.DB.prepare(
-          "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+          "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
         ).bind(config, config, config).first();
         if (acct) username = acct.username;
         else {

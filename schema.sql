@@ -292,6 +292,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     deleted_at           INTEGER,
     status               TEXT NOT NULL DEFAULT 'active'
 );
+-- Migration 0026: the manifest lookup also tries key_hash (audit DB-03, 2026-11-10).
+CREATE INDEX IF NOT EXISTS idx_accounts_key_hash ON accounts(key_hash);
 
 CREATE TABLE IF NOT EXISTS sessions (
     id_hash      TEXT PRIMARY KEY,
@@ -690,4 +692,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0022', 0),
   ('0023', 0),
   ('0024', 0),
-  ('0025', 0);
+  ('0025', 0),
+  ('0026', 0);

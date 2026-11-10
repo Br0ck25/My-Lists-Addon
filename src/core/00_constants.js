@@ -1307,6 +1307,10 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0025", kind: "index", name: "idx_lists_owner_deleted",
     consequence: "Each signed-in Lists load reads the whole lists table to find the account's recently deleted lists. Slower, not broken.",
   },
+  {
+    migration: "0026", kind: "index", name: "idx_accounts_key_hash",
+    consequence: "Each manifest and channel catalog request reads the whole accounts table. Slower, not broken.",
+  },
 ];
 
 
