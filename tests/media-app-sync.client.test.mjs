@@ -648,14 +648,40 @@ describe("adding directly to app history", () => {
     assert.deepEqual(requestsTo(c, "/api/connections/nuvio/add-history")[0].body, { id: "tmdb:550", mediaType: "movie", season: null, episode: null, title: "Fight Club" });
     assert.match(toasts[0][0], /Added.*Nuvio Watch History/);
   });
-  it("requires an episode before writing a show", async () => {
+  it("requires a season before writing a show", async () => {
     const c = loadClient({ signedIn: "alice" });
     c.window._mediaHistoryAddProvider = "nuvio";
     const toasts = [];
     c.set("showToast", (message, kind) => toasts.push([message, kind]));
     await c.call("addMediaHistoryResult", "1396", "series", "Breaking Bad", null);
     assert.equal(requestsTo(c, "/api/connections/nuvio/add-history").length, 0);
-    assert.match(toasts[0][0], /season and episode/);
+    assert.match(toasts[0][0], /season/i);
+  });
+  it("adds a whole season when the episode is left empty, with the season's own episode numbers", async () => {
+    const c = loadClient({ signedIn: "alice", routes: {
+      "/api/show-episodes": () => ({ json: { ok: true, episodes: [{ episode: 1 }, { episode: 2 }, { episode: 3 }] } }),
+      "/api/connections/nuvio/add-history": () => ({ json: { ok: true, mirrored: true } }),
+    } });
+    c.window._mediaHistoryAddProvider = "nuvio";
+    c.set("showToast", () => {});
+    c.set("closeModal", () => {});
+    c.set("document", { getElementById: (id) => (id === "mediaHistorySeason" ? { value: "2" } : id === "mediaHistoryEpisode" ? { value: "" } : null) });
+    await c.call("addMediaHistoryResult", "1396", "series", "Breaking Bad", null);
+    const body = requestsTo(c, "/api/connections/nuvio/add-history")[0].body;
+    assert.equal(body.season, 2);
+    assert.deepEqual(body.episodes, [1, 2, 3]);
+  });
+  it("adds one episode, not the season, when an episode number is given", async () => {
+    const c = loadClient({ signedIn: "alice", routes: { "/api/connections/nuvio/add-history": () => ({ json: { ok: true, mirrored: true } }) } });
+    c.window._mediaHistoryAddProvider = "nuvio";
+    c.set("showToast", () => {});
+    c.set("closeModal", () => {});
+    c.set("document", { getElementById: (id) => (id === "mediaHistorySeason" ? { value: "2" } : id === "mediaHistoryEpisode" ? { value: "4" } : null) });
+    await c.call("addMediaHistoryResult", "1396", "series", "Breaking Bad", null);
+    const body = requestsTo(c, "/api/connections/nuvio/add-history")[0].body;
+    assert.equal(body.episode, 4);
+    assert.equal(body.episodes, undefined);
+    assert.equal(requestsTo(c, "/api/show-episodes").length, 0);
   });
 });
 
