@@ -114,7 +114,7 @@ async function apiPreview(request, env, ctx, url, path) {
     previewShuffle = reqBody.shuffle === true;
     previewShuffleId = String(reqBody.shuffleId || "").slice(0, 200);
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
-    skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(reqBody.skip, 10) || 0), 9900); // same cap as the catalog rows (audit API-05)
   } else {
     // GET is kept for plain public previews only. Every caller in the
     // builder page uses POST; credentials in the query string are refused
@@ -140,7 +140,7 @@ async function apiPreview(request, env, ctx, url, path) {
     hideNonDigitalReleases = url.searchParams.get("hideNonDigitalReleases") === "1";
     adultContentFilter = url.searchParams.get("adultContentFilter") === "1";
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
-    skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0), 9900);
   }
   return apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId });
 }
@@ -153,7 +153,7 @@ async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmd
   // Discover shelves while protecting against automated scraping.
   const ip = clientIpKey(request);
   if (!ip) return json({ ok: false, error: "Couldn't load that list." }, 400, { "Cache-Control": "no-store" });
-  if (await consumeRateLimit(env, ctx, "preview", ip, 240)) {
+  if (!isFreeChartPreview(testUrl, skip) && await consumeRateLimit(env, ctx, "preview", ip, 240)) {
     return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
   }
 

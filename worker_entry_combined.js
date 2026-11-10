@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "1ed4e5db09";
+const WORKER_BUILD = "98d4f4536f";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -122155,7 +122155,7 @@ async function apiPreview(request, env, ctx, url, path) {
     previewShuffle = reqBody.shuffle === true;
     previewShuffleId = String(reqBody.shuffleId || "").slice(0, 200);
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
-    skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(reqBody.skip, 10) || 0), 9900); // same cap as the catalog rows (audit API-05)
   } else {
     // GET is kept for plain public previews only. Every caller in the
     // builder page uses POST; credentials in the query string are refused
@@ -122181,7 +122181,7 @@ async function apiPreview(request, env, ctx, url, path) {
     hideNonDigitalReleases = url.searchParams.get("hideNonDigitalReleases") === "1";
     adultContentFilter = url.searchParams.get("adultContentFilter") === "1";
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
-    skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0), 9900);
   }
   return apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId });
 }
@@ -122194,7 +122194,7 @@ async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmd
   // Discover shelves while protecting against automated scraping.
   const ip = clientIpKey(request);
   if (!ip) return json({ ok: false, error: "Couldn't load that list." }, 400, { "Cache-Control": "no-store" });
-  if (await consumeRateLimit(env, ctx, "preview", ip, 240)) {
+  if (!isFreeChartPreview(testUrl, skip) && await consumeRateLimit(env, ctx, "preview", ip, 240)) {
     return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
   }
 
@@ -123605,6 +123605,15 @@ function previewSourceCheckResponse(testUrl) {
     return json({ ok: false, error: "That URL isn't a supported list source." }, 400, { "Cache-Control": "no-store" });
   }
   return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+}
+
+// The first page of a public TMDB or Trakt chart: shared data that is cached,
+// so a preview of it is not charged to the per-address budget (audit PERF-03).
+// A deep page is, since each distinct page is its own cache entry.
+function isFreeChartPreview(testUrl, skip) {
+  if (skip !== 0) return false;
+  const urls = previewSourceUrls(testUrl);
+  return urls.length > 0 && urls.every((u) => /^(?:tmdb|trakt):chart:[a-z0-9_-]+$/i.test(u));
 }
 // IMDb id and recommendation lookups, list search/browse for TMDB and Trakt, and the Trakt, MDBList and Simkl sign-in and list routes, moved out of handleFetch (CQ-01).
 
