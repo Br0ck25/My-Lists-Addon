@@ -60,6 +60,7 @@ function fakeServices(state) {
     if (url.hostname === "v3-cinemeta.strem.io") {
       const id = url.pathname.split("/").pop().replace(".json", "");
       seen.cinemeta.push(id);
+      if (state.cinemetaDown) return new Response("down", { status: state.cinemetaDown });
       const eps = state.episodes[id];
       return eps ? json({ meta: { videos: eps } }) : json({}, 404);
     }
@@ -458,6 +459,44 @@ describe("Stremio: pulling the library", () => {
     const row = ctx.env.DB._db.prepare("SELECT last_error, last_pull_at FROM media_app_sync").get();
     assert.match(row.last_error, /still being copied/);
     assert.equal(row.last_pull_at, null, "a pull that wrote nothing is not recorded as done");
+  });
+
+  // API-04: a show the pull could not read yet must not be recorded as "nothing watched".
+  const bitShow = (n, mtime) => {
+    const id = "tt" + String(5000000 + n);
+    const eps = [1, 2, 3, 4].map((e) => ({ id: `${id}:1:${e}`, season: 1, episode: e }));
+    return { eps, id, item: { _id: id, type: "series", name: id, _mtime: new Date(mtime).toISOString(),
+      state: { video_id: `${id}:1:1`, lastWatched: new Date(mtime).toISOString(), duration: 1000, timeOffset: 1000, watched: bitfield(eps, [0, 1, 2, 3]) } } };
+  };
+  // How many shows the pull moved on to episode 4 (only the bitfield says so; the current episode is 1).
+  const showsAtEpisode4 = (ctx) => progressRows(ctx.env, ctx.accountId).filter((r) => r.last_episode === 4).length;
+
+  it("API-04: reads the watched episodes of every show, not just the first 30 of a step", async () => {
+    const shows = Array.from({ length: 40 }, (_, n) => bitShow(n + 1, NOW - (n + 1) * 60000));
+    const state = { approved: true, library: shows.map((s) => s.item), episodes: Object.fromEntries(shows.map((s) => [s.id, s.eps])) };
+    fakeServices(state);
+    const ctx = await setup("stremmany");
+    await connectStremio(ctx, state);
+    await pull(ctx.env, 8);
+    assert.equal(showsAtEpisode4(ctx), 40, "every show came across with its watched episodes");
+  });
+
+  it("API-04: when Cinemeta fails, says so, keeps the cursor, and imports the shows once it answers", async () => {
+    const shows = [1, 2, 3].map((n) => bitShow(n, NOW - n * 60000));
+    const state = { approved: true, library: shows.map((s) => s.item), episodes: Object.fromEntries(shows.map((s) => [s.id, s.eps])), cinemetaDown: 503 };
+    fakeServices(state);
+    const ctx = await setup("stremcinedown");
+    await connectStremio(ctx, state);
+    await pull(ctx.env, 1);
+    const row = () => ctx.env.DB._db.prepare("SELECT cursor_json, last_error FROM media_app_sync").get();
+    assert.ok(row().last_error, "the settings page shows an error");
+    assert.ok(!(JSON.parse(row().cursor_json || "{}").mtime > 0), "the changed-since mark did not move");
+    assert.equal(showsAtEpisode4(ctx), 0);
+    state.cinemetaDown = 0;
+    await call(ctx.env, "/api/connections/stremio/sync", { method: "POST", cookie: ctx.cookie, json: {} });
+    await pull(ctx.env, 4);
+    assert.equal(showsAtEpisode4(ctx), 3, "the shows come in once Cinemeta is back");
+    assert.equal(row().last_error, null);
   });
 
   it("asks the person to reconnect when Stremio refuses the authKey", async () => {

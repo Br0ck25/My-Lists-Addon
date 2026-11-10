@@ -16,5 +16,5 @@ function stremioStatusError(status) {
 // What to show on the settings card for a failed read of this app, or null to show nothing.
 async function mediaAppFailureMessage(env, provider, e) {
   if (provider === "nuvio") return nuvioFailureMessage(env, e);
-  return e && e.stremioStatus ? e.message : null;
+  return e && (e.stremioStatus || e.cinemeta) ? e.message : null;
 }
