@@ -806,7 +806,6 @@ async function markMdblistHistoryAllWatched(btn) {
   }
 
   const whItems = mapMdblistItemsToWatchHistory(allRawItems);
-  console.log('[MDBList] raw items:', allRawItems.length, 'mapped:', whItems.length);
 
   if (!whItems.length) {
     const detailMsg = 'No watch history found on your MDBList account. Fetched ' + allRawItems.length + ' raw items from MDBList.';

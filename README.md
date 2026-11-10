@@ -56,7 +56,7 @@ Install links never expire. When you update your lists or settings at [mylistsad
 - Automatically tracks watch progress and next unwatched episode per show.
 - Mark titles or whole seasons as watched/unwatched directly from the UI.
 - **Airing Next Shelf**: Displays upcoming episodes of shows you watch, ordered soonest first, with exact broadcast air times sourced from TVmaze.
-- **Automated Cron Sync**: Background tasks query TMDB every 6 minutes to find newly-aired episodes for caught-up shows and push them to your Continue Watching row.
+- **Automated Cron Sync**: Background tasks query TMDB every few minutes to find newly-aired episodes for caught-up shows and push them to your Continue Watching row.
 
 ### Media Server Playback Scrobbler (Plex / Jellyfin / Emby)
 - Automatically scrobble playback events from your home media servers into your Watch History and Continue Watching progress.

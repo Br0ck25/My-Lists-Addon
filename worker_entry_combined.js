@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "9b7519997e";
+const WORKER_BUILD = "0b1c40b88d";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -44430,14 +44430,7 @@ function validateAddShelfModal() {
 }
 
 function onAddShelfModalLinkInput(inputEl) {
-  const link = inputEl.value.trim().toLowerCase();
-  const typeSelect = document.getElementById('addShelfModalType');
-  // Only auto-switch type if it's the first input or type is currently 'movie' and we detect a show
-  if (link.includes('type=show') || link.includes('shows') || link.includes('series') || link.includes('tv')) {
-    typeSelect.value = 'series';
-  } else if (link.includes('movie') && typeSelect.value === 'series' && document.querySelectorAll('.addShelfModalLinkInput').length === 1) {
-    typeSelect.value = 'movie';
-  }
+  guessShelfTypeFromLink(inputEl.value, document.getElementById('addShelfModalType'));
 }
 
 function submitAddShelfModal() {
@@ -51399,7 +51392,6 @@ async function markMdblistHistoryAllWatched(btn) {
   }
 
   const whItems = mapMdblistItemsToWatchHistory(allRawItems);
-  console.log('[MDBList] raw items:', allRawItems.length, 'mapped:', whItems.length);
 
   if (!whItems.length) {
     const detailMsg = 'No watch history found on your MDBList account. Fetched ' + allRawItems.length + ' raw items from MDBList.';
@@ -57882,7 +57874,7 @@ async function renderDefaultCatalogSearch(force) {
       const mdbLists = Array.isArray(mdbPopular) ? mdbPopular : [];
       const traktLists = Array.isArray(traktPopular) ? traktPopular : [];
       if (!pubLists.length && !mdbLists.length && !traktLists.length) {
-        resEl.innerHTML = (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
+        resEl.innerHTML = (pubRes && pubRes.ok === false) ? '<p class="testresult err">✗ Could not load public lists.</p>' : (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
           ? '<p><small>No lists to show from that source right now.</small></p>'
           : '<p><small>No published My Lists Addon lists available yet.</small></p>';
         return;
@@ -57902,7 +57894,7 @@ async function renderDefaultCatalogSearch(force) {
     if (thisSeq !== currentTitleSearchSequence) return;
     if (inputEl && inputEl.value.trim()) return;
     if (!data.ok || !data.results || !data.results.length) {
-      resEl.innerHTML = '<p><small>No titles found.</small></p>';
+      resEl.innerHTML = (!res.ok || !data.ok) ? '<p class="testresult err">✗ Could not load top titles.</p>' : '<p><small>No titles found.</small></p>';
       return;
     }
     window._rawCatalogTitleItems = data.results;
@@ -71618,6 +71610,23 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   const pending = requestListPreview(listUrl, type, sample).finally(() => { listPreviewInFlight.delete(key); });
   listPreviewInFlight.set(key, pending);
   return pending;
+}
+// "+ New Catalog": the Content Type follows the link as it is typed. Only the
+// path and query are read, never the site's name ("trakt.tv" has "tv" in it),
+// and only whole words (audit PROD-01). Written without a regex slash: this
+// file sits inside a template literal.
+function guessShelfTypeFromLink(value, typeSelect) {
+  const raw = String(value || '').trim().toLowerCase();
+  let link = raw;
+  try { const u = new URL(raw); link = u.pathname + u.search; } catch (e) { link = raw; }
+  const words = link.split(/[^a-z0-9]+/);
+  const isShow = link.includes('type=show') || words.includes('shows') || words.includes('series') || link.split('?')[0].split('/').includes('tv');
+  // Only auto-switch type if it's the first input or type is currently 'movie' and we detect a show
+  if (isShow) {
+    typeSelect.value = 'series';
+  } else if (link.includes('movie') && typeSelect.value === 'series' && document.querySelectorAll('.addShelfModalLinkInput').length === 1) {
+    typeSelect.value = 'movie';
+  }
 }
 // --- Custom Lists ---------------------------------------------------------------
 //

@@ -5525,7 +5525,7 @@ async function renderDefaultCatalogSearch(force) {
       const mdbLists = Array.isArray(mdbPopular) ? mdbPopular : [];
       const traktLists = Array.isArray(traktPopular) ? traktPopular : [];
       if (!pubLists.length && !mdbLists.length && !traktLists.length) {
-        resEl.innerHTML = (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
+        resEl.innerHTML = (pubRes && pubRes.ok === false) ? '<p class="testresult err">✗ Could not load public lists.</p>' : (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
           ? '<p><small>No lists to show from that source right now.</small></p>'
           : '<p><small>No published My Lists Addon lists available yet.</small></p>';
         return;
@@ -5545,7 +5545,7 @@ async function renderDefaultCatalogSearch(force) {
     if (thisSeq !== currentTitleSearchSequence) return;
     if (inputEl && inputEl.value.trim()) return;
     if (!data.ok || !data.results || !data.results.length) {
-      resEl.innerHTML = '<p><small>No titles found.</small></p>';
+      resEl.innerHTML = (!res.ok || !data.ok) ? '<p class="testresult err">✗ Could not load top titles.</p>' : '<p><small>No titles found.</small></p>';
       return;
     }
     window._rawCatalogTitleItems = data.results;

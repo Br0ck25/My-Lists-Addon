@@ -2682,3 +2682,27 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 
 ### Checked
 `bash verify.sh -q` passes (API-02's first commit broke the file-size budget for `02_`; fixed by moving the body reader to `71_`). Each fix has a test that failed first for the reason in the audit: `tests/providers.test.mjs` (API-05), `tests/media-app-sync.test.mjs` (API-04, 2 tests), `tests/media-server-plays.test.mjs` (API-01, 4 tests), `tests/metadata-off.test.mjs` (API-03), `tests/body-cap.test.mjs` (API-02, 2 tests).
+
+## 2026-11-10 — Independent audit fixes: account deletion, bad list entries, KV outages, indexes (build `0b1c40b88d`, prepared; not deployed)
+
+Plan and evidence: `docs/audit-2026-11-10/` (finding ids in brackets). Not fixed in this release: SEC-01, SEC-02, PERF-01, API-04, PROD-02, UI-02 to UI-09 (see the notes under Owner steps).
+
+- **Fixed (DB-01, SEC-04, TEST-03): deleting an account now also removes its resume positions, Nuvio "removed plays" and search-index rows.** The next account that is handed the same id no longer inherits them. The purge test checks all of these and saved presets.
+- **Fixed (BUG-01): one empty entry in a synced list no longer breaks the whole install link.** The save drops entries that are not objects and the read skips any already stored.
+- **Fixed (DB-02): saving liked/hidden lists can no longer cut them short.** Rows are added first and only stale ones removed last; a failed write now answers an error instead of "ok".
+- **Fixed (API-01): during a storage outage the manifest answers 503 and catalog/meta rows answer empty, with CORS headers and no internal error text.**
+- **Fixed (API-02): a 403 on a Trakt/MDBList token refresh no longer flips a healthy connection to "Reconnect".** Only 400 and 401 do.
+- **Fixed (API-05, part): a catalog `skip` is a whole number from 0 to 9,900.** No limiter was added for catalog rows (see below).
+- **Fixed (PERF-03, client part): identical preview requests made at once share one call.**
+- **Fixed (DB-03): migration `0026` indexes `accounts(key_hash)`; the manifest lookup also drops a redundant `COLLATE NOCASE`** that stopped SQLite using its indexes together.
+- **Fixed (OPS-01): the build refuses a `.js` file under `src/` that it would not pick up.** (OPS-02, OPS-03, TEST-07): the last line of `verify.sh` says when the browser tests were skipped; `verify.sh` turns on the pre-commit hook if missing; generated files are git-ignored.
+- **Fixed (PROD-01): pasting a Trakt link no longer switches a new catalog to Shows.** (UI-01): a failed title or public-list search says it could not load instead of "No titles found." (PROD-03): the leftover MDBList debug log is gone. (PROD-04): README says "every few minutes".
+- **Docs (OPS-04, OPS-05, OPS-08):** the deploy checklist no longer tells the owner to run `wrangler d1 export` on `my-lists-db`; STAGING.md says staging does not run `FF_V2_LISTS_ONLY`; SELF-HOSTING links and the staging setup steps are corrected.
+- **Tests (TEST-01, TEST-02, TEST-04, TEST-05, TEST-06):** forged, edited and expired fallback admin cookies are refused (both mutations now fail the suite); the route-access test fails on any unlisted `/admin/api/` or `/api/` path string however it is matched; the air-time test no longer depends on time zone; the wall-clock budgets in `load-performance.test.mjs` run only with `MLA_PERF=1`.
+
+### Owner steps
+1. **Apply `migrations/0026_accounts_key_hash_index.sql`** in `my-lists-db`'s Console. Safe before or after pasting the Worker; without it nothing breaks, manifests are just slower.
+2. Paste the new Worker.
+
+### Checked
+`bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported on the machine used); CI runs it. Each fix has a test that failed first for the reason in the audit.
