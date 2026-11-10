@@ -95,6 +95,7 @@ async function apiPreview(request, env, ctx, url, path) {
       reqBody = {};
     }
     testUrl = reqBody.url || "";
+    if (reqBody.validateOnly === true) return previewSourceCheckResponse(testUrl);
     type = reqBody.type === "series" ? "series" : (reqBody.type === "movie" ? "movie" : "mixed");
     tmdbKey = reqBody.tmdbKey || "";
     mdblistKey = reqBody.mdblistKey || "";

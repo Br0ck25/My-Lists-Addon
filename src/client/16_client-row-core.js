@@ -4040,15 +4040,7 @@ function submitAddShelfModal() {
   const links = Array.from(document.querySelectorAll('.addShelfModalLinkInput')).map(el => el.value.trim()).filter(Boolean);
   const type = document.getElementById('addShelfModalType').value;
   if (!name || links.length === 0) return;
-  
-  if (links.length === 1) {
-    addRow(name, links[0], type, true, 'Custom');
-  } else {
-    addCombinedRow(name, links, type, 'Custom');
-  }
-  
-  document.getElementById('addShelfModal').style.display = 'none';
-  saveState();
+  submitAddShelfChecked(name, links, type);
 }
 
 function addRow(name, url, type, enabled, group, channelId, noShuffle) {

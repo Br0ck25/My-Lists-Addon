@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ed21d0fd45";
+const WORKER_BUILD = "1ed4e5db09";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -44438,15 +44438,7 @@ function submitAddShelfModal() {
   const links = Array.from(document.querySelectorAll('.addShelfModalLinkInput')).map(el => el.value.trim()).filter(Boolean);
   const type = document.getElementById('addShelfModalType').value;
   if (!name || links.length === 0) return;
-  
-  if (links.length === 1) {
-    addRow(name, links[0], type, true, 'Custom');
-  } else {
-    addCombinedRow(name, links, type, 'Custom');
-  }
-  
-  document.getElementById('addShelfModal').style.display = 'none';
-  saveState();
+  submitAddShelfChecked(name, links, type);
 }
 
 function addRow(name, url, type, enabled, group, channelId, noShuffle) {
@@ -71610,6 +71602,40 @@ async function fetchListPreviewOnce(listUrl, type, sample) {
   const pending = requestListPreview(listUrl, type, sample).finally(() => { listPreviewInFlight.delete(key); });
   listPreviewInFlight.set(key, pending);
   return pending;
+}
+// "+ New Catalog" Add: ask the server whether the link(s) are a supported list
+// source before saving the row, so a typo does not become a dead row on the TV
+// home screen (audit PROD-02). Only a clear "not supported" answer blocks; a
+// failed check (server down, offline) lets the row through as it always did.
+async function addShelfLinksUnsupported(links) {
+  try {
+    const res = await fetch(ORIGIN + '/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: links.join(String.fromCharCode(10)), validateOnly: true }),
+      cache: 'no-store',
+    });
+    if (res.status !== 400) return '';
+    const data = await res.json().catch(() => ({}));
+    return String((data && data.error) || 'That URL is not a supported list source.');
+  } catch (e) {
+    return '';
+  }
+}
+
+async function submitAddShelfChecked(name, links, type) {
+  const problem = await addShelfLinksUnsupported(links);
+  if (problem) {
+    showToast('Could not add the catalog. ' + problem, 'error');
+    return;
+  }
+  if (links.length === 1) {
+    addRow(name, links[0], type, true, 'Custom');
+  } else {
+    addCombinedRow(name, links, type, 'Custom');
+  }
+  document.getElementById('addShelfModal').style.display = 'none';
+  saveState();
 }
 // "+ New Catalog": the Content Type follows the link as it is typed. Only the
 // path and query are read, never the site's name ("trakt.tv" has "tv" in it),
@@ -122110,6 +122136,7 @@ async function apiPreview(request, env, ctx, url, path) {
       reqBody = {};
     }
     testUrl = reqBody.url || "";
+    if (reqBody.validateOnly === true) return previewSourceCheckResponse(testUrl);
     type = reqBody.type === "series" ? "series" : (reqBody.type === "movie" ? "movie" : "mixed");
     tmdbKey = reqBody.tmdbKey || "";
     mdblistKey = reqBody.mdblistKey || "";
@@ -123567,6 +123594,17 @@ async function apiResolveShow(env, ctx, url) {
   } catch (err) {
     return json({ ok: false, error: safeErrorMessage(err) });
   }
+}
+// POST /api/preview with validateOnly: true answers only whether the pasted
+// link(s) are a supported list source, the same check the preview itself makes,
+// with no provider call and no rate-limit charge (audit PROD-02). The New
+// Catalog dialog asks before it saves a row.
+function previewSourceCheckResponse(testUrl) {
+  const sourceUrls = previewSourceUrls(testUrl);
+  if (!sourceUrls.length || !sourceUrls.every(isAllowedCatalogSourceUrl)) {
+    return json({ ok: false, error: "That URL isn't a supported list source." }, 400, { "Cache-Control": "no-store" });
+  }
+  return json({ ok: true }, 200, { "Cache-Control": "no-store" });
 }
 // IMDb id and recommendation lookups, list search/browse for TMDB and Trakt, and the Trakt, MDBList and Simkl sign-in and list routes, moved out of handleFetch (CQ-01).
 
