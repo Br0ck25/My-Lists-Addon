@@ -77,3 +77,30 @@ Health grade: (pending, see end)
   ```
 - Recommended fix: delete `lists_fts2` rows by `rowid IN (SELECT id FROM lists WHERE owner_account_id = ?)` inside `purgeAccountRowsById` (by id, before the lists go), and decide/document whether feedback threads are kept or deleted on account deletion. Effort: S.
 
+### SEC-05 The anonymous feedback limit (20 per IP per day) is a racy KV counter: parallel requests bypass it
+- Severity: Low
+- Status: Proven
+- File:line: `src/api/77_my-lists-history-and-feedback-routes.js:524-528` (read), `:673` and `:612` (write, after the message is stored)
+- What is wrong: the limit reads `feedbackrate:<ip>:<day>` from KV, compares, stores the message, then writes count+1. Requests sent at the same time all read the same old count. In production it is weaker still, because KV reads are cached at the edge for up to a minute (the code's own P7-3 comment in `02_http-and-creator-utils.js:3115-3121` explains why every other limit moved to the D1 `rate_counters` primitive; this one was not moved). Also: when the limit IS hit, the answer is HTTP 200 with `ok:false` (line 528), not 429.
+- Impact: one person can flood the developer's support inbox (and D1/KV storage) with unlimited anonymous messages. Nuisance / cost, no data exposure.
+- Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s03/feedback_race.mjs`
+  ```
+  sequential: 100 anonymous messages from one IP -> accepted 20, feedback rows stored 20
+  parallel: 100 anonymous messages from one IP -> accepted 100, feedback rows stored 100
+  ```
+- Recommended fix: use the existing `consumeRateLimit(env, ctx, "feedback", ip, 20, 86400)` (D1, atomic) before storing, and answer 429. Effort: S.
+
+### SEC-06 Unauthenticated endpoints that write storage on every call have no rate limit (/api/nuvio-tv/device/code, /api/nuvio-tv/history)
+- Severity: Low
+- Status: Proven
+- File:line: `src/api/69_creator-api-sync-routes.js:778-806` (three KV writes per call, no limit), `src/api/25_api-catalog-routes.js:1284-1317` (history write: KV put + D1 + activity DB, no limit)
+- What is wrong: both routes are public, CSRF-exempt and CORS-open, and neither calls `consumeRateLimit`. `device/code` writes 3 KV keys (10-minute TTL) per request; the history route writes the full tracking record to KV and D1 per request.
+- Impact: a script can burn the Worker's KV write quota (KV writes are the scarcest billed resource; once exhausted, every save on the site fails for the rest of the day) and, combined with SEC-01, rewrite a user's history at full speed.
+- Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s03/abuse_limits.mjs` (same IP each time; for comparison account creation is limited):
+  ```
+  create account x40 (one IP)                  {"200":1,"429":39}
+  nuvio-tv/device/code x40 (one IP)            {"200":40}
+  nuvio-tv/history x40 (one IP)                {"200":40}
+  ```
+- Recommended fix: add `consumeRateLimit` per IP to both (e.g. 10/min for device codes). Effort: S.
+

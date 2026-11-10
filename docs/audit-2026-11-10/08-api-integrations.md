@@ -1,5 +1,5 @@
 # 08 API and integrations
-Health grade: (see end, filled in last)
+Health grade: B -- the Stremio/Nuvio/Wako contract, CORS, legacy install links, provider-failure handling and the breaker are solid and were proven to work; the defects found are one unguarded KV failure path, one wrong 403 rule in token refresh, Trakt paging, and unvalidated skip (no Critical or High)
 
 ## Scope covered
 - Stremio/Nuvio/Wako contract: `/:config/manifest.json`, `/catalog/:type/:id[/extra].json`, `/meta/...`, `/subtitles/...`, `/i/<token>/...`, `/c/...`, bare `/manifest.json`, OPTIONS/HEAD/POST on them. Files: `src/api/70_stremio-routes.js`, `src/api/25_api-catalog-routes.js`, `src/catalog/05_catalog-core.js` (`buildManifest`), `src/core/02_http-and-creator-utils.js` (`fetch` guard, caches, CORS).
@@ -41,7 +41,7 @@ mode=403cf refreshCalls=2 {"status":"reauth_required","last_error":"The provider
   Control run `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t9_refresh.mjs 503` leaves the connection `ok`, so the guard is only wrong for 403.
 - Recommended fix: Treat only 400 (invalid_grant) and 401 as a refusal; treat 403 and 429 as "could not be asked" (return null, retry tomorrow). Optionally require a JSON body with `error=invalid_grant` before marking. Effort S.
 
-### API-03 Anyone can put their own wording into the app's Trakt/MDBList error dialog through a link; and a real exchange failure is always described as "rate-limited by Cloudflare"
+### API-03 Anyone can put their own wording into the app's Trakt/MDBList Trakt error dialog through a link; and a real exchange failure is always described as "rate-limited by Cloudflare"
 - Severity: Low
 - Status: Proven
 - File:line: `src/client/17_client-my-lists-and-trakt-oauth.js:851-866` (`pickUpTraktTokenFromUrl`); the server side hands any text through: `src/api/75_provider-list-and-oauth-routes.js:593` (`failWith(url.searchParams.get("error"))`)
@@ -49,3 +49,91 @@ mode=403cf refreshCalls=2 {"status":"reauth_required","last_error":"The provider
 - Impact: A link such as `https://<site>/?trakt_error=Security%20alert&trakt_error_detail=Call%20support%20on%200800...` shows that sentence inside the site's own trusted dialog (phishing/social-engineering text, no links or markup possible). For genuine failures the owner/user is misled about the cause.
 - Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t8_pw.cjs` against the dev server (Chromium, 390 px wide). Screenshot `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/trakt_err_3.png` shows the dialog "Trakt Connection - Could not connect to Trakt (Security alert: Call support on 0800 123 456 to restore your account)." Screenshot `/tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/trakt_err_2.png` shows that `trakt_error=exchange_failed&trakt_error_detail=invalid_grant...` produces the unrelated "Sign in to connect your Trakt account" dialog (device-code fallback), with the detail discarded.
 - Recommended fix: Show only messages from a fixed list; map unknown codes to "Could not connect to Trakt"; log `detail` instead of displaying it; limit the 1015 wording to detail that actually contains 429/1015. Effort S.
+
+### API-04 Trakt rows page by "skip divided by 100", but an app sends the number of items it already holds, so a page that shrank is served again
+- Severity: Medium
+- Status: Proven (server behaviour); what Stremio/Nuvio/Wako send as the next skip is the assumption (the source comment itself assumes multiples of 100)
+- File:line: `src/catalog/06_source-fetchers-mdblist-trakt.js:535` (Trakt lists), `:614` (watchlist), `:757` (history), `src/catalog/07_source-fetchers-tmdb-simkl.js:260` (Trakt charts): `const page = Math.floor(skip / PAGE_SIZE) + 1;`. The items are then de-duplicated and filtered in `mapTraktItems` (`:476-501`: no ids, or the same imdb/tmdb id twice, is dropped), so a page of 100 Trakt rows can become fewer than 100 metas.
+- What is wrong: MDBList (local slice) and TMDB (offset arithmetic) honour any `skip`. Trakt does not: any skip below 100 returns Trakt page 1 again. A series row uses `shows,seasons,episodes`, watch history uses episodes, so several Trakt rows often belong to one show and collapse to one meta.
+- Impact: A Trakt list, watchlist or history row whose first page collapses to e.g. 80 titles is followed by a request with skip=80 (the number of items the app now holds), which returns the same 80 titles again; the app shows duplicates / never reaches the titles on Trakt page 2. Shows with several episodes in one list are the common trigger.
+- Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t17_trakt_skip.mjs` (Trakt stub returns 100 episode rows per page, 80 distinct shows):
+```
+skip=0 returned 80 items
+skip=80 returned 80 items; 80 of them already delivered by skip=0; trakt pages requested: [1]
+```
+- Recommended fix: Fetch by `Math.floor(skip / PAGE_SIZE)` but then drop the first `skip % PAGE_SIZE` items of what the mapping produced and, if the result is short, top up from the next Trakt page (as `fetchTmdbPagedResults` does), or record the raw offset in the `skip` the manifest hands out (only possible via `cacheMaxAge`-style ids, so the top-up is simpler). Effort M.
+
+### API-05 `skip` is not validated, there is no rate limit on catalog rows, and every different `skip` is its own cache entry
+- Severity: Low (cost / abuse amplifier on the owner's shared TMDB and Trakt keys and on KV writes; nobody's data is exposed)
+- Status: Proven
+- File:line: `src/api/70_stremio-routes.js:200` (`const skip = parseInt(extra.skip, 10) || 0;`, accepts negatives and `1e20`-sized numbers), cache keys built from it in each fetcher (e.g. `src/catalog/07_source-fetchers-tmdb-simkl.js:885-886`). The search catalog has `searchRateLimitResponse`; the row catalog does not.
+- What is wrong: Anyone (an install id is not even needed: `/catalog/movie/tmdb-chart-popular/skip=N.json` works with no config) can request an unlimited number of different `skip` values. Each one misses every cache tier (isolate memory, KV, edge), calls the provider and writes a KV entry that lives 24 hours. Negative or absurd values are forwarded to the provider as `page=-4` or `page=5000000000000000000`.
+- Impact: 200 requests from one IP produced 1,483 upstream TMDB calls and 203 KV writes with fixture-sized pages (a real 100-title page also needs up to 100 detail lookups). The owner's shared TMDB/Trakt key can be exhausted, which makes every chart show "temporarily unavailable" for everyone, and KV write/storage cost grows. (Cloudflare-side rate-limit rules, if any, are outside the code and were not visible to me.)
+- Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t14_amp.mjs`:
+```
+200 unique-skip requests from ONE ip: statuses={"200":200} upstream TMDB calls=1483 (~7.4 per request) KV puts=203, sample key=cache:tmdb:chart:popular:movie:100000:US:0
+no-config path {"200":50} tmdb calls 376
+```
+  and `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t13_extras.mjs` shows the forwarded values: `themoviedb.org/3/movie/popular?api_key=X&page=-4`, `trakt.tv/users/a/lists/b/items/movies?limit=100&page=1000000000000000000`.
+- Recommended fix: Clamp `skip` to an integer between 0 and a cap (e.g. 10,000 = TMDB's 500-page limit), round it down to a multiple of the page size for cache-key purposes, and apply the same per-IP limiter the search catalog uses to unconfigured and non-cached row requests. Effort S.
+
+### API-06 Simkl charts drop titles that Trakt and MDBList would keep, never send a year, and force every anime title to the row's type
+- Severity: Low
+- Status: Proven
+- File:line: `src/catalog/07_source-fetchers-tmdb-simkl.js:19-33` (`mapSimklItems`)
+- What is wrong: (1) `filter(it => it.ids && it.ids.imdb)` removes any title that has only a TMDB id; Trakt and MDBList mapping keep the same title as `tmdb:<id>`, and the manifest already declares the `tmdb:` prefix. (2) `release_date` is ignored, so the tile has no year (`releaseInfo`) while the other three providers do. (3) `type` is copied from the row, so on the "anime" chart (which Simkl mixes movies, series and OVAs in) an anime film is announced as `series` in a series row.
+- Impact: Simkl rows (especially anime) are shorter than Simkl's own list, show no year, and some tiles open a detail page of the wrong type (a movie asked for as a series).
+- Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t12_simkl_map.mjs` (same "TMDB only film" served by Simkl, Trakt and MDBList stubs):
+```
+sk  [{"id":"tt1111111",...,"name":"Has IMDb"},{"id":"tt3333333",...,"name":"Anime movie"}]        <- "TMDB only film" missing, no year
+ska [{"id":"tt1111111","type":"series",...},{"id":"tt3333333","type":"series","name":"Anime movie"}]  <- anime movie typed series
+tk  [{"id":"tmdb:22222","type":"movie","name":"TMDB only film","year":"2025"}]
+md  [{"id":"tmdb:22222","type":"movie","name":"TMDB only film","year":"2025"}]
+```
+  (the anime item type is Simkl's documented `anime_type` field; my stub only shows that the row type overrides it.)
+- Recommended fix: Keep `tmdb:<id>` when there is no imdb id, add `releaseInfo` from `release_date` (the stub dates are `MM/DD/YYYY` or ISO), and for the anime chart derive the type from `anime_type`. Effort S.
+
+### API-07 When Trakt rate-limits a row, the app waits about 7 seconds and the addon sends three calls for it
+- Severity: Low
+- Status: Proven
+- File:line: `src/core/02_http-and-creator-utils.js:3022-3032` (`fetchTraktWithRetry`)
+- What is wrong: On a 429 the request sleeps 1-3.5 s and retries twice inside the live request. The `Retry-After: 30` Trakt sent is capped to 3 s, so the retries hit the limit again. A `Retry-After` given as a date (allowed by HTTP) parses to `NaN`, the delay becomes 0 and all three calls go out within milliseconds. The breaker deliberately ignores Trakt 429s (`PROVIDER_PER_KEY_LIMIT`), so nothing slows the next request.
+- Impact: While Trakt is limiting, every Trakt row request holds the app for ~7 s and triples the load on the limited key, then ends in the "temporarily unavailable" tile.
+- Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t11_trakt429.mjs`:
+```
+Retry-After="30" -> trakt attempts=3 elapsed=6778ms status=200 cc=no-store
+Retry-After="Wed, 21 Oct 2026 07:28:00 GMT" -> trakt attempts=3 elapsed=5ms status=200 cc=no-store
+```
+- Recommended fix: Do not sleep inside a catalog request: on 429 serve the stale copy or the placeholder immediately and record a short "cool-down until" in memory/KV keyed on the Trakt key; parse date-form `Retry-After`. Effort S-M.
+
+## Unproven suspicions (not counted)
+- **Huge provider payloads.** No response-size cap exists on provider JSON (`res.json()` on whole MDBList/Simkl files, e.g. `src/catalog/07_source-fetchers-tmdb-simkl.js:79`). `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t15_huge.mjs 50000` (a 28 MB list) answered correctly in 0.3 s and cached only the 100-item page (KV puts ~0 MB), but Node's memory limit is not the Worker's 128 MB, so I could not show an out-of-memory failure. A real MDBList list is far smaller than my 50,000-item test, so likely fine.
+- **Stored or old base64 installs with a catalog type other than movie/series.** `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t5_legacy.mjs` shows a base64 link or a stored record with `type:"show"` or `"tv"` produces a manifest catalog of type `show`/`tv` (not in the manifest's `types`). `/api/save` now refuses such rows (`src/api/25_api-catalog-routes.js:47`), and I did not find evidence that links with these types ever existed, so this only matters for hand-made links.
+- **Stremio's next `skip` value (API-04).** Proven on the server side; I could not run a real Stremio/Nuvio/Wako client to confirm that it sends the held-item count rather than a multiple of 100.
+- **Placeholder tile id `tt0000000`** (`src/api/70_stremio-routes.js:438`): opening it sends a meta request for a non-existent title; the meta route answers with a "not found" shaped answer from TMDB/Cinemeta calls. Not shown to be harmful.
+- **MDBList and Simkl OAuth callbacks** use the same "reflect `error` text" pattern as Trakt (`src/api/75_provider-list-and-oauth-routes.js:874, 1022`); I only ran the browser proof for Trakt.
+
+## Checked and rejected
+- **CORS on addon routes.** `Access-Control-Allow-Origin: *` is present on manifest, catalog, meta, subtitles and the v2 `/i/<token>/...` routes for 200, 404 (unknown install), empty and placeholder answers; OPTIONS on all of them returns 200 with `GET, OPTIONS` (`node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t2_catalog.mjs`, `t6_v2.mjs`). Only the uncaught-exception path misses it (API-01), plus plain "Not found" 404 for malformed paths (`.JSON` upper case, trailing slash), which no app requests.
+- **Manifest fields.** `id, version, name, description, logo, resources (catalog + meta with idPrefixes tt/tmdb:/channel_), types, idPrefixes, catalogs[{type,id,name,extra[skip]}], behaviorHints` are all present and well-formed (`node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t1_contract.mjs`). Search rows declare `extra: search required`.
+- **Catalog shape.** Metas carry `id, type, name, poster` (extra internal fields like `imdbId, tmdbId, vote_average` are harmless). skip in path form works (`skip=2` returned 3 of 5 items); the query form `?skip=2` is ignored, but Stremio/Nuvio/Wako only use the path form. `genre` is not advertised, so ignoring it is correct.
+- **Provider down / hang / HTML / 500 / 429 / network error.** Every one returns HTTP 200 with CORS and `Cache-Control: no-store` and either the last good copy or the "temporarily unavailable" tile (`node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t3_failures.mjs <mode>`, run each mode in its own process). A hang is cut at 10 s. The guards are `fetch()` shadowing in `src/core/02_http-and-creator-utils.js:2946` (default 30 s timeout on every call) and `withTimeout` in `fetchWithPerUserCacheUncoalesced` (10 s).
+- **Empty or error JSON with HTTP 200 from a chart provider.** Suspected to be cached as an empty row for 30 min. Rejected for charts that have a previous copy: `refuseEmptyOverwrite` keeps the last non-empty copy. A first-ever empty answer, and ordinary user lists (which may legitimately be empty), are cached 1800 s; that is a design choice, not a bug.
+- **Provider breaker.** Behind `FF_PROVIDER_BREAKER`, which is commented out in `wrangler.toml:166` (so it is **off** unless the owner sets it). Switched on, it really works: after 5 failures calls are refused instantly (0 fetches for rows 5-7), after 61 s one call goes through and closes it, and it publishes `pb:mdblist` in KV (`node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t10_breaker.mjs`).
+- **OAuth state/CSRF.** Trakt and MDBList callbacks compare the state cookie with `timingSafeEqualHex`; MDBList also uses PKCE; the cookies are `HttpOnly; Secure; SameSite=Lax; Path=<oauth path>`; tokens are put in the URL fragment or stored server-side encrypted. Simkl compares with `!==` (not constant time) which is immaterial for a random 72-bit state.
+- **Legacy install URLs.** Bare-array base64, object base64, standard base64 with padding, the `/c/<config>/...` prefix, a raw KV key without the saved-config prefix, and the `enabled:false` flag all still resolve to correct manifests and catalogs (`node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s08/t5_legacy.mjs`). An unknown v2 token gives a clean 404 JSON with CORS.
+- **Meta route.** Channel, tt and tmdb: ids all answer with CORS; unknown ids answer `{meta:null}` (cached 1 h only for the non-tt/non-channel fallthrough).
+
+## Done well (do not change)
+- One `fetch()` guard (`src/core/02_http-and-creator-utils.js:2946`) gives every outbound call a timeout, strips edge-cache options from calls that carry an Authorization header, and hosts the breaker.
+- Three-tier last-known-good cache (isolate, KV, edge) with in-flight de-duplication and the empty-overwrite refusal.
+- Failure answers are consistently non-cacheable (`CATALOG_NO_CACHE`) so a short outage does not last an hour in the apps.
+- `/api/save` refuses unusable row ids and types (`saveEntriesProblem`).
+- Token refresh is single-use aware (re-reads the row before declaring a refusal) and uses an encrypted token store.
+
+## Not audited and why
+- Real Stremio/Nuvio/Wako clients and their exact paging behaviour (no apps available; only the server side was exercised).
+- Live provider responses (no network by rule); only the committed fixtures plus my own failure stubs were used. Real TMDB page limits (500) were not exercised.
+- Nuvio TV launcher routes (`/nuvio-tv-launcher`, `/api/nuvio-tv/*`), Plex/Jellyfin/Emby scrobble webhooks, Ko-fi webhook, and the media-app sync calls to Stremio/Nuvio servers (`src/api/61_*`, `64_*`): only counted as outbound call sites (all pass through the timeout guard or set their own `AbortSignal.timeout`), not behaviour-tested.
+- Admin API integrations and the client-side `fetch` calls inside page scripts.
+- v2 installs end to end (`/api/installs` creation) beyond the unknown-token case.
