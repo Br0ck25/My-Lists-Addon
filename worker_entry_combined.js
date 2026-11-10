@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "6d2a02eae5";
+const WORKER_BUILD = "82ae3986cd";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -107133,8 +107133,16 @@ async function purgeAccountRowsById(env, accountId) {
       actDb.prepare("DELETE FROM watch_events WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(id),
+      actDb.prepare("DELETE FROM watch_positions WHERE account_id = ?").bind(id),
+      actDb.prepare("DELETE FROM watch_events_removed WHERE account_id = ?").bind(id),
     ]));
   }
+
+  // Search-index rows (list name and owner name) go by list id, before the
+  // account's lists are deleted.
+  await run("search index", () => env.DB.prepare(
+    "DELETE FROM lists_fts2 WHERE rowid IN (SELECT id FROM lists WHERE owner_account_id = ?)"
+  ).bind(id).run());
 
   const voter = `acct:${id}`;
   await run("likes", () => env.DB.batch([
