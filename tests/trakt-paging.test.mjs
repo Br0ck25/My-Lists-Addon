@@ -93,7 +93,7 @@ async function walkAll(pages, titlesPerPage, rawTotal) {
     const saved = await call(env, "/api/save", { method: "POST", json: { entries: [{ id: "tl", url: "https://trakt.tv/users/bob/lists/" + slug, name: "Best", type: "series" }], traktKey: "cid" } });
     const all = [];
     let held = 0;
-    for (let guard = 0; guard < 80; guard++) {
+    for (let guard = 0; guard < 400; guard++) {
       const r = await call(env, `/${saved.body.id}/catalog/series/tl${held ? `/skip=${held}` : ""}.json`, { ip: nextIp() });
       const metas = r.body.metas || [];
       if (!metas.length) break;
@@ -116,6 +116,22 @@ describe("API-04: a long list of shrinking pages is reachable to its end", () =>
   it("40 shrinking pages (past the walk's page cap) still reach the end instead of stopping half way", async () => {
     const all = await walkAll(40, 80, 4000);
     assert.ok(all.length >= 3000, "reached " + all.length + " of 3200 titles");
+  });
+
+  // Second review: 35 pages of 20 titles (watch history, ~5 episodes a show). Past the page cap the
+  // fallback served pages the app already had, so the app got 2,880 titles but only 600 distinct.
+  it("35 pages of 20 titles: every title once, in order (the old cap lost them after 600)", async () => {
+    const all = await walkAll(35, 20, 3500);
+    assert.equal(new Set(all).size, 700, "all 700 distinct titles reached");
+    assert.equal(all.length, 700, "and none sent twice");
+  });
+
+  it("120 pages of 30 titles (past even the larger cap): the row still moves forward to the end", async () => {
+    const all = await walkAll(120, 30, 12000);
+    const distinct = new Set(all).size;
+    assert.ok(all.includes("tt" + (2000000 + 120 * 1000)), "the last page's titles were reached");
+    assert.ok(distinct >= 0.8 * 3600, `only ${distinct} of 3600 distinct titles over ${all.length} delivered`);
+    assert.ok(all.length <= 1.3 * 3600, `${all.length} delivered: the row keeps resending the same pages`);
   });
 });
 
