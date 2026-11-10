@@ -18,8 +18,23 @@ async function addShelfLinksUnsupported(links) {
   }
 }
 
+// True while the server is being asked, so a second tap on Add Catalog (the dialog
+// stays open for the answer) does not add the row twice.
+let addShelfCheckInFlight = false;
+
 async function submitAddShelfChecked(name, links, type) {
-  const problem = await addShelfLinksUnsupported(links);
+  if (addShelfCheckInFlight) return;
+  addShelfCheckInFlight = true;
+  const btn = document.getElementById('addShelfModalBtn');
+  const wasDisabled = btn ? btn.disabled : false;
+  if (btn) btn.disabled = true;
+  let problem;
+  try {
+    problem = await addShelfLinksUnsupported(links);
+  } finally {
+    addShelfCheckInFlight = false;
+    if (btn) btn.disabled = wasDisabled;
+  }
   if (problem) {
     showToast('Could not add the catalog. ' + problem, 'error');
     return;

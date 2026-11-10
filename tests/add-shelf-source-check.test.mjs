@@ -72,6 +72,37 @@ describe("PROD-02: the New Catalog dialog", () => {
     assert.equal(requestsTo(client, "/api/preview").length, 1);
   });
 
+  it("a second click while the check is still waiting adds nothing, and the button is off meanwhile", async () => {
+    let answer;
+    const client = loadClient({ signedIn: "alice", routes: { "/api/preview": () => new Promise((r) => { answer = r; }) } });
+    const doc = client.document;
+    doc.getElementById("addShelfModalName").value = "Slow";
+    doc.getElementById("addShelfModalType").value = "movie";
+    doc.querySelectorAll = () => [{ value: "https://trakt.tv/users/bob/lists/best" }];
+    const added = [];
+    client.set("addRow", (...a) => { added.push(a); });
+    client.set("saveState", () => {});
+    const btn = doc.getElementById("addShelfModalBtn");
+    btn.disabled = false;
+    client.call("submitAddShelfModal");
+    client.call("submitAddShelfModal");
+    await flush();
+    assert.equal(btn.disabled, true, "off while the server is asked");
+    answer({ json: { ok: true } });
+    await flush();
+    assert.equal(added.length, 1, "one catalog, not two");
+    assert.equal(btn.disabled, false, "back on afterwards");
+  });
+
+  it("the button comes back on after a refusal, so the link can be fixed", async () => {
+    const { client } = setup({ status: 400, json: { ok: false, error: "That URL isn't a supported list source." } });
+    const btn = client.document.getElementById("addShelfModalBtn");
+    btn.disabled = false;
+    client.call("submitAddShelfModal");
+    await flush();
+    assert.equal(btn.disabled, false);
+  });
+
   it("still adds the row when the check itself cannot be made (server down)", async () => {
     const { client, added } = setup({ status: 503, json: { ok: false } });
     client.call("submitAddShelfModal");

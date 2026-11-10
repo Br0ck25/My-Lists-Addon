@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "87b203883c";
+const WORKER_BUILD = "fa7fa1ae8b";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -71668,8 +71668,23 @@ async function addShelfLinksUnsupported(links) {
   }
 }
 
+// True while the server is being asked, so a second tap on Add Catalog (the dialog
+// stays open for the answer) does not add the row twice.
+let addShelfCheckInFlight = false;
+
 async function submitAddShelfChecked(name, links, type) {
-  const problem = await addShelfLinksUnsupported(links);
+  if (addShelfCheckInFlight) return;
+  addShelfCheckInFlight = true;
+  const btn = document.getElementById('addShelfModalBtn');
+  const wasDisabled = btn ? btn.disabled : false;
+  if (btn) btn.disabled = true;
+  let problem;
+  try {
+    problem = await addShelfLinksUnsupported(links);
+  } finally {
+    addShelfCheckInFlight = false;
+    if (btn) btn.disabled = wasDisabled;
+  }
   if (problem) {
     showToast('Could not add the catalog. ' + problem, 'error');
     return;
