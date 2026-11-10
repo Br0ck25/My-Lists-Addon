@@ -870,32 +870,25 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
     return json({ ok: false, error: "Malformed device record." }, 500, corsHeaders());
   }
 
-  let installToken = auth.username;
-  if (env && env.DB) {
-    try {
-      const acct = await env.DB.prepare(
-        "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1"
-      ).bind(auth.username).first();
-      if (acct) {
-        const inst = await env.DB.prepare(
-          "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
-        ).bind(acct.id).first();
-        if (inst) {
-          installToken = inst.legacy_cfg_id || inst.token_hash || auth.username;
-        }
-      }
-    } catch {}
-  }
-
+  // The TV gets a secret of its own (69_nuvio-tv-device-token.js), not the username.
+  // Without a database there is nowhere to keep one, so the old username addresses stay.
   const origin = url ? url.origin : "";
-  const manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
-  const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
+  let tvId = auth.username;
+  let manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
+  if (env && env.DB) {
+    const acct = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1").bind(auth.username).first();
+    const token = acct ? await mintNuvioTvInstall(env, acct.id) : null;
+    if (!token) return json({ ok: false, error: "Could not link the TV right now. Please try again." }, 500, corsHeaders());
+    tvId = token;
+    manifestUrl = `${origin}/i/${token}/tv/manifest.json`;
+  }
+  const syncUrl = `${origin}/api/nuvio-tv/sync/${tvId}`;
 
   const updated = {
     ...record,
     status: "authenticated",
     claimedBy: auth.username,
-    installId: auth.username,
+    installId: tvId,
     manifestUrl,
     syncUrl,
     claimedAt: Date.now()

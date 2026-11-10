@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a2586fd3a3";
+const WORKER_BUILD = "87b203883c";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -17775,10 +17775,11 @@ async function resolveConfig(configParam, env, { withTracking = false, isTvLaunc
   if (cleanParam === "nuvio-default" || cleanParam === "default") {
     return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
   }
+  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js). Checked first: its token is
+  // not a username, and a username is not a secret (audit SEC-02).
+  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking, isTvLauncher });
   const creatorSync = await resolveCreatorSyncConfig(cleanParam, env, { isTvLauncher });
-  if (creatorSync) return creatorSync;
-  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
-  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
+  if (creatorSync) return legacyUsernameOwnerLinks(env) ? creatorSync : withoutOwnerProof(creatorSync);
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
     const stored = (await env.CONFIGS.get(savedConfigKey(configParam)))
       || (await env.CONFIGS.get(configParam));
@@ -93247,6 +93248,10 @@ function parseNuvioInstRowConfig(instRow, username, updatedAt) {
 }
 
 async function resolveNuvioTvTargetData(target, env) {
+  // A paired TV's secret token stands for its account (69_nuvio-tv-device-token.js).
+  const device = await resolveNuvioTvDeviceToken(env, target);
+  const deviceToken = device ? target : "";
+  if (device) target = device.username;
   let resolved = null;
   let installToken = target;
   let username = "";
@@ -93354,7 +93359,7 @@ async function resolveNuvioTvTargetData(target, env) {
     } catch {}
   }
 
-  return { resolved, installToken: installToken || username || target, username, updatedAt };
+  return { resolved, installToken: installToken || username || target, username, updatedAt, deviceToken };
 }
 
 async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
@@ -93966,10 +93971,13 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Missing targetId." }, 400, corsHeaders());
   }
 
-  const { resolved, username } = await resolveNuvioTvTargetData(targetId, env);
-  if (!resolved || !username) {
-    return json({ ok: false, error: "Target not found or not paired." }, 404, corsHeaders());
+  // Only the secret the TV was given at pairing opens these routes: a username or
+  // an account id is public (audit SEC-01).
+  const device = await resolveNuvioTvDeviceToken(env, targetId);
+  if (!device) {
+    return json({ ok: false, error: "Target not found or not paired. Pair the TV again." }, 404, corsHeaders());
   }
+  const username = device.username;
 
   if (path === "/api/nuvio-tv/history/remove" || (body && body.action === "remove")) {
     return handleNuvioTvHistoryRemove(env, username, body);
@@ -94005,7 +94013,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
 
   if (target === "default") return buildNuvioTvSyncDefaultResponse(url, request);
 
-  const { resolved, installToken, username, updatedAt } = await resolveNuvioTvTargetData(target, env);
+  const { resolved, installToken, username, updatedAt, deviceToken } = await resolveNuvioTvTargetData(target, env);
   if (!resolved) {
     return json({ ok: false, error: "Target not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
@@ -94042,7 +94050,9 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   }
   const channels = formatNuvioUserChannels(userChannelsRaw);
 
-  const manifestUrl = username
+  const manifestUrl = deviceToken
+    ? `${url.origin}/i/${deviceToken}/tv/manifest.json`
+    : username
     ? `${url.origin}/${username}/tv/manifest.json`
     : (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
       ? `${url.origin}/${installToken}/tv/manifest.json`
@@ -94050,7 +94060,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
         ? `${url.origin}/i/${installToken}/tv/manifest.json`
         : `${url.origin}/${installToken}/tv/manifest.json`;
 
-  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${username || target}`;
+  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${deviceToken || username || target}`;
 
   const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
   const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);
@@ -95574,7 +95584,7 @@ async function applyLegacyInstallRecord(env, id, parsed) {
   return { ...out, ...(await decryptInstallSecretFields(env, snap.id, snap.secrets)) };
 }
 
-async function resolveV2InstallConfig(param, env, { withTracking = false } = {}) {
+async function resolveV2InstallConfig(param, env, { withTracking = false, isTvLauncher = false } = {}) {
   const token = param.slice(INSTALL_TOKEN_PARAM_PREFIX.length);
   if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
@@ -95597,6 +95607,12 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   // deletes the row).
   const owner = snap.owner || "";
   const canTrack = Boolean(owner) && String(snap.scopes || "").split(",").includes("track");
+  // A Nuvio TV's install link is a live view of the owner's synced rows
+  // (69_nuvio-tv-device-token.js); the link itself is the proof of ownership.
+  if (cfg.liveSync === true && owner && String(snap.scopes || "").split(",").includes("tv")) {
+    const live = await resolveCreatorSyncConfig(owner, env, { isTvLauncher });
+    if (live) return { ...live, trackOwner: owner, trackCreatorName: owner, installTrackOwner: canTrack ? owner : "" };
+  }
   let watchHistory = [];
   let continueWatching = [];
   let watchlist = [];
@@ -95999,7 +96015,7 @@ async function handleInstallsApiRoutes(request, env, url, path) {
       const built = buildV2InstallConfig(body || {}, request.account);
       if (built.error) return json({ ok: false, error: built.error }, built.status);
       const active = await env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL"
+        "SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL AND scopes NOT LIKE '%tv%'"
       ).bind(accountId).first();
       if (active && active.n >= INSTALLS_PER_ACCOUNT_MAX) {
         return json({ ok: false, error: `You can have up to ${INSTALLS_PER_ACCOUNT_MAX} install links. Remove one first.` }, 409);
@@ -119640,32 +119656,25 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
     return json({ ok: false, error: "Malformed device record." }, 500, corsHeaders());
   }
 
-  let installToken = auth.username;
-  if (env && env.DB) {
-    try {
-      const acct = await env.DB.prepare(
-        "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1"
-      ).bind(auth.username).first();
-      if (acct) {
-        const inst = await env.DB.prepare(
-          "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
-        ).bind(acct.id).first();
-        if (inst) {
-          installToken = inst.legacy_cfg_id || inst.token_hash || auth.username;
-        }
-      }
-    } catch {}
-  }
-
+  // The TV gets a secret of its own (69_nuvio-tv-device-token.js), not the username.
+  // Without a database there is nowhere to keep one, so the old username addresses stay.
   const origin = url ? url.origin : "";
-  const manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
-  const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
+  let tvId = auth.username;
+  let manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
+  if (env && env.DB) {
+    const acct = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1").bind(auth.username).first();
+    const token = acct ? await mintNuvioTvInstall(env, acct.id) : null;
+    if (!token) return json({ ok: false, error: "Could not link the TV right now. Please try again." }, 500, corsHeaders());
+    tvId = token;
+    manifestUrl = `${origin}/i/${token}/tv/manifest.json`;
+  }
+  const syncUrl = `${origin}/api/nuvio-tv/sync/${tvId}`;
 
   const updated = {
     ...record,
     status: "authenticated",
     claimedBy: auth.username,
-    installId: auth.username,
+    installId: tvId,
     manifestUrl,
     syncUrl,
     claimedAt: Date.now()
@@ -119752,6 +119761,73 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
   }
 
   return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+}
+// A username is public (it is in every creator page address), so it cannot be
+// the proof that a request comes from its owner (audit SEC-01, SEC-02, owner
+// decision 2026-11-10).
+//
+// 1. Pairing a Nuvio TV mints an install link of its own, with the `tv` scope.
+//    The TV keeps that secret token as its id, and its manifest and sync
+//    addresses are built on it. Only the token opens the TV's history routes.
+//    The link is a live view of the account's synced rows and counts as the
+//    owner for private shelves and playback pings, like any signed-in install
+//    link; removing it under Install links stops that TV.
+// 2. A bare /<username>/... link still serves the account's public rows, but
+//    no longer counts as the owner: private shelves and the playback ping need
+//    a link that holds a secret. LEGACY_USERNAME_OWNER_LINKS=1 turns the old
+//    behaviour back on if it has to be undone in a hurry.
+
+const NUVIO_TV_INSTALL_NAME = "Nuvio TV";
+const NUVIO_TV_INSTALLS_MAX = 5;
+
+function legacyUsernameOwnerLinks(env) {
+  return Boolean(env) && (env.LEGACY_USERNAME_OWNER_LINKS === "1" || env.LEGACY_USERNAME_OWNER_LINKS === "true" || env.LEGACY_USERNAME_OWNER_LINKS === true);
+}
+
+// The same rows, without the claim to be the owner.
+function withoutOwnerProof(resolved) {
+  return { ...resolved, trackOwner: "", installTrackOwner: "", trackCreatorName: "", trackCreatorKey: "" };
+}
+
+// A new TV install for this account. Returns its token (shown to the TV once)
+// or null when it could not be made. Keeps the newest NUVIO_TV_INSTALLS_MAX.
+async function mintNuvioTvInstall(env, accountId) {
+  if (!env || !env.DB || !Number.isInteger(accountId)) return null;
+  try {
+    const token = generateInstallToken();
+    const tokenHash = await installTokenHash(token);
+    const now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO installs (token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at, last_used_at) " +
+      "VALUES (?, NULL, ?, ?, ?, 1, 'read,track,tv', ?, ?, NULL)"
+    ).bind(tokenHash, accountId, NUVIO_TV_INSTALL_NAME, JSON.stringify({ liveSync: true }), now, now).run();
+    const { results } = await env.DB.prepare(
+      "SELECT id, token_hash FROM installs WHERE account_id = ? AND scopes LIKE '%tv%' AND revoked_at IS NULL ORDER BY created_at DESC, id DESC"
+    ).bind(accountId).all();
+    for (const old of (results || []).slice(NUVIO_TV_INSTALLS_MAX)) {
+      await env.DB.prepare("UPDATE installs SET revoked_at = ?, version = version + 1, updated_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, now, old.id).run();
+      await forgetInstallSnapshot(env, old.token_hash);
+    }
+    return token;
+  } catch (e) {
+    console.error("[NuvioTV] could not make the TV install link:", e);
+    return null;
+  }
+}
+
+// { username, accountId } for a live TV token, else null. Only a token proves
+// it: not a username, an account id or an ordinary install link.
+async function resolveNuvioTvDeviceToken(env, token) {
+  if (!env || !env.DB || !isWellFormedInstallToken(token)) return null;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT i.account_id, i.scopes, a.username, a.deleted_at FROM installs i JOIN accounts a ON a.id = i.account_id WHERE i.token_hash = ? AND i.revoked_at IS NULL"
+    ).bind(await installTokenHash(token)).first();
+    if (!row || row.deleted_at || !String(row.scopes || "").split(",").includes("tv")) return null;
+    return { username: row.username, accountId: row.account_id };
+  } catch {
+    return null;
+  }
 }
 // Routes the Stremio, Nuvio and Wako apps call (configure, manifest, subtitles ping, catalog rows, meta, scrobble webhook), moved out of handleFetch (CQ-01).
 

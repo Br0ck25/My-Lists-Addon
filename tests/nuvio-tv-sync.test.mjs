@@ -549,6 +549,15 @@ describe("Phase 2: Nuvio TV Launcher - New User Account Seeding & Existing User 
   });
 });
 
+// Pairs a TV the way the launcher does and returns the secret it is given
+// (audit SEC-01/SEC-02: a username is public, so the TV's id is a token).
+async function pairTv(env, name, proof) {
+  const code = await call(env, "/api/nuvio-tv/device/code", { method: "POST" });
+  const claim = await call(env, "/api/nuvio-tv/device/claim", { method: "POST", json: { userCode: code.body.userCode, creatorName: name, creatorKey: proof.creatorKey } });
+  assert.equal(claim.status, 200, JSON.stringify(claim.body));
+  return claim.body.installId;
+}
+
 describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () => {
   it("POST /api/nuvio-tv/device/code generates deviceCode, userCode, and verificationUrl", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
@@ -819,7 +828,7 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
   it("POST /api/nuvio-tv/history records true watch progress for movies and episodes, and /remove deletes them", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
     const targetUser = "nuviowatcher";
-    await accountProof(env, targetUser);
+    const tvId = await pairTv(env, targetUser, await accountProof(env, targetUser));
 
     // 1. Record Movie watched via POST /api/nuvio-tv/history
     const movieRes = await call(env, "/api/nuvio-tv/history", {
@@ -829,7 +838,7 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
         "origin": "https://mylistsaddon.com",
       },
       json: {
-        targetId: targetUser,
+        targetId: tvId,
         type: "movie",
         contentId: "tt0137523",
         imdbId: "tt0137523",
@@ -856,7 +865,7 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
         "origin": "https://mylistsaddon.com",
       },
       json: {
-        targetId: targetUser,
+        targetId: tvId,
         type: "series",
         contentId: "tt0903747:1:1",
         imdbId: "tt0903747",
@@ -884,7 +893,7 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
         "x-nuvio-client": "NuvioTVLauncher",
       },
       json: {
-        targetId: targetUser,
+        targetId: tvId,
         type: "series",
         contentId: "tt0903747:1:1",
         imdbId: "tt0903747",
@@ -907,7 +916,7 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
         "x-nuvio-client": "NuvioTVLauncher",
       },
       json: {
-        targetId: targetUser,
+        targetId: tvId,
         type: "movie",
         contentId: "tt0137523",
         imdbId: "tt0137523",
@@ -924,7 +933,7 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
   it("subtitles route skips premature watch history marking for Nuvio requests", async () => {
     const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
     const targetUser = "nuviosubuser";
-    await accountProof(env, targetUser);
+    const tvId = await pairTv(env, targetUser, await accountProof(env, targetUser));
 
     // Save install with track: true
     await env.CONFIGS.put(
@@ -938,7 +947,7 @@ describe("Nuvio TV Launcher - TV Device Pairing (/api/nuvio-tv/device/*)", () =>
     );
 
     // Subtitle ping with X-Nuvio-Client header
-    const subRes = await call(env, `/${targetUser}/subtitles/movie/tt0468569.json`, {
+    const subRes = await call(env, `/i/${tvId}/subtitles/movie/tt0468569.json`, {
       headers: {
         "x-nuvio-client": "NuvioTVLauncher",
         "user-agent": "NuvioTVLauncher/1.1.10",

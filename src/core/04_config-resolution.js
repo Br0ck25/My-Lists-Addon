@@ -107,10 +107,11 @@ async function resolveConfig(configParam, env, { withTracking = false, isTvLaunc
   if (cleanParam === "nuvio-default" || cleanParam === "default") {
     return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
   }
+  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js). Checked first: its token is
+  // not a username, and a username is not a secret (audit SEC-02).
+  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking, isTvLauncher });
   const creatorSync = await resolveCreatorSyncConfig(cleanParam, env, { isTvLauncher });
-  if (creatorSync) return creatorSync;
-  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
-  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
+  if (creatorSync) return legacyUsernameOwnerLinks(env) ? creatorSync : withoutOwnerProof(creatorSync);
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
     const stored = (await env.CONFIGS.get(savedConfigKey(configParam)))
       || (await env.CONFIGS.get(configParam));

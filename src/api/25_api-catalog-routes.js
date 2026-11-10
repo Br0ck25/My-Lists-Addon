@@ -587,6 +587,10 @@ function parseNuvioInstRowConfig(instRow, username, updatedAt) {
 }
 
 async function resolveNuvioTvTargetData(target, env) {
+  // A paired TV's secret token stands for its account (69_nuvio-tv-device-token.js).
+  const device = await resolveNuvioTvDeviceToken(env, target);
+  const deviceToken = device ? target : "";
+  if (device) target = device.username;
   let resolved = null;
   let installToken = target;
   let username = "";
@@ -694,7 +698,7 @@ async function resolveNuvioTvTargetData(target, env) {
     } catch {}
   }
 
-  return { resolved, installToken: installToken || username || target, username, updatedAt };
+  return { resolved, installToken: installToken || username || target, username, updatedAt, deviceToken };
 }
 
 async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
@@ -1306,10 +1310,13 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Missing targetId." }, 400, corsHeaders());
   }
 
-  const { resolved, username } = await resolveNuvioTvTargetData(targetId, env);
-  if (!resolved || !username) {
-    return json({ ok: false, error: "Target not found or not paired." }, 404, corsHeaders());
+  // Only the secret the TV was given at pairing opens these routes: a username or
+  // an account id is public (audit SEC-01).
+  const device = await resolveNuvioTvDeviceToken(env, targetId);
+  if (!device) {
+    return json({ ok: false, error: "Target not found or not paired. Pair the TV again." }, 404, corsHeaders());
   }
+  const username = device.username;
 
   if (path === "/api/nuvio-tv/history/remove" || (body && body.action === "remove")) {
     return handleNuvioTvHistoryRemove(env, username, body);
@@ -1345,7 +1352,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
 
   if (target === "default") return buildNuvioTvSyncDefaultResponse(url, request);
 
-  const { resolved, installToken, username, updatedAt } = await resolveNuvioTvTargetData(target, env);
+  const { resolved, installToken, username, updatedAt, deviceToken } = await resolveNuvioTvTargetData(target, env);
   if (!resolved) {
     return json({ ok: false, error: "Target not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
@@ -1382,7 +1389,9 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   }
   const channels = formatNuvioUserChannels(userChannelsRaw);
 
-  const manifestUrl = username
+  const manifestUrl = deviceToken
+    ? `${url.origin}/i/${deviceToken}/tv/manifest.json`
+    : username
     ? `${url.origin}/${username}/tv/manifest.json`
     : (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
       ? `${url.origin}/${installToken}/tv/manifest.json`
@@ -1390,7 +1399,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
         ? `${url.origin}/i/${installToken}/tv/manifest.json`
         : `${url.origin}/${installToken}/tv/manifest.json`;
 
-  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${username || target}`;
+  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${deviceToken || username || target}`;
 
   const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
   const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);

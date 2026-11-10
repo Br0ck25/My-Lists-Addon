@@ -358,7 +358,7 @@ async function applyLegacyInstallRecord(env, id, parsed) {
   return { ...out, ...(await decryptInstallSecretFields(env, snap.id, snap.secrets)) };
 }
 
-async function resolveV2InstallConfig(param, env, { withTracking = false } = {}) {
+async function resolveV2InstallConfig(param, env, { withTracking = false, isTvLauncher = false } = {}) {
   const token = param.slice(INSTALL_TOKEN_PARAM_PREFIX.length);
   if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
@@ -381,6 +381,12 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   // deletes the row).
   const owner = snap.owner || "";
   const canTrack = Boolean(owner) && String(snap.scopes || "").split(",").includes("track");
+  // A Nuvio TV's install link is a live view of the owner's synced rows
+  // (69_nuvio-tv-device-token.js); the link itself is the proof of ownership.
+  if (cfg.liveSync === true && owner && String(snap.scopes || "").split(",").includes("tv")) {
+    const live = await resolveCreatorSyncConfig(owner, env, { isTvLauncher });
+    if (live) return { ...live, trackOwner: owner, trackCreatorName: owner, installTrackOwner: canTrack ? owner : "" };
+  }
   let watchHistory = [];
   let continueWatching = [];
   let watchlist = [];
@@ -783,7 +789,7 @@ async function handleInstallsApiRoutes(request, env, url, path) {
       const built = buildV2InstallConfig(body || {}, request.account);
       if (built.error) return json({ ok: false, error: built.error }, built.status);
       const active = await env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL"
+        "SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL AND scopes NOT LIKE '%tv%'"
       ).bind(accountId).first();
       if (active && active.n >= INSTALLS_PER_ACCOUNT_MAX) {
         return json({ ok: false, error: `You can have up to ${INSTALLS_PER_ACCOUNT_MAX} install links. Remove one first.` }, 409);
