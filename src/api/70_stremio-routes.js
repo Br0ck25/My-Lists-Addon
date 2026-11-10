@@ -516,7 +516,8 @@ async function stremioMetaItem(env, ctx, url, m) {
       });
       return jsonPublic({ meta: meta || null });
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -544,7 +545,8 @@ async function stremioMetaItem(env, ctx, url, m) {
         { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
       );
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 

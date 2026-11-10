@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "5246f862d2";
+const WORKER_BUILD = "33b5effd67";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -94223,6 +94223,22 @@ async function handleFetch(request, env, ctx) {
 // routes.js) for everything, then runs the response back through
 // withSecurityHeaders (02_http-and-creator-utils.js) before it goes out --
 // see handleFetch's own opening comment for why it's split this way.
+// The answer for a Stremio-protocol route (manifest, catalog, meta, subtitles)
+// that threw, e.g. a KV read during an outage: CORS and no-store, an empty row
+// the app can show, never the platform's error text (audit API-01). null for
+// any other path.
+function publicRouteFailure(request) {
+  let path = "";
+  try { path = new URL(request.url).pathname; } catch { return null; }
+  if (!isPublicCorsPath(path) || !String(path).endsWith(".json")) return null;
+  const noStore = { "Cache-Control": "no-store" };
+  if (path.includes("/catalog/")) return jsonPublic({ metas: [] }, 200, noStore);
+  if (path.includes("/meta/")) return jsonPublic({ meta: null }, 200, noStore);
+  if (path.includes("/subtitles/")) return jsonPublic({ subtitles: [] }, 200, noStore);
+  if (path.endsWith("/manifest.json")) return jsonPublic({ ok: false, error: "Temporarily unavailable. Please try again." }, 503, { ...noStore, "Retry-After": "30" });
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     let response;
@@ -94265,6 +94281,8 @@ export default {
       // the service is unavailable, which is a 503, not a bug.
       if (err && err.code === EVENT_TRACKING_UNAVAILABLE) {
         response = json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" });
+      } else if ((response = publicRouteFailure(request))) {
+        console.error("[PublicRoute] failed:", err);
       } else {
         const message = safeErrorMessage(err);
         // The engine's own text names tables and columns ("D1_ERROR: no such
@@ -120132,7 +120150,8 @@ async function stremioMetaItem(env, ctx, url, m) {
       });
       return jsonPublic({ meta: meta || null });
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -120160,7 +120179,8 @@ async function stremioMetaItem(env, ctx, url, m) {
         { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
       );
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 
