@@ -106,7 +106,7 @@ async function apiPreview(request, env, ctx, url, path) {
     simklAccessToken = reqBody.simklAccessToken || "";
     creatorName = reqBody.creatorName || "";
     creatorKey = reqBody.creatorKey || "";
-    region = reqBody.region || "";
+    region = String(reqBody.region || "").toUpperCase(); // one cache entry per country, not per spelling
     hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
     adultContentFilter = !!reqBody.adultContentFilter;
     // The builder's live preview shows a list as it will arrive once the

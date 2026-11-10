@@ -108,4 +108,31 @@ describe("PERF-03: public chart previews do not spend the preview budget", () =>
   it("a request carrying its own keys is limited like any other", async () => {
     assert.ok(await refusedCount((i) => ({ url: "tmdb:chart:popular", tmdbKey: "mine" + i })) > 0);
   });
+
+  // Second review: two letters is not a country. AA, BA, CA ... are 676 cache misses (and case
+  // forms multiply them) on the shared key, so only a real country code, upper-cased, is free.
+  it("two-letter codes that are not countries are limited", async () => {
+    // XA-XZ, QB-QZ, YA-YZ and ZA-ZZ hold no country except XK, QA, YE, YT, ZA, ZM, ZW.
+    const real = new Set(["XK", "QA", "YE", "YT", "ZA", "ZM", "ZW"]);
+    const madeUp = [];
+    for (const a of "XQYZ") for (const b of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") if (!real.has(a + b)) madeUp.push(a + b);
+    assert.ok(madeUp.length > 90);
+    assert.ok(await refusedCount((i) => ({ url: "tmdb:chart:popular", region: madeUp[i % madeUp.length] }), 300) > 0);
+  });
+
+  it("a real country is free in any case, and reaches the provider upper-cased", async () => {
+    const asked = [];
+    globalThis.fetch = async (u) => { asked.push(String(typeof u === "string" ? u : u.url)); return new Response(JSON.stringify({ results: [], total_pages: 1 }), { status: 200, headers: { "content-type": "application/json" } }); };
+    try {
+      const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+      const ip = nextIp();
+      for (let i = 0; i < 260; i++) {
+        const r = await preview(env, ip, { url: "tmdb:chart:popular", region: ["us", "Us", "uS", "US"][i % 4] });
+        assert.notEqual(r.status, 429, `request ${i} was refused`);
+      }
+      assert.ok(!asked.some((u) => /region=us\b/.test(u)), "no lower-case region reached the provider");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
 });

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-10";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c6605dac4d";
+const WORKER_BUILD = "79cb32505d";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -122300,7 +122300,7 @@ async function apiPreview(request, env, ctx, url, path) {
     simklAccessToken = reqBody.simklAccessToken || "";
     creatorName = reqBody.creatorName || "";
     creatorKey = reqBody.creatorKey || "";
-    region = reqBody.region || "";
+    region = String(reqBody.region || "").toUpperCase(); // one cache entry per country, not per spelling
     hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
     adultContentFilter = !!reqBody.adultContentFilter;
     // The builder's live preview shows a list as it will arrive once the
@@ -123761,13 +123761,16 @@ function previewSourceCheckResponse(testUrl) {
 }
 
 // The first page of ONE public TMDB or Trakt chart, asked for with no keys of the
-// caller's own and a real country code (or none): shared data that is cached, so a
+// caller's own and a real country code from PREVIEW_COUNTRY_CODES (or none): shared data that is cached, so a
 // preview of it is not charged to the per-address budget (audit PERF-03). The cache is
 // per region and per key, so anything else could make every call a miss on the shared
 // provider key; a deep page is its own cache entry too. Those are charged as before.
+// ISO 3166-1 alpha-2 country codes (plus XK): the only regions that count as real.
+const PREVIEW_COUNTRY_CODES = new Set("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW XK".split(" "));
+
 function isFreeChartPreview(testUrl, skip, { region = "", keys = [] } = {}) {
   if (skip !== 0) return false;
-  if (region && !/^[A-Za-z]{2}$/.test(String(region))) return false;
+  if (region && !PREVIEW_COUNTRY_CODES.has(String(region).toUpperCase())) return false;
   if (keys.some(Boolean)) return false;
   const urls = previewSourceUrls(testUrl);
   return urls.length === 1 && /^(?:tmdb|trakt):chart:[a-z0-9_-]+$/i.test(urls[0]);
