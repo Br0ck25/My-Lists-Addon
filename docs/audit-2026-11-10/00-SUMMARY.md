@@ -176,7 +176,7 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | SEC-01 | verified fixed | ccac5fc | 2026-11-10, independent review |
 | SEC-02 | verified fixed | ccac5fc | 2026-11-10, independent review |
 | SEC-04 | verified fixed | a1ecc1f, 5997fe0, 1ffc61e | 2026-11-10, independent review |
-| PERF-03 | fixed (awaiting verification) | 35f1c3f, 7b927c6, 605a44b, c4a374d, 7b59fc4 |  |
+| PERF-03 | verified fixed | 35f1c3f, 7b927c6, 605a44b, c4a374d, 7b59fc4 | 2026-11-11, independent review |
 | TEST-01 | verified fixed | bf54fbf | 2026-11-10, independent review |
 | TEST-02 | verified fixed | bf54fbf | 2026-11-10, independent review |
 | TEST-03 | verified fixed | a1ecc1f | 2026-11-10, independent review |
@@ -185,12 +185,12 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | TEST-06 | verified fixed | acba574 | 2026-11-10, independent review |
 | TEST-07 | verified fixed | 8a27e51 | 2026-11-10, independent review |
 | DB-01 | verified fixed | a1ecc1f | 2026-11-10, independent review |
-| DB-02 | fixed (awaiting verification) | e5110e0, 59b1a77, 008798e, 4cdb8d0 |  |
+| DB-02 | verified fixed | e5110e0, 59b1a77, 008798e, 4cdb8d0 | 2026-11-11, independent review |
 | DB-03 | verified fixed | 35f1c3f | 2026-11-10, independent review |
 | UI-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | API-01 | verified fixed | 5b60aa2 | 2026-11-10, independent review |
 | API-02 | verified fixed | 10c3c33 | 2026-11-10, independent review |
-| API-04 | fixed (awaiting verification) | c5dbd27, efd3309, e082ce3, ab07bce |  |
+| API-04 | regression introduced (duplicate titles across Trakt pages, see Verification) | c5dbd27, efd3309, e082ce3, ab07bce | 2026-11-11, independent review |
 | API-05 | verified fixed | 37cdb1a, 75a8244, 7b927c6 | 2026-11-10, independent review |
 | OPS-01 | verified fixed | 034fdb6 | 2026-11-10, independent review |
 | OPS-02 | verified fixed | 8a27e51 | 2026-11-10, independent review |
@@ -203,4 +203,4 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | PROD-03 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | PROD-04 | verified fixed | ae33b9f | 2026-11-10, independent review |
 
-Independent review, 2026-11-11: of the 30 rows above, 27 are verified fixed. 3 are partially fixed and back to open: PERF-03 (the GET form of `/api/preview` still treats each upper/lower-case spelling of a country as a separate free cache miss), DB-02 (the list-page like button can still lose a like during a D1 fault), API-04 (only lists over 100 Trakt pages, plus up to 100 Trakt calls for one deep request). Each report's **Verification.** note under the finding says what is still wrong. The other 37 findings were not touched and are still open (SEC-03, SEC-05 and SEC-06 among them).
+Independent review, 2026-11-11 (fourth round): of the 30 rows above, 29 are verified fixed. PERF-03 (case forms of a country now share one cache entry over GET and POST) and DB-02 (the list-page like button now marks the D1 copy as behind) are verified fixed. API-04 is back to `regression introduced`: the third review's two problems are fixed (long lists are exact, a deep cold request costs 13 Trakt calls, not 91), but the walk no longer drops a title already sent from an earlier Trakt page, so a watch-history row of 5 shows watched in turn over 20 pages now shows the same 5 shows 20 times (100 items; the commit before showed 5). Its **Verification.** note says what is still wrong. The other 37 findings were not touched and are still open (SEC-03, SEC-05 and SEC-06 among them).
