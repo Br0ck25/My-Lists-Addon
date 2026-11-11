@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-10";
+const WORKER_BUILD_DATE = "2026-11-11";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "03b5166742";
+const WORKER_BUILD = "e6d2b47daf";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -119504,6 +119504,7 @@ async function creatorApiSyncLike(request, env, ctx, path) {
       }
     } catch (dbErr) {
       console.error("D1 write error (/api/creator/sync/like):", dbErr);
+      blob.likedListsD1Behind = true; // load answers from KV until a full save writes D1 again (audit DB-02)
     }
   }
   await env.CONFIGS.put(key, JSON.stringify(blob));

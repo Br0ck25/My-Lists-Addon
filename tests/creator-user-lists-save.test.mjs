@@ -84,5 +84,36 @@ describe("DB-02: saving liked/hidden lists", () => {
       assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM creator_user_lists WHERE username = 'likedlots' AND list_type = 'liked'").get().n, 3, "D1 caught up");
     });
   });
+
+  // Fourth review: the heart on a list page (/api/creator/sync/like) is a second writer of the same
+  // D1 copy. It swallowed a D1 error and wrote KV without the "behind" mark, so load still answered
+  // from the stale D1 rows.
+  describe("the like button on a list page, while the liked-lists table cannot be written", () => {
+    it("a like and an unlike are still what load returns", async () => {
+      const { env, user, load } = await setup();
+      const body = { creatorName: user.creatorName, creatorKey: user.creatorKey };
+      const save = (likedLists) => call(env, "/api/creator/sync/save", { method: "POST", json: { ...body, config: [], likedLists } });
+      const like = (usernameSlug, liked) => call(env, "/api/creator/sync/like", { method: "POST", json: { ...body, usernameSlug, liked } });
+      assert.equal((await save(["L1", "L2"])).body.ok, true);
+
+      env.DB.failWhen((sql) => /creator_user_lists/.test(sql) && !/^\s*SELECT/i.test(sql));
+      assert.equal((await like("L3", true)).body.ok, true);
+      assert.deepEqual([...(await load()).body.data.likedLists].sort(), ["L1", "L2", "L3"], "the new like is not lost");
+      assert.equal((await like("L1", false)).body.ok, true);
+      assert.deepEqual([...(await load()).body.data.likedLists].sort(), ["L2", "L3"], "the unlike does not come back");
+
+      env.DB.failWhen(null);
+      assert.equal((await save(["L2", "L3"])).body.ok, true);
+      assert.deepEqual([...(await load()).body.data.likedLists].sort(), ["L2", "L3"]);
+    });
+
+    it("with D1 healthy the like writes D1 and sets no mark", async () => {
+      const { env, user } = await setup();
+      const body = { creatorName: user.creatorName, creatorKey: user.creatorKey };
+      assert.equal((await call(env, "/api/creator/sync/like", { method: "POST", json: { ...body, usernameSlug: "L9", liked: true } })).body.ok, true);
+      assert.equal(env.DB._db.prepare("SELECT count(*) AS n FROM creator_user_lists WHERE username = 'likedlots' AND list_id = 'L9'").get().n, 1);
+      assert.equal(JSON.parse(env.CONFIGS._store.get("creatorsync:likedlots")).likedListsD1Behind, undefined);
+    });
+  });
 });
 

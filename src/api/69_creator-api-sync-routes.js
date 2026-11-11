@@ -671,6 +671,7 @@ async function creatorApiSyncLike(request, env, ctx, path) {
       }
     } catch (dbErr) {
       console.error("D1 write error (/api/creator/sync/like):", dbErr);
+      blob.likedListsD1Behind = true; // load answers from KV until a full save writes D1 again (audit DB-02)
     }
   }
   await env.CONFIGS.put(key, JSON.stringify(blob));
