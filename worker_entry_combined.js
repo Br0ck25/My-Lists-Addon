@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e6d2b47daf";
+const WORKER_BUILD = "8e5ddb2a1e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -122318,7 +122318,7 @@ async function apiPreview(request, env, ctx, url, path) {
     simklAccessToken = reqBody.simklAccessToken || "";
     creatorName = reqBody.creatorName || "";
     creatorKey = reqBody.creatorKey || "";
-    region = String(reqBody.region || "").toUpperCase(); // one cache entry per country, not per spelling
+    region = reqBody.region || "";
     hideNonDigitalReleases = !!reqBody.hideNonDigitalReleases;
     adultContentFilter = !!reqBody.adultContentFilter;
     // The builder's live preview shows a list as it will arrive once the
@@ -122359,6 +122359,7 @@ async function apiPreview(request, env, ctx, url, path) {
 
 // The rest of apiPreview, moved unchanged: the same statements in the same order, split only for the 150-line limit.
 async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId }) {
+  region = String(region || "").toUpperCase(); // one cache entry per country, not per spelling, whichever way the request came (GET or POST)
   // Unauthenticated and heavyweight: each call can fan out to TMDB /
   // Trakt / MDBList. Same IP-keyed bucket as create/restore/feedback --
   // 240/minute provides sufficient budget for browsing multi-card

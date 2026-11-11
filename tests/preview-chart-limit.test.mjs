@@ -135,4 +135,33 @@ describe("PERF-03: public chart previews do not spend the preview budget", () =>
       globalThis.fetch = realFetch;
     }
   });
+
+  // Third review: case forms of one real code must cost what one form costs, over GET as well as POST.
+  // (Counted in provider calls: the cache key is the region as it reaches the fetcher.)
+  async function providerCalls(chart, regions, method) {
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return new Response(JSON.stringify({ results: [], total_pages: 1 }), { status: 200, headers: { "content-type": "application/json" } }); };
+    try {
+      const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TMDB_API_KEY: "k" });
+      for (const region of regions) {
+        const ip = nextIp();
+        if (method === "GET") await call(env, `/api/preview?url=${encodeURIComponent("tmdb:chart:" + chart)}&type=movie&sample=12&region=${region}`, { ip });
+        else await preview(env, ip, { url: "tmdb:chart:" + chart, region });
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    return calls;
+  }
+
+  // The Worker keeps fetched charts in memory between tests, so each scenario gets a chart of its own.
+  const CHARTS = { POST: ["peacock", "hbomax"], GET: ["upcoming", "netflix"] };
+  for (const method of ["POST", "GET"]) {
+    it(`${method}: four case forms of one country cost what one form costs`, async () => {
+      const one = await providerCalls(CHARTS[method][0], ["US"], method);
+      const four = await providerCalls(CHARTS[method][1], ["US", "us", "Us", "uS"], method);
+      assert.ok(one > 0, "the provider was asked at all");
+      assert.equal(four, one, `${four} provider calls for four spellings, ${one} for one`);
+    });
+  }
 });
