@@ -190,7 +190,7 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | UI-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | API-01 | verified fixed | 5b60aa2 | 2026-11-10, independent review |
 | API-02 | verified fixed | 10c3c33 | 2026-11-10, independent review |
-| API-04 | regression introduced (duplicate titles across Trakt pages, see Verification) | c5dbd27, efd3309, e082ce3, ab07bce | 2026-11-11, independent review |
+| API-04 | fixed (awaiting verification) | c5dbd27, efd3309, e082ce3, ab07bce, cf4797c | |
 | API-05 | verified fixed | 37cdb1a, 75a8244, 7b927c6 | 2026-11-10, independent review |
 | OPS-01 | verified fixed | 034fdb6 | 2026-11-10, independent review |
 | OPS-02 | verified fixed | 8a27e51 | 2026-11-10, independent review |
