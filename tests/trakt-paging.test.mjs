@@ -195,3 +195,58 @@ describe("API-04: the walk remembers where each Trakt page starts", () => {
   });
 });
 
+
+// Fourth review: the page memory also dropped the de-duplication across Trakt pages, so in a watch
+// history (a show recurs on many pages) every show was sent again on every page.
+async function walkShows(pageShows, slug, { startSkip = 0, maxRequests = 400 } = {}) {
+  globalThis.fetch = async (u) => {
+    const href = typeof u === "string" ? u : u.url;
+    if (href.includes("/users/bob/lists/" + slug + "/items")) {
+      const page = Number((href.match(/[?&]page=(\d+)/) || [])[1] || 1);
+      const shows = pageShows[page - 1];
+      const rows = shows == null ? [] : Array.from({ length: 100 }, (_, j) => { const n = shows[j % shows.length]; return { type: "show", show: { title: "S" + n, year: 2000, ids: { imdb: "tt" + String(4000000 + n), tmdb: 6000 + n } } }; });
+      return new Response(JSON.stringify(rows), { status: 200, headers: { "content-type": "application/json", "X-Pagination-Item-Count": String(pageShows.length * 100) } });
+    }
+    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TRAKT_CLIENT_ID: "cid" });
+    const saved = await call(env, "/api/save", { method: "POST", json: { entries: [{ id: "tl", url: "https://trakt.tv/users/bob/lists/" + slug, name: "Best", type: "series" }], traktKey: "cid" } });
+    const all = [];
+    let held = startSkip;
+    for (let n = 0; n < maxRequests; n++) {
+      const r = await call(env, `/${saved.body.id}/catalog/series/tl${held ? `/skip=${held}` : ""}.json`, { ip: nextIp() });
+      const metas = r.body.metas || [];
+      if (!metas.length) break;
+      all.push(...metas.map((m) => m.id));
+      held += metas.length;
+    }
+    return { all, requests: all.length };
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+describe("API-04: a title that recurs on neighbouring Trakt pages is sent once", () => {
+  it("5 shows watched in turn over 20 pages: 5 titles, not 100", async () => {
+    const r = await walkShows(Array.from({ length: 20 }, () => [1, 2, 3, 4, 5]), "histA");
+    assert.equal(r.all.length, 5);
+    assert.equal(new Set(r.all).size, 5);
+  });
+
+  it("shows that each span two and a half pages: every show once", async () => {
+    // page k holds show floor(k*0.4) and the next one, so every show covers 2-3 neighbouring pages.
+    const pages = Array.from({ length: 20 }, (_, k) => [Math.floor(k / 2.5), Math.floor(k / 2.5) + (k % 5 === 2 ? 1 : 0)]);
+    const distinct = new Set(pages.flat()).size;
+    const r = await walkShows(pages, "histB");
+    assert.equal(new Set(r.all).size, distinct, "every show reached");
+    assert.equal(r.all.length, distinct, "none sent twice");
+  });
+
+  it("after the memory is gone, the end of a list ends the row instead of re-sending the last page", async () => {
+    // 150 pages of 60 distinct titles; resume at the very end with nothing remembered.
+    const pages = Array.from({ length: 150 }, (_, p) => Array.from({ length: 60 }, (_, j) => p * 100 + j));
+    const r = await walkShows(pages, "histC", { startSkip: 150 * 60 - 60 });
+    assert.ok(r.all.length <= 120, `${r.all.length} titles sent for the last 60 that exist`);
+  });
+});

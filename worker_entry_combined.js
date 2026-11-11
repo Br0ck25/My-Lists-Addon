@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-11";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cbcd58ad8c";
+const WORKER_BUILD = "219fd772b9";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -32534,8 +32534,10 @@ async function seedNuvioTvNewUser(env, username, accountId) {
 // at or before `skip` and reads forward from there, so a long scroll reads one
 // or two pages a request, not a walk from page 1. The memory lives in the
 // isolate and in KV for ten minutes (a list changes under it, so it must not
-// last), and grows only by what a request reads. A title that appears on two
-// pages is shown for each page, as a page-by-page read always did.
+// last), and grows only by what a request reads. A title already on the page
+// just before is dropped (and not counted in `cum`), so a show that recurs on
+// neighbouring pages, as in a watch history, is sent once. The rule looks one
+// page back only, so every request agrees on what each page holds.
 //
 // loadPage(rawSkip) is the existing fetcher for one Trakt page (rawSkip is
 // 0, 100, 200, ...); each page is cached on its own by the fetchers.
@@ -32580,6 +32582,18 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
   let page = start;
   let reachedEnd = false;
   let grew = false;
+  let prevIds = new Set();
+  if (start > 0 && memo.tail && memo.tail.page === start - 1) {
+    prevIds = memo.tail.ids; // the page this isolate read last time: no extra Trakt call
+  } else if (start > 0) {
+    // The page before the first one read: its titles are not repeated by the next page.
+    try {
+      const before = await loadPage((start - 1) * PAGE_SIZE);
+      if (Array.isArray(before)) prevIds = new Set(before.filter(Boolean).map((m) => m.id));
+    } catch {
+      // Without it a title at the seam may repeat once.
+    }
+  }
   for (let n = 0; n < TRAKT_WINDOW_MAX_PAGES && titles.length < offset + PAGE_SIZE; n++, page++) {
     let metas;
     try {
@@ -32591,8 +32605,11 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
     if (!Array.isArray(metas)) break;
     if (memo.total == null && metas.totalItems != null) memo.total = metas.totalItems;
     if (page === 0 && skip === 0 && !metas.length) return metas; // keep the caller's empty-row handling
-    if (memo.cum.length === page + 1) { memo.cum.push(memo.cum[page] + metas.length); grew = true; }
-    for (const m of metas) if (m) titles.push(m);
+    const fresh = metas.filter((m) => m && !prevIds.has(m.id));
+    prevIds = new Set(metas.filter(Boolean).map((m) => m.id));
+    memo.tail = { page, ids: prevIds };
+    if (memo.cum.length === page + 1) { memo.cum.push(memo.cum[page] + fresh.length); grew = true; }
+    titles.push(...fresh);
     // The end of the list: nothing came back, Trakt sent a short page, or the total is reached.
     if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (memo.total != null && (page + 1) * PAGE_SIZE >= memo.total)) { reachedEnd = true; break; }
   }
@@ -32614,7 +32631,12 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
   const known = memo.cum.length - 1;
   const perPage = Math.max(1, memo.cum[known] / Math.max(1, known));
   let estimate = known + Math.floor((skip - memo.cum[known]) / perPage);
-  if (memo.total != null) estimate = Math.min(estimate, Math.max(0, Math.ceil(memo.total / PAGE_SIZE) - 1));
+  if (memo.total != null && estimate > Math.max(0, Math.ceil(memo.total / PAGE_SIZE) - 1)) {
+    // Past the last Trakt page: the row has ended (re-sending the last page would repeat it).
+    const none = [];
+    none.totalItems = memo.total;
+    return none;
+  }
   const more = [];
   for (let k = 0; k < 4 && more.length < PAGE_SIZE; k++) {
     let metas;
