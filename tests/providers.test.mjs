@@ -317,12 +317,12 @@ describe("P4-1: the provider registry", () => {
         for (const skip of [0, 100]) {
           const keys = { ...base, env, ctx };
           const entry = { id: "row", type: "movie", name: "Row", url };
+          if (skip === 0) vm.runInContext("traktWindowMemory.clear()", sb); // each row starts with no memory of its pages
           calls = [];
           await legacyDispatch(entry, skip, keys, f, K, legacy);
-          // Trakt rows continue where the app is (audit API-04): they read from Trakt's first
-          // page, and a short page ends the walk, so at skip 100 the fetcher is asked for page 1.
-          const TRAKT_WINDOWED = new Set(["fetchTraktWatchlist", "fetchTraktHistory", "fetchTraktChart", "fetchTrakt"]);
-          const want = calls.map(([n, args]) => [n, args.map((a, i) => label(TRAKT_WINDOWED.has(n) && i === 1 ? 0 : a, entry, keys))]);
+          // Trakt rows continue where the app is (audit API-04): the skip=0 call just before has taught
+          // the walk where page 1 ends, so at skip 100 the fetcher is asked for page 2, as before.
+          const want = calls.map(([n, args]) => [n, args.map((a) => label(a, entry, keys))]);
           calls = [];
           await sb.fetchCatalog(entry, skip, keys);
           const got = calls.map(([n, args]) => [n, args.map((a) => label(a, entry, keys))]);

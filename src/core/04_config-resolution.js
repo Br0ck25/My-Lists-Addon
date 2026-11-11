@@ -444,12 +444,12 @@ const CATALOG_SOURCES = [
   {
     name: "trakt-watchlist", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:watchlist") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktWatchlist(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx)),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktWatchlist(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["watchlist", entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "trakt-history", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:history") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktHistory(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx)),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktHistory(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["history", entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "trakt-airing-next", provider: "trakt", kind: "personal", apiUse: "trakt",
@@ -530,7 +530,7 @@ const CATALOG_SOURCES = [
     snapshot: {},
     match: (s) => s.startsWith("trakt:chart:"),
     arg: sourceArgAfter("trakt:chart:"),
-    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktChart(entry, s, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx)),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktChart(entry, s, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx), { env: keys.env, id: ["chart", ref.arg, entry.type].join("|") }),
   },
   {
     name: "simkl-chart", provider: "simkl", kind: "chart", apiUse: "simkl",
@@ -587,7 +587,7 @@ const CATALOG_SOURCES = [
   {
     name: "trakt", provider: "trakt", kind: "list", apiUse: "trakt",
     match: (s) => /^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTrakt(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx)),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTrakt(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["list", entry.url, entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "tmdb", provider: "tmdb", kind: "list", apiUse: "tmdb",

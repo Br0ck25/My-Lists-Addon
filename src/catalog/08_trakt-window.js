@@ -2,59 +2,100 @@
 // episodes of one show become one title). An app sends the number of titles it
 // already holds as the next `skip`, so "skip / 100" asked Trakt for the same
 // page again and the row repeated itself (audit API-04). This continues where
-// the app is: it walks Trakt pages from the start, each cached on its own,
-// drops a title already seen, and returns the window the app asked for.
+// the app is.
+//
+// For each list it remembers how many titles each Trakt page held (`cum`:
+// cum[i] titles before page i). A request starts at the last page that begins
+// at or before `skip` and reads forward from there, so a long scroll reads one
+// or two pages a request, not a walk from page 1. The memory lives in the
+// isolate and in KV for ten minutes (a list changes under it, so it must not
+// last), and grows only by what a request reads. A title that appears on two
+// pages is shown for each page, as a page-by-page read always did.
 //
 // loadPage(rawSkip) is the existing fetcher for one Trakt page (rawSkip is
-// 0, 100, 200, ...). At most TRAKT_WINDOW_MAX_PAGES pages are read for one
-// request (each is cached, so a long scroll mostly re-reads cached pages). A skip the
-// walk cannot reach in that many pages continues from the page the titles read so far point
-// to (an estimate: a few titles may repeat or be missed at the seam), never an empty page.
-const TRAKT_WINDOW_MAX_PAGES = 100;
+// 0, 100, 200, ...); each page is cached on its own by the fetchers.
+const TRAKT_WINDOW_MAX_PAGES = 12; // pages read for one request
+const TRAKT_WINDOW_MEMO_TTL_SEC = 600;
+const TRAKT_WINDOW_MEMO_MAX = 300; // lists remembered in the isolate
+const traktWindowMemory = new Map();
 
-async function traktWindowedPage(skip, loadPage) {
-  if (skip >= TRAKT_WINDOW_MAX_PAGES * PAGE_SIZE) return loadPage(Math.floor(skip / PAGE_SIZE) * PAGE_SIZE);
-  const want = skip + PAGE_SIZE;
-  const seen = new Set();
+async function traktWindowMemo(env, key) {
+  const hit = traktWindowMemory.get(key);
+  if (hit && Date.now() - hit.at < TRAKT_WINDOW_MEMO_TTL_SEC * 1000) return hit;
+  const memo = { cum: [0], total: null, at: Date.now() };
+  if (env && env.CONFIGS) {
+    try {
+      const saved = JSON.parse((await env.CONFIGS.get("trakt:win:" + key)) || "null");
+      if (saved && Array.isArray(saved.cum) && saved.cum[0] === 0) {
+        memo.cum = saved.cum.filter((n) => Number.isFinite(n)).slice(0, 2000);
+        memo.total = saved.total == null ? null : Number(saved.total);
+      }
+    } catch {
+      // No memory of this list: start from page one.
+    }
+  }
+  if (traktWindowMemory.size >= TRAKT_WINDOW_MEMO_MAX) traktWindowMemory.clear();
+  traktWindowMemory.set(key, memo);
+  return memo;
+}
+
+// A short hash of the list's identity (it may contain an access token, which must not be a KV key).
+async function traktWindowKey(id) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(id)));
+  return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
+  const key = id ? await traktWindowKey(id) : "";
+  const memo = key ? await traktWindowMemo(env, key) : { cum: [0], total: null, at: Date.now() };
+  let start = 0;
+  for (let i = memo.cum.length - 1; i >= 0; i--) if (memo.cum[i] <= skip) { start = i; break; }
+  const offset = skip - memo.cum[start];
   const titles = [];
-  let total = null;
+  let page = start;
   let reachedEnd = false;
-  let pagesRead = 0;
-  for (let i = 0; i < TRAKT_WINDOW_MAX_PAGES && titles.length < want; i++) {
+  let grew = false;
+  for (let n = 0; n < TRAKT_WINDOW_MAX_PAGES && titles.length < offset + PAGE_SIZE; n++, page++) {
     let metas;
     try {
-      metas = await loadPage(i * PAGE_SIZE);
+      metas = await loadPage(page * PAGE_SIZE);
     } catch (err) {
-      if (i === 0) throw err;
+      if (n === 0) throw err;
       break; // the first page worked: give what there is rather than nothing
     }
     if (!Array.isArray(metas)) break;
-    pagesRead++;
-    if (total == null && metas.totalItems != null) total = metas.totalItems;
-    if (i === 0 && metas.length === 0 && skip === 0) return metas; // keep the caller's empty-row handling
-    for (const m of metas) {
-      if (m && !seen.has(m.id)) { seen.add(m.id); titles.push(m); }
-    }
+    if (memo.total == null && metas.totalItems != null) memo.total = metas.totalItems;
+    if (page === 0 && skip === 0 && !metas.length) return metas; // keep the caller's empty-row handling
+    if (memo.cum.length === page + 1) { memo.cum.push(memo.cum[page] + metas.length); grew = true; }
+    for (const m of metas) if (m) titles.push(m);
     // The end of the list: nothing came back, Trakt sent a short page, or the total is reached.
-    if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (total != null && (i + 1) * PAGE_SIZE >= total)) { reachedEnd = true; break; }
+    if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (memo.total != null && (page + 1) * PAGE_SIZE >= memo.total)) { reachedEnd = true; break; }
   }
-  // The pages read did not get as far as `skip` and the list goes on (a very long list of
-  // shrinking pages): carry on from the page the titles read so far point to, at the titles-per-page
-  // seen so far. Titles may repeat or be missed at the seams, but each answer moves forward.
-  if (!reachedEnd && titles.length <= skip) {
-    const read = Math.max(1, pagesRead);
-    const perPage = Math.max(1, titles.length / read);
-    let page = read + Math.floor((skip - titles.length) / perPage);
-    const more = [];
-    for (let k = 0; k < 4 && more.length < PAGE_SIZE; k++, page++) {
-      let metas;
-      try { metas = await loadPage(page * PAGE_SIZE); } catch (err) { if (k === 0) throw err; break; }
-      if (!Array.isArray(metas) || !metas.length) break;
-      for (const m of metas) if (m && !seen.has(m.id)) { seen.add(m.id); more.push(m); }
+  if (grew && key && env && env.CONFIGS) {
+    try {
+      await env.CONFIGS.put("trakt:win:" + key, JSON.stringify({ cum: memo.cum, total: memo.total }), { expirationTtl: TRAKT_WINDOW_MEMO_TTL_SEC });
+    } catch {
+      // The isolate keeps it; another isolate starts from what it can read.
     }
-    return more.slice(0, PAGE_SIZE);
   }
-  const out = titles.slice(skip, skip + PAGE_SIZE);
-  if (total != null) out.totalItems = total;
-  return out;
+  const out = titles.slice(offset, offset + PAGE_SIZE);
+  if (out.length || reachedEnd) {
+    if (memo.total != null) out.totalItems = memo.total;
+    return out;
+  }
+  // A first request far down a list nobody has scrolled: the pages read did not reach `skip`.
+  // Estimate the page from the titles per page seen so far and answer from there (a few titles
+  // may repeat or be missed at the seam); the memory has grown, so scrolling on gets exact.
+  const known = memo.cum.length - 1;
+  const perPage = Math.max(1, memo.cum[known] / Math.max(1, known));
+  let estimate = known + Math.floor((skip - memo.cum[known]) / perPage);
+  if (memo.total != null) estimate = Math.min(estimate, Math.max(0, Math.ceil(memo.total / PAGE_SIZE) - 1));
+  const more = [];
+  for (let k = 0; k < 4 && more.length < PAGE_SIZE; k++) {
+    let metas;
+    try { metas = await loadPage((estimate + k) * PAGE_SIZE); } catch (err) { if (k === 0) throw err; break; }
+    if (!Array.isArray(metas) || !metas.length) break;
+    for (const m of metas) if (m) more.push(m);
+  }
+  return more.slice(0, PAGE_SIZE);
 }

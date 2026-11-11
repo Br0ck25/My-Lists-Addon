@@ -135,3 +135,63 @@ describe("API-04: a long list of shrinking pages is reachable to its end", () =>
   });
 });
 
+// Third review: past the walk's page cap the next page was estimated and the row could end early, and
+// a deep request read up to 100 Trakt pages from page 1. The walk now remembers, per list, how many
+// titles each Trakt page held, so a request starts at the right page and reads one or two.
+async function walkShape(shape, slug, { startSkip = 0, maxRequests = 400 } = {}) {
+  const pageTitles = shape.flatMap(([count, per]) => Array.from({ length: count }, () => per));
+  const rawTotal = pageTitles.length * 100;
+  let traktCalls = 0;
+  globalThis.fetch = async (u) => {
+    const href = typeof u === "string" ? u : u.url;
+    if (href.includes("/users/bob/lists/" + slug + "/items")) {
+      traktCalls++;
+      const page = Number((href.match(/[?&]page=(\d+)/) || [])[1] || 1);
+      const per = pageTitles[page - 1];
+      const rows = per == null ? [] : Array.from({ length: 100 }, (_, j) => ({ type: "show", show: { title: "S", year: 2000, ids: { imdb: "tt" + String(3000000 + page * 1000 + (j % per)), tmdb: 7000 + page * 1000 + (j % per) } } }));
+      return new Response(JSON.stringify(rows), { status: 200, headers: { "content-type": "application/json", "X-Pagination-Item-Count": String(rawTotal) } });
+    }
+    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), TRAKT_CLIENT_ID: "cid" });
+    const saved = await call(env, "/api/save", { method: "POST", json: { entries: [{ id: "tl", url: "https://trakt.tv/users/bob/lists/" + slug, name: "Best", type: "series" }], traktKey: "cid" } });
+    const all = [];
+    let held = startSkip, worst = 0;
+    for (let n = 0; n < maxRequests; n++) {
+      const before = traktCalls;
+      const r = await call(env, `/${saved.body.id}/catalog/series/tl${held ? `/skip=${held}` : ""}.json`, { ip: nextIp() });
+      worst = Math.max(worst, traktCalls - before);
+      const metas = r.body.metas || [];
+      if (!metas.length) break;
+      all.push(...metas.map((m) => m.id));
+      held += metas.length;
+    }
+    return { all, worst, traktCalls, total: pageTitles.reduce((a, b) => a + b, 0) };
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+describe("API-04: the walk remembers where each Trakt page starts", () => {
+  it("110 pages of 10 titles then 40 pages of 100 (5,100 titles): all reached once, the row never ends early", async () => {
+    const r = await walkShape([[110, 10], [40, 100]], "shapeA");
+    assert.equal(new Set(r.all).size, r.total, `reached ${new Set(r.all).size} of ${r.total}`);
+    assert.equal(r.all.length, r.total, "none sent twice");
+  });
+
+  it("scrolling a long list is exact, and a request reads only the pages its 100 titles need", async () => {
+    // 10-title pages need ten pages for one answer; the walk must not add a walk from page 1 on top.
+    const r = await walkShape([[60, 90], [90, 10]], "shapeB");
+    assert.ok(r.worst <= 12, `one request made ${r.worst} Trakt calls`);
+    assert.ok(r.traktCalls <= 150 + 12, `${r.traktCalls} Trakt calls for a 150-page list: each page should be read about once`);
+    assert.equal(r.all.length, r.total);
+    assert.equal(new Set(r.all).size, r.total);
+  });
+
+  it("a first request far down a list nobody has scrolled reads a bounded number of pages", async () => {
+    const r = await walkShape([[120, 100]], "shapeC", { startSkip: 9000, maxRequests: 1 });
+    assert.ok(r.traktCalls <= 20, `${r.traktCalls} Trakt calls for one deep request`);
+  });
+});
+
