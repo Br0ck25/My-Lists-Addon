@@ -190,7 +190,7 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | UI-01 | verified fixed | ae33b9f | 2026-11-10, independent review |
 | API-01 | verified fixed | 5b60aa2 | 2026-11-10, independent review |
 | API-02 | verified fixed | 10c3c33 | 2026-11-10, independent review |
-| API-04 | fixed (awaiting verification) | c5dbd27, efd3309, e082ce3, ab07bce, cf4797c | |
+| API-04 | regression introduced (see Verification) | c5dbd27, efd3309, e082ce3, ab07bce, cf4797c | 2026-11-13, independent review |
 | API-05 | verified fixed | 37cdb1a, 75a8244, 7b927c6 | 2026-11-10, independent review |
 | OPS-01 | verified fixed | 034fdb6 | 2026-11-10, independent review |
 | OPS-02 | verified fixed | 8a27e51 | 2026-11-10, independent review |
@@ -204,3 +204,5 @@ Per-finding rows are in each section report (`## Fix progress`). Branch `claude/
 | PROD-04 | verified fixed | ae33b9f | 2026-11-10, independent review |
 
 Independent review, 2026-11-11 (fourth round): of the 30 rows above, 29 are verified fixed. PERF-03 (case forms of a country now share one cache entry over GET and POST) and DB-02 (the list-page like button now marks the D1 copy as behind) are verified fixed. API-04 is back to `regression introduced`: the third review's two problems are fixed (long lists are exact, a deep cold request costs 13 Trakt calls, not 91), but the walk no longer drops a title already sent from an earlier Trakt page, so a watch-history row of 5 shows watched in turn over 20 pages now shows the same 5 shows 20 times (100 items; the commit before showed 5). Its **Verification.** note says what is still wrong. The other 37 findings were not touched and are still open (SEC-03, SEC-05 and SEC-06 among them).
+
+Independent review, 2026-11-13 (fifth round): API-04 stays `regression introduced`. cf4797c fixes the fourth review's cases (a show recurring on neighbouring Trakt pages is sent once; the end of a list ends the row after the memory is gone), but its new "estimate is past the last page, so end the row" rule also ends rows that have not ended: a cold request into an uneven watch history (120 pages, early pages collapsed) at skip 2,500 returns nothing and the app stops the row with 4,100 titles still to come (the commit before returned 90). Its **Verification.** note says what to change. The other 29 rows are unchanged.
