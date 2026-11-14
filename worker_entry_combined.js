@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "3c4a36f0e9";
+const WORKER_BUILD = "491f01d294";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -45220,6 +45220,50 @@ function openMdblistAiringNextDetailsPage() {
   openListDetailsPage('MDBList Airing Next', 'series', 'mdblist:user:shows:airing-next', { sample: sample, count: sample.length, maybeMore: false });
 }
 
+// Fills a provider list's Airing Next items from that provider's cached episode
+// info in localStorage (cacheKey, e.g. 'mdblistAiringNextCache') and from the local
+// Airing Next list. Runs once per list (CQ-03: was pasted into three renderers).
+function applyAiringNextCache(airingNextList, cacheKey) {
+  const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
+  if (!airingNextList._cachedApplied) {
+    try {
+      const cached = JSON.parse(localStorage.getItem('myListAddon:' + cacheKey) || '[]');
+      if (Array.isArray(cached) && cached.length) {
+        const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
+        airingNextList.items.forEach((it) => {
+          const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
+          const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
+          if (c) {
+            it.airDate = c.airDate;
+            it.seasonNum = c.seasonNum;
+            it.episodeNum = c.episodeNum;
+            it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
+            it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
+            it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
+            it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
+            it.isUnaired = true;
+            it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
+          } else if (localMatch) {
+            it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
+            it.isSeasonFinale = !!localMatch.isSeasonFinale;
+            it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
+          }
+        });
+      } else if (localAiringList.length) {
+        airingNextList.items.forEach((it) => {
+          const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
+          if (localMatch) {
+            it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
+            it.isSeasonFinale = !!localMatch.isSeasonFinale;
+            it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
+          }
+        });
+      }
+    } catch (e) {}
+    airingNextList._cachedApplied = true;
+  }
+}
+
 // Renders the list cards into #myMdblistListsResult once /api/mdblist-my-lists
 // returns.
 function renderMyMdblistLists(lists) {
@@ -45235,44 +45279,7 @@ function renderMyMdblistLists(lists) {
     if (!window._mdblistRawAiringCandidates || !window._mdblistRawAiringCandidates.length) {
       window._mdblistRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:mdblistAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'mdblistAiringNextCache');
     const hasExpired = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_mdblistAiringNextEnriching && (hasExpired || !_mdblistAiringNextEnrichedAt || Date.now() - _mdblistAiringNextEnrichedAt >= 120000)) {
       enrichMdblistAiringNextDates(airingNextList).catch(() => {});
@@ -46234,44 +46241,7 @@ function renderMyPrivateTraktLists(lists) {
     if (!window._traktRawAiringCandidates || !window._traktRawAiringCandidates.length) {
       window._traktRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:traktAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'traktAiringNextCache');
     const hasExpired = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_traktAiringNextEnriching && (hasExpired || !_traktAiringNextEnrichedAt || Date.now() - _traktAiringNextEnrichedAt >= 120000)) {
       enrichTraktAiringNextDates(airingNextList).catch(() => {});
@@ -47739,44 +47709,7 @@ function renderMySimklLists(lists) {
     if (!window._simklRawAiringCandidates || !window._simklRawAiringCandidates.length) {
       window._simklRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:simklAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'simklAiringNextCache');
     const hasExpiredSimkl = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_simklAiringNextEnriching && (hasExpiredSimkl || !_simklAiringNextEnrichedAt || Date.now() - _simklAiringNextEnrichedAt >= 120000)) {
       enrichSimklAiringNextDates(airingNextList).catch(() => {});
