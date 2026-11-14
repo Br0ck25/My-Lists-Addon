@@ -14,11 +14,11 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | PERF-01 | open - blocked on an owner decision | (none; a try was reverted) | See docs/HANDOFF.md, PERF-02 section. |  |
-| PERF-02 | open |  |  |  |
+| PERF-02 | fixed (awaiting verification) | 20862d7 | node --test tests/perf-legacy-tracking-write.test.mjs. Histories of 80 entries or fewer are still written in full (one batch; reading first would add a statement to every scrobble, which tests/load-performance.test.mjs forbids). |  |
 | PERF-03 | verified fixed | 35f1c3f, 7b927c6, 605a44b, c4a374d, 7b59fc4 | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. | 2026-11-11, independent review |
-| PERF-04 | open |  |  |  |
-| PERF-05 | open |  |  |  |
-| PERF-06 | open |  |  |  |
+| PERF-04 | fixed (awaiting verification) | 021d62a | node --test tests/perf-scrobble-seen-user.test.mjs. The KV read is kept; only the write is skipped (user listed, same server, seen under an hour ago). The call was not moved after the play-event check, so users who only pause still appear in the filter list. |  |
+| PERF-05 | open - owner decision needed | (none) | Skipped: capping the public list page and its .json changes what readers and any importer of /lists/<user>/<slug>.json receive (items silently missing past the cap). See the owner questions in the fixer's final report. |  |
+| PERF-06 | open - owner decision needed | (none) | Skipped: moving list items out of saved install configs is a storage change for existing installs (migration of saved data), larger than the report's M estimate implies. |  |
 
 ## Proven findings
 ### PERF-01 Every play (scrobble) re-reads and re-diffs the account's whole watch history
