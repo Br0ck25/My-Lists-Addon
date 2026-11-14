@@ -46,4 +46,43 @@ describe("BUG-02: list save racing a delete-account under FF_V2_LISTS_ONLY", () 
     assert.equal(lists.n, 0, "no list rows may survive the deletion");
     assert.equal(accts.n, 0, "the deleted account row must not come back");
   });
+
+  // The delete finishes before the save's account lookup, and the save's own
+  // session step then brings the account row back. Only the retract's
+  // deleteAccountRow removes it: the stamp-bump staging above cannot see it,
+  // because there the delete's own purge already removed the row.
+  it("removes an account row the save itself brought back", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), ...FLAGS });
+    const user = await createUser(env, "racerv2b");
+    const db = env.DB;
+    let deleted = false;
+    const realPrepare = db.prepare.bind(db);
+    db.prepare = (sql) => {
+      const st = realPrepare(sql);
+      if (deleted || !/^\s*SELECT id, username, display_name, key_hash/i.test(String(sql))) return st;
+      const realBind = st.bind.bind(st);
+      st.bind = (...a) => {
+        const b = realBind(...a);
+        for (const m of ["first", "all", "run"]) {
+          const real = b[m].bind(b);
+          b[m] = async (...x) => {
+            if (!deleted) {
+              deleted = true;
+              const d = await call(env, "/api/creator/delete-account", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey, confirm: "DELETE" } });
+              assert.equal(d.body.ok, true, JSON.stringify(d.body));
+            }
+            return real(...x);
+          };
+        }
+        return b;
+      };
+      return st;
+    };
+    const r = await call(env, "/api/creator/lists/save", { method: "POST", json: { creatorName: user.creatorName, creatorKey: user.creatorKey, name: "Mine", type: "movie", items: [{ id: "tt0000001", name: "A", type: "movie" }], visibility: "public" } });
+    db.prepare = realPrepare;
+    assert.equal(deleted, true, "the race was actually staged");
+    assert.notEqual(r.status, 200, "a save into a deleted account must not report success");
+    const accts = await db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE username = ? COLLATE NOCASE").bind("racerv2b").first();
+    assert.equal(accts.n, 0, "the deleted account row must not come back");
+  });
 });

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a35bccda5c";
+const WORKER_BUILD = "51ac99dfff";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -117369,18 +117369,23 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   // never fails the save: a mirror that cannot finish marks the
   // account's v2 copy stale, and reads fall back to what was just saved.
   await listsV2MirrorLists(env, auth.username, [slug]);
+  // A delete may have landed after the first re-check, before the search-index and mirror writes: check once more (v2 rows may exist now).
+  const retractedLate = await creatorListSaveRetractIfDeleted(env, auth, slug, true);
+  if (retractedLate) return retractedLate;
   return json(savedAnswer);
 }
 
 // The account may have been deleted while a save was in flight (it authenticated before its writes).
 // Deletion writes its tombstone before sweeping, so a standing tombstone means the sweep may have
 // passed already: take back what the save just wrote. Returns the 401 to answer with, or null.
-// With listsOnly the save wrote v2 rows (and may have found or recreated the account row), so those go too.
-async function creatorListSaveRetractIfDeleted(env, auth, slug, listsOnly = false) {
+// With v2Rows the save wrote v2 rows (listsOnly, or the mirror), so those go too. The account row (the save's
+// own auth can bring it back after the delete removed it) and the lists_fts row always go.
+async function creatorListSaveRetractIfDeleted(env, auth, slug, v2Rows = false) {
   if (!(await isCreatorTombstoned(env, auth.username.toLowerCase()))) return null;
-  if (listsOnly) {
-    await listsV2PurgeAccount(env, auth.username);
-    await deleteAccountRow(env, auth.username);
+  if (v2Rows) await listsV2PurgeAccount(env, auth.username);
+  await deleteAccountRow(env, auth.username);
+  if (env.DB) {
+    try { await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${auth.username}:${slug}`).run(); } catch (e) { logIgnoredWrite("delete lists_fts row", e); }
   }
   for (const key of [`creatorlist:${auth.username}:${slug}`, `creatorlistorder:${auth.username}`, `creatorliststamp:${auth.username}`]) {
     try { await env.CONFIGS.delete(key); } catch (e) { logIgnoredWrite(`delete ${key}`, e); }
