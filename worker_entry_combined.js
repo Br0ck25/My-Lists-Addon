@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a294a06f44";
+const WORKER_BUILD = "9639f0d450";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -93681,10 +93681,13 @@ async function handleNuvioTvHistoryRemove(env, username, body) {
 }
 
 async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
-  await ensureTrackingMigrated(env, username);
+  // FF_DIRECT_PLAY (41_direct-play.js, audit PERF-01): the record without its Watch
+  // History, so one play does not read and rewrite the whole history. Null = old path.
+  const direct = await directPlayLoad(env, username);
+  if (!direct) await ensureTrackingMigrated(env, username);
   const syncKey = `creatorsynctracking:${username}`;
-  let blob = null;
-  if (env.DB) {
+  let blob = direct ? direct.blob : null;
+  if (!blob && env.DB) {
     try { blob = await readCreatorTrackingD1(env, username); } catch {}
   }
   if (!blob) {
@@ -93813,6 +93816,10 @@ async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
   }
 
   blob.updatedAt = Date.now();
+  if (direct) {
+    await directPlayCommit(env, username, direct, blob, "nuvio-tv");
+    return json({ ok: true, success: true }, 200, corsHeaders());
+  }
   await env.CONFIGS.put(syncKey, JSON.stringify(blob));
   if (env.DB) {
     try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
