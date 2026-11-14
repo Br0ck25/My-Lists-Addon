@@ -159,7 +159,10 @@ Plan: `docs/PERF_AUDIT_PLAN.md`. Done: PERF-00, 12, 05, 08+07 (both steps), 09, 
 - `sync/meta` returns the record's own `updatedAt` for activity-database accounts (same number `sync/load` returns). Anything that changes an account's tracking must bump `settings.tracking.updatedAt`, or other open tabs will not notice (a ping does today because it goes through the blob path).
 - `verifyShelfOwner` is remembered 10 s per (name, key); purge and key rotation clear it on the same isolate, other isolates lag up to 10 s.
 
-### PERF-02 (playback ping), blocked, owner/next-AI decision
+### PERF-02 (playback ping): built as PERF-01 (2026-11-14, behind `FF_DIRECT_PLAY`); the text below is the history
+The owner approved the rebuild after measuring four accounts over 10,000 plays. `src/data/41_direct-play.js` is the direct path; `tests/perf-direct-play.test.mjs` pins the three behaviours below on both paths. Off unless `FF_DIRECT_PLAY` is `1` (dashboard, no deploy to turn off). Do not remove the old path: uncopied accounts and self-hosters use it.
+
+### PERF-02 (playback ping), was blocked, owner/next-AI decision
 `tests/perf-ping-cost.test.mjs` pins today's cost (500 plays: 2 full `watch_events` reads, 14 activity statements per ping). The plan's fix (call `recordActivityPlay` directly for activity accounts) would lose, with no test able to hide it:
 1. The next-episode and "fully watched" decision. `applyEpisodePlayToBlob` asks TMDB for the next aired episode, un-completes a finished show when a new episode is played, and marks it completed when nothing is ahead. `recordActivityPlay` only moves `show_progress` forward and never touches `status = 'completed'`.
 2. A first-ever play of a show gets its Continue Watching entry from that blob step; the schedule job (`show.refresh`) only fills it in later (`shelfStoredForUnknown`).

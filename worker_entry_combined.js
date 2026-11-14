@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "c28eb9155e";
+const WORKER_BUILD = "a294a06f44";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -103896,6 +103896,99 @@ function eventTrackingUnboundEnv(env) {
   });
 }
 
+// --- Recording one play directly (audit PERF-01) ------------------------------
+//
+// Behind FF_DIRECT_PLAY ("1" or "true"; anything else, or unset, is off -- set it
+// to "0" in the dashboard to turn it off again, no deploy). The Plex/Jellyfin/Emby
+// webhook (64_) and the Stremio/Nuvio ping (63_) used to treat a play as an edit
+// of the account's whole tracking record: read the record (for an account on the
+// activity database that rebuilds EVERY play, 40_event-tracking.js), change it,
+// put it back (a diff of every stored play, then a rebuild of all show progress).
+// One play cost work proportional to the account's history -- about 300 database
+// statements at 5,000 plays, and past Cloudflare's 1,000-call limit near 18,000,
+// where plays were dropped.
+//
+// Here an account served from the activity database records the play itself:
+//   - the play: recordActivityPlay (38_), one batch, whatever the history size;
+//   - the record's other parts (Continue Watching, fully watched, dismissals, the
+//     Watchlist copy, the settings, the updated stamp): the small "tracking" JSON
+//     in account_settings, which is the record without its Watch History;
+//   - the show's state: show_progress.status, completed or not.
+// The three things the blob path did and recordActivityPlay alone does not are kept
+// by running the SAME next-episode code on a record whose Watch History holds only
+// the show's furthest watched episode:
+//   1. the next episode and "fully watched" decision (and un-completing a show);
+//   2. the first Continue Watching entry of a show the schedule does not know yet;
+//   3. the stamp other open tabs poll (settings.tracking.updatedAt, sync/meta).
+//
+// Not used (the old path runs unchanged) when the switch is off, FF_EVENT_TRACKING
+// is off, the account's history has not been copied yet, or its settings have not
+// been stored yet (the first read after the switch assembles and stores them).
+
+function isDirectPlayEnabled(env) {
+  const v = env ? env.FF_DIRECT_PLAY : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// The account id when plays are recorded directly for this account, else null.
+async function directPlayAccount(env, username) {
+  if (!isDirectPlayEnabled(env) || !isEventTrackingEnabled(env) || !username) return null;
+  return eventTrackingOwns(env, username);
+}
+
+// The record without its Watch History, as the play code expects to find it, or
+// null when the old path has to run.
+async function directPlayLoad(env, username) {
+  const accountId = await directPlayAccount(env, username);
+  if (accountId == null) return null;
+  const { tracking } = await readTrackingSettings(env, accountId);
+  if (!tracking) return null;
+  const blob = { ...tracking, watchHistory: [] };
+  await ensureTrackingWatchlist(env, username, blob);
+  blob.continueWatching = Array.isArray(blob.continueWatching) ? blob.continueWatching : [];
+  blob.fullyWatchedShowIds = Array.isArray(blob.fullyWatchedShowIds) ? blob.fullyWatchedShowIds : [];
+  blob.dismissedContinueWatching = blob.dismissedContinueWatching && typeof blob.dismissedContinueWatching === "object" ? blob.dismissedContinueWatching : {};
+  return { accountId, blob };
+}
+
+// What the next-episode code needs of the show's history: its furthest watched
+// episode (it works the next one out from that). One indexed lookup. `showId` is
+// the key the show is filed under in the record (the code matches on it).
+async function directPlayShowHistory(env, direct, { showId, showTitle, showPoster, season, episode }) {
+  const ref = legacyHistoryPlay({ type: "episode", showId, showTitle, seasonNum: season, episodeNum: episode }, 0).ref;
+  const { ids } = await resolveMediaBatch(env, [ref], { maxLookups: 1 });
+  if (ids[0] == null) return [];
+  const far = await activityDb(env, direct.accountId).prepare(
+    `SELECT season, episode FROM watch_events WHERE account_id = ? AND media_id = ? AND season IS NOT NULL AND episode IS NOT NULL
+     ORDER BY season DESC, episode DESC LIMIT 1`
+  ).bind(direct.accountId, ids[0]).first();
+  if (!far) return [];
+  return [{ id: `${showId}:${far.season}:${far.episode}`, type: "episode", showId, showTitle: showTitle || "", showPoster: showPoster || "", seasonNum: far.season, episodeNum: far.episode }];
+}
+
+// Writes the play (the entry at the top of the record's Watch History) and the
+// rest of the record's changes. Returns recordActivityPlay's answer.
+async function directPlayCommit(env, username, direct, blob, source) {
+  const entry = blob.watchHistory[0];
+  const res = await recordActivityPlay(env, username, activityPlayFromLegacyEntry(entry), source);
+  if (res.reason === "error") throw new Error("could not record the play in the activity database");
+  const settings = await readTrackingSettings(env, direct.accountId);
+  await writeTrackingSettings(env, direct.accountId, settings.all, trackingRecordRest(blob));
+  // The show's own state: finished, or not (the rebuild the old path ran did this for every show).
+  if (res.mediaId != null && entry && String(entry.type) === "episode") {
+    const done = blob.fullyWatchedShowIds.map(String).includes(String(entry.showId));
+    const actDb = activityDb(env, direct.accountId);
+    await actDb.prepare(
+      done
+        ? "UPDATE show_progress SET status = 'completed', updated_at = ? WHERE account_id = ? AND media_id = ? AND status = 'watching'"
+        : "UPDATE show_progress SET status = 'watching', updated_at = ? WHERE account_id = ? AND media_id = ? AND status = 'completed'"
+    ).bind(Date.now(), direct.accountId, res.mediaId).run();
+  }
+  // A new play goes on to the apps with two-way sync on, as a website save does.
+  if (res.recorded && typeof nudgeMediaAppPush === "function") await nudgeMediaAppPush(env, direct.accountId);
+  return res;
+}
+
 // --- Provider breaker (Phase 4, P4-4) -----------------------------------------
 //
 // When a provider goes down, every request that needs it used to wait out the
@@ -112963,7 +113056,9 @@ async function handleSubtitlesTrackFor(configParam, stremioType, id, env, reques
 
 // The try block of handleSubtitlesTrackFor: look the play up, record it, take it off the Watchlist.
 async function recordSubtitlesPlay(env, ctx, auth, stremioType, imdbId, season, episode, effectiveTmdbKey) {
-  await ensureTrackingMigrated(env, auth.username);
+  // Asking for the tracking key of an account on the activity database rebuilds its
+  // whole history (PERF-01), so a directly recorded play (41_direct-play.js) skips it.
+  if ((await directPlayAccount(env, auth.username)) == null) await ensureTrackingMigrated(env, auth.username);
   const syncKey = `creatorsynctracking:${auth.username}`;
 
   // Resolve what we're actually recording (TMDB lookups) exactly
@@ -113142,6 +113237,8 @@ async function resolveSubtitlesPlayRecord(stremioType, imdbId, season, episode, 
 
 // The read-modify-write of the account's tracking blob, retried a bounded number of times.
 async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
+  const direct = await directPlayLoad(env, auth.username);
+  if (direct) return writeSubtitlesPlayDirect(env, direct, { auth, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie });
   const MAX_ATTEMPTS = 3;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let blob = null;
@@ -113205,6 +113302,26 @@ async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, ep
 
     break;
   }
+}
+
+// The same play, recorded directly (FF_DIRECT_PLAY, 41_direct-play.js): the same
+// next-episode code, on a record holding only this show's furthest watched episode,
+// then the play and the record's other changes written without touching the rest of
+// the history. No retry loop: nothing is read-compared-and-rewritten as a whole.
+async function writeSubtitlesPlayDirect(env, direct, { auth, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
+  const blob = direct.blob;
+  if (recordEpisode) {
+    const { showTitle, showPoster } = recordEpisode.episodeEntry;
+    blob.watchHistory = await directPlayShowHistory(env, direct, { showId: imdbId, showTitle, showPoster, season, episode });
+    await applyEpisodePlayToBlob(blob, recordEpisode, imdbId, season, episode, effectiveTmdbKey, env);
+  } else if (recordMovie) {
+    blob.watchHistory = [{ ...recordMovie.movieEntry, watchedAt: Date.now() }];
+  }
+  if (Array.isArray(blob.watchlist) && blob.watchlist.length) {
+    blob.watchlist = blob.watchlist.filter((it) => it && String(it.id || it.imdbId) !== imdbId && String(it.showId || '') !== imdbId);
+  }
+  blob.updatedAt = Date.now();
+  await directPlayCommit(env, auth.username, direct, blob, "ping");
 }
 
 // Put an episode play into the blob's Watch History and recompute that show's Continue Watching.
@@ -113666,7 +113783,9 @@ async function authenticateScrobbleRequest(url, env, request, ctx) {
     }
     return { response: json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401) };
   }
-  await ensureTrackingMigrated(env, authUser);
+  // A directly recorded play (41_direct-play.js) never asks for the assembled record,
+  // which for an account on the activity database rebuilds its whole history (PERF-01).
+  if ((await directPlayAccount(env, authUser)) == null) await ensureTrackingMigrated(env, authUser);
 
   if (!effectiveTmdbKey && authUser && env && env.CONFIGS) {
     try {
@@ -113896,6 +114015,11 @@ async function loadScrobbleFilterSettings(url, env, authUser) {
           };
         }
       }
+      const directAccount = trackingObj ? null : await directPlayAccount(env, authUser);
+      if (directAccount != null) {
+        // The settings part of the record is all the filter reads (PERF-01).
+        trackingObj = (await readTrackingSettings(env, directAccount)).tracking;
+      }
       if (!trackingObj) {
         let trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${authUser}`);
         if (!trackingRaw) {
@@ -114001,25 +114125,32 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
   let matched = "no";
   const syncKey = `creatorsynctracking:${authUser}`;
   let blob = null;
-  if (env.DB) {
-    blob = await readCreatorTrackingD1(env, authUser);
+  // FF_DIRECT_PLAY (41_direct-play.js): the record without its Watch History, and the play
+  // written on its own below.
+  const direct = await directPlayLoad(env, authUser);
+  if (direct) {
+    blob = direct.blob;
+  } else {
+    if (env.DB) {
+      blob = await readCreatorTrackingD1(env, authUser);
+    }
+    const raw = await env.CONFIGS.get(syncKey);
+    if (!blob && raw) {
+      try { blob = JSON.parse(raw); } catch {}
+    }
+    if (!blob || typeof blob !== "object") {
+      blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true };
+    }
+    // Written back whole below -- see ensureTrackingWatchlist.
+    await ensureTrackingWatchlist(env, authUser, blob);
   }
-  const raw = await env.CONFIGS.get(syncKey);
-  if (!blob && raw) {
-    try { blob = JSON.parse(raw); } catch {}
-  }
-  if (!blob || typeof blob !== "object") {
-    blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true };
-  }
-  // Written back whole below -- see ensureTrackingWatchlist.
-  await ensureTrackingWatchlist(env, authUser, blob);
   blob.watchHistory = Array.isArray(blob.watchHistory) ? blob.watchHistory : [];
   blob.continueWatching = Array.isArray(blob.continueWatching) ? blob.continueWatching : [];
   blob.fullyWatchedShowIds = Array.isArray(blob.fullyWatchedShowIds) ? blob.fullyWatchedShowIds : [];
   blob.dismissedContinueWatching = blob.dismissedContinueWatching && typeof blob.dismissedContinueWatching === "object" ? blob.dismissedContinueWatching : {};
 
   if (mediaType === "series") {
-    const played = await recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey });
+    const played = await recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey, direct });
     matched = played.matched;
     imdbId = played.imdbId;
   } else {
@@ -114034,6 +114165,11 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
   }
 
   blob.updatedAt = Date.now();
+  if (direct) {
+    // Nothing recorded, nothing to write (the old path rewrote the record regardless).
+    if (matched.startsWith("yes")) await directPlayCommit(env, authUser, direct, blob, "webhook");
+    return matched;
+  }
   await env.CONFIGS.put(syncKey, JSON.stringify(blob));
   if (env.DB) {
     await saveCreatorTrackingD1(env, authUser, blob, false);
@@ -114049,7 +114185,7 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
 }
 
 // The series branch of step 5.
-async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey }) {
+async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey, direct }) {
   const seasonNum = season != null ? season : 1;
   const episodeNum = episode != null ? episode : 1;
 
@@ -114097,6 +114233,9 @@ async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTi
   const itemKey = epIdStr || `${resolvedShowId}:${seasonNum}:${episodeNum}`;
   const finalEpisodePoster = epPoster || sPoster || (imdbId && imdbId.startsWith("tt") ? `https://images.metahub.space/poster/medium/${imdbId}/img` : "");
   const finalShowPoster = sPoster || (imdbId && imdbId.startsWith("tt") ? `https://images.metahub.space/poster/medium/${imdbId}/img` : "") || epPoster;
+
+  // Directly recorded (41_direct-play.js): the history holds only this show's furthest watched episode.
+  if (direct) blob.watchHistory = await directPlayShowHistory(env, direct, { showId: resolvedShowId, showTitle: sTitle, showPoster: finalShowPoster, season: seasonNum, episode: episodeNum });
 
   // Re-watching or newly watching an episode always brings it to the top of Watch History
   blob.watchHistory = blob.watchHistory.filter((it) => !((it.showId === resolvedShowId || it.showTitle === sTitle) && it.seasonNum === seasonNum && it.episodeNum === episodeNum));

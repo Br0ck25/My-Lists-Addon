@@ -2739,3 +2739,18 @@ Owner decisions of 2026-11-10 on the open items of `docs/audit-2026-11-10/`. Rea
 
 ### Checked
 `bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported by the test runner on this machine). Separately, the panel was opened in a real browser against the dev server, in light, dark and phone width, and Restore was clicked: the show came back, the success message appeared, and the panel hid itself when nothing was left.
+
+## 2026-11-14 — Recording a play no longer re-reads the whole watch history (PERF-01) (build `a294a06f44`, prepared; not deployed)
+
+- **Fixed (PERF-01), behind a new switch `FF_DIRECT_PLAY`.** A play from Plex, Jellyfin or Emby, or from the Stremio/Nuvio playback ping, used to rebuild the account's whole history and compare it with what was stored: about 300 database calls at 5,000 plays, and over Cloudflare's 1,000-call limit near 18,000 (four accounts have more than 10,000). With the switch on, an account whose history has been copied records the play on its own, at a cost that does not depend on its history: 200 and 3,200 plays make the same number of calls. The old way still runs, unchanged, when the switch is off or unset (the default, and what self-hosters get), for an account not yet copied to the activity database, and for an account whose settings were never stored.
+- **Kept, with tests that run on both ways:** the next episode and "fully watched" decision (including taking a finished show off the finished list when a newer episode is played), the first Continue Watching entry of a show seen for the first time, and the updated stamp other open tabs poll.
+- **One small difference:** a show's first play now also counts the account as a watcher of that show (`show_schedule.watcher_count`), as `recordActivityPlay` was written to do; on the old way the history rebuild got there first and the count was left to the schedule job's recount.
+
+### Owner steps
+1. Paste the new Worker.
+2. Turn it on: in the Cloudflare dashboard add the variable `FF_DIRECT_PLAY` = `1` to the Worker. To turn it off again, set it to `0` or delete it; no deploy is needed and the old way takes over on the next play.
+3. To check: play something, then watch **Continue Watching** and **Watch History** on the website.
+
+### Checked
+`tests/perf-direct-play.test.mjs` (34 tests). The cost test failed first (2 full history reads per play); the behaviour tests pin the old way's results and run on both ways. `bash verify.sh -q`: see the commit.
+
