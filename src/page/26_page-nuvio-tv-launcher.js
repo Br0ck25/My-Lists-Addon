@@ -225,30 +225,47 @@ function buildNuvioTvConfigScript(origin) {
     '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
     '  if (remName) showToast("Removed \\"" + remName + "\\" from TV Launcher shelves.", "success");\n' +
     '}\n' +
-    'async function loadTvLauncherConfig() {\n' +
+    'async function renewTvLauncherSession(creatorName) {\n' +
+    '  var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
+    '  if (!creatorName || !creatorKey) return false;\n' +
     '  try {\n' +
-    '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
+    '    var r = await fetch(ORIGIN + "/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ username: creatorName, key: creatorKey }) });\n' +
+    '    return !!(r && r.ok);\n' +
+    '  } catch (err) { return false; }\n' +
+    '}\n' +
+    'async function loadTvLauncherConfig() {\n' +
+    '  var creatorName = "";\n' +
+    '  try {\n' +
+    '    creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
     '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "");\n' +
-    '    var res = (typeof creatorApiFetch === "function") ? await creatorApiFetch(url, { credentials: "same-origin" }) : await fetch(url, { credentials: "same-origin" });\n' +
-    '    if (res && res.ok) {\n' +
-    '      var data = await res.json();\n' +
-    '      if (data && data.ok) {\n' +
-    '        tvLauncherConfig = data;\n' +
-    '        tvLauncherIsMirror = data.mirror !== false;\n' +
-    '        tvLauncherMainLists = Array.isArray(data.mainLists) ? data.mainLists : [];\n' +
-    '        tvLauncherTvLists = Array.isArray(data.tvLists) ? data.tvLists : [];\n' +
-    '        var sw = document.getElementById("tvMirrorSwitch");\n' +
-    '        if (sw) sw.checked = tvLauncherIsMirror;\n' +
-    '        var copyBtn = document.getElementById("tvCopyMainBtn");\n' +
-    '        if (copyBtn) copyBtn.style.display = tvLauncherIsMirror ? "none" : "inline-flex";\n' +
-    '        renderTvHomeShelves();\n' +
-    '        if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
-    '        if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
-    '      }\n' +
+    '    var ask = function() { return (typeof creatorApiFetch === "function") ? creatorApiFetch(url, { credentials: "same-origin" }) : fetch(url, { credentials: "same-origin" }); };\n' +
+    '    var res = await ask();\n' +
+    '    // The Account Key never goes in the address (SEC-03), so the read relies on the sign-in cookie. If it has ended, sign in again with the stored key and ask once more.\n' +
+    '    if (res && res.status === 401 && await renewTvLauncherSession(creatorName)) res = await ask();\n' +
+    '    var data = (res && res.ok) ? await res.json() : null;\n' +
+    '    if (data && data.ok) {\n' +
+    '      tvLauncherConfig = data;\n' +
+    '      tvLauncherIsMirror = data.mirror !== false;\n' +
+    '      tvLauncherMainLists = Array.isArray(data.mainLists) ? data.mainLists : [];\n' +
+    '      tvLauncherTvLists = Array.isArray(data.tvLists) ? data.tvLists : [];\n' +
+    '      var sw = document.getElementById("tvMirrorSwitch");\n' +
+    '      if (sw) sw.checked = tvLauncherIsMirror;\n' +
+    '      var copyBtn = document.getElementById("tvCopyMainBtn");\n' +
+    '      if (copyBtn) copyBtn.style.display = tvLauncherIsMirror ? "none" : "inline-flex";\n' +
+    '      renderTvHomeShelves();\n' +
+    '      if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '      if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
+    '    } else if (creatorName) {\n' +
+    '      showToast("Could not load your TV setup. Sign in again, then reload this page.", "error");\n' +
     '    }\n' +
-    '  } catch (err) { console.error("loadTvLauncherConfig error:", err); }\n' +
+    '  } catch (err) {\n' +
+    '    console.error("loadTvLauncherConfig error:", err);\n' +
+    '    if (creatorName) showToast("Could not load your TV setup. Check your connection and reload this page.", "error");\n' +
+    '  }\n' +
     '}\n' +
     'async function saveTvLauncherConfig(mirrorVal, listsVal) {\n' +
+    '  // Never save from the empty defaults: if the saved setup did not load, writing now would replace it.\n' +
+    '  if (!tvLauncherConfig) { showToast("Could not save TV setup because it has not loaded. Sign in again, then reload this page.", "error"); return false; }\n' +
     '  try {\n' +
     '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
     '    var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
