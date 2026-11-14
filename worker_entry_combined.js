@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f975edffb6";
+const WORKER_BUILD = "0b9e7fbc8f";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -126967,23 +126967,19 @@ async function apiFeedback(request, env, ctx, path) {
   // What actually gets stored: the admin marker, a proven username, or
   // nothing. Never the raw claim.
   const creatorName = isAdmin ? claimedCreator : authedCreator;
-  let rateLimitKey = null;
-  let rateCount = 0;
   if (!isAdmin) {
     const ip = clientIpKey(request);
     if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
-    rateLimitKey = `feedbackrate:${ip}:${statsToday()}`;
-    const rateCountRaw = await env.CONFIGS.get(rateLimitKey);
-    rateCount = parseInt(rateCountRaw, 10) || 0;
-    if (rateCount >= 20) {
-      return json({ ok: false, error: "You've sent a few messages today -- please try again tomorrow." });
+    // Atomic D1 counter (SEC-05): a KV read-then-write let parallel requests all see the same count.
+    if (await consumeRateLimit(env, ctx, "feedback", ip, 20, 86400)) {
+      return json({ ok: false, error: "You've sent a few messages today -- please try again tomorrow." }, 429, { "Cache-Control": "no-store" });
     }
   }
-  return apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount });
+  return apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName });
 }
 
 // The rest of apiFeedback, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount }) {
+async function apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName }) {
   // If replying to an existing thread
   if (threadId) {
     let entry = null;
@@ -127060,7 +127056,6 @@ async function apiFeedbackThreadReply(request, env, { message, category, contact
         // someone else's report.
         if (creatorName && !entry.creatorName) entry.creatorName = creatorName;
         await putFeedbackThread(env, `feedback:${threadId}`, entry);
-        if (!isAdmin) await env.CONFIGS.put(rateLimitKey, String(rateCount + 1), { expirationTtl: 86400 });
         return json({ ok: true, entry });
       }
     } catch (e) {
@@ -127082,11 +127077,11 @@ async function apiFeedbackThreadReply(request, env, { message, category, contact
       return json({ ok: false, error: safeErrorMessage(e, "Could not save your reply right now. Please try again in a moment.") }, 500);
     }
   }
-  return apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount });
+  return apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName });
 }
 
 // The rest of apiFeedback, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount }) {
+async function apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName }) {
   // New Thread
   //
   // The id is a capability: /api/feedback/threads hands the whole thread
@@ -127121,7 +127116,6 @@ async function apiFeedbackNewEntry(request, env, { message, category, contact, i
   };
   try {
     await putFeedbackThread(env, `feedback:${id}`, entry);
-    if (!isAdmin) await env.CONFIGS.put(rateLimitKey, String(rateCount + 1), { expirationTtl: 86400 });
   } catch (e) {
     // Logged rather than swallowed, for the reason spelled out at the
     // admin status route (26_...). This one is NOT admin-only, so the

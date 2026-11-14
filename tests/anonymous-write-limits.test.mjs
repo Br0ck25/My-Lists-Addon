@@ -112,3 +112,16 @@ describe("/api/save and /api/feedback keep their limits", () => {
     assert.match(results[20].error, /tomorrow/);
   });
 });
+
+// SEC-05: the daily feedback cap was a read-then-write KV counter, so requests
+// sent at the same time all saw the same old count and every one got through.
+describe("/api/feedback daily limit holds under parallel requests", () => {
+  it("accepts at most 20 of 60 simultaneous messages from one address, and refuses the rest with 429", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const ip = "203.0.113.91";
+    const res = await Promise.all(Array.from({ length: 60 }, (_, i) => call(env, "/api/feedback", { method: "POST", ip, json: { message: "p" + i } })));
+    const accepted = res.filter((r) => r.body && r.body.ok === true).length;
+    assert.ok(accepted <= 20, "accepted " + accepted + " of 60");
+    assert.ok(res.filter((r) => r.status === 429).length >= 40, "the rest are refused with 429");
+  });
+});
