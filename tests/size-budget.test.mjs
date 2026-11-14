@@ -9,7 +9,9 @@
 //
 // Functions are measured on the server sources joined the way build.py joins them
 // (src/header.js, then every src/*/NN_*.js sorted by file name). Client code inside
-// the page template is a string to the parser, so only the FILE limit applies to it.
+// the page template is a string to the parser, so it is measured on the page the Worker
+// really renders (the inline scripts, joined as the browser sees them) and listed under
+// "clientFunctions" as "page::name" (CQ-01). It is a ratchet like the rest.
 // Exempt, because the page itself is their length: renderBuilder, renderAdminDashboard.
 //
 // Keys are "file::name" (nested: "file::outer>inner"), never line numbers, so moving
@@ -24,6 +26,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { renderPage } from "./client-harness.mjs";
 import assert from "node:assert/strict";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -68,6 +71,50 @@ function keyName(node, parent) {
   return null;
 }
 
+// Sizes (in lines) of every named function over the limit in `code`, keyed
+// "<file>::outer>inner". fileAt(line) says which file a line belongs to.
+export function functionSizes(acorn, code, fileAt, sourceType, exempt = EXEMPT_FUNCTIONS) {
+  const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType, locations: true });
+  const sizes = {};
+  const seen = {};
+  const isFn = (n) => n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression";
+  (function walk(node, parent, path) {
+    if (!node || typeof node.type !== "string") return;
+    let nextPath = path;
+    if (isFn(node)) {
+      const name = keyName(node, parent);
+      if (name) {
+        const [, file] = fileAt(node.loc.start.line);
+        const size = node.loc.end.line - node.loc.start.line + 1;
+        const isExempt = path.length === 0 && exempt.has(name);
+        const key0 = `${file}::${[...path, name].join(">")}`;
+        seen[key0] = (seen[key0] || 0) + 1;
+        if (size > FUNCTION_LIMIT && !isExempt) {
+          sizes[seen[key0] > 1 ? `${key0}#${seen[key0]}` : key0] = size;
+        }
+        nextPath = [...path, name];
+      }
+    }
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (Array.isArray(v)) v.forEach((c) => c && typeof c.type === "string" && walk(c, node, nextPath));
+      else if (v && typeof v.type === "string") walk(v, node, nextPath);
+    }
+  })(ast, null, []);
+  return sizes;
+}
+
+// The page scripts as the browser gets them: every inline <script> block of the
+// rendered builder page, in order (same filter as tests/client-harness.mjs).
+export function pageScript() {
+  const html = renderPage();
+  const blocks = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
+  return blocks
+    .filter(([, attrs, body]) => !/application\/ld\+json/.test(attrs) && !/\bsrc=/.test(attrs) && body.trim())
+    .map(([, , body]) => body)
+    .join("\n;\n");
+}
+
 export async function measure() {
   const acorn = await loadAcorn();
   const files = sourceFiles();
@@ -87,49 +134,20 @@ export async function measure() {
   }
   const fileAt = (ln) => { let r = starts[0]; for (const s of starts) { if (s[0] <= ln) r = s; else break; } return r; };
 
-  const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType: "module", locations: true });
-  const sizes = {};
-  const seen = {};
-  const isFn = (n) => n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression";
-  (function walk(node, parent, path) {
-    if (!node || typeof node.type !== "string") return;
-    let nextPath = path;
-    if (isFn(node)) {
-      const name = keyName(node, parent);
-      if (name) {
-        const [, file] = fileAt(node.loc.start.line);
-        const size = node.loc.end.line - node.loc.start.line + 1;
-        const exempt = path.length === 0 && EXEMPT_FUNCTIONS.has(name);
-        if (size > FUNCTION_LIMIT && !exempt) {
-          let key = `${file}::${[...path, name].join(">")}`;
-          seen[key] = (seen[key] || 0) + 1;
-          if (seen[key] > 1) key += `#${seen[key]}`;
-          sizes[key] = size;
-        } else {
-          const k = `${file}::${[...path, name].join(">")}`;
-          seen[k] = (seen[k] || 0) + 1;
-        }
-        nextPath = [...path, name];
-      }
-    }
-    for (const k of Object.keys(node)) {
-      const v = node[k];
-      if (Array.isArray(v)) v.forEach((c) => c && typeof c.type === "string" && walk(c, node, nextPath));
-      else if (v && typeof v.type === "string") walk(v, node, nextPath);
-    }
-  })(ast, null, []);
+  const sizes = functionSizes(acorn, code, fileAt, "module");
+  const clientFunctions = functionSizes(acorn, pageScript(), () => [1, "page"], "script", new Set());
 
   const bigFiles = {};
   for (const [f, n] of Object.entries(fileSizes)) if (n > FILE_LIMIT) bigFiles[f] = n;
-  return { functions: sizes, files: bigFiles };
+  return { functions: sizes, files: bigFiles, clientFunctions };
 }
 
 const sortObj = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
 
 function compare(current, saved) {
   const problems = [];
-  for (const kind of ["functions", "files"]) {
-    const limit = kind === "functions" ? FUNCTION_LIMIT : FILE_LIMIT;
+  for (const kind of ["functions", "files", "clientFunctions"]) {
+    const limit = kind === "files" ? FILE_LIMIT : FUNCTION_LIMIT;
     const cur = current[kind], base = saved[kind] || {};
     for (const [k, n] of Object.entries(cur)) {
       if (!(k in base)) problems.push(`${k}: new code over the limit (${n} lines, limit ${limit}): split it`);
@@ -146,9 +164,9 @@ if (process.argv.includes("--update")) {
   let current;
   try { current = await measure(); } catch (e) { console.error("size-budget: " + e.message); process.exit(1); }
   const saved = JSON.parse(readFileSync(BASELINE_FILE, "utf8"));
-  const next = { functions: {}, files: {} };
+  const next = { functions: {}, files: {}, clientFunctions: {} };
   let lowered = 0, removed = 0, refused = 0;
-  for (const kind of ["functions", "files"]) {
+  for (const kind of ["functions", "files", "clientFunctions"]) {
     for (const [k, old] of Object.entries(saved[kind] || {})) {
       const n = current[kind][k];
       if (n === undefined) { removed++; continue; }
@@ -157,7 +175,7 @@ if (process.argv.includes("--update")) {
       next[kind][k] = n;
     }
   }
-  writeFileSync(BASELINE_FILE, JSON.stringify({ functions: sortObj(next.functions), files: sortObj(next.files) }, null, 1) + "\n");
+  writeFileSync(BASELINE_FILE, JSON.stringify({ functions: sortObj(next.functions), files: sortObj(next.files), clientFunctions: sortObj(next.clientFunctions) }, null, 1) + "\n");
   console.log(`size-budget: ${lowered} lowered, ${removed} removed, ${refused} grew (left as is: they still fail). New items are never added.`);
   process.exit(0);
 }
@@ -167,4 +185,17 @@ test("size budget: nothing new over the limit, nothing listed grew or is stale",
   const saved = JSON.parse(readFileSync(BASELINE_FILE, "utf8"));
   const problems = compare(current, saved);
   assert.equal(problems.length, 0, `\n  ` + problems.join("\n  "));
+});
+
+test("size budget: client functions are measured, named or assigned (CQ-01)", async () => {
+  const acorn = await loadAcorn();
+  const body = Array.from({ length: 200 }, (_, i) => `  x += ${i};`).join("\n");
+  const code = `function bigNamed() {\n  let x = 0;\n${body}\n}\nconst bigAssigned = () => {\n  let x = 0;\n${body}\n};\nfunction small() { return 1; }\n`;
+  const sizes = functionSizes(acorn, code, () => [1, "page"], "script", new Set());
+  assert.deepEqual(Object.keys(sizes).sort(), ["page::bigAssigned", "page::bigNamed"]);
+});
+
+test("size budget: the page script is really parsed and holds the big client functions (CQ-01)", async () => {
+  const current = await measure();
+  assert.ok(current.clientFunctions["page::openListDetailsPage"] > FUNCTION_LIMIT, "openListDetailsPage should be measured");
 });
