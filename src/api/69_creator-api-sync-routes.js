@@ -781,6 +781,10 @@ async function handleNuvioTvDeviceCode(request, env, ctx, url) {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   const kv = (env && (env.CONFIGS || env["LIST_CACHE"]));
   if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+  // Public and writes 3 KV keys per call, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvdevicecode", clientIpKey(request), 10)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
 
   const deviceCode = crypto.randomUUID();
   const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";

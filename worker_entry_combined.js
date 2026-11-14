@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0b9e7fbc8f";
+const WORKER_BUILD = "a4bbee0a88";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -93808,6 +93808,11 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   }
 
+  // Public and each call writes KV, D1 and the activity DB, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvhistory", clientIpKey(request), 120)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
   let body;
   try {
     body = await readJsonObject(request);
@@ -119459,6 +119464,10 @@ async function handleNuvioTvDeviceCode(request, env, ctx, url) {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   const kv = (env && (env.CONFIGS || env["LIST_CACHE"]));
   if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+  // Public and writes 3 KV keys per call, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvdevicecode", clientIpKey(request), 10)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
 
   const deviceCode = crypto.randomUUID();
   const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";

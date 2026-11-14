@@ -1298,6 +1298,11 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   }
 
+  // Public and each call writes KV, D1 and the activity DB, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvhistory", clientIpKey(request), 120)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
   let body;
   try {
     body = await readJsonObject(request);

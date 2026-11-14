@@ -125,3 +125,26 @@ describe("/api/feedback daily limit holds under parallel requests", () => {
     assert.ok(res.filter((r) => r.status === 429).length >= 40, "the rest are refused with 429");
   });
 });
+
+// SEC-06: both routes are public and write storage on every call; neither had a limit.
+describe("Nuvio TV public write routes have a per-address limit", () => {
+  it("/api/nuvio-tv/device/code gives 10 codes a minute to one address, then 429", async () => {
+    await awaitFreshRateWindow();
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const ip = "203.0.113.92";
+    const statuses = [];
+    for (let i = 0; i < 14; i++) statuses.push((await call(env, "/api/nuvio-tv/device/code", { method: "POST", ip })).status);
+    assert.ok(statuses.slice(0, 10).every((s) => s === 200), statuses.join(","));
+    assert.ok(statuses.slice(10).every((s) => s === 429), statuses.join(","));
+  });
+
+  it("/api/nuvio-tv/history stops one address after 120 requests a minute, with 429", async () => {
+    await awaitFreshRateWindow();
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const ip = "203.0.113.93";
+    const statuses = [];
+    for (let i = 0; i < 125; i++) statuses.push((await call(env, "/api/nuvio-tv/history", { method: "POST", ip, json: { targetId: "nope" } })).status);
+    assert.ok(statuses.slice(0, 120).every((s) => s === 404), "unpaired ids are refused, not limited");
+    assert.ok(statuses.slice(120).every((s) => s === 429), statuses.slice(118).join(","));
+  });
+});
