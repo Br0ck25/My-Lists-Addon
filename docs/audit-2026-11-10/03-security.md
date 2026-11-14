@@ -21,10 +21,10 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 |---|---|---|---|---|
 | SEC-01 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-01 block). Old TVs must pair again. | 2026-11-10, independent review |
 | SEC-02 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-02 block). LEGACY_USERNAME_OWNER_LINKS=1 undoes it. | 2026-11-10, independent review |
-| SEC-03 | open |  |  |  |
+| SEC-03 | fixed (awaiting verification) | 8e88c86 | node --test tests/nuvio-tv-config-query-key.test.mjs. The launcher page now loads its config through the signed-in session. |  |
 | SEC-04 | verified fixed | a1ecc1f, 5997fe0, 1ffc61e | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). | 2026-11-10, independent review |
-| SEC-05 | open |  |  |  |
-| SEC-06 | open |  |  |  |
+| SEC-05 | fixed (awaiting verification) | cc18207 | node --test tests/anonymous-write-limits.test.mjs (parallel feedback block). Over-limit now answers 429. |  |
+| SEC-06 | fixed (awaiting verification) | 6cc6efd | node --test tests/anonymous-write-limits.test.mjs (Nuvio TV block). 10 device codes/min and 120 history calls/min per address. |  |
 
 ## Proven findings   (ordered by severity)
 
