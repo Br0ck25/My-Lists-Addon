@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "be4903cdd1";
+const WORKER_BUILD = "2628e86eb4";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -9667,10 +9667,6 @@ async function backfillAccounts(env, options = {}) {
     updated,
     errors,
   };
-}
-
-async function reconcileAccounts(env) {
-  return backfillAccounts(env, { dryRun: true });
 }
 
 // D1 is the authoritative store for creator lists when bound.
@@ -49378,115 +49374,6 @@ function addNewNuvioCollection(existing, incoming, options) {
   });
 
   return cleanedExisting.concat(newCols);
-}
-
-// Twin of src/api/61_media-app-sync.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
-function mergeNuvioCollections(existing, incoming) {
-  const existingArr = extractNuvioCollections(existing);
-  const incomingArr = extractNuvioCollections(incoming);
-
-  if (!existingArr.length) return incomingArr;
-  if (!incomingArr.length) return existingArr;
-
-  // Preserve all collections from other providers / community templates 100% untouched
-  const otherCollections = [];
-  let myListsCol = null;
-
-  for (let i = 0; i < existingArr.length; i++) {
-    const c = existingArr[i];
-    if (!c) continue;
-    const cTitle = String(c.title || c.name || '').trim();
-    const cFolders = Array.isArray(c.folders) ? c.folders : [];
-
-
-    const isMyLists = (c.id && (c.id === 'my-lists-collections' || c.id === 'my-lists-addon')) ||
-                      (cTitle && (cTitle.toLowerCase() === 'my lists collections' || cTitle.toLowerCase() === 'my lists addon' || cTitle.toLowerCase() === 'my lists'));
-    if (isMyLists) {
-      if (!myListsCol) {
-        myListsCol = JSON.parse(JSON.stringify(c));
-      } else if (cFolders.length > 0) {
-        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
-        myListsCol.folders.push.apply(myListsCol.folders, JSON.parse(JSON.stringify(cFolders)));
-      }
-    } else {
-      otherCollections.push(JSON.parse(JSON.stringify(c)));
-    }
-  }
-
-  if (!myListsCol) {
-    myListsCol = {
-      id: 'my-lists-collections',
-      title: 'My Lists Collections',
-      name: 'My Lists Collections',
-      viewMode: 'FOLLOW_LAYOUT',
-      showAllTab: false,
-      pinToTop: false,
-      focusGlowEnabled: true,
-      hidden: false,
-      isVisible: true,
-      enabled: true,
-      folders: []
-    };
-  } else {
-    myListsCol.id = 'my-lists-collections';
-    myListsCol.title = 'My Lists Collections';
-    myListsCol.name = 'My Lists Collections';
-    myListsCol.hidden = false;
-    myListsCol.isVisible = true;
-    myListsCol.enabled = true;
-    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
-  }
-
-  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
-  for (let i = 0; i < incomingArr.length; i++) {
-    const inCol = incomingArr[i];
-    if (!inCol) continue;
-    const inTitle = String(inCol.title || inCol.name || '').trim();
-    const isIncomingMyLists = (inCol.id && (inCol.id === 'my-lists-collections' || inCol.id === 'my-lists-addon')) ||
-                             (inTitle && (inTitle.toLowerCase() === 'my lists collections' || inTitle.toLowerCase() === 'my lists addon' || inTitle.toLowerCase() === 'my lists'));
-
-    if (inCol.id && !isIncomingMyLists) {
-      const existingOtherIdx = otherCollections.findIndex(function (oc) { return oc.id === inCol.id; });
-      if (existingOtherIdx !== -1) {
-        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
-        continue;
-      }
-    }
-
-    // Folders intended for My Lists Collections
-    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
-    for (let j = 0; j < foldersToMerge.length; j++) {
-      const inF = foldersToMerge[j];
-      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
-      const cleanFolder = Object.assign({}, inF, {
-        hidden: false,
-        isVisible: true,
-        enabled: true
-      });
-      if (Array.isArray(cleanFolder.catalogSources)) {
-        cleanFolder.catalogSources = cleanFolder.catalogSources.map(function (cs) {
-          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
-          cName = stripMediaSuffix(cName);
-          return Object.assign({}, cs, {
-            name: cName,
-            title: cName
-          });
-        });
-      }
-      const fIdx = myListsCol.folders.findIndex(function (f) {
-        return (f.id && inF.id && f.id === inF.id) ||
-               (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
-               (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase());
-      });
-      if (fIdx !== -1) {
-        myListsCol.folders[fIdx] = Object.assign({}, myListsCol.folders[fIdx], cleanFolder);
-      } else {
-        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
-      }
-    }
-  }
-
-  return otherCollections.concat([myListsCol]);
 }
 
 function buildNuvioCollectionsPayload(collections, parents) {
@@ -97449,11 +97336,6 @@ async function resolveMediaBatch(env, inputs, opts = {}) {
   return { ids, stats };
 }
 
-async function resolveMedia(env, input, opts = {}) {
-  const { ids } = await resolveMediaBatch(env, [input], opts);
-  return ids[0];
-}
-
 // Tries the oldest stubs again. Those TMDB still cannot place move to the
 // back of the queue (updated_at), so one title TMDB will never know cannot
 // hold up the rest. A stub whose TMDB id turns out to belong to another row
@@ -111267,7 +111149,7 @@ function mergeIntoNuvioCollection(existing, incoming, targetId) {
   return existingArr.map((c, i) => (i === idx ? target : c));
 }
 
-// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
+// The only copy: the page sends its folders and the server merges them (the page's twin was removed, CQ-04). Tests: tests/nuvio-collections-merge.test.mjs.
 function mergeNuvioCollections(existing, incoming) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);

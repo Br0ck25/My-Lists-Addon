@@ -317,7 +317,7 @@ describe("P3b-2: the media resolver", () => {
       { kind: row.kind, tmdb: row.tmdb_id, imdb: row.imdb_id, title: row.title, year: row.year, poster: row.poster_path, resolved: row.resolved_at > 0 },
       { kind: "series", tmdb: 1396, imdb: "tt0903747", title: "Breaking Bad", year: 2008, poster: "/bb.jpg", resolved: true });
 
-    const again = await sb.resolveMedia(env, { imdbId: "tt0903747" });
+    const again = (await sb.resolveMediaBatch(env, [{ imdbId: "tt0903747" }])).ids[0];
     assert.equal(again, first.ids[0]);
     assert.equal(tmdb.calls.length, 1, "the second time is answered by the database");
   });
@@ -326,13 +326,13 @@ describe("P3b-2: the media resolver", () => {
     const sb = loadMedia();
     fakeTmdb(sb, { shows: { 1396: { ...BREAKING_BAD, external_ids: { imdb_id: "tt0903747", tvdb_id: 81189 } } } });
     const env = mediaEnv();
-    const id = await sb.resolveMedia(env, { id: "tmdb:1396", type: "series" });
+    const id = (await sb.resolveMediaBatch(env, [{ id: "tmdb:1396", type: "series" }])).ids[0];
     const [row] = mediaRows(env);
     assert.equal(row.id, id);
     assert.equal(row.imdb_id, "tt0903747");
     assert.equal(row.tvdb_id, 81189);
     // The same show named by its IMDb id is the same row.
-    assert.equal(await sb.resolveMedia(env, { id: "tt0903747" }), id);
+    assert.equal((await sb.resolveMediaBatch(env, [{ id: "tt0903747" }])).ids[0], id);
   });
 
   it("recognises a title met under a new id, and adds the id to its row", async () => {
@@ -341,7 +341,7 @@ describe("P3b-2: the media resolver", () => {
     const env = mediaEnv();
     // Known so far only by its TMDB id.
     env.DB._db.prepare("INSERT INTO media (id, kind, tmdb_id, title, resolved_at, created_at, updated_at) VALUES (7, 'series', 1396, 'Breaking Bad', 1, 1, 1)").run();
-    const id = await sb.resolveMedia(env, { id: "tt0903747", type: "series" });
+    const id = (await sb.resolveMediaBatch(env, [{ id: "tt0903747", type: "series" }])).ids[0];
     assert.equal(id, 7);
     assert.equal(tmdb.calls.length, 1);
     const rows = mediaRows(env);
@@ -353,7 +353,7 @@ describe("P3b-2: the media resolver", () => {
     const sb = loadMedia();
     fakeTmdb(sb, { finds: { tt0903747: { movie_results: [], tv_results: [BREAKING_BAD] } } });
     const env = mediaEnv();
-    await sb.resolveMedia(env, { id: "tt0903747", type: "movie" });
+    await sb.resolveMediaBatch(env, [{ id: "tt0903747", type: "movie" }]);
     assert.equal(mediaRows(env)[0].kind, "series");
   });
 

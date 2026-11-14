@@ -441,11 +441,6 @@ async function resolveMediaBatch(env, inputs, opts = {}) {
   return { ids, stats };
 }
 
-async function resolveMedia(env, input, opts = {}) {
-  const { ids } = await resolveMediaBatch(env, [input], opts);
-  return ids[0];
-}
-
 // Tries the oldest stubs again. Those TMDB still cannot place move to the
 // back of the queue (updated_at), so one title TMDB will never know cannot
 // hold up the rest. A stub whose TMDB id turns out to belong to another row

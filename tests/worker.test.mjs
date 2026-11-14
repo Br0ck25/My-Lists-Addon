@@ -14169,7 +14169,7 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
 });
 
 describe("P3a-3: accounts backfill (migrate.accounts)", () => {
-  const { backfillAccounts, reconcileAccounts } = loadSourceFunctions(
+  const { backfillAccounts } = loadSourceFunctions(
     "src/core/00_constants.js",
     "src/core/02_http-and-creator-utils.js"
   );
@@ -14333,14 +14333,14 @@ describe("P3a-3: accounts backfill (migrate.accounts)", () => {
     assert.equal(rows2[1].id, betaId, "beta id preserved");
   });
 
-  it("reconcileAccounts / dryRun calculates counts without modifying accounts table", async () => {
+  it("backfillAccounts dryRun calculates counts without modifying accounts table", async () => {
     const env = makeEnv({ DB: makeD1() });
     await env.DB.prepare(
       "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
     ).bind("dry_user1", "Dry 1", "hash1", 1000).run();
     await env.CONFIGS.put("creator:dry_user2", JSON.stringify({ displayName: "Dry 2", keyHash: "hash2", createdAt: 1000 }));
 
-    const report = await reconcileAccounts(env);
+    const report = await backfillAccounts(env, { dryRun: true });
     assert.equal(report.dryRun, true);
     assert.equal(report.unionCount, 2);
     assert.equal(report.accountsCount, 0);

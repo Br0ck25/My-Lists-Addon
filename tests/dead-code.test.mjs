@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 
-const REMOVED = ["buildNuvioTvDefaultPreset"];
+const REMOVED = ["buildNuvioTvDefaultPreset", "reconcileAccounts", "resolveMedia"];
 const files = readdirSync(new URL("../src/", import.meta.url), { withFileTypes: true })
   .flatMap((d) => d.isDirectory() ? readdirSync(new URL(`../src/${d.name}/`, import.meta.url)).map((f) => `../src/${d.name}/${f}`) : []);
 

@@ -31,14 +31,14 @@
   "src/catalog/05_catalog-core.js": 4669,
   "src/catalog/07_source-fetchers-tmdb-simkl.js": 5465,
   "src/client/16_client-row-core.js": 4361,
-  "src/client/17_client-my-lists-and-trakt-oauth.js": 5383,
+  "src/client/17_client-my-lists-and-trakt-oauth.js": 5274,
   "src/client/19_client-search-and-likes.js": 5612,
   "src/client/20_client-channel-builder.js": 13368,
   "src/client/21_client-custom-list-builder.js": 4637,
   "src/client/22_client-creator-profile.js": 7075,
   "src/client/23_client-list-management.js": 3961,
   "src/client/24_client-backup-restore-presets.js": 4886,
-  "src/core/02_http-and-creator-utils.js": 7043,
+  "src/core/02_http-and-creator-utils.js": 7039,
   "src/page/09_page-shell.js": 5793
  },
  "clientFunctions": {

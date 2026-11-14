@@ -5791,10 +5791,6 @@ async function backfillAccounts(env, options = {}) {
   };
 }
 
-async function reconcileAccounts(env) {
-  return backfillAccounts(env, { dryRun: true });
-}
-
 // D1 is the authoritative store for creator lists when bound.
 // KV serves as a read-through cache and fallback for unmigrated lists.
 //
