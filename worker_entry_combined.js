@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "46d55724f4";
+const WORKER_BUILD = "2d9b0ea361";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -26110,7 +26110,7 @@ function tmdbProviderChartPaths(providerId) {
 // with regional availability and shouldn't need touching.
 function substituteWatchRegion(path, region) {
   if (!path || !path.includes("watch_region=")) return path;
-  const effectiveRegion = tmdbRegionCode(region);
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   return path.replace(/watch_region=[A-Z]{2}/, `watch_region=${effectiveRegion}`);
 }
 
@@ -29133,7 +29133,7 @@ const ITEM_DETAILS_SHAPE = "v3";
 
 async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypassCache, env, ctx) {
   if (!apiKey || !imdbId) return null;
-  const effectiveRegion = tmdbRegionCode(region);
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   const cacheKey = `tmdb:itemdetails:${ITEM_DETAILS_SHAPE}:${String(imdbId).trim()}:${fallbackType || ""}:${effectiveRegion}`;
 
   const upgradeIfUnpacked = async (d) => {
@@ -29183,7 +29183,7 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
   // One call per outbound fetch below. Counted here rather than by wrapping
   // fetch() globally, so nothing else in the Worker changes behaviour.
   if (!apiKey || !imdbId) return null;
-  const effectiveRegion = tmdbRegionCode(region);
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
   let rawStr = String(imdbId).trim();
@@ -108180,13 +108180,6 @@ async function titleDetailsWithoutTmdb(env, rawId, type, region) {
     nextEpisodeName,
     notOnTmdb: true,
   };
-}
-
-// A region is a two-letter code. Anything else (cut-off emoji, digits) means US:
-// slicing by UTF-16 units used to leave half a character in the cache key.
-function tmdbRegionCode(region) {
-  const r = String(region || "").trim().toUpperCase();
-  return /^[A-Z]{2}/.test(r) ? r.slice(0, 2) : "US";
 }
 
 // --- New accounts' history copy: activity.copy-new (Release 17) ------------------

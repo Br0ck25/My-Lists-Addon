@@ -8630,6 +8630,7 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/api/67_creator-api-routes.js :: creatorListsReadOrder": "reads the order key for the lists read; writes nothing",
     "src/api/67_creator-api-routes.js :: creatorListsOrphanSweep": "lists the record keys the order lost for the lists read; writes nothing",
     "src/api/67_creator-api-routes.js :: creatorListSaveReadOrder": "reads the order key for a list save; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveRetractIfDeleted": "only deletes the keys a save just wrote, and only for an account being deleted; the delete-account purge already drops the stamp and the other browsers are signed out",
     "src/api/67_creator-api-routes.js :: creatorListSaveSlug": "checks which slugs are taken; writes nothing",
     "src/api/67_creator-api-routes.js :: creatorListSaveAddToOrder": "adds the just-saved slug to the order key; its only caller, creatorApiListsSave, bumps the stamp right after",
     "src/api/69_creator-api-sync-routes.js :: creatorApiSyncLoad": "reads the order key",

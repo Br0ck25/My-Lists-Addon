@@ -132,10 +132,3 @@ async function titleDetailsWithoutTmdb(env, rawId, type, region) {
     notOnTmdb: true,
   };
 }
-
-// A region is a two-letter code. Anything else (cut-off emoji, digits) means US:
-// slicing by UTF-16 units used to leave half a character in the cache key.
-function tmdbRegionCode(region) {
-  const r = String(region || "").trim().toUpperCase();
-  return /^[A-Z]{2}/.test(r) ? r.slice(0, 2) : "US";
-}
