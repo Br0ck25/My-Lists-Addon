@@ -19,19 +19,19 @@ Numbers measured:
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
+Updated 2026-11-14. Status values: `open`, `fixed (awaiting verification)`, `verified`, `failed verification`. To verify a row, run its check and change the status.
 
-| Finding | Status | Commit | How to verify |
-|---|---|---|---|
-| CQ-01 | fixed (awaiting verification) | 3d50d40 |  |
-| CQ-02 | fixed (awaiting verification) | 7824ed4 |  |
-| CQ-03 | fixed (awaiting verification) | 2d17999 |  |
-| CQ-04 | fixed (awaiting verification) | 2d4b89f | Partly: only buildNuvioTvDefaultPreset removed (tests/dead-code.test.mjs). The test-only and shelf functions are left: owner decision needed. |
-| CQ-05 | fixed (awaiting verification) | 4d2e858 |  |
-| CQ-06 | fixed (awaiting verification) | c9da1f9 |  |
-| CQ-07 | open |  | Not started: needs a decision on which server write paths deserve logging. |
-| CQ-08 | open |  | Not started: the report says not worth a dedicated pass; remove guards when a file is touched anyway. |
-| CQ-09 | not fixed | 49e1558 | No longer reproduces at 49e1558: build.py's check_no_unlisted_sources already refuses any stray .js under src/ (tests/build-source-names.test.mjs). Only the sort-by-file-name order note remains, which is a design note. |
+| Finding | Status | Commit | Verified | How to verify |
+|---|---|---|---|---|
+| CQ-01 | verified fixed | b16b13a | 2026-11-14, independent review | Table said 3d50d40, which does not exist; the fix is b16b13a. Check: `node --test tests/size-budget.test.mjs`. |
+| CQ-02 | verified fixed | 7824ed4 | 2026-11-14, independent review | `node --test tests/continue-watching-row-map.test.mjs` |
+| CQ-03 | open (partially fixed) | 2d17999 | 2026-11-14, independent review | Cache merge unified; the two 33/34-line air-date and premiere/finale badge blocks in the MDBList and Trakt renderers are still copies. See Verification. |
+| CQ-04 | open (partially fixed) | 2d4b89f | 2026-11-14, independent review | Only buildNuvioTvDefaultPreset removed (tests/dead-code.test.mjs). The test-only and shelf functions are left: owner decision needed. |
+| CQ-05 | verified fixed | 4d2e858 | 2026-11-14, independent review | `node --test tests/channel-constants-parity.test.mjs` |
+| CQ-06 | verified fixed | c9da1f9 | 2026-11-14, independent review | `node --test tests/agent-instructions.test.mjs` |
+| CQ-07 | open |  | | Not started: needs a decision on which server write paths deserve logging. |
+| CQ-08 | open |  | | Not started: the report says not worth a dedicated pass; remove guards when a file is touched anyway. |
+| CQ-09 | not fixed | 49e1558 | | No longer reproduces at 49e1558: build.py's check_no_unlisted_sources already refuses any stray .js under src/ (tests/build-source-names.test.mjs). Only the sort-by-file-name order note remains, which is a design note. |
 
 ## Proven findings
 
@@ -47,6 +47,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   - Measurement of the real page: `node s01/analyze.mjs` reports builder `functions >150: 42`; the top ones are `openListDetailsPage` 1,177, `loadCreatorSync` 823, `openSelectListModal` 451.
 - Recommended fix and effort: M. Extract the client code from the rendered page (or from the numbered client files wrapped as a script) and measure it with the same acorn routine, with a baseline file, as the server code. At minimum add the 42 current sizes as a ratchet so they cannot grow.
 
+**Verification.** The table listed commit 3d50d40, which is not in the repository; the fix is b16b13a. It measures every inline script of the rendered builder page with the same acorn routine and keeps 38 named client functions as a shrink-only ratchet (`clientFunctions` in `tests/size-budget.json`). In a scratch worktree, appending to `src/client/20_client-dead-links.js`: a 400-line named function fails (`page::probeBig: new code over the limit`), and a 400-line object method fails (`page::big`). Two gaps, neither blocking: (1) a 400-line anonymous callback passes, but the server side treats anonymous functions the same way (checked: a 400-line anonymous callback in `src/jobs/46_show-refresh.js` also passes), so client and server now follow one rule; this is why the audit counted 42 and the baseline holds 38. (2) The admin page script is not measured; a 300-line function added to it was caught only because `src/admin/03_admin.js` is on the shrink-only file list, not by name. It has 0 functions over the limit today. The two new tests would fail at the parent (`functionSizes` did not exist). Verdict: verified fixed for the finding as written (the builder page, 42 unmeasured functions).
+
 ### CQ-02 Same database-row-to-item mapping written out three times (continue-watching)
 - Severity: Medium
 - Status: Proven
@@ -56,6 +58,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Proof: `node s01/dupblocks.mjs /home/user/My-Lists-Addon 12` lists `27 lines: src/catalog/05_catalog-core.js:2748 <-> src/core/02_http-and-creator-utils.js:6768` and `22 lines: ...:2768 <-> ...:6788`. I read both: same `let isCompanion/companionType/...` declarations, same `type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode"`, same return object. `grep -rn 'startsWith("COMPANION:")' src` shows three sites (05_catalog-core.js:2756, 02_http-and-creator-utils.js:6776, 37_activity-backfill.js:194).
 - Recommended fix and effort: S. Add one `mapContinueWatchingRow(r)` helper next to the companion code and call it from both places; decide separately whether the third (backfill) variant should use it.
 
+**Verification.** `git show 7824ed4`: both verbatim copies (catalog read in `fetchAutoTrackedCatalog`, creator-tracking read in `readCreatorTrackingD1`) are replaced by `.map(mapContinueWatchingRow)`, and the helper body is the old code moved unchanged (`src/core/02_http-and-creator-utils.js:6683`); it only reads its first argument, so `.map` passing index/array is harmless. `grep -rn 'startsWith("COMPANION:")' src` now shows the helper and the backfill variant only. The backfill variant (`legacyContinueWatchingFromRow`, `src/data/37_activity-backfill.js:182`) builds a different shape (keeps `showId` for movies, no `kind` fallback for companion movies); the finding left that as a separate decision, so it is not counted against the fix. `tests/continue-watching-row-map.test.mjs` (5 pass) covers movie, episode, companion movie and broken companion JSON, and its "exists once" check would find 2 copies at the parent commit. Verdict: verified fixed.
+
 ### CQ-03 Three near-identical 190-270 line renderers for the provider list panels
 - Severity: Medium
 - Status: Proven
@@ -64,6 +68,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Impact: Any fix to how Airing Next dates or finales are applied has to be made three times. They are all over the 150-line limit and are among the unmeasured client functions (CQ-01).
 - Proof: `s01/a.txt`, `s01/b.txt`, `s01/c.txt` hold the three function heads; they match line for line apart from `myMdblistLists`/`myPrivateTraktLists`/`mySimklLists`, `mdblistAiringNextCache`/`traktAiringNextCache`/`simklAiringNextCache` and the `cacheMap`/`localMatch` blocks. The detector reports repeated regions between them: `30 lines: 17_client-my-lists-and-trakt-oauth.js:230 <-> :1229 <-> :2734 (copies:3)`, `33 lines: :335 <-> :1335`, `22 lines: :404 <-> :1409`. Sizes (analyze.mjs): 268, 273, 188 lines.
 - Recommended fix and effort: M. Move the shared "apply cached Airing Next data" step into one helper that takes the provider's cache key, and keep each renderer to its own markup.
+
+**Verification.** `git show 2d17999`: the 30-line cache merge (the `copies:3` region) is now one `applyAiringNextCache(list, cacheKey)` called from all three renderers with the right key each; the three `localStorage.setItem` writers (`:108`, `:1122`, `:2636`) use the same keys, and the removed `localAiringList` is not used later in any renderer. `tests/airing-next-cache.client.test.mjs` passes (6) and would fail at the parent (no such function). But the finding's proof also named two more copied regions, and both are still there: a 15-line duplicate scan of `src/client/17_client-my-lists-and-trakt-oauth.js` shows `:342` <-> `:1305` (33 identical lines: air date from `findAiringMatchFor`, `isSeasonPremiere`, `isSeasonFinale`, `seasonFinaleAirDate`, and the premiere/finale badge HTML) and `:405` <-> `:1373` (34 identical lines: badge settings and card markup) between `renderMyMdblistLists` and `renderMyPrivateTraktLists`. The finding's impact ("a fix to how Airing Next dates or finales are applied has to be made more than once") still holds for that display logic. Verdict: partially fixed, set back to `open`. Next step: one helper for the per-item air-date/premiere/finale badge computation (the `:343`-`:375` block), used by both renderers. Not in scope but seen: `openMdblistAiringNextDetailsPage`/`openTraktAiringNextDetailsPage`/`openSimklAiringNextDetailsPage` repeat the same `localMatch` premiere/finale lines.
 
 ### CQ-04 Dead functions: code nothing in the product calls
 - Severity: Low
@@ -78,6 +84,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Proof: `node s01/dead2.mjs /home/user/My-Lists-Addon ...` (comments stripped; word-count of every top-level name across all src) prints `top-level: 2308 zero/one-ref: 9` and the nine names above, each with `srcRefs: 1` (its own declaration). `grep -rnw <name> src` returns only the declaration for each. Client check: `node s01/dead3.mjs` (reads the rendered builder and admin pages, counts references in script text and in HTML attributes) prints `[{"label":"builder","name":"mergeNuvioCollections","line":9308,"size":107,"selfRefs":0},{"label":"builder","name":"getRemovedAiringNextShows","line":35039,"size":26,"selfRefs":0}]`. Dynamic use: none of the names appears in any string, `window[...]` lookup or route table in `src`.
 - Recommended fix and effort: S. Delete `buildNuvioTvDefaultPreset`; decide per item whether the test-only ones are kept as test helpers (move them out of production) or removed. Do not delete the shelf functions before the owner confirms the feature is dropped.
 
+**Verification.** `git show 2d4b89f`: `buildNuvioTvDefaultPreset` is deleted; `grep -rnw` finds no caller in `src`, `tests`, `tools`, nor on `origin/main` or `origin/feat/nuvio-tv-phase1` (declaration only), so the removal is safe and no merge will bring back a caller. `docs/HANDOFF.md` was updated to match. The other eight names in the finding still have only their declaration in `src` (each `grep -rnw <name> src` finds only the declaration, plus comment mentions for `getRemovedAiringNextShows` and `mergeNuvioCollections`). Those wait on an owner decision (keep as test helpers, move out of production, or drop the shelf feature), which the report itself asked for. Verdict: partially fixed, set back to `open` for the owner decision only; nothing further is needed from a coder until the owner decides.
+
 ### CQ-05 A limit is defined twice, server and client, with nothing linking the two
 - Severity: Low
 - Status: Proven
@@ -87,6 +95,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Proof: In the scratch copy I changed `src/core/00_constants.js:560` to `4000`, ran `python3 build.py`, then `node --test tests/channel-preset.test.mjs tests/server-client-parity.test.mjs tests/design-system.test.mjs`: `# tests 301  # pass 297  # fail 0`. Nothing noticed.
 - Recommended fix and effort: S. Either inject the server value into the page template, or add one parity assertion for these three constants to `tests/server-client-parity.test.mjs`.
 
+**Verification.** `tests/channel-constants-parity.test.mjs` reads the server sources (core, catalog, api) and the client sources and requires each of the three constants to be declared exactly once on each side with the same number. In a scratch worktree: server `CHANNEL_POOL_MAX_ITEMS` 5000 -> 4000 gives `# fail 1`; client `CHANNEL_ROTATION_EPISODES_PER_SHOW` 3 -> 4 gives `# fail 1`; rewriting the server value as `5_000` (a form the regex does not read) also fails loudly ("declared exactly once, found 0") rather than passing silently. Nothing else changed in the commit. Verdict: verified fixed.
+
 ### CQ-06 AGENTS.md and CLAUDE.md disagree; AGENTS.md sends an AI to a variable that does not exist
 - Severity: Low
 - Status: Proven
@@ -95,6 +105,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Impact: An agent that reads AGENTS.md (the file for Antigravity and Arena agents, per its own header) will hunt for or invent `WORKER_RELEASE` and skip the test and scope discipline the owner relies on.
 - Proof: `grep -rn WORKER_RELEASE src tests tools` returns nothing; `grep -n "WORKER_BUILD" src/core/00_constants.js` returns lines 7 and 14 only. `grep -ci` of the phrases "failing test first", "Unrelated dead code", "short plan", "Never skip or loosen", "product decision" returns 1 in CLAUDE.md and 0 in AGENTS.md each.
 - Recommended fix and effort: S. Fix line 56, and either point AGENTS.md at CLAUDE.md for rules or copy rules 6-12 across.
+
+**Verification.** `git show c9da1f9`: `AGENTS.md:58` now says there is no release number to bump, matching `CLAUDE.md`, and a new line near the top sends every agent to `CLAUDE.md`'s hard rules and names rules 6-12. `grep -rn WORKER_RELEASE` outside the audit files finds only the test comment and a historical note in `docs/RELEASES.md`. `tests/agent-instructions.test.mjs` checks every `WORKER_*` name in both files exists in `src/core/00_constants.js`; at the parent commit `AGENTS.md` named `WORKER_RELEASE`, so it would fail there. Verdict: verified fixed.
 
 ### CQ-07 Hundreds of silent "catch and ignore" blocks
 - Severity: Low
