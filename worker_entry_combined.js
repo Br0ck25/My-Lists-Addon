@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "cc9dc09be0";
+const WORKER_BUILD = "f8ba32cf1c";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -5094,7 +5094,7 @@ async function storeRecoveryAnswerHash(env, username, hash) {
     }
     try {
       await env.DB.prepare("UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE").bind(hash, username).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("recovery_answer_hash backfill", e); }
   }
   const raw = await getCreator(env, username);
   if (raw) {
@@ -5543,7 +5543,7 @@ async function revokeSession(env, idHash) {
     try {
       const now = Date.now();
       await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE id_hash = ? AND revoked_at IS NULL").bind(now, idHash).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeSession", e); }
   }
 }
 
@@ -5568,7 +5568,7 @@ async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
           "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL"
         ).bind(now, accountId).run();
       }
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeAccountSessions", e); }
   }
 }
 
@@ -5667,7 +5667,7 @@ async function deleteCreatorKeyLookup(env, username, key) {
     if (username) {
       try {
         await env.DB.prepare("UPDATE accounts SET key_lookup_hmac = NULL WHERE lower(username) = lower(?)").bind(username).run();
-      } catch {}
+      } catch (e) { logIgnoredWrite("key_lookup_hmac clear", e); }
     }
   }
   if (env.CONFIGS) {
@@ -7867,10 +7867,10 @@ async function deleteCreatorLists(env, username, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deleteCreatorLists):", dbErr);
         out.ok = false;
@@ -7997,10 +7997,10 @@ async function deletePublishedLists(env, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deletePublishedLists):", dbErr);
         out.ok = false;
@@ -8826,7 +8826,7 @@ async function purgeCreatorData(env, username, options = {}) {
         try {
           await env.CONFIGS.delete(`creatorlastseen:${u}`);
           keysCleared++;
-        } catch (e) {}
+        } catch (e) { logIgnoredWrite("purge: creatorlastseen", e); }
       }
     }
   }
@@ -8879,7 +8879,7 @@ async function purgeCreatorData(env, username, options = {}) {
       try {
         const revived = await env.CONFIGS.get(creatorScrobbleTokenKey(u));
         if (revived) await env.CONFIGS.delete(scrobbleTokenKey(revived));
-      } catch (e) {}
+      } catch (e) { logIgnoredWrite("purge: scrobble token", e); }
       for (const key of dataKeys) {
         await env.CONFIGS.delete(key);
       }
@@ -117589,7 +117589,7 @@ async function creatorListSaveAddToOrder(env, auth, slug, order) {
   if (env.DB) {
     try {
       await env.DB.prepare("UPDATE creator_lists SET sort_order = ? WHERE id = ?").bind(order.indexOf(slug), `${auth.username}:${slug}`).run();
-    } catch (e) {}
+    } catch (e) { logIgnoredWrite("list order: sort_order update", e); }
   }
 }
 
@@ -119083,7 +119083,7 @@ async function creatorSyncLoadMergePresets(env, auth, data, presetsRawInit) {
         presetsB64: dedicatedPresetsB64,
         updatedAt: dedicatedUpdatedAt,
       }));
-    } catch {}
+    } catch (e) { logIgnoredWrite("creatorsyncpresets put", e); }
   }
 
   if (!data) {
@@ -128875,7 +128875,7 @@ async function apiChannelSharePublish(request, env, ctx, url, path) {
     if (record.published && owner) {
       try {
         await env.CONFIGS.put(`creatorchannel:${owner.toLowerCase()}:${channelSlug}`, code);
-      } catch {}
+      } catch (e) { logIgnoredWrite("creatorchannel index put", e); }
     }
     if (record.published) {
       await upsertPublicChannelIndex(env, code, record).catch(() => {});
@@ -129171,7 +129171,7 @@ async function apiChannelUnpublish(request, env, ctx, path) {
   record.updatedAt = Date.now();
   try {
     await env.CONFIGS.put(`channelshare:${code}`, JSON.stringify(record));
-  } catch {}
+  } catch (e) { logIgnoredWrite("channelshare unpublish put", e); }
   await removePublicChannelIndex(env, code).catch(() => {});
   await channelsV2SyncShare(env, code, record);
   return json({ ok: true });

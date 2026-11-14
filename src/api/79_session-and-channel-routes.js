@@ -346,7 +346,7 @@ async function apiChannelSharePublish(request, env, ctx, url, path) {
     if (record.published && owner) {
       try {
         await env.CONFIGS.put(`creatorchannel:${owner.toLowerCase()}:${channelSlug}`, code);
-      } catch {}
+      } catch (e) { logIgnoredWrite("creatorchannel index put", e); }
     }
     if (record.published) {
       await upsertPublicChannelIndex(env, code, record).catch(() => {});
@@ -642,7 +642,7 @@ async function apiChannelUnpublish(request, env, ctx, path) {
   record.updatedAt = Date.now();
   try {
     await env.CONFIGS.put(`channelshare:${code}`, JSON.stringify(record));
-  } catch {}
+  } catch (e) { logIgnoredWrite("channelshare unpublish put", e); }
   await removePublicChannelIndex(env, code).catch(() => {});
   await channelsV2SyncShare(env, code, record);
   return json({ ok: true });

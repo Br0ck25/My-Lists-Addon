@@ -1210,7 +1210,7 @@ async function storeRecoveryAnswerHash(env, username, hash) {
     }
     try {
       await env.DB.prepare("UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE").bind(hash, username).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("recovery_answer_hash backfill", e); }
   }
   const raw = await getCreator(env, username);
   if (raw) {
@@ -1659,7 +1659,7 @@ async function revokeSession(env, idHash) {
     try {
       const now = Date.now();
       await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE id_hash = ? AND revoked_at IS NULL").bind(now, idHash).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeSession", e); }
   }
 }
 
@@ -1684,7 +1684,7 @@ async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
           "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL"
         ).bind(now, accountId).run();
       }
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeAccountSessions", e); }
   }
 }
 
@@ -1783,7 +1783,7 @@ async function deleteCreatorKeyLookup(env, username, key) {
     if (username) {
       try {
         await env.DB.prepare("UPDATE accounts SET key_lookup_hmac = NULL WHERE lower(username) = lower(?)").bind(username).run();
-      } catch {}
+      } catch (e) { logIgnoredWrite("key_lookup_hmac clear", e); }
     }
   }
   if (env.CONFIGS) {
@@ -3983,10 +3983,10 @@ async function deleteCreatorLists(env, username, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deleteCreatorLists):", dbErr);
         out.ok = false;
@@ -4113,10 +4113,10 @@ async function deletePublishedLists(env, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deletePublishedLists):", dbErr);
         out.ok = false;
@@ -4942,7 +4942,7 @@ async function purgeCreatorData(env, username, options = {}) {
         try {
           await env.CONFIGS.delete(`creatorlastseen:${u}`);
           keysCleared++;
-        } catch (e) {}
+        } catch (e) { logIgnoredWrite("purge: creatorlastseen", e); }
       }
     }
   }
@@ -4995,7 +4995,7 @@ async function purgeCreatorData(env, username, options = {}) {
       try {
         const revived = await env.CONFIGS.get(creatorScrobbleTokenKey(u));
         if (revived) await env.CONFIGS.delete(scrobbleTokenKey(revived));
-      } catch (e) {}
+      } catch (e) { logIgnoredWrite("purge: scrobble token", e); }
       for (const key of dataKeys) {
         await env.CONFIGS.delete(key);
       }

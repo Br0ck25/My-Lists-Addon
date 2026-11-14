@@ -437,7 +437,7 @@ async function creatorSyncLoadMergePresets(env, auth, data, presetsRawInit) {
         presetsB64: dedicatedPresetsB64,
         updatedAt: dedicatedUpdatedAt,
       }));
-    } catch {}
+    } catch (e) { logIgnoredWrite("creatorsyncpresets put", e); }
   }
 
   if (!data) {

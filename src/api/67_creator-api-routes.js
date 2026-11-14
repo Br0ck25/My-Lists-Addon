@@ -1425,7 +1425,7 @@ async function creatorListSaveAddToOrder(env, auth, slug, order) {
   if (env.DB) {
     try {
       await env.DB.prepare("UPDATE creator_lists SET sort_order = ? WHERE id = ?").bind(order.indexOf(slug), `${auth.username}:${slug}`).run();
-    } catch (e) {}
+    } catch (e) { logIgnoredWrite("list order: sort_order update", e); }
   }
 }
 
