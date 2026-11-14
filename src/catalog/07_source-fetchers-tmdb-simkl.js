@@ -3801,13 +3801,6 @@ async function fetchShowAirTime(imdbId, env, ctx) {
 // v3: air dates with timezone offset and streaming webChannel default times.
 const ITEM_DETAILS_SHAPE = "v3";
 
-// A region is a two-letter code. Anything else (cut-off emoji, digits) means US:
-// slicing by UTF-16 units used to leave half a character in the cache key.
-function tmdbRegionCode(region) {
-  const r = String(region || "").trim().toUpperCase();
-  return /^[A-Z]{2}/.test(r) ? r.slice(0, 2) : "US";
-}
-
 async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypassCache, env, ctx) {
   if (!apiKey || !imdbId) return null;
   const effectiveRegion = tmdbRegionCode(region);

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ca8e778dc6";
+const WORKER_BUILD = "46d55724f4";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -29130,13 +29130,6 @@ async function fetchShowAirTime(imdbId, env, ctx) {
 // v2: airTime / nextEpisodeAirTimeLabel (episode air times).
 // v3: air dates with timezone offset and streaming webChannel default times.
 const ITEM_DETAILS_SHAPE = "v3";
-
-// A region is a two-letter code. Anything else (cut-off emoji, digits) means US:
-// slicing by UTF-16 units used to leave half a character in the cache key.
-function tmdbRegionCode(region) {
-  const r = String(region || "").trim().toUpperCase();
-  return /^[A-Z]{2}/.test(r) ? r.slice(0, 2) : "US";
-}
 
 async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypassCache, env, ctx) {
   if (!apiKey || !imdbId) return null;
@@ -108189,6 +108182,13 @@ async function titleDetailsWithoutTmdb(env, rawId, type, region) {
   };
 }
 
+// A region is a two-letter code. Anything else (cut-off emoji, digits) means US:
+// slicing by UTF-16 units used to leave half a character in the cache key.
+function tmdbRegionCode(region) {
+  const r = String(region || "").trim().toUpperCase();
+  return /^[A-Z]{2}/.test(r) ? r.slice(0, 2) : "US";
+}
+
 // --- New accounts' history copy: activity.copy-new (Release 17) ------------------
 //
 // With FF_EVENT_TRACKING on, an account is served from the activity database
@@ -117366,16 +117366,8 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   // to prevent. See bumpCreatorListsStamp (02_http-and-creator-utils.js).
   await bumpCreatorListsStamp(env, auth.username);
 
-  // The account may have been deleted while this save was in flight (it
-  // authenticated before the awaits above). Deletion writes its tombstone
-  // before sweeping, so a standing tombstone now means the sweep may have
-  // passed already: take back what this save just wrote.
-  if (await isCreatorTombstoned(env, auth.username.toLowerCase())) {
-    for (const key of [`creatorlist:${auth.username}:${slug}`, `creatorlistorder:${auth.username}`, `creatorliststamp:${auth.username}`]) {
-      try { await env.CONFIGS.delete(key); } catch (e) { logIgnoredWrite(`delete ${key}`, e); }
-    }
-    return json({ ok: false, error: "Username or Key is incorrect." }, 401);
-  }
+  const retracted = await creatorListSaveRetractIfDeleted(env, auth, slug);
+  if (retracted) return retracted;
 
   await creatorListSaveSearchIndex(env, auth, slug, name, visibility);
   // The same change into v2, by diff (P3b-7, 34_lists-v2-bridge.js). It
@@ -117383,6 +117375,17 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   // account's v2 copy stale, and reads fall back to what was just saved.
   await listsV2MirrorLists(env, auth.username, [slug]);
   return json(savedAnswer);
+}
+
+// The account may have been deleted while a save was in flight (it authenticated before its writes).
+// Deletion writes its tombstone before sweeping, so a standing tombstone means the sweep may have
+// passed already: take back what the save just wrote. Returns the 401 to answer with, or null.
+async function creatorListSaveRetractIfDeleted(env, auth, slug) {
+  if (!(await isCreatorTombstoned(env, auth.username.toLowerCase()))) return null;
+  for (const key of [`creatorlist:${auth.username}:${slug}`, `creatorlistorder:${auth.username}`, `creatorliststamp:${auth.username}`]) {
+    try { await env.CONFIGS.delete(key); } catch (e) { logIgnoredWrite(`delete ${key}`, e); }
+  }
+  return json({ ok: false, error: "Username or Key is incorrect." }, 401);
 }
 
 // The stored record and the answer of a list save, with the sourceUrl/sync fields falling back to the stored ones (a step of creatorApiListsSave).
