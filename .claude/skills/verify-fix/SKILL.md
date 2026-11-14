@@ -17,6 +17,24 @@ Arguments: `$ARGUMENTS` (a report path, optionally followed by finding IDs).
 If no path was given, list the reports in `docs/audits/` whose Fix progress
 table has rows `fixed (awaiting verification)` and stop.
 
+## Sync first (the two commands run in different sessions)
+Every cloud session gets its own branch and a shallow clone, so the other
+command's commits and the report's commit hashes are often missing here.
+Before anything else:
+1. `git fetch --unshallow origin 2>/dev/null || git fetch origin` then
+   `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`.
+2. Find the newest version of the report on any remote branch:
+   `git for-each-ref --sort=-committerdate --format='%(refname:short)' refs/remotes/origin | while read b; do git log -1 --format="$b %h %cd" --date=iso "$b" -- <report path>; done | sort -k3,4 -r | head -3`
+   If the newest is not on your branch and your branch has nothing of its own
+   to keep, `git merge --no-edit <that branch>`; otherwise merge it in and
+   resolve conflicts by keeping the Fix progress rows with the later state
+   (verdict beats `fixed (awaiting verification)`, which beats `open`).
+3. A commit hash in the report that still cannot be found
+   (`git cat-file -t <hash>`) after this: search by ID,
+   `git log --all --oneline --grep='<ID>'`, and use that commit instead.
+   Say in the report which hash you actually used.
+4. Tell the owner which branch you are on and which branch the report came from.
+
 ## Setup
 1. Read `CLAUDE.md` and the report's Baseline, the finding(s) and Fix
    progress table. Work on the IDs given, otherwise every row marked
@@ -53,7 +71,7 @@ table has rows `fixed (awaiting verification)` and stop.
   so the next `/fix-plan` can pick it up (set Status back to `open` for
   `not fixed` and `partially fixed`, and say so in the note).
 - Do not fix anything yourself. The only file you change is the report.
-- Commit the report alone (`verify: <IDs>`) and push.
+- Commit the report alone (`verify: <IDs>`) and push to your current branch, then run `git log origin/<branch> -1` to confirm the push landed, and tell the owner the branch name so `/fix-plan` can pick it up.
 
 ## Finish
 Return a plain-English summary for the owner: how many verified, how many
