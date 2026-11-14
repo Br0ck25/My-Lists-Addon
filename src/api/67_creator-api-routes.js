@@ -1175,6 +1175,8 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
       return json({ ok: false, error: "Couldn't save that list right now. Please try again in a moment." }, 503);
     }
     await bumpCreatorListsStamp(env, auth.username);
+    const retractedV2 = await creatorListSaveRetractIfDeleted(env, auth, slug, true);
+    if (retractedV2) return retractedV2;
     return json(savedAnswer);
   }
 
@@ -1212,8 +1214,13 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
 // The account may have been deleted while a save was in flight (it authenticated before its writes).
 // Deletion writes its tombstone before sweeping, so a standing tombstone means the sweep may have
 // passed already: take back what the save just wrote. Returns the 401 to answer with, or null.
-async function creatorListSaveRetractIfDeleted(env, auth, slug) {
+// With listsOnly the save wrote v2 rows (and may have found or recreated the account row), so those go too.
+async function creatorListSaveRetractIfDeleted(env, auth, slug, listsOnly = false) {
   if (!(await isCreatorTombstoned(env, auth.username.toLowerCase()))) return null;
+  if (listsOnly) {
+    await listsV2PurgeAccount(env, auth.username);
+    await deleteAccountRow(env, auth.username);
+  }
   for (const key of [`creatorlist:${auth.username}:${slug}`, `creatorlistorder:${auth.username}`, `creatorliststamp:${auth.username}`]) {
     try { await env.CONFIGS.delete(key); } catch (e) { logIgnoredWrite(`delete ${key}`, e); }
   }
