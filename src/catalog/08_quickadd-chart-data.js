@@ -1584,10 +1584,6 @@ function buildNuvioTvDefaultConfig() {
   };
 }
 
-function buildNuvioTvDefaultPreset() {
-  return buildNuvioTvDefaultConfig();
-}
-
 async function seedNuvioTvNewUser(env, username, accountId) {
   if (!env || !env.CONFIGS) return;
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};

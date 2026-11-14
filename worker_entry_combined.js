@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "491f01d294";
+const WORKER_BUILD = "35962ea4d0";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -32380,10 +32380,6 @@ function buildNuvioTvDefaultConfig() {
     collections: PREMADE_COLLECTIONS,
     channels: buildNuvioDefaultChannels(),
   };
-}
-
-function buildNuvioTvDefaultPreset() {
-  return buildNuvioTvDefaultConfig();
 }
 
 async function seedNuvioTvNewUser(env, username, accountId) {

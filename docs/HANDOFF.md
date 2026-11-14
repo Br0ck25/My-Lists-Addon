@@ -121,7 +121,7 @@
   - Added fallback in web preview rendering to `ORIGIN + '/api/channel-poster?name=' + encodeURIComponent(name) + '&v=6'` when `posterUrl` is empty.
   - Added `OPTIONS` preflight support and `Access-Control-Allow-Origin: *` to `/api/channel-lineup`, ensuring lineup items include `poster`, `thumbnail`, `title`, and media ID (`tmdb:...` or `tt...`).
 - **Phase 1 (Default preset, guest manifest, unified sync)**:
-  - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultPreset()` and `buildNuvioTvDefaultConfig()`.
+  - Built default preset & guest manifest endpoints `/nuvio-default/manifest.json`, `/c/nuvio-default/manifest.json`, and `/nuvio-default/catalog/:type/:id.json` backed by `buildNuvioTvDefaultConfig()`.
   - Built unified sync route `GET /api/nuvio-tv/sync/:target` (registered as public in `tests/route-access.json`), supporting `"default"` target, user accounts, and install tokens. Computes deterministic SHA-256 `versionHash` and formats collections and channels in Nuvio schema.
 - **Phase 2 (New user account seeding for Nuvio TV Launcher & existing user sign-in)**:
   - Implemented `seedNuvioTvNewUser` in `src/catalog/08_quickadd-chart-data.js`.
