@@ -23,7 +23,7 @@
   "src/core/02_http-and-creator-utils.js::backfillAccounts": 312,
   "src/core/02_http-and-creator-utils.js::fetchWithPerUserCacheUncoalesced": 154,
   "src/core/02_http-and-creator-utils.js::purgeCreatorData": 452,
-  "src/core/02_http-and-creator-utils.js::writeCreatorTrackingD1": 259,
+  "src/core/02_http-and-creator-utils.js::writeCreatorTrackingD1": 213,
   "src/data/29_media.js::resolveMediaBatch": 160
  },
  "files": {
@@ -38,7 +38,7 @@
   "src/client/22_client-creator-profile.js": 7054,
   "src/client/23_client-list-management.js": 3961,
   "src/client/24_client-backup-restore-presets.js": 4886,
-  "src/core/02_http-and-creator-utils.js": 7034,
+  "src/core/02_http-and-creator-utils.js": 6988,
   "src/page/09_page-shell.js": 5793
  },
  "clientFunctions": {

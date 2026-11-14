@@ -6500,55 +6500,9 @@ async function writeCreatorTrackingD1(env, username, trackingData, isIntentional
       prunes.push(...await d1ReplaceRowsById(env, "airing_next", username, "show_id", an.seen));
     }
 
-    // 5. Watch History
+    // 5. Watch History (only new or changed rows; see 05_watch-history-write.js)
     if (Array.isArray(trackingData.watchHistory)) {
-      const whSeen = new Set();
-      for (const item of trackingData.watchHistory) {
-        if (!item) continue;
-        const itemId = String(item.id || (item.showId ? `${item.showId}:${item.seasonNum}:${item.episodeNum}` : ""));
-        if (!itemId || whSeen.has(itemId)) continue;
-        whSeen.add(itemId);
-        const itemType = item.type || (item.seasonNum != null ? "episode" : "movie");
-        const title = item.name || item.title || null;
-        const poster = item.poster || null;
-        const showId = item.showId ? String(item.showId) : null;
-        const showTitle = item.showTitle || null;
-        const showPoster = item.showPoster || null;
-        const seasonNum = item.seasonNum != null ? Number(item.seasonNum) : null;
-        const episodeNum = item.episodeNum != null ? Number(item.episodeNum) : null;
-        const year = item.year ? String(item.year) : null;
-        const airDate = item.airDate ? String(item.airDate) : null;
-        const watchedAt = Number(item.watchedAt) || meta.updatedAt;
-        stmts.push(
-          env.DB.prepare(
-            `INSERT INTO watch_history (
-              username, item_id, item_type, title, poster, show_id, show_title,
-              show_poster, season_num, episode_num, year, air_date, watched_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(username, item_id) DO UPDATE SET
-              item_type = excluded.item_type,
-              title = excluded.title,
-              poster = excluded.poster,
-              show_id = excluded.show_id,
-              show_title = excluded.show_title,
-              show_poster = excluded.show_poster,
-              season_num = excluded.season_num,
-              episode_num = excluded.episode_num,
-              year = excluded.year,
-              air_date = excluded.air_date,
-              watched_at = excluded.watched_at`
-          ).bind(
-            username, itemId, itemType, title, poster, showId, showTitle,
-            showPoster, seasonNum, episodeNum, year, airDate, watchedAt
-          )
-        );
-      }
-      // Only an INTENTIONAL removal shortens Watch History -- an ordinary
-      // autosave is additive, and the rescue-merge in save-tracking exists
-      // precisely so a stale push cannot shorten it by accident.
-      if (isIntentionalRemoval) {
-        prunes.push(...await d1ReplaceRowsById(env, "watch_history", username, "item_id", whSeen));
-      }
+      await pushWatchHistoryWrites(env, username, trackingData.watchHistory, meta.updatedAt, isIntentionalRemoval, stmts, prunes);
     }
 
     // Upserts first, deletions next, the meta stamp last, in that order across

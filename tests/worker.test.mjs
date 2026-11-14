@@ -10136,7 +10136,7 @@ describe("Phase 4: Split sync blobs into relational D1 tables", () => {
     saveCreatorUserListsD1,
     readCreatorUserListsD1,
     fetchAutoTrackedCatalog,
-  } = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/05_catalog-core.js");
+  } = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_watch-history-write.js", "src/catalog/05_catalog-core.js");
 
   // A personal shelf is only served to a caller that has proved it owns the
   // account -- see mayReadTrackedShelf (src/core/02_http-and-creator-utils.js). These
