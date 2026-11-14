@@ -9,16 +9,16 @@ Health grade: B- — database access is well indexed and flat as lists grow; the
 - Page weight: `hdrs.sh` (curl, identity vs gzip). Home page 428 KB, app.js 536 KB, app-features.js 1.46 MB, app.css 194 KB raw (about 55, 108, 282 and 33 KB gzipped).
 ## Fix progress
 
-Updated 2026-11-14. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
+Updated 2026-11-14. Status values: `open`, `accepted risk`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
 
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
-| PERF-01 | owner decision made - measure first | (none; a try was reverted) | Owner decision 2026-11-14, see the note under PERF-01. Run the measurement query first; fix only if an account is over about 10,000 plays. Earlier notes: docs/HANDOFF.md, PERF-02 section. |  |
+| PERF-01 | open | (none; a try was reverted) | Measured 2026-11-14: four accounts are over 10,000 plays (18,549; 14,543; 11,797; 10,793) and four more have 8,000+, so the fix is needed now (see the note under PERF-01). Earlier notes: docs/HANDOFF.md, PERF-02 section. |  |
 | PERF-02 | verified fixed | 20862d7 | node --test tests/perf-legacy-tracking-write.test.mjs. Histories of 80 entries or fewer are still written in full (one batch; reading first would add a statement to every scrobble, which tests/load-performance.test.mjs forbids). | 2026-11-14, independent review |
 | PERF-03 | verified fixed | 35f1c3f, 7b927c6, 605a44b, c4a374d, 7b59fc4 | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. | 2026-11-11, independent review |
 | PERF-04 | verified fixed | 021d62a | node --test tests/perf-scrobble-seen-user.test.mjs. The KV read is kept; only the write is skipped (user listed, same server, seen under an hour ago). The call was not moved after the play-event check, so users who only pause still appear in the filter list. | 2026-11-14, independent review |
-| PERF-05 | owner decision made - measure first | (none) | Owner decision 2026-11-14, see the note under PERF-05. Do not cap the .json feed; cap only the web page, and only if lists of 3,000 or more exist. |  |
-| PERF-06 | owner decision made - measure first | (none) | Owner decision 2026-11-14, see the note under PERF-06. Run the measurement query first; leave alone unless several links are over 4 MB or many are over 1 MB. |  |
+| PERF-05 | accepted risk | (none) | Measured 2026-11-14: the largest public list is 1,692 items, none reach 3,000, so no web-page cap and no change; the .json feed stays whole (see the note under PERF-05). |  |
+| PERF-06 | accepted risk | (none) | Measured 2026-11-14 on D1: 0 active installs with config_json over 1,000,000 bytes. Older links in KV (cfg:<id>) were not measured (see the note under PERF-06). |  |
 
 ## Proven findings
 ### PERF-01 Every play (scrobble) re-reads and re-diffs the account's whole watch history
@@ -39,6 +39,8 @@ history=30000 scrobble -> 200 1461ms d1stmts=1680 d1batches=3 kv=3/3 fetch=4 => 
 - Recommended fix and effort: M. Make the two play routes record the play directly with `recordActivityPlay` (src/data/38_activity-scrobble.js:73, already constant cost: 1 batch) and stop round-tripping through the whole-record shim for them; keep the shim for the website's full-record save only.
 
 **Owner decision (2026-11-14).** Owner says: unsure how many accounts have more than about 3,000 plays, but accounts above 3,000 must be supported, not dropped. Go with the recommendation: run the measurement query `npx wrangler d1 execute mylists-activity --remote --command "SELECT account_id, COUNT(*) AS plays FROM watch_events GROUP BY account_id ORDER BY plays DESC LIMIT 20"`. If the heaviest account is under about 5,000 plays, it waits. If any account is over about 10,000, do the fix now: record each play directly (constant cost), and keep next-episode and fully-watched handling, the first Continue Watching entry for a new show, and the updated stamp. The rebuild of those three is approved by the owner only if the measurement shows it is needed.
+
+**Measured (2026-11-14).** Ran `SELECT account_id, COUNT(*) AS plays FROM watch_events GROUP BY account_id ORDER BY plays DESC LIMIT 20` on mylists-activity: four accounts are over 10,000 plays (18,549; 14,543; 11,797; 10,793) and four more have 8,000+. The owner rule says over 10,000 means fix now, so the status is `open`. The owner approved the rebuild of next-episode/fully-watched handling, the first Continue Watching entry for new shows, and the updated stamp by choosing the recommendation. Keep all three in the fix.
 
 ### PERF-02 Without the activity database, every play rewrites the account's whole history row by row
 - Severity: Low (affects self-hosted installs and accounts not yet copied to the activity database; Medium for them)
@@ -112,6 +114,8 @@ media.stop   200 {"ok":true,"ignored":...} d1=10+0b kvPut=1 PUT scrobbleseenuser
 
 **Owner decision (2026-11-14).** Owner says: unsure how big the largest public lists are, and unsure whether anyone imports the .json. Owner proposes a cap of 1,000. Recommendation adopted instead: do not cap the .json feed (importers would silently lose items). Measure with `npx wrangler d1 execute my-lists-db --remote --command "SELECT slug, item_count FROM lists WHERE visibility='public' ORDER BY item_count DESC LIMIT 20"`. Check whether non-browser apps fetch the .json from request logs. Cap only the web page, and only if lists of 3,000 or more exist, with a working "show more" link. Do not use 1,000: the largest real list on record is about 1,200 items.
 
+**Measured (2026-11-14).** Ran the public-lists query on my-lists-db: the largest public list is 1,692 items (imdb-7-1990), then 1,450, 1,450, 1,201, 1,056, 1,000. No public list reaches 3,000, so there is no web-page cap and no change; the .json feed stays whole. A cap of 1,000 is rejected because it would cut 4 or more real lists. Not checked: whether non-browser apps fetch the .json. The owner accepts this. Status: `accepted risk`.
+
 ### PERF-06 Each Stremio/Nuvio request reads the whole install configuration, including every list item, from KV
 - Severity: Low (becomes Medium for installs near the 10 MB limit)
 - Status: Proven
@@ -129,6 +133,8 @@ R=40 N=3000  /<id>/manifest.json 200 143ms kvGetKB=7864 kvGet=3
 - Recommended fix and effort: M. Keep list items out of the install configuration (reference the stored list by id, as the account lists already do) or store each row separately so a catalog request reads only its own row.
 
 **Owner decision (2026-11-14).** Owner says: unsure how many saved links are over about 1 MB. Recommendation adopted: measure first with `npx wrangler d1 execute my-lists-db --remote --command "SELECT COUNT(*), MAX(length(config_json)) FROM installs WHERE revoked_at IS NULL AND length(config_json) > 1000000"`. Fewer than about 5 links over 1 MB and none over about 4 MB means leave it alone. Act only if several are over 4 MB or many are over 1 MB. Older links in KV need a separate one-off read-only script.
+
+**Measured (2026-11-14).** On D1, 0 active installs have config_json over 1,000,000 bytes. Gap: older links stored in KV (`cfg:<id>`) were NOT measured, so large configurations there are unknown. The owner accepts this for now. Status: `accepted risk`.
 
 ## Unproven suspicions   (not counted)
 - U1: The cron job's "copy new activity" backlog run used 825 D1 statements plus 189 KV calls in one tick (t9, a backlog of one account's history), i.e. over 1,000 internal calls with other work in the same invocation. I could not reproduce the real Cloudflare limit locally, so whether a real tick exceeds it is unknown. Steady-state ticks stayed flat at about 533 D1 plus 61 KV for 100 to 400 users.
