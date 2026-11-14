@@ -29,9 +29,9 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | CQ-04 | fixed (awaiting verification) | 2d4b89f | Partly: only buildNuvioTvDefaultPreset removed (tests/dead-code.test.mjs). The test-only and shelf functions are left: owner decision needed. |
 | CQ-05 | fixed (awaiting verification) | 4d2e858 |  |
 | CQ-06 | fixed (awaiting verification) | c9da1f9 |  |
-| CQ-07 | open |  |  |
-| CQ-08 | open |  |  |
-| CQ-09 | open |  |  |
+| CQ-07 | open |  | Not started: needs a decision on which server write paths deserve logging. |
+| CQ-08 | open |  | Not started: the report says not worth a dedicated pass; remove guards when a file is touched anyway. |
+| CQ-09 | not fixed | 49e1558 | No longer reproduces at 49e1558: build.py's check_no_unlisted_sources already refuses any stray .js under src/ (tests/build-source-names.test.mjs). Only the sort-by-file-name order note remains, which is a design note. |
 
 ## Proven findings
 
@@ -125,6 +125,9 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 ## Unproven suspicions (not counted)
 - The 28 server functions over 150 lines (largest `fetchAutoTrackedCatalog` 466, `purgeCreatorData` 454, `fetchTmdbItemDetailsUncached` 392) are all in the baseline, so they are known debt, not new; I did not check whether any of them is hard to change in practice.
 - `src/admin/59_support-emails.js:510` vs `:643` and `src/api/76_external-list-routes.js:373` vs `:496` repeat 23-28 line blocks. I saw the detector hits but did not read both copies to confirm they are logically identical.
+
+## Unverified hunches (added by /fix-plan)
+- `tests/preview-chart-limit.test.mjs` ("PERF-03: public chart previews do not spend the preview budget") failed once in a full `verify.sh -q` run and passed alone and on the next full run: possibly a timing flake under load. Not investigated.
 
 ## Checked and rejected
 - Global-scope collisions across numbered files: none. Top-level declarations are unique in the server scope (2,308 names), in the builder page script (1,409) and in the admin page script (137). 17 names (for example `isAdultOrNsfw`, `getSafePosterUrl`, `CHART_SLUG_ENTRIES`) are declared in both the server scope and the page scope, which is legal because they are separate scopes (the page is a template string). Only the constants in CQ-05 are a drift risk.
