@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2dfc461594";
+const WORKER_BUILD = "888fe3b33c";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -126218,7 +126218,7 @@ async function apiTmdbMyLists(request, env, url) {
       const body = await readJsonObject(request);
       if (body.sessionId) sessionId = body.sessionId;
       if (body.accountId) accountId = body.accountId;
-      if (body.tmdbKey) manualKey = body.tmdbKey;
+      if (body.tmdbKey && typeof body.tmdbKey === "string") manualKey = body.tmdbKey;
     } catch {}
   }
 
