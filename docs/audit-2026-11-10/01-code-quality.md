@@ -25,7 +25,7 @@ Updated 2026-11-14. Status values: `open`, `fixed (awaiting verification)`, `ver
 |---|---|---|---|---|
 | CQ-01 | verified fixed | b16b13a | 2026-11-14, independent review | Table said 3d50d40, which does not exist; the fix is b16b13a. Check: `node --test tests/size-budget.test.mjs`. |
 | CQ-02 | verified fixed | 7824ed4 | 2026-11-14, independent review | `node --test tests/continue-watching-row-map.test.mjs` |
-| CQ-03 | open (partially fixed) | 2d17999 | 2026-11-14, independent review | Cache merge unified; the two 33/34-line air-date and premiere/finale badge blocks in the MDBList and Trakt renderers are still copies. See Verification. |
+| CQ-03 | fixed (awaiting verification) | 2d17999, 370a8b1 | | 370a8b1 moves the remaining Up Next and Airing Next badge blocks into upNextTileBadgesHtml / airingNextTileBadgesHtml. Check: `node --test tests/list-panel-badges.client.test.mjs tests/airing-next-cache.client.test.mjs`. |
 | CQ-04 | open (partially fixed) | 2d4b89f | 2026-11-14, independent review | Only buildNuvioTvDefaultPreset removed (tests/dead-code.test.mjs). The test-only and shelf functions are left: owner decision needed. |
 | CQ-05 | verified fixed | 4d2e858 | 2026-11-14, independent review | `node --test tests/channel-constants-parity.test.mjs` |
 | CQ-06 | verified fixed | c9da1f9 | 2026-11-14, independent review | `node --test tests/agent-instructions.test.mjs` |
@@ -135,6 +135,7 @@ Updated 2026-11-14. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Recommended fix and effort: S. Optional: make `build.py` fail on a stray non-matching `.js` file in `src/*/`.
 
 ## Unproven suspicions (not counted)
+- Seen while fixing CQ-03 (370a8b1), not checked further: similar air-date and premiere/finale badge code also lives in `src/client/21_client-custom-list-builder.js` (~4389), `src/client/22_client-creator-profile.js` (~5353) and `src/client/23_client-list-management.js` (~2079), and the three `open*AiringNextDetailsPage` functions repeat the same `localMatch` lines (the CQ-03 reviewer noted these too). Not in CQ-03's scope; I did not compare them line by line.
 - The 28 server functions over 150 lines (largest `fetchAutoTrackedCatalog` 466, `purgeCreatorData` 454, `fetchTmdbItemDetailsUncached` 392) are all in the baseline, so they are known debt, not new; I did not check whether any of them is hard to change in practice.
 - `src/admin/59_support-emails.js:510` vs `:643` and `src/api/76_external-list-routes.js:373` vs `:496` repeat 23-28 line blocks. I saw the detector hits but did not read both copies to confirm they are logically identical.
 
