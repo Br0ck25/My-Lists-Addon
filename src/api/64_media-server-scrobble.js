@@ -377,6 +377,9 @@ async function recordScrobbleSeenUser(env, ctx, authUser, server, mediaServerUse
       const seenKey = `scrobbleseenusers:${authUser}`;
       const raw = await env.CONFIGS.get(seenKey);
       const seen = raw ? JSON.parse(raw) : {};
+      // PERF-04: a user already listed and seen within the hour needs no write.
+      const prev = seen[mediaServerUser];
+      if (prev && prev.server === server && Date.now() - Number(prev.lastSeen) < 60 * 60 * 1000) return;
       seen[mediaServerUser] = { server, lastSeen: Date.now() };
       // 90-day TTL — stale accounts from old servers quietly expire
       await env.CONFIGS.put(seenKey, JSON.stringify(seen), { expirationTtl: 60 * 60 * 24 * 90 });

@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "868ee07168";
+const WORKER_BUILD = "c28eb9155e";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -113854,6 +113854,9 @@ async function recordScrobbleSeenUser(env, ctx, authUser, server, mediaServerUse
       const seenKey = `scrobbleseenusers:${authUser}`;
       const raw = await env.CONFIGS.get(seenKey);
       const seen = raw ? JSON.parse(raw) : {};
+      // PERF-04: a user already listed and seen within the hour needs no write.
+      const prev = seen[mediaServerUser];
+      if (prev && prev.server === server && Date.now() - Number(prev.lastSeen) < 60 * 60 * 1000) return;
       seen[mediaServerUser] = { server, lastSeen: Date.now() };
       // 90-day TTL — stale accounts from old servers quietly expire
       await env.CONFIGS.put(seenKey, JSON.stringify(seen), { expirationTtl: 60 * 60 * 24 * 90 });
