@@ -101,6 +101,8 @@ D1 write error (creator create): Error: UNIQUE constraint failed: creators.usern
 - BUG-04: only the non-string `tmdbKey` is fixed. The lone-surrogate `sessionId`/`accountId` 500 on the same route ("URI malformed") is a separate cause and was left as is.
 - Unverified hunch: `newOnStreamingRegion` and `src/catalog/57_title-details-fallback.js:24` still slice by UTF-16 units, but only compare against a fixed list, so no throw was seen.
 
+Follow-up commits after the size-budget check: the BUG-02 and BUG-03 code moved in the commits after their first ones (helper extraction, inline region check). Search by ID with `git log --grep='BUG-0'` for all commits; the table hashes are the first commits.
+
 ## Unproven suspicions   (not counted)
 - Overlapping cron ticks run the same job more than once. With three simultaneous ticks "New on Streaming JustWatch" ran three times (`$S/cron1.mjs` prints the line 3 times). I did not show that it creates duplicates or double cost; it may be idempotent. In production ticks overlap only if one runs longer than its interval.
 - `buildNetworkChannelPreset` (`src/catalog/07_source-fetchers-tmdb-simkl.js:2746`) throws if TMDB answers JSON `null` (`discoverData.results`) and `/api/channel-preset` then returns a 500 (seen in `$S/fuzz-null.log`). TMDB does not send `null` for this endpoint, so this is hypothetical.
