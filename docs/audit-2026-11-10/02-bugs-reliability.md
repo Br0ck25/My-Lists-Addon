@@ -18,7 +18,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | BUG-01 | verified fixed | a0b0ea7 | node --test tests/sync-config-bad-entries.test.mjs | 2026-11-10, independent review |
-| BUG-02 | open (partially fixed: legacy path only; production runs FF_V2_LISTS_ONLY, which still leaks) | c1c7abe | node --test tests/save-after-delete-account.test.mjs | 2026-11-14, independent review |
+| BUG-02 | fixed (awaiting verification) | c1c7abe, 2b9a2cd | node --test tests/save-after-delete-account.test.mjs tests/save-after-delete-account-v2.test.mjs | |
 | BUG-03 | verified fixed | 0bef949 | node --test tests/details-region-junk.test.mjs | 2026-11-14, independent review |
 | BUG-04 | verified fixed | e57945c | node --test tests/tmdb-my-lists-bad-key.test.mjs | 2026-11-14, independent review |
 | BUG-05 | verified fixed | 0cd9a5d | node --test tests/creator-create-username-race.test.mjs | 2026-11-14, independent review |
@@ -113,6 +113,8 @@ D1 write error (creator create): Error: UNIQUE constraint failed: creators.usern
 - Unverified hunch: `newOnStreamingRegion` and `src/catalog/57_title-details-fallback.js:24` still slice by UTF-16 units, but only compare against a fixed list, so no throw was seen.
 
 Follow-up commits after the size-budget check: the BUG-02 and BUG-03 code moved in the commits after their first ones (helper extraction, inline region check). Search by ID with `git log --grep='BUG-0'` for all commits; the table hashes are the first commits.
+
+- BUG-02 (second round, 2b9a2cd): the `listsOnly` (FF_V2_LISTS_ONLY) branch now runs `creatorListSaveRetractIfDeleted` after its v2 write; with a standing tombstone it purges the v2 rows (`listsV2PurgeAccount`), removes the account row (`deleteAccountRow`) and answers 401. New test `tests/save-after-delete-account-v2.test.mjs` fails on the parent. The audit's race (5 saves plus a delete, 40 trials, production flags) left leaks in 13 of 40 before and 0 of 40 after. Not done: the optional point 2 (legacy path, delete landing between the re-check and the search-index write).
 
 ## Unproven suspicions   (not counted)
 - Overlapping cron ticks run the same job more than once. With three simultaneous ticks "New on Streaming JustWatch" ran three times (`$S/cron1.mjs` prints the line 3 times). I did not show that it creates duplicates or double cost; it may be idempotent. In production ticks overlap only if one runs longer than its interval.
