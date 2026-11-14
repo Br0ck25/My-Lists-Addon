@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "51ac99dfff";
+const WORKER_BUILD = "20d40cc827";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -117364,15 +117364,20 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   const retracted = await creatorListSaveRetractIfDeleted(env, auth, slug);
   if (retracted) return retracted;
 
+  const retractedLate = await creatorListSaveIndexAndMirror(env, auth, slug, name, visibility);
+  if (retractedLate) return retractedLate;
+  return json(savedAnswer);
+}
+
+// The search-index and v2 mirror writes of a legacy save, then a last tombstone re-check: a delete may have
+// landed after the first re-check and before these writes. Returns the 401 to answer with, or null.
+async function creatorListSaveIndexAndMirror(env, auth, slug, name, visibility) {
   await creatorListSaveSearchIndex(env, auth, slug, name, visibility);
   // The same change into v2, by diff (P3b-7, 34_lists-v2-bridge.js). It
   // never fails the save: a mirror that cannot finish marks the
   // account's v2 copy stale, and reads fall back to what was just saved.
   await listsV2MirrorLists(env, auth.username, [slug]);
-  // A delete may have landed after the first re-check, before the search-index and mirror writes: check once more (v2 rows may exist now).
-  const retractedLate = await creatorListSaveRetractIfDeleted(env, auth, slug, true);
-  if (retractedLate) return retractedLate;
-  return json(savedAnswer);
+  return creatorListSaveRetractIfDeleted(env, auth, slug, true);
 }
 
 // The account may have been deleted while a save was in flight (it authenticated before its writes).
