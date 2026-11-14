@@ -1136,6 +1136,22 @@ async function handleNuvioTvHistoryRemove(env, username, body) {
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
+// The old path's write of one Nuvio TV play: the whole record to KV and D1, then the activity database.
+async function saveNuvioTvPlayLegacy(env, username, syncKey, blob) {
+  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
+  if (env.DB) {
+    try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
+  }
+  if (typeof recordActivityPlay === "function" && blob.watchHistory[0]) {
+    try {
+      const legacyEntry = typeof activityPlayFromLegacyEntry === "function"
+        ? activityPlayFromLegacyEntry(blob.watchHistory[0])
+        : blob.watchHistory[0];
+      await recordActivityPlay(env, username, legacyEntry, "nuvio-tv");
+    } catch {}
+  }
+}
+
 async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
   // FF_DIRECT_PLAY (41_direct-play.js, audit PERF-01): the record without its Watch
   // History, so one play does not read and rewrite the whole history. Null = old path.
@@ -1276,19 +1292,7 @@ async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
     await directPlayCommit(env, username, direct, blob, "nuvio-tv");
     return json({ ok: true, success: true }, 200, corsHeaders());
   }
-  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
-  if (env.DB) {
-    try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
-  }
-  if (typeof recordActivityPlay === "function" && blob.watchHistory[0]) {
-    try {
-      const legacyEntry = typeof activityPlayFromLegacyEntry === "function"
-        ? activityPlayFromLegacyEntry(blob.watchHistory[0])
-        : blob.watchHistory[0];
-      await recordActivityPlay(env, username, legacyEntry, "nuvio-tv");
-    } catch {}
-  }
-
+  await saveNuvioTvPlayLegacy(env, username, syncKey, blob);
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
