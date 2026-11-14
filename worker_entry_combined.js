@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "764bfd5814";
+const WORKER_BUILD = "3c4a36f0e9";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -10555,6 +10555,53 @@ async function ensureTrackingWatchlist(env, username, blob) {
   return blob;
 }
 
+// One stored continue_watching row -> one item (CQ-02). Used by the catalog read
+// path and the creator-tracking read path, so a fix lands in both. A COMPANION:
+// show_title carries the companion fields as JSON.
+function mapContinueWatchingRow(r) {
+  let isCompanion = undefined;
+  let companionType = undefined;
+  let companionNote = undefined;
+  let companionStoryline = undefined;
+  let precedingShowId = undefined;
+  let showTitle = r.show_title || undefined;
+  let kind = undefined;
+  let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
+  if (r.show_title && r.show_title.startsWith("COMPANION:")) {
+    try {
+      const compMeta = JSON.parse(r.show_title.slice(10));
+      isCompanion = true;
+      companionType = compMeta.companionType;
+      companionNote = compMeta.companionNote;
+      companionStoryline = compMeta.companionStoryline;
+      precedingShowId = compMeta.precedingShowId;
+      showTitle = compMeta.showTitle || undefined;
+      kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
+      type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
+    } catch {}
+  } else if (type === "movie") {
+    kind = "movie";
+  }
+  return {
+    id: r.item_id,
+    showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
+    type: type,
+    kind: kind,
+    name: r.name || undefined,
+    poster: r.poster || undefined,
+    showTitle: showTitle,
+    showPoster: r.show_poster || undefined,
+    seasonNum: r.season_num != null ? r.season_num : undefined,
+    episodeNum: r.episode_num != null ? r.episode_num : undefined,
+    updatedAt: r.updated_at,
+    isCompanion: isCompanion,
+    companionType: companionType,
+    companionNote: companionNote,
+    companionStoryline: companionStoryline,
+    precedingShowId: precedingShowId,
+  };
+}
+
 // D1 is authoritative for this record -- /api/creator/sync/load and every
 // personal catalog row read it first -- so this has to be able to notice when
 // it is NOT the freshest copy.
@@ -10642,49 +10689,7 @@ async function readCreatorTrackingD1(env, username) {
       watchedAt: r.watched_at,
     }));
 
-    const continueWatching = cwRows.map((r) => {
-      let isCompanion = undefined;
-      let companionType = undefined;
-      let companionNote = undefined;
-      let companionStoryline = undefined;
-      let precedingShowId = undefined;
-      let showTitle = r.show_title || undefined;
-      let kind = undefined;
-      let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
-      if (r.show_title && r.show_title.startsWith("COMPANION:")) {
-        try {
-          const compMeta = JSON.parse(r.show_title.slice(10));
-          isCompanion = true;
-          companionType = compMeta.companionType;
-          companionNote = compMeta.companionNote;
-          companionStoryline = compMeta.companionStoryline;
-          precedingShowId = compMeta.precedingShowId;
-          showTitle = compMeta.showTitle || undefined;
-          kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
-          type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
-        } catch {}
-      } else if (type === "movie") {
-        kind = "movie";
-      }
-      return {
-        id: r.item_id,
-        showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
-        type: type,
-        kind: kind,
-        name: r.name || undefined,
-        poster: r.poster || undefined,
-        showTitle: showTitle,
-        showPoster: r.show_poster || undefined,
-        seasonNum: r.season_num != null ? r.season_num : undefined,
-        episodeNum: r.episode_num != null ? r.episode_num : undefined,
-        updatedAt: r.updated_at,
-        isCompanion: isCompanion,
-        companionType: companionType,
-        companionNote: companionNote,
-        companionStoryline: companionStoryline,
-        precedingShowId: precedingShowId,
-      };
-    });
+    const continueWatching = cwRows.map(mapContinueWatchingRow);
 
     const airingNext = anRows.map((r) => ({
       id: r.item_id,
@@ -21598,49 +21603,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
             if (r.is_unaired || r.isUnaired || (r.airDate && typeof isEpisodeAired === 'function' && !isEpisodeAired(r.airDate)) || (r.air_date && typeof isEpisodeAired === 'function' && !isEpisodeAired(r.air_date))) return true;
             if (fullyWatchedSet.has(sid) || (base && fullyWatchedSet.has(base))) return false;
             return true;
-          }).map(r => {
-            let isCompanion = undefined;
-            let companionType = undefined;
-            let companionNote = undefined;
-            let companionStoryline = undefined;
-            let precedingShowId = undefined;
-            let showTitle = r.show_title || undefined;
-            let kind = undefined;
-            let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
-            if (r.show_title && r.show_title.startsWith("COMPANION:")) {
-              try {
-                const compMeta = JSON.parse(r.show_title.slice(10));
-                isCompanion = true;
-                companionType = compMeta.companionType;
-                companionNote = compMeta.companionNote;
-                companionStoryline = compMeta.companionStoryline;
-                precedingShowId = compMeta.precedingShowId;
-                showTitle = compMeta.showTitle || undefined;
-                kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
-                type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
-              } catch {}
-            } else if (type === "movie") {
-              kind = "movie";
-            }
-            return {
-              id: r.item_id,
-              showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
-              type: type,
-              kind: kind,
-              name: r.name || undefined,
-              poster: r.poster || undefined,
-              showTitle: showTitle,
-              showPoster: r.show_poster || undefined,
-              seasonNum: r.season_num != null ? r.season_num : undefined,
-              episodeNum: r.episode_num != null ? r.episode_num : undefined,
-              updatedAt: r.updated_at,
-              isCompanion: isCompanion,
-              companionType: companionType,
-              companionNote: companionNote,
-              companionStoryline: companionStoryline,
-              precedingShowId: precedingShowId,
-            };
-          });
+          }).map(mapContinueWatchingRow);
           if (airingRows && airingRows.length) {
             airingItems = airingRows.map(r => ({
               id: r.item_id,
