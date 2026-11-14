@@ -113,6 +113,10 @@ async function persistNewCreatorProfile(env, username, profileObj, creatorKey) {
         "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at) VALUES (?, ?, ?, ?, ?)"
       ).bind(username, profileObj.displayName, profileObj.keyHash, profileObj.recoveryAnswerHash, profileObj.createdAt).run();
     } catch (dbErr) {
+      // Lost the race for this name: the other request inserted it between our check and here.
+      if (/UNIQUE constraint failed/i.test(String(dbErr && dbErr.message))) {
+        return { ok: false, taken: true, error: "That username is already taken." };
+      }
       console.error("D1 write error (creator create):", dbErr);
       return { ok: false, error: "Failed to create creator account. Please try again." };
     }
@@ -191,6 +195,7 @@ async function creatorApiCreate(request, env, ctx, url) {
 
   const persisted = await persistNewCreatorProfile(env, v.normalized, profileObj, creatorKey);
   if (!persisted.ok) {
+    if (persisted.taken) return json({ ok: false, error: persisted.error });
     return json({ ok: false, error: persisted.error }, 500);
   }
 
