@@ -39,5 +39,15 @@ describe("OPS-01: every .js under src/ is part of the build, or the build fails"
     });
   }
 
+  it("refuses two files with the same name in different folders, naming both (CQ-09)", () => {
+    const a = "src/api/02_http-and-creator-utils.js";
+    mkdirSync(join(dir, a, ".."), { recursive: true });
+    writeFileSync(join(dir, a), "const __cq09Probe = 1;\n");
+    const r = buildIn(dir);
+    rmSync(join(dir, a));
+    assert.notEqual(r.status, 0);
+    assert.ok(r.stderr.includes(a) && r.stderr.includes("src/core/02_http-and-creator-utils.js"), r.stderr);
+  });
+
   it("cleanup", () => rmSync(dir, { recursive: true, force: true }));
 });

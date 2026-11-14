@@ -52,6 +52,14 @@ def check_no_unlisted_sources():
             path = os.path.join(root, n).replace(os.sep, '/')
             if n.endswith('.js') and path not in picked:
                 left_out.append(path)
+    by_name = {}
+    for path in picked:
+        by_name.setdefault(os.path.basename(path), []).append(path)
+    same_name = sorted(p for ps in by_name.values() if len(ps) > 1 for p in ps)
+    if same_name:
+        # Order is decided by base name alone, so two of them would swap places
+        # with the file system (audit CQ-09).
+        raise SystemExit("Two source files share a name, so their build order is undefined:\n  " + "\n  ".join(same_name))
     if left_out:
         raise SystemExit(
             "These source files are NOT part of the build (the name must be src/<folder>/NN_name.js with exactly two digits, directly in a folder):\n  "
