@@ -1905,7 +1905,7 @@ async function sweepRapidApiNewOnStreaming(env, ctx, fetchBudget, maxUnits, opti
     // it did not reach stays unread, which is the right trade for a rebuild.
     summary.mode = isReset ? "reset" : "full";
     if (isReset) {
-      try { await env.CONFIGS.delete("cron:newonstreaming:lastsweep"); } catch (e) {}
+      try { await env.CONFIGS.delete("cron:newonstreaming:lastsweep"); } catch (e) { logIgnoredWrite("delete cron:newonstreaming:lastsweep", e); }
     }
     const limitUnits = Number.isFinite(maxUnits) && maxUnits > 0 ? Math.floor(maxUnits) : 30;
     const maxPages = Math.min(isReset ? Math.max(30, budgetCap) : budgetCap, limitUnits, remainingInQuota);
@@ -4793,7 +4793,7 @@ async function refreshAiringNextSweep(env, ctx) {
   } catch (e) {
     console.error('[Cron] Airing Next: account listing failed, restarting from the beginning:', e);
     if (sweep.c) {
-      try { await env.CONFIGS.put(CURSOR_KEY, ''); } catch {}
+      try { await env.CONFIGS.put(CURSOR_KEY, ''); } catch (e) { logIgnoredWrite(`put ${CURSOR_KEY}`, e); }
     }
     return;
   }
@@ -4851,7 +4851,7 @@ async function refreshAiringNextSweep(env, ctx) {
     next = { c: sweep.c, o: nextOffset };
   }
   if (next.c !== sweep.c || next.o !== sweep.o) {
-    try { await env.CONFIGS.put(CURSOR_KEY, JSON.stringify(next)); } catch {}
+    try { await env.CONFIGS.put(CURSOR_KEY, JSON.stringify(next)); } catch (e) { logIgnoredWrite(`put ${CURSOR_KEY}`, e); }
   }
 }
 

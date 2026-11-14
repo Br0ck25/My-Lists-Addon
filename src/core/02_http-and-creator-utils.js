@@ -1,3 +1,9 @@
+// Best-effort KV writes swallow their failure on purpose (the request must still
+// succeed), but a failure must leave a trace: say which key and why.
+function logIgnoredWrite(label, e) {
+  console.warn(`[ignored write] ${label}:`, e && e.message ? e.message : e);
+}
+
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -4985,7 +4991,7 @@ async function purgeCreatorData(env, username, options = {}) {
           await env.CONFIGS.delete(k.name);
           const listPath = k.name.slice("creatorlist:".length);
           lateListIds.push("c:" + listPath);
-          try { await env.CONFIGS.delete(`listlikevoters:${listPath}`); } catch (e) {}
+          try { await env.CONFIGS.delete(`listlikevoters:${listPath}`); } catch (e) { logIgnoredWrite(`delete listlikevoters:${listPath}`, e); }
           listsCleared++;
         }
         if (res.list_complete || !res.cursor) break;
