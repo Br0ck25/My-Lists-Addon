@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "20d40cc827";
+const WORKER_BUILD = "f975edffb6";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -94569,8 +94569,7 @@ function buildNuvioTvConfigScript(origin) {
     'async function loadTvLauncherConfig() {\n' +
     '  try {\n' +
     '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
-    '    var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
-    '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "") + (creatorKey ? (creatorName ? "&" : "?") + "creatorKey=" + encodeURIComponent(creatorKey) : "");\n' +
+    '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "");\n' +
     '    var res = (typeof creatorApiFetch === "function") ? await creatorApiFetch(url, { credentials: "same-origin" }) : await fetch(url, { credentials: "same-origin" });\n' +
     '    if (res && res.ok) {\n' +
     '      var data = await res.json();\n' +
@@ -119588,6 +119587,9 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders() });
   }
+  // The Account Key never travels in an address (SEC-03); see refuseQueryCredentials.
+  const refusedKey = url ? refuseQueryCredentials(url, ["creatorKey"]) : null;
+  if (refusedKey) return refusedKey;
   let body = {};
   if (request.method === "POST") {
     try {
@@ -119597,7 +119599,7 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
     }
   }
   const creatorName = (body && body.creatorName) || (url && url.searchParams.get("creatorName")) || "";
-  const creatorKey = (body && body.creatorKey) || (url && url.searchParams.get("creatorKey")) || "";
+  const creatorKey = (body && body.creatorKey) || "";
   const auth = await authenticateCreatorFor(request, env, ctx, path, creatorName, creatorKey);
   if (!auth.ok) return authFailureResponse(auth);
 

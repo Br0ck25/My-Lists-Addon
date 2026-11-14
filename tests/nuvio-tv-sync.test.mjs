@@ -990,7 +990,7 @@ describe("Nuvio TV Launcher - Dedicated TV Addon (app.my-list.tv) & /nuvio-tv-la
   });
 
   it("GET /api/nuvio-tv/config requires auth and returns mirror status", async () => {
-    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv(), FF_SESSIONS: "1" });
 
     // Unauthenticated GET returns 401/403
     const unauthRes = await call(env, "/api/nuvio-tv/config");
@@ -1013,7 +1013,10 @@ describe("Nuvio TV Launcher - Dedicated TV Addon (app.my-list.tv) & /nuvio-tv-la
     }));
 
     // Authenticated GET
-    const authRes = await call(env, "/api/nuvio-tv/config?creatorName=tvtestuser&creatorKey=" + encodeURIComponent(creatorKey));
+    // The key is never read from the address (SEC-03); the signed-in session authenticates.
+    const sess = await call(env, "/api/session", { method: "POST", json: { username: "tvtestuser", key: creatorKey } });
+    const cookie = (sess.headers.get("set-cookie") || "").split(";")[0];
+    const authRes = await call(env, "/api/nuvio-tv/config?creatorName=tvtestuser", { cookie });
     assert.equal(authRes.status, 200);
     assert.equal(authRes.body.ok, true);
     assert.equal(authRes.body.mirror, true);

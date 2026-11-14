@@ -909,6 +909,9 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders() });
   }
+  // The Account Key never travels in an address (SEC-03); see refuseQueryCredentials.
+  const refusedKey = url ? refuseQueryCredentials(url, ["creatorKey"]) : null;
+  if (refusedKey) return refusedKey;
   let body = {};
   if (request.method === "POST") {
     try {
@@ -918,7 +921,7 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
     }
   }
   const creatorName = (body && body.creatorName) || (url && url.searchParams.get("creatorName")) || "";
-  const creatorKey = (body && body.creatorKey) || (url && url.searchParams.get("creatorKey")) || "";
+  const creatorKey = (body && body.creatorKey) || "";
   const auth = await authenticateCreatorFor(request, env, ctx, path, creatorName, creatorKey);
   if (!auth.ok) return authFailureResponse(auth);
 

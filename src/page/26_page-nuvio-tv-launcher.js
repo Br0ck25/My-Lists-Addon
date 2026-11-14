@@ -228,8 +228,7 @@ function buildNuvioTvConfigScript(origin) {
     'async function loadTvLauncherConfig() {\n' +
     '  try {\n' +
     '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
-    '    var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
-    '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "") + (creatorKey ? (creatorName ? "&" : "?") + "creatorKey=" + encodeURIComponent(creatorKey) : "");\n' +
+    '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "");\n' +
     '    var res = (typeof creatorApiFetch === "function") ? await creatorApiFetch(url, { credentials: "same-origin" }) : await fetch(url, { credentials: "same-origin" });\n' +
     '    if (res && res.ok) {\n' +
     '      var data = await res.json();\n' +
