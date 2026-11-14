@@ -18,10 +18,10 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | BUG-01 | verified fixed | a0b0ea7 | node --test tests/sync-config-bad-entries.test.mjs | 2026-11-10, independent review |
-| BUG-02 | open |  |  |  |
-| BUG-03 | open |  |  |  |
-| BUG-04 | open |  |  |  |
-| BUG-05 | open |  |  |  |
+| BUG-02 | fixed (awaiting verification) | c1c7abe | node --test tests/save-after-delete-account.test.mjs |  |
+| BUG-03 | fixed (awaiting verification) | 0bef949 | node --test tests/details-region-junk.test.mjs |  |
+| BUG-04 | fixed (awaiting verification) | e57945c | node --test tests/tmdb-my-lists-bad-key.test.mjs |  |
+| BUG-05 | fixed (awaiting verification) | 0cd9a5d | node --test tests/creator-create-username-race.test.mjs |  |
 
 ## Proven findings   (ordered by severity)
 
@@ -95,6 +95,11 @@ concurrent x2: 200 ok | 500 Failed to create creator account. Please try again.
 D1 write error (creator create): Error: UNIQUE constraint failed: creators.username
 ```
 - Recommended fix and effort: S. Treat a UNIQUE failure in `persistNewCreatorProfile` as "already taken".
+
+## Fixer notes (2026-11-14)
+- BUG-02: the save re-checks the deletion tombstone after its writes and removes its list, order and stamp keys, answering 401. It does not clean the D1 list row written earlier in the same save, nor the v2 (listsOnly) path.
+- BUG-04: only the non-string `tmdbKey` is fixed. The lone-surrogate `sessionId`/`accountId` 500 on the same route ("URI malformed") is a separate cause and was left as is.
+- Unverified hunch: `newOnStreamingRegion` and `src/catalog/57_title-details-fallback.js:24` still slice by UTF-16 units, but only compare against a fixed list, so no throw was seen.
 
 ## Unproven suspicions   (not counted)
 - Overlapping cron ticks run the same job more than once. With three simultaneous ticks "New on Streaming JustWatch" ran three times (`$S/cron1.mjs` prints the line 3 times). I did not show that it creates duplicates or double cost; it may be idempotent. In production ticks overlap only if one runs longer than its interval.
