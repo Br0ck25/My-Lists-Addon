@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "2628e86eb4";
+const WORKER_BUILD = "85f8054678";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -40017,6 +40017,13 @@ if ('serviceWorker' in navigator) {
       <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
       <div id="hiddenListsSettingsSection"></div>
     </div>
+
+    <!-- Removed from Airing Next: filled and shown by renderRemovedAiringNextSettingsSection only when a show is removed -->
+    <div class="panel u-mt-12px" style="display:none;">
+      <h2 class="panel-title">Removed from Airing Next</h2>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Shows you removed from Airing Next with the x on their poster. A show comes back by itself when you watch another episode, or restore it here now.</p>
+      <div id="removedAiringNextSettingsSection"></div>
+    </div>
   </div>
 
   <!-- Subpanel 3: Tracking & Scrobble -->
@@ -75034,7 +75041,7 @@ function removeAiringNextShow(showId, btn) {
   if (typeof scheduleTrackingSync === 'function') scheduleTrackingSync({ intentionalRemoval: true });
   if (typeof showAddedToast === 'function') {
     const title = (entry && (entry.showTitle || entry.name)) || 'This show';
-    showAddedToast('Removed ' + title + ' from Airing Next. Watch another episode to bring it back.');
+    showAddedToast('Removed ' + title + ' from Airing Next. Restore it from Settings.');
   }
 }
 window.removeAiringNextShow = removeAiringNextShow;
@@ -77250,27 +77257,6 @@ function onHiddenSectionToggle(cb) {
   if (!section) return;
   // Same checked = hidden convention as onHiddenListToggle above.
   if (typeof setMyListsSectionHidden === 'function') setMyListsSectionHidden(section, cb.checked);
-}
-
-// "Removed from Airing Next" panel on Settings -- the way back from the "x"
-// on an Airing Next poster (removeAiringNextShow, 21_client-custom-list-
-// builder.js).
-//
-// A removal undoes itself the moment another episode of the show is watched,
-// so this panel is not the only route back. It is the route for the person
-// who removed the wrong show, or changed their mind about one they are not
-// currently watching -- without it, a show removed by mistake could only be
-// recovered by watching an episode of it.
-//
-// Deliberately hidden entirely when nothing is removed: an empty panel
-// explaining a feature nobody has used is noise on a Settings tab that
-// already has a lot to read.
-function renderRemovedAiringNextSettingsSection() {
-  const box = document.getElementById('removedAiringNextSettingsSection');
-  if (!box) return;
-  box.innerHTML = '';
-  const panel = box.closest('.panel');
-  if (panel) panel.style.display = 'none';
 }
 
 // that persists anywhere outside a single browser for that link to
@@ -83583,6 +83569,44 @@ window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
 window.applyChannelLogoUrl = applyChannelLogoUrl;
 window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
 window.setChannelDraftLogo = setChannelDraftLogo;
+// "Removed from Airing Next" panel on Settings -- the way back from the "x"
+// on an Airing Next poster (removeAiringNextShow, 21_client-custom-list-
+// builder.js).
+//
+// A removal undoes itself the moment another episode of the show is watched,
+// so this panel is not the only route back. It is the route for the person
+// who removed the wrong show, or changed their mind about one they are not
+// currently watching -- without it, a show removed by mistake could only be
+// recovered by watching an episode of it.
+//
+// Deliberately hidden entirely when nothing is removed: an empty panel
+// explaining a feature nobody has used is noise on a Settings tab that
+// already has a lot to read. One row per show (getRemovedAiringNextShows
+// groups a show's two ids), and Restore clears every id of that row.
+function renderRemovedAiringNextSettingsSection() {
+  const box = document.getElementById('removedAiringNextSettingsSection');
+  if (!box) return;
+  const panel = box.closest('.panel');
+  const rows = typeof getRemovedAiringNextShows === 'function' ? getRemovedAiringNextShows() : [];
+  if (!rows.length) {
+    box.innerHTML = '';
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  box.innerHTML = rows.map((r) =>
+    '<div class="settings-toggle-row">' +
+      '<span class="u-flex-1 u-minw-0 u-fw-600 u-fs-v_font_size_sm u-c-v_text u-overflowwrap-anywhere">' + escapeHtml(r.title) + '</span>' +
+      '<button type="button" class="btn-secondary btn-sm" aria-label="' + escapeAttr('Restore ' + r.title + ' to Airing Next') + '"' +
+        ' data-act="onRestoreAiringNextShow" data-act-args="' + appActArgs([r.showIds.join(','), r.title]) + '">Restore</button>' +
+    '</div>'
+  ).join('');
+  if (panel) panel.style.display = '';
+}
+
+function onRestoreAiringNextShow(showIds, title) {
+  restoreAiringNextShow(showIds);
+  if (typeof showToast === 'function') showToast('"' + (title || 'The show') + '" is back on Airing Next.', 'success');
+}
 // Nuvio/Stremio Watch History: Episodes opens <app>-watch-episodes, the other pills <app>-watch-history.
 
 const APP_HISTORY_URL = /^(autotrack:(?:nuvio|stremio)-)watch-(history|episodes):/;

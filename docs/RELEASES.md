@@ -2727,3 +2727,15 @@ Owner decisions of 2026-11-10 on the open items of `docs/audit-2026-11-10/`. Rea
 
 ### Checked
 `bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported on the machine used). Tests that relied on the username link now use the owner's own install link; two support-history tests and one providers test were changed to the new rules and say why.
+
+## 2026-11-14 — "Removed from Airing Next" is back in Settings; unused code removed (build `85f8054678`, prepared; not deployed)
+
+- **Restored: Settings → Catalog & Display → Removed from Airing Next.** It lists every show taken off Airing Next with the x on its poster, each with a Restore button. It appears only when at least one show is removed. Before this, a show removed by mistake came back only once another episode of it was watched. The removal message now reads *Removed [show] from Airing Next. Restore it from Settings.*
+- **Removed (CQ-04): code nothing called.** `buildNuvioTvDefaultPreset`, `reconcileAccounts`, `resolveMedia` and the page's copy of `mergeNuvioCollections` (the server's copy is the one in use). Nothing users see changes.
+
+### Owner steps
+1. Paste the new Worker.
+2. To check: remove a show from Airing Next with the x, open Settings → Catalog & Display, and press Restore beside it.
+
+### Checked
+`bash verify.sh -q` passes with the browser step skipped (Playwright cannot be imported by the test runner on this machine). Separately, the panel was opened in a real browser against the dev server, in light, dark and phone width, and Restore was clicked: the show came back, the success message appeared, and the panel hid itself when nothing was left.

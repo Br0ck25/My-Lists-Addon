@@ -4744,6 +4744,54 @@ describe("client: taking one show off Airing Next", () => {
     assert.equal(client.call("getRemovedAiringNextShows").length, 0);
   });
 
+  it("lists a removed show in its Settings panel, and Restore puts it back", async () => {
+    // The panel ships hidden on the Settings page and is the only way back for
+    // a show removed by mistake that is not being watched.
+    const html = renderPage();
+    assert.match(html, /<div class="panel u-mt-12px" style="display:none;">\s*<h2 class="panel-title">Removed from Airing Next<\/h2>[\s\S]{0,400}id="removedAiringNextSettingsSection"/);
+
+    const client = loadClient({ routes: { [BATCH]: () => ({ json: { ok: true, results: {} } }) } });
+    const box = client.document.getElementById("removedAiringNextSettingsSection");
+    const panel = { style: { display: "none" } };
+    box.closest = (sel) => (sel === ".panel" ? panel : null);
+    const toasts = [];
+    client.set("showToast", (msg, kind) => { toasts.push([msg, kind]); });
+    seedShelf(client);
+
+    client.call("renderRemovedAiringNextSettingsSection");
+    assert.equal(panel.style.display, "none", "nothing removed: the panel stays hidden");
+
+    client.call("removeAiringNextShow", "ttB", null);
+    assert.equal(panel.style.display, "", "a removal shows the panel");
+    assert.match(box.innerHTML, /Removed Show/);
+    assert.doesNotMatch(box.innerHTML, /Kept Show/, "only removed shows are listed");
+    const btn = box.innerHTML.match(/<button type="button" class="btn-secondary btn-sm" aria-label="Restore Removed Show to Airing Next" data-act="(\w+)" data-act-args="([^"]*)">Restore<\/button>/);
+    assert.ok(btn, box.innerHTML);
+    const args = JSON.parse(btn[2].replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
+
+    client.call(btn[1], ...args);
+    await settle();
+    assert.equal(client.call("isAiringNextRemoved", "ttB"), false);
+    assert.deepEqual(toasts.at(-1), ['"Removed Show" is back on Airing Next.', "success"]);
+    assert.equal(panel.style.display, "none", "nothing left to restore: hidden again");
+    assert.equal(box.innerHTML, "");
+  });
+
+  it("escapes a removed show's title in the Settings panel", () => {
+    const client = loadClient();
+    const box = client.document.getElementById("removedAiringNextSettingsSection");
+    box.closest = () => ({ style: {} });
+    client.call("saveLocalCustomListsMap", {
+      "watch-history": { slug: "watch-history", name: "Watch History", type: "series", updatedAt: 1,
+        items: [{ id: "ttX:1:1", showId: "ttX", showTitle: 'Bob\'s "Show" <img src=x>', type: "episode", seasonNum: 1, episodeNum: 1, watchedAt: 5 }] },
+      "airing-next": { slug: "airing-next", name: "Airing Next", type: "series", updatedAt: 1,
+        items: [{ id: "ttX", showId: "ttX", showTitle: "X", airDate: "2099-01-01" }] },
+    });
+    client.call("removeAiringNextShow", "ttX", null);
+    assert.doesNotMatch(box.innerHTML, /<img/);
+    assert.match(box.innerHTML, /&lt;img src=x&gt;/);
+  });
+
   it("puts the x on the full-page view, wired to the right shelf", () => {
     const client = loadClient();
     const html = client.call("livePreviewPosterHtml", {
@@ -7830,8 +7878,6 @@ describe("client: My Catalogs sub-heading and poster rating badges", () => {
   it("IMDb rating option is removed and TMDb rating toggle is present in Settings HTML", async () => {
     const fs = await import("node:fs");
     const settingsHtml = fs.readFileSync("src/page/15_tab-settings-html.js", "utf8");
-    assert.doesNotMatch(settingsHtml, /Removed from Airing Next/);
-    assert.doesNotMatch(settingsHtml, /removedAiringNextSettingsSection/);
     assert.doesNotMatch(settingsHtml, /IMDb Ratings/);
     assert.doesNotMatch(settingsHtml, /id="posterRatingImdbRadio"/);
     assert.match(settingsHtml, /id="badgeTmdbRatingCheckbox"/);

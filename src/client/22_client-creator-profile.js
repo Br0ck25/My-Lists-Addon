@@ -1090,27 +1090,6 @@ function onHiddenSectionToggle(cb) {
   if (typeof setMyListsSectionHidden === 'function') setMyListsSectionHidden(section, cb.checked);
 }
 
-// "Removed from Airing Next" panel on Settings -- the way back from the "x"
-// on an Airing Next poster (removeAiringNextShow, 21_client-custom-list-
-// builder.js).
-//
-// A removal undoes itself the moment another episode of the show is watched,
-// so this panel is not the only route back. It is the route for the person
-// who removed the wrong show, or changed their mind about one they are not
-// currently watching -- without it, a show removed by mistake could only be
-// recovered by watching an episode of it.
-//
-// Deliberately hidden entirely when nothing is removed: an empty panel
-// explaining a feature nobody has used is noise on a Settings tab that
-// already has a lot to read.
-function renderRemovedAiringNextSettingsSection() {
-  const box = document.getElementById('removedAiringNextSettingsSection');
-  if (!box) return;
-  box.innerHTML = '';
-  const panel = box.closest('.panel');
-  if (panel) panel.style.display = 'none';
-}
-
 // that persists anywhere outside a single browser for that link to
 // point at in the first place.
 function renderTrackPlaybackSection() {
