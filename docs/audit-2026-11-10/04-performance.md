@@ -13,12 +13,12 @@ Updated 2026-11-14. Status values: `open`, `fixed (awaiting verification)`, `ver
 
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
-| PERF-01 | open - blocked on an owner decision | (none; a try was reverted) | See docs/HANDOFF.md, PERF-02 section. |  |
+| PERF-01 | owner decision made - measure first | (none; a try was reverted) | Owner decision 2026-11-14, see the note under PERF-01. Run the measurement query first; fix only if an account is over about 10,000 plays. Earlier notes: docs/HANDOFF.md, PERF-02 section. |  |
 | PERF-02 | verified fixed | 20862d7 | node --test tests/perf-legacy-tracking-write.test.mjs. Histories of 80 entries or fewer are still written in full (one batch; reading first would add a statement to every scrobble, which tests/load-performance.test.mjs forbids). | 2026-11-14, independent review |
 | PERF-03 | verified fixed | 35f1c3f, 7b927c6, 605a44b, c4a374d, 7b59fc4 | node --test tests/preview-inflight.client.test.mjs tests/preview-chart-limit.test.mjs. Not built: serving the home charts from one cached GET. | 2026-11-11, independent review |
 | PERF-04 | verified fixed | 021d62a | node --test tests/perf-scrobble-seen-user.test.mjs. The KV read is kept; only the write is skipped (user listed, same server, seen under an hour ago). The call was not moved after the play-event check, so users who only pause still appear in the filter list. | 2026-11-14, independent review |
-| PERF-05 | open - owner decision needed | (none) | Skipped: capping the public list page and its .json changes what readers and any importer of /lists/<user>/<slug>.json receive (items silently missing past the cap). See the owner questions in the fixer's final report. |  |
-| PERF-06 | open - owner decision needed | (none) | Skipped: moving list items out of saved install configs is a storage change for existing installs (migration of saved data), larger than the report's M estimate implies. |  |
+| PERF-05 | owner decision made - measure first | (none) | Owner decision 2026-11-14, see the note under PERF-05. Do not cap the .json feed; cap only the web page, and only if lists of 3,000 or more exist. |  |
+| PERF-06 | owner decision made - measure first | (none) | Owner decision 2026-11-14, see the note under PERF-06. Run the measurement query first; leave alone unless several links are over 4 MB or many are over 1 MB. |  |
 
 ## Proven findings
 ### PERF-01 Every play (scrobble) re-reads and re-diffs the account's whole watch history
@@ -37,6 +37,8 @@ history=30000 scrobble -> 200 1461ms d1stmts=1680 d1batches=3 kv=3/3 fetch=4 => 
 ```
   A new account with no history does the same play in ~30 statements (t6.mjs `play #1: d1=30+3b`). Where the statements go at 5,000 plays (statement histogram printed by t8.mjs): 168 x `SELECT m.id, m.kind, ... FROM media ...` (title lookups for every history row, three times over), 56 x `SELECT count(*) FROM media WHERE resolved_at IS NULL AND id IN (...)` (src/data/37_activity-backfill.js:644, a leftover of the one-off copy reconciliation, run on every play), 26 x `INSERT OR IGNORE INTO watch_events ... SELECT j.m ...` (src/data/37_activity-backfill.js:444, re-offering already-stored plays). `t8b.mjs` shows all of it finishes BEFORE the HTTP reply (`response after 255ms (d1 stmts at response=305)`), so the webhook caller waits for it; the 4 waitUntil promises are not where the cost is.
 - Recommended fix and effort: M. Make the two play routes record the play directly with `recordActivityPlay` (src/data/38_activity-scrobble.js:73, already constant cost: 1 batch) and stop round-tripping through the whole-record shim for them; keep the shim for the website's full-record save only.
+
+**Owner decision (2026-11-14).** Owner says: unsure how many accounts have more than about 3,000 plays, but accounts above 3,000 must be supported, not dropped. Go with the recommendation: run the measurement query `npx wrangler d1 execute mylists-activity --remote --command "SELECT account_id, COUNT(*) AS plays FROM watch_events GROUP BY account_id ORDER BY plays DESC LIMIT 20"`. If the heaviest account is under about 5,000 plays, it waits. If any account is over about 10,000, do the fix now: record each play directly (constant cost), and keep next-episode and fully-watched handling, the first Continue Watching entry for a new show, and the updated stamp. The rebuild of those three is approved by the owner only if the measurement shows it is needed.
 
 ### PERF-02 Without the activity database, every play rewrites the account's whole history row by row
 - Severity: Low (affects self-hosted installs and accounts not yet copied to the activity database; Medium for them)
@@ -108,6 +110,8 @@ media.stop   200 {"ok":true,"ignored":...} d1=10+0b kvPut=1 PUT scrobbleseenuser
 - Proof: `node /tmp/claude-0/-home-user-My-Lists-Addon/55241830-1216-5d7f-89cf-715a0b7ec78e/scratchpad/s04/t15.mjs`: `N=100 public html: 27KB`, `N=1000: 276KB`, `N=5000: 1389KB`, `N=10000: 2781KB 116ms d1=4`. Saving the same 10,000-item list is cheap and flat (`save 200 411ms d1=21+2b(7st)`), so the item data is stored efficiently; only the read response is unbounded.
 - Recommended fix and effort: S. Cap the public page to the first few hundred items with a "next page" link or offset, as the Stremio catalog already does (100 per page).
 
+**Owner decision (2026-11-14).** Owner says: unsure how big the largest public lists are, and unsure whether anyone imports the .json. Owner proposes a cap of 1,000. Recommendation adopted instead: do not cap the .json feed (importers would silently lose items). Measure with `npx wrangler d1 execute my-lists-db --remote --command "SELECT slug, item_count FROM lists WHERE visibility='public' ORDER BY item_count DESC LIMIT 20"`. Check whether non-browser apps fetch the .json from request logs. Cap only the web page, and only if lists of 3,000 or more exist, with a working "show more" link. Do not use 1,000: the largest real list on record is about 1,200 items.
+
 ### PERF-06 Each Stremio/Nuvio request reads the whole install configuration, including every list item, from KV
 - Severity: Low (becomes Medium for installs near the 10 MB limit)
 - Status: Proven
@@ -123,6 +127,8 @@ R=40 N=3000  /<id>/manifest.json 200 143ms kvGetKB=7864 kvGet=3
 ```
   A catalog row also makes one outbound Cinemeta call per item shown (`fetch=100` for a 100-item page; src/catalog/05_catalog-core.js:2510-2517). That is within the 1,000-call paid limit but would exceed the 50-call free limit.
 - Recommended fix and effort: M. Keep list items out of the install configuration (reference the stored list by id, as the account lists already do) or store each row separately so a catalog request reads only its own row.
+
+**Owner decision (2026-11-14).** Owner says: unsure how many saved links are over about 1 MB. Recommendation adopted: measure first with `npx wrangler d1 execute my-lists-db --remote --command "SELECT COUNT(*), MAX(length(config_json)) FROM installs WHERE revoked_at IS NULL AND length(config_json) > 1000000"`. Fewer than about 5 links over 1 MB and none over about 4 MB means leave it alone. Act only if several are over 4 MB or many are over 1 MB. Older links in KV need a separate one-off read-only script.
 
 ## Unproven suspicions   (not counted)
 - U1: The cron job's "copy new activity" backlog run used 825 D1 statements plus 189 KV calls in one tick (t9, a backlog of one account's history), i.e. over 1,000 internal calls with other work in the same invocation. I could not reproduce the real Cloudflare limit locally, so whether a real tick exceeds it is unknown. Steady-state ticks stayed flat at about 533 D1 plus 61 KV for 100 to 400 users.
