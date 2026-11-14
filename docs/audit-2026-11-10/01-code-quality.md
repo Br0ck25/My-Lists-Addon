@@ -23,7 +23,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 
 | Finding | Status | Commit | How to verify |
 |---|---|---|---|
-| CQ-01 | open |  |  |
+| CQ-01 | fixed (awaiting verification) | 3d50d40 |  |
 | CQ-02 | open |  |  |
 | CQ-03 | open |  |  |
 | CQ-04 | open |  |  |
