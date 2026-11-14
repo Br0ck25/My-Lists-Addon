@@ -29,8 +29,8 @@ Updated 2026-11-14. Status values: `open`, `fixed (awaiting verification)`, `ver
 | CQ-04 | verified fixed | 2d4b89f, 4ff8e0d, 6531986 | 2026-11-14, independent review | Owner chose 2026-11-14: delete the unused helpers, keep the shelf and backfill functions. `node --test tests/dead-code.test.mjs tests/nuvio-collections-merge.test.mjs tests/lists-v2.test.mjs`. getRemovedAiringNextShows now has a caller again: owner restored its Settings panel (6531986). |
 | CQ-05 | verified fixed | 4d2e858 | 2026-11-14, independent review | `node --test tests/channel-constants-parity.test.mjs` |
 | CQ-06 | verified fixed | c9da1f9 | 2026-11-14, independent review | `node --test tests/agent-instructions.test.mjs` |
-| CQ-07 | open |  | | Not started: needs a decision on which server write paths deserve logging. |
-| CQ-08 | open |  | | Not started: the report says not worth a dedicated pass; remove guards when a file is touched anyway. |
+| CQ-07 | open |  | | Owner decided 2026-11-14: add one small logging helper (a one-line console warning) and use it only in empty catches on server paths that save user data (lists, account, watch history, sync). Leave caches, reads and client code alone. No behaviour change. |
+| CQ-08 | accepted risk |  | | Owner decided 2026-11-14: no dedicated pass and no new guard test. Remove a needless guard only when its file is changed anyway (tests already catch a rename). |
 | CQ-09 | verified fixed | e8eb925, f6ab6fa | 2026-11-14, independent review | `node --test tests/build-source-names.test.mjs` (6 pass): stray files (OPS-01) and same base name in two folders both stop the build. |
 
 ## Proven findings
