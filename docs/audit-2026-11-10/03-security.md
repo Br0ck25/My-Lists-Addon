@@ -15,16 +15,16 @@ Root cause shared by SEC-01 and SEC-02: the username is used as a credential. Th
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
+Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note. SEC-03, SEC-05 and SEC-06 were reviewed on 2026-11-14 at 8450cc9 (commit hashes as listed, all found): `bash verify.sh -q` passes, but the browser tests were SKIPPED (Playwright cannot be imported here).
 
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | SEC-01 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-01 block). Old TVs must pair again. | 2026-11-10, independent review |
 | SEC-02 | verified fixed | ccac5fc | node --test tests/nuvio-tv-device-token.test.mjs (SEC-02 block). LEGACY_USERNAME_OWNER_LINKS=1 undoes it. | 2026-11-10, independent review |
-| SEC-03 | fixed (awaiting verification) | 8e88c86 | node --test tests/nuvio-tv-config-query-key.test.mjs. The launcher page now loads its config through the signed-in session. |  |
+| SEC-03 | regression introduced (launcher config no longer loads without a live session; see Verification) | 8e88c86 | node --test tests/nuvio-tv-config-query-key.test.mjs. The launcher page now loads its config through the signed-in session. | 2026-11-14, independent review |
 | SEC-04 | verified fixed | a1ecc1f, 5997fe0, 1ffc61e | node --test tests/account-purge.test.mjs tests/support-history.test.mjs. Feedback threads are now deleted with the account (owner decision). | 2026-11-10, independent review |
-| SEC-05 | fixed (awaiting verification) | cc18207 | node --test tests/anonymous-write-limits.test.mjs (parallel feedback block). Over-limit now answers 429. |  |
-| SEC-06 | fixed (awaiting verification) | 6cc6efd | node --test tests/anonymous-write-limits.test.mjs (Nuvio TV block). 10 device codes/min and 120 history calls/min per address. |  |
+| SEC-05 | verified fixed | cc18207 | node --test tests/anonymous-write-limits.test.mjs (parallel feedback block). Over-limit now answers 429. | 2026-11-14, independent review |
+| SEC-06 | verified fixed | 6cc6efd | node --test tests/anonymous-write-limits.test.mjs (Nuvio TV block). 10 device codes/min and 120 history calls/min per address. | 2026-11-14, independent review |
 
 ## Proven findings   (ordered by severity)
 
@@ -87,6 +87,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   ```
 - Recommended fix: call `refuseQueryCredentials(url, ["creatorKey"])` at the top of the handler, like `/api/feedback/threads` does. Effort: S.
 
+**Verification.** 2026-11-14, independent review: **regression introduced**. Read 8e88c86. The security part is right: `GET /api/nuvio-tv/config?creatorName=..&creatorKey=<right key>` now answers 400 and authenticates nothing; `?creatorKey=%20` and `?key=` do not authenticate either. The new `tests/nuvio-tv-config-query-key.test.mjs` fails on the parent (1 of 2) and passes on HEAD. The old `nuvio-tv-sync` GET test was changed to sign in with a session (and to turn `FF_SESSIONS` on); that matches the new rule and is not a loosening. **What is now broken:** the launcher page's `loadTvLauncherConfig` (`src/page/26_page-nuvio-tv-launcher.js:228-250`) sends a GET with only `creatorName` and no key, so it works only when the browser holds a live session cookie. `creatorApiFetch`'s "401, send again with the key" fallback does not apply (it only re-adds a key from a JSON body; a GET has none), and the page calls this at `DOMContentLoaded` (line 681), before anything else renews the session. Own probe on the real Worker (`scratchpad/sec03_probe.mjs`): with `FF_SESSIONS=1` but no cookie (session ended after 30 days away, key still in localStorage because `FF_FORGET_KEY` is off by default) the page's request answers 401 on HEAD, where the parent's key-in-query request answered 200. With `FF_SESSIONS` unset it answers 401 for everyone (wrangler.toml `[vars]` leaves the flag commented out and OPERATIONS.md still says "Leave unset", though Release 19 in RELEASES.md reads as if it is on in production; I could not confirm the live setting). The page then silently keeps its defaults (`tvLauncherIsMirror = true`, `tvLauncherTvLists = []`, line 165): a person with their own TV lineup sees "mirror" and none of their TV shelves, and the next change made on the launcher page is saved from those defaults (`saveTvLauncherConfig` POSTs with the key in the body, so it authenticates), which can replace their saved TV lineup. Fix needed: give the page a key-carrying read that does not use the address (for example a POST read action, or a header the server accepts, or `/api/session` renewal before the GET), and a test that loads the config with the key and no session. Status set to `regression introduced`; the key-in-URL refusal itself should stay.
+
 ### SEC-04 Deleting an account leaves its username and list names in the search index
 - Severity: Low
 - Status: Proven
@@ -124,6 +126,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   ```
 - Recommended fix: use the existing `consumeRateLimit(env, ctx, "feedback", ip, 20, 86400)` (D1, atomic) before storing, and answer 429. Effort: S.
 
+**Verification.** 2026-11-14, independent review: **verified fixed**. Read cc18207. The KV `feedbackrate:` read and both KV writes are gone (no other use left in `src/` or `tests/`); `apiFeedback` now spends the atomic D1 `consumeRateLimit(env, ctx, "feedback", ip, 20, 86400)` before anything is stored and answers 429 with the same "tomorrow" message. The bucket name does not collide (`feedbackthreads`, `feedbackdelete` are separate). The new parallel test fails on the parent ("accepted 60 of 60") and passes on HEAD; the existing sequential 20-a-day test was not changed. Own probes: 25 empty messages (400, refused before the limit) do not use up the budget; two addresses sending 15 each in parallel all get through; no client IP answers 400. The client (`16_client-row-core.js:3161,3207`) shows `data.error` whatever the status, so the 429 still shows the message. Behaviour change worth knowing: a request that passes validation but then fails (e.g. a reply to a thread that does not exist) now counts toward the 20; the old code also counted those, so this is not new.
+
 ### SEC-06 Unauthenticated endpoints that write storage on every call have no rate limit (/api/nuvio-tv/device/code, /api/nuvio-tv/history)
 - Severity: Low
 - Status: Proven
@@ -137,6 +141,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   nuvio-tv/history x40 (one IP)                {"200":40}
   ```
 - Recommended fix: add `consumeRateLimit` per IP to both (e.g. 10/min for device codes). Effort: S.
+
+**Verification.** 2026-11-14, independent review: **verified fixed**. Read 6cc6efd. `handleNuvioTvDeviceCode` (69_:784) spends `tvdevicecode` 10/min and `handleNuvioTvHistoryRoute` (25_:1301) spends `tvhistory` 120/min, both before any KV/D1 write and before body parsing, with a CORS 429. The history handler serves both `/history` and `/history/remove`, so both are covered. The other public Nuvio TV device route, `device/poll`, only reads; `device/claim` needs the Account Key. The two new tests fail on the parent (2 of 2) and pass on HEAD. Own probes: 40 parallel device-code requests from one address give 10 x 200 and 30 x 429 (atomic, not just sequential); another address is unaffected; 130 parallel `/history/remove` calls give 120 then 10 x 429; the 429 carries `Access-Control-Allow-Origin: *`; a preflight `OPTIONS` is not limited. A request without `CF-Connecting-IP` is refused, as every other limiter here does.
 
 ## Unproven suspicions   (not counted)
 - `/api/nuvio-tv/collections/<username>` and the schedule routes (`/api/nuvio-tv/schedule/`, `/schedules/`) are public and take a username via the same `resolveNuvioTvTargetData`; they probably expose the account's custom collections / channels the way `/api/nuvio-tv/sync/<username>` does (SEC-01 proof shows the sync one answers 200). Not walked one by one.
