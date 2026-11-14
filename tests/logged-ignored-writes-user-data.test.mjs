@@ -46,4 +46,17 @@ describe("failed user-data writes are logged and the request still succeeds", ()
     assert.equal(res.body.ok, true, "the list must still save: " + JSON.stringify(res.body));
     assert.ok(logged.some((l) => l.includes("sort_order")), `expected a sort_order warning, got: ${JSON.stringify(logged)}`);
   });
+  it("list delete: a failed likes-ledger delete is logged and the delete still answers ok", async () => {
+    const { env, user } = await signedIn("del1");
+    const saved = await call(env, "/api/creator/lists/save", { method: "POST", json: { creatorName: "del1", creatorKey: user.creatorKey, slug: "gone", name: "Gone", type: "movie", items: [{ id: "tt0133093" }] } });
+    assert.equal(saved.body.ok, true, JSON.stringify(saved.body));
+    env.CONFIGS._hooks.beforeDelete = (key) => { if (String(key).startsWith("listlikevoters:")) throw new Error("kv down"); };
+    let res;
+    const logged = await captureWarnings(async () => {
+      res = await call(env, "/api/creator/lists/delete", { method: "POST", json: { creatorName: "del1", creatorKey: user.creatorKey, slug: "gone" } });
+    });
+    env.CONFIGS._hooks.beforeDelete = null;
+    assert.equal(res.body.ok, true, "the delete must still succeed: " + JSON.stringify(res.body));
+    assert.ok(logged.some((l) => l.includes("listlikevoters")), `expected a listlikevoters warning, got: ${JSON.stringify(logged)}`);
+  });
 });

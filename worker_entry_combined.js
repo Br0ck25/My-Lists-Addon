@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "f8ba32cf1c";
+const WORKER_BUILD = "93da690c41";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -6007,8 +6007,9 @@ async function stampListVisibilityIfNeeded(env, key, data) {
   if (env && env.CONFIGS && key && !(isV2ListsOnly(env) && isLegacyListKvKey(key))) {
     try {
       await env.CONFIGS.put(key, JSON.stringify(data));
-    } catch {
+    } catch (e) {
       // Best-effort: the in-memory value is still stamped for this request.
+      logIgnoredWrite("list visibility stamp", e);
     }
   }
   return true;
@@ -7784,7 +7785,7 @@ async function clearCreatorListDeletion(env, username, slug) {
         delete known[String(slug)];
         await writeCreatorListDeletions(env, username, known);
       }
-    } catch (e) {}
+    } catch (e) { logIgnoredWrite("clear list tombstone", e); }
   }
 }
 
@@ -7890,9 +7891,7 @@ async function deleteCreatorLists(env, username, slugs) {
       }
       try {
         await env.CONFIGS.delete(`listlikevoters:${username}:${slug}`);
-      } catch (e) {
-        // A stranded ledger is untidy, not harmful on its own.
-      }
+      } catch (e) { logIgnoredWrite(`delete listlikevoters:${username}:${slug}`, e); } // a stranded ledger is untidy, not fatal
     }
     (existed ? out.deleted : out.missing).push(slug);
   }
@@ -8015,9 +8014,7 @@ async function deletePublishedLists(env, slugs) {
       }
       try {
         await env.CONFIGS.delete(`listlikevoters:user:${slug}`);
-      } catch (e) {
-        // A stranded ledger is untidy, not harmful on its own.
-      }
+      } catch (e) { logIgnoredWrite(`delete listlikevoters:user:${slug}`, e); } // a stranded ledger is untidy, not fatal
     }
     (existed ? out.deleted : out.missing).push(slug);
   }
@@ -9719,8 +9716,8 @@ async function getCreatorList(env, username, slug) {
           try {
             env.DB.prepare(
               "UPDATE creator_lists SET name = ?, type = ?, visibility = ?, items_json = ?, updated_at = ? WHERE id = ?"
-            ).bind(name, type, visibility, JSON.stringify(items), updatedAt || 0, `${username}:${slug}`).run().catch(() => {});
-          } catch {}
+            ).bind(name, type, visibility, JSON.stringify(items), updatedAt || 0, `${username}:${slug}`).run().catch((e) => logIgnoredWrite("list D1 mirror update", e));
+          } catch (e) { logIgnoredWrite("list D1 mirror update", e); }
         }
 
         const payload = {

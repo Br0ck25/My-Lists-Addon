@@ -38,7 +38,7 @@
   "src/client/22_client-creator-profile.js": 7054,
   "src/client/23_client-list-management.js": 3961,
   "src/client/24_client-backup-restore-presets.js": 4886,
-  "src/core/02_http-and-creator-utils.js": 7037,
+  "src/core/02_http-and-creator-utils.js": 7034,
   "src/page/09_page-shell.js": 5793
  },
  "clientFunctions": {
