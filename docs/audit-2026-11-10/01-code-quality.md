@@ -26,7 +26,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | CQ-01 | fixed (awaiting verification) | 3d50d40 |  |
 | CQ-02 | fixed (awaiting verification) | 7824ed4 |  |
 | CQ-03 | fixed (awaiting verification) | 2d17999 |  |
-| CQ-04 | open |  |  |
+| CQ-04 | fixed (awaiting verification) | 2d4b89f | Partly: only buildNuvioTvDefaultPreset removed (tests/dead-code.test.mjs). The test-only and shelf functions are left: owner decision needed. |
 | CQ-05 | open |  |  |
 | CQ-06 | open |  |  |
 | CQ-07 | open |  |  |
