@@ -2409,3 +2409,9 @@ const UTILITY_CSS = `
 .u-ws-nowrap{white-space:nowrap !important}
 .u-ws-pre_wrap{white-space:pre-wrap !important}
 `;
+
+// Best-effort KV writes swallow their failure on purpose (the request must still
+// succeed), but a failure must leave a trace: say which key and why.
+function logIgnoredWrite(label, e) {
+  console.warn(`[ignored write] ${label}:`, e && e.message ? e.message : e);
+}

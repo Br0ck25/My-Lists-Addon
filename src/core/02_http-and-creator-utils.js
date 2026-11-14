@@ -1,9 +1,3 @@
-// Best-effort KV writes swallow their failure on purpose (the request must still
-// succeed), but a failure must leave a trace: say which key and why.
-function logIgnoredWrite(label, e) {
-  console.warn(`[ignored write] ${label}:`, e && e.message ? e.message : e);
-}
-
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -4752,9 +4746,7 @@ async function purgeCreatorData(env, username, options = {}) {
         // unable to like it.
         try {
           await env.CONFIGS.delete(`listlikevoters:${listPath}`);
-        } catch (e) {
-          // best-effort: a stranded ledger is untidy, not harmful on its own
-        }
+        } catch (e) { logIgnoredWrite(`delete listlikevoters:${listPath}`, e); } // best-effort, but a re-registered username would inherit a stranded ledger
         listsCleared++;
       }
       if (res.list_complete || !res.cursor) break;
