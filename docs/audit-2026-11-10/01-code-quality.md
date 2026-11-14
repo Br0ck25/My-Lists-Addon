@@ -31,7 +31,7 @@ Updated 2026-11-14. Status values: `open`, `fixed (awaiting verification)`, `ver
 | CQ-06 | verified fixed | c9da1f9 | 2026-11-14, independent review | `node --test tests/agent-instructions.test.mjs` |
 | CQ-07 | open |  | | Not started: needs a decision on which server write paths deserve logging. |
 | CQ-08 | open |  | | Not started: the report says not worth a dedicated pass; remove guards when a file is touched anyway. |
-| CQ-09 | open (partially fixed) | e8eb925 | 2026-11-14, independent review | Table said 49e1558, a docs-only commit; the stray-file check came with OPS-01 (e8eb925). Same-name files in two folders still build silently. See Verification. |
+| CQ-09 | fixed (awaiting verification) | f6ab6fa |  | `node --test tests/build-source-names.test.mjs` (6 pass): same base name in two folders now fails the build. |
 
 ## Proven findings
 
