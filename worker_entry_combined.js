@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-14";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "93da690c41";
+const WORKER_BUILD = "82a17e96cd";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -117353,6 +117353,17 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   // hears about a stored change is exactly the failure this stamp exists
   // to prevent. See bumpCreatorListsStamp (02_http-and-creator-utils.js).
   await bumpCreatorListsStamp(env, auth.username);
+
+  // The account may have been deleted while this save was in flight (it
+  // authenticated before the awaits above). Deletion writes its tombstone
+  // before sweeping, so a standing tombstone now means the sweep may have
+  // passed already: take back what this save just wrote.
+  if (await isCreatorTombstoned(env, auth.username.toLowerCase())) {
+    for (const key of [`creatorlist:${auth.username}:${slug}`, `creatorlistorder:${auth.username}`, `creatorliststamp:${auth.username}`]) {
+      try { await env.CONFIGS.delete(key); } catch (e) { logIgnoredWrite(`delete ${key}`, e); }
+    }
+    return json({ ok: false, error: "Username or Key is incorrect." }, 401);
+  }
 
   await creatorListSaveSearchIndex(env, auth, slug, name, visibility);
   // The same change into v2, by diff (P3b-7, 34_lists-v2-bridge.js). It
