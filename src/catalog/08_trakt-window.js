@@ -104,20 +104,49 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
   // Estimate the page from the titles per page seen so far and answer from there (a few titles
   // may repeat or be missed at the seam); the memory has grown, so scrolling on gets exact.
   const known = memo.cum.length - 1;
-  const perPage = Math.max(1, memo.cum[known] / Math.max(1, known));
+  const lastPage = memo.total != null ? Math.max(0, Math.ceil(memo.total / PAGE_SIZE) - 1) : null;
+  let perPage = Math.max(1, memo.cum[known] / Math.max(1, known));
+  if (lastPage != null && lastPage > known + 1) {
+    // The first pages of a watch history collapse most, so they say little about the rest: also
+    // measure a few pages spread over the unread part (each is cached on its own).
+    const counts = [];
+    for (let k = 1; k <= 4; k++) {
+      try {
+        const sample = await loadPage((known + Math.round(((lastPage - known) * k) / 4)) * PAGE_SIZE);
+        if (Array.isArray(sample) && sample.length) counts.push(sample.length);
+      } catch {
+        // A page that will not load only makes the guess rougher.
+      }
+    }
+    if (counts.length) perPage = Math.max(1, counts.reduce((a, b) => a + b, 0) / counts.length);
+  }
   let estimate = known + Math.floor((skip - memo.cum[known]) / perPage);
-  if (memo.total != null && estimate > Math.max(0, Math.ceil(memo.total / PAGE_SIZE) - 1)) {
-    // Past the last Trakt page: the row has ended (re-sending the last page would repeat it).
+  if (memo.endSkip != null && skip >= memo.endSkip) {
+    // This isolate already served the last Trakt page for this list and the app has taken it.
     const none = [];
     none.totalItems = memo.total;
     return none;
   }
+  if (lastPage != null && estimate > lastPage) {
+    // The guess must not end the row. A page holds at most PAGE_SIZE titles, so this is the
+    // earliest page `skip` can be on: only past the last page has the row really ended.
+    estimate = known + Math.floor((skip - memo.cum[known]) / PAGE_SIZE);
+    if (estimate > lastPage) {
+      const none = [];
+      none.totalItems = memo.total;
+      return none;
+    }
+  }
   const more = [];
+  let sawLast = false;
   for (let k = 0; k < 4 && more.length < PAGE_SIZE; k++) {
     let metas;
     try { metas = await loadPage((estimate + k) * PAGE_SIZE); } catch (err) { if (k === 0) throw err; break; }
     if (!Array.isArray(metas) || !metas.length) break;
     for (const m of metas) if (m) more.push(m);
+    if (lastPage != null && estimate + k >= lastPage) { sawLast = true; break; }
   }
-  return more.slice(0, PAGE_SIZE);
+  const served = more.slice(0, PAGE_SIZE);
+  if (sawLast && served.length === more.length) memo.endSkip = skip + served.length;
+  return served;
 }

@@ -250,3 +250,16 @@ describe("API-04: a title that recurs on neighbouring Trakt pages is sent once",
     assert.ok(r.all.length <= 120, `${r.all.length} titles sent for the last 60 that exist`);
   });
 });
+
+// Fifth review: a cold request into a list whose early pages collapse (a binge in a watch history) but
+// whose later pages are full estimated too many titles per page, jumped past the last Trakt page and
+// ended the row while thousands of titles were still to come.
+describe("API-04: a cold request into an uneven list never ends the row early", () => {
+  it("60 pages of 20 titles then 60 of 90, resumed cold at skip 2,500, 4,000 and 6,000: titles come back and the last page is reached", async () => {
+    for (const startSkip of [2500, 4000, 6000]) {
+      const r = await walkShape([[60, 20], [60, 90]], "uneven" + startSkip, { startSkip, maxRequests: 400 });
+      assert.ok(r.all.length > 0, `skip ${startSkip}: the row ended at once with ${r.total - startSkip} titles to come`);
+      assert.ok(r.all.includes("tt" + (3000000 + 120 * 1000)), `skip ${startSkip}: the last Trakt page was never reached`);
+    }
+  });
+});
