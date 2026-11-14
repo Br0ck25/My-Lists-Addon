@@ -17,6 +17,9 @@
 11. **Multi-step work:** state a short plan with a check after each step.
 12. **Size limits:** functions ≤ 150 lines, source files ≤ 3,000 lines for new code; `tests/size-budget.test.mjs` enforces it and the baseline in `tests/size-budget.json` may only shrink (`node tests/size-budget.test.mjs --update` lowers it, never raises it).
 
+## Session start
+A SessionStart hook (`.claude/hooks/session-start.sh`) fetches, unshallows and fast-forwards the branch, because cloud containers can start from an old clone. Read its `sync:` line; if it says NOT updated, run `git fetch` and compare with `origin/<branch>` before trusting any file.
+
 ## Finding code cheaply
 - "Which file?": read `docs/FILE-INDEX.md` (5KB, one line per source file).
 - `grep` `docs/FUNCTION-MAP.md` for the symbol (~170KB: never read it whole), then read only that file with `offset`/`limit`.
