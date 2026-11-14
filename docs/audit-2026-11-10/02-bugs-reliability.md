@@ -18,10 +18,10 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | BUG-01 | verified fixed | a0b0ea7 | node --test tests/sync-config-bad-entries.test.mjs | 2026-11-10, independent review |
-| BUG-02 | fixed (awaiting verification) | c1c7abe | node --test tests/save-after-delete-account.test.mjs |  |
-| BUG-03 | fixed (awaiting verification) | 0bef949 | node --test tests/details-region-junk.test.mjs |  |
-| BUG-04 | fixed (awaiting verification) | e57945c | node --test tests/tmdb-my-lists-bad-key.test.mjs |  |
-| BUG-05 | fixed (awaiting verification) | 0cd9a5d | node --test tests/creator-create-username-race.test.mjs |  |
+| BUG-02 | open (partially fixed: legacy path only; production runs FF_V2_LISTS_ONLY, which still leaks) | c1c7abe | node --test tests/save-after-delete-account.test.mjs | 2026-11-14, independent review |
+| BUG-03 | verified fixed | 0bef949 | node --test tests/details-region-junk.test.mjs | 2026-11-14, independent review |
+| BUG-04 | verified fixed | e57945c | node --test tests/tmdb-my-lists-bad-key.test.mjs | 2026-11-14, independent review |
+| BUG-05 | verified fixed | 0cd9a5d | node --test tests/creator-create-username-race.test.mjs | 2026-11-14, independent review |
 
 ## Proven findings   (ordered by severity)
 
@@ -58,6 +58,11 @@ trials 12 leaks 7
   (`$S/race5d.mjs` shows no D1 rows left, directory empty.)
 - Recommended fix and effort: M. After writing, a save should re-check that the account still exists (and remove its own writes if not), or the purge should run a second sweep after a short delay.
 
+**Verification.** 2026-11-14, independent review: **partially fixed**, Status set back to `open`. Read c1c7abe and its follow-ups 717d9ea and 2948496 (helper `creatorListSaveRetractIfDeleted` in `src/api/67_creator-api-routes.js`). The new test fails on the parent commit ("a save into a deleted account must not report success") and passes on HEAD. With the audit's race (5 saves plus a delete fired together, 40 trials, default test flags) the parent leaves list keys in KV and `lists_fts` rows in 19 of 40 trials; HEAD leaves nothing in 40 of 40. What is still wrong:
+1. **Production does not run this path.** `docs/RELEASES.md` says `FF_V2_LISTS_ONLY` has been on since 2026-10-01. Under that flag the save takes the `listsOnly` branch (`listsV2WriteRecord`, then return), which has no re-check. The same 40-trial race with `MLA_TEST_FLAGS=FF_V2_LISTS_READ,FF_V2_LISTS_API,FF_V2_LISTS_ONLY,FF_SESSIONS,FF_INSTALLS` leaves an `accounts` row, `lists` rows and `lists_fts2` rows in 19 of 40 trials, with every save and the delete answering 200. A sequential save then delete under the same flags leaves nothing, so this is the race and not normal behaviour. The leftovers are not served (public list 404, profile 404). The new test does not cover this: under those flags it fails at "the race was actually staged", because no `creatorlist:` key is ever written.
+2. Smaller, legacy path: the re-check runs before `creatorListSaveSearchIndex` and `listsV2MirrorLists`. A delete that starts after the re-check and finishes before the search-index write leaves a `lists_fts` row (list name and display name), and the save answers 200. Staged by running the delete inside the `lists_fts` batch. Search does not show it, because it joins on `creator_lists`.
+Next fix: give the `listsOnly` branch the same post-write check, and have it remove the v2 rows and the account row it may have recreated. Add a test that runs under `FF_V2_LISTS_ONLY`. Optionally run the check after the search-index and mirror writes too.
+
 ### BUG-03 A region value with an emoji in the first two characters crashes `/api/details` with a 500
 - Severity: Low
 - Status: Proven
@@ -73,6 +78,8 @@ region=lone surrogate via POST   -> 500 {"ok":false,"error":"URI malformed"}
   Stack (from `$S/bugA5.mjs`): `encodeURIComponent` ← `fetchWithPerUserCacheUncoalesced` ← `fetchTmdbItemDetails` ← `apiDetails`.
 - Recommended fix and effort: S. Only accept `/^[A-Za-z]{2}$/` for region (else fall back to `US`).
 
+**Verification.** 2026-11-14, independent review: **verified fixed**. Read 0bef949 and the final form in 2948496: `/^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US"` at `src/catalog/07_source-fetchers-tmdb-simkl.js:783`, `:3806` and `:3856`. On the parent commit the new test fails 2 of 3 ("URI malformed"). On HEAD it passes. These inputs to POST `/api/details` all gave 404 and no 500: `ab`+emoji, emoji first, object, `["gb"]`, number, `" GB"`, `null`, a 300 KB string, Kelvin sign. GET with `a%F0%9F%98%80` and with encoded lone surrogates gave the same, and `/api/details/batch` gave 200. The other `slice(0, 2)` sites are `newOnStreamingRegion`, `57_title-details-fallback.js:24`, the admin new-on-streaming route and `buildRegionOptionsHtml`. Each compares against a fixed list or is admin-only, so none of them reaches `encodeURIComponent`. Minor behaviour note: a padded `" GB"` now becomes `US`. Before, it became `" G"`, which was already wrong. Not tested (unproven): `fetchTmdbChart` (`:884`) puts `region || "US"` into a cache key without validating it, reached via the install region and `/api/preview`. The audit's fuzz did not show a 500 there.
+
 ### BUG-04 `/api/tmdb-my-lists` returns 500 when `tmdbKey` is not a string
 - Severity: Info
 - Status: Proven
@@ -81,6 +88,8 @@ region=lone surrogate via POST   -> 500 {"ok":false,"error":"URI malformed"}
 - Impact: a hand-made request gets `500 apiKey.startsWith is not a function` instead of a 400. The real page always sends a string.
 - Proof: `node $S/fuzz.mjs /api/tmdb-my-lists` prints `!! POST /api/tmdb-my-lists [all:obj] -> 500 {"ok":false,"error":"apiKey.startsWith is not a function"}` (also logged in `$S/fuzz-full.log`). The same route also 500s on a lone surrogate in `sessionId`/`accountId` ("Failed to load TMDB lists: URI malformed").
 - Recommended fix and effort: S. `String(body.tmdbKey)` or reject non-strings.
+
+**Verification.** 2026-11-14, independent review: **verified fixed**. Read e57945c, a one-line type check at `src/api/76_external-list-routes.js:1301`. On the parent commit the new test fails 3 of 3 ("apiKey.startsWith is not a function"). On HEAD it passes. More inputs: `["eyJabc"]`, `""`, `0` and `false` give a 400 "TMDB API key is missing." (no server key in the harness; with one configured, a non-string key falls back to it, the same as an empty one). Real string keys behave as before. `apiKey.startsWith` is the only such call in `src`. The lone-surrogate `sessionId` case, which the fixer left as a separate cause, answered 200 in this stubbed run.
 
 ### BUG-05 Two people registering the same new username at the same moment: the loser gets a 500 instead of "already taken"
 - Severity: Info
@@ -95,6 +104,8 @@ concurrent x2: 200 ok | 500 Failed to create creator account. Please try again.
 D1 write error (creator create): Error: UNIQUE constraint failed: creators.username
 ```
 - Recommended fix and effort: S. Treat a UNIQUE failure in `persistNewCreatorProfile` as "already taken".
+
+**Verification.** 2026-11-14, independent review: **verified fixed**. Read 0cd9a5d. On the parent commit the new test fails its UNIQUE case. On HEAD it passes, and its second case confirms other D1 failures still answer 500. Real race, not stubbed: two concurrent `/api/creator/create` calls from different addresses, 30 trials. The parent gave `200 ok | 500 Failed to create` 30 of 30 times. HEAD gave `200 ok | 200 That username is already taken.` 30 of 30 times, the same answer as the sequential path. In every trial the winner could save a list afterwards, with default flags and with production flags (`accounts` row present). `username` is the only unique column on `creators` (primary key), so the regex cannot misread another constraint.
 
 ## Fixer notes (2026-11-14)
 - BUG-02: the save re-checks the deletion tombstone after its writes and removes its list, order and stamp keys, answering 401. It does not clean the D1 list row written earlier in the same save, nor the v2 (listsOnly) path.
