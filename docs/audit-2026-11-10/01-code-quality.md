@@ -25,7 +25,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 |---|---|---|---|
 | CQ-01 | fixed (awaiting verification) | 3d50d40 |  |
 | CQ-02 | fixed (awaiting verification) | 7824ed4 |  |
-| CQ-03 | open |  |  |
+| CQ-03 | fixed (awaiting verification) | 2d17999 |  |
 | CQ-04 | open |  |  |
 | CQ-05 | open |  |  |
 | CQ-06 | open |  |  |
