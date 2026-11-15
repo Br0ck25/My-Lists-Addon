@@ -809,3 +809,52 @@ describe("P5-2: one-off jobs", () => {
     assert.deepEqual(plain(await t.sb.createJob({}, "test.work", {})), { ok: false, reason: "noDatabase" });
   });
 });
+
+// OPS-07: a job that keeps failing must be visible on the /admin front page,
+// not only inside Maintenance -> Check jobs.
+describe("OPS-07: the /admin front page names jobs that keep failing", () => {
+  async function ranEnv() {
+    const env = jobsEnv();
+    await runScheduledTick(env);
+    await drainQueue(env);
+    return env;
+  }
+
+  it("lists a job that failed 10 times in a row, with its error escaped", async () => {
+    const net = blockNetwork();
+    try {
+      const env = await ranEnv();
+      const cookie = await adminCookie(env);
+      const hostile = '<img src=x onerror="alert(1)"> boom';
+      env.DB._db.prepare("UPDATE jobs SET attempts = 10, last_error = ? WHERE type = ?").run(hostile, CRON_JOBS[0]);
+      env.DB._db.prepare("UPDATE jobs SET attempts = 9, last_error = 'almost' WHERE type = ?").run(CRON_JOBS[1]);
+      const page = await call(env, "/admin", { cookie });
+      assert.match(page.text, /id="failingJobsAlert"/);
+      assert.ok(page.text.includes(CRON_JOBS[0]), "the failing job is named");
+      assert.ok(page.text.includes("failed 10 times in a row"), "the streak is shown");
+      assert.ok(!page.text.includes(hostile), "the error text is never raw HTML");
+      assert.ok(page.text.includes("&lt;img src=x onerror=&quot;alert(1)&quot;&gt; boom"), "the error text is escaped");
+      assert.ok(!page.text.includes("almost"), "a streak under 10 is not listed");
+    } finally {
+      net.restore();
+    }
+  });
+
+  it("shows nothing extra when no job is failing", async () => {
+    const net = blockNetwork();
+    try {
+      const env = await ranEnv();
+      const cookie = await adminCookie(env);
+      env.DB._db.prepare("UPDATE jobs SET attempts = 9, last_error = 'almost' WHERE type = ?").run(CRON_JOBS[0]);
+      const page = await call(env, "/admin", { cookie });
+      assert.ok(!page.text.includes('id="failingJobsAlert"'));
+      // No jobs table at all: the front page still renders.
+      env.DB._db.exec("DROP TABLE jobs");
+      const none = await call(env, "/admin", { cookie });
+      assert.equal(none.status, 200);
+      assert.ok(!none.text.includes('id="failingJobsAlert"'));
+    } finally {
+      net.restore();
+    }
+  });
+});

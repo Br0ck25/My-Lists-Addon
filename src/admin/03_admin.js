@@ -2904,7 +2904,7 @@ ${UTILITY_CSS}
       <p class="admin-header-meta">My Lists Addon &middot; <span id="workerRelease">Built ${WORKER_BUILD_DATE}</span> <span id="workerBuild">(build ${WORKER_BUILD})</span></p>
     </div>
   </div>
-  ${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
+  ${typeof adminFailingJobsHtml === "function" ? await adminFailingJobsHtml(env) : ""}${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
        which row of sub-tabs is shown, and it is the sub-tab that selects

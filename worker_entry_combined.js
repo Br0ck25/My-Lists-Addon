@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e5f8162fe8";
+const WORKER_BUILD = "ea495879c8";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -13780,7 +13780,7 @@ ${UTILITY_CSS}
       <p class="admin-header-meta">My Lists Addon &middot; <span id="workerRelease">Built ${WORKER_BUILD_DATE}</span> <span id="workerBuild">(build ${WORKER_BUILD})</span></p>
     </div>
   </div>
-  ${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
+  ${typeof adminFailingJobsHtml === "function" ? await adminFailingJobsHtml(env) : ""}${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
        which row of sub-tabs is shown, and it is the sub-tab that selects
@@ -105333,6 +105333,24 @@ async function handleJobsAdminApi(request, env, url, path) {
   } catch (e) {
     return json({ ok: false, error: safeErrorMessage(e) }, 500);
   }
+}
+
+// OPS-07: the /admin front page line for periodic jobs that have failed
+// JOBS_PERIODIC_BACKOFF_AFTER runs in a row, from the same status the Check
+// jobs view reads. "" when none fail or there is no jobs table. Every
+// stored string is escaped.
+async function adminFailingJobsHtml(env) {
+  let failing = [];
+  try {
+    const status = typeof jobsTableStatus === "function" ? await jobsTableStatus(env) : null;
+    failing = ((status && status.periodic) || []).filter((j) => j.failuresInARow >= JOBS_PERIODIC_BACKOFF_AFTER);
+  } catch (e) {
+    console.error("Admin front page: jobs status failed:", e);
+  }
+  if (!failing.length) return "";
+  const head = failing.length === 1 ? "1 periodic job is failing." : failing.length + " periodic jobs are failing.";
+  const list = failing.map((j) => escapeHtmlServer(j.type) + " failed " + j.failuresInARow + " times in a row: " + escapeHtmlServer(j.lastError || "unknown error")).join("; ");
+  return '<div id="failingJobsAlert" role="alert" class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>' + head + "</strong> " + list + ". See Maintenance &rarr; Check jobs.</div>";
 }
 
 // --- Background jobs: the dispatcher (Phase 5, P5-2) ---------------------------
