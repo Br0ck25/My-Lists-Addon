@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "e98de5c190";
+const WORKER_BUILD = "a96b2e0846";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -57956,7 +57956,9 @@ function syncAddButtonA11y(btn) {
     if (label) btn.setAttribute('aria-label', label);
     return;
   }
-  if (btn.matches && !btn.getAttribute('data-name') && !btn.matches(LIST_ADD_SELECTOR)) {
+  // A remove cross may carry the item title in data-name; it is still a removal,
+  // so test for it before the data-name check below.
+  if (btn.matches && (btn.matches(ITEM_REMOVE_SELECTOR) || (!btn.getAttribute('data-name') && !btn.matches(LIST_ADD_SELECTOR)))) {
     const other = a11yOtherLabel(btn);
     if (other) btn.setAttribute('aria-label', other);
     return;

@@ -119,6 +119,21 @@ describe("UI-05 second pass: repeated buttons are named", () => {
     assert.equal(arrival, "Remove from Trakt History: Arrival");
     assert.notEqual(dune, arrival);
   });
+  it("remove crosses that carry data-name are named as removals, never as adds", () => {
+    // Discover poster tile (Nuvio/Stremio) and live-preview poster (Trakt/MDBList)
+    // crosses put the item title in data-name; that must not read as a list add.
+    const tile = el("div", "list-card-mini-poster-tile");
+    el("div", "list-card-mini-poster-name", {}, "Dune", tile);
+    const a = el("button", "cw-remove-btn", { "data-name": "Dune", "aria-label": "Remove from Nuvio", title: "Remove from Nuvio" }, "\u2715", tile);
+    assert.equal(label(a), "Remove from Nuvio: Dune");
+    const card = el("div", "live-preview-poster-card");
+    el("div", "live-preview-poster-name", {}, "Arrival", card);
+    const b = el("button", "cw-remove-btn", { "data-name": "Arrival", "aria-label": "Remove from Trakt", title: "Remove from Trakt" }, "\u2715", card);
+    assert.equal(label(b), "Remove from Trakt: Arrival");
+    const lone = el("button", "cw-remove-btn", { "data-name": "Heat", "aria-label": "Remove from Trakt" }, "\u2715");
+    c.call("syncAddButtonA11y", lone);
+    assert.ok(!/^Add /.test(lone.attrs["aria-label"]), lone.attrs["aria-label"]);
+  });
   it("per-item Remove in the select-list dialog names its list", () => {
     const row = el("div", "select-list-row");
     const lab = el("label", "", {}, "", row);

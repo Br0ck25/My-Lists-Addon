@@ -91,7 +91,9 @@ function syncAddButtonA11y(btn) {
     if (label) btn.setAttribute('aria-label', label);
     return;
   }
-  if (btn.matches && !btn.getAttribute('data-name') && !btn.matches(LIST_ADD_SELECTOR)) {
+  // A remove cross may carry the item title in data-name; it is still a removal,
+  // so test for it before the data-name check below.
+  if (btn.matches && (btn.matches(ITEM_REMOVE_SELECTOR) || (!btn.getAttribute('data-name') && !btn.matches(LIST_ADD_SELECTOR)))) {
     const other = a11yOtherLabel(btn);
     if (other) btn.setAttribute('aria-label', other);
     return;
