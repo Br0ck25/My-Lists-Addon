@@ -697,4 +697,5 @@ INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES
   ('0024', 0),
   ('0025', 0),
   ('0026', 0),
-  ('0027', 0);
+  ('0027', 0),
+  ('0028', 0);

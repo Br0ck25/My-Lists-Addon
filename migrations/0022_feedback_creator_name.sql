@@ -29,3 +29,6 @@ UPDATE feedback
    AND json_extract(body_json, '$.creatorName') IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_feedback_creator_updated ON feedback(creator_name, updated_at DESC);
+
+INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+  VALUES ('0022', CAST(strftime('%s', 'now') AS INTEGER) * 1000);

@@ -30,3 +30,6 @@ CREATE TABLE IF NOT EXISTS media_app_sync (
     updated_at     INTEGER NOT NULL,
     PRIMARY KEY (account_id, provider)
 );
+
+INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+  VALUES ('0023', CAST(strftime('%s', 'now') AS INTEGER) * 1000);

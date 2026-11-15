@@ -87,7 +87,8 @@ describe("support history by account", () => {
   it("migration 0022 gives existing rows the creator_name they were filed under", () => {
     const db = new DatabaseSync(":memory:");
     db.exec(`CREATE TABLE feedback (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'open', subject TEXT,
-             body_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);`);
+             body_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+             CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL);`); // 0022 now records its ledger row (DB-05)
     const ins = db.prepare("INSERT INTO feedback (id, body_json, created_at, updated_at) VALUES (?, ?, 1, 1)");
     ins.run("a", JSON.stringify({ id: "a", creatorName: "  Alice " }));
     ins.run("b", JSON.stringify({ id: "b", creatorName: null }));
