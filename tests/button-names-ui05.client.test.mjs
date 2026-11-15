@@ -108,6 +108,17 @@ describe("UI-05 second pass: repeated buttons are named", () => {
     el("div", "live-preview-poster-name", {}, "Arrival", card2);
     assert.equal(label(el("button", "cw-remove-btn channelRemovePickBtn", { "aria-label": "Remove pick" }, "✕", card2)), "Remove pick: Arrival");
   });
+  it("remove crosses on list-card poster tiles name their own item", () => {
+    const mk = (name) => {
+      const tile = el("div", "list-card-mini-poster-tile");
+      el("div", "list-card-mini-poster-name", {}, name, tile);
+      return el("button", "cw-remove-btn", { "aria-label": "Remove from Trakt History", title: "Remove from Trakt History" }, "✕", tile);
+    };
+    const dune = label(mk("Dune")), arrival = label(mk("Arrival"));
+    assert.equal(dune, "Remove from Trakt History: Dune");
+    assert.equal(arrival, "Remove from Trakt History: Arrival");
+    assert.notEqual(dune, arrival);
+  });
   it("per-item Remove in the select-list dialog names its list", () => {
     const row = el("div", "select-list-row");
     const lab = el("label", "", {}, "", row);

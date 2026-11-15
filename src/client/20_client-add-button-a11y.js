@@ -77,7 +77,10 @@ function a11yOtherLabel(btn) {
     }
     const card = btn.closest('.live-preview-poster-card');
     const item = card && (a11yText(card.querySelector('.live-preview-poster-name')) || card.getAttribute('data-title'));
-    return item ? btn.getAttribute('data-a11y-base') + ': ' + item : '';
+    // List-card poster tiles keep the item title in their own name element.
+    const tileItem = a11yCardText(btn, '.list-card-mini-poster-tile', '.list-card-mini-poster-name');
+    const who = item || tileItem;
+    return who ? btn.getAttribute('data-a11y-base') + ': ' + who : '';
   }
   return '';
 }

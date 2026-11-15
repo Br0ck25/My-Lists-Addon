@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "322ace41f5";
+const WORKER_BUILD = "e98de5c190";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -57942,7 +57942,10 @@ function a11yOtherLabel(btn) {
     }
     const card = btn.closest('.live-preview-poster-card');
     const item = card && (a11yText(card.querySelector('.live-preview-poster-name')) || card.getAttribute('data-title'));
-    return item ? btn.getAttribute('data-a11y-base') + ': ' + item : '';
+    // List-card poster tiles keep the item title in their own name element.
+    const tileItem = a11yCardText(btn, '.list-card-mini-poster-tile', '.list-card-mini-poster-name');
+    const who = item || tileItem;
+    return who ? btn.getAttribute('data-a11y-base') + ': ' + who : '';
   }
   return '';
 }
