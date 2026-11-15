@@ -146,6 +146,18 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "", memo: me
   // may repeat or be missed at the seam); the memory has grown, so scrolling on gets exact.
   const known = memo.cum.length - 1;
   const lastPage = memo.total != null ? Math.max(0, Math.ceil(memo.total / PAGE_SIZE) - 1) : null;
+  if (!extended && lastPage != null && lastPage - known < TRAKT_WINDOW_END_PAGES) {
+    // The walk did not reach `skip` and the last page is near: read the pages in between (each
+    // cached) so the memory covers them, and answer from pages actually read, which includes ending
+    // the row. This does not wait for an estimate to come close: it undercounts when shows carry
+    // over to the next page, and the row then ended before its last titles were sent.
+    const fetched = await traktWindowExtend(memo, loadPage, lastPage);
+    if (fetched) {
+      await traktWindowSave(env, key, memo);
+      const cached = (raw) => (fetched.has(raw) ? Promise.resolve(fetched.get(raw)) : loadPage(raw));
+      return traktWindowedPage(skip, cached, { env, id, memo, extended: true });
+    }
+  }
   let perPage = Math.max(1, memo.cum[known] / Math.max(1, known));
   if (lastPage != null && lastPage > known + 1) {
     // The first pages of a watch history collapse most, so they say little about the rest: also
@@ -162,16 +174,6 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "", memo: me
     if (counts.length) perPage = Math.max(1, counts.reduce((a, b) => a + b, 0) / counts.length);
   }
   let estimate = known + Math.floor((skip - memo.cum[known]) / perPage);
-  if (!extended && lastPage != null && estimate + 3 >= lastPage && lastPage - known < TRAKT_WINDOW_END_PAGES) {
-    // The estimated window reaches the last page: read the pages in between (each cached) so the
-    // memory covers them, and answer from pages actually read; that includes ending the row.
-    const fetched = await traktWindowExtend(memo, loadPage, lastPage);
-    if (fetched) {
-      await traktWindowSave(env, key, memo);
-      const cached = (raw) => (fetched.has(raw) ? Promise.resolve(fetched.get(raw)) : loadPage(raw));
-      return traktWindowedPage(skip, cached, { env, id, memo, extended: true });
-    }
-  }
   if (lastPage != null && estimate > lastPage) {
     // The guess must not end the row. A page holds at most PAGE_SIZE titles, so this is the
     // earliest page `skip` can be on: only past the last page has the row really ended.

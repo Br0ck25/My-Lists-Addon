@@ -191,7 +191,9 @@ describe("API-04: the walk remembers where each Trakt page starts", () => {
 
   it("a first request far down a list nobody has scrolled reads a bounded number of pages", async () => {
     const r = await walkShape([[120, 100]], "shapeC", { startSkip: 9000, maxRequests: 1 });
-    assert.ok(r.traktCalls <= 20, `${r.traktCalls} Trakt calls for one deep request`);
+    // Owner-approved cost (eighth review fix): a cold deep request reads to the end, at most about
+    // 425 calls (400 pages plus the walk and samples), then the memory serves it for 10 minutes.
+    assert.ok(r.traktCalls <= 425, `${r.traktCalls} Trakt calls for one deep request`);
   });
 });
 
@@ -301,5 +303,35 @@ describe("API-04: the end of a list is found by reading to it", () => {
     const r = await walkShape([[300, 30]], "smallPages", { startSkip: 300 * 30 - 30, maxRequests: 6 });
     assert.ok(r.all.includes("tt" + (3000000 + 300 * 1000)), "the last page was reached");
     assert.ok(r.all.length <= 30, `${r.all.length} titles sent for the last 30 that exist`);
+  });
+});
+
+// Eighth review: in a watch history where shows carry over to the next page, a cold resume near the
+// end estimated too few titles per page (it counted the repeats), re-sent titles the app holds, and
+// the row ended before its last titles were sent. A cold request near the end now reads to the end.
+describe("API-04: a cold resume near the end of a history whose shows carry over reaches the last title", () => {
+  // 300 pages of 10 shows, 2 carried over from the page before: 10 + 299 x 8 = 2,402 titles.
+  const carried = () => {
+    const pages = [];
+    let next = 10;
+    pages.push(Array.from({ length: 10 }, (_, j) => j));
+    for (let p = 1; p < 300; p++) {
+      const prev = pages[p - 1];
+      pages.push([prev[8], prev[9], ...Array.from({ length: 8 }, () => next++)]);
+    }
+    return { pages, last: next - 1, total: next };
+  };
+
+  it("300 pages, resumed cold at 2,202: the last title arrives", async () => {
+    const { pages, last, total } = carried();
+    assert.equal(total, 2402);
+    const r = await walkShows(pages, "carryA", { startSkip: 2202 });
+    assert.ok(r.all.includes("tt" + (4000000 + last)), `only ${new Set(r.all.filter((id) => Number(id.slice(2)) - 4000000 >= 2202)).size} of the 200 titles still to come arrived, the last never did`);
+  });
+
+  it("300 pages, resumed cold at 2,394: the last titles arrive", async () => {
+    const { pages, last } = carried();
+    const r = await walkShows(pages, "carryB", { startSkip: 2394 });
+    assert.ok(r.all.includes("tt" + (4000000 + last)), "the last title never arrived");
   });
 });
