@@ -9,6 +9,11 @@
 --
 -- Safe to run against a live database.
 --
+-- If the run stops part-way: SQLite cannot add a column twice, so re-running the
+-- whole file fails at the first ALTER. Check which columns exist, then run only
+-- what is missing: the three ADD COLUMN statements (creators.share_json, creators.lists_stamp,
+-- creator_lists.sort_order), then the CREATE TABLE and everything after them.
+--
 -- Run it (README.md's D1 section has the full walkthrough):
 --   Dashboard: open this database's Console tab and paste/run the statements below.
 --   Wrangler:  npx wrangler d1 execute my-lists-db --remote --file=./migrations/0008_add_list_tombstones_and_creator_columns.sql

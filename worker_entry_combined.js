@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "0f250a8a80";
+const WORKER_BUILD = "af73a0dc7c";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1341,6 +1341,14 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0027", kind: "index", name: "idx_channels_owner_account",
     consequence: "Deleting an account reads the whole channels table. Slower, not broken.",
+  },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_username",
+    consequence: "Looking up one account's published lists reads the whole creator_lists table. Slower, not broken.",
+  },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_visibility",
+    consequence: "Filtering published lists by visibility reads the whole creator_lists table. Slower, not broken.",
   },
 ];
 

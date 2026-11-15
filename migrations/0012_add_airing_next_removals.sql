@@ -19,6 +19,10 @@
 -- absent (see d1HasAiringRemovalColumns), so a deployment that has not run
 -- this yet keeps syncing everything else -- it just cannot remember removals.
 --
+-- If the run stops part-way: SQLite cannot add a column twice, so re-running the
+-- whole file fails at the first ALTER. Check which columns exist, then run only
+-- what is missing: the ADD COLUMN statements for the two columns below, then anything after them.
+--
 -- Run it (README.md's D1 section has the full walkthrough):
 --   Dashboard: open this database's Console tab and paste/run the statements below.
 --   Wrangler:  npx wrangler d1 execute my-lists-db --remote --file=./migrations/0012_add_airing_next_removals.sql

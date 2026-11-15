@@ -1319,6 +1319,14 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0027", kind: "index", name: "idx_channels_owner_account",
     consequence: "Deleting an account reads the whole channels table. Slower, not broken.",
   },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_username",
+    consequence: "Looking up one account's published lists reads the whole creator_lists table. Slower, not broken.",
+  },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_visibility",
+    consequence: "Filtering published lists by visibility reads the whole creator_lists table. Slower, not broken.",
+  },
 ];
 
 
