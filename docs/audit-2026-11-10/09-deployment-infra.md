@@ -17,7 +17,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | OPS-05 | verified fixed | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) | 2026-11-10, independent review |
 | OPS-07 | open (partially fixed: hourly back-off verified; the alert is not built) | 5658c50 | node --test tests/jobs.test.mjs (test OPS-07) | 2026-11-15, independent review |
 | OPS-08 | verified fixed | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) | 2026-11-10, independent review |
-| OPS-09 | fixed (awaiting verification) (owner chose option B, 2026-11-15) | COMMIT | node --test tests/ci-build-stamp-step.test.mjs; open a CI run log: the step 'Print the build stamp and size to paste' shows the stamp, size and gzip size |  |
+| OPS-09 | fixed (awaiting verification) (owner chose option B, 2026-11-15) | 5b135b1 | node --test tests/ci-build-stamp-step.test.mjs; open a CI run log: the step 'Print the build stamp and size to paste' shows the stamp, size and gzip size |  |
 
 ## Proven findings
 
