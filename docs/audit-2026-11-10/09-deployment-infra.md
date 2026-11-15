@@ -17,7 +17,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | OPS-05 | verified fixed | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) | 2026-11-10, independent review |
 | OPS-07 | open (partially fixed: hourly back-off verified; the alert is not built) | 5658c50 | node --test tests/jobs.test.mjs (test OPS-07) | 2026-11-15, independent review |
 | OPS-08 | verified fixed | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) | 2026-11-10, independent review |
-| OPS-09 | open (owner decision needed: new deploy workflow and Cloudflare secrets) |  |  |  |
+| OPS-09 | fixed (awaiting verification) (owner chose option B, 2026-11-15) | COMMIT | node --test tests/ci-build-stamp-step.test.mjs; open a CI run log: the step 'Print the build stamp and size to paste' shows the stamp, size and gzip size |  |
 
 ## Proven findings
 
@@ -138,6 +138,8 @@ C poison periodic job after 15 more ticks: queued/13, queued/14, queued/15, queu
 - Impact: A human slip (pasting an uncommitted local file or a stale one) is not caught before users see it; /admin build stamp shows it afterwards.
 - Proof: `gzip -9 -c worker_entry_combined.js | wc -c` -> 1622068; ci.yml contains no wrangler/deploy step; DEPLOY_CHECKLIST lines in Phase D.
 - Recommended fix: a manual "deploy" workflow that publishes only the CI-built, hash-matching file (or at least prints the stamp to paste). Effort M.
+
+**Owner decision (2026-11-15).** Option B chosen: CI only prints the build stamp and file size; the owner keeps pasting the built file into Cloudflare by hand. No deploy workflow, no Cloudflare secrets, no `wrangler deploy` from CI. Done as the CI step "Print the build stamp and size to paste" in `.github/workflows/ci.yml`, guarded by `tests/ci-build-stamp-step.test.mjs`.
 
 ## Unproven suspicions   (not counted)
 - U1. SELF-HOSTING Method B runs `npx wrangler d1 execute my-lists-db --remote --file=./schema.sql` (lines 179-180) WITHOUT `-c wrangler.selfhost.toml`, while the secret and deploy commands do pass it. If wrangler resolves the database name from the default `wrangler.toml` in the current folder, it would target the public site's database id (`wrangler.toml:11`) and, for `mylists-activity`, the `FILL-IN-...` placeholder (`wrangler.toml:65`) instead of the self-hoster's new databases, and the step would fail. I could not run wrangler (no network, not installed), so this is unconfirmed. The site-shutdown date has passed, so self-hosting is the main path now; worth a dry run by the owner.
