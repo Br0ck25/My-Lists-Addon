@@ -1311,6 +1311,14 @@ const D1_SCHEMA_MANIFEST = [
     migration: "0026", kind: "index", name: "idx_accounts_key_hash",
     consequence: "Each manifest and channel catalog request reads the whole accounts table. Slower, not broken.",
   },
+  {
+    migration: "0027", kind: "index", name: "idx_lists_owner_account",
+    consequence: "Deleting an account reads the whole lists table. Slower, not broken.",
+  },
+  {
+    migration: "0027", kind: "index", name: "idx_channels_owner_account",
+    consequence: "Deleting an account reads the whole channels table. Slower, not broken.",
+  },
 ];
 
 

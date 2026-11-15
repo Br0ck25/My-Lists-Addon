@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-14";
+const WORKER_BUILD_DATE = "2026-11-15";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "46bd4fbe16";
+const WORKER_BUILD = "0f250a8a80";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -1333,6 +1333,14 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0026", kind: "index", name: "idx_accounts_key_hash",
     consequence: "Each manifest and channel catalog request reads the whole accounts table. Slower, not broken.",
+  },
+  {
+    migration: "0027", kind: "index", name: "idx_lists_owner_account",
+    consequence: "Deleting an account reads the whole lists table. Slower, not broken.",
+  },
+  {
+    migration: "0027", kind: "index", name: "idx_channels_owner_account",
+    consequence: "Deleting an account reads the whole channels table. Slower, not broken.",
   },
 ];
 
