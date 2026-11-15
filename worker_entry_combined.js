@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "af73a0dc7c";
+const WORKER_BUILD = "dedc09740f";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -889,7 +889,7 @@ const PUBLIC_INDEX_MAX = 20000;
 // 503 while the database's schema_migrations ledger is behind this (see
 // schemaWriteGate, 02_http-and-creator-utils.js). Bump it in the same change
 // that adds a migration the code depends on.
-const REQUIRED_SCHEMA_VERSION = "0014";
+const REQUIRED_SCHEMA_VERSION = "0016";
 
 const D1_SCHEMA_MANIFEST = [
   {

@@ -866,7 +866,7 @@ const PUBLIC_INDEX_MAX = 20000;
 // 503 while the database's schema_migrations ledger is behind this (see
 // schemaWriteGate, 02_http-and-creator-utils.js). Bump it in the same change
 // that adds a migration the code depends on.
-const REQUIRED_SCHEMA_VERSION = "0014";
+const REQUIRED_SCHEMA_VERSION = "0016";
 
 const D1_SCHEMA_MANIFEST = [
   {

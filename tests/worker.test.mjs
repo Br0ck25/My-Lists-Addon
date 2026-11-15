@@ -2792,7 +2792,7 @@ describe("schema gate: a Worker ahead of its database refuses writes, not reads"
     db._db.exec("DELETE FROM schema_migrations WHERE version >= '0014'");
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });
     const r = await call(env, "/admin/api/schema-status", { cookie: await adminCookie(env) });
-    assert.deepEqual({ ...r.body.ledger }, { version: "0013", required: "0014", readable: true, behind: true });
+    assert.deepEqual({ ...r.body.ledger }, { version: "0013", required: "0016", readable: true, behind: true });
   });
 
   it("is not fooled by the activity database's A0001 run in the main database", async () => {
@@ -2813,6 +2813,24 @@ describe("schema gate: a Worker ahead of its database refuses writes, not reads"
     const w = await freshIsolate();
     const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
     assert.equal((await create(w, env, "currentuser")).status, 200);
+  });
+
+  it("refuses writes at ledger 0015 (below the required 0016) and accepts them at 0016 or later (audit DB-05)", async () => {
+    // Rewind the ledger to 0015: one step under the gate's required version.
+    const w1 = await freshIsolate();
+    const behindDb = makeD1();
+    behindDb._db.exec("DELETE FROM schema_migrations WHERE version >= '0016'");
+    const behindEnv = makeEnv({ CONFIGS: makeKv(), DB: behindDb });
+    assert.equal((await create(w1, behindEnv, "ledger0015")).status, 503);
+    assert.equal(behindDb.q("SELECT COUNT(*) AS n FROM creators")[0].n, 0, "nothing was written");
+
+    // Exactly 0016 (the live database is at 0025, a fresh schema is newer still).
+    const w2 = await freshIsolate();
+    const atDb = makeD1();
+    atDb._db.exec("DELETE FROM schema_migrations WHERE version > '0016'");
+    assert.equal(atDb.q("SELECT MAX(version) AS v FROM schema_migrations")[0].v, "0016");
+    const atEnv = makeEnv({ CONFIGS: makeKv(), DB: atDb });
+    assert.equal((await create(w2, atEnv, "ledger0016")).status, 200);
   });
 
   it("lets writes through on a database that predates the ledger", async () => {
