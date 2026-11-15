@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7e7cfbf783";
+const WORKER_BUILD = "c60cefdb08";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -45939,10 +45939,10 @@ function pickUpTraktTokenFromUrl() {
       token_exchange_failed: 'Failed to exchange authorization code for a Trakt token.',
       access_denied: 'Trakt sign-in was cancelled.',
     };
-    const isRateLimit = detail.includes('1015') || detail.includes('429') || err === 'exchange_failed';
-    const msg = isRateLimit 
+    const isRateLimit = detail.includes('1015') || detail.includes('429'); // never echo err/detail: the address bar is untrusted
+    const msg = isRateLimit
       ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead…'
-      : (messages[err] || ('Could not connect to Trakt (' + err + (detail ? ': ' + detail : '') + ').'));
+      : (Object.prototype.hasOwnProperty.call(messages, err) ? messages[err] : 'Could not connect to Trakt.');
 
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Connection', msg, !isRateLimit);

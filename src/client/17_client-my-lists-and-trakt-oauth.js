@@ -877,10 +877,10 @@ function pickUpTraktTokenFromUrl() {
       token_exchange_failed: 'Failed to exchange authorization code for a Trakt token.',
       access_denied: 'Trakt sign-in was cancelled.',
     };
-    const isRateLimit = detail.includes('1015') || detail.includes('429') || err === 'exchange_failed';
-    const msg = isRateLimit 
+    const isRateLimit = detail.includes('1015') || detail.includes('429'); // never echo err/detail: the address bar is untrusted
+    const msg = isRateLimit
       ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead…'
-      : (messages[err] || ('Could not connect to Trakt (' + err + (detail ? ': ' + detail : '') + ').'));
+      : (Object.prototype.hasOwnProperty.call(messages, err) ? messages[err] : 'Could not connect to Trakt.');
 
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Connection', msg, !isRateLimit);
