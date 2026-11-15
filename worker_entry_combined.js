@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "a96b2e0846";
+const WORKER_BUILD = "7e7cfbf783";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -33765,7 +33765,7 @@ ${UTILITY_CSS}
   }
   .subnav-pill.active {
     background: var(--color-brand-subtle);
-    color: var(--accent);
+    color: var(--color-brand-text);
     border-color: var(--color-brand-line);
     box-shadow: none;
     font-weight: 700;

@@ -1082,7 +1082,7 @@ ${UTILITY_CSS}
   }
   .subnav-pill.active {
     background: var(--color-brand-subtle);
-    color: var(--accent);
+    color: var(--color-brand-text);
     border-color: var(--color-brand-line);
     box-shadow: none;
     font-weight: 700;
