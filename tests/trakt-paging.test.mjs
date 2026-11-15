@@ -335,3 +335,27 @@ describe("API-04: a cold resume near the end of a history whose shows carry over
     assert.ok(r.all.includes("tt" + (4000000 + last)), "the last title never arrived");
   });
 });
+
+// Ninth review: more than 400 Trakt pages from the memory, the estimate (sampled pages counted with
+// their carried-over titles) ran past the real total and the row lost its last titles.
+describe("API-04: a cold resume more than 400 pages from the memory, in a history whose shows carry over", () => {
+  // 600 pages of 10 shows, 2 carried over from the page before: 10 + 599 x 8 = 4,802 titles.
+  const carried600 = () => {
+    const pages = [];
+    let next = 10;
+    pages.push(Array.from({ length: 10 }, (_, j) => j));
+    for (let p = 1; p < 600; p++) {
+      const prev = pages[p - 1];
+      pages.push([prev[8], prev[9], ...Array.from({ length: 8 }, () => next++)]);
+    }
+    return { last: next - 1, total: next, pages };
+  };
+
+  it("600 pages, resumed cold at 4,602: the last title arrives", async () => {
+    const { pages, last, total } = carried600();
+    assert.equal(total, 4802);
+    const r = await walkShows(pages, "carryC", { startSkip: 4602 });
+    const got = new Set(r.all.filter((id) => Number(id.slice(2)) - 4000000 >= 4602)).size;
+    assert.ok(r.all.includes("tt" + (4000000 + last)), `only ${got} of the 200 titles still to come arrived, the last never did`);
+  });
+});

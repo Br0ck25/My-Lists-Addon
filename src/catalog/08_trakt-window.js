@@ -165,8 +165,21 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "", memo: me
     const counts = [];
     for (let k = 1; k <= 4; k++) {
       try {
-        const sample = await loadPage((known + Math.round(((lastPage - known) * k) / 4)) * PAGE_SIZE);
-        if (Array.isArray(sample) && sample.length) counts.push(sample.length);
+        const at = known + Math.round(((lastPage - known) * k) / 4);
+        const sample = await loadPage(at * PAGE_SIZE);
+        if (!Array.isArray(sample) || !sample.length) continue;
+        // Count only the titles the page before does not already hold (one more cached call), as
+        // the walk does; counting the carried-over ones ran the estimate past the real total.
+        let before = new Set();
+        if (at > 0) {
+          try {
+            const b = await loadPage((at - 1) * PAGE_SIZE);
+            if (Array.isArray(b)) before = new Set(b.filter(Boolean).map((m) => m.id));
+          } catch {
+            // Without it the count is a little high.
+          }
+        }
+        counts.push(Math.max(1, sample.filter((m) => m && !before.has(m.id)).length));
       } catch {
         // A page that will not load only makes the guess rougher.
       }
