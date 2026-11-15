@@ -765,6 +765,16 @@ describe("P5-2: one-off jobs", () => {
     assert.equal((await t.tick()).sent, 0, "a failed job is not sent again");
   });
 
+  it("OPS-07: a periodic job that keeps failing backs off to hourly, one-off jobs do not", () => {
+    const sb = loadSourceFunctions("src/jobs/44_jobs-queue.js", "src/jobs/45_jobs-dispatcher.js");
+    const every = 4 * 60 * 1000;
+    const periodic = { periodic: true, everyMs: every };
+    assert.ok(sb.jobRowRetryMs(periodic, 3) <= every, "early failures retry within the job's own period");
+    assert.equal(sb.jobRowRetryMs(periodic, 40), 60 * 60 * 1000, "a long failure streak waits an hour");
+    assert.ok(sb.jobRowRetryMs(periodic, 9) <= every, "below the threshold nothing changes");
+    assert.equal(sb.jobRowRetryMs({ periodic: false, everyMs: 0 }, 40), sb.jobRetryDelaySec(40, {}) * 1000, "one-off jobs keep their own delay");
+  });
+
   it("a run that stopped part way is started again after its lease, and fails for good at the limit", async () => {
     const t = setup(() => ({}), { maxAttempts: 2 });
     const { id } = plain(await t.sb.createJob(t.env, "test.work", {}));
