@@ -60,6 +60,13 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
+## Finale badges back on shows in the middle of their season (built 2026-11-15, stamp cdbd71e3dd; prepared, not deployed)
+
+Owner report (2026-11-15): the "Finale: <date>" badge was missing on the Lists tab for FBI, Tulsa King, Dexter: Resurrection and others. Since `FF_SHOW_SCHEDULE` went on (2026-10-04), Continue Watching and Airing Next come from `show_schedule`, and `show.refresh` only knew the finale's date when the finale was the next or the last aired episode. TMDB's show answer gives a season's episode count but no dates.
+- `show.refresh` now reads the season's episode list when an episode between the premiere and the finale is next (one more TMDB call for those shows only, as the older path did), and stores the finale's date. A failed read leaves no date, never a wrong one. Badges come back as each show's next refresh runs (within about 6 hours, no action needed).
+- Continue Watching now carries the air time of the scheduled next episode itself; it used to borrow it from Airing Next, so a show removed there showed the date without the hour.
+- Test: `tests/show-finale-date.test.mjs`.
+
 ## Nuvio pulls only what changed, stores positions, mirrors deletions (built 2026-11-09, stamp ; prepared, not deployed)
 
 From the Nuvio API document (v1.3). Before this, every Nuvio pull re-read the whole watch history and all progress, and read progress with a paging header the document does not describe. Now:

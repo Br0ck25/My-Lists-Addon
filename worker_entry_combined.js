@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "ea495879c8";
+const WORKER_BUILD = "cdbd71e3dd";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -103315,6 +103315,11 @@ function shelfEpisodeAfter(sched, season, episode, today) {
   return null;
 }
 
+// The hour the schedule's next episode airs ("9 PM ET"), or "" when unknown.
+function shelfAirTimeLabel(s) {
+  return s && s.next_air_time && typeof formatAirTimeLabel === "function" ? formatAirTimeLabel(s.next_air_time, s.air_tz) : "";
+}
+
 function shelfBadges(sched, season, episode) {
   const finaleSeason = sched.season_finale_season != null ? sched.season_finale_season : (sched.next_season != null ? sched.next_season : sched.last_aired_season);
   const inFinaleSeason = finaleSeason === season;
@@ -103441,6 +103446,9 @@ async function continueWatching(env, accountId, opts = {}) {
       seasonNum: next.season,
       episodeNum: next.episode,
       airDate: next.airDate || undefined,
+      // The hour, for the episode the schedule has next: the tile used to borrow
+      // it from Airing Next, so a show removed there lost it.
+      airTime: (!next.aired && next.season === t.sched.next_season && next.episode === t.sched.next_episode && shelfAirTimeLabel(t.sched)) || undefined,
       isUnaired: next.aired ? undefined : true,
       ...shelfBadges(t.sched, next.season, next.episode),
       updatedAt: Number(row.last_watched_at) || 0,
@@ -103556,7 +103564,7 @@ async function airingNext(env, accountId, opts = {}) {
     if (!s.next_air_date || shelfAired(s.next_air_date, today) || s.next_season == null || s.next_episode == null) continue;
     const showId = shelfShowId(t.media);
     const name = s.next_episode === 1 ? "Season Premiere" : `Episode ${s.next_episode}`;
-    const label = s.next_air_time && typeof formatAirTimeLabel === "function" ? formatAirTimeLabel(s.next_air_time, s.air_tz) : "";
+    const label = shelfAirTimeLabel(s);
     items.push({
       id: showId,
       type: "series",
@@ -106148,6 +106156,29 @@ function showScheduleFromTmdb(tv, airTime, now) {
   return row;
 }
 
+// The finale's date for a show in the middle of its season. /tv/{id} gives a
+// season's episode count but no dates, so showScheduleFromTmdb only knows it
+// when the finale is the next or the last aired episode, and the "Finale:
+// <date>" badge never showed mid-season (owner report, 2026-11-15). One more
+// call reads the season's episodes, as fetchTmdbItemDetailsUncached does for
+// the older path, and only for the same case: an episode after the premiere
+// and before the finale is next. A failure leaves no date, never a wrong one.
+async function showFinaleFromSeason(row, tmdbId, key) {
+  const fin = row.season_finale_episode;
+  if (!tmdbId || row.season_finale_date || fin == null || row.next_season == null || row.season_finale_season !== row.next_season) return;
+  if (!(row.next_episode > 1 && row.next_episode < fin)) return;
+  try {
+    const got = await showTmdbGet(`/tv/${Number(tmdbId)}/season/${Number(row.next_season)}`, key);
+    const eps = got.data && Array.isArray(got.data.episodes) ? got.data.episodes : [];
+    const last = eps[eps.length - 1];
+    if (!last) return;
+    if (typeof last.episode_number === "number") row.season_finale_episode = last.episode_number;
+    if (last.air_date) row.season_finale_date = String(last.air_date).slice(0, 10);
+  } catch (err) {
+    console.warn(`[Jobs] show.refresh: season ${row.next_season} of TMDB ${tmdbId}: ${jobErrorText(err)}`);
+  }
+}
+
 const SHOW_SCHEDULE_COLUMNS = [
   "status", "last_aired_season", "last_aired_episode", "last_aired_date", "next_season", "next_episode",
   "next_air_date", "next_air_time", "air_tz", "season_finale_season", "season_finale_date",
@@ -106192,6 +106223,7 @@ async function refreshShowSchedules(env, mediaIds, { now = Date.now(), ctx = nul
         }
       }
       row = showScheduleFromTmdb(tv, airTime, now);
+      await showFinaleFromSeason(row, tmdbId, key);
     } catch (err) {
       out.failed++;
       console.warn(`[Jobs] show.refresh: media ${m.id}: ${jobErrorText(err)}`);

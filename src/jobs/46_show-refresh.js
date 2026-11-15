@@ -120,6 +120,29 @@ function showScheduleFromTmdb(tv, airTime, now) {
   return row;
 }
 
+// The finale's date for a show in the middle of its season. /tv/{id} gives a
+// season's episode count but no dates, so showScheduleFromTmdb only knows it
+// when the finale is the next or the last aired episode, and the "Finale:
+// <date>" badge never showed mid-season (owner report, 2026-11-15). One more
+// call reads the season's episodes, as fetchTmdbItemDetailsUncached does for
+// the older path, and only for the same case: an episode after the premiere
+// and before the finale is next. A failure leaves no date, never a wrong one.
+async function showFinaleFromSeason(row, tmdbId, key) {
+  const fin = row.season_finale_episode;
+  if (!tmdbId || row.season_finale_date || fin == null || row.next_season == null || row.season_finale_season !== row.next_season) return;
+  if (!(row.next_episode > 1 && row.next_episode < fin)) return;
+  try {
+    const got = await showTmdbGet(`/tv/${Number(tmdbId)}/season/${Number(row.next_season)}`, key);
+    const eps = got.data && Array.isArray(got.data.episodes) ? got.data.episodes : [];
+    const last = eps[eps.length - 1];
+    if (!last) return;
+    if (typeof last.episode_number === "number") row.season_finale_episode = last.episode_number;
+    if (last.air_date) row.season_finale_date = String(last.air_date).slice(0, 10);
+  } catch (err) {
+    console.warn(`[Jobs] show.refresh: season ${row.next_season} of TMDB ${tmdbId}: ${jobErrorText(err)}`);
+  }
+}
+
 const SHOW_SCHEDULE_COLUMNS = [
   "status", "last_aired_season", "last_aired_episode", "last_aired_date", "next_season", "next_episode",
   "next_air_date", "next_air_time", "air_tz", "season_finale_season", "season_finale_date",
@@ -164,6 +187,7 @@ async function refreshShowSchedules(env, mediaIds, { now = Date.now(), ctx = nul
         }
       }
       row = showScheduleFromTmdb(tv, airTime, now);
+      await showFinaleFromSeason(row, tmdbId, key);
     } catch (err) {
       out.failed++;
       console.warn(`[Jobs] show.refresh: media ${m.id}: ${jobErrorText(err)}`);
