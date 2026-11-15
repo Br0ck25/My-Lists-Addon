@@ -15,7 +15,9 @@ Health grade: B+ — The UI is consistent, responsive at all five sizes with no 
 
 ## Fix progress
 
-Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on 2026-11-10; see each finding's **Verification.** note.
+Updated 2026-11-15. Status values: `open`, `fixed (awaiting verification)`, `verified fixed`, `open (partially fixed, ...)`, `regression introduced (...)`. Rows marked in the Verified column were checked by an independent review on the date shown; see each finding's **Verification.** note.
+
+2026-11-15 review of UI-05 to UI-09 (branch `claude/youthful-galileo-e6ci4l`, commits used as listed below): `bash verify.sh -q` on db2230f printed `PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them.` The browser checks in the notes below were made separately, with the Playwright browser tool against `dev/server.mjs`. UI-02, UI-03 and UI-04 were not reviewed and are unchanged.
 
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
@@ -23,11 +25,11 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | UI-02 | open |  | needs a browser to regenerate tests/ui-contract.json. Not attempted: Playwright cannot be imported in this session, so the contract cannot be regenerated |  |
 | UI-03 | open |  | needs a browser to regenerate tests/ui-contract.json. Not attempted: Playwright cannot be imported in this session |  |
 | UI-04 | open |  | needs a browser and an owner choice of text colour. Skipped: owner decision (which darker colour) still needed |  |
-| UI-05 | fixed (awaiting verification) | fc295e1 | node --test tests/add-button-a11y.client.test.mjs. Covers "+ Add"/"Remove" (name from data-name, follows added state) and the Quick Add "+ Movies"/"+ Shows"/"See All". NOT covered: "Retry" buttons and the per-item "Remove" buttons in list details/channels |  |
-| UI-06 | fixed (awaiting verification) | 4e85ed0 | node --test tests/static-modal-focus-return.client.test.mjs; also try in a browser: open Create List with the keyboard, press Escape, focus should be back on the button |  |
-| UI-07 | fixed (awaiting verification) | 2e383c0 | node --test tests/tv-link-no-code.test.mjs |  |
-| UI-08 | fixed (awaiting verification) | 008b65c | node --test tests/design-system-budget.test.mjs (baseline in tests/design-system-budget.json: rgba 56, odd px 2, radii 0, !important 242). The two hand-styled Settings danger buttons were not changed |  |
-| UI-09 | fixed (awaiting verification) | a89c8f8 | node --test tests/lists-load-error-wording.client.test.mjs |  |
+| UI-05 | open (partially fixed, see Verification: Retry, the /catalogs shelf "See All", other "+ Add"/"Remove" builders and 27 shared Quick Add names remain) | fc295e1 | node --test tests/add-button-a11y.client.test.mjs. Covers the `.searchAddBtn` "+ Add"/"Remove" (name from data-name, follows added state) and the Quick Add "+ Movies"/"+ Shows"/"See All". NOT covered: "Retry" buttons and the per-item "Remove" buttons in list details/channels | 2026-11-15, independent review |
+| UI-06 | verified fixed | 4e85ed0 | node --test tests/static-modal-focus-return.client.test.mjs; also try in a browser: open Create List with the keyboard, press Escape, focus should be back on the button | 2026-11-15, independent review |
+| UI-07 | verified fixed | 2e383c0 | node --test tests/tv-link-no-code.test.mjs | 2026-11-15, independent review |
+| UI-08 | verified fixed | 008b65c | node --test tests/design-system-budget.test.mjs (baseline in tests/design-system-budget.json: rgba 56, odd px 2, radii 0, !important 242). The two hand-styled Settings danger buttons were not changed | 2026-11-15, independent review |
+| UI-09 | verified fixed | a89c8f8 | node --test tests/lists-load-error-wording.client.test.mjs | 2026-11-15, independent review |
 
 ## Proven findings   (ordered by severity)
 
@@ -100,6 +102,14 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   `curl http://127.0.0.1:8870/ | grep -c '+ Shows'` gives 139.
 - Recommended fix and effort: Add `aria-label="Add <name> to my lists"` / `Remove <name>` etc. where these buttons are built (the data-name is already there). S-M.
 
+**Verification.** 2026-11-15, independent review: **partially fixed**, Status set back to `open`. Read fc295e1 (new `src/client/20_client-add-button-a11y.js`, a MutationObserver that sets `aria-label` from `data-name` and the `is-added` class). The new test fails on the old code (3 of 3 fail with the file removed). In a real headless Chromium against `dev/server.mjs`: a `.searchAddBtn` card button reads "Add Verifier Test List to my lists", and after a real click through the page's own handler "Remove ... from my lists", then back again, so the label follows the state. Quick Add "+ Movies"/"+ Shows"/"See All ›" now carry the card title. What is done works. What is still wrong:
+1. **Retry** buttons: still unnamed (/discover still has 5 visible "Retry" with no name). The fixer said this up front.
+2. **The /catalogs "See All ›" from the audit's own proof are not covered.** They are the live-preview shelf buttons (`button.text-action-btn` in `.live-preview-shelf-title`, built in `src/client/16_client-row-core.js:4162`), not `a.discover-chart-seeall`. Measured: 8 visible "See All ›" on /catalogs with no name after the fix.
+3. **Other "+ Add"/"Remove" list buttons are not covered.** The selector is `button.searchAddBtn[data-name]` only. The same repeated text is also built as `.myListAddBtn`/`.myPrivateListAddBtn` (`17_client-my-lists-and-trakt-oauth.js:394, 1291, 1656, 2689`), `.creatorListAddToConfigBtn` (`22_client-creator-profile.js:4996`), `.localListAddToConfigBtn` (`21_client-custom-list-builder.js:4435`), `.channelAddBtn` (`20_client-channel-builder.js:9560, 10647, 13305`) and the unnamed-class add buttons at `17_client-my-lists-and-trakt-oauth.js:2097, 5069, 5109, 5156, 5189`. These could not be seen on screen here (stubbed providers, no sign-in), so how many show on Discover today is not measured. The report row's "Covers + Add/Remove" means the `.searchAddBtn` ones only.
+4. **New: 27 Quick Add names are still shared by two different buttons.** The label uses the card title, but the Streaming Top 10 and Streaming (All Services) sections both have cards titled "Netflix", "Apple TV+", "Disney+", "HBO Max", "Hulu" and so on. In `#catalogsQuickAddContainer` 54 of 208 buttons share their name with a button that adds a different list: both are "Add Netflix movies", but one adds "Netflix Top 10" (mdblist netflix-top-10) and the other "Netflix" (`tmdb:chart:netflix`). The same is true in `#discoverShelvesContainer`. The add button's own first `data-act-args` value (the real label, "Netflix Top 10") would tell them apart.
+5. Per-item "Remove" in list details and channels: not covered (stated by the fixer).
+No regression found: the observer only watches `class` changes, so writing `aria-label` does not set it off again.
+
 ### UI-06 Six dialogs do not return keyboard focus to the button that opened them
 - Severity: Low
 - Status: Proven
@@ -113,6 +123,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   ```
 - Recommended fix and effort: Remember `document.activeElement` when a static modal is opened and focus it again in `closeStaticModal` and the specific close functions. S.
 
+**Verification.** 2026-11-15, independent review: **verified fixed**. Read 4e85ed0 (new `src/client/20_client-static-modal-focus.js`: a capture `focusin` listener remembers the last focused control outside the six dialogs, and a MutationObserver on each dialog's `style` gives focus back when none is visible). The new test fails on the old code (3 of 3 fail with the file removed). The unit test calls `syncStaticModalFocus` directly, because the harness has no MutationObserver, so it does not prove the observer is wired up. I checked that part separately in a real headless Chromium (Playwright) against `dev/server.mjs` on /lists. I focused the real "+ Create List" button, opened each of the six dialogs the way their open functions do (set `display:flex`, move focus inside), then pressed Tab and Escape: focus was inside each dialog while it was open, and after Escape it was back on "+ Create List" for all six (createListModal, selectListModal, addShelfModal, importListModal, importChannelModal, traktDeviceModal). Closing Create List by clicking its Cancel button also returned focus. Limit: the real `openCreateListModal` needs a signed-in account, and in this session it did nothing, so the full sign-in, keyboard Enter, dialog path was not driven end to end. The observer is safe on load: the file is in the deferred `/app-features.js` (after `MYLISTS_APP_BUNDLE_END` in `18_client-copy-and-trakt-export.js:1759`), so all six dialogs are already in the page when it attaches. No close function moves focus on purpose, so the restore overrides nothing. Edge case: if the opener is removed from the page while the dialog is open, focus goes to BODY (the old behaviour), with no error.
+
 ### UI-07 `/tv` shows an enabled "Link TV Now" button even when there is no pairing code
 - Severity: Low
 - Status: Proven
@@ -125,6 +137,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   ... PAIRING CODE — Signed in as auditui Link TV Now Cancel Missing pairing code.
   ```
 - Recommended fix and effort: When there is no code, disable the button and say "Open this page from the code shown on your TV." S.
+
+**Verification.** 2026-11-15, independent review: **verified fixed**. Read 2e383c0 (`src/api/25_api-catalog-routes.js:1034-1035`). The new test fails on the old code (2 of 4 fail: the two no-code cases). In a real headless Chromium: `/tv`, `/link` and `/tv?code=%20%20` (blank after trim) show the hint and a disabled "Link TV Now"; `/tv?tv_code=ab12` (the second parameter name, lower case) and `/tv?code=ABCD-1234` show the code, an enabled button and no hint. The page script only re-enables the button inside its own click handler, which a disabled button cannot reach. The "Missing pairing code." check stays as a backstop.
 
 ### UI-08 The design-system test lets several rule breaks through
 - Severity: Low (process risk, not a user bug)
@@ -145,6 +159,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
   Count commands: `python3` over `curl localhost:8870/app.css` gives `rgba outside root: 56`, `!important comp: 242`.
 - Recommended fix and effort: Add a ratcheting count test for rgba literals, odd pixel values and non-token radii in the component CSS (baseline = today's numbers, may only shrink), as is already done for source size. M.
 
+**Verification.** 2026-11-15, independent review: **verified fixed**. Read 008b65c (new `tests/design-system-budget.test.mjs` and its baseline; no source changed). I replayed the audit's exact mutation in a scratch worktree (`.subnav-pill.active` given `background: rgba(12, 34, 56, 0.5); padding: 7px 13px; margin: 5px; border-radius: 9px;`, rebuilt). `design-system.test.mjs` still passes 28/28, as before, but the new test fails with `rgbaLiterals: 56 -> 57, oddPixelValues: 2 -> 6, nonTokenRadii: 0 -> 1` (9px is odd too). One added `!important` fails it (`242 -> 243`), and so does `border-radius: 999px` alone. Its baseline numbers match the audit's own counts (56 rgba, 242 `!important`). `verify.sh` runs it through `tests/*.test.mjs`. Gaps for a later pass, not blocking: a negative odd value (`margin: -7px`) is not counted (the look-behind excludes `-`; tried, test stayed green); only `/app.css` is measured, so inline `style="..."` in client JS and the `u-*` helpers are outside it; the long-hand `border-top-left-radius` and similar are not checked. The two hand-styled Settings danger buttons (`22_client-creator-profile.js:631, 636`) are unchanged, as the fix row says; the recommended fix asked only for the ratchet.
+
 ### UI-09 Server error text is shown to people as-is, without the "Could not ..." wording
 - Severity: Info
 - Status: Proven
@@ -153,6 +169,8 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 - Impact: Cosmetic. Today the server's message is short; if it ever sends technical text, the person sees it.
 - Proof: `errs.cjs` (all API calls fail with 500): `... Refresh ✗ boom Your MDBList Lists ...`; `errs3.cjs`: `... Refresh ✗ db down ...`.
 - Recommended fix and effort: Prefix with "Could not load your lists." and show server text only as a detail. S.
+
+**Verification.** 2026-11-15, independent review: **verified fixed** for the place named in the finding. Read a89c8f8 (`src/client/22_client-creator-profile.js:4810`). The new test fails on the old code (1 of 2 fails: "✗ db down" was the message). Server text is still escaped (`escapeHtml`) and is now shown in `<small>(...)</small>` after "✗ Could not load your lists."; with no server text only the sentence shows. Same pattern elsewhere, not fixed and not part of this finding as written (the audit only saw the Lists one on screen): `escapeHtml(data.error || 'Could not ...')` still puts the server's text in place of the sentence at `17_client-my-lists-and-trakt-oauth.js:42, 973, 1068, 1601, 2515`, `23_client-list-management.js:1367, 2589, 3868` and `20_client-channel-builder.js:91, 232`. A later pass could reuse this same wording at those places.
 
 ## Unproven suspicions   (not counted)
 - The auto-tracked "Continue Watching" card shows the type label "Shows" (screenshot `shots/_lists-360.png`, label code `src/client/22_client-creator-profile.js:5375`), while the app's own blurb for that list says it holds "movies part way through and the next episode of your shows" (`src/client/17_client-my-lists-and-trakt-oauth.js:2094`). I could not produce a movie in that list in the stubbed environment (outbound providers return nothing), so the wrong label is not shown on screen. If movies can appear there, the label is wrong for them.
