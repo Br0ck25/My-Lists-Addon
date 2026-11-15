@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7292b40ebc";
+const WORKER_BUILD = "39ca5936ac";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -32538,6 +32538,8 @@ async function seedNuvioTvNewUser(env, username, accountId) {
 const TRAKT_WINDOW_MAX_PAGES = 12; // pages read for one request
 const TRAKT_WINDOW_MEMO_TTL_SEC = 600;
 const TRAKT_WINDOW_MEMO_MAX = 300; // lists remembered in the isolate
+const TRAKT_WINDOW_END_PAGES = 400; // most pages read at once to reach the end of a list (paid-plan subrequest budget)
+const TRAKT_WINDOW_BATCH = 8;
 const traktWindowMemory = new Map();
 
 async function traktWindowMemo(env, key) {
@@ -32566,9 +32568,52 @@ async function traktWindowKey(id) {
   return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
+async function traktWindowSave(env, key, memo) {
+  if (!key || !env || !env.CONFIGS) return;
+  try {
+    await env.CONFIGS.put("trakt:win:" + key, JSON.stringify({ cum: memo.cum, total: memo.total }), { expirationTtl: TRAKT_WINDOW_MEMO_TTL_SEC });
+  } catch {
+    // The isolate keeps it; another isolate starts from what it can read.
+  }
+}
+
+// Reads the pages after the memory, up to the last Trakt page, so the memory covers them and the
+// end of the list comes from a page actually read (API-04). Returns the pages read, or null when
+// one would not load (the caller then estimates). Same one-page-back de-duplication as the walk.
+async function traktWindowExtend(memo, loadPage, lastPage) {
+  const known = memo.cum.length - 1;
+  const fetched = new Map();
+  let prev = new Set();
+  if (known > 0 && memo.tail && memo.tail.page === known - 1) prev = memo.tail.ids;
+  else if (known > 0) {
+    try {
+      const before = await loadPage((known - 1) * PAGE_SIZE);
+      if (Array.isArray(before)) { fetched.set((known - 1) * PAGE_SIZE, before); prev = new Set(before.filter(Boolean).map((m) => m.id)); }
+    } catch {
+      // Without it a title at the seam may repeat once.
+    }
+  }
+  for (let from = known; from <= lastPage; from += TRAKT_WINDOW_BATCH) {
+    const pages = [];
+    for (let p = from; p <= lastPage && p < from + TRAKT_WINDOW_BATCH; p++) pages.push(p);
+    const got = await Promise.all(pages.map((p) => loadPage(p * PAGE_SIZE).catch(() => null)));
+    for (let i = 0; i < pages.length; i++) {
+      const metas = got[i];
+      if (!Array.isArray(metas)) return null;
+      fetched.set(pages[i] * PAGE_SIZE, metas);
+      const fresh = metas.filter((m) => m && !prev.has(m.id));
+      prev = new Set(metas.filter(Boolean).map((m) => m.id));
+      memo.tail = { page: pages[i], ids: prev };
+      if (memo.cum.length === pages[i] + 1) memo.cum.push(memo.cum[pages[i]] + fresh.length);
+      if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE)) return fetched;
+    }
+  }
+  return fetched;
+}
+
+async function traktWindowedPage(skip, loadPage, { env = null, id = "", memo: memoIn = null, extended = false } = {}) {
   const key = id ? await traktWindowKey(id) : "";
-  const memo = key ? await traktWindowMemo(env, key) : { cum: [0], total: null, at: Date.now() };
+  const memo = memoIn || (key ? await traktWindowMemo(env, key) : { cum: [0], total: null, at: Date.now() });
   let start = 0;
   for (let i = memo.cum.length - 1; i >= 0; i--) if (memo.cum[i] <= skip) { start = i; break; }
   const offset = skip - memo.cum[start];
@@ -32609,13 +32654,7 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
     // The end of the list: nothing came back, Trakt sent a short page, or the total is reached.
     if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (memo.total != null && (page + 1) * PAGE_SIZE >= memo.total)) { reachedEnd = true; break; }
   }
-  if (grew && key && env && env.CONFIGS) {
-    try {
-      await env.CONFIGS.put("trakt:win:" + key, JSON.stringify({ cum: memo.cum, total: memo.total }), { expirationTtl: TRAKT_WINDOW_MEMO_TTL_SEC });
-    } catch {
-      // The isolate keeps it; another isolate starts from what it can read.
-    }
-  }
+  if (grew) await traktWindowSave(env, key, memo);
   const out = titles.slice(offset, offset + PAGE_SIZE);
   if (out.length || reachedEnd) {
     if (memo.total != null) out.totalItems = memo.total;
@@ -32642,6 +32681,16 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
     if (counts.length) perPage = Math.max(1, counts.reduce((a, b) => a + b, 0) / counts.length);
   }
   let estimate = known + Math.floor((skip - memo.cum[known]) / perPage);
+  if (!extended && lastPage != null && estimate + 3 >= lastPage && lastPage - known < TRAKT_WINDOW_END_PAGES) {
+    // The estimated window reaches the last page: read the pages in between (each cached) so the
+    // memory covers them, and answer from pages actually read; that includes ending the row.
+    const fetched = await traktWindowExtend(memo, loadPage, lastPage);
+    if (fetched) {
+      await traktWindowSave(env, key, memo);
+      const cached = (raw) => (fetched.has(raw) ? Promise.resolve(fetched.get(raw)) : loadPage(raw));
+      return traktWindowedPage(skip, cached, { env, id, memo, extended: true });
+    }
+  }
   if (lastPage != null && estimate > lastPage) {
     // The guess must not end the row. A page holds at most PAGE_SIZE titles, so this is the
     // earliest page `skip` can be on: only past the last page has the row really ended.

@@ -247,11 +247,8 @@ describe("API-04: a title that recurs on neighbouring Trakt pages is sent once",
     // 150 pages of 60 distinct titles; resume at the very end with nothing remembered.
     const pages = Array.from({ length: 150 }, (_, p) => Array.from({ length: 60 }, (_, j) => p * 100 + j));
     const r = await walkShows(pages, "histC", { startSkip: 150 * 60 - 60 });
-    // Sixth review: a cold window must not end the row on an estimate (it cannot tell the end of
-    // the list from an over-counted position), so the app may get some repeats before a page read
-    // says the list is over. The row must still end and must have reached the last page.
     assert.ok(r.all.includes("tt" + (4000000 + 149 * 100 + 59)), "the last page was reached");
-    assert.ok(r.all.length <= 1100, `${r.all.length} titles sent for the last 60 that exist`);
+    assert.ok(r.all.length <= 120, `${r.all.length} titles sent for the last 60 that exist`);
   });
 });
 
@@ -285,5 +282,24 @@ describe("API-04: only a page actually read ends the row", () => {
       const r = await walkShape([[90, 100]], "pastTotal" + startSkip, { startSkip, maxRequests: 1 });
       assert.equal(r.all.length, 0, `skip ${startSkip} sent ${r.all.length} titles the app already has`);
     }
+  });
+});
+
+// Seventh review: a skip past the title total but under the raw total, and a cold resume at the end
+// of a list with small pages, re-sent titles the app already holds before the row ended. The row now
+// ends from pages actually read: when the estimate reaches the last Trakt page, the pages in between
+// are read (each cached) so the memory covers them.
+describe("API-04: the end of a list is found by reading to it", () => {
+  it("150 pages of 60 titles (9,000 titles, 15,000 raw rows) asked at skip 9,000, 9,100 and 9,500: no title the app already has", async () => {
+    for (const startSkip of [9000, 9100, 9500]) {
+      const r = await walkShape([[150, 60]], "titleTotal" + startSkip, { startSkip, maxRequests: 3 });
+      assert.equal(r.all.length, 0, `skip ${startSkip} sent ${r.all.length} titles the app already has`);
+    }
+  });
+
+  it("300 pages of 30 titles resumed cold at the last page: only that page, then the row ends", async () => {
+    const r = await walkShape([[300, 30]], "smallPages", { startSkip: 300 * 30 - 30, maxRequests: 6 });
+    assert.ok(r.all.includes("tt" + (3000000 + 300 * 1000)), "the last page was reached");
+    assert.ok(r.all.length <= 30, `${r.all.length} titles sent for the last 30 that exist`);
   });
 });
