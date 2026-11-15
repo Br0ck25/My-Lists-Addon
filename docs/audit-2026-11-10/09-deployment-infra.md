@@ -15,9 +15,9 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | OPS-03 | verified fixed | 8a27e51 | git check-ignore rendered-admin.html rendered-scope.html rendered-hostile.html service-worker.js | 2026-11-10, independent review |
 | OPS-04 | verified fixed | 26148a7, bbae733 | Read docs/DEPLOY_CHECKLIST.md Phase B and Phase F: no "wrangler d1 export" on my-lists-db (docs only) | 2026-11-10, independent review |
 | OPS-05 | verified fixed | 26148a7, 9496b00 | grep FF_V2_LISTS_ONLY wrangler.toml (staging block); read docs/STAGING.md (config only, not deployed) | 2026-11-10, independent review |
-| OPS-07 | open |  |  |  |
+| OPS-07 | fixed (awaiting verification) (partial: back-off only, no new alert) | 5658c50 | node --test tests/jobs.test.mjs (test OPS-07) | |
 | OPS-08 | verified fixed | 26148a7, 9496b00 | Links in docs/SELF-HOSTING.md resolve (../worker_entry_combined.js, ../migrations/, OPERATIONS.md); line 3 has no shutdown date (docs only) | 2026-11-10, independent review |
-| OPS-09 | open |  |  |  |
+| OPS-09 | open (owner decision needed: new deploy workflow and Cloudflare secrets) |  |  |  |
 
 ## Proven findings
 
