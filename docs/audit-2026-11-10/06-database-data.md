@@ -16,7 +16,7 @@ Updated 2026-11-15. Status values: `open`, `fixed (awaiting verification)`, `ver
 | DB-02 | verified fixed | e5110e0, 59b1a77, 008798e, 4cdb8d0 | node --test tests/creator-user-lists-save.test.mjs | 2026-11-11, independent review |
 | DB-03 | verified fixed | 35f1c3f | node --test tests/accounts-key-hash-index.test.mjs. Live: apply migrations/0026_accounts_key_hash_index.sql. | 2026-11-10, independent review |
 | DB-04 | verified fixed | 30e7490 | node --test tests/owner-account-indexes.test.mjs. Live: apply migrations/0027_owner_account_indexes.sql. | 2026-11-15, independent review |
-| DB-05 | open (partially fixed: ledger rows done, REQUIRED_SCHEMA_VERSION not raised, owner decision needed) | ccf197f | node --test tests/migration-ledger.test.mjs. Live: apply migrations/0028_ledger_backfill_0022_0023.sql. | 2026-11-15, independent review: partially fixed, stays open |
+| DB-05 | fixed (awaiting verification) | ccf197f, 8d0c09f | node --test tests/migration-ledger.test.mjs; node --test --test-name-pattern="ledger 0015" tests/worker.test.mjs. Live: apply migrations/0028_ledger_backfill_0022_0023.sql. Owner confirmed live MAX(version) = 0025, so REQUIRED_SCHEMA_VERSION is now "0016". | |
 | DB-06 | verified fixed | 1c98e82 | node --test tests/migration-rerun.test.mjs. Live: apply migrations/0029_creator_lists_base_indexes.sql. Chose resume notes in the 0008/0012/0024 headers rather than splitting the files (they are already applied, and splitting would change their ledger identity). | 2026-11-15, independent review |
 
 ## Proven findings
@@ -171,7 +171,7 @@ PASS 1 FAIL 0003_add_missing_indexes.sql: no such table: main.creators
 - The browser backup/restore round trip (Playwright) was not run; see U4. Restore of the encrypted artefacts from GitHub Actions needs the production passphrase and was not attempted.
 
 ## Questions for the owner
-- DB-05, gate: `REQUIRED_SCHEMA_VERSION` is still "0014". Raising it (to 0016, say) makes the Worker answer 503 "being updated" on every write whenever the live database ledger is older than that. I cannot see the live ledger. Before raising it, run `SELECT MAX(version) FROM schema_migrations WHERE version GLOB '[0-9]*'` in the D1 console; if it is 0016 or later it is safe to raise. Which value do you want?
+- DB-05, gate: answered by the owner (live MAX(version) = 0025); REQUIRED_SCHEMA_VERSION raised to "0016" in 8d0c09f.
 
 ## Unverified hunches
 - tests/preview rate-limit test ("other previews are still limited per address", PERF-03) failed once in a full parallel run and passed alone and in the next run; looks timing-dependent, not related to these findings.
