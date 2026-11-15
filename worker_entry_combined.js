@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "320778afe7";
+const WORKER_BUILD = "dccc4b9e06";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -81068,7 +81068,7 @@ async function renderCreatorDashboard(options) {
     const data = await fetchCreatorListsOnce(creatorKey);
     if (!data.ok) {
       if (!hasExistingContent) {
-        box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml(data.error || 'Could not load your lists.') + '</p>';
+        box.innerHTML = '<p class="testresult err">\u2717 Could not load your lists.' + (data.error ? ' <small>(' + escapeHtml(data.error) + ')</small>' : '') + '</p>';
       }
       return;
     }
