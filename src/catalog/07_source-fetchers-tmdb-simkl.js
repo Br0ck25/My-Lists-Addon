@@ -13,21 +13,21 @@ const SIMKL_CHART_FILES = {
 
 // Simkl's items use the same { ids: { imdb, tmdb, ... } } shape Trakt's do.
 // Anime entries more often lack an IMDB id than movies/TV do (per Simkl's
-// own docs: "IMDB IDs where available") -- those just get filtered out,
-// same as any other source's imdb-less items, since this add-on always
-// keys catalog items by IMDB id.
-function mapSimklItems(data, type) {
+// own docs: "IMDB IDs where available") -- those are kept as tmdb:<id>, as
+// the Trakt and MDBList mappers do, and dropped only when they have neither.
+function mapSimklItems(data, type, isAnime = false) {
   const items = Array.isArray(data) ? data : [];
-  return items
-    .filter((it) => it && it.ids && it.ids.imdb)
-    .map((it) => ({
-      id: it.ids.imdb,
-      type,
-      name: it.title,
-      poster: `https://images.metahub.space/poster/medium/${it.ids.imdb}/img`,
-      rating: it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined),
-      vote_average: it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined),
-    }));
+  return items.filter((it) => it && it.ids && (it.ids.imdb || it.ids.tmdb)).map((it) => {
+    const year = /\b(\d{4})\b/.exec(String(it.release_date || it.year || ""));
+    const score = it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined);
+    const imdb = it.ids.imdb;
+    return {
+      id: imdb || `tmdb:${it.ids.tmdb}`, type: isAnime && it.anime_type === "movie" ? "movie" : type, name: it.title, // anime chart mixes films and series
+      poster: imdb ? `https://images.metahub.space/poster/medium/${imdb}/img` : undefined,
+      releaseInfo: year ? year[1] : undefined, tmdbId: it.ids.tmdb ? String(it.ids.tmdb) : undefined,
+      rating: score, vote_average: score,
+    };
+  });
 }
 
 // chartKey is either a plain time window ("today"/"week"/"month" -- movies
@@ -77,7 +77,7 @@ async function fetchSimklChart(entry, skip, clientId, chartKey, env = null, ctx 
       }
 
       const data = await res.json();
-      const metas = mapSimklItems(data, entry.type);
+      const metas = mapSimklItems(data, entry.type, isAnime);
       return enrichTrailers(metas.slice(skip, skip + PAGE_SIZE), entry.type, TMDB_API_KEY);
     },
   });
