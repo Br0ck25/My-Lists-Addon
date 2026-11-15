@@ -4778,7 +4778,7 @@ describe("audit fix 9: stat counters are atomic when D1 is bound", () => {
 
 describe("audit fix 13: outbound requests are bounded by a timeout", () => {
   it("wires a timeout signal into the shared fetch helper", async () => {
-    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js", "src/core/82_trakt-retry.js");
     let sawSignal = false;
     sandbox.fetch = async (_url, opts) => { sawSignal = !!(opts && opts.signal); return { status: 200 }; };
     sandbox.AbortSignal = { timeout: (ms) => ({ __timeoutMs: ms }) };

@@ -3020,18 +3020,6 @@ function withTimeout(promise, ms, label) {
   });
 }
 
-async function fetchTraktWithRetry(url, options = {}, retries = 2) {
-  let res = await fetchWithTimeout(url, options);
-  if (res.status === 429 && retries > 0) {
-    const retrySec = parseInt((res.headers && res.headers.get("Retry-After")) || "1", 10);
-    const jitter = Math.floor(Math.random() * 500);
-    const delayMs = Math.min(3000, Math.max(1000, retrySec * 1000)) + jitter;
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-    return fetchTraktWithRetry(url, options, retries - 1);
-  }
-  return res;
-}
-
 
 // --- Like voter ledger -------------------------------------------------------
 //
