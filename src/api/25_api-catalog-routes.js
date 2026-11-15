@@ -1031,7 +1031,8 @@ ${css}
 
     <div id="actionArea">
       <div id="signedInView" style="display:none;">
-        <button type="button" class="btn btn-primary" id="confirmLinkBtn">Link TV Now</button>
+        ${codeParam ? "" : '<p class="sub" id="noCodeHint">Open this page from the code shown on your TV.</p>'}
+        <button type="button" class="btn btn-primary" id="confirmLinkBtn"${codeParam ? "" : " disabled"}>Link TV Now</button>
         <a href="/" class="btn btn-secondary">Cancel</a>
       </div>
 

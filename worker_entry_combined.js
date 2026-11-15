@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-15";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "41cea8f066";
+const WORKER_BUILD = "320778afe7";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -93632,7 +93632,8 @@ ${css}
 
     <div id="actionArea">
       <div id="signedInView" style="display:none;">
-        <button type="button" class="btn btn-primary" id="confirmLinkBtn">Link TV Now</button>
+        ${codeParam ? "" : '<p class="sub" id="noCodeHint">Open this page from the code shown on your TV.</p>'}
+        <button type="button" class="btn btn-primary" id="confirmLinkBtn"${codeParam ? "" : " disabled"}>Link TV Now</button>
         <a href="/" class="btn btn-secondary">Cancel</a>
       </div>
 
