@@ -80,6 +80,8 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
     if (!Array.isArray(metas)) break;
     if (memo.total == null && metas.totalItems != null) memo.total = metas.totalItems;
     if (page === 0 && skip === 0 && !metas.length) return metas; // keep the caller's empty-row handling
+    // Titles never outnumber raw rows, so a skip at or past the raw total is past the end.
+    if (memo.total != null && skip >= memo.total) { reachedEnd = true; break; }
     const fresh = metas.filter((m) => m && !prevIds.has(m.id));
     prevIds = new Set(metas.filter(Boolean).map((m) => m.id));
     memo.tail = { page, ids: prevIds };
@@ -121,12 +123,6 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
     if (counts.length) perPage = Math.max(1, counts.reduce((a, b) => a + b, 0) / counts.length);
   }
   let estimate = known + Math.floor((skip - memo.cum[known]) / perPage);
-  if (memo.endSkip != null && skip >= memo.endSkip) {
-    // This isolate already served the last Trakt page for this list and the app has taken it.
-    const none = [];
-    none.totalItems = memo.total;
-    return none;
-  }
   if (lastPage != null && estimate > lastPage) {
     // The guess must not end the row. A page holds at most PAGE_SIZE titles, so this is the
     // earliest page `skip` can be on: only past the last page has the row really ended.
@@ -137,16 +133,18 @@ async function traktWindowedPage(skip, loadPage, { env = null, id = "" } = {}) {
       return none;
     }
   }
+  // The estimate is approximate and never ends the row: only a page read here that comes back
+  // empty (or a skip past the raw total, above) does. A title on the page just before is dropped,
+  // as in the walk above.
   const more = [];
-  let sawLast = false;
+  let prev = new Set();
   for (let k = 0; k < 4 && more.length < PAGE_SIZE; k++) {
     let metas;
     try { metas = await loadPage((estimate + k) * PAGE_SIZE); } catch (err) { if (k === 0) throw err; break; }
     if (!Array.isArray(metas) || !metas.length) break;
-    for (const m of metas) if (m) more.push(m);
-    if (lastPage != null && estimate + k >= lastPage) { sawLast = true; break; }
+    for (const m of metas) if (m && !prev.has(m.id)) more.push(m);
+    prev = new Set(metas.filter(Boolean).map((m) => m.id));
+    if (lastPage != null && estimate + k >= lastPage) break;
   }
-  const served = more.slice(0, PAGE_SIZE);
-  if (sawLast && served.length === more.length) memo.endSkip = skip + served.length;
-  return served;
+  return more.slice(0, PAGE_SIZE);
 }

@@ -247,7 +247,11 @@ describe("API-04: a title that recurs on neighbouring Trakt pages is sent once",
     // 150 pages of 60 distinct titles; resume at the very end with nothing remembered.
     const pages = Array.from({ length: 150 }, (_, p) => Array.from({ length: 60 }, (_, j) => p * 100 + j));
     const r = await walkShows(pages, "histC", { startSkip: 150 * 60 - 60 });
-    assert.ok(r.all.length <= 120, `${r.all.length} titles sent for the last 60 that exist`);
+    // Sixth review: a cold window must not end the row on an estimate (it cannot tell the end of
+    // the list from an over-counted position), so the app may get some repeats before a page read
+    // says the list is over. The row must still end and must have reached the last page.
+    assert.ok(r.all.includes("tt" + (4000000 + 149 * 100 + 59)), "the last page was reached");
+    assert.ok(r.all.length <= 1100, `${r.all.length} titles sent for the last 60 that exist`);
   });
 });
 
@@ -260,6 +264,26 @@ describe("API-04: a cold request into an uneven list never ends the row early", 
       const r = await walkShape([[60, 20], [60, 90]], "uneven" + startSkip, { startSkip, maxRequests: 400 });
       assert.ok(r.all.length > 0, `skip ${startSkip}: the row ended at once with ${r.total - startSkip} titles to come`);
       assert.ok(r.all.includes("tt" + (3000000 + 120 * 1000)), `skip ${startSkip}: the last Trakt page was never reached`);
+    }
+  });
+});
+
+// Sixth review: the estimate for a cold request also ended rows (a list whose later pages collapse
+// landed on the last pages and the next request ended the row), and a skip past the raw total was
+// answered with titles the app already had. A row ends only when a page actually read says so.
+describe("API-04: only a page actually read ends the row", () => {
+  it("60 pages of 90 titles then 60 of 20, cold at skip 5,000: the titles still to come all arrive", async () => {
+    const r = await walkShape([[60, 90], [60, 20]], "collapseLate", { startSkip: 5000, maxRequests: 400 });
+    assert.ok(r.all.length > 80, `only ${r.all.length} titles came back, the row ended early`);
+    assert.ok(r.all.length >= 1000, `${r.all.length} of the 1,600 titles still to come`);
+    assert.ok(r.all.includes("tt" + (3000000 + 120 * 1000)), "the last Trakt page was reached");
+  });
+
+  it("a skip at or past the raw total returns no titles", async () => {
+    // 90 pages of 100 distinct titles: 9,000 raw rows, so no title count can reach 9,000 or more.
+    for (const startSkip of [9000, 9100, 9500]) {
+      const r = await walkShape([[90, 100]], "pastTotal" + startSkip, { startSkip, maxRequests: 1 });
+      assert.equal(r.all.length, 0, `skip ${startSkip} sent ${r.all.length} titles the app already has`);
     }
   });
 });
