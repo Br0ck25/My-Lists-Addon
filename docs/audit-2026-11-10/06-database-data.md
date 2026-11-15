@@ -15,9 +15,9 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | DB-01 | verified fixed | a1ecc1f | node --test tests/account-purge.test.mjs | 2026-11-10, independent review |
 | DB-02 | verified fixed | e5110e0, 59b1a77, 008798e, 4cdb8d0 | node --test tests/creator-user-lists-save.test.mjs | 2026-11-11, independent review |
 | DB-03 | verified fixed | 35f1c3f | node --test tests/accounts-key-hash-index.test.mjs. Live: apply migrations/0026_accounts_key_hash_index.sql. | 2026-11-10, independent review |
-| DB-04 | open |  |  |  |
-| DB-05 | open |  |  |  |
-| DB-06 | open |  |  |  |
+| DB-04 | fixed (awaiting verification) | 30e7490 | node --test tests/owner-account-indexes.test.mjs. Live: apply migrations/0027_owner_account_indexes.sql. |  |
+| DB-05 | open (partially fixed: ledger rows done, REQUIRED_SCHEMA_VERSION not raised, owner decision needed) | ccf197f | node --test tests/migration-ledger.test.mjs. Live: apply migrations/0028_ledger_backfill_0022_0023.sql. |  |
+| DB-06 | fixed (awaiting verification) | 1c98e82 | node --test tests/migration-rerun.test.mjs. Live: apply migrations/0029_creator_lists_base_indexes.sql. Chose resume notes in the 0008/0012/0024 headers rather than splitting the files (they are already applied, and splitting would change their ledger identity). |  |
 
 ## Proven findings
 
@@ -163,3 +163,9 @@ PASS 1 FAIL 0003_add_missing_indexes.sql: no such table: main.creators
 - Activity DB sharding (`ACTIVITY_SHARD_COUNT` > 1): only the single-database path was exercised.
 - Production data volumes, real D1 limits and billing: everything here ran against SQLite in the harness; "rows read" costs are from query plans and timings, not from Cloudflare.
 - The browser backup/restore round trip (Playwright) was not run; see U4. Restore of the encrypted artefacts from GitHub Actions needs the production passphrase and was not attempted.
+
+## Questions for the owner
+- DB-05, gate: `REQUIRED_SCHEMA_VERSION` is still "0014". Raising it (to 0016, say) makes the Worker answer 503 "being updated" on every write whenever the live database ledger is older than that. I cannot see the live ledger. Before raising it, run `SELECT MAX(version) FROM schema_migrations WHERE version GLOB '[0-9]*'` in the D1 console; if it is 0016 or later it is safe to raise. Which value do you want?
+
+## Unverified hunches
+- tests/preview rate-limit test ("other previews are still limited per address", PERF-03) failed once in a full parallel run and passed alone and in the next run; looks timing-dependent, not related to these findings.
