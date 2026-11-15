@@ -18,7 +18,7 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | API-01 | verified fixed | 5b60aa2 | node --test tests/public-routes-kv-outage.test.mjs tests/security-suite.test.mjs | 2026-11-10, independent review |
 | API-02 | verified fixed | 10c3c33 | node --test tests/token-refresh.test.mjs | 2026-11-10, independent review |
 | API-03 | verified fixed | 629586c | node --test tests/trakt-error-dialog.test.mjs tests/client.test.mjs | 2026-11-15, independent review |
-| API-04 | fixed (awaiting verification; beyond 400 pages from the memory the result is still an estimate: a few titles can be missed, see the tenth fix note) | c5dbd27, efd3309, e082ce3, ab07bce, cf4797c, aede2ba, 47f892a, daf3c9f, abdb191, TENTH-HASH | node --test tests/trakt-paging.test.mjs tests/providers.test.mjs | 2026-11-15, independent review |
+| API-04 | fixed (awaiting verification; beyond 400 pages from the memory the result is still an estimate: a few titles can be missed, see the tenth fix note) | c5dbd27, efd3309, e082ce3, ab07bce, cf4797c, aede2ba, 47f892a, daf3c9f, abdb191, 398a3d1 | node --test tests/trakt-paging.test.mjs tests/providers.test.mjs | 2026-11-15, independent review |
 | API-05 | verified fixed | 37cdb1a, 75a8244, 7b927c6 | node --test tests/catalog-skip-clamp.test.mjs tests/catalog-skip-limit.test.mjs tests/preview-chart-limit.test.mjs | 2026-11-10, independent review |
 | API-06 | verified fixed | 5ea09be | node --test tests/simkl-mapping.test.mjs tests/providers.test.mjs | 2026-11-15, independent review |
 | API-07 | verified fixed | 7ef7125 | node --test tests/trakt-retry.test.mjs tests/worker.test.mjs | 2026-11-15, independent review |
