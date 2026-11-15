@@ -20,14 +20,14 @@ Updated 2026-11-10. Status values: `open`, `fixed (awaiting verification)`, `ver
 | Finding | Status | Commit | How to verify | Verified |
 |---|---|---|---|---|
 | UI-01 | verified fixed | ae33b9f | node --test tests/search-failure-message.client.test.mjs | 2026-11-10, independent review |
-| UI-02 | open |  | needs a browser to regenerate tests/ui-contract.json |  |
-| UI-03 | open |  | needs a browser to regenerate tests/ui-contract.json |  |
-| UI-04 | open |  | needs a browser and an owner choice of text colour |  |
-| UI-05 | open |  |  |  |
-| UI-06 | open |  |  |  |
-| UI-07 | open |  |  |  |
-| UI-08 | open |  |  |  |
-| UI-09 | open |  |  |  |
+| UI-02 | open |  | needs a browser to regenerate tests/ui-contract.json. Not attempted: Playwright cannot be imported in this session, so the contract cannot be regenerated |  |
+| UI-03 | open |  | needs a browser to regenerate tests/ui-contract.json. Not attempted: Playwright cannot be imported in this session |  |
+| UI-04 | open |  | needs a browser and an owner choice of text colour. Skipped: owner decision (which darker colour) still needed |  |
+| UI-05 | fixed (awaiting verification) | fc295e1 | node --test tests/add-button-a11y.client.test.mjs. Covers "+ Add"/"Remove" (name from data-name, follows added state) and the Quick Add "+ Movies"/"+ Shows"/"See All". NOT covered: "Retry" buttons and the per-item "Remove" buttons in list details/channels |  |
+| UI-06 | fixed (awaiting verification) | 4e85ed0 | node --test tests/static-modal-focus-return.client.test.mjs; also try in a browser: open Create List with the keyboard, press Escape, focus should be back on the button |  |
+| UI-07 | fixed (awaiting verification) | 2e383c0 | node --test tests/tv-link-no-code.test.mjs |  |
+| UI-08 | fixed (awaiting verification) | 008b65c | node --test tests/design-system-budget.test.mjs (baseline in tests/design-system-budget.json: rgba 56, odd px 2, radii 0, !important 242). The two hand-styled Settings danger buttons were not changed |  |
+| UI-09 | fixed (awaiting verification) | a89c8f8 | node --test tests/lists-load-error-wording.client.test.mjs |  |
 
 ## Proven findings   (ordered by severity)
 
