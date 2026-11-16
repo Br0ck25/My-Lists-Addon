@@ -556,26 +556,36 @@ async function stremioMetaItem(env, ctx, url, m) {
   return jsonPublic({ meta: null });
 }
 
+// The account whose My Channels an address reads: a username, an account id or
+// key hash, a legacy install id, or a secret install token. A token is stored
+// only as its hash, so it is looked up by its hash and only while the install is
+// live. Comparing the raw address to token_hash never matched, so a paired Nuvio TV
+// (whose address is such a token) got no schedule and an empty channel catalog
+// (owner report, 2026-11-16). "" when none.
+async function channelOwnerUsername(config, env) {
+  if (!config || !env || !env.DB) return "";
+  try {
+    const acct = await env.DB.prepare(
+      "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
+    ).bind(config, config, config).first();
+    if (acct) return acct.username;
+    // The catalog routes see /i/<token>/ as "i~<token>" (v2InstallPath); the TV routes see the bare token.
+    const token = isV2InstallParam(config) ? config.slice(INSTALL_TOKEN_PARAM_PREFIX.length) : config;
+    const tokenHash = isWellFormedInstallToken(token) ? await installTokenHash(token) : null;
+    const instRow = await env.DB.prepare(
+      "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR id = ? OR (token_hash = ? AND revoked_at IS NULL) LIMIT 1"
+    ).bind(config, config, tokenHash || config).first();
+    if (instRow && instRow.account_id) {
+      const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
+      if (linked) return linked.username;
+    }
+  } catch {}
+  return "";
+}
+
 async function loadUserChannelsForManifest(config, env) {
   if (!config || !env || !env.CONFIGS || config === "nuvio-default" || config === "default") return [];
-  let username = "";
-  if (env.DB) {
-    try {
-      const acct = await env.DB.prepare(
-        "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
-      ).bind(config, config, config).first();
-      if (acct) username = acct.username;
-      else {
-        const instRow = await env.DB.prepare(
-          "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
-        ).bind(config, config, config).first();
-        if (instRow && instRow.account_id) {
-          const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
-          if (linked) username = linked.username;
-        }
-      }
-    } catch {}
-  }
+  let username = await channelOwnerUsername(config, env);
   if (!username) {
     try {
       if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;
@@ -603,23 +613,7 @@ async function findChannelEntryById(wantedId, config, env) {
 
   let username = "";
   if (config && config !== "nuvio-default" && config !== "default") {
-    if (env && env.DB) {
-      try {
-        const acct = await env.DB.prepare(
-          "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
-        ).bind(config, config, config).first();
-        if (acct) username = acct.username;
-        else {
-          const instRow = await env.DB.prepare(
-            "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
-          ).bind(config, config, config).first();
-          if (instRow && instRow.account_id) {
-            const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
-            if (linked) username = linked.username;
-          }
-        }
-      } catch {}
-    }
+    username = await channelOwnerUsername(config, env);
     if (!username && env && env.CONFIGS) {
       try {
         if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;
