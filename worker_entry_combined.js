@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-16";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "7caca6cc00";
+const WORKER_BUILD = "f6e57cc1ef";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -93436,18 +93436,14 @@ async function resolveNuvioTvTargetData(target, env) {
         if (resolved && resolved.unresolved) resolved = null;
       } catch {}
     }
+    // Only an owner the link proves, as the channel lookups accept it
+    // (provenConfigOwnerUsername, 70_): an ownerId stamp must still be the same account.
     if (resolved && !username) {
-      if (resolved.trackOwner) {
-        username = resolved.trackOwner;
-      } else if (resolved.ownerId && env && env.DB) {
+      username = await provenConfigOwnerUsername(env, resolved);
+      if (username && env && env.DB) {
         try {
-          const oAcct = await env.DB.prepare("SELECT username, created_at, last_active_at FROM accounts WHERE id = ? LIMIT 1").bind(resolved.ownerId).first();
-          if (oAcct && oAcct.username) {
-            username = oAcct.username;
-            if (oAcct.last_active_at || oAcct.created_at) {
-              updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
-            }
-          }
+          const oAcct = await env.DB.prepare("SELECT created_at, last_active_at FROM accounts WHERE username = ? LIMIT 1").bind(username).first();
+          if (oAcct && (oAcct.last_active_at || oAcct.created_at)) updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
         } catch {}
       }
     }
@@ -120811,6 +120807,29 @@ async function channelOwnerUsername(config, env) {
       const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
       if (linked) return linked.username;
     }
+    // A saved addon link (/<id>/manifest.json) proves its account the way the
+    // manifest route accepts it (resolveConfig): its key or owner stamp, or the
+    // account id stamped by a signed-in save.
+    if (!isV2InstallParam(config) && String(config).length <= SHORT_ID_LENGTH) {
+      return await provenConfigOwnerUsername(env, await resolveConfig(config, env));
+    }
+  } catch {}
+  return "";
+}
+
+// The account a resolved install config proves, or "": the verified owner
+// (trackOwner), or the ownerId a signed-in save stamped, only while that id is
+// still the same account (created at ownerSince, active), as
+// connectionOwnerForConfig (28_) checks it. A name alone proves nothing.
+async function provenConfigOwnerUsername(env, resolved) {
+  if (!resolved || resolved.unresolved) return "";
+  if (resolved.trackOwner) return String(resolved.trackOwner);
+  const ownerId = Number(resolved.ownerId);
+  const ownerSince = Number(resolved.ownerSince);
+  if (!env || !env.DB || !ownerId || !ownerSince) return "";
+  try {
+    const row = await env.DB.prepare("SELECT username, created_at, status, deleted_at FROM accounts WHERE id = ?").bind(ownerId).first();
+    if (row && Number(row.created_at) === ownerSince && row.deleted_at == null && (!row.status || row.status === "active")) return row.username;
   } catch {}
   return "";
 }

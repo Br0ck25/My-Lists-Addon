@@ -579,6 +579,29 @@ async function channelOwnerUsername(config, env) {
       const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
       if (linked) return linked.username;
     }
+    // A saved addon link (/<id>/manifest.json) proves its account the way the
+    // manifest route accepts it (resolveConfig): its key or owner stamp, or the
+    // account id stamped by a signed-in save.
+    if (!isV2InstallParam(config) && String(config).length <= SHORT_ID_LENGTH) {
+      return await provenConfigOwnerUsername(env, await resolveConfig(config, env));
+    }
+  } catch {}
+  return "";
+}
+
+// The account a resolved install config proves, or "": the verified owner
+// (trackOwner), or the ownerId a signed-in save stamped, only while that id is
+// still the same account (created at ownerSince, active), as
+// connectionOwnerForConfig (28_) checks it. A name alone proves nothing.
+async function provenConfigOwnerUsername(env, resolved) {
+  if (!resolved || resolved.unresolved) return "";
+  if (resolved.trackOwner) return String(resolved.trackOwner);
+  const ownerId = Number(resolved.ownerId);
+  const ownerSince = Number(resolved.ownerSince);
+  if (!env || !env.DB || !ownerId || !ownerSince) return "";
+  try {
+    const row = await env.DB.prepare("SELECT username, created_at, status, deleted_at FROM accounts WHERE id = ?").bind(ownerId).first();
+    if (row && Number(row.created_at) === ownerSince && row.deleted_at == null && (!row.status || row.status === "active")) return row.username;
   } catch {}
   return "";
 }

@@ -60,11 +60,12 @@ The owner decided to release the new version **one phase at a time, straight to 
 
 ---
 
-## My Channels play on a paired Nuvio TV (built 2026-11-16, stamp 7caca6cc00; prepared, not deployed)
+## My Channels play on a paired Nuvio TV (built 2026-11-16, stamp f6e57cc1ef; prepared, not deployed)
 
 Owner report (2026-11-16): the Nuvio TV Launcher listed no programmes for the account's own channels (Avatar, Saturday Classics Cartoons, The Complete Arrowverse Timeline). Since pairing hands a TV a secret install token (SEC-01/02), the TV asks for schedules and channel catalogs with that token. Those two routes found the channel's account by comparing the token to `installs.token_hash`, which holds only its hash, so they found no account: every channel came back `missing` and its catalog empty. By username they worked, and the sync answer itself already listed the channels.
 - One lookup (`channelOwnerUsername`, `70_stremio-routes.js`) now also recognises a secret install token by its hash, in both its forms (`/i/<token>/` and the bare token), and only while the install is not revoked. It serves `GET /api/nuvio-tv/schedules/<token>`, `/api/nuvio-tv/schedule/<token>/<id>` and `/i/<token>/tv/catalog/<type>/channel_<id>.json`.
 - The channels do not need to be in the account's catalogs: the launcher reads them from My Channels through the sync answer.
+- A plain addon link (`/<id>/manifest.json`) given to the launcher without pairing counts as the account on all three routes when the link proves it, the way the manifest route accepts it: saved while signed in (the `ownerId` stamp, checked against the account's creation time so a reused id does not count) or carrying the account's key or owner stamp. Before, the sync answer found the account by such a link but the schedules and the channel catalog did not. A link saved signed out proves no account and still gets the 28 presets: anyone can make a link that only names an account, so it cannot read that account's channels. The owner's link `i872xonFrpCI` is such a link (checked on production 2026-11-16): save a new link while signed in, or pair the TV.
 - Test: `tests/nuvio-tv-device-channels.test.mjs`.
 
 ## Finale badges back on shows in the middle of their season (built 2026-11-15, stamp cdbd71e3dd; prepared, not deployed)

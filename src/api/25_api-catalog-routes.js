@@ -658,18 +658,14 @@ async function resolveNuvioTvTargetData(target, env) {
         if (resolved && resolved.unresolved) resolved = null;
       } catch {}
     }
+    // Only an owner the link proves, as the channel lookups accept it
+    // (provenConfigOwnerUsername, 70_): an ownerId stamp must still be the same account.
     if (resolved && !username) {
-      if (resolved.trackOwner) {
-        username = resolved.trackOwner;
-      } else if (resolved.ownerId && env && env.DB) {
+      username = await provenConfigOwnerUsername(env, resolved);
+      if (username && env && env.DB) {
         try {
-          const oAcct = await env.DB.prepare("SELECT username, created_at, last_active_at FROM accounts WHERE id = ? LIMIT 1").bind(resolved.ownerId).first();
-          if (oAcct && oAcct.username) {
-            username = oAcct.username;
-            if (oAcct.last_active_at || oAcct.created_at) {
-              updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
-            }
-          }
+          const oAcct = await env.DB.prepare("SELECT created_at, last_active_at FROM accounts WHERE username = ? LIMIT 1").bind(username).first();
+          if (oAcct && (oAcct.last_active_at || oAcct.created_at)) updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
         } catch {}
       }
     }
