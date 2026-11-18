@@ -1125,3 +1125,31 @@ describe("My Lists TV progress", () => {
     assert.equal((await post(env, { targetId: tv2, type: "movie", imdbId: "notanid", positionMs: 5, durationMs: 10 })).status, 400);
   });
 });
+
+describe("My Lists TV library", () => {
+  const lib = (env, json) => call(env, "/api/nuvio-tv/library", { method: "POST", headers: { "origin": "https://mylistsaddon.com" }, json });
+  it("a TV's Library becomes the account's Watchlist and reads back; the website's own fields are kept", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    const tv = await pairTv(env, "tvlib", await accountProof(env, "tvlib"));
+    const empty = await lib(env, { targetId: tv, action: "get" });
+    assert.equal(empty.status, 200); assert.deepEqual(empty.body.items, []);
+    const set = await lib(env, { targetId: tv, action: "set", items: [{ id: "tt0903747", type: "series", name: "Breaking Bad", poster: "p.jpg" }, { id: "tt0137523", type: "movie", name: "Fight Club" }, { id: "bad" }] });
+    assert.equal(set.status, 200); assert.equal(set.body.count, 2);
+    const got = await lib(env, { targetId: tv, action: "get" });
+    assert.deepEqual(got.body.items.map((i) => i.id), ["tt0903747", "tt0137523"]);
+    assert.equal(got.body.updatedAt, set.body.updatedAt);
+    // The website's copy of a title (extra fields) survives the TV sending the list again; removing a title removes it.
+    const stored = JSON.parse(await env.CONFIGS.get("creatorlist:tvlib:watchlist"));
+    stored.items[0].year = "2008"; await env.CONFIGS.put("creatorlist:tvlib:watchlist", JSON.stringify(stored));
+    await lib(env, { targetId: tv, action: "set", items: [{ id: "tt0903747", type: "series", name: "Breaking Bad" }] });
+    const after = (await lib(env, { targetId: tv, action: "get" })).body.items;
+    assert.equal(after.length, 1); assert.equal(after[0].year, "2008");
+  });
+  it("refuses a username and bad requests", async () => {
+    const env = makeEnv({ DB: makeD1(), CONFIGS: makeKv() });
+    await accountProof(env, "tvlib2");
+    assert.equal((await lib(env, { targetId: "tvlib2", action: "get" })).status, 404);
+    const tv = await pairTv(env, "tvlib3", await accountProof(env, "tvlib3"));
+    assert.equal((await lib(env, { targetId: tv, action: "wipe" })).status, 400);
+  });
+});

@@ -2722,6 +2722,18 @@ New test in `tests/worker.test.mjs` ("passes a pick's runtime on"): a movie and 
 ### Checked
 `tests/nuvio-tv-sync.test.mjs` covers storing, replacing by show, ignoring a start, clearing on finish, an unknown box and bad input.
 
+## 2026-11-18 — My Lists TV Library (prepared; not deployed)
+
+- **Added `POST /api/nuvio-tv/library`** for the My Lists TV launcher. `action: "get"` returns the account's Watchlist (`items`, `updatedAt`); `action: "set"` with up to 500 `{ id, type, name, poster }` items replaces it with the TV's Library. A title already on the Watchlist keeps what the website stored for it; titles that are not imdb ids are skipped. The write goes through `creatorTrackingWriteWatchlist`, the same mirror the website's save uses (D1 row, KV record, v2 lists). Only the secret the TV got at pairing opens it. 60 requests a minute per account.
+- Code in `src/api/83_tv-library-routes.js`; one more clause on the existing delegating line in `handleNuvioTvHistoryRoute` (`25_`), so no baseline grew.
+- A browser that still holds a title the TV removed can send it back, because the website merges its local items in. That is the website's existing Watchlist behaviour.
+
+### Owner steps
+1. Paste the new Worker.
+
+### Checked
+`tests/nuvio-tv-sync.test.mjs`: set and get, the website's extra fields kept, removal, a username refused, a bad action.
+
 ## 2026-11-10 — Independent audit fixes: account deletion, bad list entries, KV outages, indexes (build `0b1c40b88d`, prepared; not deployed)
 
 Plan and evidence: `docs/audit-2026-11-10/` (finding ids in brackets). Not fixed in this release: SEC-01, SEC-02, PERF-01, API-04, PROD-02, UI-02 to UI-09 (see the notes under Owner steps).

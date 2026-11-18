@@ -1294,7 +1294,7 @@ async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
 }
 
 async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
-  if (path === "/api/nuvio-tv/progress") return handleNuvioTvProgress(request, env, ctx); if (path !== "/api/nuvio-tv/history" && path !== "/api/nuvio-tv/history/remove") return null;
+  if (path === "/api/nuvio-tv/progress") return handleNuvioTvProgress(request, env, ctx); if (path === "/api/nuvio-tv/library") return handleNuvioTvLibrary(request, env, ctx); if (path !== "/api/nuvio-tv/history" && path !== "/api/nuvio-tv/history/remove") return null;
   if (path === "/api/nuvio-tv/history" || path === "/api/nuvio-tv/history/remove") {
     // Exact route match recognized by route-access scanner
   }
