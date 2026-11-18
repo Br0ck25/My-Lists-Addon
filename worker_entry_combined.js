@@ -27,14 +27,14 @@
 // pasted file is live (docs/RELEASES.md). build.py fills in both; nobody
 // raises a number by hand. The date is the day the code last changed (see
 // build_date in build.py).
-const WORKER_BUILD_DATE = "2026-11-10";
+const WORKER_BUILD_DATE = "2026-11-18";
 
 // A fingerprint of the exact sources this file was built from. build.py fills
 // in the placeholder below with the first 10 characters of the SHA-256 of
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "6d2a02eae5";
+const WORKER_BUILD = "75c215a2f0";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -4330,6 +4330,8 @@ async function schemaWriteGate(request, env) {
 // 2. OAuth provider callbacks and starts (/api/{trakt,mdblist,simkl,tmdb}/oauth/{start,callback})
 // 3. Admin form login and logout (/admin/login, /admin/logout)
 // 4. Ko-fi's payment webhook (/api/kofi-webhook), which carries its own token
+// 5. The My Lists TV backup (/api/tv-backup): the TV app is not a browser page, so it has no Origin. The blob is
+//    encrypted on the TV and stored under a hash of a secret code, so a forged cross-site write needs a 128-bit id.
 function verifyCsrf(request) {
   const method = (request.method || "GET").toUpperCase();
   if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
@@ -4357,6 +4359,9 @@ function verifyCsrf(request) {
   // Ko-fi's payment webhook is posted by Ko-fi's servers, not by a page, and
   // proves itself with its verification token (handled in the route).
   if (path === "/api/kofi-webhook") {
+    return null;
+  }
+  if (path === "/api/tv-backup") {
     return null;
   }
   if (path === "/admin/login" || path === "/admin/logout") {
@@ -94126,6 +94131,11 @@ async function handleFetch(request, env, ctx) {
     const lookupResponse = handleLookupRoutes(request, env, ctx, url, path);
     if (lookupResponse) return lookupResponse;
 
+    // /api/tv-backup, the My Lists TV encrypted setup backup. Returns a Response promise, or null.
+    // -- 81_tv-backup-routes.js.
+    const tvBackupResponse = handleTvBackupRoutes(request, env, ctx, url, path);
+    if (tvBackupResponse) return tvBackupResponse;
+
     // /api/imdb-ids, /api/recommendations, the TMDB and Trakt list search/browse routes and the Trakt, MDBList and Simkl OAuth start/callback, device-code and my-lists routes, at their original place. Returns a Response promise, or null.
     // -- 75_provider-list-and-oauth-routes.js.
     const providerListResponse = handleProviderListRoutes(request, env, ctx, url, path);
@@ -129444,4 +129454,54 @@ function traktHeaders(accessToken, apiKey = TRAKT_CLIENT_ID) {
   };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   return headers;
+}
+// My Lists TV: encrypted setup backup.
+//
+// The TV encrypts its whole setup (addons with their keys, IPTV logins, settings, profiles)
+// on the box before anything is sent, using a recovery code only the owner holds. This
+// Worker stores one opaque blob per hash of that code. It cannot read the blob, never sees
+// the code, and a blob it holds is useless without the code. One blob per code: a new
+// backup replaces the last. Entries expire after 400 days without a backup.
+const TV_BACKUP_MAX_BYTES = 256 * 1024;
+const TV_BACKUP_TTL_SEC = 400 * 24 * 3600;
+const TV_BACKUP_ID_RE = /^[a-f0-9]{32}$/;
+const TV_BACKUP_NO_STORE = { "Cache-Control": "no-store" };
+
+// /api/tv-backup?id=<32 hex>   PUT stores the body, GET returns it.
+function handleTvBackupRoutes(request, env, ctx, url, path) {
+  if (path !== "/api/tv-backup") return null;
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
+  if (request.method === "PUT") return apiTvBackupPut(request, env, ctx, url);
+  if (request.method === "GET") return apiTvBackupGet(request, env, ctx, url);
+  return json({ ok: false, error: "Method not allowed." }, 405, TV_BACKUP_NO_STORE);
+}
+
+// Shared checks: a sane id, a rate limit by caller, and storage that exists.
+async function tvBackupGate(request, env, ctx, url) {
+  const id = String(url.searchParams.get("id") || "");
+  if (!TV_BACKUP_ID_RE.test(id)) return { error: json({ ok: false, error: "Bad backup id." }, 400, TV_BACKUP_NO_STORE) };
+  if (!env || !env.CONFIGS) return { error: json({ ok: false, error: "Not set up." }, 503, TV_BACKUP_NO_STORE) };
+  const ip = clientIpKey(request);
+  if (!ip || await consumeRateLimit(env, ctx, "tvbackup", ip, 30, 60)) {
+    return { error: json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...TV_BACKUP_NO_STORE, "Retry-After": "30" }) };
+  }
+  return { key: `tvbk:${id}` };
+}
+
+async function apiTvBackupPut(request, env, ctx, url) {
+  const gate = await tvBackupGate(request, env, ctx, url);
+  if (gate.error) return gate.error;
+  const body = await readRequestTextCapped(request, TV_BACKUP_MAX_BYTES);
+  if (body.tooLarge) return json({ ok: false, error: "That backup is too large." }, 413, TV_BACKUP_NO_STORE);
+  if (!body.text) return json({ ok: false, error: "Nothing to store." }, 400, TV_BACKUP_NO_STORE);
+  await env.CONFIGS.put(gate.key, body.text, { expirationTtl: TV_BACKUP_TTL_SEC });
+  return json({ ok: true, bytes: body.text.length }, 200, TV_BACKUP_NO_STORE);
+}
+
+async function apiTvBackupGet(request, env, ctx, url) {
+  const gate = await tvBackupGate(request, env, ctx, url);
+  if (gate.error) return gate.error;
+  const text = await env.CONFIGS.get(gate.key);
+  if (text === null || text === undefined) return json({ ok: false, error: "No backup found for that code." }, 404, TV_BACKUP_NO_STORE);
+  return new Response(text, { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8", ...TV_BACKUP_NO_STORE, ...corsHeaders() } });
 }
