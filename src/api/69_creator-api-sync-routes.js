@@ -322,7 +322,8 @@ async function creatorApiSyncLoad(request, env, ctx, path) {
     }
   }
   if (data && data.keys) data.keys = await openSyncKeys(env, auth.username, data.keys);
-  if (d1UserLists) {
+  // Not when the last save could not write them: D1 is then behind and KV is the newer copy (audit DB-02).
+  if (d1UserLists && !(data && data.likedListsD1Behind)) {
     if (!data) {
       data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };
     }
@@ -436,7 +437,7 @@ async function creatorSyncLoadMergePresets(env, auth, data, presetsRawInit) {
         presetsB64: dedicatedPresetsB64,
         updatedAt: dedicatedUpdatedAt,
       }));
-    } catch {}
+    } catch (e) { logIgnoredWrite("creatorsyncpresets put", e); }
   }
 
   if (!data) {
@@ -670,6 +671,7 @@ async function creatorApiSyncLike(request, env, ctx, path) {
       }
     } catch (dbErr) {
       console.error("D1 write error (/api/creator/sync/like):", dbErr);
+      blob.likedListsD1Behind = true; // load answers from KV until a full save writes D1 again (audit DB-02)
     }
   }
   await env.CONFIGS.put(key, JSON.stringify(blob));
@@ -779,6 +781,10 @@ async function handleNuvioTvDeviceCode(request, env, ctx, url) {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   const kv = (env && (env.CONFIGS || env["LIST_CACHE"]));
   if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+  // Public and writes 3 KV keys per call, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvdevicecode", clientIpKey(request), 10)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
 
   const deviceCode = crypto.randomUUID();
   const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -870,32 +876,25 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
     return json({ ok: false, error: "Malformed device record." }, 500, corsHeaders());
   }
 
-  let installToken = auth.username;
-  if (env && env.DB) {
-    try {
-      const acct = await env.DB.prepare(
-        "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1"
-      ).bind(auth.username).first();
-      if (acct) {
-        const inst = await env.DB.prepare(
-          "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
-        ).bind(acct.id).first();
-        if (inst) {
-          installToken = inst.legacy_cfg_id || inst.token_hash || auth.username;
-        }
-      }
-    } catch {}
-  }
-
+  // The TV gets a secret of its own (69_nuvio-tv-device-token.js), not the username.
+  // Without a database there is nowhere to keep one, so the old username addresses stay.
   const origin = url ? url.origin : "";
-  const manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
-  const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
+  let tvId = auth.username;
+  let manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
+  if (env && env.DB) {
+    const acct = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1").bind(auth.username).first();
+    const token = acct ? await mintNuvioTvInstall(env, acct.id) : null;
+    if (!token) return json({ ok: false, error: "Could not link the TV right now. Please try again." }, 500, corsHeaders());
+    tvId = token;
+    manifestUrl = `${origin}/i/${token}/tv/manifest.json`;
+  }
+  const syncUrl = `${origin}/api/nuvio-tv/sync/${tvId}`;
 
   const updated = {
     ...record,
     status: "authenticated",
     claimedBy: auth.username,
-    installId: auth.username,
+    installId: tvId,
     manifestUrl,
     syncUrl,
     claimedAt: Date.now()
@@ -914,6 +913,9 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders() });
   }
+  // The Account Key never travels in an address (SEC-03); see refuseQueryCredentials.
+  const refusedKey = url ? refuseQueryCredentials(url, ["creatorKey"]) : null;
+  if (refusedKey) return refusedKey;
   let body = {};
   if (request.method === "POST") {
     try {
@@ -923,7 +925,7 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
     }
   }
   const creatorName = (body && body.creatorName) || (url && url.searchParams.get("creatorName")) || "";
-  const creatorKey = (body && body.creatorKey) || (url && url.searchParams.get("creatorKey")) || "";
+  const creatorKey = (body && body.creatorKey) || "";
   const auth = await authenticateCreatorFor(request, env, ctx, path, creatorName, creatorKey);
   if (!auth.ok) return authFailureResponse(auth);
 

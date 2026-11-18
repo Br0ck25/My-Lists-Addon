@@ -130,6 +130,11 @@ function shelfEpisodeAfter(sched, season, episode, today) {
   return null;
 }
 
+// The hour the schedule's next episode airs ("9 PM ET"), or "" when unknown.
+function shelfAirTimeLabel(s) {
+  return s && s.next_air_time && typeof formatAirTimeLabel === "function" ? formatAirTimeLabel(s.next_air_time, s.air_tz) : "";
+}
+
 function shelfBadges(sched, season, episode) {
   const finaleSeason = sched.season_finale_season != null ? sched.season_finale_season : (sched.next_season != null ? sched.next_season : sched.last_aired_season);
   const inFinaleSeason = finaleSeason === season;
@@ -256,6 +261,9 @@ async function continueWatching(env, accountId, opts = {}) {
       seasonNum: next.season,
       episodeNum: next.episode,
       airDate: next.airDate || undefined,
+      // The hour, for the episode the schedule has next: the tile used to borrow
+      // it from Airing Next, so a show removed there lost it.
+      airTime: (!next.aired && next.season === t.sched.next_season && next.episode === t.sched.next_episode && shelfAirTimeLabel(t.sched)) || undefined,
       isUnaired: next.aired ? undefined : true,
       ...shelfBadges(t.sched, next.season, next.episode),
       updatedAt: Number(row.last_watched_at) || 0,
@@ -371,7 +379,7 @@ async function airingNext(env, accountId, opts = {}) {
     if (!s.next_air_date || shelfAired(s.next_air_date, today) || s.next_season == null || s.next_episode == null) continue;
     const showId = shelfShowId(t.media);
     const name = s.next_episode === 1 ? "Season Premiere" : `Episode ${s.next_episode}`;
-    const label = s.next_air_time && typeof formatAirTimeLabel === "function" ? formatAirTimeLabel(s.next_air_time, s.air_tz) : "";
+    const label = shelfAirTimeLabel(s);
     items.push({
       id: showId,
       type: "series",

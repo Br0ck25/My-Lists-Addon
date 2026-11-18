@@ -1443,7 +1443,7 @@ function mergeIntoNuvioCollection(existing, incoming, targetId) {
   return existingArr.map((c, i) => (i === idx ? target : c));
 }
 
-// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
+// The only copy: the page sends its folders and the server merges them (the page's twin was removed, CQ-04). Tests: tests/nuvio-collections-merge.test.mjs.
 function mergeNuvioCollections(existing, incoming) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);

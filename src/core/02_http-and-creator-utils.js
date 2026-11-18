@@ -1210,7 +1210,7 @@ async function storeRecoveryAnswerHash(env, username, hash) {
     }
     try {
       await env.DB.prepare("UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE").bind(hash, username).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("recovery_answer_hash backfill", e); }
   }
   const raw = await getCreator(env, username);
   if (raw) {
@@ -1659,7 +1659,7 @@ async function revokeSession(env, idHash) {
     try {
       const now = Date.now();
       await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE id_hash = ? AND revoked_at IS NULL").bind(now, idHash).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeSession", e); }
   }
 }
 
@@ -1684,7 +1684,7 @@ async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
           "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL"
         ).bind(now, accountId).run();
       }
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeAccountSessions", e); }
   }
 }
 
@@ -1783,7 +1783,7 @@ async function deleteCreatorKeyLookup(env, username, key) {
     if (username) {
       try {
         await env.DB.prepare("UPDATE accounts SET key_lookup_hmac = NULL WHERE lower(username) = lower(?)").bind(username).run();
-      } catch {}
+      } catch (e) { logIgnoredWrite("key_lookup_hmac clear", e); }
     }
   }
   if (env.CONFIGS) {
@@ -2123,8 +2123,9 @@ async function stampListVisibilityIfNeeded(env, key, data) {
   if (env && env.CONFIGS && key && !(isV2ListsOnly(env) && isLegacyListKvKey(key))) {
     try {
       await env.CONFIGS.put(key, JSON.stringify(data));
-    } catch {
+    } catch (e) {
       // Best-effort: the in-memory value is still stamped for this request.
+      logIgnoredWrite("list visibility stamp", e);
     }
   }
   return true;
@@ -3019,18 +3020,6 @@ function withTimeout(promise, ms, label) {
   });
 }
 
-async function fetchTraktWithRetry(url, options = {}, retries = 2) {
-  let res = await fetchWithTimeout(url, options);
-  if (res.status === 429 && retries > 0) {
-    const retrySec = parseInt((res.headers && res.headers.get("Retry-After")) || "1", 10);
-    const jitter = Math.floor(Math.random() * 500);
-    const delayMs = Math.min(3000, Math.max(1000, retrySec * 1000)) + jitter;
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-    return fetchTraktWithRetry(url, options, retries - 1);
-  }
-  return res;
-}
-
 
 // --- Like voter ledger -------------------------------------------------------
 //
@@ -3900,7 +3889,7 @@ async function clearCreatorListDeletion(env, username, slug) {
         delete known[String(slug)];
         await writeCreatorListDeletions(env, username, known);
       }
-    } catch (e) {}
+    } catch (e) { logIgnoredWrite("clear list tombstone", e); }
   }
 }
 
@@ -3983,10 +3972,10 @@ async function deleteCreatorLists(env, username, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deleteCreatorLists):", dbErr);
         out.ok = false;
@@ -4006,9 +3995,7 @@ async function deleteCreatorLists(env, username, slugs) {
       }
       try {
         await env.CONFIGS.delete(`listlikevoters:${username}:${slug}`);
-      } catch (e) {
-        // A stranded ledger is untidy, not harmful on its own.
-      }
+      } catch (e) { logIgnoredWrite(`delete listlikevoters:${username}:${slug}`, e); } // a stranded ledger is untidy, not fatal
     }
     (existed ? out.deleted : out.missing).push(slug);
   }
@@ -4113,10 +4100,10 @@ async function deletePublishedLists(env, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deletePublishedLists):", dbErr);
         out.ok = false;
@@ -4131,9 +4118,7 @@ async function deletePublishedLists(env, slugs) {
       }
       try {
         await env.CONFIGS.delete(`listlikevoters:user:${slug}`);
-      } catch (e) {
-        // A stranded ledger is untidy, not harmful on its own.
-      }
+      } catch (e) { logIgnoredWrite(`delete listlikevoters:user:${slug}`, e); } // a stranded ledger is untidy, not fatal
     }
     (existed ? out.deleted : out.missing).push(slug);
   }
@@ -4746,9 +4731,7 @@ async function purgeCreatorData(env, username, options = {}) {
         // unable to like it.
         try {
           await env.CONFIGS.delete(`listlikevoters:${listPath}`);
-        } catch (e) {
-          // best-effort: a stranded ledger is untidy, not harmful on its own
-        }
+        } catch (e) { logIgnoredWrite(`delete listlikevoters:${listPath}`, e); } // best-effort, but a re-registered username would inherit a stranded ledger
         listsCleared++;
       }
       if (res.list_complete || !res.cursor) break;
@@ -4889,7 +4872,7 @@ async function purgeCreatorData(env, username, options = {}) {
   // other leftover: the name is not freed.
   if (deleteIdentity || options.detachSupportThreads === true) {
     try {
-      await detachFeedbackThreadsFromCreator(env, u);
+      await (deleteIdentity ? deleteFeedbackThreadsFromCreator(env, u) : detachFeedbackThreadsFromCreator(env, u));
     } catch (e) {
       console.error("purgeCreatorData: could not detach the support threads", e);
       dataSweepFailed = true;
@@ -4944,7 +4927,7 @@ async function purgeCreatorData(env, username, options = {}) {
         try {
           await env.CONFIGS.delete(`creatorlastseen:${u}`);
           keysCleared++;
-        } catch (e) {}
+        } catch (e) { logIgnoredWrite("purge: creatorlastseen", e); }
       }
     }
   }
@@ -4985,7 +4968,7 @@ async function purgeCreatorData(env, username, options = {}) {
           await env.CONFIGS.delete(k.name);
           const listPath = k.name.slice("creatorlist:".length);
           lateListIds.push("c:" + listPath);
-          try { await env.CONFIGS.delete(`listlikevoters:${listPath}`); } catch (e) {}
+          try { await env.CONFIGS.delete(`listlikevoters:${listPath}`); } catch (e) { logIgnoredWrite(`delete listlikevoters:${listPath}`, e); }
           listsCleared++;
         }
         if (res.list_complete || !res.cursor) break;
@@ -4997,7 +4980,7 @@ async function purgeCreatorData(env, username, options = {}) {
       try {
         const revived = await env.CONFIGS.get(creatorScrobbleTokenKey(u));
         if (revived) await env.CONFIGS.delete(scrobbleTokenKey(revived));
-      } catch (e) {}
+      } catch (e) { logIgnoredWrite("purge: scrobble token", e); }
       for (const key of dataKeys) {
         await env.CONFIGS.delete(key);
       }
@@ -5791,10 +5774,6 @@ async function backfillAccounts(env, options = {}) {
   };
 }
 
-async function reconcileAccounts(env) {
-  return backfillAccounts(env, { dryRun: true });
-}
-
 // D1 is the authoritative store for creator lists when bound.
 // KV serves as a read-through cache and fallback for unmigrated lists.
 //
@@ -5841,8 +5820,8 @@ async function getCreatorList(env, username, slug) {
           try {
             env.DB.prepare(
               "UPDATE creator_lists SET name = ?, type = ?, visibility = ?, items_json = ?, updated_at = ? WHERE id = ?"
-            ).bind(name, type, visibility, JSON.stringify(items), updatedAt || 0, `${username}:${slug}`).run().catch(() => {});
-          } catch {}
+            ).bind(name, type, visibility, JSON.stringify(items), updatedAt || 0, `${username}:${slug}`).run().catch((e) => logIgnoredWrite("list D1 mirror update", e));
+          } catch (e) { logIgnoredWrite("list D1 mirror update", e); }
         }
 
         const payload = {
@@ -6509,55 +6488,9 @@ async function writeCreatorTrackingD1(env, username, trackingData, isIntentional
       prunes.push(...await d1ReplaceRowsById(env, "airing_next", username, "show_id", an.seen));
     }
 
-    // 5. Watch History
+    // 5. Watch History (only new or changed rows; see 05_watch-history-write.js)
     if (Array.isArray(trackingData.watchHistory)) {
-      const whSeen = new Set();
-      for (const item of trackingData.watchHistory) {
-        if (!item) continue;
-        const itemId = String(item.id || (item.showId ? `${item.showId}:${item.seasonNum}:${item.episodeNum}` : ""));
-        if (!itemId || whSeen.has(itemId)) continue;
-        whSeen.add(itemId);
-        const itemType = item.type || (item.seasonNum != null ? "episode" : "movie");
-        const title = item.name || item.title || null;
-        const poster = item.poster || null;
-        const showId = item.showId ? String(item.showId) : null;
-        const showTitle = item.showTitle || null;
-        const showPoster = item.showPoster || null;
-        const seasonNum = item.seasonNum != null ? Number(item.seasonNum) : null;
-        const episodeNum = item.episodeNum != null ? Number(item.episodeNum) : null;
-        const year = item.year ? String(item.year) : null;
-        const airDate = item.airDate ? String(item.airDate) : null;
-        const watchedAt = Number(item.watchedAt) || meta.updatedAt;
-        stmts.push(
-          env.DB.prepare(
-            `INSERT INTO watch_history (
-              username, item_id, item_type, title, poster, show_id, show_title,
-              show_poster, season_num, episode_num, year, air_date, watched_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(username, item_id) DO UPDATE SET
-              item_type = excluded.item_type,
-              title = excluded.title,
-              poster = excluded.poster,
-              show_id = excluded.show_id,
-              show_title = excluded.show_title,
-              show_poster = excluded.show_poster,
-              season_num = excluded.season_num,
-              episode_num = excluded.episode_num,
-              year = excluded.year,
-              air_date = excluded.air_date,
-              watched_at = excluded.watched_at`
-          ).bind(
-            username, itemId, itemType, title, poster, showId, showTitle,
-            showPoster, seasonNum, episodeNum, year, airDate, watchedAt
-          )
-        );
-      }
-      // Only an INTENTIONAL removal shortens Watch History -- an ordinary
-      // autosave is additive, and the rescue-merge in save-tracking exists
-      // precisely so a stale push cannot shorten it by accident.
-      if (isIntentionalRemoval) {
-        prunes.push(...await d1ReplaceRowsById(env, "watch_history", username, "item_id", whSeen));
-      }
+      await pushWatchHistoryWrites(env, username, trackingData.watchHistory, meta.updatedAt, isIntentionalRemoval, stmts, prunes);
     }
 
     // Upserts first, deletions next, the meta stamp last, in that order across
@@ -6677,6 +6610,53 @@ async function ensureTrackingWatchlist(env, username, blob) {
   return blob;
 }
 
+// One stored continue_watching row -> one item (CQ-02). Used by the catalog read
+// path and the creator-tracking read path, so a fix lands in both. A COMPANION:
+// show_title carries the companion fields as JSON.
+function mapContinueWatchingRow(r) {
+  let isCompanion = undefined;
+  let companionType = undefined;
+  let companionNote = undefined;
+  let companionStoryline = undefined;
+  let precedingShowId = undefined;
+  let showTitle = r.show_title || undefined;
+  let kind = undefined;
+  let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
+  if (r.show_title && r.show_title.startsWith("COMPANION:")) {
+    try {
+      const compMeta = JSON.parse(r.show_title.slice(10));
+      isCompanion = true;
+      companionType = compMeta.companionType;
+      companionNote = compMeta.companionNote;
+      companionStoryline = compMeta.companionStoryline;
+      precedingShowId = compMeta.precedingShowId;
+      showTitle = compMeta.showTitle || undefined;
+      kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
+      type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
+    } catch {}
+  } else if (type === "movie") {
+    kind = "movie";
+  }
+  return {
+    id: r.item_id,
+    showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
+    type: type,
+    kind: kind,
+    name: r.name || undefined,
+    poster: r.poster || undefined,
+    showTitle: showTitle,
+    showPoster: r.show_poster || undefined,
+    seasonNum: r.season_num != null ? r.season_num : undefined,
+    episodeNum: r.episode_num != null ? r.episode_num : undefined,
+    updatedAt: r.updated_at,
+    isCompanion: isCompanion,
+    companionType: companionType,
+    companionNote: companionNote,
+    companionStoryline: companionStoryline,
+    precedingShowId: precedingShowId,
+  };
+}
+
 // D1 is authoritative for this record -- /api/creator/sync/load and every
 // personal catalog row read it first -- so this has to be able to notice when
 // it is NOT the freshest copy.
@@ -6764,49 +6744,7 @@ async function readCreatorTrackingD1(env, username) {
       watchedAt: r.watched_at,
     }));
 
-    const continueWatching = cwRows.map((r) => {
-      let isCompanion = undefined;
-      let companionType = undefined;
-      let companionNote = undefined;
-      let companionStoryline = undefined;
-      let precedingShowId = undefined;
-      let showTitle = r.show_title || undefined;
-      let kind = undefined;
-      let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
-      if (r.show_title && r.show_title.startsWith("COMPANION:")) {
-        try {
-          const compMeta = JSON.parse(r.show_title.slice(10));
-          isCompanion = true;
-          companionType = compMeta.companionType;
-          companionNote = compMeta.companionNote;
-          companionStoryline = compMeta.companionStoryline;
-          precedingShowId = compMeta.precedingShowId;
-          showTitle = compMeta.showTitle || undefined;
-          kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
-          type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
-        } catch {}
-      } else if (type === "movie") {
-        kind = "movie";
-      }
-      return {
-        id: r.item_id,
-        showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
-        type: type,
-        kind: kind,
-        name: r.name || undefined,
-        poster: r.poster || undefined,
-        showTitle: showTitle,
-        showPoster: r.show_poster || undefined,
-        seasonNum: r.season_num != null ? r.season_num : undefined,
-        episodeNum: r.episode_num != null ? r.episode_num : undefined,
-        updatedAt: r.updated_at,
-        isCompanion: isCompanion,
-        companionType: companionType,
-        companionNote: companionNote,
-        companionStoryline: companionStoryline,
-        precedingShowId: precedingShowId,
-      };
-    });
+    const continueWatching = cwRows.map(mapContinueWatchingRow);
 
     const airingNext = anRows.map((r) => ({
       id: r.item_id,
@@ -6883,43 +6821,27 @@ async function readCreatorTrackingD1(env, username) {
   }
 }
 
+// Inserts first (ignoring what is there), stale rows deleted last: a failure
+// part-way leaves extra ids, never a truncated list (audit DB-02). Returns
+// true only when every statement ran.
 async function saveCreatorUserListsD1(env, username, likedLists, hiddenLists, hiddenSections) {
   if (!env || !env.DB || !username) return false;
   try {
-    const stmts = [
-      env.DB.prepare("DELETE FROM creator_user_lists WHERE username = ?").bind(username),
-    ];
     const now = Date.now();
-    if (Array.isArray(likedLists)) {
-      for (const id of likedLists) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'liked', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
-    if (Array.isArray(hiddenLists)) {
-      for (const id of hiddenLists) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'hidden', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
-    if (Array.isArray(hiddenSections)) {
-      for (const id of hiddenSections) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'hidden_section', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
+    const wanted = new Map();
+    const collect = (type, list) => {
+      if (!Array.isArray(list)) return;
+      for (const id of list) if (typeof id === "string" && id) wanted.set(`${type}\u0000${id}`, [id, type]);
+    };
+    collect("liked", likedLists);
+    collect("hidden", hiddenLists);
+    collect("hidden_section", hiddenSections);
+    const insertSql = "INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, ?, ?)";
+    const inserts = [...wanted.values()].map(([id, type]) => env.DB.prepare(insertSql).bind(username, id, type, now));
+    const { results } = await env.DB.prepare("SELECT list_id, list_type FROM creator_user_lists WHERE username = ?").bind(username).all();
+    const stale = (results || []).filter((r) => !wanted.has(`${r.list_type}\u0000${r.list_id}`));
+    const removals = stale.map((r) => env.DB.prepare("DELETE FROM creator_user_lists WHERE username = ? AND list_id = ? AND list_type = ?").bind(username, r.list_id, r.list_type));
+    const stmts = inserts.concat(removals);
     const CHUNK_SIZE = 80;
     for (let i = 0; i < stmts.length; i += CHUNK_SIZE) {
       await env.DB.batch(stmts.slice(i, i + CHUNK_SIZE));

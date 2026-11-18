@@ -254,6 +254,11 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
 // partial-update case that actually needs a smaller request, and one
 // key is simpler to reason about than keeping four in sync with each
 // other.
+// A config row is an object: a null or a number used to break the install link.
+function isPlainConfigEntry(e) {
+  return !!e && typeof e === "object" && !Array.isArray(e);
+}
+
 async function creatorApiSyncSave(request, env, ctx, path) {
   let body;
   try {
@@ -370,7 +375,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   }
 
   const blob = {
-    config: Array.isArray(body.config) ? body.config : [],
+    config: Array.isArray(body.config) ? body.config.filter(isPlainConfigEntry) : [], // a null here broke the install link
     keys: await sealSyncKeys(env, auth.username, mergedKeys),
     collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
     likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
@@ -378,16 +383,16 @@ async function creatorApiSyncSave(request, env, ctx, path) {
     hiddenMyListsSections: Array.isArray(body.hiddenMyListsSections) ? body.hiddenMyListsSections.map(String) : [],
     updatedAt: nextSyncVersion(currentUpdatedAt),
   };
-  const serialized = JSON.stringify(blob);
+  // A failed D1 write must not stop the rows reaching KV and the install links: it is reported on its
+  // own, and the KV record says its D1 copy is behind so load answers from KV until a write succeeds (audit DB-02).
+  const likedListsSynced = !env.DB || await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
+  const serialized = JSON.stringify(likedListsSynced ? blob : { ...blob, likedListsD1Behind: true });
   // Workers KV hard-caps a value at 25MB. Presets/Channels and tracking
   // data (watchHistory/continueWatching/etc) no longer live in this
   // blob at all (see above), so this is now just a defensive backstop
   // rather than the main thing it used to guard against.
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "This account's saved data is too large to store (over the 25MB limit)." });
-  }
-  if (env.DB) {
-    await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
   }
   try {
     await env.CONFIGS.put(`creatorsync:${auth.username}`, serialized);
@@ -402,7 +407,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   }
   // updatedAt lets the client advance its own baseline without a
   // separate /sync/meta round trip -- see expectedUpdatedAt above.
-  return json({ ok: true, updatedAt: blob.updatedAt });
+  return json(likedListsSynced ? { ok: true, updatedAt: blob.updatedAt } : { ok: true, updatedAt: blob.updatedAt, likedListsSynced: false });
 }
 
 // /api/creator/sync/save-tracking  (POST)  { creatorName, creatorKey,

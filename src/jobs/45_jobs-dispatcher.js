@@ -67,6 +67,11 @@ const JOBS_DURABLE_MAX_ATTEMPTS = JOBS_MAX_RETRIES + 1;
 // the trigger fires every 5 or every 6 minutes, and an hourly job is not
 // pushed a whole tick later every hour.
 const JOBS_PERIODIC_SLACK_MS = 90 * 1000;
+// A periodic job that has failed this many runs in a row (OPS-07) is retried
+// hourly instead of every few minutes, so a broken release stops spending
+// provider calls and D1 writes. One success puts it back on its own period.
+const JOBS_PERIODIC_BACKOFF_AFTER = 10;
+const JOBS_PERIODIC_BACKOFF_MS = 60 * 60 * 1000;
 // The cron's own work runs every tick.
 const LEGACY_CRON_EVERY_MS = 4 * 60 * 1000;
 const PERIODIC_JOB_KEY_PREFIX = "periodic:";
@@ -134,6 +139,7 @@ function jobErrorText(err) {
 
 function jobRowRetryMs(spec, failures) {
   const ms = jobRetryDelaySec(failures, spec) * 1000;
+  if (spec.periodic && failures >= JOBS_PERIODIC_BACKOFF_AFTER) return JOBS_PERIODIC_BACKOFF_MS;
   return spec.periodic ? Math.min(ms, spec.everyMs) : ms;
 }
 

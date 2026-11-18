@@ -2,6 +2,8 @@
 
 This file defines the mandatory rules and protocols for all AI agents working in this repository (including **Claude Code**, **Antigravity / Gemini 3.8**, and **Arena.ai Agent Mode**).
 
+**Read `CLAUDE.md` first.** Its "Hard rules" (never skip or loosen a test, ask only about product decisions, failing test first for a bug, mention unrelated dead code instead of deleting it, state a short plan for multi-step work, `<\/script>` inside template literals) apply to every agent, whichever file it started from.
+
 ---
 
 ## 1. Project Context & Environment
@@ -53,7 +55,7 @@ Every change to what the user sees (buttons, colours, spacing, text sizes, modal
 - **Build stamp:** `python build.py` fills in `WORKER_BUILD` (shown on `/admin`). Never write a value into it by hand; the owner compares it after pasting.
 - **UI contract:** `node tests/ui-contract.mjs` (CI job `ui-contract`) fails when a shared component's computed look changes. Accept an intended change with `--update` and keep the `tests/ui-contract.json` diff in the commit.
 - **Pre-commit hook:** `git config core.hooksPath .githooks` (once per clone).
-- **Release:** bump `WORKER_RELEASE` and add the entry to `docs/RELEASES.md`. Protection settings and the PR checklist: `docs/REPO_PROTECTION.md`, `.github/pull_request_template.md`.
+- **Release:** there is no release number to bump (`python build.py` fills `WORKER_BUILD` and `WORKER_BUILD_DATE`). Add the entry to `docs/RELEASES.md` under the build date and stamp `python build.py` prints. Protection settings and the PR checklist: `docs/REPO_PROTECTION.md`, `.github/pull_request_template.md`.
 - **Size limits:** new functions ≤ 150 lines and source files ≤ 3,000 lines. `tests/size-budget.test.mjs` fails on anything new over the limit or any listed item that grew; `tests/size-budget.json` may only shrink (`node tests/size-budget.test.mjs --update` lowers it, never raises it).
 - Never skip, disable or loosen a test to get green. If a guard is wrong, change the guard and say why in the commit.
 

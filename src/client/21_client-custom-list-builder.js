@@ -3509,7 +3509,7 @@ function removeAiringNextShow(showId, btn) {
   if (typeof scheduleTrackingSync === 'function') scheduleTrackingSync({ intentionalRemoval: true });
   if (typeof showAddedToast === 'function') {
     const title = (entry && (entry.showTitle || entry.name)) || 'This show';
-    showAddedToast('Removed ' + title + ' from Airing Next. Watch another episode to bring it back.');
+    showAddedToast('Removed ' + title + ' from Airing Next. Restore it from Settings.');
   }
 }
 window.removeAiringNextShow = removeAiringNextShow;

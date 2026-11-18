@@ -2792,7 +2792,7 @@ describe("schema gate: a Worker ahead of its database refuses writes, not reads"
     db._db.exec("DELETE FROM schema_migrations WHERE version >= '0014'");
     const env = makeEnv({ CONFIGS: makeKv(), DB: db });
     const r = await call(env, "/admin/api/schema-status", { cookie: await adminCookie(env) });
-    assert.deepEqual({ ...r.body.ledger }, { version: "0013", required: "0014", readable: true, behind: true });
+    assert.deepEqual({ ...r.body.ledger }, { version: "0013", required: "0016", readable: true, behind: true });
   });
 
   it("is not fooled by the activity database's A0001 run in the main database", async () => {
@@ -2813,6 +2813,24 @@ describe("schema gate: a Worker ahead of its database refuses writes, not reads"
     const w = await freshIsolate();
     const env = makeEnv({ CONFIGS: makeKv(), DB: makeD1() });
     assert.equal((await create(w, env, "currentuser")).status, 200);
+  });
+
+  it("refuses writes at ledger 0015 (below the required 0016) and accepts them at 0016 or later (audit DB-05)", async () => {
+    // Rewind the ledger to 0015: one step under the gate's required version.
+    const w1 = await freshIsolate();
+    const behindDb = makeD1();
+    behindDb._db.exec("DELETE FROM schema_migrations WHERE version >= '0016'");
+    const behindEnv = makeEnv({ CONFIGS: makeKv(), DB: behindDb });
+    assert.equal((await create(w1, behindEnv, "ledger0015")).status, 503);
+    assert.equal(behindDb.q("SELECT COUNT(*) AS n FROM creators")[0].n, 0, "nothing was written");
+
+    // Exactly 0016 (the live database is at 0025, a fresh schema is newer still).
+    const w2 = await freshIsolate();
+    const atDb = makeD1();
+    atDb._db.exec("DELETE FROM schema_migrations WHERE version > '0016'");
+    assert.equal(atDb.q("SELECT MAX(version) AS v FROM schema_migrations")[0].v, "0016");
+    const atEnv = makeEnv({ CONFIGS: makeKv(), DB: atDb });
+    assert.equal((await create(w2, atEnv, "ledger0016")).status, 200);
   });
 
   it("lets writes through on a database that predates the ledger", async () => {
@@ -4760,7 +4778,7 @@ describe("audit fix 9: stat counters are atomic when D1 is bound", () => {
 
 describe("audit fix 13: outbound requests are bounded by a timeout", () => {
   it("wires a timeout signal into the shared fetch helper", async () => {
-    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js");
+    const sandbox = loadSourceFunctions("src/core/02_http-and-creator-utils.js", "src/core/82_trakt-retry.js");
     let sawSignal = false;
     sandbox.fetch = async (_url, opts) => { sawSignal = !!(opts && opts.signal); return { status: 200 }; };
     sandbox.AbortSignal = { timeout: (ms) => ({ __timeoutMs: ms }) };
@@ -8630,6 +8648,7 @@ describe("FE-17: the custom-lists stamp cannot silently stop working", () => {
     "src/api/67_creator-api-routes.js :: creatorListsReadOrder": "reads the order key for the lists read; writes nothing",
     "src/api/67_creator-api-routes.js :: creatorListsOrphanSweep": "lists the record keys the order lost for the lists read; writes nothing",
     "src/api/67_creator-api-routes.js :: creatorListSaveReadOrder": "reads the order key for a list save; writes nothing",
+    "src/api/67_creator-api-routes.js :: creatorListSaveRetractIfDeleted": "only deletes the keys a save just wrote, and only for an account being deleted; the delete-account purge already drops the stamp and the other browsers are signed out",
     "src/api/67_creator-api-routes.js :: creatorListSaveSlug": "checks which slugs are taken; writes nothing",
     "src/api/67_creator-api-routes.js :: creatorListSaveAddToOrder": "adds the just-saved slug to the order key; its only caller, creatorApiListsSave, bumps the stamp right after",
     "src/api/69_creator-api-sync-routes.js :: creatorApiSyncLoad": "reads the order key",
@@ -10135,7 +10154,7 @@ describe("Phase 4: Split sync blobs into relational D1 tables", () => {
     saveCreatorUserListsD1,
     readCreatorUserListsD1,
     fetchAutoTrackedCatalog,
-  } = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/catalog/05_catalog-core.js");
+  } = loadSourceFunctions("src/core/00_constants.js", "src/core/02_http-and-creator-utils.js", "src/core/05_watch-history-write.js", "src/catalog/05_catalog-core.js");
 
   // A personal shelf is only served to a caller that has proved it owns the
   // account -- see mayReadTrackedShelf (src/core/02_http-and-creator-utils.js). These
@@ -14169,7 +14188,7 @@ describe("P3a-2: token encryption and blind index HMAC", () => {
 });
 
 describe("P3a-3: accounts backfill (migrate.accounts)", () => {
-  const { backfillAccounts, reconcileAccounts } = loadSourceFunctions(
+  const { backfillAccounts } = loadSourceFunctions(
     "src/core/00_constants.js",
     "src/core/02_http-and-creator-utils.js"
   );
@@ -14333,14 +14352,14 @@ describe("P3a-3: accounts backfill (migrate.accounts)", () => {
     assert.equal(rows2[1].id, betaId, "beta id preserved");
   });
 
-  it("reconcileAccounts / dryRun calculates counts without modifying accounts table", async () => {
+  it("backfillAccounts dryRun calculates counts without modifying accounts table", async () => {
     const env = makeEnv({ DB: makeD1() });
     await env.DB.prepare(
       "INSERT INTO creators (username, display_name, key_hash, created_at) VALUES (?, ?, ?, ?)"
     ).bind("dry_user1", "Dry 1", "hash1", 1000).run();
     await env.CONFIGS.put("creator:dry_user2", JSON.stringify({ displayName: "Dry 2", keyHash: "hash2", createdAt: 1000 }));
 
-    const report = await reconcileAccounts(env);
+    const report = await backfillAccounts(env, { dryRun: true });
     assert.equal(report.dryRun, true);
     assert.equal(report.unionCount, 2);
     assert.equal(report.accountsCount, 0);

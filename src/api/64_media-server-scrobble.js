@@ -189,7 +189,9 @@ async function authenticateScrobbleRequest(url, env, request, ctx) {
     }
     return { response: json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401) };
   }
-  await ensureTrackingMigrated(env, authUser);
+  // A directly recorded play (41_direct-play.js) never asks for the assembled record,
+  // which for an account on the activity database rebuilds its whole history (PERF-01).
+  if ((await directPlayAccount(env, authUser)) == null) await ensureTrackingMigrated(env, authUser);
 
   if (!effectiveTmdbKey && authUser && env && env.CONFIGS) {
     try {
@@ -377,6 +379,9 @@ async function recordScrobbleSeenUser(env, ctx, authUser, server, mediaServerUse
       const seenKey = `scrobbleseenusers:${authUser}`;
       const raw = await env.CONFIGS.get(seenKey);
       const seen = raw ? JSON.parse(raw) : {};
+      // PERF-04: a user already listed and seen within the hour needs no write.
+      const prev = seen[mediaServerUser];
+      if (prev && prev.server === server && Date.now() - Number(prev.lastSeen) < 60 * 60 * 1000) return;
       seen[mediaServerUser] = { server, lastSeen: Date.now() };
       // 90-day TTL — stale accounts from old servers quietly expire
       await env.CONFIGS.put(seenKey, JSON.stringify(seen), { expirationTtl: 60 * 60 * 24 * 90 });
@@ -415,6 +420,11 @@ async function loadScrobbleFilterSettings(url, env, authUser) {
             scrobbleBlockAnonymous: Boolean(metaRow.scrobble_block_anonymous),
           };
         }
+      }
+      const directAccount = trackingObj ? null : await directPlayAccount(env, authUser);
+      if (directAccount != null) {
+        // The settings part of the record is all the filter reads (PERF-01).
+        trackingObj = (await readTrackingSettings(env, directAccount)).tracking;
       }
       if (!trackingObj) {
         let trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${authUser}`);
@@ -521,25 +531,32 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
   let matched = "no";
   const syncKey = `creatorsynctracking:${authUser}`;
   let blob = null;
-  if (env.DB) {
-    blob = await readCreatorTrackingD1(env, authUser);
+  // FF_DIRECT_PLAY (41_direct-play.js): the record without its Watch History, and the play
+  // written on its own below.
+  const direct = await directPlayLoad(env, authUser);
+  if (direct) {
+    blob = direct.blob;
+  } else {
+    if (env.DB) {
+      blob = await readCreatorTrackingD1(env, authUser);
+    }
+    const raw = await env.CONFIGS.get(syncKey);
+    if (!blob && raw) {
+      try { blob = JSON.parse(raw); } catch {}
+    }
+    if (!blob || typeof blob !== "object") {
+      blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true };
+    }
+    // Written back whole below -- see ensureTrackingWatchlist.
+    await ensureTrackingWatchlist(env, authUser, blob);
   }
-  const raw = await env.CONFIGS.get(syncKey);
-  if (!blob && raw) {
-    try { blob = JSON.parse(raw); } catch {}
-  }
-  if (!blob || typeof blob !== "object") {
-    blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true };
-  }
-  // Written back whole below -- see ensureTrackingWatchlist.
-  await ensureTrackingWatchlist(env, authUser, blob);
   blob.watchHistory = Array.isArray(blob.watchHistory) ? blob.watchHistory : [];
   blob.continueWatching = Array.isArray(blob.continueWatching) ? blob.continueWatching : [];
   blob.fullyWatchedShowIds = Array.isArray(blob.fullyWatchedShowIds) ? blob.fullyWatchedShowIds : [];
   blob.dismissedContinueWatching = blob.dismissedContinueWatching && typeof blob.dismissedContinueWatching === "object" ? blob.dismissedContinueWatching : {};
 
   if (mediaType === "series") {
-    const played = await recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey });
+    const played = await recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey, direct });
     matched = played.matched;
     imdbId = played.imdbId;
   } else {
@@ -554,6 +571,11 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
   }
 
   blob.updatedAt = Date.now();
+  if (direct) {
+    // Nothing recorded, nothing to write (the old path rewrote the record regardless).
+    if (matched.startsWith("yes")) await directPlayCommit(env, authUser, direct, blob, "webhook");
+    return matched;
+  }
   await env.CONFIGS.put(syncKey, JSON.stringify(blob));
   if (env.DB) {
     await saveCreatorTrackingD1(env, authUser, blob, false);
@@ -569,7 +591,7 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
 }
 
 // The series branch of step 5.
-async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey }) {
+async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey, direct }) {
   const seasonNum = season != null ? season : 1;
   const episodeNum = episode != null ? episode : 1;
 
@@ -617,6 +639,9 @@ async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTi
   const itemKey = epIdStr || `${resolvedShowId}:${seasonNum}:${episodeNum}`;
   const finalEpisodePoster = epPoster || sPoster || (imdbId && imdbId.startsWith("tt") ? `https://images.metahub.space/poster/medium/${imdbId}/img` : "");
   const finalShowPoster = sPoster || (imdbId && imdbId.startsWith("tt") ? `https://images.metahub.space/poster/medium/${imdbId}/img` : "") || epPoster;
+
+  // Directly recorded (41_direct-play.js): the history holds only this show's furthest watched episode.
+  if (direct) blob.watchHistory = await directPlayShowHistory(env, direct, { showId: resolvedShowId, showTitle: sTitle, showPoster: finalShowPoster, season: seasonNum, episode: episodeNum });
 
   // Re-watching or newly watching an episode always brings it to the top of Watch History
   blob.watchHistory = blob.watchHistory.filter((it) => !((it.showId === resolvedShowId || it.showTitle === sTitle) && it.seasonNum === seasonNum && it.episodeNum === episodeNum));

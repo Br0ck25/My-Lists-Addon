@@ -160,7 +160,7 @@ async function nuvioTvScheduleFor(env, ctx, url, target, wantedId, now) {
     if (planned && JSON.stringify(planned) !== JSON.stringify(saved)) {
       state = planned;
       if (env && env.CONFIGS) {
-        try { await env.CONFIGS.put(key, JSON.stringify(planned), { expirationTtl: NUVIO_TV_SCHEDULE_TTL_SEC }); } catch {}
+        try { await env.CONFIGS.put(key, JSON.stringify(planned), { expirationTtl: NUVIO_TV_SCHEDULE_TTL_SEC }); } catch (e) { logIgnoredWrite(`put ${key}`, e); }
       }
     }
   }

@@ -51,6 +51,9 @@ describe("the deleted-lists lookup on the Lists page (DB-03)", () => {
     const db = new DatabaseSync(":memory:");
     db.exec(read("schema.sql"));
     db.exec("DROP INDEX idx_lists_owner_deleted");
+    // Migration 0027's plain owner index would also serve this lookup; drop it
+    // so the test still proves migration 0025's index on its own.
+    db.exec("DROP INDEX idx_lists_owner_account");
     populated(db);
     assert.match(planOf(db), /SCAN lists/, "without the index the lookup reads the whole table");
     const file = fs.readdirSync(path.join(ROOT, "migrations")).find((f) => f.startsWith("0025_"));

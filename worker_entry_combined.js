@@ -34,7 +34,7 @@ const WORKER_BUILD_DATE = "2026-11-18";
 // header.js plus the numbered files, so two pasted Workers carry the same
 // value only if they are the same code. /admin shows it beside the build date:
 // after pasting, compare it with what `python build.py` printed.
-const WORKER_BUILD = "28cb160767";
+const WORKER_BUILD = "4c789cd7b8";
 
 // --- Trakt Continue Watching: how many shows get a "next episode" check -------
 //
@@ -889,7 +889,7 @@ const PUBLIC_INDEX_MAX = 20000;
 // 503 while the database's schema_migrations ledger is behind this (see
 // schemaWriteGate, 02_http-and-creator-utils.js). Bump it in the same change
 // that adds a migration the code depends on.
-const REQUIRED_SCHEMA_VERSION = "0014";
+const REQUIRED_SCHEMA_VERSION = "0016";
 
 const D1_SCHEMA_MANIFEST = [
   {
@@ -1329,6 +1329,26 @@ const D1_SCHEMA_MANIFEST = [
   {
     migration: "0025", kind: "index", name: "idx_lists_owner_deleted",
     consequence: "Each signed-in Lists load reads the whole lists table to find the account's recently deleted lists. Slower, not broken.",
+  },
+  {
+    migration: "0026", kind: "index", name: "idx_accounts_key_hash",
+    consequence: "Each manifest and channel catalog request reads the whole accounts table. Slower, not broken.",
+  },
+  {
+    migration: "0027", kind: "index", name: "idx_lists_owner_account",
+    consequence: "Deleting an account reads the whole lists table. Slower, not broken.",
+  },
+  {
+    migration: "0027", kind: "index", name: "idx_channels_owner_account",
+    consequence: "Deleting an account reads the whole channels table. Slower, not broken.",
+  },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_username",
+    consequence: "Looking up one account's published lists reads the whole creator_lists table. Slower, not broken.",
+  },
+  {
+    migration: "0029", kind: "index", name: "idx_creator_lists_visibility",
+    consequence: "Filtering published lists by visibility reads the whole creator_lists table. Slower, not broken.",
   },
 ];
 
@@ -2428,6 +2448,12 @@ const UTILITY_CSS = `
 .u-ws-nowrap{white-space:nowrap !important}
 .u-ws-pre_wrap{white-space:pre-wrap !important}
 `;
+
+// Best-effort KV writes swallow their failure on purpose (the request must still
+// succeed), but a failure must leave a trace: say which key and why.
+function logIgnoredWrite(label, e) {
+  console.warn(`[ignored write] ${label}:`, e && e.message ? e.message : e);
+}
 // --- icon --------------------------------------------------------------
 const ICON_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAEAAElEQVR42rz9d9xt11Eejs/MWvu0" +
@@ -5084,7 +5110,7 @@ async function storeRecoveryAnswerHash(env, username, hash) {
     }
     try {
       await env.DB.prepare("UPDATE accounts SET recovery_answer_hash = ? WHERE username = ? COLLATE NOCASE").bind(hash, username).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("recovery_answer_hash backfill", e); }
   }
   const raw = await getCreator(env, username);
   if (raw) {
@@ -5533,7 +5559,7 @@ async function revokeSession(env, idHash) {
     try {
       const now = Date.now();
       await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE id_hash = ? AND revoked_at IS NULL").bind(now, idHash).run();
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeSession", e); }
   }
 }
 
@@ -5558,7 +5584,7 @@ async function revokeAccountSessions(env, accountId, exceptIdHash = null) {
           "UPDATE sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL"
         ).bind(now, accountId).run();
       }
-    } catch {}
+    } catch (e) { logIgnoredWrite("revokeAccountSessions", e); }
   }
 }
 
@@ -5657,7 +5683,7 @@ async function deleteCreatorKeyLookup(env, username, key) {
     if (username) {
       try {
         await env.DB.prepare("UPDATE accounts SET key_lookup_hmac = NULL WHERE lower(username) = lower(?)").bind(username).run();
-      } catch {}
+      } catch (e) { logIgnoredWrite("key_lookup_hmac clear", e); }
     }
   }
   if (env.CONFIGS) {
@@ -5997,8 +6023,9 @@ async function stampListVisibilityIfNeeded(env, key, data) {
   if (env && env.CONFIGS && key && !(isV2ListsOnly(env) && isLegacyListKvKey(key))) {
     try {
       await env.CONFIGS.put(key, JSON.stringify(data));
-    } catch {
+    } catch (e) {
       // Best-effort: the in-memory value is still stamped for this request.
+      logIgnoredWrite("list visibility stamp", e);
     }
   }
   return true;
@@ -6893,18 +6920,6 @@ function withTimeout(promise, ms, label) {
   });
 }
 
-async function fetchTraktWithRetry(url, options = {}, retries = 2) {
-  let res = await fetchWithTimeout(url, options);
-  if (res.status === 429 && retries > 0) {
-    const retrySec = parseInt((res.headers && res.headers.get("Retry-After")) || "1", 10);
-    const jitter = Math.floor(Math.random() * 500);
-    const delayMs = Math.min(3000, Math.max(1000, retrySec * 1000)) + jitter;
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-    return fetchTraktWithRetry(url, options, retries - 1);
-  }
-  return res;
-}
-
 
 // --- Like voter ledger -------------------------------------------------------
 //
@@ -7774,7 +7789,7 @@ async function clearCreatorListDeletion(env, username, slug) {
         delete known[String(slug)];
         await writeCreatorListDeletions(env, username, known);
       }
-    } catch (e) {}
+    } catch (e) { logIgnoredWrite("clear list tombstone", e); }
   }
 }
 
@@ -7857,10 +7872,10 @@ async function deleteCreatorLists(env, username, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`c:${username}:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deleteCreatorLists):", dbErr);
         out.ok = false;
@@ -7880,9 +7895,7 @@ async function deleteCreatorLists(env, username, slugs) {
       }
       try {
         await env.CONFIGS.delete(`listlikevoters:${username}:${slug}`);
-      } catch (e) {
-        // A stranded ledger is untidy, not harmful on its own.
-      }
+      } catch (e) { logIgnoredWrite(`delete listlikevoters:${username}:${slug}`, e); } // a stranded ledger is untidy, not fatal
     }
     (existed ? out.deleted : out.missing).push(slug);
   }
@@ -7987,10 +8000,10 @@ async function deletePublishedLists(env, slugs) {
         }
         try {
           await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: lists_fts row", e); }
         try {
           await env.DB.prepare("DELETE FROM list_likes WHERE list_id = ?").bind(`a:${slug}`).run();
-        } catch {}
+        } catch (e) { logIgnoredWrite("shared list delete: list_likes rows", e); }
       } catch (dbErr) {
         console.error("D1 write error (deletePublishedLists):", dbErr);
         out.ok = false;
@@ -8005,9 +8018,7 @@ async function deletePublishedLists(env, slugs) {
       }
       try {
         await env.CONFIGS.delete(`listlikevoters:user:${slug}`);
-      } catch (e) {
-        // A stranded ledger is untidy, not harmful on its own.
-      }
+      } catch (e) { logIgnoredWrite(`delete listlikevoters:user:${slug}`, e); } // a stranded ledger is untidy, not fatal
     }
     (existed ? out.deleted : out.missing).push(slug);
   }
@@ -8620,9 +8631,7 @@ async function purgeCreatorData(env, username, options = {}) {
         // unable to like it.
         try {
           await env.CONFIGS.delete(`listlikevoters:${listPath}`);
-        } catch (e) {
-          // best-effort: a stranded ledger is untidy, not harmful on its own
-        }
+        } catch (e) { logIgnoredWrite(`delete listlikevoters:${listPath}`, e); } // best-effort, but a re-registered username would inherit a stranded ledger
         listsCleared++;
       }
       if (res.list_complete || !res.cursor) break;
@@ -8763,7 +8772,7 @@ async function purgeCreatorData(env, username, options = {}) {
   // other leftover: the name is not freed.
   if (deleteIdentity || options.detachSupportThreads === true) {
     try {
-      await detachFeedbackThreadsFromCreator(env, u);
+      await (deleteIdentity ? deleteFeedbackThreadsFromCreator(env, u) : detachFeedbackThreadsFromCreator(env, u));
     } catch (e) {
       console.error("purgeCreatorData: could not detach the support threads", e);
       dataSweepFailed = true;
@@ -8818,7 +8827,7 @@ async function purgeCreatorData(env, username, options = {}) {
         try {
           await env.CONFIGS.delete(`creatorlastseen:${u}`);
           keysCleared++;
-        } catch (e) {}
+        } catch (e) { logIgnoredWrite("purge: creatorlastseen", e); }
       }
     }
   }
@@ -8859,7 +8868,7 @@ async function purgeCreatorData(env, username, options = {}) {
           await env.CONFIGS.delete(k.name);
           const listPath = k.name.slice("creatorlist:".length);
           lateListIds.push("c:" + listPath);
-          try { await env.CONFIGS.delete(`listlikevoters:${listPath}`); } catch (e) {}
+          try { await env.CONFIGS.delete(`listlikevoters:${listPath}`); } catch (e) { logIgnoredWrite(`delete listlikevoters:${listPath}`, e); }
           listsCleared++;
         }
         if (res.list_complete || !res.cursor) break;
@@ -8871,7 +8880,7 @@ async function purgeCreatorData(env, username, options = {}) {
       try {
         const revived = await env.CONFIGS.get(creatorScrobbleTokenKey(u));
         if (revived) await env.CONFIGS.delete(scrobbleTokenKey(revived));
-      } catch (e) {}
+      } catch (e) { logIgnoredWrite("purge: scrobble token", e); }
       for (const key of dataKeys) {
         await env.CONFIGS.delete(key);
       }
@@ -9665,10 +9674,6 @@ async function backfillAccounts(env, options = {}) {
   };
 }
 
-async function reconcileAccounts(env) {
-  return backfillAccounts(env, { dryRun: true });
-}
-
 // D1 is the authoritative store for creator lists when bound.
 // KV serves as a read-through cache and fallback for unmigrated lists.
 //
@@ -9715,8 +9720,8 @@ async function getCreatorList(env, username, slug) {
           try {
             env.DB.prepare(
               "UPDATE creator_lists SET name = ?, type = ?, visibility = ?, items_json = ?, updated_at = ? WHERE id = ?"
-            ).bind(name, type, visibility, JSON.stringify(items), updatedAt || 0, `${username}:${slug}`).run().catch(() => {});
-          } catch {}
+            ).bind(name, type, visibility, JSON.stringify(items), updatedAt || 0, `${username}:${slug}`).run().catch((e) => logIgnoredWrite("list D1 mirror update", e));
+          } catch (e) { logIgnoredWrite("list D1 mirror update", e); }
         }
 
         const payload = {
@@ -10383,55 +10388,9 @@ async function writeCreatorTrackingD1(env, username, trackingData, isIntentional
       prunes.push(...await d1ReplaceRowsById(env, "airing_next", username, "show_id", an.seen));
     }
 
-    // 5. Watch History
+    // 5. Watch History (only new or changed rows; see 05_watch-history-write.js)
     if (Array.isArray(trackingData.watchHistory)) {
-      const whSeen = new Set();
-      for (const item of trackingData.watchHistory) {
-        if (!item) continue;
-        const itemId = String(item.id || (item.showId ? `${item.showId}:${item.seasonNum}:${item.episodeNum}` : ""));
-        if (!itemId || whSeen.has(itemId)) continue;
-        whSeen.add(itemId);
-        const itemType = item.type || (item.seasonNum != null ? "episode" : "movie");
-        const title = item.name || item.title || null;
-        const poster = item.poster || null;
-        const showId = item.showId ? String(item.showId) : null;
-        const showTitle = item.showTitle || null;
-        const showPoster = item.showPoster || null;
-        const seasonNum = item.seasonNum != null ? Number(item.seasonNum) : null;
-        const episodeNum = item.episodeNum != null ? Number(item.episodeNum) : null;
-        const year = item.year ? String(item.year) : null;
-        const airDate = item.airDate ? String(item.airDate) : null;
-        const watchedAt = Number(item.watchedAt) || meta.updatedAt;
-        stmts.push(
-          env.DB.prepare(
-            `INSERT INTO watch_history (
-              username, item_id, item_type, title, poster, show_id, show_title,
-              show_poster, season_num, episode_num, year, air_date, watched_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(username, item_id) DO UPDATE SET
-              item_type = excluded.item_type,
-              title = excluded.title,
-              poster = excluded.poster,
-              show_id = excluded.show_id,
-              show_title = excluded.show_title,
-              show_poster = excluded.show_poster,
-              season_num = excluded.season_num,
-              episode_num = excluded.episode_num,
-              year = excluded.year,
-              air_date = excluded.air_date,
-              watched_at = excluded.watched_at`
-          ).bind(
-            username, itemId, itemType, title, poster, showId, showTitle,
-            showPoster, seasonNum, episodeNum, year, airDate, watchedAt
-          )
-        );
-      }
-      // Only an INTENTIONAL removal shortens Watch History -- an ordinary
-      // autosave is additive, and the rescue-merge in save-tracking exists
-      // precisely so a stale push cannot shorten it by accident.
-      if (isIntentionalRemoval) {
-        prunes.push(...await d1ReplaceRowsById(env, "watch_history", username, "item_id", whSeen));
-      }
+      await pushWatchHistoryWrites(env, username, trackingData.watchHistory, meta.updatedAt, isIntentionalRemoval, stmts, prunes);
     }
 
     // Upserts first, deletions next, the meta stamp last, in that order across
@@ -10551,6 +10510,53 @@ async function ensureTrackingWatchlist(env, username, blob) {
   return blob;
 }
 
+// One stored continue_watching row -> one item (CQ-02). Used by the catalog read
+// path and the creator-tracking read path, so a fix lands in both. A COMPANION:
+// show_title carries the companion fields as JSON.
+function mapContinueWatchingRow(r) {
+  let isCompanion = undefined;
+  let companionType = undefined;
+  let companionNote = undefined;
+  let companionStoryline = undefined;
+  let precedingShowId = undefined;
+  let showTitle = r.show_title || undefined;
+  let kind = undefined;
+  let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
+  if (r.show_title && r.show_title.startsWith("COMPANION:")) {
+    try {
+      const compMeta = JSON.parse(r.show_title.slice(10));
+      isCompanion = true;
+      companionType = compMeta.companionType;
+      companionNote = compMeta.companionNote;
+      companionStoryline = compMeta.companionStoryline;
+      precedingShowId = compMeta.precedingShowId;
+      showTitle = compMeta.showTitle || undefined;
+      kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
+      type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
+    } catch {}
+  } else if (type === "movie") {
+    kind = "movie";
+  }
+  return {
+    id: r.item_id,
+    showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
+    type: type,
+    kind: kind,
+    name: r.name || undefined,
+    poster: r.poster || undefined,
+    showTitle: showTitle,
+    showPoster: r.show_poster || undefined,
+    seasonNum: r.season_num != null ? r.season_num : undefined,
+    episodeNum: r.episode_num != null ? r.episode_num : undefined,
+    updatedAt: r.updated_at,
+    isCompanion: isCompanion,
+    companionType: companionType,
+    companionNote: companionNote,
+    companionStoryline: companionStoryline,
+    precedingShowId: precedingShowId,
+  };
+}
+
 // D1 is authoritative for this record -- /api/creator/sync/load and every
 // personal catalog row read it first -- so this has to be able to notice when
 // it is NOT the freshest copy.
@@ -10638,49 +10644,7 @@ async function readCreatorTrackingD1(env, username) {
       watchedAt: r.watched_at,
     }));
 
-    const continueWatching = cwRows.map((r) => {
-      let isCompanion = undefined;
-      let companionType = undefined;
-      let companionNote = undefined;
-      let companionStoryline = undefined;
-      let precedingShowId = undefined;
-      let showTitle = r.show_title || undefined;
-      let kind = undefined;
-      let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
-      if (r.show_title && r.show_title.startsWith("COMPANION:")) {
-        try {
-          const compMeta = JSON.parse(r.show_title.slice(10));
-          isCompanion = true;
-          companionType = compMeta.companionType;
-          companionNote = compMeta.companionNote;
-          companionStoryline = compMeta.companionStoryline;
-          precedingShowId = compMeta.precedingShowId;
-          showTitle = compMeta.showTitle || undefined;
-          kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
-          type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
-        } catch {}
-      } else if (type === "movie") {
-        kind = "movie";
-      }
-      return {
-        id: r.item_id,
-        showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
-        type: type,
-        kind: kind,
-        name: r.name || undefined,
-        poster: r.poster || undefined,
-        showTitle: showTitle,
-        showPoster: r.show_poster || undefined,
-        seasonNum: r.season_num != null ? r.season_num : undefined,
-        episodeNum: r.episode_num != null ? r.episode_num : undefined,
-        updatedAt: r.updated_at,
-        isCompanion: isCompanion,
-        companionType: companionType,
-        companionNote: companionNote,
-        companionStoryline: companionStoryline,
-        precedingShowId: precedingShowId,
-      };
-    });
+    const continueWatching = cwRows.map(mapContinueWatchingRow);
 
     const airingNext = anRows.map((r) => ({
       id: r.item_id,
@@ -10757,43 +10721,27 @@ async function readCreatorTrackingD1(env, username) {
   }
 }
 
+// Inserts first (ignoring what is there), stale rows deleted last: a failure
+// part-way leaves extra ids, never a truncated list (audit DB-02). Returns
+// true only when every statement ran.
 async function saveCreatorUserListsD1(env, username, likedLists, hiddenLists, hiddenSections) {
   if (!env || !env.DB || !username) return false;
   try {
-    const stmts = [
-      env.DB.prepare("DELETE FROM creator_user_lists WHERE username = ?").bind(username),
-    ];
     const now = Date.now();
-    if (Array.isArray(likedLists)) {
-      for (const id of likedLists) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'liked', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
-    if (Array.isArray(hiddenLists)) {
-      for (const id of hiddenLists) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'hidden', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
-    if (Array.isArray(hiddenSections)) {
-      for (const id of hiddenSections) {
-        if (typeof id === "string" && id) {
-          stmts.push(
-            env.DB.prepare("INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, 'hidden_section', ?)")
-              .bind(username, id, now)
-          );
-        }
-      }
-    }
+    const wanted = new Map();
+    const collect = (type, list) => {
+      if (!Array.isArray(list)) return;
+      for (const id of list) if (typeof id === "string" && id) wanted.set(`${type}\u0000${id}`, [id, type]);
+    };
+    collect("liked", likedLists);
+    collect("hidden", hiddenLists);
+    collect("hidden_section", hiddenSections);
+    const insertSql = "INSERT OR IGNORE INTO creator_user_lists (username, list_id, list_type, created_at) VALUES (?, ?, ?, ?)";
+    const inserts = [...wanted.values()].map(([id, type]) => env.DB.prepare(insertSql).bind(username, id, type, now));
+    const { results } = await env.DB.prepare("SELECT list_id, list_type FROM creator_user_lists WHERE username = ?").bind(username).all();
+    const stale = (results || []).filter((r) => !wanted.has(`${r.list_type}\u0000${r.list_id}`));
+    const removals = stale.map((r) => env.DB.prepare("DELETE FROM creator_user_lists WHERE username = ? AND list_id = ? AND list_type = ?").bind(username, r.list_id, r.list_type));
+    const stmts = inserts.concat(removals);
     const CHUNK_SIZE = 80;
     for (let i = 0; i < stmts.length; i += CHUNK_SIZE) {
       await env.DB.batch(stmts.slice(i, i + CHUNK_SIZE));
@@ -13244,14 +13192,14 @@ function supportGoalMonth(now = new Date()) {
 // The message every visitor to mylistsaddon.com sees once per browser session
 // (openShutdownNotice, 16_client-row-core.js). The admin turns it off, edits
 // its words and picks its buttons under Management & Tools -> Site Notice.
-// Nothing stored means the original shutdown message, on, with both buttons:
+// Nothing stored means the original shutdown message, OFF (the site is staying online), with both buttons:
 // a self-hosted copy never shows it either way (the page only shows it on
 // mylistsaddon.com). The page asks /api/site-notice once per session.
 const SITE_NOTICE_KEY = "site:notice:v1";
 const SITE_NOTICE_TITLE_MAX = 120;
 const SITE_NOTICE_BODY_MAX = 4000;
 const DEFAULT_SITE_NOTICE = {
-  enabled: true,
+  enabled: false, // the site is not shutting down (owner, 2026-11-10); the words stay for a future notice
   title: "A Message About the Future of My Lists Addon",
   body: [
     "First, I want to say thank you to everyone who has used and supported My Lists Addon. We now have around 1,100 users, and I really appreciate everyone who has given the project a chance.",
@@ -13832,7 +13780,7 @@ ${UTILITY_CSS}
       <p class="admin-header-meta">My Lists Addon &middot; <span id="workerRelease">Built ${WORKER_BUILD_DATE}</span> <span id="workerBuild">(build ${WORKER_BUILD})</span></p>
     </div>
   </div>
-  ${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
+  ${typeof adminFailingJobsHtml === "function" ? await adminFailingJobsHtml(env) : ""}${isD1Bound ? '' : '<div class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>Warning: No D1 database bound.</strong> D1 is required for authoritative accounts, lists, full-text search, likes, feedback, and tracking. Please bind your D1 database as <code>DB</code> in the Cloudflare Dashboard (Worker Settings &rarr; Bindings).</div>'}
 
   <!-- Not a tablist: these three buttons do not reveal panels, they choose
        which row of sub-tabs is shown, and it is the sub-tab that selects
@@ -17721,11 +17669,11 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
             const mainParsed = mainRaw ? JSON.parse(mainRaw) : null;
             if (mainParsed && typeof mainParsed === "object") settingsSource = mainParsed;
           } catch {}
-          const tvList = Array.isArray(tvParsed.config)
+          const tvList = (Array.isArray(tvParsed.config)
             ? tvParsed.config
             : (Array.isArray(tvParsed.entries)
               ? tvParsed.entries
-              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []));
+              : (Array.isArray(tvParsed.lists) ? tvParsed.lists : []))).filter((e) => e && typeof e === "object");
           return {
             entries: tvList,
             lists: tvList,
@@ -17749,11 +17697,12 @@ async function resolveCreatorSyncConfig(username, env, { isTvLauncher = false } 
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed) return null;
-    const list = Array.isArray(parsed.config)
+    // An entry that is not an object (a stored null) is skipped, not fatal.
+    const list = (Array.isArray(parsed.config)
       ? parsed.config
       : (Array.isArray(parsed.entries)
         ? parsed.entries
-        : (Array.isArray(parsed.lists) ? parsed.lists : []));
+        : (Array.isArray(parsed.lists) ? parsed.lists : []))).filter((e) => e && typeof e === "object");
     return {
       entries: list,
       lists: list,
@@ -17786,10 +17735,11 @@ async function resolveConfig(configParam, env, { withTracking = false, isTvLaunc
   if (cleanParam === "nuvio-default" || cleanParam === "default") {
     return typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : { entries: [], lists: [], randomizeItemsDaily: true, shuffleItems: true };
   }
+  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js). Checked first: its token is
+  // not a username, and a username is not a secret (audit SEC-02).
+  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking, isTvLauncher });
   const creatorSync = await resolveCreatorSyncConfig(cleanParam, env, { isTvLauncher });
-  if (creatorSync) return creatorSync;
-  // A v2 install link, /i/{token}/... (P3a-8, 27_installs.js).
-  if (isV2InstallParam(configParam)) return resolveV2InstallConfig(configParam, env, { withTracking });
+  if (creatorSync) return legacyUsernameOwnerLinks(env) ? creatorSync : withoutOwnerProof(creatorSync);
   if (configParam.length <= SHORT_ID_LENGTH && env && env.CONFIGS) {
     const stored = (await env.CONFIGS.get(savedConfigKey(configParam)))
       || (await env.CONFIGS.get(configParam));
@@ -18122,12 +18072,12 @@ const CATALOG_SOURCES = [
   {
     name: "trakt-watchlist", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:watchlist") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/watchlist\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktWatchlist(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktWatchlist(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["watchlist", entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "trakt-history", provider: "trakt", kind: "personal", apiUse: "trakt",
     match: (s) => isSourceSentinel(s, "trakt:history") || /^https?:\/\/(www\.|app\.)?trakt\.tv\/users\/[^/]+\/history\/?(?:[?#].*)?$/i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktHistory(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktHistory(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["history", entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "trakt-airing-next", provider: "trakt", kind: "personal", apiUse: "trakt",
@@ -18208,7 +18158,7 @@ const CATALOG_SOURCES = [
     snapshot: {},
     match: (s) => s.startsWith("trakt:chart:"),
     arg: sourceArgAfter("trakt:chart:"),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTraktChart(entry, skip, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTraktChart(entry, s, catalogTraktKey(keys), ref.arg, keys.env, keys.ctx), { env: keys.env, id: ["chart", ref.arg, entry.type].join("|") }),
   },
   {
     name: "simkl-chart", provider: "simkl", kind: "chart", apiUse: "simkl",
@@ -18265,7 +18215,7 @@ const CATALOG_SOURCES = [
   {
     name: "trakt", provider: "trakt", kind: "list", apiUse: "trakt",
     match: (s) => /^https?:\/\/(www\.|app\.)?trakt\.tv\//i.test(s),
-    fetchPage: (ref, { entry, skip, keys }) => fetchTrakt(entry, skip, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx),
+    fetchPage: (ref, { entry, skip, keys }) => traktWindowedPage(skip, (s) => fetchTrakt(entry, s, catalogTraktKey(keys), keys.traktAccessToken || "", keys.env, keys.ctx), { env: keys.env, id: ["list", entry.url, entry.type, keys.traktAccessToken || ""].join("|") }),
   },
   {
     name: "tmdb", provider: "tmdb", kind: "list", apiUse: "tmdb",
@@ -21608,49 +21558,7 @@ async function fetchAutoTrackedCatalog(entry, env, keys = {}) {
             if (r.is_unaired || r.isUnaired || (r.airDate && typeof isEpisodeAired === 'function' && !isEpisodeAired(r.airDate)) || (r.air_date && typeof isEpisodeAired === 'function' && !isEpisodeAired(r.air_date))) return true;
             if (fullyWatchedSet.has(sid) || (base && fullyWatchedSet.has(base))) return false;
             return true;
-          }).map(r => {
-            let isCompanion = undefined;
-            let companionType = undefined;
-            let companionNote = undefined;
-            let companionStoryline = undefined;
-            let precedingShowId = undefined;
-            let showTitle = r.show_title || undefined;
-            let kind = undefined;
-            let type = (r.season_num == null && r.episode_num == null && !r.show_title) ? "movie" : "episode";
-            if (r.show_title && r.show_title.startsWith("COMPANION:")) {
-              try {
-                const compMeta = JSON.parse(r.show_title.slice(10));
-                isCompanion = true;
-                companionType = compMeta.companionType;
-                companionNote = compMeta.companionNote;
-                companionStoryline = compMeta.companionStoryline;
-                precedingShowId = compMeta.precedingShowId;
-                showTitle = compMeta.showTitle || undefined;
-                kind = compMeta.kind || (compMeta.type === 'movie' ? 'movie' : undefined);
-                type = compMeta.type || (kind === 'movie' ? 'movie' : 'episode');
-              } catch {}
-            } else if (type === "movie") {
-              kind = "movie";
-            }
-            return {
-              id: r.item_id,
-              showId: (type === 'movie' && !r.season_num && !r.episode_num && !showTitle) ? undefined : r.show_id,
-              type: type,
-              kind: kind,
-              name: r.name || undefined,
-              poster: r.poster || undefined,
-              showTitle: showTitle,
-              showPoster: r.show_poster || undefined,
-              seasonNum: r.season_num != null ? r.season_num : undefined,
-              episodeNum: r.episode_num != null ? r.episode_num : undefined,
-              updatedAt: r.updated_at,
-              isCompanion: isCompanion,
-              companionType: companionType,
-              companionNote: companionNote,
-              companionStoryline: companionStoryline,
-              precedingShowId: precedingShowId,
-            };
-          });
+          }).map(mapContinueWatchingRow);
           if (airingRows && airingRows.length) {
             airingItems = airingRows.map(r => ({
               id: r.item_id,
@@ -23916,6 +23824,86 @@ function forgetShelfOwner(username) {
   SHELF_OWNER_MEMO.clear();
   return username;
 }
+// Watch History rows for the older (non-activity-database) tracking write,
+// writeCreatorTrackingD1 in 02_http-and-creator-utils.js.
+//
+// PERF-02: that write used to upsert EVERY history entry on every save, so one
+// play cost one row write per play the account ever had. The stored rows are
+// read in one statement and only entries that are new or differ are written.
+// Up to WATCH_HISTORY_DIFF_MIN entries (one write batch) the read is skipped:
+// writing that many rows costs less than the extra round trip, and every
+// scrobble pays that round trip (tests/load-performance.test.mjs counts it).
+
+const WATCH_HISTORY_DIFF_MIN = 80;
+
+const WATCH_HISTORY_PRINT_SQL = "SELECT item_id, item_type, title, poster, show_id, show_title, show_poster, season_num, episode_num, year, air_date, watched_at FROM watch_history WHERE username = ?";
+
+function watchHistoryPrint(r) {
+  return JSON.stringify([r.item_type, r.title, r.poster, r.show_id, r.show_title, r.show_poster, r.season_num, r.episode_num, r.year, r.air_date, r.watched_at]);
+}
+
+// item_id -> fingerprint of what is stored. null (read failed) means "write everything".
+async function storedWatchHistoryPrints(env, username) {
+  try {
+    const res = await env.DB.prepare(WATCH_HISTORY_PRINT_SQL).bind(username).all();
+    return new Map((res.results || []).map((r) => [r.item_id, watchHistoryPrint(r)]));
+  } catch (_) { return null; }
+}
+
+async function pushWatchHistoryWrites(env, username, watchHistory, fallbackStamp, isIntentionalRemoval, stmts, prunes) {
+  const stored = watchHistory.length > WATCH_HISTORY_DIFF_MIN ? await storedWatchHistoryPrints(env, username) : null;
+  const whSeen = new Set();
+  for (const item of watchHistory) {
+    if (!item) continue;
+    const itemId = String(item.id || (item.showId ? `${item.showId}:${item.seasonNum}:${item.episodeNum}` : ""));
+    if (!itemId || whSeen.has(itemId)) continue;
+    whSeen.add(itemId);
+    const row = {
+      item_id: itemId,
+      item_type: item.type || (item.seasonNum != null ? "episode" : "movie"),
+      title: item.name || item.title || null,
+      poster: item.poster || null,
+      show_id: item.showId ? String(item.showId) : null,
+      show_title: item.showTitle || null,
+      show_poster: item.showPoster || null,
+      season_num: item.seasonNum != null ? Number(item.seasonNum) : null,
+      episode_num: item.episodeNum != null ? Number(item.episodeNum) : null,
+      year: item.year ? String(item.year) : null,
+      air_date: item.airDate ? String(item.airDate) : null,
+      watched_at: Number(item.watchedAt) || fallbackStamp,
+    };
+    if (stored && stored.get(itemId) === watchHistoryPrint(row)) continue;
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO watch_history (
+          username, item_id, item_type, title, poster, show_id, show_title,
+          show_poster, season_num, episode_num, year, air_date, watched_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(username, item_id) DO UPDATE SET
+          item_type = excluded.item_type,
+          title = excluded.title,
+          poster = excluded.poster,
+          show_id = excluded.show_id,
+          show_title = excluded.show_title,
+          show_poster = excluded.show_poster,
+          season_num = excluded.season_num,
+          episode_num = excluded.episode_num,
+          year = excluded.year,
+          air_date = excluded.air_date,
+          watched_at = excluded.watched_at`
+      ).bind(
+        username, itemId, row.item_type, row.title, row.poster, row.show_id, row.show_title,
+        row.show_poster, row.season_num, row.episode_num, row.year, row.air_date, row.watched_at
+      )
+    );
+  }
+  // Only an INTENTIONAL removal shortens Watch History -- an ordinary
+  // autosave is additive, and the rescue-merge in save-tracking exists
+  // precisely so a stale push cannot shorten it by accident.
+  if (isIntentionalRemoval) {
+    prunes.push(...await d1ReplaceRowsById(env, "watch_history", username, "item_id", whSeen));
+  }
+}
 function extractMdblistItem(it) {
   if (!it) return null;
   // MDBList sync/watched item shapes:
@@ -24159,8 +24147,11 @@ function traktPayloadTotal(payload) {
 // metas.totalItems and hands it to the browser as the list's size (see
 // 25_api-catalog-routes.js). In-process only, so unlike the cached payload
 // above there is no serialization to lose it.
-function withTraktTotal(metas, totalItems) {
+function withTraktTotal(metas, totalItems, rawRows) {
   if (totalItems != null && Array.isArray(metas)) metas.totalItems = totalItems;
+  // How many rows Trakt sent for this page, before they were mapped to titles
+  // (traktWindowedPage uses it to tell the last page from a shrunk one).
+  if (Array.isArray(rawRows) && Array.isArray(metas)) metas.rawRows = rawRows.length;
   return metas;
 }
 
@@ -24513,7 +24504,7 @@ async function fetchTrakt(entry, skip = 0, traktKey = "", accessToken = "", env 
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Pulls the connected account's Trakt watchlist
@@ -24563,7 +24554,7 @@ async function fetchTraktWatchlist(entry, skip = 0, traktKey = "", accessToken =
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // History's shape is different from a plain list/watchlist -- each row is
@@ -24706,7 +24697,7 @@ async function fetchTraktHistory(entry, skip = 0, traktKey = "", accessToken = "
   });
 
   const metas = await enrichTrailers(mapTraktHistoryItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Pulls the connected account's Trakt Airing Next shows
@@ -25390,21 +25381,21 @@ const SIMKL_CHART_FILES = {
 
 // Simkl's items use the same { ids: { imdb, tmdb, ... } } shape Trakt's do.
 // Anime entries more often lack an IMDB id than movies/TV do (per Simkl's
-// own docs: "IMDB IDs where available") -- those just get filtered out,
-// same as any other source's imdb-less items, since this add-on always
-// keys catalog items by IMDB id.
-function mapSimklItems(data, type) {
+// own docs: "IMDB IDs where available") -- those are kept as tmdb:<id>, as
+// the Trakt and MDBList mappers do, and dropped only when they have neither.
+function mapSimklItems(data, type, isAnime = false) {
   const items = Array.isArray(data) ? data : [];
-  return items
-    .filter((it) => it && it.ids && it.ids.imdb)
-    .map((it) => ({
-      id: it.ids.imdb,
-      type,
-      name: it.title,
-      poster: `https://images.metahub.space/poster/medium/${it.ids.imdb}/img`,
-      rating: it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined),
-      vote_average: it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined),
-    }));
+  return items.filter((it) => it && it.ids && (it.ids.imdb || it.ids.tmdb)).map((it) => {
+    const year = /\b(\d{4})\b/.exec(String(it.release_date || it.year || ""));
+    const score = it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined);
+    const imdb = it.ids.imdb;
+    return {
+      id: imdb || `tmdb:${it.ids.tmdb}`, type: isAnime && it.anime_type === "movie" ? "movie" : type, name: it.title, // anime chart mixes films and series
+      poster: imdb ? `https://images.metahub.space/poster/medium/${imdb}/img` : undefined,
+      releaseInfo: year ? year[1] : undefined, tmdbId: it.ids.tmdb ? String(it.ids.tmdb) : undefined,
+      rating: score, vote_average: score,
+    };
+  });
 }
 
 // chartKey is either a plain time window ("today"/"week"/"month" -- movies
@@ -25454,7 +25445,7 @@ async function fetchSimklChart(entry, skip, clientId, chartKey, env = null, ctx 
       }
 
       const data = await res.json();
-      const metas = mapSimklItems(data, entry.type);
+      const metas = mapSimklItems(data, entry.type, isAnime);
       return enrichTrailers(metas.slice(skip, skip + PAGE_SIZE), entry.type, TMDB_API_KEY);
     },
   });
@@ -25675,7 +25666,7 @@ async function fetchTraktChart(entry, skip, traktKey, chartKey, env = null, ctx 
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Runs async `fn` over `items` with at most `limit` running at once, rather
@@ -26157,7 +26148,7 @@ function tmdbProviderChartPaths(providerId) {
 // with regional availability and shouldn't need touching.
 function substituteWatchRegion(path, region) {
   if (!path || !path.includes("watch_region=")) return path;
-  const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   return path.replace(/watch_region=[A-Z]{2}/, `watch_region=${effectiveRegion}`);
 }
 
@@ -27282,7 +27273,7 @@ async function sweepRapidApiNewOnStreaming(env, ctx, fetchBudget, maxUnits, opti
     // it did not reach stays unread, which is the right trade for a rebuild.
     summary.mode = isReset ? "reset" : "full";
     if (isReset) {
-      try { await env.CONFIGS.delete("cron:newonstreaming:lastsweep"); } catch (e) {}
+      try { await env.CONFIGS.delete("cron:newonstreaming:lastsweep"); } catch (e) { logIgnoredWrite("delete cron:newonstreaming:lastsweep", e); }
     }
     const limitUnits = Number.isFinite(maxUnits) && maxUnits > 0 ? Math.floor(maxUnits) : 30;
     const maxPages = Math.min(isReset ? Math.max(30, budgetCap) : budgetCap, limitUnits, remainingInQuota);
@@ -29180,7 +29171,7 @@ const ITEM_DETAILS_SHAPE = "v3";
 
 async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypassCache, env, ctx) {
   if (!apiKey || !imdbId) return null;
-  const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   const cacheKey = `tmdb:itemdetails:${ITEM_DETAILS_SHAPE}:${String(imdbId).trim()}:${fallbackType || ""}:${effectiveRegion}`;
 
   const upgradeIfUnpacked = async (d) => {
@@ -29230,7 +29221,7 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
   // One call per outbound fetch below. Counted here rather than by wrapping
   // fetch() globally, so nothing else in the Worker changes behaviour.
   if (!apiKey || !imdbId) return null;
-  const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
   let rawStr = String(imdbId).trim();
@@ -30170,7 +30161,7 @@ async function refreshAiringNextSweep(env, ctx) {
   } catch (e) {
     console.error('[Cron] Airing Next: account listing failed, restarting from the beginning:', e);
     if (sweep.c) {
-      try { await env.CONFIGS.put(CURSOR_KEY, ''); } catch {}
+      try { await env.CONFIGS.put(CURSOR_KEY, ''); } catch (e) { logIgnoredWrite(`put ${CURSOR_KEY}`, e); }
     }
     return;
   }
@@ -30228,7 +30219,7 @@ async function refreshAiringNextSweep(env, ctx) {
     next = { c: sweep.c, o: nextOffset };
   }
   if (next.c !== sweep.c || next.o !== sweep.o) {
-    try { await env.CONFIGS.put(CURSOR_KEY, JSON.stringify(next)); } catch {}
+    try { await env.CONFIGS.put(CURSOR_KEY, JSON.stringify(next)); } catch (e) { logIgnoredWrite(`put ${CURSOR_KEY}`, e); }
   }
 }
 
@@ -32426,10 +32417,6 @@ function buildNuvioTvDefaultConfig() {
   };
 }
 
-function buildNuvioTvDefaultPreset() {
-  return buildNuvioTvDefaultConfig();
-}
-
 async function seedNuvioTvNewUser(env, username, accountId) {
   if (!env || !env.CONFIGS) return;
   const defaultConfig = typeof buildNuvioTvDefaultConfig === "function" ? buildNuvioTvDefaultConfig() : {};
@@ -32530,6 +32517,220 @@ async function seedNuvioTvNewUser(env, username, accountId) {
 
 
 
+// Trakt pages hold 100 raw rows, but one page can map to fewer titles (several
+// episodes of one show become one title). An app sends the number of titles it
+// already holds as the next `skip`, so "skip / 100" asked Trakt for the same
+// page again and the row repeated itself (audit API-04). This continues where
+// the app is.
+//
+// For each list it remembers how many titles each Trakt page held (`cum`:
+// cum[i] titles before page i). A request starts at the last page that begins
+// at or before `skip` and reads forward from there, so a long scroll reads one
+// or two pages a request, not a walk from page 1. The memory lives in the
+// isolate and in KV for ten minutes (a list changes under it, so it must not
+// last), and grows only by what a request reads. A title already on the page
+// just before is dropped (and not counted in `cum`), so a show that recurs on
+// neighbouring pages, as in a watch history, is sent once. The rule looks one
+// page back only, so every request agrees on what each page holds.
+//
+// loadPage(rawSkip) is the existing fetcher for one Trakt page (rawSkip is
+// 0, 100, 200, ...); each page is cached on its own by the fetchers.
+const TRAKT_WINDOW_MAX_PAGES = 12; // pages read for one request
+const TRAKT_WINDOW_MEMO_TTL_SEC = 600;
+const TRAKT_WINDOW_MEMO_MAX = 300; // lists remembered in the isolate
+const TRAKT_WINDOW_END_PAGES = 400; // most pages read at once to reach the end of a list (paid-plan subrequest budget)
+const TRAKT_WINDOW_BATCH = 8;
+const traktWindowMemory = new Map();
+
+async function traktWindowMemo(env, key) {
+  const hit = traktWindowMemory.get(key);
+  if (hit && Date.now() - hit.at < TRAKT_WINDOW_MEMO_TTL_SEC * 1000) return hit;
+  const memo = { cum: [0], total: null, at: Date.now() };
+  if (env && env.CONFIGS) {
+    try {
+      const saved = JSON.parse((await env.CONFIGS.get("trakt:win:" + key)) || "null");
+      if (saved && Array.isArray(saved.cum) && saved.cum[0] === 0) {
+        memo.cum = saved.cum.filter((n) => Number.isFinite(n)).slice(0, 2000);
+        memo.total = saved.total == null ? null : Number(saved.total);
+      }
+    } catch {
+      // No memory of this list: start from page one.
+    }
+  }
+  if (traktWindowMemory.size >= TRAKT_WINDOW_MEMO_MAX) traktWindowMemory.clear();
+  traktWindowMemory.set(key, memo);
+  return memo;
+}
+
+// A short hash of the list's identity (it may contain an access token, which must not be a KV key).
+async function traktWindowKey(id) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(id)));
+  return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function traktWindowSave(env, key, memo) {
+  if (!key || !env || !env.CONFIGS) return;
+  try {
+    await env.CONFIGS.put("trakt:win:" + key, JSON.stringify({ cum: memo.cum, total: memo.total }), { expirationTtl: TRAKT_WINDOW_MEMO_TTL_SEC });
+  } catch {
+    // The isolate keeps it; another isolate starts from what it can read.
+  }
+}
+
+// Reads the pages after the memory, up to the last Trakt page, so the memory covers them and the
+// end of the list comes from a page actually read (API-04). Returns the pages read, or null when
+// one would not load (the caller then estimates). Same one-page-back de-duplication as the walk.
+async function traktWindowExtend(memo, loadPage, lastPage) {
+  const known = memo.cum.length - 1;
+  const fetched = new Map();
+  let prev = new Set();
+  if (known > 0 && memo.tail && memo.tail.page === known - 1) prev = memo.tail.ids;
+  else if (known > 0) {
+    try {
+      const before = await loadPage((known - 1) * PAGE_SIZE);
+      if (Array.isArray(before)) { fetched.set((known - 1) * PAGE_SIZE, before); prev = new Set(before.filter(Boolean).map((m) => m.id)); }
+    } catch {
+      // Without it a title at the seam may repeat once.
+    }
+  }
+  for (let from = known; from <= lastPage; from += TRAKT_WINDOW_BATCH) {
+    const pages = [];
+    for (let p = from; p <= lastPage && p < from + TRAKT_WINDOW_BATCH; p++) pages.push(p);
+    const got = await Promise.all(pages.map((p) => loadPage(p * PAGE_SIZE).catch(() => null)));
+    for (let i = 0; i < pages.length; i++) {
+      const metas = got[i];
+      if (!Array.isArray(metas)) return null;
+      fetched.set(pages[i] * PAGE_SIZE, metas);
+      const fresh = metas.filter((m) => m && !prev.has(m.id));
+      prev = new Set(metas.filter(Boolean).map((m) => m.id));
+      memo.tail = { page: pages[i], ids: prev };
+      if (memo.cum.length === pages[i] + 1) memo.cum.push(memo.cum[pages[i]] + fresh.length);
+      if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE)) return fetched;
+    }
+  }
+  return fetched;
+}
+
+async function traktWindowedPage(skip, loadPage, { env = null, id = "", memo: memoIn = null, extended = false } = {}) {
+  const key = id ? await traktWindowKey(id) : "";
+  const memo = memoIn || (key ? await traktWindowMemo(env, key) : { cum: [0], total: null, at: Date.now() });
+  let start = 0;
+  for (let i = memo.cum.length - 1; i >= 0; i--) if (memo.cum[i] <= skip) { start = i; break; }
+  const offset = skip - memo.cum[start];
+  const titles = [];
+  let page = start;
+  let reachedEnd = false;
+  let grew = false;
+  let prevIds = new Set();
+  if (start > 0 && memo.tail && memo.tail.page === start - 1) {
+    prevIds = memo.tail.ids; // the page this isolate read last time: no extra Trakt call
+  } else if (start > 0) {
+    // The page before the first one read: its titles are not repeated by the next page.
+    try {
+      const before = await loadPage((start - 1) * PAGE_SIZE);
+      if (Array.isArray(before)) prevIds = new Set(before.filter(Boolean).map((m) => m.id));
+    } catch {
+      // Without it a title at the seam may repeat once.
+    }
+  }
+  for (let n = 0; n < TRAKT_WINDOW_MAX_PAGES && titles.length < offset + PAGE_SIZE; n++, page++) {
+    let metas;
+    try {
+      metas = await loadPage(page * PAGE_SIZE);
+    } catch (err) {
+      if (n === 0) throw err;
+      break; // the first page worked: give what there is rather than nothing
+    }
+    if (!Array.isArray(metas)) break;
+    if (memo.total == null && metas.totalItems != null) memo.total = metas.totalItems;
+    if (page === 0 && skip === 0 && !metas.length) return metas; // keep the caller's empty-row handling
+    // Titles never outnumber raw rows, so a skip at or past the raw total is past the end.
+    if (memo.total != null && skip >= memo.total) { reachedEnd = true; break; }
+    const fresh = metas.filter((m) => m && !prevIds.has(m.id));
+    prevIds = new Set(metas.filter(Boolean).map((m) => m.id));
+    memo.tail = { page, ids: prevIds };
+    if (memo.cum.length === page + 1) { memo.cum.push(memo.cum[page] + fresh.length); grew = true; }
+    titles.push(...fresh);
+    // The end of the list: nothing came back, Trakt sent a short page, or the total is reached.
+    if (!metas.length || (metas.rawRows != null && metas.rawRows < PAGE_SIZE) || (memo.total != null && (page + 1) * PAGE_SIZE >= memo.total)) { reachedEnd = true; break; }
+  }
+  if (grew) await traktWindowSave(env, key, memo);
+  const out = titles.slice(offset, offset + PAGE_SIZE);
+  if (out.length || reachedEnd) {
+    if (memo.total != null) out.totalItems = memo.total;
+    return out;
+  }
+  // A first request far down a list nobody has scrolled: the pages read did not reach `skip`.
+  // Estimate the page from the titles per page seen so far and answer from there (a few titles
+  // may repeat or be missed at the seam); the memory has grown, so scrolling on gets exact.
+  const known = memo.cum.length - 1;
+  const lastPage = memo.total != null ? Math.max(0, Math.ceil(memo.total / PAGE_SIZE) - 1) : null;
+  if (!extended && lastPage != null && lastPage - known < TRAKT_WINDOW_END_PAGES) {
+    // The walk did not reach `skip` and the last page is near: read the pages in between (each
+    // cached) so the memory covers them, and answer from pages actually read, which includes ending
+    // the row. This does not wait for an estimate to come close: it undercounts when shows carry
+    // over to the next page, and the row then ended before its last titles were sent.
+    const fetched = await traktWindowExtend(memo, loadPage, lastPage);
+    if (fetched) {
+      await traktWindowSave(env, key, memo);
+      const cached = (raw) => (fetched.has(raw) ? Promise.resolve(fetched.get(raw)) : loadPage(raw));
+      return traktWindowedPage(skip, cached, { env, id, memo, extended: true });
+    }
+  }
+  let perPage = Math.max(1, memo.cum[known] / Math.max(1, known));
+  if (lastPage != null && lastPage > known + 1) {
+    // The first pages of a watch history collapse most, so they say little about the rest: also
+    // measure a few pages spread over the unread part (each is cached on its own).
+    const counts = [];
+    for (let k = 1; k <= 4; k++) {
+      try {
+        const at = known + Math.round(((lastPage - known) * k) / 4);
+        const sample = await loadPage(at * PAGE_SIZE);
+        if (!Array.isArray(sample) || !sample.length) continue;
+        // Count only the titles the page before does not already hold (one more cached call), as
+        // the walk does; counting the carried-over ones ran the estimate past the real total.
+        let before = new Set();
+        if (at > 0) {
+          try {
+            const b = await loadPage((at - 1) * PAGE_SIZE);
+            if (Array.isArray(b)) before = new Set(b.filter(Boolean).map((m) => m.id));
+          } catch {
+            // Without it the count is a little high.
+          }
+        }
+        counts.push(Math.max(1, sample.filter((m) => m && !before.has(m.id)).length));
+      } catch {
+        // A page that will not load only makes the guess rougher.
+      }
+    }
+    if (counts.length) perPage = Math.max(1, counts.reduce((a, b) => a + b, 0) / counts.length);
+  }
+  let estimate = known + Math.floor((skip - memo.cum[known]) / perPage);
+  if (lastPage != null && estimate > lastPage) {
+    // The guess must not end the row. A page holds at most PAGE_SIZE titles, so this is the
+    // earliest page `skip` can be on: only past the last page has the row really ended.
+    estimate = known + Math.floor((skip - memo.cum[known]) / PAGE_SIZE);
+    if (estimate > lastPage) {
+      const none = [];
+      none.totalItems = memo.total;
+      return none;
+    }
+  }
+  // The estimate is approximate and never ends the row: only a page read here that comes back
+  // empty (or a skip past the raw total, above) does. A title on the page just before is dropped,
+  // as in the walk above.
+  const more = [];
+  let prev = new Set();
+  for (let k = 0; k < 4 && more.length < PAGE_SIZE; k++) {
+    let metas;
+    try { metas = await loadPage((estimate + k) * PAGE_SIZE); } catch (err) { if (k === 0) throw err; break; }
+    if (!Array.isArray(metas) || !metas.length) break;
+    for (const m of metas) if (m && !prev.has(m.id)) more.push(m);
+    prev = new Set(metas.filter(Boolean).map((m) => m.id));
+    if (lastPage != null && estimate + k >= lastPage) break;
+  }
+  return more.slice(0, PAGE_SIZE);
+}
 // --- The new UI shell's chrome (Phase 6, P6-1) ------------------------------
 //
 // Every visitor gets this chrome (the classic page was retired in Release 21).
@@ -33614,7 +33815,7 @@ ${UTILITY_CSS}
   }
   .subnav-pill.active {
     background: var(--color-brand-subtle);
-    color: var(--accent);
+    color: var(--color-brand-text);
     border-color: var(--color-brand-line);
     box-shadow: none;
     font-weight: 700;
@@ -39917,6 +40118,13 @@ if ('serviceWorker' in navigator) {
       <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Hide specific lists from My Lists, Airing Next, and Simkl Airing Next. A hidden list is still tracked and updated normally underneath -- only its display is suppressed, and it can be shown again here at any time.</p>
       <div id="hiddenListsSettingsSection"></div>
     </div>
+
+    <!-- Removed from Airing Next: filled and shown by renderRemovedAiringNextSettingsSection only when a show is removed -->
+    <div class="panel u-mt-12px" style="display:none;">
+      <h2 class="panel-title">Removed from Airing Next</h2>
+      <p class="u-m-0_0_10px u-c-v_muted u-fs-v_font_size_sm">Shows you removed from Airing Next with the x on their poster. A show comes back by itself when you watch another episode, or restore it here now.</p>
+      <div id="removedAiringNextSettingsSection"></div>
+    </div>
   </div>
 
   <!-- Subpanel 3: Tracking & Scrobble -->
@@ -44441,14 +44649,7 @@ function validateAddShelfModal() {
 }
 
 function onAddShelfModalLinkInput(inputEl) {
-  const link = inputEl.value.trim().toLowerCase();
-  const typeSelect = document.getElementById('addShelfModalType');
-  // Only auto-switch type if it's the first input or type is currently 'movie' and we detect a show
-  if (link.includes('type=show') || link.includes('shows') || link.includes('series') || link.includes('tv')) {
-    typeSelect.value = 'series';
-  } else if (link.includes('movie') && typeSelect.value === 'series' && document.querySelectorAll('.addShelfModalLinkInput').length === 1) {
-    typeSelect.value = 'movie';
-  }
+  guessShelfTypeFromLink(inputEl.value, document.getElementById('addShelfModalType'));
 }
 
 function submitAddShelfModal() {
@@ -44456,15 +44657,7 @@ function submitAddShelfModal() {
   const links = Array.from(document.querySelectorAll('.addShelfModalLinkInput')).map(el => el.value.trim()).filter(Boolean);
   const type = document.getElementById('addShelfModalType').value;
   if (!name || links.length === 0) return;
-  
-  if (links.length === 1) {
-    addRow(name, links[0], type, true, 'Custom');
-  } else {
-    addCombinedRow(name, links, type, 'Custom');
-  }
-  
-  document.getElementById('addShelfModal').style.display = 'none';
-  saveState();
+  submitAddShelfChecked(name, links, type);
 }
 
 function addRow(name, url, type, enabled, group, channelId, noShuffle) {
@@ -45127,6 +45320,128 @@ function openMdblistAiringNextDetailsPage() {
   openListDetailsPage('MDBList Airing Next', 'series', 'mdblist:user:shows:airing-next', { sample: sample, count: sample.length, maybeMore: false });
 }
 
+// Fills a provider list's Airing Next items from that provider's cached episode
+// info in localStorage (cacheKey, e.g. 'mdblistAiringNextCache') and from the local
+// Airing Next list. Runs once per list (CQ-03: was pasted into three renderers).
+function applyAiringNextCache(airingNextList, cacheKey) {
+  const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
+  if (!airingNextList._cachedApplied) {
+    try {
+      const cached = JSON.parse(localStorage.getItem('myListAddon:' + cacheKey) || '[]');
+      if (Array.isArray(cached) && cached.length) {
+        const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
+        airingNextList.items.forEach((it) => {
+          const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
+          const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
+          if (c) {
+            it.airDate = c.airDate;
+            it.seasonNum = c.seasonNum;
+            it.episodeNum = c.episodeNum;
+            it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
+            it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
+            it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
+            it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
+            it.isUnaired = true;
+            it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
+          } else if (localMatch) {
+            it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
+            it.isSeasonFinale = !!localMatch.isSeasonFinale;
+            it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
+          }
+        });
+      } else if (localAiringList.length) {
+        airingNextList.items.forEach((it) => {
+          const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
+          if (localMatch) {
+            it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
+            it.isSeasonFinale = !!localMatch.isSeasonFinale;
+            it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
+          }
+        });
+      }
+    } catch (e) {}
+    airingNextList._cachedApplied = true;
+  }
+}
+
+// Air-date and premiere/finale badges for an Up Next / Continue Watching poster
+// tile. Falls back to the matching Airing Next entry (findAiringMatchFor) when
+// the item has no air date. sectionSettingKey is the panel's own badge toggle.
+// Shared by the MDBList and Trakt panels (audit CQ-03).
+function upNextTileBadgesHtml(it, sectionSettingKey) {
+  const showSectionBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting(sectionSettingKey) : true;
+  const showAirDate = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
+  const showPremiere = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
+  const showFinale = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
+  const showFinaleDate = showSectionBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
+
+  const airingMatch = typeof findAiringMatchFor === 'function' ? findAiringMatchFor(it) : null;
+  const effectiveAirDate = it.airDate || (airingMatch ? airingMatch.airDate : '');
+  const hasAired = effectiveAirDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(effectiveAirDate) : false;
+  const isUnairedEp = effectiveAirDate ? !hasAired : !!(it.isUnaired || (airingMatch && airingMatch.isUnaired));
+  let dateBadge = '';
+  if (showAirDate && effectiveAirDate && !hasAired && typeof isEpisodeAired === 'function') {
+    dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml({
+      airDate: effectiveAirDate,
+      airTime: it.airTime || (airingMatch && airingMatch.airTime) || '',
+      showId: it.showId || it.id,
+      seasonNum: it.seasonNum,
+      episodeNum: it.episodeNum
+    }) : '';
+  }
+  const isSeasonPremiere = (typeof it.isSeasonPremiere === 'boolean') ? it.isSeasonPremiere : (airingMatch ? airingMatch.isSeasonPremiere : (it.episodeNum === 1));
+  const isSeasonFinale = !!(it.isSeasonFinale || (airingMatch && airingMatch.isSeasonFinale));
+  const seasonFinaleAirDate = it.seasonFinaleAirDate || (airingMatch ? (airingMatch.seasonFinaleAirDate || (airingMatch.isSeasonFinale ? airingMatch.airDate : null)) : null);
+  const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
+  let bottomBadge = '';
+  if (isUnairedEp) {
+    if (showPremiere && isSeasonPremiere) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Premiere</div>';
+    } else if (showFinale && isSeasonFinale) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Finale</div>';
+    } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
+      const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(seasonFinaleAirDate) : '';
+      if (finaleText) {
+        bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
+      }
+    }
+  }
+  return dateBadge + bottomBadge;
+}
+
+// Air-date and premiere/finale badges for an Airing Next poster tile.
+// Shared by the MDBList, Trakt and Simkl panels (audit CQ-03).
+function airingNextTileBadgesHtml(it) {
+  const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
+  const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
+  const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
+  const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
+  const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
+
+  const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
+  const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
+  let dateBadge = '';
+  if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
+    dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
+  }
+  const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
+  const isFinaleUnaired = it.seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(it.seasonFinaleAirDate) : !!it.seasonFinaleAirDate;
+  let bottomBadge = '';
+  if (isUnairedEp) {
+    if (showPremiere && isSeasonPremiere) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
+    } else if (showFinale && it.isSeasonFinale) {
+      bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
+    } else if (showFinaleDate && it.seasonFinaleAirDate && isFinaleUnaired) {
+      const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
+      if (finaleText) {
+        bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
+      }
+    }
+  }
+  return dateBadge + bottomBadge;
+}
+
 // Renders the list cards into #myMdblistListsResult once /api/mdblist-my-lists
 // returns.
 function renderMyMdblistLists(lists) {
@@ -45142,44 +45457,7 @@ function renderMyMdblistLists(lists) {
     if (!window._mdblistRawAiringCandidates || !window._mdblistRawAiringCandidates.length) {
       window._mdblistRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:mdblistAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'mdblistAiringNextCache');
     const hasExpired = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_mdblistAiringNextEnriching && (hasExpired || !_mdblistAiringNextEnrichedAt || Date.now() - _mdblistAiringNextEnrichedAt >= 120000)) {
       enrichMdblistAiringNextDates(airingNextList).catch(() => {});
@@ -45246,44 +45524,6 @@ function renderMyMdblistLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistUpNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showMdbUpNextBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesMdblistUpNext') : true;
-            const showAirDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showMdbUpNextBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const airingMatch = typeof findAiringMatchFor === 'function' ? findAiringMatchFor(it) : null;
-            const effectiveAirDate = it.airDate || (airingMatch ? airingMatch.airDate : '');
-            const hasAired = effectiveAirDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(effectiveAirDate) : false;
-            const isUnairedEp = effectiveAirDate ? !hasAired : !!(it.isUnaired || (airingMatch && airingMatch.isUnaired));
-            let dateBadge = '';
-            if (showAirDate && effectiveAirDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml({
-                airDate: effectiveAirDate,
-                airTime: it.airTime || (airingMatch && airingMatch.airTime) || '',
-                showId: it.showId || it.id,
-                seasonNum: it.seasonNum,
-                episodeNum: it.episodeNum
-              }) : '';
-            }
-            const isSeasonPremiere = (typeof it.isSeasonPremiere === 'boolean') ? it.isSeasonPremiere : (airingMatch ? airingMatch.isSeasonPremiere : (it.episodeNum === 1));
-            const isSeasonFinale = !!(it.isSeasonFinale || (airingMatch && airingMatch.isSeasonFinale));
-            const seasonFinaleAirDate = it.seasonFinaleAirDate || (airingMatch ? (airingMatch.seasonFinaleAirDate || (airingMatch.isSeasonFinale ? airingMatch.airDate : null)) : null);
-            const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
-
             const poster = resolveListCardItemPoster(it);
             const epSubtitle = it.episodeTitle || (it.seasonNum != null && it.episodeNum != null ? ('S' + it.seasonNum + 'E' + it.episodeNum) : '');
 
@@ -45291,7 +45531,7 @@ function renderMyMdblistLists(lists) {
             return '<div class="list-card-mini-poster-tile mdblist-up-next-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="series">' +
               '<div class="list-card-mini-poster-img-wrap">' +
                 (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="series" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
-                (dateBadge + bottomBadge) +
+                upNextTileBadgesHtml(it, 'showBadgesMdblistUpNext') +
                 mdbUpNextRemoveBtn +
                 overlays +
               '</div>' +
@@ -45314,33 +45554,6 @@ function renderMyMdblistLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openMdblistAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
-            const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
-            const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
-            let dateBadge = '';
-            if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
-            }
-            const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
-            const isFinaleUnaired = it.seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(it.seasonFinaleAirDate) : !!it.seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && it.isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && it.seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
             const label = (typeof formatWatchItemLabel === 'function')
               ? formatWatchItemLabel({ showTitle: it.name, seasonNum: it.seasonNum, episodeNum: it.episodeNum, title: it.episodeTitle || '', isSeasonPremiere: it.isSeasonPremiere })
               : {
@@ -45353,7 +45566,7 @@ function renderMyMdblistLists(lists) {
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
                 (poster ? '<img src="' + escapeAttr(poster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(poster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
-                (dateBadge + bottomBadge) +
+                airingNextTileBadgesHtml(it) +
                 mdbAiringNextRemoveBtn +
                 overlays +
               '</div>' +
@@ -45776,10 +45989,10 @@ function pickUpTraktTokenFromUrl() {
       token_exchange_failed: 'Failed to exchange authorization code for a Trakt token.',
       access_denied: 'Trakt sign-in was cancelled.',
     };
-    const isRateLimit = detail.includes('1015') || detail.includes('429') || err === 'exchange_failed';
-    const msg = isRateLimit 
+    const isRateLimit = detail.includes('1015') || detail.includes('429'); // never echo err/detail: the address bar is untrusted
+    const msg = isRateLimit
       ? 'Trakt web redirect was rate-limited by Cloudflare (1015). Opening direct PIN code activation instead…'
-      : (messages[err] || ('Could not connect to Trakt (' + err + (detail ? ': ' + detail : '') + ').'));
+      : (Object.prototype.hasOwnProperty.call(messages, err) ? messages[err] : 'Could not connect to Trakt.');
 
     if (typeof showAppAlert === 'function') {
       showAppAlert('Trakt Connection', msg, !isRateLimit);
@@ -46141,44 +46354,7 @@ function renderMyPrivateTraktLists(lists) {
     if (!window._traktRawAiringCandidates || !window._traktRawAiringCandidates.length) {
       window._traktRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:traktAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'traktAiringNextCache');
     const hasExpired = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_traktAiringNextEnriching && (hasExpired || !_traktAiringNextEnrichedAt || Date.now() - _traktAiringNextEnrichedAt >= 120000)) {
       enrichTraktAiringNextDates(airingNextList).catch(() => {});
@@ -46246,44 +46422,6 @@ function renderMyPrivateTraktLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktContinueWatchingDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showTraktCwBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesTraktContinueWatching') : true;
-            const showAirDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showTraktCwBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const airingMatch = typeof findAiringMatchFor === 'function' ? findAiringMatchFor(it) : null;
-            const effectiveAirDate = it.airDate || (airingMatch ? airingMatch.airDate : '');
-            const hasAired = effectiveAirDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(effectiveAirDate) : false;
-            const isUnairedEp = effectiveAirDate ? !hasAired : !!(it.isUnaired || (airingMatch && airingMatch.isUnaired));
-            let dateBadge = '';
-            if (showAirDate && effectiveAirDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml({
-                airDate: effectiveAirDate,
-                airTime: it.airTime || (airingMatch && airingMatch.airTime) || '',
-                showId: it.showId || it.id,
-                seasonNum: it.seasonNum,
-                episodeNum: it.episodeNum
-              }) : '';
-            }
-            const isSeasonPremiere = (typeof it.isSeasonPremiere === 'boolean') ? it.isSeasonPremiere : (airingMatch ? airingMatch.isSeasonPremiere : (it.episodeNum === 1));
-            const isSeasonFinale = !!(it.isSeasonFinale || (airingMatch && airingMatch.isSeasonFinale));
-            const seasonFinaleAirDate = it.seasonFinaleAirDate || (airingMatch ? (airingMatch.seasonFinaleAirDate || (airingMatch.isSeasonFinale ? airingMatch.airDate : null)) : null);
-            const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(effectiveAirDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
-
             const traktPoster = resolveListCardItemPoster(it);
             const progPercent = Math.min(100, Math.max(0, it.progress || 0));
             const progressOverlay = progPercent > 0
@@ -46296,7 +46434,7 @@ function renderMyPrivateTraktLists(lists) {
               '<div class="list-card-mini-poster-img-wrap">' +
                 (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || 'series') + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
                 progressOverlay +
-                (dateBadge + bottomBadge) +
+                upNextTileBadgesHtml(it, 'showBadgesTraktContinueWatching') +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="history" data-list-id="history" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt History" aria-label="Remove from Trakt History">\u2715</button>' +
                 overlays +
               '</div>' +
@@ -46319,33 +46457,6 @@ function renderMyPrivateTraktLists(lists) {
             if (isMobileEnd) overlays += '<div class="list-card-count-overlay mobile-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
             if (isDesktopEnd) overlays += '<div class="list-card-count-overlay desktop-only u-cur-pointer" data-act="openTraktAiringNextDetailsPage" data-act-stop>' + totalCount + ' &rsaquo;</div>';
 
-            const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
-            const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-            const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-            const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-            const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-            const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
-            const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
-            let dateBadge = '';
-            if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
-              dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
-            }
-            const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
-            const isFinaleUnaired = it.seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(it.seasonFinaleAirDate) : !!it.seasonFinaleAirDate;
-            let bottomBadge = '';
-            if (isUnairedEp) {
-              if (showPremiere && isSeasonPremiere) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
-              } else if (showFinale && it.isSeasonFinale) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
-              } else if (showFinaleDate && it.seasonFinaleAirDate && isFinaleUnaired) {
-                const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
-                if (finaleText) {
-                  bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-                }
-              }
-            }
             const label = (typeof formatWatchItemLabel === 'function')
               ? formatWatchItemLabel({ showTitle: it.name, seasonNum: it.seasonNum, episodeNum: it.episodeNum, title: it.episodeTitle || '', isSeasonPremiere: it.isSeasonPremiere })
               : {
@@ -46357,7 +46468,7 @@ function renderMyPrivateTraktLists(lists) {
             return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '">' +
               '<div class="list-card-mini-poster-img-wrap">' +
                 (traktPoster ? '<img src="' + escapeAttr(traktPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(traktPoster || '') + '" data-imdb="' + escapeAttr(it.imdbId || it.id || '') + '" alt="" loading="lazy" data-act="handlePosterImgError" data-act-args="[&quot;@self&quot;]">' : '<div class="live-preview-poster live-preview-poster-placeholder u-bg-v_color_bg_sunken" data-needs-fallback="1" style="width:100%; height:100%;"><small class="u-c-v_muted u-fs-v_font_size_xs">No poster</small></div>') +
-                (dateBadge + bottomBadge) +
+                airingNextTileBadgesHtml(it) +
                 '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="trakt" data-target="watchlist" data-list-id="watchlist" data-remove-id="' + escapeAttr(it.id || it.imdbId || '') + '" data-media-type="' + escapeAttr(it.type || 'series') + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Trakt Watchlist" aria-label="Remove from Trakt Watchlist">\u2715</button>' +
                 overlays +
               '</div>' +
@@ -47646,44 +47757,7 @@ function renderMySimklLists(lists) {
     if (!window._simklRawAiringCandidates || !window._simklRawAiringCandidates.length) {
       window._simklRawAiringCandidates = airingNextList.items.map(it => ({ ...it }));
     }
-    const localAiringList = (typeof loadLocalCustomLists === 'function') ? ((loadLocalCustomLists()['airing-next'] || {}).items || []) : [];
-    if (!airingNextList._cachedApplied) {
-      try {
-        const cached = JSON.parse(localStorage.getItem('myListAddon:simklAiringNextCache') || '[]');
-        if (Array.isArray(cached) && cached.length) {
-          const cacheMap = new Map(cached.map((c) => [c.id || c.imdbId || (c.tmdbId ? 'tmdb:' + c.tmdbId : ''), c]));
-          airingNextList.items.forEach((it) => {
-            const c = cacheMap.get(it.id || it.imdbId || (it.tmdbId ? 'tmdb:' + it.tmdbId : ''));
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (c) {
-              it.airDate = c.airDate;
-              it.seasonNum = c.seasonNum;
-              it.episodeNum = c.episodeNum;
-              it.isSeasonPremiere = (typeof c.isSeasonPremiere === 'boolean') ? c.isSeasonPremiere : (localMatch ? localMatch.isSeasonPremiere : (c.episodeNum === 1));
-              it.isSeasonFinale = !!(c.isSeasonFinale || (localMatch && localMatch.isSeasonFinale));
-              it.seasonFinaleAirDate = c.seasonFinaleAirDate || (localMatch && localMatch.seasonFinaleAirDate) || null;
-              it.seasonFinaleEpisodeNumber = c.seasonFinaleEpisodeNumber || null;
-              it.isUnaired = true;
-              it.episodeTitle = c.episodeTitle || (it.isSeasonPremiere ? 'Season Premiere' : (it.isSeasonFinale ? 'Season Finale' : (c.episodeNum != null ? ('Episode ' + c.episodeNum) : '')));
-            } else if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        } else if (localAiringList.length) {
-          airingNextList.items.forEach((it) => {
-            const localMatch = localAiringList.find((a) => a && (a.showId === it.id || a.showId === it.imdbId || (it.tmdbId && a.showId === 'tmdb:' + it.tmdbId)));
-            if (localMatch) {
-              it.isSeasonPremiere = !!localMatch.isSeasonPremiere;
-              it.isSeasonFinale = !!localMatch.isSeasonFinale;
-              it.seasonFinaleAirDate = localMatch.seasonFinaleAirDate || null;
-            }
-          });
-        }
-      } catch (e) {}
-      airingNextList._cachedApplied = true;
-    }
+    applyAiringNextCache(airingNextList, 'simklAiringNextCache');
     const hasExpiredSimkl = (airingNextList.items || []).some((it) => it && it.airDate && typeof isEpisodeAired === 'function' && isEpisodeAired(it.airDate));
     if (!_simklAiringNextEnriching && (hasExpiredSimkl || !_simklAiringNextEnrichedAt || Date.now() - _simklAiringNextEnrichedAt >= 120000)) {
       enrichSimklAiringNextDates(airingNextList).catch(() => {});
@@ -47743,35 +47817,6 @@ function renderMySimklLists(lists) {
           }
           const simklStatus = isAiringNext ? (it.status || 'watching') : (l.statusKey || (l.url ? l.url.split(':')[3] : 'plantowatch'));
           const removeBtn = '<button type="button" class="cw-remove-btn" data-remove-type="external" data-provider="simkl" data-target="status" data-list-id="' + escapeAttr(simklStatus) + '" data-remove-id="' + escapeAttr(it.id) + '" data-media-type="' + escapeAttr(it.type || type) + '" data-act="removeListItemFromDetails" data-act-stop data-act-args="[&quot;@self&quot;]" title="Remove from Simkl" aria-label="Remove from Simkl">\u2715</button>';
-          const showAiringBadges = typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgesAiringNext') : true;
-          const showAirDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeAirDate') : true);
-          const showPremiere = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonPremiere') : true);
-          const showFinale = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinale') : true);
-          const showFinaleDate = showAiringBadges && (typeof getBadgeSetting === 'function' ? getBadgeSetting('showBadgeSeasonFinaleDate') : true);
-
-          const hasAired = it.airDate && typeof isEpisodeAired === 'function' ? isEpisodeAired(it.airDate) : false;
-          const isUnairedEp = it.airDate ? !hasAired : !!it.isUnaired;
-          let dateBadge = '';
-          if (showAirDate && it.airDate && !hasAired && typeof isEpisodeAired === 'function') {
-            dateBadge = typeof watchItemAirDateBadgeHtml === 'function' ? watchItemAirDateBadgeHtml(it) : '';
-          }
-          const isSeasonPremiere = (it.episodeNum === 1 || (it.episodeNum == null && it.isSeasonPremiere));
-          const isSeasonFinale = !!it.isSeasonFinale;
-          const seasonFinaleAirDate = it.seasonFinaleAirDate || null;
-          const isFinaleUnaired = seasonFinaleAirDate && typeof isEpisodeAired === 'function' ? !isEpisodeAired(seasonFinaleAirDate) : !!seasonFinaleAirDate;
-          let bottomBadge = '';
-          if (isUnairedEp) {
-            if (showPremiere && isSeasonPremiere) {
-              bottomBadge = '<div class="cw-date-badge cw-date-badge-premiere" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Premiere</div>';
-            } else if (showFinale && isSeasonFinale) {
-              bottomBadge = '<div class="cw-date-badge cw-date-badge-finale" title="Airs on ' + escapeAttr(it.airDate || '') + '">Season Finale</div>';
-            } else if (showFinaleDate && seasonFinaleAirDate && isFinaleUnaired) {
-              const finaleText = typeof formatAirDateBadge === 'function' ? formatAirDateBadge(it.seasonFinaleAirDate) : '';
-              if (finaleText) {
-                bottomBadge = '<div class="cw-date-badge cw-date-badge-finale-date" title="Season finale airs on ' + escapeAttr(it.seasonFinaleAirDate) + '">Finale: ' + escapeHtml(finaleText) + '</div>';
-              }
-            }
-          }
           const label = (typeof formatWatchItemLabel === 'function')
             ? formatWatchItemLabel({ showTitle: it.name, seasonNum: it.seasonNum, episodeNum: it.episodeNum, title: it.episodeTitle || '', isSeasonPremiere: it.isSeasonPremiere })
             : {
@@ -47783,7 +47828,7 @@ function renderMySimklLists(lists) {
           return '<div class="list-card-mini-poster-tile" data-name="' + escapeAttr(l.name) + '" data-url="' + escapeAttr(l.url) + '" data-type="' + escapeAttr(type) + '" data-items="' + escapeAttr(totalCount) + '">' +
             '<div class="list-card-mini-poster-img-wrap">' +
               (smkPoster ? '<img src="' + escapeAttr(smkPoster) + '" class="clickable-poster" data-id="' + escapeAttr(it.id) + '" data-type="' + escapeAttr(it.type || type) + '" data-title="' + escapeAttr(it.name || '') + '" data-poster="' + escapeAttr(smkPoster || '') + '" alt="" loading="lazy">' : '<div class="u-bg-v_color_bg_sunken" style="width:100%; height:100%;"></div>') +
-              (isAiringNext ? (dateBadge + bottomBadge) : '') +
+              (isAiringNext ? airingNextTileBadgesHtml(it) : '') +
               removeBtn +
               overlays +
             '</div>' +
@@ -49437,115 +49482,6 @@ function addNewNuvioCollection(existing, incoming, options) {
   });
 
   return cleanedExisting.concat(newCols);
-}
-
-// Twin of src/api/61_media-app-sync.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
-function mergeNuvioCollections(existing, incoming) {
-  const existingArr = extractNuvioCollections(existing);
-  const incomingArr = extractNuvioCollections(incoming);
-
-  if (!existingArr.length) return incomingArr;
-  if (!incomingArr.length) return existingArr;
-
-  // Preserve all collections from other providers / community templates 100% untouched
-  const otherCollections = [];
-  let myListsCol = null;
-
-  for (let i = 0; i < existingArr.length; i++) {
-    const c = existingArr[i];
-    if (!c) continue;
-    const cTitle = String(c.title || c.name || '').trim();
-    const cFolders = Array.isArray(c.folders) ? c.folders : [];
-
-
-    const isMyLists = (c.id && (c.id === 'my-lists-collections' || c.id === 'my-lists-addon')) ||
-                      (cTitle && (cTitle.toLowerCase() === 'my lists collections' || cTitle.toLowerCase() === 'my lists addon' || cTitle.toLowerCase() === 'my lists'));
-    if (isMyLists) {
-      if (!myListsCol) {
-        myListsCol = JSON.parse(JSON.stringify(c));
-      } else if (cFolders.length > 0) {
-        if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
-        myListsCol.folders.push.apply(myListsCol.folders, JSON.parse(JSON.stringify(cFolders)));
-      }
-    } else {
-      otherCollections.push(JSON.parse(JSON.stringify(c)));
-    }
-  }
-
-  if (!myListsCol) {
-    myListsCol = {
-      id: 'my-lists-collections',
-      title: 'My Lists Collections',
-      name: 'My Lists Collections',
-      viewMode: 'FOLLOW_LAYOUT',
-      showAllTab: false,
-      pinToTop: false,
-      focusGlowEnabled: true,
-      hidden: false,
-      isVisible: true,
-      enabled: true,
-      folders: []
-    };
-  } else {
-    myListsCol.id = 'my-lists-collections';
-    myListsCol.title = 'My Lists Collections';
-    myListsCol.name = 'My Lists Collections';
-    myListsCol.hidden = false;
-    myListsCol.isVisible = true;
-    myListsCol.enabled = true;
-    if (!Array.isArray(myListsCol.folders)) myListsCol.folders = [];
-  }
-
-  // Merge incoming folders ONLY into myListsCol. If an incoming collection matches otherCollections, update that collection.
-  for (let i = 0; i < incomingArr.length; i++) {
-    const inCol = incomingArr[i];
-    if (!inCol) continue;
-    const inTitle = String(inCol.title || inCol.name || '').trim();
-    const isIncomingMyLists = (inCol.id && (inCol.id === 'my-lists-collections' || inCol.id === 'my-lists-addon')) ||
-                             (inTitle && (inTitle.toLowerCase() === 'my lists collections' || inTitle.toLowerCase() === 'my lists addon' || inTitle.toLowerCase() === 'my lists'));
-
-    if (inCol.id && !isIncomingMyLists) {
-      const existingOtherIdx = otherCollections.findIndex(function (oc) { return oc.id === inCol.id; });
-      if (existingOtherIdx !== -1) {
-        otherCollections[existingOtherIdx] = JSON.parse(JSON.stringify(inCol));
-        continue;
-      }
-    }
-
-    // Folders intended for My Lists Collections
-    const foldersToMerge = Array.isArray(inCol.folders) ? inCol.folders : [inCol];
-    for (let j = 0; j < foldersToMerge.length; j++) {
-      const inF = foldersToMerge[j];
-      if (!inF || (!inF.id && !inF.title && !inF.name)) continue;
-      const cleanFolder = Object.assign({}, inF, {
-        hidden: false,
-        isVisible: true,
-        enabled: true
-      });
-      if (Array.isArray(cleanFolder.catalogSources)) {
-        cleanFolder.catalogSources = cleanFolder.catalogSources.map(function (cs) {
-          let cName = String(cs.name || cs.title || cs.catalogId || '').trim();
-          cName = stripMediaSuffix(cName);
-          return Object.assign({}, cs, {
-            name: cName,
-            title: cName
-          });
-        });
-      }
-      const fIdx = myListsCol.folders.findIndex(function (f) {
-        return (f.id && inF.id && f.id === inF.id) ||
-               (f.title && inF.title && f.title.toLowerCase() === inF.title.toLowerCase()) ||
-               (f.name && inF.name && f.name.toLowerCase() === inF.name.toLowerCase());
-      });
-      if (fIdx !== -1) {
-        myListsCol.folders[fIdx] = Object.assign({}, myListsCol.folders[fIdx], cleanFolder);
-      } else {
-        myListsCol.folders.push(JSON.parse(JSON.stringify(cleanFolder)));
-      }
-    }
-  }
-
-  return otherCollections.concat([myListsCol]);
 }
 
 function buildNuvioCollectionsPayload(collections, parents) {
@@ -51410,7 +51346,6 @@ async function markMdblistHistoryAllWatched(btn) {
   }
 
   const whItems = mapMdblistItemsToWatchHistory(allRawItems);
-  console.log('[MDBList] raw items:', allRawItems.length, 'mapped:', whItems.length);
 
   if (!whItems.length) {
     const detailMsg = 'No watch history found on your MDBList account. Fetched ' + allRawItems.length + ' raw items from MDBList.';
@@ -53536,7 +53471,7 @@ function previewCreatorAuth() {
   }
 }
 
-async function fetchListPreviewOnce(listUrl, type, sample) {
+async function requestListPreview(listUrl, type, sample) {
   const isAdultFilterOn = isAdultContentFilterEnabled();
   const cacheKey = String(listUrl) + '|' + String(type) + '|' + String(sample || 12) + (isAdultFilterOn ? '|safe' : '');
   const liveLibrary = /^autotrack:(nuvio|stremio)-library:/.test(String(listUrl || ''));
@@ -57893,7 +57828,7 @@ async function renderDefaultCatalogSearch(force) {
       const mdbLists = Array.isArray(mdbPopular) ? mdbPopular : [];
       const traktLists = Array.isArray(traktPopular) ? traktPopular : [];
       if (!pubLists.length && !mdbLists.length && !traktLists.length) {
-        resEl.innerHTML = (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
+        resEl.innerHTML = (pubRes && pubRes.ok === false) ? '<p class="testresult err">✗ Could not load public lists.</p>' : (chips && catalogListSearchSource !== 'mylists' && catalogListSearchSource !== 'all')
           ? '<p><small>No lists to show from that source right now.</small></p>'
           : '<p><small>No published My Lists Addon lists available yet.</small></p>';
         return;
@@ -57913,7 +57848,7 @@ async function renderDefaultCatalogSearch(force) {
     if (thisSeq !== currentTitleSearchSequence) return;
     if (inputEl && inputEl.value.trim()) return;
     if (!data.ok || !data.results || !data.results.length) {
-      resEl.innerHTML = '<p><small>No titles found.</small></p>';
+      resEl.innerHTML = (!res.ok || !data.ok) ? '<p class="testresult err">✗ Could not load top titles.</p>' : '<p><small>No titles found.</small></p>';
       return;
     }
     window._rawCatalogTitleItems = data.results;
@@ -57978,6 +57913,133 @@ async function runCatalogSearch() {
 
 
 
+// Names for the "+ Add" / "Remove" buttons on list cards (audit UI-05). The
+// visible text is the same on every card, so a screen reader heard "+ Add,
+// button" with no list name. The name is in data-name; the add/remove state is
+// the "is-added" class the click handler already flips, so the label is read
+// from those instead of being kept in step at each of the places that build the
+// button.
+const CHART_CARD_BUTTON_SELECTOR = '.discover-chart-btns button, a.discover-chart-seeall';
+// Every other "+ Add" / "Remove" list button, the per-item remove crosses, the
+// "Retry" buttons and the /catalogs shelf "See All": the repeated text is the
+// same everywhere, so the name comes from the card or shelf the button sits in.
+const LIST_ADD_SELECTOR = 'button.list-add-btn, button[data-act="removeDirectoryChannel"]';
+const ITEM_REMOVE_SELECTOR = 'button.cw-remove-btn, button[data-act="removeSingleExternalItemDirect"], button[data-act="removeSingleCustomItemDirect"]';
+const RETRY_SELECTOR = 'button[data-act="retryPosterSlot"], button[data-act="renderLivePreview"]';
+const SHELF_SEEALL_SELECTOR = '.live-preview-shelf-title button.text-action-btn';
+const ADD_BUTTON_SELECTOR = 'button.searchAddBtn[data-name], ' + CHART_CARD_BUTTON_SELECTOR + ', ' +
+  [LIST_ADD_SELECTOR, ITEM_REMOVE_SELECTOR, RETRY_SELECTOR, SHELF_SEEALL_SELECTOR].join(', ');
+
+function a11yText(el) {
+  return el ? (el.textContent || '').replace(/\\s+/g, ' ').trim() : '';
+}
+
+// Text of titleSel inside the nearest ancestor matching cardSel.
+function a11yCardText(btn, cardSel, titleSel) {
+  const card = btn.closest && btn.closest(cardSel);
+  return card ? a11yText(card.querySelector(titleSel)) : '';
+}
+
+// The list this button belongs to: its own data-name / data-title, else the
+// title of the card around it (creator, channel and media-app cards carry only
+// a slug or an id on the button).
+function a11yListName(btn) {
+  return btn.getAttribute('data-name') || btn.getAttribute('data-title') ||
+    a11yCardText(btn, '.list-card', '.list-card-title');
+}
+
+// Quick Add chart cards: "+ Movies", "+ Shows" and "See All" repeat on every
+// card; the card's own title says which list they belong to.
+function chartCardButtonLabel(btn) {
+  const card = btn.closest && btn.closest('.discover-chart-card');
+  const titleEl = card && card.querySelector('.discover-chart-title');
+  // The first data-act-args value is the list the button really adds. Two
+  // cards can show the same title ("Netflix" under Streaming Top 10 and under
+  // Streaming) while adding different lists ("Netflix Top 10"), so it wins.
+  let title = titleEl && (titleEl.textContent || '').trim();
+  try {
+    const args = JSON.parse(btn.getAttribute('data-act-args') || '[]');
+    if (args && typeof args[0] === 'string' && args[0].trim()) title = args[0].trim();
+  } catch (e) { /* keep the card title */ }
+  if (!title) return '';
+  const text = (btn.textContent || '').replace(/\\s+/g, ' ').trim();
+  if (/^\\+\\s*Movies$/i.test(text)) return 'Add ' + title + ' movies';
+  if (/^\\+\\s*Shows$/i.test(text)) return 'Add ' + title + ' shows';
+  if (/^See All/i.test(text)) return 'See all of ' + title;
+  return '';
+}
+
+// Label for the buttons that are not list add buttons; '' when none applies.
+function a11yOtherLabel(btn) {
+  if (btn.matches(RETRY_SELECTOR)) {
+    if (btn.matches('[data-act="renderLivePreview"]')) {
+      const shelf = a11yCardText(btn, '.live-preview-shelf', '.shelf-title-text');
+      return 'Retry loading ' + (shelf || 'this catalog');
+    }
+    const slot = btn.closest('[data-name]');
+    const name = (slot && slot.getAttribute('data-name')) || a11yCardText(btn, '.list-card', '.list-card-title');
+    return 'Retry loading previews' + (name ? ' for ' + name : '');
+  }
+  if (btn.matches('button.text-action-btn') && btn.closest('.live-preview-shelf-title')) {
+    const t = a11yCardText(btn, '.live-preview-shelf-title', '.shelf-title-text');
+    return t ? 'See all of ' + t : '';
+  }
+  if (btn.matches(ITEM_REMOVE_SELECTOR)) {
+    const row = btn.closest('.select-list-row');
+    if (row) return 'Remove from ' + a11yText(row.querySelector('label span'));
+    if (!btn.getAttribute('data-a11y-base')) {
+      btn.setAttribute('data-a11y-base', btn.getAttribute('aria-label') || btn.getAttribute('title') || 'Remove');
+    }
+    const card = btn.closest('.live-preview-poster-card');
+    const item = card && (a11yText(card.querySelector('.live-preview-poster-name')) || card.getAttribute('data-title'));
+    // List-card poster tiles keep the item title in their own name element.
+    const tileItem = a11yCardText(btn, '.list-card-mini-poster-tile', '.list-card-mini-poster-name');
+    const who = item || tileItem;
+    return who ? btn.getAttribute('data-a11y-base') + ': ' + who : '';
+  }
+  return '';
+}
+
+function syncAddButtonA11y(btn) {
+  if (btn.matches && btn.matches(CHART_CARD_BUTTON_SELECTOR)) {
+    const label = chartCardButtonLabel(btn);
+    if (label) btn.setAttribute('aria-label', label);
+    return;
+  }
+  // A remove cross may carry the item title in data-name; it is still a removal,
+  // so test for it before the data-name check below.
+  if (btn.matches && (btn.matches(ITEM_REMOVE_SELECTOR) || (!btn.getAttribute('data-name') && !btn.matches(LIST_ADD_SELECTOR)))) {
+    const other = a11yOtherLabel(btn);
+    if (other) btn.setAttribute('aria-label', other);
+    return;
+  }
+  const name = a11yListName(btn);
+  if (!name) return;
+  const added = btn.classList.contains('is-added') || /^Remove/i.test(a11yText(btn));
+  btn.setAttribute('aria-label', (added ? 'Remove ' : 'Add ') + name + (added ? ' from my lists' : ' to my lists'));
+}
+
+(function watchAddButtons() {
+  if (typeof MutationObserver !== 'function') return;
+  function start() {
+    document.querySelectorAll(ADD_BUTTON_SELECTOR).forEach(syncAddButtonA11y);
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        if (m.type === 'attributes') {
+          if (m.target.matches && m.target.matches(ADD_BUTTON_SELECTOR)) syncAddButtonA11y(m.target);
+          return;
+        }
+        m.addedNodes.forEach(function (n) {
+          if (n.nodeType !== 1) return;
+          if (n.matches(ADD_BUTTON_SELECTOR)) syncAddButtonA11y(n);
+          n.querySelectorAll(ADD_BUTTON_SELECTOR).forEach(syncAddButtonA11y);
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 // Poster-tile text for Nuvio and Stremio list cards. An episode reads like the
 // other lists ("Show S04E05", its title underneath) via formatWatchItemLabel;
 // a movie keeps its own name. listUrl picks the app lists; resumeLabel is "44m left" style text, or ''.
@@ -71617,6 +71679,126 @@ function centerActivePill(bar) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();
+// Calls for the same chart made while the first is still on the way share it
+// (the home page shows some charts in two rows); a finished answer is cached by
+// requestListPreview (19_), and a failed one is not kept (audit PERF-03).
+const listPreviewInFlight = new Map();
+async function fetchListPreviewOnce(listUrl, type, sample) {
+  const liveLibrary = /^autotrack:(nuvio|stremio)-library:/.test(String(listUrl || ''));
+  if (liveLibrary) return requestListPreview(listUrl, type, sample);
+  const key = String(listUrl) + '|' + String(type) + '|' + String(sample || 12) + (isAdultContentFilterEnabled() ? '|safe' : '');
+  if (listPreviewInFlight.has(key)) return listPreviewInFlight.get(key);
+  const pending = requestListPreview(listUrl, type, sample).finally(() => { listPreviewInFlight.delete(key); });
+  listPreviewInFlight.set(key, pending);
+  return pending;
+}
+// "+ New Catalog" Add: ask the server whether the link(s) are a supported list
+// source before saving the row, so a typo does not become a dead row on the TV
+// home screen (audit PROD-02). Only a clear "not supported" answer blocks; a
+// failed check (server down, offline) lets the row through as it always did.
+async function addShelfLinksUnsupported(links) {
+  try {
+    const res = await creatorApiFetch(ORIGIN + '/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: links.join(String.fromCharCode(10)), validateOnly: true }),
+      cache: 'no-store',
+    });
+    if (res.status !== 400) return '';
+    const data = await res.json().catch(() => ({}));
+    return String((data && data.error) || 'That URL is not a supported list source.');
+  } catch (e) {
+    return '';
+  }
+}
+
+// True while the server is being asked, so a second tap on Add Catalog (the dialog
+// stays open for the answer) does not add the row twice.
+let addShelfCheckInFlight = false;
+
+async function submitAddShelfChecked(name, links, type) {
+  if (addShelfCheckInFlight) return;
+  addShelfCheckInFlight = true;
+  const btn = document.getElementById('addShelfModalBtn');
+  const wasDisabled = btn ? btn.disabled : false;
+  if (btn) btn.disabled = true;
+  let problem;
+  try {
+    problem = await addShelfLinksUnsupported(links);
+  } finally {
+    addShelfCheckInFlight = false;
+    if (btn) btn.disabled = wasDisabled;
+  }
+  if (problem) {
+    showToast('Could not add the catalog. ' + problem, 'error');
+    return;
+  }
+  if (links.length === 1) {
+    addRow(name, links[0], type, true, 'Custom');
+  } else {
+    addCombinedRow(name, links, type, 'Custom');
+  }
+  document.getElementById('addShelfModal').style.display = 'none';
+  saveState();
+}
+// "+ New Catalog": the Content Type follows the link as it is typed. Only the
+// path and query are read, never the site's name ("trakt.tv" has "tv" in it),
+// and only whole words (audit PROD-01). Written without a regex slash: this
+// file sits inside a template literal.
+function guessShelfTypeFromLink(value, typeSelect) {
+  const raw = String(value || '').trim().toLowerCase();
+  let link = raw;
+  try { const u = new URL(raw); link = u.pathname + u.search; } catch (e) { link = raw; }
+  const words = link.split(/[^a-z0-9]+/);
+  const isShow = link.includes('type=show') || words.includes('shows') || words.includes('series') || link.split('?')[0].split('/').includes('tv');
+  // Only auto-switch type if it's the first input or type is currently 'movie' and we detect a show
+  if (isShow) {
+    typeSelect.value = 'series';
+  } else if (link.includes('movie') && typeSelect.value === 'series' && document.querySelectorAll('.addShelfModalLinkInput').length === 1) {
+    typeSelect.value = 'movie';
+  }
+}
+// Focus return for the fixed-markup dialogs listed in STATIC_MODALS (audit
+// UI-06). They open and close by many routes (each has its own close function,
+// plus Escape and backdrop clicks), so instead of patching each one, watch the
+// shared fact: whether any of them is visible. When one appears, remember the
+// control that had focus just before; when the last one disappears, give focus
+// back to it.
+let _staticModalOpener = null;
+let _lastFocusOutsideStaticModal = null;
+
+function noteFocusOutsideStaticModals(e) {
+  const t = e && e.target;
+  if (!t || t === document.body) return;
+  for (let i = 0; i < STATIC_MODALS.length; i++) {
+    const m = document.getElementById(STATIC_MODALS[i].id);
+    if (m && typeof m.contains === 'function' && m.contains(t)) return;
+  }
+  _lastFocusOutsideStaticModal = t;
+}
+
+function syncStaticModalFocus() {
+  if (visibleStaticModal()) {
+    if (!_staticModalOpener) _staticModalOpener = _lastFocusOutsideStaticModal;
+    return;
+  }
+  const opener = _staticModalOpener;
+  _staticModalOpener = null;
+  if (opener && typeof opener.focus === 'function') {
+    try { opener.focus(); } catch (e) {}
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('focusin', noteFocusOutsideStaticModals, true);
+  if (typeof MutationObserver === 'function') {
+    const staticModalObserver = new MutationObserver(syncStaticModalFocus);
+    STATIC_MODALS.forEach((m) => {
+      const el = document.getElementById(m.id);
+      if (el && typeof el.nodeType === 'number') staticModalObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
+    });
+  }
+}
 // --- Custom Lists ---------------------------------------------------------------
 //
 // A hand-picked list of movies OR shows (not both -- see customListDraftType):
@@ -75128,7 +75310,7 @@ function removeAiringNextShow(showId, btn) {
   if (typeof scheduleTrackingSync === 'function') scheduleTrackingSync({ intentionalRemoval: true });
   if (typeof showAddedToast === 'function') {
     const title = (entry && (entry.showTitle || entry.name)) || 'This show';
-    showAddedToast('Removed ' + title + ' from Airing Next. Watch another episode to bring it back.');
+    showAddedToast('Removed ' + title + ' from Airing Next. Restore it from Settings.');
   }
 }
 window.removeAiringNextShow = removeAiringNextShow;
@@ -77344,27 +77526,6 @@ function onHiddenSectionToggle(cb) {
   if (!section) return;
   // Same checked = hidden convention as onHiddenListToggle above.
   if (typeof setMyListsSectionHidden === 'function') setMyListsSectionHidden(section, cb.checked);
-}
-
-// "Removed from Airing Next" panel on Settings -- the way back from the "x"
-// on an Airing Next poster (removeAiringNextShow, 21_client-custom-list-
-// builder.js).
-//
-// A removal undoes itself the moment another episode of the show is watched,
-// so this panel is not the only route back. It is the route for the person
-// who removed the wrong show, or changed their mind about one they are not
-// currently watching -- without it, a show removed by mistake could only be
-// recovered by watching an episode of it.
-//
-// Deliberately hidden entirely when nothing is removed: an empty panel
-// explaining a feature nobody has used is noise on a Settings tab that
-// already has a lot to read.
-function renderRemovedAiringNextSettingsSection() {
-  const box = document.getElementById('removedAiringNextSettingsSection');
-  if (!box) return;
-  box.innerHTML = '';
-  const panel = box.closest('.panel');
-  if (panel) panel.style.display = 'none';
 }
 
 // that persists anywhere outside a single browser for that link to
@@ -81084,7 +81245,7 @@ async function renderCreatorDashboard(options) {
     const data = await fetchCreatorListsOnce(creatorKey);
     if (!data.ok) {
       if (!hasExistingContent) {
-        box.innerHTML = '<p class="testresult err">\u2717 ' + escapeHtml(data.error || 'Could not load your lists.') + '</p>';
+        box.innerHTML = '<p class="testresult err">\u2717 Could not load your lists.' + (data.error ? ' <small>(' + escapeHtml(data.error) + ')</small>' : '') + '</p>';
       }
       return;
     }
@@ -83677,6 +83838,44 @@ window.showNuvioTvPairingSuccessModal = showNuvioTvPairingSuccessModal;
 window.applyChannelLogoUrl = applyChannelLogoUrl;
 window.syncChannelLogoUrlInput = syncChannelLogoUrlInput;
 window.setChannelDraftLogo = setChannelDraftLogo;
+// "Removed from Airing Next" panel on Settings -- the way back from the "x"
+// on an Airing Next poster (removeAiringNextShow, 21_client-custom-list-
+// builder.js).
+//
+// A removal undoes itself the moment another episode of the show is watched,
+// so this panel is not the only route back. It is the route for the person
+// who removed the wrong show, or changed their mind about one they are not
+// currently watching -- without it, a show removed by mistake could only be
+// recovered by watching an episode of it.
+//
+// Deliberately hidden entirely when nothing is removed: an empty panel
+// explaining a feature nobody has used is noise on a Settings tab that
+// already has a lot to read. One row per show (getRemovedAiringNextShows
+// groups a show's two ids), and Restore clears every id of that row.
+function renderRemovedAiringNextSettingsSection() {
+  const box = document.getElementById('removedAiringNextSettingsSection');
+  if (!box) return;
+  const panel = box.closest('.panel');
+  const rows = typeof getRemovedAiringNextShows === 'function' ? getRemovedAiringNextShows() : [];
+  if (!rows.length) {
+    box.innerHTML = '';
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  box.innerHTML = rows.map((r) =>
+    '<div class="settings-toggle-row">' +
+      '<span class="u-flex-1 u-minw-0 u-fw-600 u-fs-v_font_size_sm u-c-v_text u-overflowwrap-anywhere">' + escapeHtml(r.title) + '</span>' +
+      '<button type="button" class="btn-secondary btn-sm" aria-label="' + escapeAttr('Restore ' + r.title + ' to Airing Next') + '"' +
+        ' data-act="onRestoreAiringNextShow" data-act-args="' + appActArgs([r.showIds.join(','), r.title]) + '">Restore</button>' +
+    '</div>'
+  ).join('');
+  if (panel) panel.style.display = '';
+}
+
+function onRestoreAiringNextShow(showIds, title) {
+  restoreAiringNextShow(showIds);
+  if (typeof showToast === 'function') showToast('"' + (title || 'The show') + '" is back on Airing Next.', 'success');
+}
 // Nuvio/Stremio Watch History: Episodes opens <app>-watch-episodes, the other pills <app>-watch-history.
 
 const APP_HISTORY_URL = /^(autotrack:(?:nuvio|stremio)-)watch-(history|episodes):/;
@@ -91721,7 +91920,7 @@ function renderGuidePage(origin) { const siteHost = new URL(origin).host, siteHo
         acceptedAnswer: {
           "@type": "Answer",
           text:
-            "Yes, with no subscriptions, ads, or paywalls. The public site at mylistsaddon.com will shut down on November 8, 2026 unless donations on Ko-fi cover its costs; you can also self-host (docs/SELF-HOSTING.md).",
+            "Yes, with no subscriptions, ads, or paywalls. Running the public site costs the owner real money, so donations on Ko-fi are welcome; you can also self-host (docs/SELF-HOSTING.md).",
         },
       },
     ],
@@ -92536,7 +92735,7 @@ ${UTILITY_CSS}
 
     <div class="faq-item">
       <div class="faq-q">Is My Lists Addon completely free?</div>
-      <div class="faq-a">Yes, it has no subscription, no ads, and no paid tier. Running it costs the owner real money, though, and the public site will shut down on November 8, 2026 unless donations cover its costs (Ko-fi). You can also run your own copy on Cloudflare (a Workers Paid plan, about $5 a month): see <a href="https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md" target="_blank" rel="noopener">docs/SELF-HOSTING.md</a>.</div>
+      <div class="faq-a">Yes, it has no subscription, no ads, and no paid tier. Running it costs the owner real money, though, so donations are welcome (Ko-fi). You can also run your own copy on Cloudflare (a Workers Paid plan, about $5 a month): see <a href="https://github.com/Br0ck25/My-Lists-Addon/blob/main/SELF-HOSTING.md" target="_blank" rel="noopener">docs/SELF-HOSTING.md</a>.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Do I need to sign up or create an account?</div>
@@ -93166,6 +93365,10 @@ function parseNuvioInstRowConfig(instRow, username, updatedAt) {
 }
 
 async function resolveNuvioTvTargetData(target, env) {
+  // A paired TV's secret token stands for its account (69_nuvio-tv-device-token.js).
+  const device = await resolveNuvioTvDeviceToken(env, target);
+  const deviceToken = device ? target : "";
+  if (device) target = device.username;
   let resolved = null;
   let installToken = target;
   let username = "";
@@ -93174,7 +93377,7 @@ async function resolveNuvioTvTargetData(target, env) {
   if (env && env.DB) {
     try {
       const acct = await env.DB.prepare(
-        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
+        "SELECT id, username, key_hash, created_at, last_active_at FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
       ).bind(target, target, target).first();
       if (acct) {
         username = acct.username;
@@ -93233,18 +93436,14 @@ async function resolveNuvioTvTargetData(target, env) {
         if (resolved && resolved.unresolved) resolved = null;
       } catch {}
     }
+    // Only an owner the link proves, as the channel lookups accept it
+    // (provenConfigOwnerUsername, 70_): an ownerId stamp must still be the same account.
     if (resolved && !username) {
-      if (resolved.trackOwner) {
-        username = resolved.trackOwner;
-      } else if (resolved.ownerId && env && env.DB) {
+      username = await provenConfigOwnerUsername(env, resolved);
+      if (username && env && env.DB) {
         try {
-          const oAcct = await env.DB.prepare("SELECT username, created_at, last_active_at FROM accounts WHERE id = ? LIMIT 1").bind(resolved.ownerId).first();
-          if (oAcct && oAcct.username) {
-            username = oAcct.username;
-            if (oAcct.last_active_at || oAcct.created_at) {
-              updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
-            }
-          }
+          const oAcct = await env.DB.prepare("SELECT created_at, last_active_at FROM accounts WHERE username = ? LIMIT 1").bind(username).first();
+          if (oAcct && (oAcct.last_active_at || oAcct.created_at)) updatedAt = Math.max(updatedAt, oAcct.last_active_at || oAcct.created_at);
         } catch {}
       }
     }
@@ -93273,7 +93472,7 @@ async function resolveNuvioTvTargetData(target, env) {
     } catch {}
   }
 
-  return { resolved, installToken: installToken || username || target, username, updatedAt };
+  return { resolved, installToken: installToken || username || target, username, updatedAt, deviceToken };
 }
 
 async function handleNuvioTvCollectionsRoute(request, env, ctx, url, path) {
@@ -93606,7 +93805,8 @@ ${css}
 
     <div id="actionArea">
       <div id="signedInView" style="display:none;">
-        <button type="button" class="btn btn-primary" id="confirmLinkBtn">Link TV Now</button>
+        ${codeParam ? "" : '<p class="sub" id="noCodeHint">Open this page from the code shown on your TV.</p>'}
+        <button type="button" class="btn btn-primary" id="confirmLinkBtn"${codeParam ? "" : " disabled"}>Link TV Now</button>
         <a href="/" class="btn btn-secondary">Cancel</a>
       </div>
 
@@ -93711,11 +93911,30 @@ async function handleNuvioTvHistoryRemove(env, username, body) {
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
-async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
-  await ensureTrackingMigrated(env, username);
-  const syncKey = `creatorsynctracking:${username}`;
-  let blob = null;
+// The old path's write of one Nuvio TV play: the whole record to KV and D1, then the activity database.
+async function saveNuvioTvPlayLegacy(env, username, syncKey, blob) {
+  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
   if (env.DB) {
+    try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
+  }
+  if (typeof recordActivityPlay === "function" && blob.watchHistory[0]) {
+    try {
+      const legacyEntry = typeof activityPlayFromLegacyEntry === "function"
+        ? activityPlayFromLegacyEntry(blob.watchHistory[0])
+        : blob.watchHistory[0];
+      await recordActivityPlay(env, username, legacyEntry, "nuvio-tv");
+    } catch {}
+  }
+}
+
+async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
+  // FF_DIRECT_PLAY (41_direct-play.js, audit PERF-01): the record without its Watch
+  // History, so one play does not read and rewrite the whole history. Null = old path.
+  const direct = await directPlayLoad(env, username);
+  if (!direct) await ensureTrackingMigrated(env, username);
+  const syncKey = `creatorsynctracking:${username}`;
+  let blob = direct ? direct.blob : null;
+  if (!blob && env.DB) {
     try { blob = await readCreatorTrackingD1(env, username); } catch {}
   }
   if (!blob) {
@@ -93844,19 +94063,11 @@ async function handleNuvioTvHistoryAdd(env, ctx, username, body) {
   }
 
   blob.updatedAt = Date.now();
-  await env.CONFIGS.put(syncKey, JSON.stringify(blob));
-  if (env.DB) {
-    try { await saveCreatorTrackingD1(env, username, blob, false); } catch {}
+  if (direct) {
+    await directPlayCommit(env, username, direct, blob, "nuvio-tv");
+    return json({ ok: true, success: true }, 200, corsHeaders());
   }
-  if (typeof recordActivityPlay === "function" && blob.watchHistory[0]) {
-    try {
-      const legacyEntry = typeof activityPlayFromLegacyEntry === "function"
-        ? activityPlayFromLegacyEntry(blob.watchHistory[0])
-        : blob.watchHistory[0];
-      await recordActivityPlay(env, username, legacyEntry, "nuvio-tv");
-    } catch {}
-  }
-
+  await saveNuvioTvPlayLegacy(env, username, syncKey, blob);
   return json({ ok: true, success: true }, 200, corsHeaders());
 }
 
@@ -93873,6 +94084,11 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   }
 
+  // Public and each call writes KV, D1 and the activity DB, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvhistory", clientIpKey(request), 120)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
+
   let body;
   try {
     body = await readJsonObject(request);
@@ -93885,10 +94101,13 @@ async function handleNuvioTvHistoryRoute(request, env, ctx, url, path) {
     return json({ ok: false, error: "Missing targetId." }, 400, corsHeaders());
   }
 
-  const { resolved, username } = await resolveNuvioTvTargetData(targetId, env);
-  if (!resolved || !username) {
-    return json({ ok: false, error: "Target not found or not paired." }, 404, corsHeaders());
+  // Only the secret the TV was given at pairing opens these routes: a username or
+  // an account id is public (audit SEC-01).
+  const device = await resolveNuvioTvDeviceToken(env, targetId);
+  if (!device) {
+    return json({ ok: false, error: "Target not found or not paired. Pair the TV again." }, 404, corsHeaders());
   }
+  const username = device.username;
 
   if (path === "/api/nuvio-tv/history/remove" || (body && body.action === "remove")) {
     return handleNuvioTvHistoryRemove(env, username, body);
@@ -93924,7 +94143,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
 
   if (target === "default") return buildNuvioTvSyncDefaultResponse(url, request);
 
-  const { resolved, installToken, username, updatedAt } = await resolveNuvioTvTargetData(target, env);
+  const { resolved, installToken, username, updatedAt, deviceToken } = await resolveNuvioTvTargetData(target, env);
   if (!resolved) {
     return json({ ok: false, error: "Target not found." }, 404, { ...corsHeaders(), "Cache-Control": "no-store" });
   }
@@ -93961,7 +94180,9 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
   }
   const channels = formatNuvioUserChannels(userChannelsRaw);
 
-  const manifestUrl = username
+  const manifestUrl = deviceToken
+    ? `${url.origin}/i/${deviceToken}/tv/manifest.json`
+    : username
     ? `${url.origin}/${username}/tv/manifest.json`
     : (typeof isV2InstallParam === "function" && isV2InstallParam(installToken))
       ? `${url.origin}/${installToken}/tv/manifest.json`
@@ -93969,7 +94190,7 @@ async function handleNuvioTvSyncRoute(request, env, ctx, url, path) {
         ? `${url.origin}/i/${installToken}/tv/manifest.json`
         : `${url.origin}/${installToken}/tv/manifest.json`;
 
-  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${username || target}`;
+  const collectionsUrl = `${url.origin}/api/nuvio-tv/collections/${deviceToken || username || target}`;
 
   const randomizeItemsDaily = Boolean(resolved.randomizeItemsDaily || resolved.shuffleItems);
   const entries = Array.isArray(resolved.entries) ? resolved.entries : (Array.isArray(resolved.lists) ? resolved.lists : []);
@@ -94046,7 +94267,7 @@ async function handleFetch(request, env, ctx) {
       request.session = sessionAuth.session;
     }
 
-    const nuvioTvSyncResponse = await handleNuvioTvSyncRoute(request, env, ctx, url, path);
+    const nuvioTvSyncResponse = (await adminApiGate(request, env, path)) || await handleNuvioTvSyncRoute(request, env, ctx, url, path);
     if (nuvioTvSyncResponse) return nuvioTvSyncResponse;
     const installsResponse = await handleInstallsApi(request, env, url, path);
     if (installsResponse) return installsResponse;
@@ -94238,6 +94459,22 @@ async function handleFetch(request, env, ctx) {
 // routes.js) for everything, then runs the response back through
 // withSecurityHeaders (02_http-and-creator-utils.js) before it goes out --
 // see handleFetch's own opening comment for why it's split this way.
+// The answer for a Stremio-protocol route (manifest, catalog, meta, subtitles)
+// that threw, e.g. a KV read during an outage: CORS and no-store, an empty row
+// the app can show, never the platform's error text (audit API-01). null for
+// any other path.
+function publicRouteFailure(request) {
+  let path = "";
+  try { path = new URL(request.url).pathname; } catch { return null; }
+  if (!isPublicCorsPath(path) || !String(path).endsWith(".json")) return null;
+  const noStore = { "Cache-Control": "no-store" };
+  if (path.includes("/catalog/")) return jsonPublic({ metas: [] }, 200, noStore);
+  if (path.includes("/meta/")) return jsonPublic({ meta: null }, 200, noStore);
+  if (path.includes("/subtitles/")) return jsonPublic({ subtitles: [] }, 200, noStore);
+  if (path.endsWith("/manifest.json")) return jsonPublic({ ok: false, error: "Temporarily unavailable. Please try again." }, 503, { ...noStore, "Retry-After": "30" });
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     let response;
@@ -94280,6 +94517,8 @@ export default {
       // the service is unavailable, which is a 503, not a bug.
       if (err && err.code === EVENT_TRACKING_UNAVAILABLE) {
         response = json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" });
+      } else if ((response = publicRouteFailure(request))) {
+        console.error("[PublicRoute] failed:", err);
       } else {
         const message = safeErrorMessage(err);
         // The engine's own text names tables and columns ("D1_ERROR: no such
@@ -94608,31 +94847,47 @@ function buildNuvioTvConfigScript(origin) {
     '  if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
     '  if (remName) showToast("Removed \\"" + remName + "\\" from TV Launcher shelves.", "success");\n' +
     '}\n' +
-    'async function loadTvLauncherConfig() {\n' +
+    'async function renewTvLauncherSession(creatorName) {\n' +
+    '  var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
+    '  if (!creatorName || !creatorKey) return false;\n' +
     '  try {\n' +
-    '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
-    '    var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
-    '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "") + (creatorKey ? (creatorName ? "&" : "?") + "creatorKey=" + encodeURIComponent(creatorKey) : "");\n' +
-    '    var res = (typeof creatorApiFetch === "function") ? await creatorApiFetch(url, { credentials: "same-origin" }) : await fetch(url, { credentials: "same-origin" });\n' +
-    '    if (res && res.ok) {\n' +
-    '      var data = await res.json();\n' +
-    '      if (data && data.ok) {\n' +
-    '        tvLauncherConfig = data;\n' +
-    '        tvLauncherIsMirror = data.mirror !== false;\n' +
-    '        tvLauncherMainLists = Array.isArray(data.mainLists) ? data.mainLists : [];\n' +
-    '        tvLauncherTvLists = Array.isArray(data.tvLists) ? data.tvLists : [];\n' +
-    '        var sw = document.getElementById("tvMirrorSwitch");\n' +
-    '        if (sw) sw.checked = tvLauncherIsMirror;\n' +
-    '        var copyBtn = document.getElementById("tvCopyMainBtn");\n' +
-    '        if (copyBtn) copyBtn.style.display = tvLauncherIsMirror ? "none" : "inline-flex";\n' +
-    '        renderTvHomeShelves();\n' +
-    '        if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
-    '        if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
-    '      }\n' +
+    '    var r = await fetch(ORIGIN + "/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ username: creatorName, key: creatorKey }) });\n' +
+    '    return !!(r && r.ok);\n' +
+    '  } catch (err) { return false; }\n' +
+    '}\n' +
+    'async function loadTvLauncherConfig() {\n' +
+    '  var creatorName = "";\n' +
+    '  try {\n' +
+    '    creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
+    '    var url = ORIGIN + "/api/nuvio-tv/config" + (creatorName ? "?creatorName=" + encodeURIComponent(creatorName) : "");\n' +
+    '    var ask = function() { return (typeof creatorApiFetch === "function") ? creatorApiFetch(url, { credentials: "same-origin" }) : fetch(url, { credentials: "same-origin" }); };\n' +
+    '    var res = await ask();\n' +
+    '    // The Account Key never goes in the address (SEC-03), so the read relies on the sign-in cookie. If it has ended, sign in again with the stored key and ask once more.\n' +
+    '    if (res && res.status === 401 && await renewTvLauncherSession(creatorName)) res = await ask();\n' +
+    '    var data = (res && res.ok) ? await res.json() : null;\n' +
+    '    if (data && data.ok) {\n' +
+    '      tvLauncherConfig = data;\n' +
+    '      tvLauncherIsMirror = data.mirror !== false;\n' +
+    '      tvLauncherMainLists = Array.isArray(data.mainLists) ? data.mainLists : [];\n' +
+    '      tvLauncherTvLists = Array.isArray(data.tvLists) ? data.tvLists : [];\n' +
+    '      var sw = document.getElementById("tvMirrorSwitch");\n' +
+    '      if (sw) sw.checked = tvLauncherIsMirror;\n' +
+    '      var copyBtn = document.getElementById("tvCopyMainBtn");\n' +
+    '      if (copyBtn) copyBtn.style.display = tvLauncherIsMirror ? "none" : "inline-flex";\n' +
+    '      renderTvHomeShelves();\n' +
+    '      if (typeof updateAllListAddButtons === "function") updateAllListAddButtons();\n' +
+    '      if (typeof updateTvChannelAndStorylineButtons === "function") updateTvChannelAndStorylineButtons();\n' +
+    '    } else if (creatorName) {\n' +
+    '      showToast("Could not load your TV setup. Sign in again, then reload this page.", "error");\n' +
     '    }\n' +
-    '  } catch (err) { console.error("loadTvLauncherConfig error:", err); }\n' +
+    '  } catch (err) {\n' +
+    '    console.error("loadTvLauncherConfig error:", err);\n' +
+    '    if (creatorName) showToast("Could not load your TV setup. Check your connection and reload this page.", "error");\n' +
+    '  }\n' +
     '}\n' +
     'async function saveTvLauncherConfig(mirrorVal, listsVal) {\n' +
+    '  // Never save from the empty defaults: if the saved setup did not load, writing now would replace it.\n' +
+    '  if (!tvLauncherConfig) { showToast("Could not save TV setup because it has not loaded. Sign in again, then reload this page.", "error"); return false; }\n' +
     '  try {\n' +
     '    var creatorName = (typeof activeCreator !== "undefined" && activeCreator && activeCreator.creatorName) || localStorage.getItem("myListAddon:creatorName") || "";\n' +
     '    var creatorKey = localStorage.getItem("myListAddon:creatorKey") || "";\n' +
@@ -95475,7 +95730,7 @@ async function applyLegacyInstallRecord(env, id, parsed) {
   return { ...out, ...(await decryptInstallSecretFields(env, snap.id, snap.secrets)) };
 }
 
-async function resolveV2InstallConfig(param, env, { withTracking = false } = {}) {
+async function resolveV2InstallConfig(param, env, { withTracking = false, isTvLauncher = false } = {}) {
   const token = param.slice(INSTALL_TOKEN_PARAM_PREFIX.length);
   if (!isWellFormedInstallToken(token)) return unresolvedInstallConfig();
   const snap = await loadInstallSnapshot(env, await installTokenHash(token));
@@ -95498,6 +95753,12 @@ async function resolveV2InstallConfig(param, env, { withTracking = false } = {})
   // deletes the row).
   const owner = snap.owner || "";
   const canTrack = Boolean(owner) && String(snap.scopes || "").split(",").includes("track");
+  // A Nuvio TV's install link is a live view of the owner's synced rows
+  // (69_nuvio-tv-device-token.js); the link itself is the proof of ownership.
+  if (cfg.liveSync === true && owner && String(snap.scopes || "").split(",").includes("tv")) {
+    const live = await resolveCreatorSyncConfig(owner, env, { isTvLauncher });
+    if (live) return { ...live, trackOwner: owner, trackCreatorName: owner, installTrackOwner: canTrack ? owner : "" };
+  }
   let watchHistory = [];
   let continueWatching = [];
   let watchlist = [];
@@ -95900,7 +96161,7 @@ async function handleInstallsApiRoutes(request, env, url, path) {
       const built = buildV2InstallConfig(body || {}, request.account);
       if (built.error) return json({ ok: false, error: built.error }, built.status);
       const active = await env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL"
+        "SELECT COUNT(*) AS n FROM installs WHERE account_id = ? AND legacy_cfg_id IS NULL AND revoked_at IS NULL AND scopes NOT LIKE '%tv%'"
       ).bind(accountId).first();
       if (active && active.n >= INSTALLS_PER_ACCOUNT_MAX) {
         return json({ ok: false, error: `You can have up to ${INSTALLS_PER_ACCOUNT_MAX} install links. Remove one first.` }, 409);
@@ -96565,7 +96826,8 @@ async function exchangeRefreshToken(env, provider, conn) {
             expiresAt: d.created_at && d.expires_in ? (d.created_at + d.expires_in) * 1000 : null,
           };
         }
-        if (res.status === 400 || res.status === 401 || res.status === 403) rejected = true;
+        // 403 and 429 are Cloudflare slowing a burst down, not a refusal (audit API-02).
+        if (res.status === 400 || res.status === 401) rejected = true;
         else return null;
       } catch {
         return null;
@@ -96614,7 +96876,7 @@ async function exchangeRefreshToken(env, provider, conn) {
           expiresAt: d.expires_in ? Date.now() + Number(d.expires_in) * 1000 : null,
         };
       }
-      if (res.status === 400 || res.status === 401 || res.status === 403) return { rejected: true };
+      if (res.status === 400 || res.status === 401) return { rejected: true };
     } catch {}
     return null;
   }
@@ -97396,11 +97658,6 @@ async function resolveMediaBatch(env, inputs, opts = {}) {
   return { ids, stats };
 }
 
-async function resolveMedia(env, input, opts = {}) {
-  const { ids } = await resolveMediaBatch(env, [input], opts);
-  return ids[0];
-}
-
 // Tries the oldest stubs again. Those TMDB still cannot place move to the
 // back of the queue (updated_at), so one title TMDB will never know cannot
 // hold up the rest. A stub whose TMDB id turns out to belong to another row
@@ -98047,7 +98304,7 @@ async function nuvioTvScheduleFor(env, ctx, url, target, wantedId, now) {
     if (planned && JSON.stringify(planned) !== JSON.stringify(saved)) {
       state = planned;
       if (env && env.CONFIGS) {
-        try { await env.CONFIGS.put(key, JSON.stringify(planned), { expirationTtl: NUVIO_TV_SCHEDULE_TTL_SEC }); } catch {}
+        try { await env.CONFIGS.put(key, JSON.stringify(planned), { expirationTtl: NUVIO_TV_SCHEDULE_TTL_SEC }); } catch (e) { logIgnoredWrite(`put ${key}`, e); }
       }
     }
   }
@@ -103054,6 +103311,11 @@ function shelfEpisodeAfter(sched, season, episode, today) {
   return null;
 }
 
+// The hour the schedule's next episode airs ("9 PM ET"), or "" when unknown.
+function shelfAirTimeLabel(s) {
+  return s && s.next_air_time && typeof formatAirTimeLabel === "function" ? formatAirTimeLabel(s.next_air_time, s.air_tz) : "";
+}
+
 function shelfBadges(sched, season, episode) {
   const finaleSeason = sched.season_finale_season != null ? sched.season_finale_season : (sched.next_season != null ? sched.next_season : sched.last_aired_season);
   const inFinaleSeason = finaleSeason === season;
@@ -103180,6 +103442,9 @@ async function continueWatching(env, accountId, opts = {}) {
       seasonNum: next.season,
       episodeNum: next.episode,
       airDate: next.airDate || undefined,
+      // The hour, for the episode the schedule has next: the tile used to borrow
+      // it from Airing Next, so a show removed there lost it.
+      airTime: (!next.aired && next.season === t.sched.next_season && next.episode === t.sched.next_episode && shelfAirTimeLabel(t.sched)) || undefined,
       isUnaired: next.aired ? undefined : true,
       ...shelfBadges(t.sched, next.season, next.episode),
       updatedAt: Number(row.last_watched_at) || 0,
@@ -103295,7 +103560,7 @@ async function airingNext(env, accountId, opts = {}) {
     if (!s.next_air_date || shelfAired(s.next_air_date, today) || s.next_season == null || s.next_episode == null) continue;
     const showId = shelfShowId(t.media);
     const name = s.next_episode === 1 ? "Season Premiere" : `Episode ${s.next_episode}`;
-    const label = s.next_air_time && typeof formatAirTimeLabel === "function" ? formatAirTimeLabel(s.next_air_time, s.air_tz) : "";
+    const label = shelfAirTimeLabel(s);
     items.push({
       id: showId,
       type: "series",
@@ -103879,6 +104144,99 @@ function eventTrackingUnboundEnv(env) {
       return Reflect.get(target, prop, receiver);
     },
   });
+}
+
+// --- Recording one play directly (audit PERF-01) ------------------------------
+//
+// Behind FF_DIRECT_PLAY ("1" or "true"; anything else, or unset, is off -- set it
+// to "0" in the dashboard to turn it off again, no deploy). The Plex/Jellyfin/Emby
+// webhook (64_) and the Stremio/Nuvio ping (63_) used to treat a play as an edit
+// of the account's whole tracking record: read the record (for an account on the
+// activity database that rebuilds EVERY play, 40_event-tracking.js), change it,
+// put it back (a diff of every stored play, then a rebuild of all show progress).
+// One play cost work proportional to the account's history -- about 300 database
+// statements at 5,000 plays, and past Cloudflare's 1,000-call limit near 18,000,
+// where plays were dropped.
+//
+// Here an account served from the activity database records the play itself:
+//   - the play: recordActivityPlay (38_), one batch, whatever the history size;
+//   - the record's other parts (Continue Watching, fully watched, dismissals, the
+//     Watchlist copy, the settings, the updated stamp): the small "tracking" JSON
+//     in account_settings, which is the record without its Watch History;
+//   - the show's state: show_progress.status, completed or not.
+// The three things the blob path did and recordActivityPlay alone does not are kept
+// by running the SAME next-episode code on a record whose Watch History holds only
+// the show's furthest watched episode:
+//   1. the next episode and "fully watched" decision (and un-completing a show);
+//   2. the first Continue Watching entry of a show the schedule does not know yet;
+//   3. the stamp other open tabs poll (settings.tracking.updatedAt, sync/meta).
+//
+// Not used (the old path runs unchanged) when the switch is off, FF_EVENT_TRACKING
+// is off, the account's history has not been copied yet, or its settings have not
+// been stored yet (the first read after the switch assembles and stores them).
+
+function isDirectPlayEnabled(env) {
+  const v = env ? env.FF_DIRECT_PLAY : undefined;
+  return v === "1" || v === "true" || v === true;
+}
+
+// The account id when plays are recorded directly for this account, else null.
+async function directPlayAccount(env, username) {
+  if (!isDirectPlayEnabled(env) || !isEventTrackingEnabled(env) || !username) return null;
+  return eventTrackingOwns(env, username);
+}
+
+// The record without its Watch History, as the play code expects to find it, or
+// null when the old path has to run.
+async function directPlayLoad(env, username) {
+  const accountId = await directPlayAccount(env, username);
+  if (accountId == null) return null;
+  const { tracking } = await readTrackingSettings(env, accountId);
+  if (!tracking) return null;
+  const blob = { ...tracking, watchHistory: [] };
+  await ensureTrackingWatchlist(env, username, blob);
+  blob.continueWatching = Array.isArray(blob.continueWatching) ? blob.continueWatching : [];
+  blob.fullyWatchedShowIds = Array.isArray(blob.fullyWatchedShowIds) ? blob.fullyWatchedShowIds : [];
+  blob.dismissedContinueWatching = blob.dismissedContinueWatching && typeof blob.dismissedContinueWatching === "object" ? blob.dismissedContinueWatching : {};
+  return { accountId, blob };
+}
+
+// What the next-episode code needs of the show's history: its furthest watched
+// episode (it works the next one out from that). One indexed lookup. `showId` is
+// the key the show is filed under in the record (the code matches on it).
+async function directPlayShowHistory(env, direct, { showId, showTitle, showPoster, season, episode }) {
+  const ref = legacyHistoryPlay({ type: "episode", showId, showTitle, seasonNum: season, episodeNum: episode }, 0).ref;
+  const { ids } = await resolveMediaBatch(env, [ref], { maxLookups: 1 });
+  if (ids[0] == null) return [];
+  const far = await activityDb(env, direct.accountId).prepare(
+    `SELECT season, episode FROM watch_events WHERE account_id = ? AND media_id = ? AND season IS NOT NULL AND episode IS NOT NULL
+     ORDER BY season DESC, episode DESC LIMIT 1`
+  ).bind(direct.accountId, ids[0]).first();
+  if (!far) return [];
+  return [{ id: `${showId}:${far.season}:${far.episode}`, type: "episode", showId, showTitle: showTitle || "", showPoster: showPoster || "", seasonNum: far.season, episodeNum: far.episode }];
+}
+
+// Writes the play (the entry at the top of the record's Watch History) and the
+// rest of the record's changes. Returns recordActivityPlay's answer.
+async function directPlayCommit(env, username, direct, blob, source) {
+  const entry = blob.watchHistory[0];
+  const res = await recordActivityPlay(env, username, activityPlayFromLegacyEntry(entry), source);
+  if (res.reason === "error") throw new Error("could not record the play in the activity database");
+  const settings = await readTrackingSettings(env, direct.accountId);
+  await writeTrackingSettings(env, direct.accountId, settings.all, trackingRecordRest(blob));
+  // The show's own state: finished, or not (the rebuild the old path ran did this for every show).
+  if (res.mediaId != null && entry && String(entry.type) === "episode") {
+    const done = blob.fullyWatchedShowIds.map(String).includes(String(entry.showId));
+    const actDb = activityDb(env, direct.accountId);
+    await actDb.prepare(
+      done
+        ? "UPDATE show_progress SET status = 'completed', updated_at = ? WHERE account_id = ? AND media_id = ? AND status = 'watching'"
+        : "UPDATE show_progress SET status = 'watching', updated_at = ? WHERE account_id = ? AND media_id = ? AND status = 'completed'"
+    ).bind(Date.now(), direct.accountId, res.mediaId).run();
+  }
+  // A new play goes on to the apps with two-way sync on, as a website save does.
+  if (res.recorded && typeof nudgeMediaAppPush === "function") await nudgeMediaAppPush(env, direct.accountId);
+  return res;
 }
 
 // --- Provider breaker (Phase 4, P4-4) -----------------------------------------
@@ -104981,6 +105339,24 @@ async function handleJobsAdminApi(request, env, url, path) {
   }
 }
 
+// OPS-07: the /admin front page line for periodic jobs that have failed
+// JOBS_PERIODIC_BACKOFF_AFTER runs in a row, from the same status the Check
+// jobs view reads. "" when none fail or there is no jobs table. Every
+// stored string is escaped.
+async function adminFailingJobsHtml(env) {
+  let failing = [];
+  try {
+    const status = typeof jobsTableStatus === "function" ? await jobsTableStatus(env) : null;
+    failing = ((status && status.periodic) || []).filter((j) => j.failuresInARow >= JOBS_PERIODIC_BACKOFF_AFTER);
+  } catch (e) {
+    console.error("Admin front page: jobs status failed:", e);
+  }
+  if (!failing.length) return "";
+  const head = failing.length === 1 ? "1 periodic job is failing." : failing.length + " periodic jobs are failing.";
+  const list = failing.map((j) => escapeHtmlServer(j.type) + " failed " + j.failuresInARow + " times in a row: " + escapeHtmlServer(j.lastError || "unknown error")).join("; ");
+  return '<div id="failingJobsAlert" role="alert" class="u-bg-rgba_255_59_48_0_12 u-bd-1px_solid_v_color_danger u-br-v_radius_sm u-p-12px_16px u-m-0_0_18px u-c-v_color_danger_text u-fs-v_font_size_sm u-lh-1_4"><strong>' + head + "</strong> " + list + ". See Maintenance &rarr; Check jobs.</div>";
+}
+
 // --- Background jobs: the dispatcher (Phase 5, P5-2) ---------------------------
 //
 // The cron tick stops doing work and hands it to the queue (44_jobs-queue.js).
@@ -105049,6 +105425,11 @@ const JOBS_DURABLE_MAX_ATTEMPTS = JOBS_MAX_RETRIES + 1;
 // the trigger fires every 5 or every 6 minutes, and an hourly job is not
 // pushed a whole tick later every hour.
 const JOBS_PERIODIC_SLACK_MS = 90 * 1000;
+// A periodic job that has failed this many runs in a row (OPS-07) is retried
+// hourly instead of every few minutes, so a broken release stops spending
+// provider calls and D1 writes. One success puts it back on its own period.
+const JOBS_PERIODIC_BACKOFF_AFTER = 10;
+const JOBS_PERIODIC_BACKOFF_MS = 60 * 60 * 1000;
 // The cron's own work runs every tick.
 const LEGACY_CRON_EVERY_MS = 4 * 60 * 1000;
 const PERIODIC_JOB_KEY_PREFIX = "periodic:";
@@ -105116,6 +105497,7 @@ function jobErrorText(err) {
 
 function jobRowRetryMs(spec, failures) {
   const ms = jobRetryDelaySec(failures, spec) * 1000;
+  if (spec.periodic && failures >= JOBS_PERIODIC_BACKOFF_AFTER) return JOBS_PERIODIC_BACKOFF_MS;
   return spec.periodic ? Math.min(ms, spec.everyMs) : ms;
 }
 
@@ -105770,6 +106152,29 @@ function showScheduleFromTmdb(tv, airTime, now) {
   return row;
 }
 
+// The finale's date for a show in the middle of its season. /tv/{id} gives a
+// season's episode count but no dates, so showScheduleFromTmdb only knows it
+// when the finale is the next or the last aired episode, and the "Finale:
+// <date>" badge never showed mid-season (owner report, 2026-11-15). One more
+// call reads the season's episodes, as fetchTmdbItemDetailsUncached does for
+// the older path, and only for the same case: an episode after the premiere
+// and before the finale is next. A failure leaves no date, never a wrong one.
+async function showFinaleFromSeason(row, tmdbId, key) {
+  const fin = row.season_finale_episode;
+  if (!tmdbId || row.season_finale_date || fin == null || row.next_season == null || row.season_finale_season !== row.next_season) return;
+  if (!(row.next_episode > 1 && row.next_episode < fin)) return;
+  try {
+    const got = await showTmdbGet(`/tv/${Number(tmdbId)}/season/${Number(row.next_season)}`, key);
+    const eps = got.data && Array.isArray(got.data.episodes) ? got.data.episodes : [];
+    const last = eps[eps.length - 1];
+    if (!last) return;
+    if (typeof last.episode_number === "number") row.season_finale_episode = last.episode_number;
+    if (last.air_date) row.season_finale_date = String(last.air_date).slice(0, 10);
+  } catch (err) {
+    console.warn(`[Jobs] show.refresh: season ${row.next_season} of TMDB ${tmdbId}: ${jobErrorText(err)}`);
+  }
+}
+
 const SHOW_SCHEDULE_COLUMNS = [
   "status", "last_aired_season", "last_aired_episode", "last_aired_date", "next_season", "next_episode",
   "next_air_date", "next_air_time", "air_tz", "season_finale_season", "season_finale_date",
@@ -105814,6 +106219,7 @@ async function refreshShowSchedules(env, mediaIds, { now = Date.now(), ctx = nul
         }
       }
       row = showScheduleFromTmdb(tv, airTime, now);
+      await showFinaleFromSeason(row, tmdbId, key);
     } catch (err) {
       out.failed++;
       console.warn(`[Jobs] show.refresh: media ${m.id}: ${jobErrorText(err)}`);
@@ -107133,8 +107539,16 @@ async function purgeAccountRowsById(env, accountId) {
       actDb.prepare("DELETE FROM watch_events WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM show_progress WHERE account_id = ?").bind(id),
       actDb.prepare("DELETE FROM user_media_state WHERE account_id = ?").bind(id),
+      actDb.prepare("DELETE FROM watch_positions WHERE account_id = ?").bind(id),
+      actDb.prepare("DELETE FROM watch_events_removed WHERE account_id = ?").bind(id),
     ]));
   }
+
+  // Search-index rows (list name and owner name) go by list id, before the
+  // account's lists are deleted.
+  await run("search index", () => env.DB.prepare(
+    "DELETE FROM lists_fts2 WHERE rowid IN (SELECT id FROM lists WHERE owner_account_id = ?)"
+  ).bind(id).run());
 
   const voter = `acct:${id}`;
   await run("likes", () => env.DB.batch([
@@ -111206,7 +111620,7 @@ function mergeIntoNuvioCollection(existing, incoming, targetId) {
   return existingArr.map((c, i) => (i === idx ? target : c));
 }
 
-// Twin of src/client/17_client-my-lists-and-trakt-oauth.js:mergeNuvioCollections; tests/server-client-parity.test.mjs keeps them equal.
+// The only copy: the page sends its folders and the server merges them (the page's twin was removed, CQ-04). Tests: tests/nuvio-collections-merge.test.mjs.
 function mergeNuvioCollections(existing, incoming) {
   const existingArr = extractNuvioCollections(existing);
   const incomingArr = extractNuvioCollections(incoming);
@@ -112940,7 +113354,9 @@ async function handleSubtitlesTrackFor(configParam, stremioType, id, env, reques
 
 // The try block of handleSubtitlesTrackFor: look the play up, record it, take it off the Watchlist.
 async function recordSubtitlesPlay(env, ctx, auth, stremioType, imdbId, season, episode, effectiveTmdbKey) {
-  await ensureTrackingMigrated(env, auth.username);
+  // Asking for the tracking key of an account on the activity database rebuilds its
+  // whole history (PERF-01), so a directly recorded play (41_direct-play.js) skips it.
+  if ((await directPlayAccount(env, auth.username)) == null) await ensureTrackingMigrated(env, auth.username);
   const syncKey = `creatorsynctracking:${auth.username}`;
 
   // Resolve what we're actually recording (TMDB lookups) exactly
@@ -113119,6 +113535,8 @@ async function resolveSubtitlesPlayRecord(stremioType, imdbId, season, episode, 
 
 // The read-modify-write of the account's tracking blob, retried a bounded number of times.
 async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
+  const direct = await directPlayLoad(env, auth.username);
+  if (direct) return writeSubtitlesPlayDirect(env, direct, { auth, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie });
   const MAX_ATTEMPTS = 3;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let blob = null;
@@ -113182,6 +113600,26 @@ async function writeSubtitlesPlayRecord(env, { auth, syncKey, imdbId, season, ep
 
     break;
   }
+}
+
+// The same play, recorded directly (FF_DIRECT_PLAY, 41_direct-play.js): the same
+// next-episode code, on a record holding only this show's furthest watched episode,
+// then the play and the record's other changes written without touching the rest of
+// the history. No retry loop: nothing is read-compared-and-rewritten as a whole.
+async function writeSubtitlesPlayDirect(env, direct, { auth, imdbId, season, episode, effectiveTmdbKey, recordEpisode, recordMovie }) {
+  const blob = direct.blob;
+  if (recordEpisode) {
+    const { showTitle, showPoster } = recordEpisode.episodeEntry;
+    blob.watchHistory = await directPlayShowHistory(env, direct, { showId: imdbId, showTitle, showPoster, season, episode });
+    await applyEpisodePlayToBlob(blob, recordEpisode, imdbId, season, episode, effectiveTmdbKey, env);
+  } else if (recordMovie) {
+    blob.watchHistory = [{ ...recordMovie.movieEntry, watchedAt: Date.now() }];
+  }
+  if (Array.isArray(blob.watchlist) && blob.watchlist.length) {
+    blob.watchlist = blob.watchlist.filter((it) => it && String(it.id || it.imdbId) !== imdbId && String(it.showId || '') !== imdbId);
+  }
+  blob.updatedAt = Date.now();
+  await directPlayCommit(env, auth.username, direct, blob, "ping");
 }
 
 // Put an episode play into the blob's Watch History and recompute that show's Continue Watching.
@@ -113643,7 +114081,9 @@ async function authenticateScrobbleRequest(url, env, request, ctx) {
     }
     return { response: json({ ok: false, error: "Unauthorized: Invalid or missing user credentials / config parameter." }, 401) };
   }
-  await ensureTrackingMigrated(env, authUser);
+  // A directly recorded play (41_direct-play.js) never asks for the assembled record,
+  // which for an account on the activity database rebuilds its whole history (PERF-01).
+  if ((await directPlayAccount(env, authUser)) == null) await ensureTrackingMigrated(env, authUser);
 
   if (!effectiveTmdbKey && authUser && env && env.CONFIGS) {
     try {
@@ -113831,6 +114271,9 @@ async function recordScrobbleSeenUser(env, ctx, authUser, server, mediaServerUse
       const seenKey = `scrobbleseenusers:${authUser}`;
       const raw = await env.CONFIGS.get(seenKey);
       const seen = raw ? JSON.parse(raw) : {};
+      // PERF-04: a user already listed and seen within the hour needs no write.
+      const prev = seen[mediaServerUser];
+      if (prev && prev.server === server && Date.now() - Number(prev.lastSeen) < 60 * 60 * 1000) return;
       seen[mediaServerUser] = { server, lastSeen: Date.now() };
       // 90-day TTL — stale accounts from old servers quietly expire
       await env.CONFIGS.put(seenKey, JSON.stringify(seen), { expirationTtl: 60 * 60 * 24 * 90 });
@@ -113869,6 +114312,11 @@ async function loadScrobbleFilterSettings(url, env, authUser) {
             scrobbleBlockAnonymous: Boolean(metaRow.scrobble_block_anonymous),
           };
         }
+      }
+      const directAccount = trackingObj ? null : await directPlayAccount(env, authUser);
+      if (directAccount != null) {
+        // The settings part of the record is all the filter reads (PERF-01).
+        trackingObj = (await readTrackingSettings(env, directAccount)).tracking;
       }
       if (!trackingObj) {
         let trackingRaw = await env.CONFIGS.get(`creatorsynctracking:${authUser}`);
@@ -113975,25 +114423,32 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
   let matched = "no";
   const syncKey = `creatorsynctracking:${authUser}`;
   let blob = null;
-  if (env.DB) {
-    blob = await readCreatorTrackingD1(env, authUser);
+  // FF_DIRECT_PLAY (41_direct-play.js): the record without its Watch History, and the play
+  // written on its own below.
+  const direct = await directPlayLoad(env, authUser);
+  if (direct) {
+    blob = direct.blob;
+  } else {
+    if (env.DB) {
+      blob = await readCreatorTrackingD1(env, authUser);
+    }
+    const raw = await env.CONFIGS.get(syncKey);
+    if (!blob && raw) {
+      try { blob = JSON.parse(raw); } catch {}
+    }
+    if (!blob || typeof blob !== "object") {
+      blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true };
+    }
+    // Written back whole below -- see ensureTrackingWatchlist.
+    await ensureTrackingWatchlist(env, authUser, blob);
   }
-  const raw = await env.CONFIGS.get(syncKey);
-  if (!blob && raw) {
-    try { blob = JSON.parse(raw); } catch {}
-  }
-  if (!blob || typeof blob !== "object") {
-    blob = { watchHistory: [], continueWatching: [], fullyWatchedShowIds: [], dismissedContinueWatching: {}, trackPlayback: true };
-  }
-  // Written back whole below -- see ensureTrackingWatchlist.
-  await ensureTrackingWatchlist(env, authUser, blob);
   blob.watchHistory = Array.isArray(blob.watchHistory) ? blob.watchHistory : [];
   blob.continueWatching = Array.isArray(blob.continueWatching) ? blob.continueWatching : [];
   blob.fullyWatchedShowIds = Array.isArray(blob.fullyWatchedShowIds) ? blob.fullyWatchedShowIds : [];
   blob.dismissedContinueWatching = blob.dismissedContinueWatching && typeof blob.dismissedContinueWatching === "object" ? blob.dismissedContinueWatching : {};
 
   if (mediaType === "series") {
-    const played = await recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey });
+    const played = await recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey, direct });
     matched = played.matched;
     imdbId = played.imdbId;
   } else {
@@ -114008,6 +114463,11 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
   }
 
   blob.updatedAt = Date.now();
+  if (direct) {
+    // Nothing recorded, nothing to write (the old path rewrote the record regardless).
+    if (matched.startsWith("yes")) await directPlayCommit(env, authUser, direct, blob, "webhook");
+    return matched;
+  }
   await env.CONFIGS.put(syncKey, JSON.stringify(blob));
   if (env.DB) {
     await saveCreatorTrackingD1(env, authUser, blob, false);
@@ -114023,7 +114483,7 @@ async function recordScrobblePlay(env, ctx, { authUser, server, mediaType, title
 }
 
 // The series branch of step 5.
-async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey }) {
+async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTitle, season, episode, imdbId, tmdbId, searchFoundPoster, effectiveTmdbKey, direct }) {
   const seasonNum = season != null ? season : 1;
   const episodeNum = episode != null ? episode : 1;
 
@@ -114071,6 +114531,9 @@ async function recordScrobbleEpisodePlay(blob, env, ctx, { server, title, showTi
   const itemKey = epIdStr || `${resolvedShowId}:${seasonNum}:${episodeNum}`;
   const finalEpisodePoster = epPoster || sPoster || (imdbId && imdbId.startsWith("tt") ? `https://images.metahub.space/poster/medium/${imdbId}/img` : "");
   const finalShowPoster = sPoster || (imdbId && imdbId.startsWith("tt") ? `https://images.metahub.space/poster/medium/${imdbId}/img` : "") || epPoster;
+
+  // Directly recorded (41_direct-play.js): the history holds only this show's furthest watched episode.
+  if (direct) blob.watchHistory = await directPlayShowHistory(env, direct, { showId: resolvedShowId, showTitle: sTitle, showPoster: finalShowPoster, season: seasonNum, episode: episodeNum });
 
   // Re-watching or newly watching an episode always brings it to the top of Watch History
   blob.watchHistory = blob.watchHistory.filter((it) => !((it.showId === resolvedShowId || it.showTitle === sTitle) && it.seasonNum === seasonNum && it.episodeNum === episodeNum));
@@ -116306,6 +116769,10 @@ async function persistNewCreatorProfile(env, username, profileObj, creatorKey) {
         "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at) VALUES (?, ?, ?, ?, ?)"
       ).bind(username, profileObj.displayName, profileObj.keyHash, profileObj.recoveryAnswerHash, profileObj.createdAt).run();
     } catch (dbErr) {
+      // Lost the race for this name: the other request inserted it between our check and here.
+      if (/UNIQUE constraint failed/i.test(String(dbErr && dbErr.message))) {
+        return { ok: false, taken: true, error: "That username is already taken." };
+      }
       console.error("D1 write error (creator create):", dbErr);
       return { ok: false, error: "Failed to create creator account. Please try again." };
     }
@@ -116384,6 +116851,7 @@ async function creatorApiCreate(request, env, ctx, url) {
 
   const persisted = await persistNewCreatorProfile(env, v.normalized, profileObj, creatorKey);
   if (!persisted.ok) {
+    if (persisted.taken) return json({ ok: false, error: persisted.error });
     return json({ ok: false, error: persisted.error }, 500);
   }
 
@@ -117363,6 +117831,8 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
       return json({ ok: false, error: "Couldn't save that list right now. Please try again in a moment." }, 503);
     }
     await bumpCreatorListsStamp(env, auth.username);
+    const retractedV2 = await creatorListSaveRetractIfDeleted(env, auth, slug, true);
+    if (retractedV2) return retractedV2;
     return json(savedAnswer);
   }
 
@@ -117386,12 +117856,41 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   // to prevent. See bumpCreatorListsStamp (02_http-and-creator-utils.js).
   await bumpCreatorListsStamp(env, auth.username);
 
+  const retracted = await creatorListSaveRetractIfDeleted(env, auth, slug);
+  if (retracted) return retracted;
+
+  const retractedLate = await creatorListSaveIndexAndMirror(env, auth, slug, name, visibility);
+  if (retractedLate) return retractedLate;
+  return json(savedAnswer);
+}
+
+// The search-index and v2 mirror writes of a legacy save, then a last tombstone re-check: a delete may have
+// landed after the first re-check and before these writes. Returns the 401 to answer with, or null.
+async function creatorListSaveIndexAndMirror(env, auth, slug, name, visibility) {
   await creatorListSaveSearchIndex(env, auth, slug, name, visibility);
   // The same change into v2, by diff (P3b-7, 34_lists-v2-bridge.js). It
   // never fails the save: a mirror that cannot finish marks the
   // account's v2 copy stale, and reads fall back to what was just saved.
   await listsV2MirrorLists(env, auth.username, [slug]);
-  return json(savedAnswer);
+  return creatorListSaveRetractIfDeleted(env, auth, slug, true);
+}
+
+// The account may have been deleted while a save was in flight (it authenticated before its writes).
+// Deletion writes its tombstone before sweeping, so a standing tombstone means the sweep may have
+// passed already: take back what the save just wrote. Returns the 401 to answer with, or null.
+// With v2Rows the save wrote v2 rows (listsOnly, or the mirror), so those go too. The account row (the save's
+// own auth can bring it back after the delete removed it) and the lists_fts row always go.
+async function creatorListSaveRetractIfDeleted(env, auth, slug, v2Rows = false) {
+  if (!(await isCreatorTombstoned(env, auth.username.toLowerCase()))) return null;
+  if (v2Rows) await listsV2PurgeAccount(env, auth.username);
+  await deleteAccountRow(env, auth.username);
+  if (env.DB) {
+    try { await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${auth.username}:${slug}`).run(); } catch (e) { logIgnoredWrite("delete lists_fts row", e); }
+  }
+  for (const key of [`creatorlist:${auth.username}:${slug}`, `creatorlistorder:${auth.username}`, `creatorliststamp:${auth.username}`]) {
+    try { await env.CONFIGS.delete(key); } catch (e) { logIgnoredWrite(`delete ${key}`, e); }
+  }
+  return json({ ok: false, error: "Username or Key is incorrect." }, 401);
 }
 
 // The stored record and the answer of a list save, with the sourceUrl/sync fields falling back to the stored ones (a step of creatorApiListsSave).
@@ -117618,7 +118117,7 @@ async function creatorListSaveAddToOrder(env, auth, slug, order) {
   if (env.DB) {
     try {
       await env.DB.prepare("UPDATE creator_lists SET sort_order = ? WHERE id = ?").bind(order.indexOf(slug), `${auth.username}:${slug}`).run();
-    } catch (e) {}
+    } catch (e) { logIgnoredWrite("list order: sort_order update", e); }
   }
 }
 
@@ -117646,6 +118145,42 @@ async function creatorListSaveSearchIndex(env, auth, slug, name, visibility) {
       console.error("D1 write error (lists_fts save):", dbErr);
     }
   }
+}
+// Deleting an account deletes the support/feedback threads filed under its
+// username (audit SEC-04, owner decision 2026-11-10): the D1 row and the KV
+// copy. A reset keeps them (detachFeedbackThreadsFromCreator, 03_admin.js, is
+// still what runs for that). Throws if one could not be deleted, so the caller
+// does not free the username. Returns how many were deleted.
+async function deleteFeedbackThreadsFromCreator(env, username) {
+  const name = String(username || "").trim().toLowerCase();
+  let deleted = 0;
+  if (!name) return deleted;
+  // Each round takes up to FEEDBACK_CREATOR_THREAD_CAP; the ceiling only stops
+  // a loop that somehow makes no progress.
+  for (let round = 0; round < 20; round++) {
+    const entries = await findFeedbackThreadsByCreator(env, name, { strict: true });
+    if (!entries.length) break;
+    for (const entry of entries) {
+      if (env.DB) await env.DB.prepare("DELETE FROM feedback WHERE id = ?").bind(entry.id).run();
+      if (env.CONFIGS) await env.CONFIGS.delete(`feedback:${entry.id}`);
+      deleted++;
+    }
+    // Without a database the KV scan is the only lookup and it is one pass.
+    if (!env.DB) break;
+  }
+  return deleted;
+}
+// One check for every /admin/api/ route (audit TEST-04). Each admin route also
+// checks isAdminRequest itself, but a route added without that check, however it
+// is matched, used to answer a stranger. handleFetch (25_) calls this before any
+// route, so such a route answers 401 to anyone without an admin identity.
+//
+// It asks only who the caller is (resolveAdminIdentity), not isAdminRequest,
+// which also writes the audit row: the route's own check still does that, once.
+async function adminApiGate(request, env, path) {
+  if (!String(path || "").startsWith("/admin/api/")) return null;
+  if (await resolveAdminIdentity(request, env)) return null;
+  return json({ ok: false, error: "Not authorized." }, 401, { "Cache-Control": "no-store" });
 }
 // Creator list delete/reorder, account reset/delete and the sync save routes (/api/creator/lists/delete ... /sync/save-tracking), moved out of handleFetch (CQ-01).
 
@@ -117903,6 +118438,11 @@ async function creatorApiDeleteAccount(request, env, ctx, path) {
 // partial-update case that actually needs a smaller request, and one
 // key is simpler to reason about than keeping four in sync with each
 // other.
+// A config row is an object: a null or a number used to break the install link.
+function isPlainConfigEntry(e) {
+  return !!e && typeof e === "object" && !Array.isArray(e);
+}
+
 async function creatorApiSyncSave(request, env, ctx, path) {
   let body;
   try {
@@ -118019,7 +118559,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   }
 
   const blob = {
-    config: Array.isArray(body.config) ? body.config : [],
+    config: Array.isArray(body.config) ? body.config.filter(isPlainConfigEntry) : [], // a null here broke the install link
     keys: await sealSyncKeys(env, auth.username, mergedKeys),
     collapsedPanels: body.collapsedPanels && typeof body.collapsedPanels === "object" ? body.collapsedPanels : {},
     likedLists: Array.isArray(body.likedLists) ? body.likedLists.map(String) : [],
@@ -118027,16 +118567,16 @@ async function creatorApiSyncSave(request, env, ctx, path) {
     hiddenMyListsSections: Array.isArray(body.hiddenMyListsSections) ? body.hiddenMyListsSections.map(String) : [],
     updatedAt: nextSyncVersion(currentUpdatedAt),
   };
-  const serialized = JSON.stringify(blob);
+  // A failed D1 write must not stop the rows reaching KV and the install links: it is reported on its
+  // own, and the KV record says its D1 copy is behind so load answers from KV until a write succeeds (audit DB-02).
+  const likedListsSynced = !env.DB || await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
+  const serialized = JSON.stringify(likedListsSynced ? blob : { ...blob, likedListsD1Behind: true });
   // Workers KV hard-caps a value at 25MB. Presets/Channels and tracking
   // data (watchHistory/continueWatching/etc) no longer live in this
   // blob at all (see above), so this is now just a defensive backstop
   // rather than the main thing it used to guard against.
   if (serialized.length > 24 * 1024 * 1024) {
     return json({ ok: false, error: "This account's saved data is too large to store (over the 25MB limit)." });
-  }
-  if (env.DB) {
-    await saveCreatorUserListsD1(env, auth.username, blob.likedLists, blob.hiddenLists, blob.hiddenMyListsSections);
   }
   try {
     await env.CONFIGS.put(`creatorsync:${auth.username}`, serialized);
@@ -118051,7 +118591,7 @@ async function creatorApiSyncSave(request, env, ctx, path) {
   }
   // updatedAt lets the client advance its own baseline without a
   // separate /sync/meta round trip -- see expectedUpdatedAt above.
-  return json({ ok: true, updatedAt: blob.updatedAt });
+  return json(likedListsSynced ? { ok: true, updatedAt: blob.updatedAt } : { ok: true, updatedAt: blob.updatedAt, likedListsSynced: false });
 }
 
 // /api/creator/sync/save-tracking  (POST)  { creatorName, creatorKey,
@@ -118956,7 +119496,8 @@ async function creatorApiSyncLoad(request, env, ctx, path) {
     }
   }
   if (data && data.keys) data.keys = await openSyncKeys(env, auth.username, data.keys);
-  if (d1UserLists) {
+  // Not when the last save could not write them: D1 is then behind and KV is the newer copy (audit DB-02).
+  if (d1UserLists && !(data && data.likedListsD1Behind)) {
     if (!data) {
       data = { config: [], collapsedPanels: {}, likedLists: [], updatedAt: Date.now() };
     }
@@ -119070,7 +119611,7 @@ async function creatorSyncLoadMergePresets(env, auth, data, presetsRawInit) {
         presetsB64: dedicatedPresetsB64,
         updatedAt: dedicatedUpdatedAt,
       }));
-    } catch {}
+    } catch (e) { logIgnoredWrite("creatorsyncpresets put", e); }
   }
 
   if (!data) {
@@ -119304,6 +119845,7 @@ async function creatorApiSyncLike(request, env, ctx, path) {
       }
     } catch (dbErr) {
       console.error("D1 write error (/api/creator/sync/like):", dbErr);
+      blob.likedListsD1Behind = true; // load answers from KV until a full save writes D1 again (audit DB-02)
     }
   }
   await env.CONFIGS.put(key, JSON.stringify(blob));
@@ -119413,6 +119955,10 @@ async function handleNuvioTvDeviceCode(request, env, ctx, url) {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
   const kv = (env && (env.CONFIGS || env["LIST_CACHE"]));
   if (!kv) return json({ ok: false, error: "no-storage" }, 500, corsHeaders());
+  // Public and writes 3 KV keys per call, so it is capped per address (SEC-06).
+  if (await consumeRateLimit(env, ctx, "tvdevicecode", clientIpKey(request), 10)) {
+    return json({ ok: false, error: "Too many requests. Please wait a moment." }, 429, { ...corsHeaders(), "Cache-Control": "no-store" });
+  }
 
   const deviceCode = crypto.randomUUID();
   const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -119504,32 +120050,25 @@ async function handleNuvioTvDeviceClaim(request, env, ctx, url, path) {
     return json({ ok: false, error: "Malformed device record." }, 500, corsHeaders());
   }
 
-  let installToken = auth.username;
-  if (env && env.DB) {
-    try {
-      const acct = await env.DB.prepare(
-        "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1"
-      ).bind(auth.username).first();
-      if (acct) {
-        const inst = await env.DB.prepare(
-          "SELECT legacy_cfg_id, token_hash FROM installs WHERE account_id = ? AND revoked_at IS NULL ORDER BY updated_at DESC LIMIT 1"
-        ).bind(acct.id).first();
-        if (inst) {
-          installToken = inst.legacy_cfg_id || inst.token_hash || auth.username;
-        }
-      }
-    } catch {}
-  }
-
+  // The TV gets a secret of its own (69_nuvio-tv-device-token.js), not the username.
+  // Without a database there is nowhere to keep one, so the old username addresses stay.
   const origin = url ? url.origin : "";
-  const manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
-  const syncUrl = `${origin}/api/nuvio-tv/sync/${auth.username}`;
+  let tvId = auth.username;
+  let manifestUrl = `${origin}/${auth.username}/tv/manifest.json`;
+  if (env && env.DB) {
+    const acct = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE LIMIT 1").bind(auth.username).first();
+    const token = acct ? await mintNuvioTvInstall(env, acct.id) : null;
+    if (!token) return json({ ok: false, error: "Could not link the TV right now. Please try again." }, 500, corsHeaders());
+    tvId = token;
+    manifestUrl = `${origin}/i/${token}/tv/manifest.json`;
+  }
+  const syncUrl = `${origin}/api/nuvio-tv/sync/${tvId}`;
 
   const updated = {
     ...record,
     status: "authenticated",
     claimedBy: auth.username,
-    installId: auth.username,
+    installId: tvId,
     manifestUrl,
     syncUrl,
     claimedAt: Date.now()
@@ -119548,6 +120087,9 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders() });
   }
+  // The Account Key never travels in an address (SEC-03); see refuseQueryCredentials.
+  const refusedKey = url ? refuseQueryCredentials(url, ["creatorKey"]) : null;
+  if (refusedKey) return refusedKey;
   let body = {};
   if (request.method === "POST") {
     try {
@@ -119557,7 +120099,7 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
     }
   }
   const creatorName = (body && body.creatorName) || (url && url.searchParams.get("creatorName")) || "";
-  const creatorKey = (body && body.creatorKey) || (url && url.searchParams.get("creatorKey")) || "";
+  const creatorKey = (body && body.creatorKey) || "";
   const auth = await authenticateCreatorFor(request, env, ctx, path, creatorName, creatorKey);
   if (!auth.ok) return authFailureResponse(auth);
 
@@ -119616,6 +120158,73 @@ async function handleNuvioTvConfig(request, env, ctx, url, path) {
   }
 
   return json({ ok: false, error: "Method not allowed." }, 405, corsHeaders());
+}
+// A username is public (it is in every creator page address), so it cannot be
+// the proof that a request comes from its owner (audit SEC-01, SEC-02, owner
+// decision 2026-11-10).
+//
+// 1. Pairing a Nuvio TV mints an install link of its own, with the `tv` scope.
+//    The TV keeps that secret token as its id, and its manifest and sync
+//    addresses are built on it. Only the token opens the TV's history routes.
+//    The link is a live view of the account's synced rows and counts as the
+//    owner for private shelves and playback pings, like any signed-in install
+//    link; removing it under Install links stops that TV.
+// 2. A bare /<username>/... link still serves the account's public rows, but
+//    no longer counts as the owner: private shelves and the playback ping need
+//    a link that holds a secret. LEGACY_USERNAME_OWNER_LINKS=1 turns the old
+//    behaviour back on if it has to be undone in a hurry.
+
+const NUVIO_TV_INSTALL_NAME = "Nuvio TV";
+const NUVIO_TV_INSTALLS_MAX = 5;
+
+function legacyUsernameOwnerLinks(env) {
+  return Boolean(env) && (env.LEGACY_USERNAME_OWNER_LINKS === "1" || env.LEGACY_USERNAME_OWNER_LINKS === "true" || env.LEGACY_USERNAME_OWNER_LINKS === true);
+}
+
+// The same rows, without the claim to be the owner.
+function withoutOwnerProof(resolved) {
+  return { ...resolved, trackOwner: "", installTrackOwner: "", trackCreatorName: "", trackCreatorKey: "" };
+}
+
+// A new TV install for this account. Returns its token (shown to the TV once)
+// or null when it could not be made. Keeps the newest NUVIO_TV_INSTALLS_MAX.
+async function mintNuvioTvInstall(env, accountId) {
+  if (!env || !env.DB || !Number.isInteger(accountId)) return null;
+  try {
+    const token = generateInstallToken();
+    const tokenHash = await installTokenHash(token);
+    const now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO installs (token_hash, legacy_cfg_id, account_id, name, config_json, version, scopes, created_at, updated_at, last_used_at) " +
+      "VALUES (?, NULL, ?, ?, ?, 1, 'read,track,tv', ?, ?, NULL)"
+    ).bind(tokenHash, accountId, NUVIO_TV_INSTALL_NAME, JSON.stringify({ liveSync: true }), now, now).run();
+    const { results } = await env.DB.prepare(
+      "SELECT id, token_hash FROM installs WHERE account_id = ? AND scopes LIKE '%tv%' AND revoked_at IS NULL ORDER BY created_at DESC, id DESC"
+    ).bind(accountId).all();
+    for (const old of (results || []).slice(NUVIO_TV_INSTALLS_MAX)) {
+      await env.DB.prepare("UPDATE installs SET revoked_at = ?, version = version + 1, updated_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, now, old.id).run();
+      await forgetInstallSnapshot(env, old.token_hash);
+    }
+    return token;
+  } catch (e) {
+    console.error("[NuvioTV] could not make the TV install link:", e);
+    return null;
+  }
+}
+
+// { username, accountId } for a live TV token, else null. Only a token proves
+// it: not a username, an account id or an ordinary install link.
+async function resolveNuvioTvDeviceToken(env, token) {
+  if (!env || !env.DB || !isWellFormedInstallToken(token)) return null;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT i.account_id, i.scopes, a.username, a.deleted_at FROM installs i JOIN accounts a ON a.id = i.account_id WHERE i.token_hash = ? AND i.revoked_at IS NULL"
+    ).bind(await installTokenHash(token)).first();
+    if (!row || row.deleted_at || !String(row.scopes || "").split(",").includes("tv")) return null;
+    return { username: row.username, accountId: row.account_id };
+  } catch {
+    return null;
+  }
 }
 // Routes the Stremio, Nuvio and Wako apps call (configure, manifest, subtitles ping, catalog rows, meta, scrobble webhook), moved out of handleFetch (CQ-01).
 
@@ -119816,7 +120425,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
   const browseRow = browseKey && typeof STREAMING_ROW_BY_CHART_KEY !== "undefined" ? STREAMING_ROW_BY_CHART_KEY[browseKey] : null;
   if (browseRow && browseRow.additional && !browseRow.kinds[type]) return jsonPublic({ metas: [] }, 200, CATALOG_NO_CACHE);
   const extra = Object.fromEntries(new URLSearchParams(extraStr || ""));
-  const skip = parseInt(extra.skip, 10) || 0;
+  // A whole number from 0 to 9,900 (a row page is 100 titles and TMDB stops at page 500, 20 titles each): a negative or enormous skip is not forwarded to a provider (audit API-05).
+  const skip = Math.min(Math.max(parseInt(extra.skip, 10) || 0, 0), 9900);
   const searchQuery = extra.search ? safeDecodeURIComponent(extra.search).trim() : "";
 
   // Dedicated search catalogs for Stremio and Nuvio
@@ -119948,6 +120558,8 @@ async function stremioCatalogRow(request, env, ctx, url, m) {
       }, 200, { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0" });
     }
   }
+  const skipLimited = await catalogSkipLimitResponse(request, env, ctx, skip);
+  if (skipLimited) return skipLimited;
   return stremioCatalogRowFetch(env, ctx, { url, config, type, id, skip, searchQuery, resolvedConfig, entries, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, shuffleItems, trackCreatorName, trackOwner, region, hideNonDigitalReleases, adultContentFilter, dedupeAcrossLists, betterPosters, showBadgesStremio, showBadgesStremioAiringNext, showBadgesStremioContinueWatching, showBadgesStremioCatalogs, showBadgesStremioWatchlist, entryIndex, entry, isAutoTrack, isUserPersonal, isLiveCustomList });
 }
 
@@ -120135,7 +120747,8 @@ async function stremioMetaItem(env, ctx, url, m) {
       });
       return jsonPublic({ meta: meta || null });
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 
@@ -120163,33 +120776,67 @@ async function stremioMetaItem(env, ctx, url, m) {
         { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
       );
     } catch (err) {
-      return jsonPublic({ meta: null, error: safeErrorMessage(err) }, 200, CATALOG_NO_CACHE);
+      console.error("[Meta] failed:", err); // the storage text stays out of the answer
+      return jsonPublic({ meta: null }, 200, CATALOG_NO_CACHE);
     }
   }
 
   return jsonPublic({ meta: null });
 }
 
+// The account whose My Channels an address reads: a username, an account id or
+// key hash, a legacy install id, or a secret install token. A token is stored
+// only as its hash, so it is looked up by its hash and only while the install is
+// live. Comparing the raw address to token_hash never matched, so a paired Nuvio TV
+// (whose address is such a token) got no schedule and an empty channel catalog
+// (owner report, 2026-11-16). "" when none.
+async function channelOwnerUsername(config, env) {
+  if (!config || !env || !env.DB) return "";
+  try {
+    const acct = await env.DB.prepare(
+      "SELECT username FROM accounts WHERE username = ? OR id = ? OR key_hash = ? LIMIT 1"
+    ).bind(config, config, config).first();
+    if (acct) return acct.username;
+    // The catalog routes see /i/<token>/ as "i~<token>" (v2InstallPath); the TV routes see the bare token.
+    const token = isV2InstallParam(config) ? config.slice(INSTALL_TOKEN_PARAM_PREFIX.length) : config;
+    const tokenHash = isWellFormedInstallToken(token) ? await installTokenHash(token) : null;
+    const instRow = await env.DB.prepare(
+      "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR id = ? OR (token_hash = ? AND revoked_at IS NULL) LIMIT 1"
+    ).bind(config, config, tokenHash || config).first();
+    if (instRow && instRow.account_id) {
+      const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
+      if (linked) return linked.username;
+    }
+    // A saved addon link (/<id>/manifest.json) proves its account the way the
+    // manifest route accepts it (resolveConfig): its key or owner stamp, or the
+    // account id stamped by a signed-in save.
+    if (!isV2InstallParam(config) && String(config).length <= SHORT_ID_LENGTH) {
+      return await provenConfigOwnerUsername(env, await resolveConfig(config, env));
+    }
+  } catch {}
+  return "";
+}
+
+// The account a resolved install config proves, or "": the verified owner
+// (trackOwner), or the ownerId a signed-in save stamped, only while that id is
+// still the same account (created at ownerSince, active), as
+// connectionOwnerForConfig (28_) checks it. A name alone proves nothing.
+async function provenConfigOwnerUsername(env, resolved) {
+  if (!resolved || resolved.unresolved) return "";
+  if (resolved.trackOwner) return String(resolved.trackOwner);
+  const ownerId = Number(resolved.ownerId);
+  const ownerSince = Number(resolved.ownerSince);
+  if (!env || !env.DB || !ownerId || !ownerSince) return "";
+  try {
+    const row = await env.DB.prepare("SELECT username, created_at, status, deleted_at FROM accounts WHERE id = ?").bind(ownerId).first();
+    if (row && Number(row.created_at) === ownerSince && row.deleted_at == null && (!row.status || row.status === "active")) return row.username;
+  } catch {}
+  return "";
+}
+
 async function loadUserChannelsForManifest(config, env) {
   if (!config || !env || !env.CONFIGS || config === "nuvio-default" || config === "default") return [];
-  let username = "";
-  if (env.DB) {
-    try {
-      const acct = await env.DB.prepare(
-        "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
-      ).bind(config, config, config).first();
-      if (acct) username = acct.username;
-      else {
-        const instRow = await env.DB.prepare(
-          "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
-        ).bind(config, config, config).first();
-        if (instRow && instRow.account_id) {
-          const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
-          if (linked) username = linked.username;
-        }
-      }
-    } catch {}
-  }
+  let username = await channelOwnerUsername(config, env);
   if (!username) {
     try {
       if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;
@@ -120217,23 +120864,7 @@ async function findChannelEntryById(wantedId, config, env) {
 
   let username = "";
   if (config && config !== "nuvio-default" && config !== "default") {
-    if (env && env.DB) {
-      try {
-        const acct = await env.DB.prepare(
-          "SELECT username FROM accounts WHERE username = ? COLLATE NOCASE OR id = ? OR key_hash = ? LIMIT 1"
-        ).bind(config, config, config).first();
-        if (acct) username = acct.username;
-        else {
-          const instRow = await env.DB.prepare(
-            "SELECT account_id FROM installs WHERE legacy_cfg_id = ? OR token_hash = ? OR id = ? LIMIT 1"
-          ).bind(config, config, config).first();
-          if (instRow && instRow.account_id) {
-            const linked = await env.DB.prepare("SELECT username FROM accounts WHERE id = ? LIMIT 1").bind(instRow.account_id).first();
-            if (linked) username = linked.username;
-          }
-        }
-      } catch {}
-    }
+    username = await channelOwnerUsername(config, env);
     if (!username && env && env.CONFIGS) {
       try {
         if (await env.CONFIGS.get(`creatorsyncchannels:${config}`)) username = config;
@@ -122041,6 +122672,7 @@ async function apiPreview(request, env, ctx, url, path) {
       reqBody = {};
     }
     testUrl = reqBody.url || "";
+    if (reqBody.validateOnly === true) return previewSourceCheckResponse(testUrl);
     type = reqBody.type === "series" ? "series" : (reqBody.type === "movie" ? "movie" : "mixed");
     tmdbKey = reqBody.tmdbKey || "";
     mdblistKey = reqBody.mdblistKey || "";
@@ -122059,7 +122691,7 @@ async function apiPreview(request, env, ctx, url, path) {
     previewShuffle = reqBody.shuffle === true;
     previewShuffleId = String(reqBody.shuffleId || "").slice(0, 200);
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(reqBody.sample, 10) || 5));
-    skip = Math.max(0, parseInt(reqBody.skip, 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(reqBody.skip, 10) || 0), 9900); // same cap as the catalog rows (audit API-05)
   } else {
     // GET is kept for plain public previews only. Every caller in the
     // builder page uses POST; credentials in the query string are refused
@@ -122085,20 +122717,21 @@ async function apiPreview(request, env, ctx, url, path) {
     hideNonDigitalReleases = url.searchParams.get("hideNonDigitalReleases") === "1";
     adultContentFilter = url.searchParams.get("adultContentFilter") === "1";
     sampleSize = Math.max(1, Math.min(PAGE_SIZE, parseInt(url.searchParams.get("sample"), 10) || 5));
-    skip = Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0);
+    skip = Math.min(Math.max(0, parseInt(url.searchParams.get("skip"), 10) || 0), 9900);
   }
   return apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId });
 }
 
 // The rest of apiPreview, moved unchanged: the same statements in the same order, split only for the 150-line limit.
 async function apiPreviewLoad(request, env, ctx, { url, path, testUrl, type, tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, sampleSize, skip, creatorName, creatorKey, hideNonDigitalReleases, adultContentFilter, region, previewShuffle, previewShuffleId }) {
+  region = String(region || "").toUpperCase(); // one cache entry per country, not per spelling, whichever way the request came (GET or POST)
   // Unauthenticated and heavyweight: each call can fan out to TMDB /
   // Trakt / MDBList. Same IP-keyed bucket as create/restore/feedback --
   // 240/minute provides sufficient budget for browsing multi-card
   // Discover shelves while protecting against automated scraping.
   const ip = clientIpKey(request);
   if (!ip) return json({ ok: false, error: "Couldn't load that list." }, 400, { "Cache-Control": "no-store" });
-  if (await consumeRateLimit(env, ctx, "preview", ip, 240)) {
+  if (!isFreeChartPreview(testUrl, skip, { region, keys: [tmdbKey, mdblistKey, mdblistAccessToken, traktKey, traktAccessToken, simklKey, simklAccessToken, creatorName] }) && await consumeRateLimit(env, ctx, "preview", ip, 240)) {
     return json({ ok: false, error: "Couldn't load that list." }, 429, { "Cache-Control": "no-store" });
   }
 
@@ -123499,6 +124132,46 @@ async function apiResolveShow(env, ctx, url) {
   } catch (err) {
     return json({ ok: false, error: safeErrorMessage(err) });
   }
+}
+// POST /api/preview with validateOnly: true answers only whether the pasted
+// link(s) are a supported list source, the same check the preview itself makes,
+// with no provider call and no rate-limit charge (audit PROD-02). The New
+// Catalog dialog asks before it saves a row.
+function previewSourceCheckResponse(testUrl) {
+  const sourceUrls = previewSourceUrls(testUrl);
+  if (!sourceUrls.length || !sourceUrls.every(isAllowedCatalogSourceUrl)) {
+    return json({ ok: false, error: "That URL isn't a supported list source." }, 400, { "Cache-Control": "no-store" });
+  }
+  return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+}
+
+// The first page of ONE public TMDB or Trakt chart, asked for with no keys of the
+// caller's own and a real country code from PREVIEW_COUNTRY_CODES (or none): shared data that is cached, so a
+// preview of it is not charged to the per-address budget (audit PERF-03). The cache is
+// per region and per key, so anything else could make every call a miss on the shared
+// provider key; a deep page is its own cache entry too. Those are charged as before.
+// ISO 3166-1 alpha-2 country codes (plus XK): the only regions that count as real.
+const PREVIEW_COUNTRY_CODES = new Set("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW XK".split(" "));
+
+function isFreeChartPreview(testUrl, skip, { region = "", keys = [] } = {}) {
+  if (skip !== 0) return false;
+  if (region && !PREVIEW_COUNTRY_CODES.has(String(region).toUpperCase())) return false;
+  if (keys.some(Boolean)) return false;
+  const urls = previewSourceUrls(testUrl);
+  return urls.length === 1 && /^(?:tmdb|trakt):chart:[a-z0-9_-]+$/i.test(urls[0]);
+}
+
+// Catalog rows past the first page: every distinct `skip` is its own cache
+// entry and its own provider call, so one address asking for hundreds of them
+// could spend the shared TMDB and Trakt keys (audit API-05). They share a
+// budget of 120 a minute per address; the first page is never charged and
+// normal scrolling never gets near it. null when allowed.
+const CATALOG_SKIP_MAX_PER_MINUTE = 120;
+async function catalogSkipLimitResponse(request, env, ctx, skip) {
+  if (!(skip > 0)) return null;
+  const ip = clientIpKey(request);
+  if (!ip || !(await consumeRateLimit(env, ctx, "catalog-skip", ip, CATALOG_SKIP_MAX_PER_MINUTE, 60))) return null;
+  return jsonPublic({ metas: [] }, 429, { "Cache-Control": "no-store", "Retry-After": "30" });
 }
 // IMDb id and recommendation lookups, list search/browse for TMDB and Trakt, and the Trakt, MDBList and Simkl sign-in and list routes, moved out of handleFetch (CQ-01).
 
@@ -126083,7 +126756,7 @@ async function apiTmdbMyLists(request, env, url) {
       const body = await readJsonObject(request);
       if (body.sessionId) sessionId = body.sessionId;
       if (body.accountId) accountId = body.accountId;
-      if (body.tmdbKey) manualKey = body.tmdbKey;
+      if (body.tmdbKey && typeof body.tmdbKey === "string") manualKey = body.tmdbKey;
     } catch {}
   }
 
@@ -126812,23 +127485,19 @@ async function apiFeedback(request, env, ctx, path) {
   // What actually gets stored: the admin marker, a proven username, or
   // nothing. Never the raw claim.
   const creatorName = isAdmin ? claimedCreator : authedCreator;
-  let rateLimitKey = null;
-  let rateCount = 0;
   if (!isAdmin) {
     const ip = clientIpKey(request);
     if (!ip) return json({ ok: false, error: "Could not process this request." }, 400);
-    rateLimitKey = `feedbackrate:${ip}:${statsToday()}`;
-    const rateCountRaw = await env.CONFIGS.get(rateLimitKey);
-    rateCount = parseInt(rateCountRaw, 10) || 0;
-    if (rateCount >= 20) {
-      return json({ ok: false, error: "You've sent a few messages today -- please try again tomorrow." });
+    // Atomic D1 counter (SEC-05): a KV read-then-write let parallel requests all see the same count.
+    if (await consumeRateLimit(env, ctx, "feedback", ip, 20, 86400)) {
+      return json({ ok: false, error: "You've sent a few messages today -- please try again tomorrow." }, 429, { "Cache-Control": "no-store" });
     }
   }
-  return apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount });
+  return apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName });
 }
 
 // The rest of apiFeedback, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName, rateLimitKey, rateCount }) {
+async function apiFeedbackThreadReply(request, env, { message, category, contact, threadId, isAdmin, authedCreator, creatorName }) {
   // If replying to an existing thread
   if (threadId) {
     let entry = null;
@@ -126905,7 +127574,6 @@ async function apiFeedbackThreadReply(request, env, { message, category, contact
         // someone else's report.
         if (creatorName && !entry.creatorName) entry.creatorName = creatorName;
         await putFeedbackThread(env, `feedback:${threadId}`, entry);
-        if (!isAdmin) await env.CONFIGS.put(rateLimitKey, String(rateCount + 1), { expirationTtl: 86400 });
         return json({ ok: true, entry });
       }
     } catch (e) {
@@ -126927,11 +127595,11 @@ async function apiFeedbackThreadReply(request, env, { message, category, contact
       return json({ ok: false, error: safeErrorMessage(e, "Could not save your reply right now. Please try again in a moment.") }, 500);
     }
   }
-  return apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount });
+  return apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName });
 }
 
 // The rest of apiFeedback, moved unchanged: the same statements in the same order, split only for the 150-line limit.
-async function apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName, rateLimitKey, rateCount }) {
+async function apiFeedbackNewEntry(request, env, { message, category, contact, isAdmin, creatorName }) {
   // New Thread
   //
   // The id is a capability: /api/feedback/threads hands the whole thread
@@ -126966,7 +127634,6 @@ async function apiFeedbackNewEntry(request, env, { message, category, contact, i
   };
   try {
     await putFeedbackThread(env, `feedback:${id}`, entry);
-    if (!isAdmin) await env.CONFIGS.put(rateLimitKey, String(rateCount + 1), { expirationTtl: 86400 });
   } catch (e) {
     // Logged rather than swallowed, for the reason spelled out at the
     // admin status route (26_...). This one is NOT admin-only, so the
@@ -128755,7 +129422,7 @@ async function apiChannelSharePublish(request, env, ctx, url, path) {
     if (record.published && owner) {
       try {
         await env.CONFIGS.put(`creatorchannel:${owner.toLowerCase()}:${channelSlug}`, code);
-      } catch {}
+      } catch (e) { logIgnoredWrite("creatorchannel index put", e); }
     }
     if (record.published) {
       await upsertPublicChannelIndex(env, code, record).catch(() => {});
@@ -129051,7 +129718,7 @@ async function apiChannelUnpublish(request, env, ctx, path) {
   record.updatedAt = Date.now();
   try {
     await env.CONFIGS.put(`channelshare:${code}`, JSON.stringify(record));
-  } catch {}
+  } catch (e) { logIgnoredWrite("channelshare unpublish put", e); }
   await removePublicChannelIndex(env, code).catch(() => {});
   await channelsV2SyncShare(env, code, record);
   return json({ ok: true });
@@ -129495,4 +130162,49 @@ async function apiTvBackupGet(request, env, ctx, url) {
   const text = await env.CONFIGS.get(gate.key);
   if (text === null || text === undefined) return json({ ok: false, error: "No backup found for that code." }, 404, TV_BACKUP_NO_STORE);
   return new Response(text, { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8", ...TV_BACKUP_NO_STORE, ...corsHeaders() } });
+}
+// Trakt calls with a rate-limit retry (API-07). Moved here from
+// 02_http-and-creator-utils.js, which is over the size baseline.
+//
+// A 429 is only waited out inside the live request when Trakt asks for a
+// short pause. A long one (Retry-After 30) is answered at once with the 429
+// and remembered per key, so the next requests make no Trakt call until it
+// has passed: the app gets the stale copy or the "temporarily unavailable"
+// tile immediately instead of after ~7 s, and the limited key is not hit again.
+const TRAKT_RETRY_MAX_WAIT_MS = 3000;
+const TRAKT_COOLDOWN_MAX_MS = 60000;
+const traktCooldownUntil = new Map();
+
+// Retry-After is seconds or an HTTP date; anything else counts as 1 s.
+function traktRetryAfterMs(res) {
+  const raw = String((res.headers && res.headers.get("Retry-After")) || "").trim();
+  if (/^\d+$/.test(raw)) return parseInt(raw, 10) * 1000;
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : 1000;
+}
+
+function traktCooldownKey(options) {
+  const h = (options && options.headers) || {};
+  const get = (n) => (typeof h.get === "function" ? h.get(n) : h[n]);
+  return String(get("trakt-api-key") || "") + "|" + String(get("Authorization") || "");
+}
+
+async function fetchTraktWithRetry(url, options = {}, retries = 2) {
+  const key = traktCooldownKey(options);
+  const now = Date.now();
+  const until = traktCooldownUntil.get(key) || 0;
+  if (until > now) {
+    return new Response("", { status: 429, headers: { "Retry-After": String(Math.ceil((until - now) / 1000)) } });
+  }
+  const res = await fetchWithTimeout(url, options);
+  if (res.status !== 429) return res;
+  const waitMs = traktRetryAfterMs(res);
+  if (retries > 0 && waitMs <= TRAKT_RETRY_MAX_WAIT_MS) {
+    const delayMs = Math.max(1000, waitMs) + Math.floor(Math.random() * 500);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return fetchTraktWithRetry(url, options, retries - 1);
+  }
+  if (traktCooldownUntil.size > 500) traktCooldownUntil.clear();
+  traktCooldownUntil.set(key, Date.now() + Math.min(TRAKT_COOLDOWN_MAX_MS, Math.max(1000, waitMs)));
+  return res;
 }

@@ -39,8 +39,37 @@ def build_date(stamp, existing='worker_entry_combined.js'):
     return datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')
 
 
+def check_no_unlisted_sources():
+    """Stop the build when a .js file under src/ is not one the build picks up.
+
+    Only src/header.js and src/<folder>/NN_name.js (two digits) are assembled.
+    Anything else (100_x.js, x.js, src/core/nested/20_x.js) used to be dropped
+    silently, with every check still green (audit OPS-01)."""
+    picked = set(glob.glob('src/*/[0-9][0-9]_*.js')) | {'src/header.js'}
+    left_out = []
+    for root, _dirs, names in os.walk('src'):
+        for n in names:
+            path = os.path.join(root, n).replace(os.sep, '/')
+            if n.endswith('.js') and path not in picked:
+                left_out.append(path)
+    by_name = {}
+    for path in picked:
+        by_name.setdefault(os.path.basename(path), []).append(path)
+    same_name = sorted(p for ps in by_name.values() if len(ps) > 1 for p in ps)
+    if same_name:
+        # Order is decided by base name alone, so two of them would swap places
+        # with the file system (audit CQ-09).
+        raise SystemExit("Two source files share a name, so their build order is undefined:\n  " + "\n  ".join(same_name))
+    if left_out:
+        raise SystemExit(
+            "These source files are NOT part of the build (the name must be src/<folder>/NN_name.js with exactly two digits, directly in a folder):\n  "
+            + "\n  ".join(sorted(left_out))
+        )
+
+
 def assemble():
     """Return (worker bytes with the build stamp filled in, the stamp)."""
+    check_no_unlisted_sources()
     out = bytearray(open('src/header.js', 'rb').read())
     for f in sorted(glob.glob('src/*/[0-9][0-9]_*.js'), key=os.path.basename):
         data = open(f, 'rb').read()

@@ -11,6 +11,24 @@ Arguments: `$ARGUMENTS` (a report path, optionally followed by finding IDs).
 If no path was given, list the reports in `docs/audits/` whose Fix progress
 table still has `open` items, and ask which one.
 
+## Sync first (the two commands run in different sessions)
+Every cloud session gets its own branch and a shallow clone, so the other
+command's commits and the report's commit hashes are often missing here.
+Before anything else:
+1. `git fetch --unshallow origin 2>/dev/null || git fetch origin` then
+   `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`.
+2. Find the newest version of the report on any remote branch:
+   `git for-each-ref --sort=-committerdate --format='%(refname:short)' refs/remotes/origin | while read b; do git log -1 --format="$b %h %cd" --date=iso "$b" -- <report path>; done | sort -k3,4 -r | head -3`
+   If the newest is not on your branch and your branch has nothing of its own
+   to keep, `git merge --no-edit <that branch>`; otherwise merge it in and
+   resolve conflicts by keeping the Fix progress rows with the later state
+   (verdict beats `fixed (awaiting verification)`, which beats `open`).
+3. A commit hash in the report that still cannot be found
+   (`git cat-file -t <hash>`) after this: search by ID,
+   `git log --all --oneline --grep='<ID>'`, and use that commit instead.
+   Say in the report which hash you actually used.
+4. Tell the owner which branch you are on and which branch the report came from.
+
 ## Before you start
 1. Read `CLAUDE.md` and the report's "Rules for the implementer". They win
    over anything below.
@@ -40,7 +58,7 @@ table still has `open` items, and ask which one.
 6. Update the report's Fix progress row: status `fixed (awaiting
    verification)` and the commit hash. Never fill in the "Verified" column:
    only `/verify-fix` does that, in a separate review.
-7. Push after each finding, or every few small ones. A cloud session can end
+7. Push to your current branch after each finding (confirm with `git log origin/<branch> -1`), or every few small ones, and tell the owner the branch name so `/verify-fix` can find it. A cloud session can end
    without warning.
 
 ## Rules

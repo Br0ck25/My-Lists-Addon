@@ -45,6 +45,18 @@ jobs:
           print("build matches committed Worker")
           PY
 
+      # OPS-09: production is updated by pasting worker_entry_combined.js by
+      # hand. This prints the stamp and size of the file CI built so the owner
+      # can compare them with /admin after pasting. Read-only: it deploys
+      # nothing and uses no secrets.
+      - name: Print the build stamp and size to paste
+        run: |
+          python3 build.py
+          stamp=$(sed -n 's/^const WORKER_BUILD = "\([0-9a-f]*\)";$/\1/p' worker_entry_combined.js)
+          echo "build stamp: $stamp"
+          echo "size: $(wc -c < worker_entry_combined.js) bytes ($(gzip -9 -c worker_entry_combined.js | wc -c) gzipped)"
+          echo "After pasting, /admin must show build stamp $stamp."
+
       - name: Syntax check combined Worker
         run: node --check worker_entry_combined.js
 

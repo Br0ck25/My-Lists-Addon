@@ -13,21 +13,21 @@ const SIMKL_CHART_FILES = {
 
 // Simkl's items use the same { ids: { imdb, tmdb, ... } } shape Trakt's do.
 // Anime entries more often lack an IMDB id than movies/TV do (per Simkl's
-// own docs: "IMDB IDs where available") -- those just get filtered out,
-// same as any other source's imdb-less items, since this add-on always
-// keys catalog items by IMDB id.
-function mapSimklItems(data, type) {
+// own docs: "IMDB IDs where available") -- those are kept as tmdb:<id>, as
+// the Trakt and MDBList mappers do, and dropped only when they have neither.
+function mapSimklItems(data, type, isAnime = false) {
   const items = Array.isArray(data) ? data : [];
-  return items
-    .filter((it) => it && it.ids && it.ids.imdb)
-    .map((it) => ({
-      id: it.ids.imdb,
-      type,
-      name: it.title,
-      poster: `https://images.metahub.space/poster/medium/${it.ids.imdb}/img`,
-      rating: it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined),
-      vote_average: it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined),
-    }));
+  return items.filter((it) => it && it.ids && (it.ids.imdb || it.ids.tmdb)).map((it) => {
+    const year = /\b(\d{4})\b/.exec(String(it.release_date || it.year || ""));
+    const score = it.ratings ? (it.ratings.imdb ? it.ratings.imdb.rating : (it.ratings.simkl ? it.ratings.simkl.rating : undefined)) : (it.rating || undefined);
+    const imdb = it.ids.imdb;
+    return {
+      id: imdb || `tmdb:${it.ids.tmdb}`, type: isAnime && it.anime_type === "movie" ? "movie" : type, name: it.title, // anime chart mixes films and series
+      poster: imdb ? `https://images.metahub.space/poster/medium/${imdb}/img` : undefined,
+      releaseInfo: year ? year[1] : undefined, tmdbId: it.ids.tmdb ? String(it.ids.tmdb) : undefined,
+      rating: score, vote_average: score,
+    };
+  });
 }
 
 // chartKey is either a plain time window ("today"/"week"/"month" -- movies
@@ -77,7 +77,7 @@ async function fetchSimklChart(entry, skip, clientId, chartKey, env = null, ctx 
       }
 
       const data = await res.json();
-      const metas = mapSimklItems(data, entry.type);
+      const metas = mapSimklItems(data, entry.type, isAnime);
       return enrichTrailers(metas.slice(skip, skip + PAGE_SIZE), entry.type, TMDB_API_KEY);
     },
   });
@@ -298,7 +298,7 @@ async function fetchTraktChart(entry, skip, traktKey, chartKey, env = null, ctx 
   });
 
   const metas = await enrichTrailers(mapTraktItems(traktPayloadItems(data), entry.type), entry.type, TMDB_API_KEY);
-  return withTraktTotal(metas, traktPayloadTotal(data));
+  return withTraktTotal(metas, traktPayloadTotal(data), traktPayloadItems(data));
 }
 
 // Runs async `fn` over `items` with at most `limit` running at once, rather
@@ -780,7 +780,7 @@ function tmdbProviderChartPaths(providerId) {
 // with regional availability and shouldn't need touching.
 function substituteWatchRegion(path, region) {
   if (!path || !path.includes("watch_region=")) return path;
-  const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   return path.replace(/watch_region=[A-Z]{2}/, `watch_region=${effectiveRegion}`);
 }
 
@@ -1905,7 +1905,7 @@ async function sweepRapidApiNewOnStreaming(env, ctx, fetchBudget, maxUnits, opti
     // it did not reach stays unread, which is the right trade for a rebuild.
     summary.mode = isReset ? "reset" : "full";
     if (isReset) {
-      try { await env.CONFIGS.delete("cron:newonstreaming:lastsweep"); } catch (e) {}
+      try { await env.CONFIGS.delete("cron:newonstreaming:lastsweep"); } catch (e) { logIgnoredWrite("delete cron:newonstreaming:lastsweep", e); }
     }
     const limitUnits = Number.isFinite(maxUnits) && maxUnits > 0 ? Math.floor(maxUnits) : 30;
     const maxPages = Math.min(isReset ? Math.max(30, budgetCap) : budgetCap, limitUnits, remainingInQuota);
@@ -3803,7 +3803,7 @@ const ITEM_DETAILS_SHAPE = "v3";
 
 async function fetchTmdbItemDetails(imdbId, apiKey, fallbackType, region, bypassCache, env, ctx) {
   if (!apiKey || !imdbId) return null;
-  const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   const cacheKey = `tmdb:itemdetails:${ITEM_DETAILS_SHAPE}:${String(imdbId).trim()}:${fallbackType || ""}:${effectiveRegion}`;
 
   const upgradeIfUnpacked = async (d) => {
@@ -3853,7 +3853,7 @@ async function fetchTmdbItemDetailsUncached(imdbId, apiKey, fallbackType, region
   // One call per outbound fetch below. Counted here rather than by wrapping
   // fetch() globally, so nothing else in the Worker changes behaviour.
   if (!apiKey || !imdbId) return null;
-  const effectiveRegion = (region || "US").toUpperCase().slice(0, 2) || "US";
+  const effectiveRegion = /^[a-z]{2}/i.test(String(region || "")) ? String(region).slice(0, 2).toUpperCase() : "US";
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
   let rawStr = String(imdbId).trim();
@@ -4793,7 +4793,7 @@ async function refreshAiringNextSweep(env, ctx) {
   } catch (e) {
     console.error('[Cron] Airing Next: account listing failed, restarting from the beginning:', e);
     if (sweep.c) {
-      try { await env.CONFIGS.put(CURSOR_KEY, ''); } catch {}
+      try { await env.CONFIGS.put(CURSOR_KEY, ''); } catch (e) { logIgnoredWrite(`put ${CURSOR_KEY}`, e); }
     }
     return;
   }
@@ -4851,7 +4851,7 @@ async function refreshAiringNextSweep(env, ctx) {
     next = { c: sweep.c, o: nextOffset };
   }
   if (next.c !== sweep.c || next.o !== sweep.o) {
-    try { await env.CONFIGS.put(CURSOR_KEY, JSON.stringify(next)); } catch {}
+    try { await env.CONFIGS.put(CURSOR_KEY, JSON.stringify(next)); } catch (e) { logIgnoredWrite(`put ${CURSOR_KEY}`, e); }
   }
 }
 

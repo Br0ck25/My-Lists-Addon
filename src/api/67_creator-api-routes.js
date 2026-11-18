@@ -113,6 +113,10 @@ async function persistNewCreatorProfile(env, username, profileObj, creatorKey) {
         "INSERT INTO creators (username, display_name, key_hash, recovery_answer_hash, created_at) VALUES (?, ?, ?, ?, ?)"
       ).bind(username, profileObj.displayName, profileObj.keyHash, profileObj.recoveryAnswerHash, profileObj.createdAt).run();
     } catch (dbErr) {
+      // Lost the race for this name: the other request inserted it between our check and here.
+      if (/UNIQUE constraint failed/i.test(String(dbErr && dbErr.message))) {
+        return { ok: false, taken: true, error: "That username is already taken." };
+      }
       console.error("D1 write error (creator create):", dbErr);
       return { ok: false, error: "Failed to create creator account. Please try again." };
     }
@@ -191,6 +195,7 @@ async function creatorApiCreate(request, env, ctx, url) {
 
   const persisted = await persistNewCreatorProfile(env, v.normalized, profileObj, creatorKey);
   if (!persisted.ok) {
+    if (persisted.taken) return json({ ok: false, error: persisted.error });
     return json({ ok: false, error: persisted.error }, 500);
   }
 
@@ -1170,6 +1175,8 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
       return json({ ok: false, error: "Couldn't save that list right now. Please try again in a moment." }, 503);
     }
     await bumpCreatorListsStamp(env, auth.username);
+    const retractedV2 = await creatorListSaveRetractIfDeleted(env, auth, slug, true);
+    if (retractedV2) return retractedV2;
     return json(savedAnswer);
   }
 
@@ -1193,12 +1200,41 @@ async function creatorApiListsSave(request, env, ctx, url, path) {
   // to prevent. See bumpCreatorListsStamp (02_http-and-creator-utils.js).
   await bumpCreatorListsStamp(env, auth.username);
 
+  const retracted = await creatorListSaveRetractIfDeleted(env, auth, slug);
+  if (retracted) return retracted;
+
+  const retractedLate = await creatorListSaveIndexAndMirror(env, auth, slug, name, visibility);
+  if (retractedLate) return retractedLate;
+  return json(savedAnswer);
+}
+
+// The search-index and v2 mirror writes of a legacy save, then a last tombstone re-check: a delete may have
+// landed after the first re-check and before these writes. Returns the 401 to answer with, or null.
+async function creatorListSaveIndexAndMirror(env, auth, slug, name, visibility) {
   await creatorListSaveSearchIndex(env, auth, slug, name, visibility);
   // The same change into v2, by diff (P3b-7, 34_lists-v2-bridge.js). It
   // never fails the save: a mirror that cannot finish marks the
   // account's v2 copy stale, and reads fall back to what was just saved.
   await listsV2MirrorLists(env, auth.username, [slug]);
-  return json(savedAnswer);
+  return creatorListSaveRetractIfDeleted(env, auth, slug, true);
+}
+
+// The account may have been deleted while a save was in flight (it authenticated before its writes).
+// Deletion writes its tombstone before sweeping, so a standing tombstone means the sweep may have
+// passed already: take back what the save just wrote. Returns the 401 to answer with, or null.
+// With v2Rows the save wrote v2 rows (listsOnly, or the mirror), so those go too. The account row (the save's
+// own auth can bring it back after the delete removed it) and the lists_fts row always go.
+async function creatorListSaveRetractIfDeleted(env, auth, slug, v2Rows = false) {
+  if (!(await isCreatorTombstoned(env, auth.username.toLowerCase()))) return null;
+  if (v2Rows) await listsV2PurgeAccount(env, auth.username);
+  await deleteAccountRow(env, auth.username);
+  if (env.DB) {
+    try { await env.DB.prepare("DELETE FROM lists_fts WHERE list_id = ?").bind(`c:${auth.username}:${slug}`).run(); } catch (e) { logIgnoredWrite("delete lists_fts row", e); }
+  }
+  for (const key of [`creatorlist:${auth.username}:${slug}`, `creatorlistorder:${auth.username}`, `creatorliststamp:${auth.username}`]) {
+    try { await env.CONFIGS.delete(key); } catch (e) { logIgnoredWrite(`delete ${key}`, e); }
+  }
+  return json({ ok: false, error: "Username or Key is incorrect." }, 401);
 }
 
 // The stored record and the answer of a list save, with the sourceUrl/sync fields falling back to the stored ones (a step of creatorApiListsSave).
@@ -1425,7 +1461,7 @@ async function creatorListSaveAddToOrder(env, auth, slug, order) {
   if (env.DB) {
     try {
       await env.DB.prepare("UPDATE creator_lists SET sort_order = ? WHERE id = ?").bind(order.indexOf(slug), `${auth.username}:${slug}`).run();
-    } catch (e) {}
+    } catch (e) { logIgnoredWrite("list order: sort_order update", e); }
   }
 }
 

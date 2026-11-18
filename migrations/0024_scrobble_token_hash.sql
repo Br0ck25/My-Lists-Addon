@@ -20,6 +20,11 @@
 -- Run the two ALTERs once only: SQLite cannot add a column twice. The index is
 -- safe to repeat.
 --
+-- If the run stops part-way: SQLite cannot add a column twice, so re-running the
+-- whole file fails at the first ALTER. Check which columns exist, then run only
+-- what is missing: the two ADD COLUMN statements (token_hash, token_enc), then the CREATE
+-- UNIQUE INDEX and the schema_migrations INSERT, which are safe to repeat.
+--
 -- Run it (README.md's D1 section has the full walkthrough):
 --   Dashboard: open this database's Console tab and paste/run the statements below.
 --   Wrangler:  npx wrangler d1 execute my-lists-db --remote --file=./migrations/0024_scrobble_token_hash.sql

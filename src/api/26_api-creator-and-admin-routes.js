@@ -89,6 +89,22 @@
 // routes.js) for everything, then runs the response back through
 // withSecurityHeaders (02_http-and-creator-utils.js) before it goes out --
 // see handleFetch's own opening comment for why it's split this way.
+// The answer for a Stremio-protocol route (manifest, catalog, meta, subtitles)
+// that threw, e.g. a KV read during an outage: CORS and no-store, an empty row
+// the app can show, never the platform's error text (audit API-01). null for
+// any other path.
+function publicRouteFailure(request) {
+  let path = "";
+  try { path = new URL(request.url).pathname; } catch { return null; }
+  if (!isPublicCorsPath(path) || !String(path).endsWith(".json")) return null;
+  const noStore = { "Cache-Control": "no-store" };
+  if (path.includes("/catalog/")) return jsonPublic({ metas: [] }, 200, noStore);
+  if (path.includes("/meta/")) return jsonPublic({ meta: null }, 200, noStore);
+  if (path.includes("/subtitles/")) return jsonPublic({ subtitles: [] }, 200, noStore);
+  if (path.endsWith("/manifest.json")) return jsonPublic({ ok: false, error: "Temporarily unavailable. Please try again." }, 503, { ...noStore, "Retry-After": "30" });
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     let response;
@@ -131,6 +147,8 @@ export default {
       // the service is unavailable, which is a 503, not a bug.
       if (err && err.code === EVENT_TRACKING_UNAVAILABLE) {
         response = json({ ok: false, error: err.message }, 503, { "Cache-Control": "no-store", "Retry-After": "60" });
+      } else if ((response = publicRouteFailure(request))) {
+        console.error("[PublicRoute] failed:", err);
       } else {
         const message = safeErrorMessage(err);
         // The engine's own text names tables and columns ("D1_ERROR: no such

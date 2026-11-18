@@ -7,6 +7,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# The pre-commit hook is off in a fresh clone until this is set (audit TEST-07).
+# Harmless to repeat; skipped outside a git checkout.
+if git rev-parse --git-dir >/dev/null 2>&1 && [ "$(git config --get core.hooksPath || true)" != ".githooks" ]; then
+  git config core.hooksPath .githooks && echo "  (turned on the pre-commit hook: git config core.hooksPath .githooks)"
+fi
+
 if [ "${1:-}" = "-q" ]; then
   shift
   log=$(mktemp)
@@ -145,12 +151,19 @@ echo
 echo "=== 6d. UI contract and browser workflows (need Playwright; skipped if it is not installed) ==="
 # Test the way the scripts load it: an ESM import. require() also finds a global install via NODE_PATH,
 # which import ignores, so a require() check says yes and the scripts then fail (audit TEST-09).
+browser_skipped=0
 if node --input-type=module -e "await import('playwright')" >/dev/null 2>&1; then
   node tests/ui-contract.mjs
   node tests/e2e-workflows.mjs
 else
+  browser_skipped=1
   echo "  skipped: Playwright is not installed here (CI still runs it)"
 fi
 
 echo
-echo "ALL CHECKS PASSED"
+# The last line is all that -q shows, so it must say when the browser step did not run (audit OPS-02).
+if [ "$browser_skipped" = "1" ]; then
+  echo "PASSED, BUT THE BROWSER TESTS (UI contract, end-to-end) WERE SKIPPED: Playwright cannot be imported here. CI runs them."
+else
+  echo "ALL CHECKS PASSED"
+fi
